@@ -19,7 +19,7 @@ import os
 import threading
 import time
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 import cv2
 import mujoco
@@ -1162,35 +1162,38 @@ class RobosuiteZmqServer(BaseZmqServer):
         lines.append("-------------------")
         return "\n".join(lines)
 
-    def get_base_xyt(self) -> np.ndarray:
+    def get_base_xyt(self, data=None) -> np.ndarray:
+        data = self._mjdata if data is None else data
         base_name = self._spec.base_link_name
-        if self._mjdata is None:
+        if data is None:
             return np.zeros(3)
         try:
             with self._mj_lock:
-                if self._mjmodel is not None and self._planar_base_joint_names() is not None:
-                    mujoco.mj_forward(self._mjmodel, self._mjdata)
-                xpos = self._mjdata.body(base_name).xpos
-                xmat = self._mjdata.body(base_name).xmat.reshape(3, 3)
+                if data is self._mjdata and self._mjmodel is not None and self._planar_base_joint_names() is not None:
+                    mujoco.mj_forward(self._mjmodel, data)
+                xpos = data.body(base_name).xpos
+                xmat = data.body(base_name).xmat.reshape(3, 3)
                 theta = np.arctan2(xmat[1, 0], xmat[0, 0])
                 return np.array([xpos[0], xpos[1], theta])
         except Exception as e:
             logger.warning(f"get_base_xyt failed for body {base_name!r}: {e!r}")
             return np.zeros(3)
 
-    def get_base_pose(self) -> np.ndarray | None:
+    def get_base_pose(self, data=None) -> np.ndarray | None:
+        data = self._mjdata if data is None else data
         if self._initial_xyt is None:
             return None
-        xyt = self.get_base_xyt()
+        xyt = self.get_base_xyt(data=data)
         return xyt_global_to_base(xyt, self._initial_xyt)
 
-    def get_joint_state(self):
+    def get_joint_state(self, data=None):
+        data = self._mjdata if data is None else data
         dof = self._spec.dof
         positions = np.zeros(dof)
         velocities = np.zeros(dof)
         efforts = np.zeros(dof)
 
-        if self._mjdata is None:
+        if data is None:
             return positions, velocities, efforts
 
         with self._mj_lock:
@@ -1201,16 +1204,17 @@ class RobosuiteZmqServer(BaseZmqServer):
                         continue
                     qadr = self._mjmodel.jnt_qposadr[jid]
                     vadr = self._mjmodel.jnt_dofadr[jid]
-                    positions[i] = self._mjdata.qpos[qadr]
-                    velocities[i] = self._mjdata.qvel[vadr]
+                    positions[i] = data.qpos[qadr]
+                    velocities[i] = data.qvel[vadr]
                 except Exception:
                     continue
 
         return positions, velocities, efforts
 
-    def _joint_head_qpos(self) -> float | None:
+    def _joint_head_qpos(self, data=None) -> float | None:
         """Head tilt for Rerun / observations (innate_mars ``joint_head`` or xlerobot ``head_tilt_joint``)."""
-        if self._mjmodel is None or self._mjdata is None:
+        data = self._mjdata if data is None else data
+        if self._mjmodel is None or data is None:
             return None
         if self._spec.name == "innate_mars":
             with self._mj_lock:
@@ -1218,14 +1222,14 @@ class RobosuiteZmqServer(BaseZmqServer):
                 if jid < 0:
                     return None
                 qadr = int(self._mjmodel.jnt_qposadr[jid])
-                return float(self._mjdata.qpos[qadr])
+                return float(data.qpos[qadr])
         if self._spec.name == "xlerobot":
             with self._mj_lock:
                 jid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_JOINT, "head_tilt_joint")
                 if jid < 0:
                     return None
                 qadr = int(self._mjmodel.jnt_qposadr[jid])
-                return float(self._mjdata.qpos[qadr])
+                return float(data.qpos[qadr])
         return None
 
     def _close_renderers(self) -> None:
@@ -1316,36 +1320,50 @@ class RobosuiteZmqServer(BaseZmqServer):
             mask = mujoco.MjvOption().geomgroup.copy()
         renderer._scene_option.geomgroup[:] = mask
 
-    def _render_rgb_raw(self, camera_name: str) -> np.ndarray:
-        """RGB uint8 from ``mujoco.Renderer`` at primary resolution (no pixel postprocess)."""
-        cam = self._camera_for_renderer(camera_name)
+    def _capture_render_state(self):
+        """Copy one frame under the physics lock; rasterization must not hold it."""
+        snapshot = mujoco.MjData(self._mjmodel)
         with self._mj_lock:
-            with self._render_lock:
-                renderer = self._get_or_create_primary_renderer()
-                self._configure_renderer_geomgroups_for_camera(renderer, camera_name)
-                renderer.update_scene(self._mjdata, camera=cam)
-                rgb = cast(np.ndarray, renderer.render())
-                return np.asarray(rgb, dtype=np.uint8).copy()
+            mujoco.mj_copyData(snapshot, self._mjmodel, self._mjdata)
+        return snapshot
+
+    def _remember_render_state(self, camera_name, snapshot):
+        # Called with the render lock. Retain the actual frame's camera/robot
+        # state so publishing after a slow render does not use newer geometry.
+        if not hasattr(self, "_camera_render_states"):
+            self._camera_render_states = {}
+        self._camera_render_states[camera_name] = snapshot
+
+    def _render_rgb_raw(self, camera_name: str) -> np.ndarray:
+        """Render private state without stopping physics or measured telemetry."""
+        cam = self._camera_for_renderer(camera_name)
+        snapshot = self._capture_render_state()
+        with self._render_lock:
+            renderer = self._get_or_create_primary_renderer()
+            self._configure_renderer_geomgroups_for_camera(renderer, camera_name)
+            renderer.update_scene(snapshot, camera=cam)
+            rgb = np.asarray(renderer.render(), dtype=np.uint8).copy()
+            self._remember_render_state(camera_name, snapshot)
+            return rgb
 
     def _render_primary_rgb_and_depth_raw(self, camera_name: str) -> tuple[np.ndarray, np.ndarray]:
-        """RGB + depth in one lock scope and one ``Renderer`` pass (avoids EGL framebuffer races)."""
+        """RGB/depth share a private snapshot and one serialized renderer."""
         cam = self._camera_for_renderer(camera_name)
-        with self._mj_lock:
-            with self._render_lock:
-                renderer = self._get_or_create_primary_renderer()
+        snapshot = self._capture_render_state()
+        with self._render_lock:
+            renderer = self._get_or_create_primary_renderer()
+            self._configure_renderer_geomgroups_for_camera(renderer, camera_name)
+            renderer.update_scene(snapshot, camera=cam)
+            rgb = np.asarray(renderer.render(), dtype=np.uint8).copy()
+            renderer.enable_depth_rendering()
+            try:
                 self._configure_renderer_geomgroups_for_camera(renderer, camera_name)
-                renderer.update_scene(self._mjdata, camera=cam)
-                rgb = cast(np.ndarray, renderer.render())
-                rgb = np.asarray(rgb, dtype=np.uint8).copy()
-                renderer.enable_depth_rendering()
-                try:
-                    self._configure_renderer_geomgroups_for_camera(renderer, camera_name)
-                    renderer.update_scene(self._mjdata, camera=cam)
-                    depth = cast(np.ndarray, renderer.render())
-                    depth = np.asarray(depth, dtype=np.float32).copy()
-                finally:
-                    renderer.disable_depth_rendering()
-                return rgb, depth
+                renderer.update_scene(snapshot, camera=cam)
+                depth = np.asarray(renderer.render(), dtype=np.float32).copy()
+            finally:
+                renderer.disable_depth_rendering()
+            self._remember_render_state(camera_name, snapshot)
+            return rgb, depth
 
     def _postprocess_rgb_depth_and_K(
         self, camera_name: str, rgb: np.ndarray, depth: np.ndarray | None
@@ -1404,13 +1422,14 @@ class RobosuiteZmqServer(BaseZmqServer):
         bid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_BODY, body)
         if bid < 0:
             return None
-        with self._mj_lock:
-            with self._render_lock:
-                renderer = self._get_or_create_primary_renderer()
-                cam = build_base_chase_camera(self._mjmodel, self._mjdata, int(bid))
-                renderer.update_scene(self._mjdata, camera=cam)
-                apply_chase_frustum_near(renderer.scene, near=0.05)
-                rgb = np.asarray(renderer.render(), dtype=np.uint8).copy()
+        snapshot = self._capture_render_state()
+        with self._render_lock:
+            renderer = self._get_or_create_primary_renderer()
+            renderer._scene_option.geomgroup[:] = mujoco.MjvOption().geomgroup
+            cam = build_base_chase_camera(self._mjmodel, snapshot, int(bid))
+            renderer.update_scene(snapshot, camera=cam)
+            apply_chase_frustum_near(renderer.scene, near=0.05)
+            rgb = np.asarray(renderer.render(), dtype=np.uint8).copy()
         return self._apply_optional_mujoco_render_flip_ud(rgb)
 
     def _render_overhead_rgb(self) -> np.ndarray | None:
@@ -1423,13 +1442,14 @@ class RobosuiteZmqServer(BaseZmqServer):
         bid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_BODY, body)
         if bid < 0:
             return None
-        with self._mj_lock:
-            with self._render_lock:
-                renderer = self._get_or_create_primary_renderer()
-                cam = build_overhead_camera(self._mjmodel, self._mjdata, int(bid))
-                renderer.update_scene(self._mjdata, camera=cam)
-                apply_chase_frustum_near(renderer.scene, near=0.05)
-                rgb = np.asarray(renderer.render(), dtype=np.uint8).copy()
+        snapshot = self._capture_render_state()
+        with self._render_lock:
+            renderer = self._get_or_create_primary_renderer()
+            renderer._scene_option.geomgroup[:] = mujoco.MjvOption().geomgroup
+            cam = build_overhead_camera(self._mjmodel, snapshot, int(bid))
+            renderer.update_scene(snapshot, camera=cam)
+            apply_chase_frustum_near(renderer.scene, near=0.05)
+            rgb = np.asarray(renderer.render(), dtype=np.uint8).copy()
         return self._apply_optional_mujoco_render_flip_ud(rgb)
 
     def _primary_rgb_and_depth(self, camera_name: str) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -1711,21 +1731,22 @@ class RobosuiteZmqServer(BaseZmqServer):
             self._preserve_joint_ctrl_hold_from_ctrl()
             mujoco.mj_forward(self._mjmodel, self._mjdata)
 
-    def _camera_pose_world(self, camera_name: str) -> np.ndarray:
+    def _camera_pose_world(self, camera_name: str, data=None) -> np.ndarray:
         """4x4 **OpenCV** camera-to-world transform for pinhole unprojection (DynaMem voxel code).
 
         MuJoCo reports ``cam_xmat`` in an OpenGL-style camera frame (+Y up, −Z forward). EMET unprojection
         uses OpenCV-style rays (+Y down image rows, +Z into the scene). For the same physical camera,
         ``R_world_from_cv = R_mujoco @ diag(1,-1,-1)`` so ``p_world = R_mujoco @ (D @ p_cv)``.
         """
-        if self._mjmodel is None or self._mjdata is None:
+        data = self._mjdata if data is None else data
+        if self._mjmodel is None or data is None:
             return np.eye(4, dtype=np.float64)
         with self._mj_lock:
             cam_id = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_CAMERA, camera_name)
             if cam_id < 0:
                 return np.eye(4, dtype=np.float64)
-            R = np.asarray(self._mjdata.cam_xmat[cam_id], dtype=np.float64).reshape(3, 3)
-            pos = np.asarray(self._mjdata.cam_xpos[cam_id], dtype=np.float64).reshape(3)
+            R = np.asarray(data.cam_xmat[cam_id], dtype=np.float64).reshape(3, 3)
+            pos = np.asarray(data.cam_xpos[cam_id], dtype=np.float64).reshape(3)
             # MuJoCo camera frame: +Y up, −Z forward (OpenGL). Point unprojection in emet uses OpenCV
             # camera coordinates (+Y down, +Z forward). World = R_mj @ p_mj; with p_mj = D @ p_cv and
             # D = diag(1,-1,-1), we have p_world = (R_mj @ D) @ p_cv.
@@ -2518,12 +2539,13 @@ class RobosuiteZmqServer(BaseZmqServer):
         height, width = rgb_height_width_for_zmq(rgb)
         depth_u16 = (depth * 1000).astype(np.uint16)
 
-        positions, _, _ = self.get_joint_state()
-        xyt = self.get_base_pose()
+        frame_data = getattr(self, "_camera_render_states", {}).get(primary_cam)
+        positions, _, _ = self.get_joint_state(data=frame_data)
+        xyt = self.get_base_pose(data=frame_data)
         if xyt is None:
             xyt = np.zeros(3)
 
-        cam_pose = self._camera_pose_world(primary_cam)
+        cam_pose = self._camera_pose_world(primary_cam, data=frame_data)
         # ZMQ contract: camera_pose MuJoCo world; gps episode-relative (test_zmq_observation_frame_contract).
 
         message = {
@@ -2533,9 +2555,10 @@ class RobosuiteZmqServer(BaseZmqServer):
             "camera_pose": cam_pose,
             "ee_pose": np.eye(4),
             "joint": positions,
-            "joint_head": self._joint_head_qpos(),
+            "joint_head": self._joint_head_qpos(data=frame_data),
             "gps": xyt[:2],
             "compass": np.array([xyt[2]]),
+            "image_sim_time": None if frame_data is None else float(frame_data.time),
             "rgb_width": width,
             "rgb_height": height,
             "control_mode": self.get_control_mode(),
@@ -2569,7 +2592,7 @@ class RobosuiteZmqServer(BaseZmqServer):
                 if rgb_r.shape[0] == rgb.shape[0] and rgb_r.shape[1] == rgb.shape[1]:
                     message["rgb_right"] = compression.to_jpg(rgb_r)
                     message["camera_K_right"] = K_r
-                    message["camera_pose_right"] = self._camera_pose_world(right_name)
+                    message["camera_pose_right"] = self._camera_pose_world(right_name, data=getattr(self, "_camera_render_states", {}).get(right_name))
             except Exception as e:
                 logger.debug(f"Stereo auxiliary RGB failed for {right_name}: {e!r}")
         if len(cam_names) >= 3 and allow_extra_cams:
@@ -2579,7 +2602,7 @@ class RobosuiteZmqServer(BaseZmqServer):
                     rgb_t, K_t = self._primary_rgb_only_with_K(tertiary)
                     message["rgb_tertiary"] = compression.to_jpg(rgb_t)
                     message["camera_K_tertiary"] = K_t
-                    message["camera_pose_tertiary"] = self._camera_pose_world(tertiary)
+                    message["camera_pose_tertiary"] = self._camera_pose_world(tertiary, data=getattr(self, "_camera_render_states", {}).get(tertiary))
                     message["camera_name_tertiary"] = tertiary
                 except Exception as e:
                     logger.debug(f"Tertiary RGB failed for {tertiary}: {e!r}")

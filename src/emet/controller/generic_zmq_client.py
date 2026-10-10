@@ -787,20 +787,47 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
                 continue
             if msg is None:
                 continue
-            with self._obs_lock:
-                self._servo = msg
-                if self._obs is not None:
-                    sess = read_emet_session(self._obs)
-                    caps = (sess or {}).get("capabilities") or {}
-                    if caps.get("zmq_obs_metadata_only"):
-                        merge_servo_images_into_full_obs(self._obs, msg)
-                        decode_zmq_obs_images_inplace(self._obs)
-                self._servo_obs_rerun = _decode_servo_message_to_observations(msg, self._state, self._obs)
-                self._emet_session_cache, self._emet_session_cache_step = emet_session_cache_update(
-                    self._emet_session_cache,
-                    self._emet_session_cache_step,
-                    msg,
-                )
+            self._publish_servo_message(msg)
+
+    def _publish_servo_message(self, msg):
+        """Decode images outside the lock used by the measured-state receiver."""
+        with self._obs_lock:
+            original = self._obs
+            obs = None if original is None else dict(original)
+            state = self._state
+        if obs is not None:
+            caps = (read_emet_session(obs) or {}).get("capabilities") or {}
+            if caps.get("zmq_obs_metadata_only"):
+                merge_servo_images_into_full_obs(obs, msg)
+                decode_zmq_obs_images_inplace(obs)
+        decoded = _decode_servo_message_to_observations(msg, state, obs)
+        with self._obs_lock:
+            self._servo = msg
+            # A newer full observation may arrive while decompression runs.
+            if self._obs is original and obs is not None:
+                self._obs = obs
+            self._servo_obs_rerun = decoded
+            self._emet_session_cache, self._emet_session_cache_step = emet_session_cache_update(
+                self._emet_session_cache, self._emet_session_cache_step, msg,
+            )
+
+    def _decoded_observation_snapshot(self):
+        with self._obs_lock:
+            original = self._obs
+            if original is None:
+                return None
+            obs, servo = dict(original), self._servo
+        caps = (read_emet_session(obs) or {}).get("capabilities") or {}
+        if caps.get("zmq_obs_metadata_only"):
+            if not full_obs_has_wire_images(obs) and servo is not None:
+                merge_servo_images_into_full_obs(obs, servo)
+            decode_zmq_obs_images_inplace(obs)
+        else:
+            decode_zmq_obs_depth_inplace(obs)
+        with self._obs_lock:
+            if self._obs is original:
+                self._obs = obs
+        return obs
 
     # -- Observations ---------------------------------------------------------
 
@@ -831,21 +858,8 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
             time.sleep(0.05)
 
     def _obs_ready_for_mapping(self) -> bool:
-        with self._obs_lock:
-            obs = self._obs
-            if obs is None:
-                return False
-            sess = read_emet_session(obs)
-            caps = (sess or {}).get("capabilities") or {}
-            if caps.get("zmq_obs_metadata_only"):
-                if not full_obs_has_wire_images(obs):
-                    servo = self._servo
-                    if servo is None:
-                        return False
-                    merge_servo_images_into_full_obs(obs, servo)
-                decode_zmq_obs_images_inplace(obs)
-                return obs.get("rgb") is not None
-            return True
+        obs = self._decoded_observation_snapshot()
+        return obs is not None and obs.get("rgb") is not None
 
     def get_joint_positions(self, timeout: float = 5.0) -> np.ndarray | None:
         state = self._state
@@ -889,20 +903,9 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
 
     def get_observation(self, max_iter: int = 5) -> Observations | None:
         """Get the latest observation from the server."""
-        with self._obs_lock:
-            if self._obs is None:
-                return None
-            obs = self._obs
-            servo = self._servo
-            sess = read_emet_session(obs)
-            caps = (sess or {}).get("capabilities") or {}
-            if caps.get("zmq_obs_metadata_only"):
-                if not full_obs_has_wire_images(obs) and servo is not None:
-                    merge_servo_images_into_full_obs(obs, servo)
-                decode_zmq_obs_images_inplace(obs)
-            else:
-                decode_zmq_obs_depth_inplace(obs)
-            obs = dict(self._obs)
+        obs = self._decoded_observation_snapshot()
+        if obs is None:
+            return None
 
         rgb = obs.get("rgb")
         depth = obs.get("depth")
