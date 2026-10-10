@@ -282,3 +282,7 @@ uv run python scripts/scripted_sim_pick_place.py --start-sim \
 
 TAMP tools return a consistent versioned JSON result on every path. See the
 [canonical TAMP API](apis/tamp.md) for schemas, recovery actions, and simulator limits.
+
+For placement geometry and replay, see [the placement API](apis/placement.md).
+For controlled improvements and provenance-linked figures, see
+[paired TAMP metrics](experiments/tamp_paired_metrics.md).
