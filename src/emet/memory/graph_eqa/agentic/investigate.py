@@ -425,9 +425,11 @@ def _tool_investigate(
         )
     grounding = None
     if query_candidate:
+        self._grounded_obs_id = None
         grounding = self.agent.ground_query_candidate(oid, after_observation=before_capture)
         self._append_trace({"tool": "ground_query_candidate", "candidate_id": oid, **grounding})
         if grounding["ok"]:
+            self._grounded_obs_id = grounding["obs_id"]
             record = self.agent.query_candidates.records[oid]
             self._record_voxel_score_hit(
                 record.query,
