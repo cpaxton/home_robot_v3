@@ -127,7 +127,17 @@ EQA_SKILL_SPECS: tuple[SkillSpec, ...] = (
         description=(
             "Scan in place (head sweep / rotate) to refresh the map and graph at the current pose without navigating."
         ),
-        parameters=_NO_PARAMS,
+        parameters={
+            "type": "object",
+            "properties": {
+                "profile": {
+                    "type": "string",
+                    "enum": ["local", "coverage"],
+                    "default": "local",
+                    "description": "local: existing short look. coverage: up to 16 measured views over eight headings, 180s budget; reports partial/unsupported coverage.",
+                },
+            },
+        },
     ),
     SkillSpec(
         name="verify_siglip",

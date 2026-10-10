@@ -224,16 +224,16 @@ class GraphEQAController(DynamemController):
         )
         log_vlm_context_to_visualizer(self.rerun_visualizer, self.graph_memory)
 
-    def update(self, *, full_perception: bool | None = None) -> None:
-        super().update(full_perception=full_perception)
+    def update(self, *, full_perception: bool | None = None, observation=None) -> None:
+        super().update(full_perception=full_perception, observation=observation)
         self._log_graph_eqa_rerun()
 
-    def look_around(self):
+    def look_around(self, *, profile="local", deadline=None, on_observation=None):
         """Habitat has no head actuators — rotate the base to build coverage."""
-        if is_habitat_robot_client(self.robot):
+        if profile == "local" and is_habitat_robot_client(self.robot):
             habitat_body_scan(self.robot, on_step=self.update)
             return
-        super().look_around()
+        return super().look_around(profile=profile, deadline=deadline, on_observation=on_observation)
 
     def _best_frontier_point_from_graph(self, text: str | None) -> np.ndarray | None:
         """Use graph information gain/risk scoring before the nearest-frontier fallback."""

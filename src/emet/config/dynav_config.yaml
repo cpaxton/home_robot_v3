@@ -3,6 +3,10 @@
 # Encoder setup
 # Encoder is used to compute per-object embeddings.
 encoder: "siglip"
+mapping:
+  # Opt-in only: eight headings × two supported head elevations, measured arrival.
+  # local preserves mapping_rotate_steps and the existing mapping protocol.
+  scan_profile: local
 open_vocab_category_map_file: example_cat_map.json
 
 # Sparse Voxel Map parameters

@@ -46,7 +46,7 @@ def _pin_eqa_look_obs(self, obs_id: int | None) -> None:
     gm.last_eqa_look_obs_id = oid
 
 
-def _tool_look_around(self, *, verify: bool = True) -> dict[str, Any]:
+def _tool_look_around(self, *, verify: bool = True, profile: str = "local") -> dict[str, Any]:
     agent = self.agent
     hypothesis_id = None
     if verify:
@@ -56,22 +56,49 @@ def _tool_look_around(self, *, verify: bool = True) -> dict[str, Any]:
             self.query_text,
         )
     ok = False
+    scan = None
+    frame_count = len(getattr(getattr(agent, "voxel_map", None), "observations", ()))
     if hasattr(agent, "look_around"):
         try:
-            agent.look_around()
-            ok = True
+            if profile == "local":
+                agent.look_around()
+                ok = True
+            else:
+                scan = agent.look_around(profile=profile)
+                ok = bool(isinstance(scan, dict) and scan.get("ok"))
         except Exception as e:
             _logger.warning(f"look_around failed: {e}")
     if ok:
         self._refresh_room_after_motion()
-    cap = self._tool_capture_and_update()
+    if profile == "local":
+        cap = self._tool_capture_and_update()
+    else:
+        # Do not append an unvalidated seventeenth image, or promote the final
+        # gaze after a failed turn/head wait. Earlier partial views stay mapped.
+        from emet.memory.graph_eqa.agentic.views import retain_latest_view
+
+        view = retain_latest_view(self, after=frame_count) if ok else None
+        cap = {"ok": False, "status": "scan_incomplete"}
+        if view is not None:
+            self._fresh_obs_ids.add(view.obs_id)
+            self._last_capture_status = "OK"
+            cap = {"ok": True, "obs_id": view.obs_id, "view_id": view.view_id, "status": "NEW_VIEW"}
+            self._append_trace(
+                {"tool": "capture_and_update", **cap, **dump_query_rgb(self, view.obs_id, rgb=view.rgb, kind="capture")}
+            )
     verify_out = None
     if hypothesis_id is not None and cap.get("ok") and cap.get("obs_id") is not None:
         self._policy_approached(hypothesis_id, int(cap["obs_id"]))
         if verify and self.mode == "answer":
             verify_out = self._verify_after_motion(phrase=self.query_text)
-    self._append_trace({"tool": "look_around", "ok": ok})
-    return {"ok": ok, "capture": cap, "verify": verify_out}
+    self._append_trace({"tool": "look_around", "ok": ok, "scan": scan})
+    # Keep full calibrated per-view evidence in the trace, not in the router's
+    # prompt. The model needs the outcome, cost and actionable failure reason.
+    summary = None
+    if isinstance(scan, dict):
+        summary = {key: value for key, value in scan.items() if key != "views"}
+        summary["map_observation_indices"] = [view["map_observation_index"] for view in scan.get("views", [])]
+    return {"ok": ok, "capture": cap, "verify": verify_out, "scan": summary}
 
 
 def _siglip_phrase(self, phrase: str = "") -> str:
