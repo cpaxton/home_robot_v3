@@ -4,7 +4,18 @@ The September 4 Sourccey video is **rejected as positive placement evidence**.
 Its historical `success=True` was recorded before measured-arrival fixes and with
 an invalid robot model. Object displacement alone does not establish attachment.
 
-## Confirmed defects and fixes
+## October 10 restack on the official Mk.V model
+
+PR #192 supersedes the historical Sourccey assembly, arm fragment, home posture,
+and mesh-reflection changes described below. This branch now preserves #192's
+model, generator, and robot tests exactly; it does not restore the retired assets.
+The remaining production changes are the generic URDF converter, default-scene
+floor cleanup, and recording visibility/harness repairs. Converter FK parity now
+uses the complete pinned official Mk.V URDF, including prismatic joints.
+Historical pictures and failed runs remain rejection/debug evidence, not new-model
+acceptance. Native-contact Sourccey manipulation still requires separate work.
+
+## Historical defects and fixes (Sourccey portions superseded by #192)
 
 - The URDF converter emitted revolute joints on parent bodies, rotating the wrong
   subtree about the wrong pivot. Emit each joint on its child link. Independent
