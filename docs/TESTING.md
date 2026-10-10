@@ -6,6 +6,68 @@ Central map of **how to run tests**, **what each suite validates**, and **where 
 
 ### Extracted shared-agent stack (October 2026)
 
+#### Measured scan implementation and outstanding gates (2026-10-10)
+
+- Completed replay: frozen main scored **4/4**, the full frozen candidate
+  **1/4** on q12/q14/q56/q6. The three earlier EQA losses reproduced.
+  Isolated #180 versus its main baseline scored **4/4 on both**. This narrows
+  attribution; it does not clear #181/#182/#184 or prove accuracy neutrality.
+- Completed S0: both old main and candidate failed object and receptacle find;
+  runtimes were approximately **22.4 vs 16.5 minutes**. Faster failure is not
+  task success. RoboCasa failed asset preflight, so it has no valid task score.
+- Current-main measured route gate passed **50/50 waypoints**, unchanged
+  0.02 m / 0.03 rad precision tolerances. Recorded head tilt remained near
+  -30 degrees, with camera forward Z near -0.5. The older candidate's level
+  head has **not** reproduced on this integrated base. The existing atomic
+  simulator command-snapshot repair is a plausible explanation, not proven
+  attribution. The idle-only probe never requested a tilted view.
+- A remaining head-wait bug is repaired: stationary off-target is not arrival;
+  tilt velocity participates in settling; missing/stale telemetry times out;
+  `head_to` and `look_front` propagate success/failure. Tolerances are unchanged.
+- Opt-in mapping configuration: `mapping.scan_profile: coverage`. Legacy
+  `local` remains the default and preserves `mapping_rotate_steps`. Coverage
+  instead requests eight absolute episode-frame headings and front/downward
+  head views (up to 16 captures), independent of scene or target labels. The
+  same implementation backs `look_around(profile="coverage")`.
+- Coverage returns requested/measured base/head poses, camera transforms and
+  intrinsics, frame sequences, map observation indices, elapsed time, command
+  counts, unsupported views and partial-failure reasons. Map indices are **not
+  graph object IDs**. Existing swept-footprint checks gate agent turns; no
+  unknown floor is declared free. Missing head capability yields horizontal
+  captures with an explicit vertical-coverage gap. Final gaze is preserved.
+- The 180-second scan budget is cooperative (synchronous perception in flight
+  cannot be interrupted); an earlier caller deadline can be passed. Each turn
+  uses at most a 30-second requested wait. Do not claim a hard end-to-end SLA
+  from these bounds; simulator adapters can scale motion waits.
+- GPU validation is **blocked**, not passed: the model-free probe was cancelled
+  before simulation because NVML reports a driver/library version mismatch.
+  Repair the host driver before requeueing. No reboot was performed.
+- Targeted control, scan, tool, OVMM contract and navigation regressions:
+  **379 passed, 2 skipped** (the two simulator integration tests are opt-in).
+  A Mesa software-rendering fallback booted S0 and measured head tilt near
+  -30 degrees, but ran at about **0.016 simulation seconds per wall second**.
+  It was stopped during posture preparation, without accepted scan captures.
+  This is not a coverage pass. Its probe child needed explicit termination
+  after job-wrapper cancellation; unrelated simulation processes were retained.
+
+Resume serially, with CPU-safe affinity and GPU exclusivity:
+
+1. Run `scripts/probe_rby1_camera.py --sim configs/sim/default_table_stretch.yaml
+   --coverage-scan --output-dir <fresh-directory>` through `emet jobs run`.
+   Inspect every accepted camera view/pose and require actual target visibility;
+   completion alone is not acceptance. The probe has no occupancy map, so it
+   tests optics/control in the known fixture, not agent swept-clearance safety.
+2. Extend this model-free gate to four initial headings and an opposite-side
+   fixture; score simulator masks and valid depth offline, never in policy.
+   These gates and the GT visibility scorer remain outstanding.
+3. Only after that gate, run paired legacy/coverage S0 with identical Qwen,
+   physics, seed and find budgets; report the larger mapping image/time budget.
+4. Replay EQA losses at successive #181, #182 and #184 prefixes. Keep the
+   coverage profile off for this attribution; do not promote the full stack
+   while its repeated loss remains unexplained.
+5. Preflight installed RoboCasa/Molmo assets before the small paired pilots.
+   Keep TAMP to regression checks; no Habitat-OVMM sweep in this change.
+
 #### Repaired-head pilot and review handoff (2026-10-09)
 
 - Current-main acceptance sandbox incorporates the reconciled slices, #190's

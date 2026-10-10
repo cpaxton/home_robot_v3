@@ -968,3 +968,14 @@ Offline units + scripted table smokes exist; these are the remaining **real / in
       restack; retain legacy unknown-field compatibility.
 - [ ] Complete five-repeat navigation and paired current-main acceptance gates.
       Land validated lower slices independently; no new defaults or main push.
+
+## Measured coverage / stack acceptance (2026-10-10)
+
+- [x] Repair head wait outcome propagation, off-target settling, tilt-speed checking and missing-telemetry timeout; preserve tolerances.
+- [x] Implement opt-in measured coverage scan shared by mapping and look-around; retain legacy default, exact-frame ingestion and existing swept safety checks.
+- [ ] Restore host NVIDIA driver (NVML driver/library mismatch); do not leave pilot jobs waiting indefinitely or reboot without approval.
+- [ ] Audit job cancellation of timeout-wrapped probes: wrapper cancellation left the known child running; explicit probe SIGTERM was needed. Do not kill unrelated simulator jobs.
+- [ ] Validate model-free coverage from four starting headings and an opposite-side fixture with offline GT masks/depth; completion is not visibility acceptance.
+- [ ] Paired learned S0 legacy/coverage, then small RoboCasa/Molmo after asset preflight. Freeze model/physics/seed and report added mapping cost.
+- [ ] Attribute repeated EQA q12/q14/q56 losses across #181/#182/#184. Full candidate replay 1/4 vs main 4/4; isolated #180 4/4 vs 4/4. Do not merge upper stack on current evidence.
+- [ ] Update public stack heads/descriptions after acceptance. Keep control repair, scan/tooling, and evidence commits separate; no push to main.
