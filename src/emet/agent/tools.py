@@ -554,8 +554,10 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         return getattr(executor, "robot", None) if executor is not None else None
 
     def _tamp_manip_mode() -> str:
+        from emet.simulation.env_flags import env_manip_mode
+
         executor = context.get("executor")
-        return str(getattr(executor, "_manip_mode", None) or context.get("manip_mode") or "auto")
+        return env_manip_mode() or str(getattr(executor, "_manip_mode", None) or context.get("manip_mode") or "auto")
 
     def _native_input_gate() -> str | None:
         if _tamp_manip_mode().strip().lower() != "physical":

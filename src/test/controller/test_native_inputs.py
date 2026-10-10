@@ -150,3 +150,17 @@ def test_stretch_state_update_records_receive_time(monkeypatch):
     evidence = client.get_joint_state_evidence()
     assert evidence.received_monotonic == 10.
     np.testing.assert_array_equal(evidence.require(now=10.), [1., 2.])
+
+
+def test_environment_physical_mode_cannot_bypass_tool_input_guard(monkeypatch):
+    import json
+    from unittest.mock import Mock
+
+    from emet.agent.tools import get_tools
+
+    monkeypatch.setenv('EMET_MANIP_MODE', 'physical')
+    robot = SimpleNamespace(get_emet_session=Mock(side_effect=AssertionError('privileged read')))
+    tools = {t.name: t for t in get_tools({'robot': robot, 'manip_mode': 'teleport'})}
+    result = json.loads(tools['pick_place'].func(object_name='block', receptacle_name='table'))
+    assert result['code'] == 'observed_scene_unavailable'
+    robot.get_emet_session.assert_not_called()
