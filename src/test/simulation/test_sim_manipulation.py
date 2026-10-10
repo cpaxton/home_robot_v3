@@ -133,4 +133,3 @@ def test_free_body_pose_zeros_only_its_velocity_dofs():
     expected = before.copy()
     expected[dof:dof + 6] = 0.
     np.testing.assert_array_equal(data.qvel, expected)
-
