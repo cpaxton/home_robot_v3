@@ -74,7 +74,9 @@ def set_free_body_pose(
         if not np.isfinite(q).all() or abs(float(np.linalg.norm(q)) - 1.0) > 1e-3:
             q = np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float64)
     data.qpos[qpos_adr + 3 : qpos_adr + 7] = q
-    data.qvel[qpos_adr : qpos_adr + 6] = 0.0
+    # Free joints occupy seven qpos entries but only six velocity DOFs.
+    dof_adr = int(model.jnt_dofadr[jnt_adr])
+    data.qvel[dof_adr : dof_adr + 6] = 0.0
     mujoco.mj_forward(model, data)
     return True
 
