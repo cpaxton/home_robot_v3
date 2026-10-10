@@ -102,6 +102,31 @@ class AbstractRobotClient(ABC):
         Returns True if we actually should do anything (like update) after this."""
         return False
 
+    def switch_to_manipulation_mode(self):
+        """Enter manipulation mode, if supported by this client."""
+        raise NotImplementedError()
+
+    def get_joint_state(self, timeout: float = 5.0):
+        """Return (positions, velocities, efforts), or (None, None, None) on timeout.
+
+        Registry clients use RobotSpec.joint_names order and radians/metres.
+        """
+        raise NotImplementedError()
+
+    def set_actuator_positions(
+        self,
+        positions: dict[str, float] | list[float] | np.ndarray,
+        *,
+        reliable: bool = True,
+    ) -> None:
+        """Send targets in RobotSpec.actuator_names order, if supported.
+
+        Dict keys are actuator names. Units depend on actuator type: position
+        servos use radians/metres, velocity servos use radians/second or m/s.
+        Use a complete vector when holding mixed position/velocity actuators.
+        """
+        raise NotImplementedError()
+
     @abstractmethod
     def get_robot_model(self) -> RobotModel:
         """return a model of the robot for planning"""
