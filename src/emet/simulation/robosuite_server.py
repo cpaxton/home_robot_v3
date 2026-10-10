@@ -2732,20 +2732,34 @@ class RobosuiteZmqServer(BaseZmqServer):
         }
         return self._attach_emet_session(message)
 
+    def _step_physics_tick(self) -> None:
+        """Keep each integrator step atomic, allowing feedback between substeps.
+
+        Furnished-scene contact/attachment updates can make a batch expensive.
+        Holding the lock for the whole batch starves state publication precisely
+        when measured feedback is needed. The timestep and step count stay fixed.
+        """
+        for index in range(self._mj_substeps_per_tick):
+            with self._mj_lock:
+                if index == 0:
+                    self._step_planar_yaw_slew()
+                self._step_controlled_physics_once()
+                self._physics_steps_executed += 1
+                self._maybe_report_fall_over()
+                finished = self._max_sim_steps is not None and self._physics_steps_executed >= self._max_sim_steps
+            if finished:
+                break
+            # Python locks do not guarantee a waiting publisher wins the next
+            # acquisition. Yield outside the lock before another complete step.
+            time.sleep(0)
+
     def _sim_loop(self) -> None:
         """Step the MuJoCo simulation at the configured rate."""
         if self._mujoco_ctrl_debug_enabled():
             self._ctrl_debug_emit_apply_logs = True
             logger.info("[mujoco_ctrl_debug] headless _sim_loop: apply logging enabled")
         while self._running:
-            with self._mj_lock:
-                self._step_planar_yaw_slew()
-                for _ in range(self._mj_substeps_per_tick):
-                    self._step_controlled_physics_once()
-                    self._physics_steps_executed += 1
-                    self._maybe_report_fall_over()
-                    if self._max_sim_steps is not None and self._physics_steps_executed >= self._max_sim_steps:
-                        break
+            self._step_physics_tick()
             if self._max_sim_steps is not None and self._physics_steps_executed >= self._max_sim_steps:
                 logger.info(f"MuJoCo step limit reached (--steps {self._max_sim_steps}); stopping simulation loop.")
                 self._running = False
@@ -2776,16 +2790,10 @@ class RobosuiteZmqServer(BaseZmqServer):
                     self._ctrl_debug_emit_apply_logs = True
                     logger.info("[mujoco_ctrl_debug] passive viewer: apply logging enabled")
                 while self._running and viewer.is_running():
-                    # Keep mj_step and viewer.sync under the same lock: sync uses mj_copyDataVisual
-                    # and must not overlap Renderer / mj_forward on other ZMQ threads.
+                    self._step_physics_tick()
+                    # sync reads live data, so it retains the same exclusion as
+                    # an individual step without locking the entire batch.
                     with self._mj_lock:
-                        self._step_planar_yaw_slew()
-                        for _ in range(self._mj_substeps_per_tick):
-                            self._step_controlled_physics_once()
-                            self._physics_steps_executed += 1
-                            self._maybe_report_fall_over()
-                            if self._max_sim_steps is not None and self._physics_steps_executed >= self._max_sim_steps:
-                                break
                         viewer.sync()
                     if self._max_sim_steps is not None and self._physics_steps_executed >= self._max_sim_steps:
                         logger.info(f"MuJoCo step limit reached (--steps {self._max_sim_steps}); closing viewer loop.")
