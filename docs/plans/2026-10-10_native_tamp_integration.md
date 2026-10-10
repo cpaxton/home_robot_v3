@@ -107,3 +107,32 @@ Exact integration head `5beb3ebe` is under live diagnostic
 unit regression as a live placement pass. Geometry refresh is also expensive
 under load, but a trial loop-vectorization showed no useful microprofile gain
 and was removed.
+
+### Fast feedback and attachment follow-up
+
+The substep-only retest `20261010_124407_851058` failed earlier at pregrasp:
+feedback was fresh, but frequent scene refreshes reduced physics progress and
+tracking missed its unchanged deadline. The next candidate removed scene metadata
+refresh from fast state/servo publication; only full observations publish it.
+That run (`20261010_124831_9c33c2`, `ddb30ff3`) passed pickup/lift and found three
+placement paths, then failed on a command acknowledgement after base transport.
+Neither result is a placement pass.
+
+The terminal stacks also exposed two attachment issues. `set_free_body_pose`
+used `jnt_qposadr` to clear `qvel`; free joints have different position/velocity
+addresses. A three-freejoint regression failed before the correction: it left
+one target velocity nonzero and zeroed a different object's velocity. Attachment
+updates also ran full dynamics twice per physics step. They now refresh transforms
+without redundant solver calls; explicit pose-setting retains its final dynamics
+update. Standalone telemetry/manipulation coverage passes 64 tests. Integration
+head `398eb7dc` is running as `20261010_125538_3fddc5`.
+
+### Stack reconciliation completed
+
+Non-rewriting restacks on main/#192 were pushed for #179, #186, #187, #188,
+#189, #191, and #193. #191 now preserves the official Sourccey model, generator,
+and robot tests exactly, removing its obsolete arm fragment. Its remaining
+changes concern generic conversion, floors, and recording. Validation: 198 tests
+on the restacked #193 chain; 30 model/converter checks on #191 (overlapping);
+8 paired-metric tests on #187. These do not replace live placement or native-agent
+acceptance. No production merge is justified by unit-test totals alone.
