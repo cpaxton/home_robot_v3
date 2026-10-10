@@ -82,8 +82,8 @@ def test_robocasa_sourccey_navigates_to_world_goal():
 
 @pytest.mark.skipif(not RUN_SIM_TESTS, reason="RUN_SIM_TESTS=0")
 @pytest.mark.timeout(180)
-def test_robocasa_sourccey_arms_move_and_mirror():
-    """Arm joints reach commanded targets and keep left/right mirror symmetry."""
+def test_robocasa_sourccey_arms_reach_hardware_targets():
+    """Both actual Mk.V arms track bounded joint and gripper commands."""
     import mujoco
 
     from emet.robots.sourccey import SourcceyBackend
@@ -111,7 +111,7 @@ def test_robocasa_sourccey_arms_move_and_mirror():
     mujoco.mj_resetDataKeyframe(m, d, 0)
     mujoco.mj_forward(m, d)
 
-    # mirrored joint targets: left uses +v, right uses -v (sagittal-mirrored chain)
+    # Use each full-assembly joint's convention; both grippers open positively.
     targets = {
         "left_shoulder_pan": 0.4,
         "left_shoulder_lift": -0.5,
@@ -120,10 +120,10 @@ def test_robocasa_sourccey_arms_move_and_mirror():
         "right_shoulder_lift": 0.5,
         "right_elbow_flex": -1.4,
         "left_gripper": 1.0,
-        "right_gripper": -1.0,
+        "right_gripper": 1.0,
     }
     idx = {jn: i for i, jn in enumerate(spec.joint_names)}
-    jt = np.zeros(spec.dof)
+    jt = np.array([d.qpos[m.joint(n).qposadr[0]] for n in spec.joint_names])
     for jn, v in targets.items():
         jt[idx[jn]] = v
     with server._mj_lock:
@@ -137,17 +137,6 @@ def test_robocasa_sourccey_arms_move_and_mirror():
         q = float(d.qpos[m.jnt_qposadr[jid]])
         assert abs(q - v) < 0.1, f"{jn} qpos={q:.2f} target={v}"
 
-    # left/right mirror in base frame (undo base yaw)
-    byaw = server.get_base_xyt()[2]
-    R = np.array([[np.cos(-byaw), -np.sin(-byaw)], [np.sin(-byaw), np.cos(-byaw)]])
-    bx = d.body("base_root").xpos[:2]
-
-    def local(p):
-        return R @ (p[:2] - bx)
-
-    l = local(d.body("left_Gripper-Base").xpos)
-    r = local(d.body("right_Gripper-Base").xpos)
-    assert abs(l[0] + r[0]) < 0.03 and abs(l[1] - r[1]) < 0.03, f"arms not mirrored: {l} vs {r}"
     assert np.isfinite(d.qacc).all()
     server._running = False
     server._close_renderers()

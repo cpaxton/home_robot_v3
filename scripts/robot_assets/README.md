@@ -8,15 +8,17 @@ Reusable tooling to vendor a new robot into `src/emet/assets/robot/<name>/`:
    frame alone.
 2. **`urdf_to_mjcf.py`** — turn an arm URDF into an MJCF body fragment, carrying
    over the kinematic chain (joint frames/axes/limits), inertials, and visuals.
-   Sourccey uses the **updated official** `urdf/ArmLeft/ArmLeft.urdf` (not the
-   legacy `lerobot-vulcan` `Arm.urdf`). `--mass-scale` scales link masses/inertias
-   (CAD inertials are often too heavy; tune so the full robot matches the datasheet).
+   This is for standalone arm imports. Sourccey Mk.V instead uses the complete
+   official MuJoCo assembly (see below). `--mass-scale` scales link inertials when
+   justified by measurements.
    `--recenter-joint shoulder_pan` wraps the fragment so the shoulder pivot sits at
    `arm_root` (required by `assemble_sourccey.py`). Meshes marked `"aligned": true`
    in the mesh-map are placed at the body origin with identity rotation
    (see `align_urdf_meshes.py`).
-3. **`assemble_sourccey.py`** — full-robot example: base/lift/dome/arms/cameras
-   assembled into one `sourccey.xml` with planar base joints + actuators.
+3. **`assemble_sourccey.py`** — adapt the pinned official full-body Mk.V MJCF
+   to Emet planar base joints, hardware arm limits, and actuator names.
+   **`sync_sourccey.py`** refreshes the snapshot from clean official simulator and
+   hardware checkouts, cross-checks their URDFs and records source hashes.
 4. **`align_urdf_meshes.py`** — bake URDF-joint alignment into arm-link STL meshes
    so consecutive links connect. A vendor URDF's visual origins are tuned for its
    own STL frames; STEP-derived meshes have different frames, which leaves gaps
@@ -28,6 +30,22 @@ Reusable tooling to vendor a new robot into `src/emet/assets/robot/<name>/`:
    trusting perception. Writes PNGs + raw depth `.npy`.
 6. **`serve_preview.py`** — render a `Scene`-style preview (top/front/side) of a
    generated MJCF so you can eyeball the assembly before committing.
+
+## Sourccey Mk.V
+
+```bash
+python scripts/robot_assets/sync_sourccey.py \
+    --simulation /path/to/sourccey-simulation-mujoco \
+    --hardware /path/to/sourccey-hardware
+uv run python scripts/robot_assets/assemble_sourccey.py
+```
+
+No CAD conversion is needed. The original MJCF, full-body URDF and referenced
+meshes are retained in `src/emet/assets/robot/sourccey/upstream/`, with the MIT
+license and a revision/hash manifest. Generated `sourccey.xml` is the planar
+Emet adaptation; the native model's mecanum traction needs upstream's Python
+simulation loop. See [`docs/robots/sourccey.md`](../../docs/robots/sourccey.md)
+for conventions, provisional dynamics/calibration and hardware arrival checks.
 
 ## One-time env (cadquery is only needed for the STEP step)
 
@@ -46,13 +64,9 @@ $ROBOT_ASSETS_PY scripts/robot_assets/step_to_stl.py \
     /path/to/CAD/Robot/Arms/Base.step \
     --out /tmp/meshes/arm_base.stl --scale 0.001
 
-# 3. If a URDF exists, build the arm fragment + preview.
-# Sourccey (official ArmLeft, checked-in mesh map + shoulder recenter):
-uv run python scripts/robot_assets/urdf_to_mjcf.py \
-    src/emet/assets/robot/sourccey/urdf/ArmLeft/ArmLeft.urdf \
-    --mesh-map src/emet/assets/robot/sourccey/mesh_map.json \
-    --mass-scale 0.30 --recenter-joint shoulder_pan \
-    --out src/emet/assets/robot/sourccey/arm_frag.xml
+# 3. If a standalone arm URDF exists, build a fragment:
+uv run python scripts/robot_assets/urdf_to_mjcf.py /path/to/arm.urdf \
+    --mesh-map /path/to/mesh_map.json --out /tmp/arm_frag.xml
 
 # 3b. If the STEP mesh frames don't match the URDF visual origins (links look
 #     disconnected), bake the URDF-joint alignment into the meshes first:

@@ -37,12 +37,20 @@ def render_preview(mjcf: Path, out: Path) -> None:
         mujoco.mj_resetDataKeyframe(model, data, 0)
     mujoco.mj_forward(model, data)
 
+    model.vis.global_.offwidth = max(1024, model.vis.global_.offwidth)
+    model.vis.global_.offheight = max(1024, model.vis.global_.offheight)
+    out.parent.mkdir(parents=True, exist_ok=True)
     renderer = mujoco.Renderer(model, 1024, 1024)
     views = ["preview_front", "preview_34", "preview_top", "preview_side"]
-    for name in views:
+    angles = [(0, -10), (135, -20), (90, -90), (90, -10)]
+    for name, (azimuth, elevation) in zip(views, angles, strict=True):
+        camera = name
         if mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, name) < 0:
-            continue
-        renderer.update_scene(data, camera=name)
+            camera = mujoco.MjvCamera()
+            camera.lookat[:] = model.stat.center
+            camera.distance = 2.0 * model.stat.extent
+            camera.azimuth, camera.elevation = azimuth, elevation
+        renderer.update_scene(data, camera=camera)
         pixels = renderer.render()
         p = out.with_name(f"{out.stem}_{name}{out.suffix}")
         from PIL import Image
