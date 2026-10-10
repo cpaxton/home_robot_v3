@@ -90,3 +90,20 @@ at 1.4 ms, moved-bowl geometry at 10 ms, and refreshing all articulated bodies
 at 202 ms with one BLAS thread. These costs alone do not explain the six-second
 gap. The next diagnostic must capture server and client thread stacks/timings
 at the failed transition before further changes or threshold adjustments.
+
+### Physics-batch lock correction
+
+Traced diagnostic `20261010_123558_40ba47` reproduced the placement failure with
+6.004 s receive age. At the failed transition, the state publisher waited on
+`_mj_lock` while physics stepped and snapped attachments. The server held that
+lock across every substep in a tick. The correction releases it between complete
+substeps, yielding to waiting publishers; integrator timestep, step count,
+collision checks, and acceptance limits remain unchanged. Headless and passive
+viewer paths share the same step helper. Its regression failed on the previous
+code and passes now; the standalone telemetry suite passes 43 tests.
+
+Exact integration head `5beb3ebe` is under live diagnostic
+`20261010_124407_851058` in `/tmp/tamp-physics-substep-fix/`. Do not interpret the
+unit regression as a live placement pass. Geometry refresh is also expensive
+under load, but a trial loop-vectorization showed no useful microprofile gain
+and was removed.
