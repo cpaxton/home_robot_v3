@@ -55,3 +55,46 @@ def test_render_releases_physics_lock_and_keeps_one_snapshot(method):
     assert not thread.is_alive()
     assert not errors
     assert all(np.array_equal(q, [0.]) for q in scenes), 'RGB and depth must use the same snapshot'
+
+
+def test_measured_state_can_publish_between_physics_substeps(monkeypatch):
+    """A slow batch cannot monopolize the lock through all its substeps."""
+    from emet.simulation import robosuite_server as module
+
+    server = RobosuiteZmqServer.__new__(RobosuiteZmqServer)
+    server._mj_lock = threading.RLock()
+    server._running = True
+    server._mj_substeps_per_tick = 3
+    server._max_sim_steps = 3
+    server._physics_steps_executed = 0
+    server._mujoco_ctrl_debug_enabled = lambda: False
+    server._step_planar_yaw_slew = lambda: None
+    server._maybe_report_fall_over = lambda: None
+    received = threading.Event()
+    samples = []
+
+    def read_state():
+        with server._mj_lock:
+            samples.append(server._physics_steps_executed)
+            received.set()
+
+    reader = threading.Thread(target=read_state, daemon=True)
+
+    def step():
+        if server._physics_steps_executed == 0:
+            reader.start()
+        else:
+            assert received.is_set(), 'a full physics batch blocks measured telemetry'
+
+    def yield_to_reader(_):
+        assert received.wait(1), 'scheduler yield must happen outside the physics lock'
+
+    server._step_controlled_physics_once = step
+    monkeypatch.setattr(module.time, 'sleep', yield_to_reader)
+    try:
+        server._sim_loop()
+    finally:
+        reader.join(1)
+    assert samples == [1]
+    assert server._physics_steps_executed == 3
+    assert not server._running
