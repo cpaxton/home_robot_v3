@@ -16,6 +16,7 @@ from dataclasses import dataclass, replace
 import mujoco
 import numpy as np
 
+from emet.controller.manipulation.native_inputs import ObservationUnavailable, read_object_pose
 from emet.motion.arm_rrt import plan_arm_joint_path
 from emet.motion.mujoco_arm_ik import joint_qpos_addrs, solve_pose_ik
 
@@ -51,7 +52,19 @@ class PhysicalPickPlaceExecutor:
         base_body: str | None = None,
         joint_limit_margins=None,
         gripper_open_configuration=(),
+        input_mode: str = "observed",
+        object_pose_provider=None,
     ):
+        if input_mode not in {"observed", "privileged"}:
+            raise ValueError("invalid_tamp_inputs")
+        if input_mode == "observed":
+            if object_pose_provider is None or object_pose_provider.input_mode != "observed":
+                raise ValueError("observed_object_provider_required")
+            if getattr(collision, "geometry_source", None) != "observed_voxels":
+                raise ValueError("observed_collision_provider_required")
+        elif object_pose_provider is not None and object_pose_provider.input_mode != "privileged":
+            raise ValueError("input_provider_mismatch")
+        self.input_mode, self.object_pose_provider = input_mode, object_pose_provider
         self.robot, self.model, self.data = robot, model, data
         self.ee_body, self.joint_names = ee_body, tuple(joint_names)
         self.collision = collision
@@ -180,6 +193,18 @@ class PhysicalPickPlaceExecutor:
         mujoco.mj_kinematics(self.model, self.data)
         return result.waypoints, None
 
+    def _object_pose(self, object_ref):
+        if self.object_pose_provider is not None:
+            return read_object_pose(self.object_pose_provider, object_ref, inputs=self.input_mode)
+        # Explicit oracle evaluation/debug path only. Observed construction
+        # rejects a missing provider and cannot read simulator body poses here.
+        if self.input_mode != "privileged":
+            raise ObservationUnavailable("observed_object_provider_required")
+        body = self.data.body(object_ref)
+        pose = np.eye(4)
+        pose[:3, :3], pose[:3, 3] = body.xmat.reshape(3, 3), body.xpos
+        return pose
+
     def payload_retained(self):
         """Check the freshly synchronized payload pose, before hypothetical attachment."""
         if self.payload_body is None:
@@ -188,10 +213,15 @@ class PhysicalPickPlaceExecutor:
         if expected is None:
             self.event(phase="payload_retention", accepted=False, reason="missing_payload_reference")
             return False
-        ee, obj = self.data.body(self.ee_body), self.data.body(self.payload_body)
+        try:
+            object_pose = self._object_pose(self.payload_body)
+        except ObservationUnavailable as exc:
+            self.event(phase="payload_retention", accepted=False, reason=str(exc))
+            return False
+        ee = self.data.body(self.ee_body)
         rotation = ee.xmat.reshape(3, 3).T
-        position = rotation @ (obj.xpos - ee.xpos)
-        relative_rotation = rotation @ obj.xmat.reshape(3, 3)
+        position = rotation @ (object_pose[:3, 3] - ee.xpos)
+        relative_rotation = rotation @ object_pose[:3, :3]
         angle = np.arccos(np.clip((np.sum(relative_rotation * expected[:3, :3]) - 1) / 2, -1, 1))
         displacement = float(np.linalg.norm(position - expected[:3, 3]))
         retained = bool(displacement <= 0.02 and angle <= 0.1)
@@ -404,12 +434,20 @@ class PhysicalPickPlaceExecutor:
         if not closing.success:
             return closing
         self.synchronize(self.data)
-        initial_object_height = float(self.data.body(object_gt_body).xpos[2])
+        try:
+            initial_object_height = float(self._object_pose(object_gt_body)[2, 3])
+        except ObservationUnavailable as exc:
+            return PhysicalMotionResult(False, str(exc), "grasp")
         self.collision.set_payload(self.model, self.data, object_gt_body, self.ee_body)
         self.payload_body = object_gt_body
         result = self._execute_path("lift", self.grasp_paths[2])
-        if result.success and self.data.body(object_gt_body).xpos[2] - initial_object_height < 0.05:
-            return PhysicalMotionResult(False, "object_not_lifted", "lift")
+        if result.success:
+            try:
+                height = self._object_pose(object_gt_body)[2, 3]
+            except ObservationUnavailable as exc:
+                return PhysicalMotionResult(False, str(exc), "lift")
+            if height - initial_object_height < 0.05:
+                return PhysicalMotionResult(False, "object_not_lifted", "lift")
         return result
 
     def place_only(self, receptacle_query, *, object_gt_body=None, receptacle_gt_body=None):

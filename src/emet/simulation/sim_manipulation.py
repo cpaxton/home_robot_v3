@@ -220,14 +220,13 @@ def resolve_agent_manip_mode(
     visual_servo: bool = False,
 ) -> str:
     """Resolve ``teleport`` | ``kinematic`` from env then config (default teleport)."""
-    if visual_servo:
-        return "stretch_visual_servo"
     from emet.simulation.env_flags import env_manip_mode
 
-    env_m = env_manip_mode()
-    if env_m:
-        return env_m
-    mode = str(config_mode or "teleport").strip().lower()
+    mode = str(env_manip_mode() or config_mode or "teleport").strip().lower()
+    if mode == "physical":
+        return mode
+    if visual_servo:
+        return "stretch_visual_servo"
     if mode in ("teleport", "kinematic"):
         return mode
     return "teleport"
@@ -292,6 +291,8 @@ def can_use_sim_gt_manip(
     If ``manip_mode=kinematic`` but the server lacks ``kinematic_manip``, still True when
     teleport (``sim_set_body_pose``) is available so the agent can fall back.
     """
+    if str(manip_mode).strip().lower() == "physical":
+        return False
     if prefer_kinematic_manip(robot, manip_mode=manip_mode, visual_servo=visual_servo):
         return True
     return prefer_sim_teleport_manip(robot, visual_servo=visual_servo)

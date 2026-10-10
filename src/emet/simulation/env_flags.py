@@ -42,7 +42,7 @@ def env_zmq_timing() -> bool:
 def env_manip_mode() -> str:
     """Agent pick/place backend: ``teleport`` (default) or ``kinematic`` (IK + attach)."""
     raw = os.environ.get("EMET_MANIP_MODE", "").strip().lower()
-    if raw in ("teleport", "kinematic"):
+    if raw in ("teleport", "kinematic", "physical"):
         return raw
     return ""
 

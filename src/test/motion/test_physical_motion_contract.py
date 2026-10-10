@@ -195,7 +195,7 @@ def test_navigation_posture_requires_collision_path_and_measured_tracking():
     calls = []
     executor = PhysicalPickPlaceExecutor(
         SimpleNamespace(),
-        model=m,
+        input_mode="privileged", model=m,
         data=d,
         ee_body="ee",
         joint_names=["yaw"],
@@ -316,7 +316,7 @@ def test_grasp_rechecks_pose_ik_after_measured_arrival_before_actuation():
     d = mujoco.MjData(m)
     executor = PhysicalPickPlaceExecutor(
         SimpleNamespace(open_gripper=lambda **kwargs: pytest.fail("grasp despite infeasible measured pose")),
-        model=m,
+        input_mode="privileged", model=m,
         data=d,
         ee_body="ee",
         joint_names=["yaw"],
@@ -346,7 +346,7 @@ def test_missing_payload_stops_arm_before_next_command(slip):
     events = []
     executor = PhysicalPickPlaceExecutor(
         SimpleNamespace(),
-        model=m,
+        input_mode="privileged", model=m,
         data=d,
         ee_body="ee",
         joint_names=["x"],
@@ -382,7 +382,7 @@ def test_coupled_arm_can_raise_then_extend_around_blocked_diagonal():
     checker = MujocoSceneCollisionChecker(m, robot_body="ee")
     executor = PhysicalPickPlaceExecutor(
         SimpleNamespace(),
-        model=m,
+        input_mode="privileged", model=m,
         data=d,
         ee_body="ee",
         joint_names=["z", "x1", "x2"],
@@ -427,7 +427,7 @@ def test_planned_lift_leaves_offline_payload_at_lifted_pose():
     checker.set_payload(m, d, "payload", "ee")
     executor = PhysicalPickPlaceExecutor(
         SimpleNamespace(),
-        model=m,
+        input_mode="privileged", model=m,
         data=d,
         ee_body="ee",
         joint_names=["z"],
@@ -459,7 +459,7 @@ def test_contact_closure_needs_settled_motor_and_advancing_feedback(monkeypatch,
 
     executor = module.PhysicalPickPlaceExecutor(
         robot,
-        model=m,
+        input_mode="privileged", model=m,
         data=d,
         ee_body="ee",
         joint_names=["yaw"],
@@ -489,7 +489,7 @@ def test_arm_acknowledgment_waits_for_measured_joint_convergence(monkeypatch):
 
     monkeypatch.setattr('emet.controller.manipulation.physical_pick_place.time.sleep', settle)
     executor = PhysicalPickPlaceExecutor(
-        SimpleNamespace(), model=m, data=d, ee_body='ee', joint_names=['yaw'],
+        SimpleNamespace(), input_mode="privileged", model=m, data=d, ee_body='ee', joint_names=['yaw'],
         collision=MujocoSceneCollisionChecker(m, robot_body='robot'),
         synchronize=lambda state: state.qpos.__setitem__(slice(None), measured),
         command_joints=lambda q: commanded.append(q.copy()) or True,
@@ -521,7 +521,7 @@ def test_arm_stops_after_unplanned_base_motion():
         return True
 
     executor = PhysicalPickPlaceExecutor(
-        SimpleNamespace(), model=m, data=d, ee_body="ee", joint_names=["arm"],
+        SimpleNamespace(), input_mode="privileged", model=m, data=d, ee_body="ee", joint_names=["arm"],
         collision=MujocoSceneCollisionChecker(m, robot_body="base"),
         synchronize=sync, command_joints=command, base_body="base",
     )
@@ -592,7 +592,7 @@ def test_grasp_alternatives_replan_all_phases_before_any_gripper_command():
     checker = SimpleNamespace(payload_body=None, payload_parent=None, payload_transform=None,
                               set_payload=lambda *args: None)
     robot = SimpleNamespace(open_gripper=lambda **kw: calls.append('open') or False)
-    executor = PhysicalPickPlaceExecutor(robot, model=m, data=d, ee_body='ee', joint_names=['yaw'],
+    executor = PhysicalPickPlaceExecutor(robot, input_mode="privileged", model=m, data=d, ee_body='ee', joint_names=['yaw'],
                                          collision=checker, synchronize=lambda data: None, command_joints=lambda q: True)
     nominal = [([-1,0,0], np.eye(3))] * 3
     alternative = [([1,0,0], np.eye(3))] * 3
@@ -628,7 +628,7 @@ def test_open_gripper_geometry_is_checked_before_actuation(obstacle_x):
     checker = MujocoSceneCollisionChecker(m, robot_body='robot', allowed_pairs=[('robot', 'target')])
     executor = PhysicalPickPlaceExecutor(
         SimpleNamespace(open_gripper=lambda **kw: pytest.fail('opened before a valid grasp certificate')),
-        model=m, data=d, ee_body='ee', joint_names=['x'], collision=checker,
+        input_mode="privileged", model=m, data=d, ee_body='ee', joint_names=['x'], collision=checker,
         synchronize=lambda state: mujoco.mj_kinematics(m, state), command_joints=lambda q: True,
         gripper_open_configuration=(('opening', .2),),
     )
@@ -663,7 +663,7 @@ def test_release_and_retreat_check_open_fingers_and_preserve_payload(obstacle_x)
     checker = MujocoSceneCollisionChecker(m, robot_body='robot', allowed_pairs=[('robot', 'target')])
     executor = PhysicalPickPlaceExecutor(
         SimpleNamespace(open_gripper=lambda **kw: pytest.fail('unsafe release commanded')),
-        model=m, data=d, ee_body='ee', joint_names=['x'], collision=checker,
+        input_mode="privileged", model=m, data=d, ee_body='ee', joint_names=['x'], collision=checker,
         synchronize=lambda state: mujoco.mj_kinematics(m, state), command_joints=lambda q: True,
         gripper_open_configuration=(('opening', .2),),
     )
