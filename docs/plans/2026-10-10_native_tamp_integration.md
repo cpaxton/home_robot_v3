@@ -101,3 +101,12 @@ at 1.4 ms, moved-bowl geometry at 10 ms, and refreshing all articulated bodies
 at 202 ms with one BLAS thread. These costs alone do not explain the six-second
 gap. The next diagnostic must capture server and client thread stacks/timings
 at the failed transition before further changes or threshold adjustments.
+
+### Review branches
+
+- #194 `fix/tamp-render-telemetry`: independent on current main, 42 focused tests.
+- #195 `feat/tamp-native-input-boundary`: stacked on #194; 95 tests at its first
+  head, followed by 45 passing API/input tests after adding stored-plan execution
+  guards and simulation-only privileged-mode cases. A stored assisted handle may
+  not bypass a subsequent physical-mode request.
+- Neither PR promotes native execution or unblocks #179's live acceptance gate.

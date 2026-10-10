@@ -87,6 +87,7 @@ def test_physical_request_does_not_use_legacy_controller_fallback():
 @pytest.mark.parametrize('tool_name,args', [
     ('scene_tasks', {}), ('plan_pick_place', {'object_name': 'block', 'receptacle_name': 'table'}),
     ('pick_place', {'object_name': 'block', 'receptacle_name': 'table'}),
+    ('execute_pick_place_plan', {'plan_ref': 'previously-assisted-plan'}),
 ])
 def test_observed_native_tools_do_not_discover_targets_from_gt(tool_name, args):
     import json
@@ -98,3 +99,15 @@ def test_observed_native_tools_do_not_discover_targets_from_gt(tool_name, args):
     result = json.loads(tools[tool_name].func(**args))
     assert result['code'] == 'observed_scene_unavailable'
     robot.get_emet_session.assert_not_called()
+
+
+@pytest.mark.parametrize('is_simulation,expected', [
+    (False, 'privileged_inputs_require_simulation'), (True, 'native_execution_unavailable'),
+])
+def test_privileged_native_mode_reports_explicit_unavailability(is_simulation, expected):
+    import json
+
+    from emet.agent.tools import get_tools
+    robot = SimpleNamespace(get_emet_session=lambda: {'is_simulation': is_simulation})
+    tools = {t.name: t for t in get_tools({'robot': robot, 'manip_mode': 'physical', 'tamp_inputs': 'privileged'})}
+    assert json.loads(tools['scene_tasks'].func())['code'] == expected

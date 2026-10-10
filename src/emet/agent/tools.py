@@ -664,6 +664,9 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
 
     @json_tool
     def execute_pick_place_plan(plan_ref: str) -> dict:
+        native_error = _native_input_gate()
+        if native_error:
+            return response("execute_pick_place_plan", code=native_error)
         from emet.controller.task.tamp.agent_bridge import execute_stored_agent_plan_result
 
         robot = _tamp_robot()
