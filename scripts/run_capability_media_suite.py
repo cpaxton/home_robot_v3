@@ -48,10 +48,15 @@ def main():
         else:
             cmd = [sys.executable, str(ROOT / "scripts/scripted_tamp_pick_place.py"), *common,
                    "--sim", "configs/sim/default_table_rby1.yaml", "--robot", case,
+                   "--object", "red cylinder", "--object-gt-body", "object2",
+                   "--receptacle", "table", "--receptacle-gt-body", "table",
                    "--skip-oracle", "--figures-dir", str(dest),
                    "--video-flags", "ASSISTED | latch + placement | GT | base teleport"]
         record = {"case": case, "implementation_commit": commit, "command": cmd, "process_exit_code": None,
                   "status": "running", "artifacts": str(dest), "timeout_s": 900}
+        if case in {"rby1", "innate_mars"}:
+            record["fixture"] = {"id": f"{case}_cylinder_to_table_v2", "version": 2,
+                                 "object_body": "object2", "receptacle_body": "table"}
         records.append(record)
         manifest = args.output / "suite.json"
         manifest.write_text(json.dumps({"schema_version": 1, "cases": records}, indent=2) + "\n")

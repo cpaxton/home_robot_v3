@@ -122,6 +122,18 @@ def _find_graspable_body(
     raise RuntimeError(f"no graspable GT body (query={object_query!r}); placements={list(pl.keys())[:20]}")
 
 
+def _resolve_receptacle_body(placements, query, required_body=None):
+    """Pin benchmark fixture identity before any manipulation can run."""
+    from emet.eval.ovmm_find_phase import bodies_matching_category
+
+    matches = bodies_matching_category(placements, query) or []
+    if required_body is not None:
+        if required_body not in matches:
+            raise ValueError("fixture_receptacle_mismatch")
+        return required_body
+    return matches[0] if matches else None
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--start-sim", action="store_true")
@@ -135,6 +147,8 @@ def main() -> int:
         help="Pin the GT body id (e.g. obj_main for RoboCasa PickPlace). Category query is skipped.",
     )
     parser.add_argument("--receptacle", type=str, default="blue cube")
+    parser.add_argument("--receptacle-gt-body", default=None,
+                        help="Require this exact receptacle body to match the query before motion.")
     parser.add_argument("--asset-id", type=str, default=None)
     parser.add_argument(
         "--any-object",
@@ -194,7 +208,6 @@ def main() -> int:
     from emet.controller.manipulation.kinematic_pick_place import KinematicPickPlaceExecutor
     from emet.controller.task.tamp.smoke_grasps import plant_mixed_grasp_poses
     from emet.controller.task.tamp.task_search import execute_task_plan, plan_pick_place
-    from emet.eval.ovmm_find_phase import bodies_matching_category
     from emet.eval.sim_eval_session import (
         connect_benchmark_robot,
         launch_benchmark_sim_server,
@@ -283,8 +296,7 @@ def main() -> int:
                 flush=True,
             )
         pl = read_sim_object_placements(robot.get_emet_session()) or {}
-        receps = bodies_matching_category(pl, args.receptacle) or []
-        recep_body = receps[0] if receps else None
+        recep_body = _resolve_receptacle_body(pl, args.receptacle, args.receptacle_gt_body)
         print(f"object body={body!r} n_grasps={len(poses)} recep={recep_body!r}", flush=True)
 
         before = _placement_pos(robot, body)

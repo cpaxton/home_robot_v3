@@ -78,3 +78,18 @@ def test_find_graspable_body_pins_object_gt_body(monkeypatch):
     assert poses
     T = poses[0].T_world
     assert abs(float(T[2, 2]) + 1.0) < 1e-9  # top-down: grasp +Z into the object
+
+
+def test_fixture_receptacle_is_pinned_before_execution():
+    import pytest
+
+    module = _load_script_module()
+    placements = {
+        'object1': {'cat': 'blue cube', 'pos': [0, 0, .5]},
+        'table': {'cat': 'table', 'pos': [0, 0, .4]},
+    }
+    assert module._resolve_receptacle_body(placements, 'table', 'table') == 'table'
+    with pytest.raises(ValueError, match='fixture_receptacle_mismatch'):
+        module._resolve_receptacle_body(placements, 'blue cube', 'table')
+    with pytest.raises(ValueError, match='fixture_receptacle_mismatch'):
+        module._resolve_receptacle_body(placements, 'table', 'missing')
