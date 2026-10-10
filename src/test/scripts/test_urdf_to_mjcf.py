@@ -18,7 +18,7 @@ def converter():
 
 
 def test_official_sourccey_all_link_poses_match_urdf_at_nonzero_angles():
-    source = ROOT / "src/emet/assets/robot/sourccey/urdf/ArmLeft/ArmLeft.urdf"
+    source = ROOT / "src/emet/assets/robot/sourccey/upstream/models/source/SourcceyURDF/SourcceyMkV.urdf"
     conv = converter().UrdfToMjcf(source, mesh_map={})
     model = mujoco.MjModel.from_xml_string('<mujoco><compiler angle="radian"/><worldbody>' + conv.build() + '</worldbody></mujoco>')
     data = mujoco.MjData(model)
@@ -43,7 +43,10 @@ def test_official_sourccey_all_link_poses_match_urdf_at_nonzero_angles():
                 motion = np.eye(4)
                 if joint.get("type") != "fixed":
                     axis = np.fromstring(joint.find("axis").get("xyz"), sep=" ")
-                    motion[:3, :3] = Rotation.from_rotvec(axis * values[joint.get("name")]).as_matrix()
+                    if joint.get("type") == "prismatic":
+                        motion[:3, 3] = axis * values[joint.get("name")]
+                    else:
+                        motion[:3, :3] = Rotation.from_rotvec(axis * values[joint.get("name")]).as_matrix()
                     assert model.joint(joint.get("name")).bodyid[0] == model.body(child).id
                 poses[child] = poses[parent] @ local @ motion
                 pending.remove(joint)
