@@ -61,6 +61,9 @@ def _jsonify_placement_entry(info: dict[str, Any]) -> dict[str, Any]:
             mn = np.asarray(aabb_min, dtype=np.float64).reshape(3)
             mx = np.asarray(aabb_max, dtype=np.float64).reshape(3)
             out["bounds"] = [[float(x) for x in mn], [float(x) for x in mx]]
+    for field in ("collision_bounds", "support_surfaces"):
+        if field in info:
+            out[field] = np.asarray(info[field], dtype=float).reshape(-1, 2, 3).tolist()
     return out
 
 
@@ -226,6 +229,32 @@ def _world_aabb_for_geom_ids(
     return np.asarray(center, dtype=np.float64).reshape(3), bounds, quat
 
 
+def _box_support_patch(position, rotation, half_size):
+    """Axis-aligned rectangle inside a nearly horizontal oriented-box top face.
+
+    Projected corners remain inside the face footprint; height uses its highest
+    corner. Tilt is limited to 1 mrad, independent of yaw. This tolerates measured
+    numerical pose drift without treating an arbitrary sloped face as support.
+    """
+    rotation = np.asarray(rotation).reshape(3, 3)
+    half_size = np.asarray(half_size)
+    normal_axis = int(np.argmax(np.abs(rotation[2])))
+    normal = rotation[:, normal_axis] * np.sign(rotation[2, normal_axis])
+    if np.linalg.norm(normal[:2]) > 1e-3:
+        return None
+    tangent_axes = [axis for axis in range(3) if axis != normal_axis]
+    edges = rotation[:, tangent_axes] * half_size[tangent_axes]
+    center = np.asarray(position) + normal * half_size[normal_axis]
+    projected = edges[:2]
+    # A point is inside the parallelogram iff abs(inv(projected) @ delta) <= 1.
+    # Bound this over all four corners of an axis-aligned centered rectangle.
+    half = np.abs(projected).sum(axis=1)
+    scale = 1.0 / np.max(np.abs(np.linalg.inv(projected)) @ half)
+    half *= scale
+    top = center[2] + np.abs(edges[2]).sum()
+    return np.array([np.r_[center[:2] - half, top], np.r_[center[:2] + half, top]])
+
+
 def _placement_entry_from_geom_ids(
     model: mujoco.MjModel,
     data: mujoco.MjData,
@@ -237,11 +266,27 @@ def _placement_entry_from_geom_ids(
     if aabb is None:
         return None
     center, bounds, quat = aabb
+    # Preserve disjoint declared collision components. A visual/semantic AABB
+    # can fill the empty interior of a U-shaped fixture or an entire room shell.
+    paired = set(model.pair_geom1) | set(model.pair_geom2)
+    ids = [g for g in geom_ids if model.geom_contype[g] or model.geom_conaffinity[g] or g in paired]
+    rotations = data.geom_xmat[ids].reshape(-1, 3, 3)
+    centers = np.einsum("nij,nj->ni", rotations, model.geom_aabb[ids, :3]) + data.geom_xpos[ids]
+    half = np.einsum("nij,nj->ni", np.abs(rotations), model.geom_aabb[ids, 3:])
+    collision_bounds = np.stack((centers - half, centers + half), axis=1)
+    support_surfaces = []
+    for gid, rotation in zip(ids, rotations, strict=True):
+        if model.geom_type[gid] == mujoco.mjtGeom.mjGEOM_BOX:
+            patch = _box_support_patch(data.geom_xpos[gid], rotation, model.geom_size[gid])
+            if patch is not None:
+                support_surfaces.append(patch)
     return {
         "cat": cat,
         "pos": center,
         "quat": quat,
         "bounds": bounds,
+        "collision_bounds": collision_bounds,
+        "support_surfaces": np.asarray(support_surfaces).reshape(-1, 2, 3),
     }
 
 
@@ -403,6 +448,42 @@ def overlay_live_mujoco_body_poses(
         if merged.get("pos"):
             raw[str(key)] = merged
     return raw or None
+
+
+def refresh_moved_body_placements(placements, model, data, body):
+    """Refresh actual geometry for every cached body sharing a moved free root.
+
+    A command target is not measured geometry. Parent teleports also move welded
+    children, so refreshing only the named body's position leaves stale volumes.
+    Caller must hold the simulator state lock.
+    """
+    from emet.simulation.sim_manipulation import freejoint_ancestor_body_id
+
+    bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, body)
+    if bid < 0:
+        return
+    root = freejoint_ancestor_body_id(model, bid)
+    if root is None:
+        return
+    # Only transforms are needed. Metadata publication must not rerun the
+    # dynamics/constraint solver or overwrite its warm-start/contact buffers.
+    mujoco.mj_kinematics(model, data)
+    updated = {}
+    for name, entry in placements.items():
+        if not isinstance(entry, dict):
+            continue
+        child = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, name)
+        if child < 0 or freejoint_ancestor_body_id(model, child) != root:
+            continue
+        ids = _geom_ids_for_bodies(model, [child], data=data)
+        live = _placement_entry_from_geom_ids(model, data, ids, cat=str(entry.get("cat", name)))
+        if live is not None:
+            updated[name] = _jsonify_placement_entry({**entry, **live})
+        else:
+            # Do not retain stale geometry when a current volume is unavailable.
+            updated[name] = {"cat": entry.get("cat", name), "pos": data.xpos[child].tolist(),
+                             "quat": data.xquat[child].tolist()}
+    placements.update(updated)
 
 
 def build_sim_object_placements_for_session(

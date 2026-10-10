@@ -211,3 +211,53 @@ def test_rby1_fixed_base_tracks_recorded_targets_without_contact(target, support
         server._passive_base_support = True
         server._hold_stationary_base_freejoint_if_idle()
         assert not data.eq_active[weld]
+
+
+def test_base_teleport_preserves_attachment_offset_without_reregistering():
+    import threading
+
+    from emet.simulation.robosuite_server import RobosuiteZmqServer
+
+    model = mujoco.MjModel.from_xml_string('''<mujoco><worldbody>
+      <body name="base_link"><freejoint/><geom type="sphere" size=".1"/>
+        <body name="tool" pos=".3 0 .5"><geom type="sphere" size=".02"/></body>
+      </body>
+      <body name="load" pos=".4 0 .5"><freejoint/><geom type="box" size=".03 .03 .03"/></body>
+    </worldbody></mujoco>''')
+    data = mujoco.MjData(model)
+    mujoco.mj_forward(model, data)
+    server = object.__new__(RobosuiteZmqServer)
+    server._mjmodel, server._mjdata, server._mj_lock = model, data, threading.RLock()
+    server._teleport_planar_base_world_xyt = lambda *args: False
+    server._base_freejoint_addrs = lambda: (0, 0)
+    server._patch_emet_session_body_pos = lambda *args: None
+    server._kinematic_attachments = {"load": {"ee_body": "tool", "offset_local": [.1, 0., 0.]}}
+    assert server._teleport_base_world_xyt(1., 2., np.pi / 2)
+    mujoco.mj_forward(model, data)
+    ee = data.body("tool")
+    observed_offset = ee.xmat.reshape(3, 3).T @ (data.body("load").xpos - ee.xpos)
+    np.testing.assert_allclose(observed_offset, [.1, 0, 0], atol=1e-9)
+    assert server._kinematic_attachments["load"]["offset_local"] == [.1, 0, 0]
+
+
+@pytest.mark.parametrize("ratio,blocked,accepted", [(1., False, False), (.2, False, True), (.2, True, False)])
+def test_measured_arrival_scales_slow_sim_budget_without_accepting_blockage(monkeypatch, ratio, blocked, accepted):
+    from types import SimpleNamespace
+
+    from emet.controller.manipulation import kinematic_pick_place as module
+
+    clock = [0.0]
+    monkeypatch.setattr(module, "time", SimpleNamespace(
+        monotonic=lambda: clock[0], sleep=lambda dt: clock.__setitem__(0, clock[0] + dt)))
+    ex = object.__new__(KinematicPickPlaceExecutor)
+    ex.robot = SimpleNamespace(_state={"sim_to_real_ratio": ratio})
+    ex.ee_body, ex.ik_tol_m = "tool", .035
+    ex._data = SimpleNamespace(body=lambda _: SimpleNamespace(
+        xpos=np.array([1. if clock[0] >= 5 and not blocked else 0., 0., 0.])))
+    ex._sync_qpos_from_robot = lambda: True
+    ex._joint_tracking_evidence = lambda: {}
+    ok, error = ex._wait_measured_ee(np.array([1., 0., 0.]))
+    assert ok is accepted
+    assert ex.last_ee_verification["timeout_wall_s"] == 3 / ratio
+    assert clock[0] <= 3 / ratio + .05
+    assert (error <= .035) is accepted

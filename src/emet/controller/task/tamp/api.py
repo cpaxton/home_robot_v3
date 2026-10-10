@@ -105,6 +105,10 @@ def failure_code(message: str) -> str:
     }.get(message, message)
     parts = message.split(":")
     for part in reversed(parts):
+        for code in ("placement_stale_observation", "placement_missing_joint_state",
+                     "placement_nonfinite_joint_state", "placement_path_invalidated"):
+            if part == code or part.endswith("_" + code):
+                return code
         if part in {"joint_bounds", "collision", "stale_observation"}:
             return part
         for suffix, code in (

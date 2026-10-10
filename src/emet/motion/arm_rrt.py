@@ -60,9 +60,10 @@ def make_arm_configuration_space(
     joint_names: Sequence[str],
     *,
     step_size: float = 0.15,
+    rng=None,
 ) -> ConfigurationSpace:
     mins, maxs = joint_limits_from_model(model, joint_names)
-    return ConfigurationSpace(len(joint_names), mins, maxs, step_size=float(step_size))
+    return ConfigurationSpace(len(joint_names), mins, maxs, step_size=float(step_size), rng=rng)
 
 
 def make_arm_validate_fn(
@@ -149,6 +150,7 @@ def plan_arm_joint_path(
     linear_fallback: bool = True,
     linear_steps: int = 15,
     verbose: bool = False,
+    rng=None,
 ) -> ArmRrtPlanResult:
     """Plan a joint-space path from ``q_start`` to ``q_goal``.
 
@@ -163,7 +165,7 @@ def plan_arm_joint_path(
     if not np.isfinite(q0).all() or not np.isfinite(q1).all():
         return ArmRrtPlanResult(False, [], planner, "nonfinite_configuration")
 
-    space = make_arm_configuration_space(model, joint_names, step_size=step_size)
+    space = make_arm_configuration_space(model, joint_names, step_size=step_size, rng=rng)
     validate = make_arm_validate_fn(model, data, joint_names, collision, mins=space.mins, maxs=space.maxs)
 
     start_reason = arm_config_violation(model, data, joint_names, q0, collision, mins=space.mins, maxs=space.maxs)
@@ -188,9 +190,10 @@ def plan_arm_joint_path(
             validate,
             max_iter=int(max_iter),
             goal_tolerance=float(goal_tolerance),
+            rng=rng,
         )
         if shortcut:
-            pl = Shortcut(pl, shortcut_iter=int(shortcut_iter))
+            pl = Shortcut(pl, shortcut_iter=int(shortcut_iter), rng=rng)
         res = pl.plan(q0, q1, verbose=verbose)
         if res.success and res.trajectory:
             wps = [np.asarray(n.state, dtype=np.float64).copy() for n in res.trajectory]
