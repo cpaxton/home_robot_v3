@@ -125,7 +125,7 @@ one target velocity nonzero and zeroed a different object's velocity. Attachment
 updates also ran full dynamics twice per physics step. They now refresh transforms
 without redundant solver calls; explicit pose-setting retains its final dynamics
 update. Standalone telemetry/manipulation coverage passes 64 tests. Integration
-head `398eb7dc` is running as `20261010_125538_3fddc5`.
+head `398eb7dc` completed diagnostic `20261010_125538_3fddc5`; see the terminal result below.
 
 ### Stack reconciliation completed
 
@@ -136,3 +136,33 @@ changes concern generic conversion, floors, and recording. Validation: 198 tests
 on the restacked #193 chain; 30 model/converter checks on #191 (overlapping);
 8 paired-metric tests on #187. These do not replace live placement or native-agent
 acceptance. No production merge is justified by unit-test totals alone.
+
+### Latest terminal result and merge checkpoint
+
+`20261010_125538_3fddc5` terminated with exit 1. Pickup/lift passed; after
+base transport measured-state refresh succeeded with 8.3 ms receive age and
+placement replanning found one path. Execution then returned
+`place_execution_error:TimeoutError` before release (`detach_not_attempted`).
+Artifacts: `/tmp/tamp-attachment-state-fix/`. The earlier stale-feedback boundary
+was passed, but placement acceptance remains unmet. This is CPU/Mesa assisted
+execution, not native-contact, GPU, or agent benchmark acceptance. The exact
+command/waypoint and cause of the remaining timeout need instrumented diagnosis;
+contact has not been established as its cause.
+
+The independently reproduced velocity-index correction merged as #196,
+main `9625b06d`. Its isolated regression suite passed 19 tests without skips.
+#194 retains the broader feedback/attachment scheduling changes as a draft.
+#195 adds guarded observed/privileged input contracts and atomic measured-joint
+snapshots (124 focused tests passed); it deliberately rejects native agent
+execution until real providers and adapters exist. Defaults remain unchanged.
+
+Media fixtures now explicitly bind the red cylinder and table and reject support
+query/body mismatches. Corrected fixtures have v2 identities; old failed runs
+remain evidence and are not rescored. Eight runner tests passed; new live v2
+placement acceptance is still required.
+
+Next merge gate: instrument and resolve the placement timeout, then rerun the
+existing placement/containment gates. Next native implementation gate: wire a
+Stretch actuator adapter and observed geometry/evidence providers through the
+public tools, with independent privileged scoring. Sourccey follows on #192's
+official model after contact geometry and available sensing are validated.
