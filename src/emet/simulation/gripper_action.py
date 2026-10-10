@@ -17,6 +17,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 import mujoco
@@ -44,6 +45,24 @@ def apply_gripper_action_robosuite(
 
     Returns actuator names that were updated.
     """
+    if spec.name == "sourccey":
+        from emet.robots.sourccey import SOURCCEY_GRIPPER_ACTUATORS
+
+        # These are joint angles in radians, not XLeRobot's normalized jaw values.
+        targets = {
+            _side_from_gripper_key(key): float(value)
+            for key, value in action.items()
+            if _side_from_gripper_key(key) is not None
+        }
+        if "gripper" in action and not targets:
+            targets["left"] = float(action["gripper"])
+        if not all(math.isfinite(value) for value in targets.values()):
+            raise ValueError("Sourccey gripper targets must be finite")
+        return [
+            SOURCCEY_GRIPPER_ACTUATORS[side]
+            for side, value in targets.items()
+            if _set_ctrl_clipped(model, data, SOURCCEY_GRIPPER_ACTUATORS[side], value)
+        ]
     if spec.name != "xlerobot":
         return []
 

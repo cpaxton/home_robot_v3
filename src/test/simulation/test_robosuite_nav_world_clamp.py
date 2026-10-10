@@ -272,3 +272,52 @@ def test_clamp_world_nav_xyt_inside_robocasa_clip():
     wx, wy, wt = server._clamp_world_nav_xyt(12.0, 8.0, 0.5)
     assert wx == 5.0 and wy == 2.0
     assert abs(wt - 0.5) < 1e-9
+
+
+@pytest.mark.parametrize("mount_yaw", [0.0, 0.7])
+@pytest.mark.parametrize("joint_yaw", [0.0, np.pi / 2, np.pi, -np.pi / 2])
+def test_planar_drive_uses_joint_axes_after_turning(mount_yaw, joint_yaw):
+    """World +X commands stay +X after turns, including rotated scene mounts."""
+    import mujoco
+
+    model = mujoco.MjModel.from_xml_string(f"""
+      <mujoco>
+        <option gravity="0 0 0" timestep="0.002" integrator="implicitfast"/>
+        <worldbody>
+          <body name="base_root" quat="{np.cos(mount_yaw / 2)} 0 0 {np.sin(mount_yaw / 2)}">
+            <joint name="base_x" type="slide" axis="1 0 0"/>
+            <joint name="base_y" type="slide" axis="0 1 0"/>
+            <joint name="base_yaw" type="hinge" axis="0 0 1"/>
+            <geom type="sphere" size="0.1" mass="1"/>
+          </body>
+        </worldbody>
+        <actuator>
+          <velocity joint="base_x" kv="100"/>
+          <velocity joint="base_y" kv="100"/>
+          <velocity joint="base_yaw" kv="100"/>
+        </actuator>
+      </mujoco>
+    """)
+    data = mujoco.MjData(model)
+    data.qpos[2] = joint_yaw
+    mujoco.mj_forward(model, data)
+    server = object.__new__(RobosuiteZmqServer)
+    server._mjmodel, server._mjdata = model, data
+    yaw = mount_yaw + joint_yaw
+    server._nav_goal_world = np.array([1.0, 0.0, yaw])
+    server._spec = type("Spec", (), {"planar_base_joint_names": ("base_x", "base_y", "base_yaw")})()
+    server._nav_kp_xy, server._nav_kp_theta = 1.0, 1.0
+    server._nav_v_max, server._nav_w_max = 0.4, 0.5
+    server._nav_tol_xy, server._nav_tol_theta = 0.02, 0.02
+    server._base_freejoint_addrs = lambda: None
+    server._planar_base_velocity_actuator_ids = lambda: (0, 1, 2)
+    server._sim_nav_debug_enabled = lambda: False
+    server.get_base_xyt = lambda: np.array([0.0, 0.0, yaw])
+    server._step_base_navigation_drive()
+    before = data.body("base_root").xpos.copy()
+    for _ in range(50):
+        mujoco.mj_step(model, data)
+    mujoco.mj_forward(model, data)
+    displacement = data.body("base_root").xpos - before
+    assert displacement[0] > 0.02
+    assert abs(displacement[1]) < 1e-8

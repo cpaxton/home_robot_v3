@@ -68,6 +68,8 @@ def run(self) -> AgenticEQAResult:
     self._close_map_attempts = {}
     self._consecutive_nav_fail = 0
     self._unreachable_obs_ids = set()
+    self._grounded_obs_id = None
+    self._view_grounding_attempts = set()
     self._prefer_explore = False
     self._prefer_explore_reason = ""
     self._n_consecutive_explore = 0
@@ -388,6 +390,7 @@ def run(self) -> AgenticEQAResult:
         answer_confidence=confidence_score,
         decision_rounds=self._round + 1,
         voxel_xyz=self._voxel_score_xyz,
+        grounded_obs_id=getattr(self, "_grounded_obs_id", None),
         voxel_phrase=self._voxel_score_phrase,
         voxel_from_pin=self._voxel_score_from_pin,
     )
@@ -417,6 +420,7 @@ def run(self) -> AgenticEQAResult:
                 self._final_answer_decision.to_dict() if self._final_answer_decision is not None else None
             ),
             "voxel_xyz": list(result.voxel_xyz) if result.voxel_xyz is not None else None,
+            "grounded_obs_id": result.grounded_obs_id,
             "voxel_phrase": result.voxel_phrase,
             "voxel_from_pin": result.voxel_from_pin,
         }

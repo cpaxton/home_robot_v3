@@ -64,7 +64,11 @@ def _load_default_scene_with_robot(robot_key: str):
     # When a vendored model uses relative meshdir/asset paths, resolving meshes via an absolute directory in the
     # merge wrapper avoids ambiguous resolution across MuJoCo versions and symlinked/editable installs (parent include
     # directory vs. included-file directory). Only inject when that folder exists (robot shipped without meshes omits it).
-    meshes_dir = robot_path.parent / "meshes"
+    import xml.etree.ElementTree as ET
+
+    robot_compiler = ET.parse(robot_path).getroot().find("compiler")
+    meshdir = robot_compiler.get("meshdir", "meshes") if robot_compiler is not None else "meshes"
+    meshes_dir = robot_path.parent / meshdir
     compiler_line = ""
     if meshes_dir.is_dir():
         mesh_abs = str(meshes_dir.resolve())
