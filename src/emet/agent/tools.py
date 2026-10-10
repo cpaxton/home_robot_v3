@@ -764,6 +764,9 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
 
     @json_tool
     def set_receptacle_state(task_ref: str, state: str) -> dict:
+        native_error = _native_input_gate()
+        if native_error:
+            return response("set_receptacle_state", code=native_error)
         from emet.controller.task.tamp.articulation import set_receptacle_state as apply_state
         return apply_state(_tamp_robot(), context, task_ref, state)
 

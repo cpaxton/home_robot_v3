@@ -85,6 +85,7 @@ def test_physical_request_does_not_use_legacy_controller_fallback():
 
 
 @pytest.mark.parametrize('tool_name,args', [
+    ('set_receptacle_state', {'task_ref': 'previously-assisted-task', 'state': 'open'}),
     ('scene_tasks', {}), ('plan_pick_place', {'object_name': 'block', 'receptacle_name': 'table'}),
     ('pick_place', {'object_name': 'block', 'receptacle_name': 'table'}),
     ('execute_pick_place_plan', {'plan_ref': 'previously-assisted-plan'}),

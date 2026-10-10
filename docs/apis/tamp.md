@@ -138,6 +138,8 @@ available: observed discovery returns `observed_scene_unavailable` without readi
 simulator metadata; debug mode returns `native_execution_unavailable`. These are
 integration guards, not a claim that native agent manipulation is ready. Existing
 teleport/kinematic defaults are unchanged; no native preset is promoted yet.
+The same native guard rejects simulator-assisted `set_receptacle_state`, including
+a task handle obtained before switching execution modes.
 
 The shared physical executor now requires an observed object-pose provider and
 observed collision provider by default. Object poses carry an observation ID,
