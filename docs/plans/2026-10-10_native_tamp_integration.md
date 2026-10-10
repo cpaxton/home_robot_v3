@@ -156,3 +156,19 @@ changes concern generic conversion, floors, and recording. Validation: 198 tests
 on the restacked #193 chain; 30 model/converter checks on #191 (overlapping);
 8 paired-metric tests on #187. These do not replace live placement or native-agent
 acceptance. No production merge is justified by unit-test totals alone.
+
+### Native boundary validation and corrected fixtures
+
+The final combined input/physical/API/config/protocol/client suite passes 124
+tests on #195's current ancestry; Ruff passes for the changed runtime files.
+Stretch and generic clients expose immutable joint-position evidence with an
+atomic receive timestamp. Physical-mode requests are guarded during discovery,
+planning, direct pick/place, stored-plan execution, and environment overrides.
+The native execution adapters and observed geometry/perception are still absent;
+this does not enable `run agent` physical manipulation.
+
+#189 now explicitly requests `object2` (red cylinder) and `table` in table media
+controls, and rejects a mismatched receptacle before manipulation. Corrected
+cases use `*_cylinder_to_table_v2` fixture identities in the JSON manifest.
+Eight focused runner tests pass. No new live score is attached to these fixtures;
+old object-on-cube failures remain unchanged.
