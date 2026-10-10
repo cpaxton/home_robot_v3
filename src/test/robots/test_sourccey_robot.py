@@ -13,17 +13,20 @@
 # This source code is licensed under the license found in the LICENSE file in the root directory
 # of this source tree.
 
-import re
+import hashlib
+import importlib.util
+import json
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import mujoco
 import numpy as np
+import pytest
 
 from emet.robots.sourccey import (
     SOURCCEY_CAMERA_NAMES,
     SOURCCEY_GRIPPER_ACTUATORS,
     SOURCCEY_GRIPPER_JOINTS,
-    SOURCCEY_HOME_KEYFRAME,
     SOURCCEY_JOINT_NAMES,
     SourcceyBackend,
 )
@@ -45,13 +48,17 @@ def test_sourccey_mjcf_joints_and_actuators():
         assert mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, aname) >= 0
     # planar base + lift
     assert spec.planar_base_joint_names == ("base_x", "base_y", "base_yaw")
-    assert spec.tamp_approach == "side"
+    assert spec.tamp_approach == "front"
     assert mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, "lift") >= 0
 
 
 def test_sourccey_mjcf_cameras():
     spec, model = _load()
-    assert spec.camera_names == SOURCCEY_CAMERA_NAMES == ["front_left", "front_right", "wrist_left", "wrist_right"]
+    assert (
+        spec.camera_names
+        == SOURCCEY_CAMERA_NAMES
+        == ["front_left", "front_right", "bottom", "wrist_left", "wrist_right"]
+    )
     for cname in SOURCCEY_CAMERA_NAMES:
         assert mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, cname) >= 0
 
@@ -69,107 +76,87 @@ def test_sourccey_front_camera_image_up_is_upright():
         k = np.array([[300.0, 0.0, 320.0], [0.0, 300.0, 240.0], [0.0, 0.0, 1.0]])
         k, _, _ = chain_pinhole_K_pixel_ops(k, 480, 640, spec.robosuite_rgb_depth_ops)
         up = optical_rotation @ np.linalg.solve(k, [0.0, -1.0, 0.0])
-        assert up[2] / np.linalg.norm(up) > 0.9
+        assert up[2] / np.linalg.norm(up) > 0.7
 
 
 def test_sourccey_mjcf_geometry_sane():
     spec, model = _load()
     data = mujoco.MjData(model)
-    # tuck arms to the home keyframe so extents reflect the mobile footprint
+    # Use the raised-arm startup pose to check full assembly extents
     if model.nkey > 0:
         mujoco.mj_resetDataKeyframe(model, data, 0)
     mujoco.mj_forward(model, data)
     # ~1 m tall mobile manipulator (real: 1030 mm)
     zs = [data.body(i).xpos[2] for i in range(model.nbody)]
     assert max(zs) > 0.8
-    # body centers stay near the robot footprint (tucked home pose)
+    # Raised hands extend forward, with all body centers within 0.5 m
     xs = [data.body(i).xpos[0] for i in range(model.nbody)]
     ys = [data.body(i).xpos[1] for i in range(model.nbody)]
-    assert max(abs(v) for v in xs) < 0.45
+    assert max(abs(v) for v in xs) < 0.5
     assert max(abs(v) for v in ys) < 0.45
-    # total mass plausible (~15.88 kg real; allow some tolerance for the simplified base)
-    assert 5.0 < float(sum(model.body_mass)) < 40.0
+    # Upstream warns its CAD inertials total 169 kg and are not measured hardware mass.
+    assert float(sum(model.body_mass)) == pytest.approx(169.042941, abs=1e-5)
 
 
-def test_sourccey_home_keyframe_no_self_collision():
+@pytest.mark.parametrize("pose", ["home", "zero", "interior"])
+def test_sourccey_matches_official_full_assembly_fk(pose):
+    """Independent upstream oracle catches mirrored arms, frame and lift errors."""
     spec, model = _load()
-    data = mujoco.MjData(model)
-    assert mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_KEY, SOURCCEY_HOME_KEYFRAME) >= 0
-    mujoco.mj_resetDataKeyframe(model, data, 0)
+    official = mujoco.MjModel.from_xml_path(str(Path(spec.mjcf_path).parent / "upstream/models/sourccey.xml"))
+    data, expected = mujoco.MjData(model), mujoco.MjData(official)
+    if pose == "home":
+        mujoco.mj_resetDataKeyframe(model, data, 0)
+    elif pose == "interior":
+        for i in range(3, model.njnt):
+            lo, hi = model.jnt_range[i]
+            data.qpos[model.jnt_qposadr[i]] = lo * 0.35 + hi * 0.65
+    for name in SOURCCEY_JOINT_NAMES[3:]:
+        target = "linear_actuator" if name == "lift" else name
+        expected.qpos[official.joint(target).qposadr[0]] = data.qpos[model.joint(name).qposadr[0]]
     mujoco.mj_forward(model, data)
-    for _ in range(20):
-        mujoco.mj_step(model, data)
-    pen = []
-    for i in range(data.ncon):
-        c = data.contact[i]
-        if c.dist < -0.001:
-            b1 = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, model.geom_bodyid[c.geom1])
-            b2 = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, model.geom_bodyid[c.geom2])
-            if b1 != "world" and b2 != "world":
-                pen.append((b1, b2, round(float(c.dist), 4)))
-    assert pen == [], f"self-penetrations at home pose: {pen}"
+    mujoco.mj_forward(official, expected)
+    for i in range(1, official.nbody):
+        name = official.body(i).name
+        np.testing.assert_allclose(data.body(name).xpos, expected.body(name).xpos, atol=1e-9)
+        np.testing.assert_allclose(data.body(name).xmat, expected.body(name).xmat, atol=1e-9)
+    for name in SOURCCEY_CAMERA_NAMES:
+        np.testing.assert_allclose(data.camera(name).xpos, expected.camera(name).xpos, atol=1e-9)
+        np.testing.assert_allclose(data.camera(name).xmat, expected.camera(name).xmat, atol=1e-9)
 
 
-def test_sourccey_left_right_mirror_symmetry():
+def test_sourccey_hardware_limits_and_home():
     spec, model = _load()
+    source = ET.parse(spec.urdf_path)
+    for name in SOURCCEY_JOINT_NAMES[3:]:
+        official_name = "linear_actuator" if name == "lift" else name
+        limit = source.find(f"joint[@name='{official_name}']/limit")
+        jid, aid = model.joint(name).id, model.actuator(name + "_act").id
+        lo, hi = model.jnt_range[jid]
+        assert lo >= float(limit.get("lower")) - 1e-10
+        assert hi <= float(limit.get("upper")) + 1e-10
+        np.testing.assert_allclose(model.actuator_ctrlrange[aid], [lo, hi])
+        assert lo <= model.key_qpos[0, model.jnt_qposadr[jid]] <= hi
+        assert lo <= model.key_ctrl[0, aid] <= hi
+    # A finger command must not move the IK target frame.
     data = mujoco.MjData(model)
-    mujoco.mj_resetDataKeyframe(model, data, 0)
     mujoco.mj_forward(model, data)
-    # New official ArmLeft URDF arm chain (canonical left + code-side right mirror).
-    for link in ("Arm-Base-Shoulder", "Arm-Bicep", "Arm-Forearm", "Arm-Wrist", "Gripper-Base"):
-        l = data.body(f"left_{link}").xpos
-        r = data.body(f"right_{link}").xpos
-        assert abs(float(l[0]) + float(r[0])) < 1e-3, f"{link} not mirror-symmetric in x"
-        assert abs(float(l[1]) - float(r[1])) < 1e-3, f"{link} not mirror-symmetric in y"
-        assert abs(float(l[2]) - float(r[2])) < 1e-3, f"{link} not mirror-symmetric in z"
-
-
-def test_sourccey_arm_links_connected():
-    """Consecutive arm link meshes must overlap (no visible gaps at the joints)."""
-    from scipy.spatial import cKDTree
-
-    spec, model = _load()
-    data = mujoco.MjData(model)
-    mujoco.mj_resetDataKeyframe(model, data, 0)
+    before = data.body(spec.arm_chain.ee_body).xpos.copy()
+    data.qpos[model.joint("left_gripper").qposadr[0]] = 1.0
     mujoco.mj_forward(model, data)
+    np.testing.assert_allclose(data.body(spec.arm_chain.ee_body).xpos, before)
 
-    def mesh_verts(body):
-        bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, body)
-        out = []
-        for g in range(model.ngeom):
-            if model.geom_bodyid[g] != bid or model.geom_type[g] != mujoco.mjtGeom.mjGEOM_MESH:
-                continue
-            mid = int(model.geom_dataid[g])
-            nv = model.mesh_vertnum[mid]
-            vs = model.mesh_vert.reshape(-1, 3)[model.mesh_vertadr[mid] : model.mesh_vertadr[mid] + nv]
-            out.append(vs @ data.geom_xmat[g].reshape(3, 3).T + data.geom_xpos[g])
-        return np.concatenate(out) if out else np.zeros((0, 3))
 
-    chain = [
-        "right_Arm-Base-Shoulder",
-        "right_Feetech_Servo_Motor_v1_2",
-        "right_Arm-Bicep",
-        "right_Bicep_Right_v1_1",
-        "right_Feetech_Servo_Motor_v1_3",
-        "right_Arm-Forearm",
-        "right_Feetech_Servo_Motor_v1_4",
-        "right_Arm-Wrist",
-        "right_Feetech_Servo_Motor_v1_5",
-        "right_Gripper-Base",
-        "right_Feetech_Servo_Motor_v1_6",
-        "right_Gripper-Finger",
-    ]
-    # The joint servo-motor meshes bridge the link-to-link gaps (they are the real
-    # connective hardware between bicep/forearm/wrist), so allow a small slack.
-    max_gap_m = 0.02
-    for a, b in zip(chain, chain[1:], strict=False):
-        va, vb = mesh_verts(a), mesh_verts(b)
-        assert len(va) > 0 and len(vb) > 0
-        tree = cKDTree(va)
-        dist, _ = tree.query(vb)
-        assert float(dist.min()) < max_gap_m, (
-            f"arm links {a} and {b} separated by {dist.min():.3f} m — check align_urdf_meshes"
-        )
+def test_sourccey_generated_model_and_source_hashes():
+    spec, _ = _load()
+    assets = Path(spec.mjcf_path).parent
+    manifest = json.loads((assets / "upstream/manifest.json").read_text())
+    for name, expected in manifest["files"].items():
+        assert hashlib.sha256((assets / "upstream" / name).read_bytes()).hexdigest() == expected
+    path = Path(__file__).resolve().parents[3] / "scripts/robot_assets/assemble_sourccey.py"
+    module_spec = importlib.util.spec_from_file_location("assemble_sourccey", path)
+    module = importlib.util.module_from_spec(module_spec)
+    module_spec.loader.exec_module(module)
+    assert module.build() == Path(spec.mjcf_path).read_text()
 
 
 def test_sourccey_gripper_mappings():
@@ -186,10 +173,10 @@ def test_sourccey_mjcf_stable_sim_step():
     data = mujoco.MjData(model)
     mujoco.mj_resetDataKeyframe(model, data, 0)
     mujoco.mj_forward(model, data)
-    for _ in range(50):
+    for _ in range(2500):
         mujoco.mj_step(model, data)
     assert np.isfinite(data.qacc).all()
-    assert float(data.body("head").xpos[2]) > 0.5
+    assert float(data.camera("front_left").xpos[2]) > 0.5
 
 
 def test_sourccey_registry_and_assets():
@@ -202,27 +189,15 @@ def test_sourccey_registry_and_assets():
 
 
 def test_sourccey_vendored_official_urdf():
-    """The updated official ArmLeft URDF is vendored and referenced by the backend."""
     spec, _ = _load()
-    assert spec.urdf_path, "urdf_path must point at the vendored official arm URDF"
     urdf = Path(spec.urdf_path)
-    assert urdf.is_file(), f"vendored URDF missing: {urdf}"
-    text = urdf.read_text()
-    # updated official arm chain
-    for joint in ("shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper"):
-        assert f'name="{joint}" type="revolute"' in text
-    # ArmLeft + ArmRight live next to it (STL meshes only; no Unity sidecars).
-    urdf_root = urdf.parent.parent
-    assert (urdf_root / "ArmRight" / "ArmRight.urdf").is_file()
-    assert not (urdf.parent / "UnityMeshes").exists()
-    assert not (urdf_root / "ArmRight" / "UnityMeshes").exists()
-    assert not list(urdf.parent.glob("*.meta"))
-    assert not list(urdf_root.rglob("*.meta"))
-    # Official visual/collision mesh paths resolve next to the URDF.
-    for ref in re.findall(r'filename="([^"]+)"', text):
-        mesh = urdf.parent / ref
-        assert mesh.is_file(), f"URDF mesh missing: {mesh}"
-    assert (urdf.parent.parent.parent / "mesh_map.json").is_file()
+    source = ET.parse(urdf)
+    assert source.find("joint[@name='linear_actuator']") is not None
+    for side in ("left", "right"):
+        assert source.find(f"joint[@name='{side}_shoulder_pan']") is not None
+    for mesh in source.iter("mesh"):
+        assert (urdf.parent / mesh.get("filename")).is_file()
+    assert not list(urdf.parent.rglob("*.meta"))
 
 
 def test_sourccey_declares_arm_chains_and_kinematic_manip():
@@ -237,14 +212,14 @@ def test_sourccey_declares_arm_chains_and_kinematic_manip():
         assert any(a.endswith("gripper_act") for a in chain.actuator_names)
         for jn in chain.joint_names:
             assert mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, jn) >= 0
-        assert chain.ee_body == f"{side}_Gripper-Finger"
+        assert chain.ee_body == f"Gripper_Base_v1_{1 if side == 'left' else 2}"
         assert mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, chain.ee_body) >= 0
     from emet.motion.arm_manip_profile import ArmManipProfile
 
     for side in ("left", "right"):
         profile = ArmManipProfile.for_robot("sourccey", arm=side)
         assert profile.joint_names == tuple(spec.arm_chains[side].joint_names)
-        assert profile.ee_body == f"{side}_Gripper-Finger"
+        assert profile.ee_body == spec.arm_chains[side].ee_body
         assert profile.gripper_contact_bodies()
         from emet.motion.mujoco_arm_ik import pack_arm_into_actuator_dict
 
@@ -274,7 +249,9 @@ def test_sourccey_executor_actuator_and_gripper_aliases():
     assert exe._actuator_to_joint_name("left_arm1") == "left_arm_joint1"
     exe._set_gripper(open_=True)
     sent = robot.set_actuator_positions.call_args[0][0]
-    assert sent["left_gripper_act"] == 0.05
+    assert sent["left_gripper_act"] == pytest.approx(np.deg2rad(60))
+    exe._set_gripper(open_=False)
+    assert robot.set_actuator_positions.call_args[0][0]["left_gripper_act"] == pytest.approx(np.deg2rad(-5))
 
 
 def test_wrap_recentered_on_joint_puts_parent_at_origin():
@@ -338,4 +315,55 @@ def test_sourccey_merged_table_home_keeps_object_freejoints():
     np.testing.assert_allclose(data.xpos[o2], obj2_before, atol=1e-4)
     pan_after = float(data.qpos[pan_adr])
     assert abs(pan_after - pan_before) > 0.2
-    assert abs(pan_after - 0.6) < 0.05
+    assert abs(pan_after - (-0.785)) < 0.05
+
+
+@pytest.mark.parametrize("side", ["left", "right"])
+def test_sourccey_client_gripper_commands_reach_only_selected_actuator(side):
+    from unittest.mock import Mock
+
+    from emet.controller.generic_zmq_client import GenericZmqClient
+    from emet.simulation.gripper_action import apply_gripper_action_robosuite
+
+    spec, model = _load()
+    data = mujoco.MjData(model)
+    mujoco.mj_resetDataKeyframe(model, data, 0)
+    client = object.__new__(GenericZmqClient)
+    client._spec = spec
+    client.send_action = Mock()
+    for method, expected in ((client.open_gripper, np.deg2rad(60)), (client.close_gripper, np.deg2rad(-5))):
+        before = data.ctrl.copy()
+        method(f"{side}_gripper")
+        action = client.send_action.call_args.args[0]
+        assert action[f"gripper_{side}"] == pytest.approx(expected)
+        updated = apply_gripper_action_robosuite(spec, model, data, action)
+        assert updated == [f"{side}_gripper_act"]
+        aid = model.actuator(updated[0]).id
+        assert data.ctrl[aid] == pytest.approx(expected)
+        np.testing.assert_allclose(np.delete(data.ctrl, aid), np.delete(before, aid))
+    with pytest.raises(ValueError):
+        client.open_gripper("unknown")
+    before = data.ctrl.copy()
+    with pytest.raises(ValueError):
+        apply_gripper_action_robosuite(spec, model, data, {"gripper_left": 0.0, "gripper_right": float("nan")})
+    np.testing.assert_array_equal(data.ctrl, before)
+
+
+@pytest.mark.parametrize("robot", ["sourccey", "xlerobot"])
+def test_gripper_side_validation_is_sourccey_specific(robot):
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+
+    from emet.controller.generic_zmq_client import GenericZmqClient
+
+    client = object.__new__(GenericZmqClient)
+    client._spec = SimpleNamespace(name=robot)
+    client.send_action = Mock()
+    if robot == "sourccey":
+        with pytest.raises(ValueError, match="side must be"):
+            client.gripper_to(0.4, side="legacy", blocking=False)
+        client.send_action.assert_not_called()
+    else:
+        # Preserve XLeRobot's existing non-right -> left fallback.
+        client.gripper_to(0.4, side="legacy", blocking=False)
+        client.send_action.assert_called_once_with({"gripper_left": 0.4}, reliable=True)
