@@ -1117,6 +1117,7 @@ class RobosuiteZmqServer(BaseZmqServer):
         """Keep attached freejoint bodies glued to their EE (kinematic grasp)."""
         if not self._kinematic_attachments or self._mjmodel is None or self._mjdata is None:
             return
+        mujoco.mj_kinematics(self._mjmodel, self._mjdata)
         for body, info in list(self._kinematic_attachments.items()):
             ee = str(info.get("ee_body") or "")
             offset = np.asarray(info.get("offset_local"), dtype=np.float64).reshape(3)
@@ -1126,7 +1127,7 @@ class RobosuiteZmqServer(BaseZmqServer):
             R = np.asarray(self._mjdata.body(ee_id).xmat, dtype=np.float64).reshape(3, 3)
             ee_pos = np.asarray(self._mjdata.body(ee_id).xpos, dtype=np.float64).reshape(3)
             world = ee_pos + R @ offset
-            if set_free_body_pose(self._mjmodel, self._mjdata, body, world):
+            if set_free_body_pose(self._mjmodel, self._mjdata, body, world, update_dynamics=False):
                 self._patch_emet_session_body_pos(body, world.tolist())
 
     def get_scene_summary(self) -> str:
