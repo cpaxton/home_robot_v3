@@ -1216,6 +1216,17 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
 
     # -- Stretch / DynaMem API shims (this client is spec-driven, not Stretch-indexed) ------------
 
+    def get_joint_state_evidence(self):
+        """Return feedback and receive time atomically for guarded manipulation."""
+        from emet.controller.manipulation.native_inputs import JointStateEvidence, ObservationUnavailable
+
+        with self._obs_lock:
+            state = self._state
+            received = getattr(self, "_state_received_monotonic", None)
+            if not isinstance(state, dict) or state.get("joint_positions") is None or received is None:
+                raise ObservationUnavailable("joint_state_unknown")
+            return JointStateEvidence(state["joint_positions"], received)
+
     def get_joint_state(
         self, timeout: float = 5.0
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray] | tuple[None, None, None]:

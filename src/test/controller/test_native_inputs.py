@@ -111,3 +111,42 @@ def test_privileged_native_mode_reports_explicit_unavailability(is_simulation, e
     robot = SimpleNamespace(get_emet_session=lambda: {'is_simulation': is_simulation})
     tools = {t.name: t for t in get_tools({'robot': robot, 'manip_mode': 'physical', 'tamp_inputs': 'privileged'})}
     assert json.loads(tools['scene_tasks'].func())['code'] == expected
+
+
+@pytest.mark.parametrize('client_name', ['generic', 'stretch'])
+def test_client_joint_evidence_captures_feedback_and_time_together(client_name):
+    from threading import Lock
+
+    from emet.controller.generic_zmq_client import GenericZmqClient
+    from emet.controller.zmq_client import StretchZmqClient
+    cls = GenericZmqClient if client_name == 'generic' else StretchZmqClient
+    client = cls.__new__(cls)
+    client._obs_lock = client._state_lock = Lock()
+    client._state = None
+    with pytest.raises(ObservationUnavailable, match='joint_state_unknown'):
+        client.get_joint_state_evidence()
+    q = np.array([.2, .4])
+    client._state = {'joint_positions': q}
+    client._state_received_monotonic = 10.
+    evidence = client.get_joint_state_evidence()
+    q[:] = 99
+    np.testing.assert_array_equal(evidence.require(now=11.), [.2, .4])
+    with pytest.raises(ObservationUnavailable, match='joint_observation_stale'):
+        evidence.require(now=13.)
+    with pytest.raises(ValueError):
+        evidence.positions.setflags(write=True)
+
+
+def test_stretch_state_update_records_receive_time(monkeypatch):
+    from threading import Lock
+
+    from emet.controller import zmq_client
+    client = zmq_client.StretchZmqClient.__new__(zmq_client.StretchZmqClient)
+    client._state_lock = Lock()
+    client._last_step = 0
+    client._note_emet_session_from_zmq_dict = lambda _: None
+    monkeypatch.setattr(zmq_client.time, 'monotonic', lambda: 10.)
+    client._update_state({'joint_positions': [1., 2.], 'control_mode': 'manipulation', 'at_goal': False, 'step': 1})
+    evidence = client.get_joint_state_evidence()
+    assert evidence.received_monotonic == 10.
+    np.testing.assert_array_equal(evidence.require(now=10.), [1., 2.])

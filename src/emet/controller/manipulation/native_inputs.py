@@ -64,3 +64,28 @@ def read_object_pose(provider: ObjectPoseProvider, object_ref: str, *, inputs: s
     if evidence is None:
         raise ObservationUnavailable('object_state_unknown')
     return evidence.require(inputs)
+
+
+@dataclass(frozen=True)
+class JointStateEvidence:
+    """Joint feedback and its local receive time from one atomic client snapshot.
+
+    Receive freshness does not establish sensor capture freshness. No effort,
+    contact, object pose, or localization measurement is inferred here.
+    """
+    positions: np.ndarray
+    received_monotonic: float
+
+    def __post_init__(self):
+        positions = np.asarray(self.positions, dtype=float)
+        if (positions.ndim != 1 or not positions.size or not np.isfinite(positions).all()
+                or not np.isfinite(self.received_monotonic)):
+            raise ObservationUnavailable('invalid_joint_feedback')
+        positions = np.frombuffer(positions.tobytes(), dtype=positions.dtype)
+        object.__setattr__(self, 'positions', positions)
+
+    def require(self, *, now: float | None = None, max_age_s: float = 2.) -> np.ndarray:
+        age = (time.monotonic() if now is None else now) - self.received_monotonic
+        if not np.isfinite(age) or not 0 <= age <= max_age_s:
+            raise ObservationUnavailable('joint_observation_stale')
+        return self.positions.copy()

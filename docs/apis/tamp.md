@@ -141,3 +141,9 @@ observed collision provider by default. Object poses carry an observation ID,
 source and receive time; missing, stale or privileged evidence cannot verify an
 observed grasp. The existing physical benchmark explicitly selects privileged
 inputs. Native dynamics and realistic sensor inputs are separate requirements.
+
+The Stretch and generic clients expose `get_joint_state_evidence()`, an immutable
+position vector paired atomically with its local receive timestamp. Native
+adapters can reject unknown/stale feedback without racing two separate reads.
+This is receive freshness, not a sensor capture timestamp or evidence of contact;
+no missing effort, object pose, or localization values are synthesized.

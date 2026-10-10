@@ -303,6 +303,17 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
             depth = self._servo["head_depth"]
         return rgb, depth
 
+    def get_joint_state_evidence(self):
+        """Return feedback and receive time atomically for guarded manipulation."""
+        from emet.controller.manipulation.native_inputs import JointStateEvidence, ObservationUnavailable
+
+        with self._state_lock:
+            state = self._state
+            received = getattr(self, "_state_received_monotonic", None)
+            if not isinstance(state, dict) or state.get("joint_positions") is None or received is None:
+                raise ObservationUnavailable("joint_state_unknown")
+            return JointStateEvidence(state["joint_positions"], received)
+
     def get_joint_state(self, timeout: float = 5.0) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Get the current joint positions, velocities, and efforts"""
         t0 = timeit.default_timer()
@@ -1282,7 +1293,9 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         Args:
             state (dict): state message from the robot
         """
+        received = time.monotonic()
         with self._state_lock:
+            self._state_received_monotonic = received
             if "step" in state:
                 self._last_step = max(self._last_step, state["step"])
                 if state["step"] < self._last_step:
