@@ -38,12 +38,16 @@ def set_free_body_pose(
     body_name: str,
     pos: np.ndarray | list[float],
     quat: np.ndarray | list[float] | None = None,
+    *,
+    update_dynamics: bool = True,
 ) -> bool:
     """Set world pose of a freejoint body, or a welded child via its freejoint ancestor.
 
     MolmoSpaces iTHOR objects use a freejoint root (``…_1_0_0``) with mesh children
     (``…_1_1_0``). GT placements often name the child; teleport the ancestor so the
-    requested body ends near ``pos``.
+    requested body ends near ``pos``. Attachment updates immediately after a
+    physics step may use ``update_dynamics=False``: refresh transforms only and
+    let the next integrator step rebuild dynamics/contacts.
     """
     try:
         body_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, str(body_name))
@@ -51,7 +55,7 @@ def set_free_body_pose(
         return False
     if body_id < 0:
         return False
-    mujoco.mj_forward(model, data)
+    mujoco.mj_kinematics(model, data)
     free_id = freejoint_ancestor_body_id(model, body_id)
     if free_id is None:
         return False
@@ -74,8 +78,14 @@ def set_free_body_pose(
         if not np.isfinite(q).all() or abs(float(np.linalg.norm(q)) - 1.0) > 1e-3:
             q = np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float64)
     data.qpos[qpos_adr + 3 : qpos_adr + 7] = q
-    data.qvel[qpos_adr : qpos_adr + 6] = 0.0
-    mujoco.mj_forward(model, data)
+    # Free joints occupy seven qpos entries but only six velocity DOFs.
+    dof_adr = int(model.jnt_dofadr[jnt_adr])
+    data.qvel[dof_adr : dof_adr + 6] = 0.0
+    if update_dynamics:
+        mujoco.mj_forward(model, data)
+    else:
+        mujoco.mj_kinematics(model, data)
+
     return True
 
 

@@ -116,3 +116,35 @@ def test_robot_sim_body_pose_teleport_supported_caps():
     )
     assert prefer_kinematic_manip(mars, manip_mode="kinematic", visual_servo=False)
     assert can_use_sim_gt_manip(mars, manip_mode="kinematic", visual_servo=False)
+
+
+def test_free_body_pose_zeros_only_its_velocity_dofs():
+    model = mujoco.MjModel.from_xml_string('''<mujoco><worldbody>
+      <body name="first" pos="-3 0 0"><freejoint/><geom size=".1"/></body>
+      <body name="target"><freejoint/><geom size=".1"/></body>
+      <body name="last" pos="3 0 0"><freejoint/><geom size=".1"/></body>
+    </worldbody></mujoco>''')
+    data = mujoco.MjData(model)
+    data.qvel[:] = np.arange(model.nv) + 1.
+    before = data.qvel.copy()
+    assert set_free_body_pose(model, data, 'target', [0, 0, 1])
+    joint = model.body('target').jntadr[0]
+    dof = model.jnt_dofadr[joint]
+    expected = before.copy()
+    expected[dof:dof + 6] = 0.
+    np.testing.assert_array_equal(data.qvel, expected)
+
+
+def test_attachment_transform_update_does_not_rerun_dynamics(monkeypatch):
+    model = mujoco.MjModel.from_xml_string('''<mujoco><worldbody>
+      <body name="root"><freejoint/><geom size=".1"/>
+        <body name="child" pos=".2 0 0"><geom size=".05"/></body>
+      </body></worldbody></mujoco>''')
+    data = mujoco.MjData(model)
+    data.qacc[:] = 42.
+    def forbidden(*_):
+        raise AssertionError('attachment update reran the dynamics solver')
+    monkeypatch.setattr(mujoco, 'mj_forward', forbidden)
+    assert set_free_body_pose(model, data, 'child', [1, 2, 3], update_dynamics=False)
+    np.testing.assert_allclose(data.body('child').xpos, [1, 2, 3])
+    np.testing.assert_array_equal(data.qacc, 42.)
