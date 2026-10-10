@@ -393,6 +393,10 @@ def execute_task_plan(
             value = getattr(executor, name, None)
             if isinstance(value, dict):
                 evidence[name] = {k: value.get(k) for k in fields}
+        if op == "place":
+            from emet.controller.task.tamp.api import placement_evidence
+
+            evidence.update(placement_evidence(executor))
         if len(evidence) > 1:
             plan.measurements.append(copy.deepcopy(evidence))
 

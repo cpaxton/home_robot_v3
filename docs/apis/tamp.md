@@ -112,8 +112,11 @@ experiment logs. Release or retraction failure must not report full success.
 
 These interfaces support GT-backed simulator planning. Kinematic manipulation
 uses object latch/placement assistance; the managed gates also enable base
-teleportation. Endpoint collision checks do not certify swept arm or payload
-clearance, and RBY1 arm collision geometry remains incomplete. Configured
+teleportation. The public `collision_scope` currently reports base endpoint checks. Placement
+now performs additional sampled arm/payload checks against declared geometry
+through the [placement Python API](placement.md), but those details are not yet
+propagated per stage in public results. Neither interface certifies swept base
+transport or complete physical robot geometry. Configured
 hardware controllers retain their existing behavior and do not gain physical
 certification from this API change.
 
@@ -147,3 +150,60 @@ position vector paired atomically with its local receive timestamp. Native
 adapters can reject unknown/stale feedback without racing two separate reads.
 This is receive freshness, not a sensor capture timestamp or evidence of contact;
 no missing effort, object pose, or localization values are synthesized.
+
+## Current placement and recovery limitations
+
+Placement has no separate public CHAT tool: it runs within execution of the
+existing pick/place tools. Placement failures preserve codes including `no_collision_free_placement`,
+`placement_geometry_unavailable`, `placement_invalidated`, and
+`release_execution_error`. Per-place measurements include sanitized
+`placement_search` counts, geometry source, and its sampled collision scope.
+The top-level scope remains conservative for the entire task. `completed_ops` alone cannot tell an
+agent whether release occurred during a failed `place`. Do not infer that a new
+grasp is safe from this response. There is not yet a dedicated recovery tool in
+this four-tool API.
+
+The latest full readiness gate (`20261009_081750_e342cc`, source `1335d5d5`)
+failed CHAT placement and admitted 0/3 fixtures; repeats did not run. See the
+[merge and metric plan](../plans/2026-10-09_tamp_merge_and_metrics.md) for acceptance
+criteria and the distinction between historical assisted scores and current
+end-to-end readiness.
+
+The clutter benchmark runner now stops after the first execution or relocation
+verification failure. It reports `recovery_required: true` and
+`unattempted_bodies` in its private benchmark JSON, skips navigation, and retains
+all requested objects in the denominator. These body IDs are not public tool
+output. Planning failures before execution can still proceed to another object.
+
+Per-place `release` evidence records `detach_command` as `not_attempted`,
+`unknown` (command attempted but completion unavailable), or `returned` (the helper returned without error; terminal completion is not
+independently checked), plus
+`placement_verified` as a boolean or null. `held_state` remains `unknown`: a
+returned detach helper and XY placement check do not provide a current
+attachment observation. These fields help distinguish partial effects, but do
+not authorize blind replay. Evidence resets at each operation and does not leak
+arbitrary planner messages, internal body identities or previous search results.
+
+## Simulator-assisted articulation
+
+[`set_receptacle_state`](tamp_articulation.md) opens/closes a supported receptacle
+using a current task handle and returns the same JSON envelope. Discovery now
+includes an `access` field. Closed supported fixtures must be opened before
+planning; unsupported articulated goals fail before pickup. This separate action
+is explicitly assisted, invalidates prior plans, and does not certify a door sweep.
+
+## Placement state refresh
+
+Placement waits up to two wall seconds for the state receiver to recover before
+planning or executing a segment. The maximum accepted receive age remains two
+seconds; command targets never replace measured joints. Incomplete or nonfinite
+joint arrays cannot partially overwrite the offline planning model. Logs include
+`Measured state refresh` JSON with `code`, `wait_s`, and `state_age_s`.
+
+Public placement failures retain `placement_stale_observation`,
+`placement_missing_joint_state`, `placement_nonfinite_joint_state`, or
+`placement_path_invalidated`, including nested preplace/place failures. They
+require inspection of the held object and current scene before recovery; a failed
+refresh never causes release. This distinguishes a state-stream failure from
+changed obstacle geometry. A bounded wait is a recovery mechanism, not evidence
+that the original live failure was caused by receiver starvation.

@@ -178,6 +178,8 @@ def main() -> int:
         default=None,
         help='JSON list of tool calls, e.g. \'[{"name":"pick_place","arguments":{...}}]\'.',
     )
+    parser.add_argument("--articulation-cycle", action="store_true",
+                        help="Separate assisted open/close smoke on the first discovered task; no placement score.")
     parser.add_argument("--cpu-only", action="store_true", help="Hide GPUs in sim subprocess env.")
     parser.add_argument("--verbose-sim", action="store_true", help="Print sim server stderr.")
     parser.add_argument(
@@ -238,6 +240,16 @@ def main() -> int:
                     "receptacle_name": args.receptacle,
                 },
             }
+        ]
+
+    if args.articulation_cycle:
+        if has_explicit_tool_calls:
+            parser.error("--articulation-cycle cannot be combined with --tool-calls-json")
+        has_explicit_tool_calls = True
+        tool_calls = [
+            {"name": "scene_tasks", "arguments": {"object_filter": args.object}},
+            {"name": "set_receptacle_state", "arguments": {"task_ref": "$task_ref", "state": "open"}},
+            {"name": "set_receptacle_state", "arguments": {"task_ref": "$task_ref", "state": "closed"}},
         ]
 
     sim_handle = None
@@ -395,6 +407,10 @@ def main() -> int:
                 video = None
                 if mp4 is not None:
                     print(f"mp4 -> {mp4}", flush=True)
+        if args.articulation_cycle:
+            print(json.dumps({"schema_version": 1, "track": "assisted_articulation_cycle",
+                              "success": bool(ok), "placement_tested": False}))
+            return 0 if ok else 1
         # Re-resolve after manip (session placements patched in place)
         after = _placement_pos(robot, obj_body) if obj_body else None
         print(f"pos_after={None if after is None else after.tolist()}")

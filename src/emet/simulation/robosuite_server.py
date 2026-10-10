@@ -1046,6 +1046,7 @@ class RobosuiteZmqServer(BaseZmqServer):
             "dof": int(self._spec.dof),
             "sim_set_body_pose": True,
             "sim_set_joint_qpos": True,
+            "sim_articulation_state": True,
             "kinematic_manip": kinematic_ok,
         }
         session: dict[str, Any] = {
@@ -1087,10 +1088,50 @@ class RobosuiteZmqServer(BaseZmqServer):
             data=self._mjdata,
             robot_root_name=self._spec.base_link_name,
         )
+        from emet.simulation.articulation import scene_articulations
+        session["sim_articulations"] = scene_articulations(self._mjmodel, self._mjdata, self._spec.base_link_name)
+        session["articulation_revision"] = 0
         return session
+
+    def _refresh_articulation_state(self):
+        """Publish joint evidence and coherent geometry from private data under lock."""
+        from emet.simulation.articulation import scene_articulations
+        if self._emet_session is None or self._mjmodel is None or self._mjdata is None:
+            return
+        groups = scene_articulations(self._mjmodel, self._mjdata, self._spec.base_link_name)
+        if groups != self._emet_session.get("sim_articulations"):
+            scratch = mujoco.MjData(self._mjmodel)
+            mujoco.mj_copyData(scratch, self._mjmodel, self._mjdata)
+            env = self._emet_session.get("environment") or {}
+            if env.get("kind") == "molmospaces" and not self._objects_info:
+                from emet.simulation.sim_object_placements import refresh_articulated_body_placements
+                previous = self._emet_session.get("sim_articulations") or []
+                changed = [g for g in groups if g not in previous]
+                bodies = {body for group in changed for body in group["bodies"]}
+                refresh_articulated_body_placements(
+                    self._emet_session["sim_object_placements"], self._mjmodel, scratch, bodies)
+            else:
+                # Aggregate fixture maps need their provider's grouping rules.
+                attach_sim_object_placements_to_session(
+                    self._emet_session, objects_info=self._objects_info,
+                    environment_kind=env.get("kind"), model=self._mjmodel, data=scratch,
+                    robot_root_name=self._spec.base_link_name,
+                )
+            self._emet_session["sim_articulations"] = groups
 
     def _attach_emet_session(self, message: dict[str, Any]) -> dict[str, Any]:
         if self._emet_session is not None:
+            from emet.simulation.sim_object_placements import refresh_moved_body_placements
+
+            with self._mj_lock:
+                if (self._emet_session.get("capabilities") or {}).get("sim_articulation_state"):
+                    self._refresh_articulation_state()
+                dirty = getattr(self, "_placement_geometry_dirty", set())
+                placements = self._emet_session.get("sim_object_placements")
+                if isinstance(placements, dict):
+                    for body in dirty:
+                        refresh_moved_body_placements(placements, self._mjmodel, self._mjdata, body)
+                self._placement_geometry_dirty = set()
             message[EMET_ZMQ_SESSION_KEY] = self._emet_session
         return message
 
@@ -1100,18 +1141,16 @@ class RobosuiteZmqServer(BaseZmqServer):
         pos: list[float],
         quat: list[float] | None = None,
     ) -> None:
-        """Update one body entry in cached session GT after ``sim_set_body_pose``."""
+        """Invalidate moved geometry; rebuild at publication, not every physics tick."""
         if self._emet_session is None:
             return
         placements = self._emet_session.get("sim_object_placements")
-        if not isinstance(placements, dict) or body not in placements:
+        if not isinstance(placements, dict):
             return
-        entry = placements[body]
-        if not isinstance(entry, dict):
-            return
-        entry["pos"] = [float(x) for x in pos[:3]]
-        if quat is not None:
-            entry["quat"] = [float(x) for x in quat[:4]]
+        with self._mj_lock:
+            if not hasattr(self, "_placement_geometry_dirty"):
+                self._placement_geometry_dirty = set()
+            self._placement_geometry_dirty.add(body)
 
     def _snap_kinematic_attachments(self) -> None:
         """Keep attached freejoint bodies glued to their EE (kinematic grasp)."""
@@ -2332,6 +2371,14 @@ class RobosuiteZmqServer(BaseZmqServer):
             if joint and value is not None and self._mjmodel is not None and self._mjdata is not None:
                 with self._mj_lock:
                     ok = set_named_joint_qpos(self._mjmodel, self._mjdata, joint, value)
+                    if self._emet_session is not None:
+                        self._emet_session["articulation_revision"] = int(
+                            self._emet_session.get("articulation_revision", 0)) + 1
+                        self._refresh_articulation_state()
+                        self._emet_session["articulation_result"] = {
+                            "request_id": action[EMET_ACTION_SIM_SET_JOINT_QPOS_KEY].get("request_id"),
+                            "joint": joint, "applied": bool(ok),
+                        }
                 if ok:
                     logger.info(f"sim_set_joint_qpos: {joint!r} requested={value:.4f}")
                 else:
