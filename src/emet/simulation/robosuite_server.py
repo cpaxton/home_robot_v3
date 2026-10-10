@@ -2633,6 +2633,7 @@ class RobosuiteZmqServer(BaseZmqServer):
             "base_xyz": base_xyz,
             "base_up_dot_world_z": base_up,
             "actuator_targets": joint_targets,
+            "actuator_names": list(self._spec.actuator_names),
             "ee_pose": np.eye(4),
             "joint_positions": q,
             "joint_velocities": dq,
