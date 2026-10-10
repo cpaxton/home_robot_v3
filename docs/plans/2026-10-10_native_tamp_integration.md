@@ -73,3 +73,20 @@ Sourccey, rendered depth and simulated base coordinates are not hardware depth o
 wheel odometry. Metric depth/localization availability must be validated; missing
 capabilities stay unsupported. Physical door opening, automatic clutter clearing,
 and real-hardware commissioning are outside this increment.
+
+### Live telemetry rerun — still failing
+
+Diagnostic job `20261010_122429_d89b27`, implementation `5dc29884`, terminated
+with exit 1. Pickup/lift passed and placement found three candidate paths, but
+after base motion state age reached 6.132 s and execution stopped with
+`placement_stale_observation` before release. Artifact directory:
+`/tmp/tamp-render-state-fix-20261010/` (JSON, log, and video). This was a CPU/Mesa
+run; it is not GPU validation or a paired benchmark (the articulation command
+sequence differs from the earlier run). The renderer/client lock fixes are
+necessary concurrency repairs, not a demonstrated fix for the live failure.
+
+A local microprofile on the same merged scene measured articulation descriptors
+at 1.4 ms, moved-bowl geometry at 10 ms, and refreshing all articulated bodies
+at 202 ms with one BLAS thread. These costs alone do not explain the six-second
+gap. The next diagnostic must capture server and client thread stacks/timings
+at the failed transition before further changes or threshold adjustments.
