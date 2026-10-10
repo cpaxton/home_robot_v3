@@ -74,6 +74,17 @@ wheel odometry. Metric depth/localization availability must be validated; missin
 capabilities stay unsupported. Physical door opening, automatic clutter clearing,
 and real-hardware commissioning are outside this increment.
 
+### Input-contract implementation
+
+`feat/tamp-native-contracts` begins the input boundary: immutable, source-tagged,
+fresh object poses; provider-based retention/lift checks; explicit privileged
+selection by legacy physical evaluations; no physical-mode fallback into legacy
+controllers or teleport; no GT task discovery while observed adapters are absent.
+The focused input/physical/API/config suite passes 105 tests. This is a guarded
+integration layer, not completed native CHAT execution or an observed-scene
+provider. Adapter, geometry, perception, inspection, and live acceptance work in
+the execution order above remains open.
+
 ### Live telemetry rerun — still failing
 
 Diagnostic job `20261010_122429_d89b27`, implementation `5dc29884`, terminated

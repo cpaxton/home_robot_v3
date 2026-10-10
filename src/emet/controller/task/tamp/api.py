@@ -120,6 +120,8 @@ def failure_code(message: str) -> str:
             if part.endswith(suffix):
                 return code
     allowed = {
+        "invalid_tamp_inputs", "observed_scene_unavailable",
+        "privileged_inputs_require_simulation", "native_execution_unavailable",
         "unknown_plan",
         "scene_changed_replan",
         "invalid_plan",

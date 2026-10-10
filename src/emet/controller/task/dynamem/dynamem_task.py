@@ -111,6 +111,7 @@ class DynamemTaskExecutor:
             if not isinstance(agent_cfg, dict):
                 agent_cfg = {}
         self._manip_mode = str(agent_cfg.get("manip_mode") or "teleport")
+        self._tamp_inputs = str(agent_cfg.get("tamp_inputs") or "observed")
         self._manip_collision = str(agent_cfg.get("manip_collision") or "none")
         self._manip_planner = str(agent_cfg.get("manip_planner") or "rrt_connect")
         from emet.motion.arm_rrt import resolve_agent_manip_planner
@@ -345,6 +346,9 @@ class DynamemTaskExecutor:
         OK-Robot path propagates ``agent.manipulate`` (False when grasp detection fails
         or the operator declines confirmation).
         """
+        if self._manip_mode == "physical":
+            logger.error("Physical manipulation requires the guarded TAMP execution adapter")
+            return False
         if getattr(self.agent, "query_driven_memory", False):
             return self._query_manipulation(target_object, place=False)
         from emet.simulation.sim_manipulation import (
@@ -446,6 +450,9 @@ class DynamemTaskExecutor:
 
         Stretch path propagates ``agent.place`` (False when receptacle detection fails).
         """
+        if self._manip_mode == "physical":
+            logger.error("Physical manipulation requires the guarded TAMP execution adapter")
+            return False
         if getattr(self.agent, "query_driven_memory", False):
             return self._query_manipulation(target_receptacle, place=True)
         from emet.simulation.sim_manipulation import (

@@ -557,6 +557,23 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         executor = context.get("executor")
         return str(getattr(executor, "_manip_mode", None) or context.get("manip_mode") or "auto")
 
+    def _native_input_gate() -> str | None:
+        if _tamp_manip_mode().strip().lower() != "physical":
+            return None
+        executor = context.get("executor")
+        inputs = str(getattr(executor, "_tamp_inputs", None) or context.get("tamp_inputs") or "observed")
+        if inputs not in {"observed", "privileged"}:
+            return "invalid_tamp_inputs"
+        if inputs == "observed":
+            # Do not read simulator task metadata before an observed-scene
+            # adapter is installed. Input isolation includes task discovery.
+            return "observed_scene_unavailable"
+        robot = _tamp_robot()
+        session = robot.get_emet_session() if robot is not None else None
+        if not isinstance(session, dict) or session.get("is_simulation") is not True:
+            return "privileged_inputs_require_simulation"
+        return "native_execution_unavailable"
+
     def _fallback_pick_place(executor: Any, object_name: str, receptacle_name: str) -> dict:
         keep_going = executor([("pickup", object_name), ("place", receptacle_name)])
         task_ok = keep_going and bool(getattr(executor, "_last_exec_ok", True))
@@ -579,6 +596,10 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         )
 
         requested_ref = str(task_ref).strip()
+        native_error = _native_input_gate()
+        if native_error:
+            from emet.controller.task.tamp.agent_bridge import AgentPlanBuild
+            return AgentPlanBuild(None, None, "physical", True, native_error)
         selected = (context.get("_tamp_task_refs") or {}).get(requested_ref)
         if selected is not None and not isinstance(selected, AgentTaskRef):
             selected = None
@@ -655,9 +676,9 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         executor = context.get("executor")
         if executor is None and _tamp_robot() is None:
             return response("pick_place", code="robot_not_connected")
-        if executor is not None and (
+        if executor is not None and _tamp_manip_mode().strip().lower() != "physical" and (
             bool(getattr(executor, "visual_servo", False))
-            or _tamp_manip_mode().strip().lower() not in {"auto", "teleport", "kinematic"}
+            or _tamp_manip_mode().strip().lower() not in {"auto", "teleport", "kinematic", "physical"}
         ):
             return _fallback_pick_place(executor, object_name, receptacle_name)
         build = _build_tamp_plan(object_name=object_name, receptacle_name=receptacle_name)
@@ -667,7 +688,7 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
             result = execute_stored_agent_plan_result(_tamp_robot(), context, plan_ref)
             result["tool"] = "pick_place"
             return result
-        if build.live_sim:
+        if build.live_sim or _tamp_manip_mode().strip().lower() == "physical":
             return response("pick_place", code=failure_code(build.reason or "planner_error"))
         if executor is None:
             return response("pick_place", code="controller_unavailable")
@@ -740,6 +761,9 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
     @json_tool
     def scene_tasks(object_filter: str = "", robot: str = "") -> dict:
         """Enumerate pick-and-place options from the current scene as a compact digest."""
+        native_error = _native_input_gate()
+        if native_error:
+            return response("scene_tasks", code=native_error)
         from emet.controller.task.tamp.agent_bridge import stable_scene_task_refs
         from emet.eval.scene_task_extractor import (
             default_molmospaces_scenes_dir,
