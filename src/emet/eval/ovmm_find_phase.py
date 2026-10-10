@@ -1707,7 +1707,10 @@ def run_episode_find_phase(
         cache_dir = None
         map_source = "live"
         # S0 parity always maps live (pytest path); cached find_phase maps skew localize.
-        use_scene_cache = bool(run_cfg.use_scene_cache) and not s0_parity
+        # A coverage ablation must actually execute its requested scan, not
+        # silently reuse a map collected with the legacy mapping protocol.
+        scan_profile = parameters.get("mapping/scan_profile", "local")
+        use_scene_cache = bool(run_cfg.use_scene_cache) and not s0_parity and scan_profile == "local"
         if use_scene_cache and run_cfg.backend != "ground_truth" and not episode.floor_object:
             from emet.eval.scene_map_cache import resolve_scene_cache_for_sim
 
@@ -1899,6 +1902,8 @@ def run_episode_find_phase(
             "s0_phrase_only": bool(s0_phrase_only),
             "s0_oneshot_pytest": False,  # historical result-schema field; special executor removed
             "mapping_rotate_steps_requested": run_cfg.mapping_rotate_steps,
+            "mapping_scan_profile": scan_profile,
+            "mapping_scan_result": getattr(agent, "_last_coverage_scan", None),
             "mapping_frames_added": mapping_frames_added,
             **ovmm_find_query_row(query),
             "manip_mode": str(run_cfg.manip_mode),

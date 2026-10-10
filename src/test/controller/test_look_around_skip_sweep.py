@@ -275,13 +275,16 @@ def test_dynagraph_update_forwards_full_perception(monkeypatch) -> None:
 
     forwarded: dict[str, bool | None] = {}
 
-    def _base_update(self, *, full_perception: bool | None = None):
+    def _base_update(self, *, full_perception: bool | None = None, observation=None):
         forwarded["full_perception"] = full_perception
+        forwarded["observation"] = observation
 
     monkeypatch.setattr(DynamemController, "update", _base_update)
     agent = DynagraphController.__new__(DynagraphController)
     agent.graph_memory = None
     agent.ground_truth_mode = False
     agent.visualize_ground_truth = False
-    DynagraphController.update(agent, full_perception=True)
+    frame = object()
+    DynagraphController.update(agent, full_perception=True, observation=frame)
     assert forwarded["full_perception"] is True
+    assert forwarded["observation"] is frame

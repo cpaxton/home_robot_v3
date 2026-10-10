@@ -397,7 +397,190 @@ def _head_to_sweep(self, pan: float, tilt: float) -> None:
         time.sleep(0.04)
 
 
-def look_around(self, *, on_observation=None):
+def measured_coverage_scan(robot, capture, *, deadline=None, on_observation=None, validate_turn=None):
+    """Opt-in, fixed-XY scan. Capture only after measured arrival and a fresh frame.
+
+    ``capture(obs)`` admits the view and returns its map observation index. The time
+    budget is cooperative: synchronous perception already in flight is not
+    interrupted. No object visibility or collision-free space is inferred from
+    angular coverage. The caller owns navigation-posture preparation.
+    """
+    started = time.monotonic()
+    deadline = min(started + 180.0, deadline if deadline is not None else float("inf"))
+    result = {
+        "ok": False,
+        "status": "failed",
+        "profile": "coverage",
+        "views": [],
+        "unsupported_views": [],
+        "capture_count": 0,
+        "base_command_count": 0,
+        "head_command_count": 0,
+        "note": "Measured camera coverage is not proof of object visibility or free space.",
+    }
+
+    def finish(reason):
+        if reason == "completed" and result["unsupported_views"]:
+            reason = "unsupported_views"
+        result["reason"] = reason
+        result["capture_count"] = len(result["views"])
+        result["elapsed_s"] = time.monotonic() - started
+        result["status"] = "partial" if result["views"] else "failed"
+        if reason == "completed" and not result["unsupported_views"]:
+            result.update(ok=True, status="completed")
+        return result
+
+    if not isinstance(getattr(robot, "_seq_id", None), int):
+        return finish("observation_freshness_unavailable")
+    initial = np.asarray(robot.get_base_pose(), dtype=float)
+    if initial.shape != (3,) or not np.isfinite(initial).all():
+        return finish("base_pose_unavailable")
+    capability_fn = getattr(robot, "get_head_capability", None)
+    capability = capability_fn() if callable(capability_fn) else None
+    targets = [(0.0, float(motion_constants.look_front[1])), (0.0, float(-np.pi / 3))]
+    supported = []
+    for target in targets:
+        if capability is not None and capability.contains(target):
+            supported.append(target)
+        else:
+            result["unsupported_views"].append(list(target))
+    if not supported:
+        # Fixed/unknown heads can still provide measured horizontal coverage;
+        # never send a clipped or guessed head command.
+        supported = [None]
+    for index in range(8):
+        if time.monotonic() >= deadline:
+            return finish("deadline_exceeded")
+        goal = initial.copy()
+        goal[2] = (initial[2] + index * np.pi / 4 + np.pi) % (2 * np.pi) - np.pi
+        if index:
+            if validate_turn is not None:
+                rejection = validate_turn(np.asarray(robot.get_base_pose(), dtype=float), goal)
+                if rejection is not None:
+                    result["navigation_rejection"] = rejection
+                    return finish("unsafe_turn")
+            result["base_command_count"] += 1
+            try:
+                arrived = robot.move_base_to(
+                    goal.tolist(),
+                    relative=False,
+                    blocking=True,
+                    timeout=min(30.0, deadline - time.monotonic()),
+                    navigation_policy="precision",
+                )
+            except Exception as exc:
+                result["error"] = str(exc)
+                return finish("navigation_failed")
+            if arrived is not True:
+                result["navigation_receipt"] = getattr(robot, "_command_receipt", None)
+                return finish("navigation_failed")
+        for target in supported:
+            if time.monotonic() >= deadline:
+                return finish("deadline_exceeded")
+            if target is not None:
+                result["head_command_count"] += 1
+                try:
+                    moved = robot.head_to(*target, blocking=True, timeout=min(5.0, deadline - time.monotonic()))
+                except Exception as exc:
+                    result["error"] = str(exc)
+                    return finish("head_motion_failed")
+                if moved is False:
+                    return finish("head_motion_failed")
+                head_deadline = min(deadline, time.monotonic() + 5.0)
+                while True:
+                    measured = np.asarray(robot.get_pan_tilt(), dtype=float)
+                    if measured.shape != (2,) or not np.isfinite(measured).all():
+                        return finish("head_pose_unconfirmed")
+                    if np.max(np.abs(measured - target)) <= 0.12:
+                        break
+                    if time.monotonic() >= head_deadline:
+                        return finish("head_pose_unconfirmed")
+                    time.sleep(0.05)
+            sequence = robot._seq_id
+            frame_deadline = min(deadline, time.monotonic() + 5.0)
+            while robot._seq_id <= sequence and time.monotonic() < frame_deadline:
+                time.sleep(0.02)
+            if robot._seq_id <= sequence:
+                return finish("stale_observation")
+            obs = robot.get_observation()
+            if obs is None:
+                return finish("stale_observation")
+            camera = np.asarray(obs.camera_pose, dtype=float)
+            intrinsics = np.asarray(obs.camera_K, dtype=float)
+            actual = np.asarray(robot.get_base_pose(), dtype=float)
+            if camera.shape != (4, 4) or not np.isfinite(camera).all():
+                return finish("camera_pose_unavailable")
+            if intrinsics.shape != (3, 3) or not np.isfinite(intrinsics).all() or abs(np.linalg.det(intrinsics)) < 1e-9:
+                return finish("camera_intrinsics_unavailable")
+            if actual.shape != (3,) or not np.isfinite(actual).all():
+                return finish("base_pose_unavailable")
+            yaw_error = abs((actual[2] - goal[2] + np.pi) % (2 * np.pi) - np.pi)
+            if np.linalg.norm(actual[:2] - goal[:2]) > 0.02 or yaw_error > 0.03:
+                return finish("base_pose_unconfirmed")
+            if target is not None:
+                measured = np.asarray(robot.get_pan_tilt(), dtype=float)
+                if (
+                    measured.shape != (2,)
+                    or not np.isfinite(measured).all()
+                    or np.max(np.abs(measured - target)) > 0.12
+                ):
+                    return finish("head_pose_unconfirmed")
+            depth = np.asarray(obs.depth)
+            if obs.rgb is None or depth.ndim != 2 or not (np.isfinite(depth) & (depth > 0)).any():
+                return finish("calibrated_depth_unavailable")
+            sequence = robot._seq_id
+            try:
+                obs_id = capture(obs)
+            except Exception as exc:
+                result["error"] = str(exc)
+                return finish("capture_failed")
+            result["views"].append(
+                {
+                    "map_observation_index": obs_id,
+                    "sequence": sequence,
+                    "requested_base_xyt": goal.tolist(),
+                    "measured_base_xyt": actual.tolist(),
+                    "requested_head_pan_tilt": list(target) if target is not None else None,
+                    "measured_head_pan_tilt": measured.tolist() if target is not None else None,
+                    "camera_pose": camera.tolist(),
+                    "camera_K": intrinsics.tolist(),
+                    "image_shape": list(np.asarray(obs.rgb).shape),
+                }
+            )
+            if on_observation is not None and on_observation():
+                return finish("caller_stopped")
+            if time.monotonic() >= deadline:
+                return finish("deadline_exceeded")
+    return finish("completed")
+
+
+def _coverage_scan_agent(agent, *, deadline=None, on_observation=None):
+    def validate_turn(start, goal):
+        filtered, reason, _ = agent._filter_unsafe_nav_traj(
+            [agent._planning_base_xyt(goal)],
+            start_xyt=agent._planning_base_xyt(start),
+        )
+        return reason if reason is not None else (None if filtered else "no_safe_turn")
+
+    def capture(obs):
+        before = len(agent.voxel_map.observations)
+        agent.update(full_perception=True, observation=obs)
+        if len(agent.voxel_map.observations) <= before:
+            raise RuntimeError("coverage scan did not admit a map observation")
+        return len(agent.voxel_map.observations) - 1
+
+    result = measured_coverage_scan(
+        agent.robot,
+        capture,
+        deadline=deadline,
+        on_observation=on_observation,
+        validate_turn=validate_turn,
+    )
+    agent._last_coverage_scan = result
+    return result
+
+
+def look_around(self, *, on_observation=None, profile="local", deadline=None):
     """Look around for mapping / agentic capture.
 
     Policy: :func:`look_around_should_sweep` (robot overlay
@@ -410,6 +593,10 @@ def look_around(self, *, on_observation=None):
     move and post-motion frame wait. A true result stops scanning and preserves
     that gaze; callers must still validate observation freshness.
     """
+    if profile == "coverage":
+        return _coverage_scan_agent(self, deadline=deadline, on_observation=on_observation)
+    if profile != "local":
+        raise ValueError(f"Unknown look-around profile: {profile}")
     skip_sweep = not look_around_should_sweep(self.robot, getattr(self, "parameters", None))
     if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
         import traceback
@@ -488,7 +675,15 @@ def maybe_save_rerun_recording(self) -> None:
     rr.save(dest)
 
 
-def rotate_in_place(self, *, n_steps: int | None = None):
+def rotate_in_place(self, *, n_steps: int | None = None, profile=None, deadline=None):
+    if profile is None:
+        params = getattr(self, "parameters", None)
+        profile = params.get("mapping/scan_profile", "local") if params is not None else "local"
+    if profile == "coverage":
+        self.robot.move_to_nav_posture()
+        return _coverage_scan_agent(self, deadline=deadline)
+    if profile != "local":
+        raise ValueError(f"Unknown mapping scan profile: {profile}")
     self.announce_action("Looking around: rotating in place")
     nav_timeout = self._find_phase_nav_timeout()
     self.maybe_save_rerun_recording()
