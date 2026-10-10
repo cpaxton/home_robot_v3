@@ -98,3 +98,25 @@ def test_measured_state_can_publish_between_physics_substeps(monkeypatch):
     assert samples == [1]
     assert server._physics_steps_executed == 3
     assert not server._running
+
+
+def test_fast_state_does_not_refresh_scene_geometry():
+    from unittest.mock import Mock
+
+    server = RobosuiteZmqServer.__new__(RobosuiteZmqServer)
+    server._mjdata = SimpleNamespace(body=lambda _: SimpleNamespace(xpos=np.zeros(3), xmat=np.eye(3)))
+    server._mj_lock = threading.RLock()
+    server._spec = SimpleNamespace(base_link_name='base', name='test_robot')
+    server._joint_ctrl_hold = None
+    server._physics_fps_counter = SimpleNamespace(sim_to_real_ratio=1.)
+    server._at_goal = False
+    server._last_step = 7
+    server.get_joint_state = lambda: (np.array([.2]), np.array([.0]), np.array([.0]))
+    server.get_base_pose = lambda: np.zeros(3)
+    server.get_control_mode = lambda: 'manipulation'
+    server._attach_emet_session = Mock(side_effect=AssertionError('geometry on fast feedback path'))
+    message = server.get_state_message()
+    np.testing.assert_array_equal(message['joint_positions'], [.2])
+    assert message['step'] == 7
+    assert 'emet_session' not in message  # Do not falsely refresh cached geometry's step.
+    server._attach_emet_session.assert_not_called()

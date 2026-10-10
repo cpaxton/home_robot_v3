@@ -110,3 +110,20 @@ at the failed transition before further changes or threshold adjustments.
   guards and simulation-only privileged-mode cases. A stored assisted handle may
   not bypass a subsequent physical-mode request.
 - Neither PR promotes native execution or unblocks #179's live acceptance gate.
+
+### Physics-batch lock correction
+
+Traced diagnostic `20261010_123558_40ba47` reproduced the placement failure with
+6.004 s receive age. At the failed transition, the state publisher waited on
+`_mj_lock` while physics stepped and snapped attachments. The server held that
+lock across every substep in a tick. The correction releases it between complete
+substeps, yielding to waiting publishers; integrator timestep, step count,
+collision checks, and acceptance limits remain unchanged. Headless and passive
+viewer paths share the same step helper. Its regression failed on the previous
+code and passes now; the standalone telemetry suite passes 43 tests.
+
+Exact integration head `5beb3ebe` is under live diagnostic
+`20261010_124407_851058` in `/tmp/tamp-physics-substep-fix/`. Do not interpret the
+unit regression as a live placement pass. Geometry refresh is also expensive
+under load, but a trial loop-vectorization showed no useful microprofile gain
+and was removed.
