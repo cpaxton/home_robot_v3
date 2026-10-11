@@ -936,8 +936,13 @@ Offline units + scripted table smokes exist; these are the remaining **real / in
       separately; do not relax grounding just to turn it green.
 - [ ] Review archived partial CHAT dispatch / arrival hooks separately, coordinating
       #176; no claim that this extraction delivers full CHAT pick/place.
-- [ ] Reconcile wheel/robot physics and pregrasp residuals in #169 with the separate
-      manipulation/TAMP owners (#177/#178/#179). Preserve source revisions and results.
+- [x] Audit #169 residuals: wheel contact fix extracted to #182 (`c6809aa6`);
+      full-runner Habitat preflight retained in #185. See `docs/plans/pr169_closeout.md`.
+- [ ] #179: adapt staged-clearance/failed-lift and near/far workspace regression
+      requirements from `31d1002b`/`6a1579e4` to the current manipulation planner;
+      do not restore the obsolete experimental grasp executor wholesale.
+- [ ] Revalidate physical navigation/OVMM after the wheel-material extraction;
+      the pre-extraction 16-frame scan is not evidence for the new contact model.
 - [ ] Habitat OVMM, Sourccey/Galaxea and real robots remain follow-ups; no full sweep
       required for the current EQA/small-room review gates.
 
