@@ -20,6 +20,11 @@ wheel contacts, telemetry and the acceptance driver. This is offline verificatio
 not EQA/OVMM acceptance. Providers remain opt-in; all four remaining PRs stay draft
 pending their live gates. Older dated notes below describe historical revisions.
 
+Integration branch `review/acceptance-current-main` merged that public stack at
+`527b8b03`, preserving the opt-in measured scan and head-wait repair. Its expanded
+check set passed **239 tests**, including coverage, shared VLM conversation and
+TAMP API/bridge regressions. No new live task result is implied.
+
 The post-reboot model-free scan at `86c3d2e6` completed 16 captures in 70.64 s
 (job `20261011_090030_231923`). Its images have not yet passed manual visibility
 review, and that revision predates the extracted wheel-contact fix. Do not count
