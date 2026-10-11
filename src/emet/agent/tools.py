@@ -571,7 +571,8 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
             # adapter is installed. Input isolation includes task discovery.
             return "observed_scene_unavailable"
         robot = _tamp_robot()
-        session = robot.get_emet_session() if robot is not None else None
+        session_getter = getattr(robot, "get_emet_session", None)
+        session = session_getter() if callable(session_getter) else None
         if not isinstance(session, dict) or session.get("is_simulation") is not True:
             return "privileged_inputs_require_simulation"
         return "native_execution_unavailable"
@@ -683,7 +684,7 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
             return response("pick_place", code="robot_not_connected")
         if executor is not None and _tamp_manip_mode().strip().lower() != "physical" and (
             bool(getattr(executor, "visual_servo", False))
-            or _tamp_manip_mode().strip().lower() not in {"auto", "teleport", "kinematic", "physical"}
+            or _tamp_manip_mode().strip().lower() not in {"auto", "teleport", "kinematic"}
         ):
             return _fallback_pick_place(executor, object_name, receptacle_name)
         build = _build_tamp_plan(object_name=object_name, receptacle_name=receptacle_name)

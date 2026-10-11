@@ -165,3 +165,14 @@ def test_environment_physical_mode_cannot_bypass_tool_input_guard(monkeypatch):
     result = json.loads(tools['pick_place'].func(object_name='block', receptacle_name='table'))
     assert result['code'] == 'observed_scene_unavailable'
     robot.get_emet_session.assert_not_called()
+
+
+@pytest.mark.parametrize('robot', [SimpleNamespace(), SimpleNamespace(get_emet_session=None)])
+def test_privileged_native_tools_require_session_capability(robot):
+    import json
+
+    from emet.agent.tools import get_tools
+
+    tools = {t.name: t for t in get_tools({
+        'robot': robot, 'manip_mode': 'physical', 'tamp_inputs': 'privileged'})}
+    assert json.loads(tools['scene_tasks'].func())['code'] == 'privileged_inputs_require_simulation'
