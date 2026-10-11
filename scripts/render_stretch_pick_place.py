@@ -191,7 +191,9 @@ def main():
                     },
                     "assistance": "ground-truth scripted goals; no latch, weld, or runtime pose writes",
                     "planning_scope": "coupled-joint pose IK; no collision-certified path or agent planning",
-                    "source_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
+                    "source_sha": subprocess.check_output(
+                        ["git", "rev-parse", "HEAD"], cwd=Path(__file__).resolve().parents[1], text=True
+                    ).strip(),
                     "script_sha256": script_sha256,
                 },
                 indent=2,
