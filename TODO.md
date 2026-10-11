@@ -924,10 +924,14 @@ Offline units + scripted table smokes exist; these are the remaining **real / in
 - [x] Remove MuJoCo/EGL import from A* grid helpers; before/after one-frame probe
       reproduces exit 134 then successful Habitat rendering. Repair included in #182.
 - [x] Publish Stretch body-up/XYZ and named actuator controls from the physics
-      process through IPC/ZMQ; stationary live telemetry is now present.
+      process through IPC/ZMQ; merged via #190 (`7f65dbef`). Four focused tests
+      pass; controls use raw simulator units, not normalized joint targets.
+- [x] Reconcile main through #181 → #182 → #184 → #185 after #190; telemetry is
+      owned by main, not duplicated in #185's parent diff. 165 focused tests pass.
 - [ ] Complete repaired-head route acceptance and EQA pairing before promotion;
       a startup fix is not an accuracy result. See `docs/TESTING.md` for job IDs.
-- [ ] Accept #180 → #181 → #182 → #184 on their actual extracted revisions;
+- [x] Land #176 conversation preservation and #180 current-view grounding.
+- [ ] Accept #181 → #182 → #184 → #185 on their actual extracted revisions;
       see `docs/TESTING.md` and `docs/plans/shared_stack_inventory.json`.
       Offline checks are not live acceptance. Keep providers opt-in.
 - [ ] Complete serial paired main/candidate EQA and small OVMM; restore at least
@@ -967,9 +971,9 @@ Offline units + scripted table smokes exist; these are the remaining **real / in
       paired replay with isolated evidence first, then owning-slice diagnosis.
 - [ ] Finish serial S0/RoboCasa/Molmo find comparison; report infrastructure,
       object and receptacle outcomes separately from manipulation acceptance.
-- [ ] Reconcile #180/#181/#182/#184/#185 against main after #177/#178; preserve
-      reviewed heads during active experiments and coordinate TAMP overlaps.
-- [ ] Review standalone telemetry #190 and remove its duplicate from #185 on
+- [x] Reconcile #181/#182/#184/#185 against main after #190; preserve
+      frozen experiment heads and coordinate TAMP overlaps.
+- [x] Review and merge standalone telemetry #190 and remove its duplicate from #185 on
       restack; retain legacy unknown-field compatibility.
 - [ ] Complete five-repeat navigation and paired current-main acceptance gates.
       Land validated lower slices independently; no new defaults or main push.
@@ -978,7 +982,7 @@ Offline units + scripted table smokes exist; these are the remaining **real / in
 
 - [x] Repair head wait outcome propagation, off-target settling, tilt-speed checking and missing-telemetry timeout; preserve tolerances.
 - [x] Implement opt-in measured coverage scan shared by mapping and look-around; retain legacy default, exact-frame ingestion and existing swept safety checks.
-- [ ] Restore host NVIDIA driver (NVML driver/library mismatch); do not leave pilot jobs waiting indefinitely or reboot without approval.
+- [x] Restore host NVIDIA driver after user reboot; RTX 4090 / 595.99.02 verified. Post-reboot scan completed, visibility acceptance remains open.
 - [ ] Audit job cancellation of timeout-wrapped probes: wrapper cancellation left the known child running; explicit probe SIGTERM was needed. Do not kill unrelated simulator jobs.
 - [ ] Validate model-free coverage from four starting headings and an opposite-side fixture with offline GT masks/depth; completion is not visibility acceptance.
 - [ ] Paired learned S0 legacy/coverage, then small RoboCasa/Molmo after asset preflight. Freeze model/physics/seed and report added mapping cost.
