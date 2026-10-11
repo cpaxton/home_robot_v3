@@ -1,6 +1,6 @@
 # Default MuJoCo table scene (scene_environment.xml) + Sourccey — no Robocasa, no MolmoSpaces merge.
 # Table objects sit at z≈0.6 m (within Sourccey arm reach; floor objects are not).
-# TAMP uses RobotSpec.tamp_approach=side (left yaw=+π/2); the rby1 front standoff is unreachable.
+# Mk.V uses +X forward and RobotSpec.tamp_approach=front (yaw=-pi/2).
 kind: default_mujoco
 robot: sourccey
 headless: true

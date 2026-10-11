@@ -371,6 +371,8 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
         Sample an exploration target
         """
         obstacles, explored, history_soft = self.voxel_map.get_2d_map(return_history_id=True, kernel=5)
+        if self.obstacle_map_mode == "physical":
+            obstacles, explored = self.get_navigation_map()
         outside_frontier = self.voxel_map.get_outside_frontier(xyt, planner)
 
         time_heuristics = self._time_heuristic(history_soft, outside_frontier, debug=debug)
@@ -619,7 +621,7 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
             distance_range=distance_range,
         )
         logger.debug("sample_navigation point=%s goal=%s", point, goal)
-        obstacles, explored = self.voxel_map.get_2d_map()
+        obstacles, explored = self.get_navigation_map()
         plt.imshow(obstacles)
         start_pt = self.to_pt(start)
         plt.scatter(start_pt[1], start_pt[0], s=15, c="b")
@@ -649,5 +651,5 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
 
         if index is None:
             return None
-        obstacles, explored = self.voxel_map.get_2d_map()
+        obstacles, explored = self.get_navigation_map()
         return self.voxel_map.grid_coords_to_xyt(torch.tensor([index[0], index[1]]))

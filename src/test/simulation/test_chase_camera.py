@@ -84,3 +84,32 @@ def test_build_overhead_camera_nadir() -> None:
     np.testing.assert_allclose(cam.lookat, [0.08, -0.4, 0.4], atol=1e-6)
     assert abs(cam.elevation - (-90.0)) < 1e-9
     assert abs(cam.distance - 2.4) < 1e-9
+
+
+@pytest.mark.parametrize("method", ["_render_third_person_chase_rgb", "_render_overhead_rgb"])
+def test_external_recording_does_not_inherit_head_camera_self_mask(method):
+    from threading import RLock
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+
+    import mujoco
+
+    from emet.simulation.robosuite_server import RobosuiteZmqServer
+
+    model = mujoco.MjModel.from_xml_string('<mujoco><worldbody><body name="base_link"><geom size=".1"/></body></worldbody></mujoco>')
+    data = mujoco.MjData(model)
+    mujoco.mj_forward(model, data)
+    options = mujoco.MjvOption()
+    options.geomgroup[:] = 0
+    observed = []
+    renderer = SimpleNamespace(_scene_option=options, scene=SimpleNamespace(ncamera=0),
+        update_scene=lambda *a, **k: observed.append(options.geomgroup.copy()),
+        render=lambda: np.zeros((2, 2, 3), dtype=np.uint8))
+    server = object.__new__(RobosuiteZmqServer)
+    server._mjmodel, server._mjdata = model, data
+    server._spec = SimpleNamespace(base_link_name="base_link")
+    server._mj_lock, server._render_lock = RLock(), RLock()
+    server._get_or_create_primary_renderer = Mock(return_value=renderer)
+    server._apply_optional_mujoco_render_flip_ud = lambda rgb: rgb
+    assert getattr(server, method)().shape == (2, 2, 3)
+    np.testing.assert_array_equal(observed[0], mujoco.MjvOption().geomgroup)

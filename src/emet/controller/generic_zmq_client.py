@@ -767,6 +767,7 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
                 continue
             with self._obs_lock:
                 self._state = msg
+                self._state_received_monotonic = time.monotonic()
                 if "step" in msg:
                     self._last_step = max(self._last_step, int(msg["step"]))
                 self._emet_session_cache, self._emet_session_cache_step = emet_session_cache_update(
@@ -986,6 +987,32 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
 
         return send_command(self, action, timeout=timeout, reliable=reliable)
 
+    def check_base_poses(self, poses, *, timeout: float = 10.0) -> dict:
+        """Read-only GT endpoint validation, available only on advertising simulators."""
+        from emet.core.command_client import command_receipt
+
+        if not isinstance(self._state, dict) or self._state.get("sim_base_pose_query") is not True:
+            raise RuntimeError("simulator does not advertise base pose validation")
+        points = np.asarray(poses, dtype=float)
+        if points.ndim != 2 or points.shape[1] != 3 or not 1 <= len(points) <= 32 or not np.isfinite(points).all():
+            raise ValueError("expected 1..32 finite world XYT poses")
+        if not np.isfinite(timeout) or timeout <= 0:
+            raise ValueError("query timeout must be positive and finite")
+        deadline = time.monotonic() + timeout
+        action = self.send_action({"sim_check_base_poses": points.tolist()}, timeout=timeout)
+        while time.monotonic() < deadline:
+            receipt = command_receipt(self, action)
+            if receipt and receipt["status"] == "succeeded":
+                result = receipt.get("result", {})
+                if (result.get("poses") != points.tolist() or len(result.get("clear", [])) != len(points)
+                        or any(type(v) is not bool for v in result["clear"])):
+                    raise RuntimeError("invalid base pose validation response")
+                return result
+            if receipt and receipt["status"] in {"failed", "rejected", "cancelled"}:
+                raise RuntimeError(f"base pose query failed: {receipt.get('reason')}")
+            time.sleep(.02)
+        raise TimeoutError("base pose query did not complete")
+
     def set_velocity(self, v: float, w: float) -> None:
         """Set base translational (v) and rotational (w) velocity setpoints."""
         self.send_action({"v": v, "w": w})
@@ -1139,13 +1166,18 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
                 time.sleep(float(dt))
         return True
 
-    def open_gripper(self, gripper_name: str = "left_gripper", amount: float = 0.05) -> None:
+    def open_gripper(self, gripper_name: str = "left_gripper", amount: float | None = None) -> None:
         if self._spec.name == "xlerobot":
             from emet.robots.xlerobot import parse_xlerobot_gripper_side
 
             self.gripper_to(1.0, side=parse_xlerobot_gripper_side(gripper_name))
             return
-        action = {"gripper": amount}
+        if self._spec.name == "sourccey":
+            side = self._sourccey_gripper_side(gripper_name)
+            target = self._spec.arm_chains[side].gripper_open if amount is None else amount
+            self.gripper_to(target, side=side)
+            return
+        action = {"gripper": 0.05 if amount is None else amount}
         self.send_action(action)
 
     def close_gripper(self, gripper_name: str = "left_gripper") -> None:
@@ -1153,6 +1185,10 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
             from emet.robots.xlerobot import parse_xlerobot_gripper_side
 
             self.gripper_to(0.0, side=parse_xlerobot_gripper_side(gripper_name))
+            return
+        if self._spec.name == "sourccey":
+            side = self._sourccey_gripper_side(gripper_name)
+            self.gripper_to(self._spec.arm_chains[side].gripper_closed, side=side)
             return
         action = {"gripper": -0.1}
         self.send_action(action)
@@ -1298,9 +1334,17 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
             return False
         return self.move_base_to(xyt_a, relative=relative, blocking=blocking, timeout=kwargs.get("timeout"))
 
+    @staticmethod
+    def _sourccey_gripper_side(name: str) -> str:
+        if name not in ("left_gripper", "right_gripper"):
+            raise ValueError(f"Unknown Sourccey gripper: {name!r}")
+        return name.split("_", 1)[0]
+
     def gripper_to(self, target: float, blocking: bool = True, reliable: bool = True, side: str = "left") -> None:
-        """Send gripper command (Stretch single gripper or xlerobot left/right jaw)."""
-        if self._spec.name == "xlerobot":
+        """Send a gripper target (Sourccey radians; XLeRobot normalized jaw)."""
+        if self._spec.name in ("xlerobot", "sourccey"):
+            if self._spec.name == "sourccey" and (side not in ("left", "right") or not np.isfinite(target)):
+                raise ValueError("Gripper side must be left/right and target must be finite")
             key = "gripper_right" if side == "right" else "gripper_left"
             action: dict[str, Any] = {key: float(target)}
             if blocking:
@@ -1317,8 +1361,10 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
             time.sleep(0.05)
 
     def gripper_both_to(self, target: float, blocking: bool = True, reliable: bool = True) -> None:
-        """Set both xlerobot jaws; no-op on single-gripper robots."""
-        if self._spec.name != "xlerobot":
+        """Set both dual-arm jaws in their robot-specific units."""
+        if self._spec.name == "sourccey" and not np.isfinite(target):
+            raise ValueError("Gripper target must be finite")
+        if self._spec.name not in ("xlerobot", "sourccey"):
             self.gripper_to(target, blocking=blocking, reliable=reliable)
             return
         action: dict[str, Any] = {"gripper_left": float(target), "gripper_right": float(target)}

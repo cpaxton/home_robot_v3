@@ -33,7 +33,7 @@ def captured_view(executor, obs_id) -> CapturedView | None:
 
 
 def ground_confirmed_view(executor, obs_id: int, query: str) -> dict | None:
-    """Try object grounding once per assessed view; never reinterpret a view pose.
+    """Try object grounding once per assessed view/query; never reinterpret a view pose.
 
     Visual EQA confirmation remains valid if localization abstains. OVMM/TAMP
     still require the independently admitted mask geometry.
