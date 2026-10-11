@@ -21,6 +21,8 @@ def overlay_manip_frame(
     goal: str = "",
     detail: str = "",
     title: str = "emet manip",
+    overlay_style: str = "banner",
+    flags: str = "",
 ) -> np.ndarray:
     """Draw status banners on an RGB frame (returns a copy)."""
     import cv2
@@ -28,6 +30,13 @@ def overlay_manip_frame(
     out = np.asarray(rgb, dtype=np.uint8).copy()
     if out.ndim != 3 or out.shape[2] < 3:
         raise ValueError(f"expected HxWx3 rgb, got {getattr(out, 'shape', None)}")
+    if overlay_style not in {"none", "banner", "border"}:
+        raise ValueError("overlay_style must be none, banner or border")
+    if overlay_style == "none":
+        return out
+    if overlay_style == "border":
+        # Keep every scene pixel visible; labels live outside the camera image.
+        out = cv2.copyMakeBorder(out, 64, 72, 4, 4, cv2.BORDER_CONSTANT, value=(20, 20, 20))
     h, w = int(out.shape[0]), int(out.shape[1])
     # Top banner
     cv2.rectangle(out, (0, 0), (w, 56), (20, 20, 20), thickness=-1)
@@ -41,14 +50,14 @@ def overlay_manip_frame(
         1,
         cv2.LINE_AA,
     )
-    act = f"action: {action}" if action else "action: —"
+    act = f"active skill/tool: {action}" if action else "active skill/tool: unknown"
     cv2.putText(out, act[:90], (12, 46), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (80, 220, 120), 1, cv2.LINE_AA)
     # Bottom banner
     cv2.rectangle(out, (0, h - 48), (w, h), (20, 20, 20), thickness=-1)
     if goal:
         cv2.putText(
             out,
-            f"goal: {goal}"[:100],
+            f"task: {goal}"[:100],
             (12, h - 28),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.5,
@@ -67,6 +76,9 @@ def overlay_manip_frame(
             1,
             cv2.LINE_AA,
         )
+    if flags:
+        cv2.putText(out, f"flags: {flags}"[:110], (12, h - 54 if overlay_style == "border" else 72),
+                    cv2.FONT_HERSHEY_SIMPLEX, .45, (255, 210, 120), 1, cv2.LINE_AA)
     return out
 
 
@@ -148,10 +160,16 @@ class ManipVideoRecorder:
         *,
         fps: float = 12.0,
         title: str = "emet manip",
+        overlay_style: str = "banner",
+        flags: str = "",
     ) -> None:
         self.robot = robot
         self.out_path = Path(out_path)
         self.fps = max(1.0, float(fps))
+        if overlay_style not in {"none", "banner", "border"}:
+            raise ValueError("overlay_style must be none, banner or border")
+        self.overlay_style = overlay_style
+        self.flags = str(flags)
         self.title = str(title)
         self.action = ""
         self.goal = ""
@@ -182,7 +200,8 @@ class ManipVideoRecorder:
             return False
         with self._lock:
             action, goal, detail = self.action, self.goal, self.detail
-        frame = overlay_manip_frame(rgb, action=action, goal=goal, detail=detail, title=self.title)
+        frame = overlay_manip_frame(rgb, action=action, goal=goal, detail=detail, title=self.title,
+                                   overlay_style=self.overlay_style, flags=self.flags)
         with self._lock:
             self._frames.append(frame)
         return True

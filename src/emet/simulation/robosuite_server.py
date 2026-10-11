@@ -1260,6 +1260,7 @@ class RobosuiteZmqServer(BaseZmqServer):
         self._ensure_offscreen_framebuffer(_PRIMARY_RW, _PRIMARY_RH)
         if self._primary_renderer is None:
             self._primary_renderer = mujoco.Renderer(self._mjmodel, _PRIMARY_RH, _PRIMARY_RW)
+            self._primary_renderer._scene_option.flags[mujoco.mjtVisFlag.mjVIS_RANGEFINDER] = False
         return self._primary_renderer
 
     def _discard_primary_renderer_unlocked(self) -> None:
@@ -1407,6 +1408,7 @@ class RobosuiteZmqServer(BaseZmqServer):
         with self._mj_lock:
             with self._render_lock:
                 renderer = self._get_or_create_primary_renderer()
+                renderer._scene_option.geomgroup[:] = mujoco.MjvOption().geomgroup
                 cam = build_base_chase_camera(self._mjmodel, self._mjdata, int(bid))
                 renderer.update_scene(self._mjdata, camera=cam)
                 apply_chase_frustum_near(renderer.scene, near=0.05)
@@ -1426,6 +1428,7 @@ class RobosuiteZmqServer(BaseZmqServer):
         with self._mj_lock:
             with self._render_lock:
                 renderer = self._get_or_create_primary_renderer()
+                renderer._scene_option.geomgroup[:] = mujoco.MjvOption().geomgroup
                 cam = build_overhead_camera(self._mjmodel, self._mjdata, int(bid))
                 renderer.update_scene(self._mjdata, camera=cam)
                 apply_chase_frustum_near(renderer.scene, near=0.05)
@@ -2148,23 +2151,22 @@ class RobosuiteZmqServer(BaseZmqServer):
             qxd, qyd = float(vx), float(vy)
             qdot_yaw = float(wz)
             if names and len(names) == 3:
-                jn = (str(names[0]), str(names[1]), str(names[2]))
-                anchor = scene_base_spawn.infer_planar_anchor_body_name(self._mjmodel, jn)
-                if anchor:
-                    bid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_BODY, anchor)
-                    if bid >= 0:
-                        R = np.asarray(self._mjdata.body(bid).xmat, dtype=np.float64).reshape(3, 3)
-                        M = R[:2, :2]
-                        v_world = np.array([vx, vy], dtype=np.float64)
-                        try:
-                            v_joint = np.linalg.solve(M, v_world)
-                        except np.linalg.LinAlgError:
-                            v_joint, *_ = np.linalg.lstsq(M, v_world, rcond=None)
-                        qxd, qyd = float(v_joint[0]), float(v_joint[1])
-                        a_axis = R[:, 2]
-                        az = float(a_axis[2])
-                        if abs(az) >= 0.2:
-                            qdot_yaw = float(wz) / az
+                jids = [mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_JOINT, str(n)) for n in names]
+                if all(jid >= 0 for jid in jids):
+                    # Joint axes are expressed in world coordinates *before* each
+                    # joint's transform. The body's final xmat includes base yaw,
+                    # which must not rotate upstream slide axes a second time.
+                    axes = np.asarray(self._mjdata.xaxis[jids], dtype=np.float64)
+                    M = axes[:2, :2].T
+                    v_world = np.array([vx, vy], dtype=np.float64)
+                    try:
+                        v_joint = np.linalg.solve(M, v_world)
+                    except np.linalg.LinAlgError:
+                        v_joint, *_ = np.linalg.lstsq(M, v_world, rcond=None)
+                    qxd, qyd = float(v_joint[0]), float(v_joint[1])
+                    az = float(axes[2, 2])
+                    if abs(az) >= 0.2:
+                        qdot_yaw = float(wz) / az
             self._mjdata.ctrl[ax] = qxd
             self._mjdata.ctrl[ay] = qyd
             self._mjdata.ctrl[aw] = qdot_yaw

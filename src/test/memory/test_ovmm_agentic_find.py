@@ -73,9 +73,7 @@ def test_record_ovmm_agentic_result_copies_nav_and_voxel_query():
         extra={"xyz_source": "voxel", "voxel_query_used": "lamp", "from_pin": False},
     )
     meta: dict = {}
-    xyz, ok, q_used, source = record_ovmm_agentic_result(
-        res, meta=meta, prefix="obj", default_query="lamp"
-    )
+    xyz, ok, q_used, source = record_ovmm_agentic_result(res, meta=meta, prefix="obj", default_query="lamp")
     assert ok is True
     assert np.allclose(xyz, [1.0, 1.2, 2.0])
     assert q_used == "lamp"
@@ -368,6 +366,30 @@ def test_xyz_from_verified_obs_ignores_camera_pose():
     agent.graph_memory._observations = [_Obs(3, np.array([-0.78, 0.47, 0.0]), ["table"])]
     agent.graph_memory.get_nodes.return_value = []
     assert xyz_from_verified_obs(agent, 3, phrases=["blue cube"]) is None
+
+
+@patch("emet.memory.graph_eqa.agentic_eqa.run_agentic_eqa_result")
+def test_explored_table_uses_grounded_object_not_verified_camera(mock_run):
+    mock_run.return_value = AgenticEQAResult(
+        discord_text="found",
+        answer="here",
+        confidence=True,
+        verified=True,
+        verified_obs_id=1 << 40,
+        grounded_obs_id=7,
+        n_rounds=1,
+        n_nav=0,
+        n_explore=1,
+    )
+    agent = MagicMock()
+    agent.query_driven_memory = True
+    agent.graph_memory.get_nodes.return_value = [_Node(7, np.array([1.0, 2.0, 3.0]), ["table"])]
+    out = run_ovmm_agentic_localize(agent, "Where is the table?")
+    assert out.extra["xyz_source"] == "grounded_object"
+    assert np.allclose(out.xyz, [1, 2, 3])
+    # A dresser cannot become a table through its shared view ID.
+    agent.graph_memory.get_nodes.return_value = [_Node(7, np.array([1.0, 2.0, 3.0]), ["dresser"])]
+    assert run_ovmm_agentic_localize(agent, "Where is the table?").xyz is None
 
 
 @patch("emet.memory.graph_eqa.agentic_eqa.run_agentic_eqa_result")
