@@ -6,6 +6,14 @@ Central map of **how to run tests**, **what each suite validates**, and **where 
 
 ### Extracted shared-agent stack (October 2026)
 
+#### PR #169 residual audit (2026-10-11)
+
+See the [closure and ownership audit](plans/pr169_closeout.md). The wheel-contact
+repair is extracted to #182 (`c6809aa6`): 17 targeted tests pass. #185 now runs
+the full EQA runner-import/render preflight before episodes: 7 acceptance-driver
+tests pass. This is not a new physical-task acceptance result. Staged manipulation
+and workspace requirements are handed to #179 without reviving obsolete code.
+
 #### Startup/telemetry repairs and bottom-up review (2026-10-09)
 
 - Confirmed the extracted EQA crash with a serial one-frame comparison: old

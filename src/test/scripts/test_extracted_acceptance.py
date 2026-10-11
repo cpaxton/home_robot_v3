@@ -3,13 +3,47 @@
 """Offline acceptance-driver guards; no simulator or model startup."""
 
 import json
+import runpy
 import subprocess
+import sys
+from dataclasses import dataclass
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
 DRIVER = ROOT / "scripts/run_extracted_acceptance.sh"
+
+
+@pytest.mark.parametrize("ok", [True, False])
+def test_full_runner_probe_exit_status(monkeypatch, capsys, ok):
+    @dataclass
+    class Result:
+        ok: bool
+
+    package = ModuleType("emet_habitat")
+    package.__path__ = []
+    runner = ModuleType("emet_habitat.runner")
+    probe = ModuleType("emet_habitat.egl_probe")
+
+    def run_probe(*, question_id):
+        assert question_id == 15
+        return Result(ok)
+
+    probe.run_egl_probe = run_probe
+    for module in (package, runner, probe):
+        monkeypatch.setitem(sys.modules, module.__name__, module)
+    with pytest.raises(SystemExit) as exc:
+        runpy.run_path(str(ROOT / "scripts/check_habitat_runtime.py"), run_name="__main__")
+    assert exc.value.code == (0 if ok else 1)
+    assert json.loads(capsys.readouterr().out) == {"ok": ok}
+
+
+def test_acceptance_preflight_precedes_episode_loop():
+    driver = DRIVER.read_text()
+    assert driver.index("scripts/check_habitat_runtime.py") < driver.index("bash scripts/run_dev_loop.sh")
+    assert "set -euo pipefail" in driver
 
 
 def test_driver_syntax_and_invalid_phase(tmp_path):

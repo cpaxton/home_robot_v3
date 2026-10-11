@@ -26,6 +26,11 @@ printf 'seed=%s\nphase=%s\n' "${DEV_SEED:-0}" "$1" > "$out/run.txt"
 case "${1:?eqa or room}" in
     eqa)
         unset EMET_CONFIG
+        # Import the actual runner before rendering; a bare EGL probe does not
+        # catch controller imports initializing a conflicting native GL stack.
+        habitat_bin="${HABITAT_BIN:-$ROOT/.venv-habitat/bin/emet-habitat}"
+        timeout --signal=TERM --kill-after=20s 180s "$(dirname "$habitat_bin")/python" \
+            scripts/check_habitat_runtime.py > "$out/habitat_preflight.log" 2>&1
         PHASE=eqa DEV_SEED="${DEV_SEED:-0}" OUT_DIR="$out" bash scripts/run_dev_loop.sh
         test ! -s "$out/failed.txt"
         ;;
