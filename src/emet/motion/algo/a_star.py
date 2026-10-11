@@ -98,7 +98,8 @@ class AStar(Planner):
         return float(np.arctan2(float(end_y) - float(cur_y), float(end_x) - float(cur_x)))
 
     def reset(self):
-        obs, exp = self.space.voxel_map.get_2d_map()
+        get_map = getattr(self.space, "get_navigation_map", self.space.voxel_map.get_2d_map)
+        obs, exp = get_map()
         if hasattr(obs, "cpu"):
             obs = obs.cpu().numpy()
         if hasattr(exp, "cpu"):

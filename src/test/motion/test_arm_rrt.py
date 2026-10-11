@@ -9,7 +9,7 @@ from __future__ import annotations
 import numpy as np
 
 from emet.motion.algo import get_planner
-from emet.motion.arm_rrt import plan_arm_joint_path, resolve_agent_manip_planner
+from emet.motion.arm_rrt import joint_limits_from_model, plan_arm_joint_path, resolve_agent_manip_planner
 from emet.motion.base import ConfigurationSpace
 from emet.motion.voxel_arm_collision import link_samples_collide_2d
 
@@ -134,6 +134,54 @@ def test_plan_arm_rrt_connect_no_collision():
     assert plan.success, f"expected success, got {plan}"
     assert plan.planner in ("rrt_connect", "linear")
     assert len(plan.waypoints) >= 2
+
+
+def test_invalid_start_distinguishes_bounds_from_collision():
+    """invalid_start carries a detail naming which predicate failed."""
+    from types import SimpleNamespace
+
+    import mujoco
+
+    from emet.motion.mujoco_arm_ik import RBY1_LEFT_ARM_JOINTS, joint_qpos_addrs
+    from emet.robots.rby1 import Rby1Backend
+
+    mjcf = Rby1Backend().get_spec().mjcf_path
+    model = mujoco.MjModel.from_xml_path(str(mjcf))
+    data = mujoco.MjData(model)
+    joints = RBY1_LEFT_ARM_JOINTS[:2]
+    qadr = joint_qpos_addrs(model, joints)
+    mujoco.mj_forward(model, data)
+    q0 = np.array([float(data.qpos[a]) for a in qadr], dtype=np.float64)
+
+    lo, _hi = joint_limits_from_model(model, joints)
+    out_of_bounds = q0.copy()
+    out_of_bounds[0] = lo[0] - 1.0
+    plan = plan_arm_joint_path(
+        model,
+        data,
+        joint_names=joints,
+        q_start=out_of_bounds,
+        q_goal=q0,
+        collision=None,
+        planner="linear",
+    )
+    assert not plan.success
+    assert plan.reason == "invalid_start"
+    assert plan.detail is not None and plan.detail.startswith("joint_bounds:"), plan.detail
+
+    colliding = SimpleNamespace(configuration_collides=lambda _m, _d: True)
+    plan = plan_arm_joint_path(
+        model,
+        data,
+        joint_names=joints,
+        q_start=q0,
+        q_goal=q0 + 0.01,
+        collision=colliding,
+        planner="linear",
+    )
+    assert not plan.success
+    assert plan.reason == "invalid_start"
+    assert plan.detail == "collision", plan.detail
 
 
 def test_voxel_checker_rejects_colliding_config():

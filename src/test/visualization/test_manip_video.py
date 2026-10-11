@@ -64,3 +64,15 @@ def test_write_overlay_mp4(tmp_path: Path):
     out = write_rgb_sequence_mp4(frames, tmp_path / "t.mp4", fps=4.0)
     assert out.is_file()
     assert out.stat().st_size > 64
+
+
+def test_border_labels_preserve_scene_and_none_returns_clean_copy():
+    import numpy as np
+
+    rgb = np.full((120, 200, 3), 87, dtype=np.uint8)
+    border = overlay_manip_frame(rgb, action="place", goal="bowl to counter",
+                                 flags="ASSISTED | GT", overlay_style="border")
+    np.testing.assert_array_equal(border[64:184, 4:204], rgb)
+    clean = overlay_manip_frame(rgb, overlay_style="none", action="place")
+    np.testing.assert_array_equal(clean, rgb)
+    assert not np.shares_memory(clean, rgb)

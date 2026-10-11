@@ -805,6 +805,9 @@ class RobosuiteZmqServer(BaseZmqServer):
         jn = self._planar_base_joint_names()
         if snap is None or jn is None or int(snap.shape[0]) != 3:
             return
+        from emet.simulation.physical_execution import audit_physical_action
+
+        audit_physical_action({"stationary_base_pose_hold": True}, source="RobosuiteZmqServer.planar_hold")
         for i, name in enumerate(jn):
             jid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_JOINT, name)
             if jid < 0:
@@ -820,15 +823,18 @@ class RobosuiteZmqServer(BaseZmqServer):
                 self._mjdata.ctrl[aid] = 0.0
 
     def _hold_stationary_base_freejoint_if_idle(self) -> None:
-        """Legacy full-pose hold, or opt-in planar hold with passive support dynamics.
+        """Stationary oracle support, or opt-in planar hold with passive dynamics.
 
-        Pinning all six base coordinates repeatedly cancels suspension/contact
-        response. Microscopic floor penetration then loads articulated joints
-        even with unchanged position targets and gravity compensation.
+        A declared world/base weld makes the solver account for support forces.
+        Repeatedly resetting a floating base leaves its within-step acceleration
+        coupled to the arm. Older models retain the legacy pose hold.
         """
-        if self._nav_goal_world is not None:
-            return
         if self._mjmodel is None or self._mjdata is None:
+            return
+        weld = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_EQUALITY, "emet_stationary_base")
+        if weld >= 0:
+            self._mjdata.eq_active[weld] = False
+        if self._nav_goal_world is not None:
             return
         snap = self._stationary_base_freejoint_qpos
         if snap is None or int(snap.shape[0]) != 7:
@@ -837,7 +843,19 @@ class RobosuiteZmqServer(BaseZmqServer):
         if addrs is None:
             return
         qadr, vadr = addrs
+        from emet.simulation.physical_execution import audit_physical_action
+
+        audit_physical_action({"stationary_base_pose_hold": True}, source="RobosuiteZmqServer.freejoint_hold")
         if not self._passive_base_support:
+            if weld >= 0:
+                base_id = self._mjmodel.body(self._spec.base_link_name).id
+                if (self._mjmodel.eq_type[weld] != mujoco.mjtEq.mjEQ_WELD
+                        or self._mjmodel.eq_obj1id[weld] != 0
+                        or self._mjmodel.eq_obj2id[weld] != base_id):
+                    raise ValueError("emet_stationary_base must weld world to the robot base")
+                self._mjmodel.eq_data[weld, 3:10] = snap
+                self._mjdata.eq_active[weld] = True
+                return
             self._mjdata.qpos[qadr : qadr + 7] = snap
             if vadr >= 0:
                 self._mjdata.qvel[vadr : vadr + 6] = 0.0
@@ -1242,6 +1260,7 @@ class RobosuiteZmqServer(BaseZmqServer):
         self._ensure_offscreen_framebuffer(_PRIMARY_RW, _PRIMARY_RH)
         if self._primary_renderer is None:
             self._primary_renderer = mujoco.Renderer(self._mjmodel, _PRIMARY_RH, _PRIMARY_RW)
+            self._primary_renderer._scene_option.flags[mujoco.mjtVisFlag.mjVIS_RANGEFINDER] = False
         return self._primary_renderer
 
     def _discard_primary_renderer_unlocked(self) -> None:
@@ -1389,6 +1408,7 @@ class RobosuiteZmqServer(BaseZmqServer):
         with self._mj_lock:
             with self._render_lock:
                 renderer = self._get_or_create_primary_renderer()
+                renderer._scene_option.geomgroup[:] = mujoco.MjvOption().geomgroup
                 cam = build_base_chase_camera(self._mjmodel, self._mjdata, int(bid))
                 renderer.update_scene(self._mjdata, camera=cam)
                 apply_chase_frustum_near(renderer.scene, near=0.05)
@@ -1408,6 +1428,7 @@ class RobosuiteZmqServer(BaseZmqServer):
         with self._mj_lock:
             with self._render_lock:
                 renderer = self._get_or_create_primary_renderer()
+                renderer._scene_option.geomgroup[:] = mujoco.MjvOption().geomgroup
                 cam = build_overhead_camera(self._mjmodel, self._mjdata, int(bid))
                 renderer.update_scene(self._mjdata, camera=cam)
                 apply_chase_frustum_near(renderer.scene, near=0.05)
@@ -2130,23 +2151,22 @@ class RobosuiteZmqServer(BaseZmqServer):
             qxd, qyd = float(vx), float(vy)
             qdot_yaw = float(wz)
             if names and len(names) == 3:
-                jn = (str(names[0]), str(names[1]), str(names[2]))
-                anchor = scene_base_spawn.infer_planar_anchor_body_name(self._mjmodel, jn)
-                if anchor:
-                    bid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_BODY, anchor)
-                    if bid >= 0:
-                        R = np.asarray(self._mjdata.body(bid).xmat, dtype=np.float64).reshape(3, 3)
-                        M = R[:2, :2]
-                        v_world = np.array([vx, vy], dtype=np.float64)
-                        try:
-                            v_joint = np.linalg.solve(M, v_world)
-                        except np.linalg.LinAlgError:
-                            v_joint, *_ = np.linalg.lstsq(M, v_world, rcond=None)
-                        qxd, qyd = float(v_joint[0]), float(v_joint[1])
-                        a_axis = R[:, 2]
-                        az = float(a_axis[2])
-                        if abs(az) >= 0.2:
-                            qdot_yaw = float(wz) / az
+                jids = [mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_JOINT, str(n)) for n in names]
+                if all(jid >= 0 for jid in jids):
+                    # Joint axes are expressed in world coordinates *before* each
+                    # joint's transform. The body's final xmat includes base yaw,
+                    # which must not rotate upstream slide axes a second time.
+                    axes = np.asarray(self._mjdata.xaxis[jids], dtype=np.float64)
+                    M = axes[:2, :2].T
+                    v_world = np.array([vx, vy], dtype=np.float64)
+                    try:
+                        v_joint = np.linalg.solve(M, v_world)
+                    except np.linalg.LinAlgError:
+                        v_joint, *_ = np.linalg.lstsq(M, v_world, rcond=None)
+                    qxd, qyd = float(v_joint[0]), float(v_joint[1])
+                    az = float(axes[2, 2])
+                    if abs(az) >= 0.2:
+                        qdot_yaw = float(wz) / az
             self._mjdata.ctrl[ax] = qxd
             self._mjdata.ctrl[ay] = qyd
             self._mjdata.ctrl[aw] = qdot_yaw
@@ -2215,7 +2235,28 @@ class RobosuiteZmqServer(BaseZmqServer):
             self._at_goal = False
             return True
 
+    def check_base_poses(self, poses):
+        """Check current-scene geometry on private data without moving the robot."""
+        from emet.simulation.teleport_collision import teleport_endpoint_contacts
+
+        poses = np.asarray(poses, dtype=float)
+        if poses.ndim != 2 or poses.shape[1] != 3 or not 1 <= len(poses) <= 32 or not np.isfinite(poses).all():
+            raise ValueError("expected 1..32 finite world XYT poses")
+        with self._mj_lock:
+            if self._mjmodel is None or self._mjdata is None:
+                raise RuntimeError("scene not ready")
+            contacts = [teleport_endpoint_contacts(self._mjmodel, self._mjdata, self._spec, pose)
+                        for pose in poses]
+            return {"poses": poses.tolist(), "clear": [not c for c in contacts], "contacts": contacts,
+                    "sim_time": float(self._mjdata.time), "scope": "base_endpoint_only"}
+
     def handle_action(self, action: dict[str, Any]):
+        from emet.simulation.physical_execution import audit_physical_action
+
+        audit_physical_action(
+            action, source=type(self).__name__,
+            implicit_teleport=("xyt" in action and self._is_molmospaces_session() and molmospaces_nav_teleport_enabled()),
+        )
         if EMET_ACTION_MUJOCO_GROUND_TRUTH_KEY in action:
             path_gt, exclude_robot, as_json = parse_ground_truth_dump_action_field(
                 action[EMET_ACTION_MUJOCO_GROUND_TRUTH_KEY]
@@ -2387,6 +2428,20 @@ class RobosuiteZmqServer(BaseZmqServer):
                         self._start_planar_yaw_slew(wx, wy, wt)
                         self._log_nav_action(nav_meta, applied="yaw_slew")
                     elif nav_teleport:
+                        # Teleporting an anchored chassis into a wall can drive
+                        # the articulated joints against their limits through
+                        # contact constraints. Reject on private data, before
+                        # changing base/attachment poses or reporting arrival.
+                        from emet.simulation.teleport_collision import teleport_endpoint_contacts
+
+                        contacts = teleport_endpoint_contacts(
+                            self._mjmodel, self._mjdata, self._spec, (wx, wy, wt)
+                        )
+                        if contacts:
+                            self._nav_goal_world = None
+                            self._contract_navigation_context["endpoint_contacts"] = contacts
+                            self._log_nav_action(nav_meta, applied="teleport_collision_rejected")
+                            raise RuntimeError(f"teleport_endpoint_collision: {contacts}")
                         if not self._teleport_base_world_xyt(wx, wy, wt):
                             logger.warning(
                                 f"Navigation xyt={action['xyt']!r}: no free joint on base_link "
@@ -2492,6 +2547,7 @@ class RobosuiteZmqServer(BaseZmqServer):
             "step": self._last_step,
             "at_goal": self._at_goal,
             "is_simulation": True,
+            "sim_base_pose_query": True,
             "lidar_points": None,
             "lidar_timestamp": None,
             EMET_ZMQ_ROBOT_ID_KEY: self._spec.name,
@@ -2580,6 +2636,7 @@ class RobosuiteZmqServer(BaseZmqServer):
             "base_xyz": base_xyz,
             "base_up_dot_world_z": base_up,
             "actuator_targets": joint_targets,
+            "actuator_names": list(self._spec.actuator_names),
             "ee_pose": np.eye(4),
             "joint_positions": q,
             "joint_velocities": dq,
@@ -2589,6 +2646,7 @@ class RobosuiteZmqServer(BaseZmqServer):
             "is_homed": True,
             "is_runstopped": False,
             "is_simulation": True,
+            "sim_base_pose_query": True,
             "step": self._last_step,
             EMET_ZMQ_SIM_TIME_RATIO_KEY: self._physics_fps_counter.sim_to_real_ratio,
             EMET_ZMQ_ROBOT_ID_KEY: self._spec.name,

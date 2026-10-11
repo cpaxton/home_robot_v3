@@ -3,6 +3,81 @@
 Short checklist for agent/hardware polish that is not worth a full plan doc yet.
 Strike through or move to a PR when done.
 
+## TAMP simulator API readiness (2026-10-05)
+
+- [x] Reclaim disposable pip caches; preserve source worktrees, datasets and run evidence.
+- [x] Consistent JSON across all four TAMP tools; boot/pose/clearance guards,
+      partial execution evidence and stale-state checks. Full regression pack: 206 passed.
+- [x] Correct unsupported shoulder-stall diagnosis; retain object-independent failures.
+- [x] Complete gate `20261005_183936_f4b352`: failed CHAT smoke, 1/3 admitted,
+      2/3 scored replays passed. Simulator readiness remains failed.
+- [x] Repair planning snapshots, handle namespaces, and operation-scoped evidence;
+      218 regression tests pass. See `docs/experiments/tamp_api_correctness_20261006.md`.
+- [x] Inspect CHAT smoke `20261006_160739_730b9a`: pickup passed, placement failed;
+      returned handles and operation-scoped partial evidence behaved correctly.
+- [ ] Capture the placement command failure reason with private diagnostic logging.
+      Resolve general motion failures before repeating the nine-trial readiness matrix.
+      See `docs/experiments/tamp_api_readiness_20261005.md` and `docs/apis/tamp.md`.
+
+## TAMP agent execution follow-up (2026-09-29)
+
+Evidence: [agent execution and paper figures](docs/experiments/tamp_agent_execution_20260929.md).
+
+- [x] Export baseline coverage/success and task-layout figures as PDF/SVG/PNG.
+- [x] Instrument lift outcomes; identify height-only false-positive acceptance and
+      metre-scale attachment offsets. Historical 21/25 is not verified grasp success.
+- [ ] Validate measured-joint arrival and target-distance guards, repair remaining
+      execution failures, then run paired trials across all original admitted tasks.
+- [x] Complete 90-candidate oracle expansion: 19 admitted, 19/19 fresh MCTS passes,
+      five new admitted case IDs and zero startup errors. Updated oracle-only figures saved.
+- [x] Diagnose RBY1 tracking: wall-intersecting approaches and floating-base pose
+      reset artifact; endpoint rejection and solver support validated by 102 tests.
+      See `docs/experiments/tamp_contact_tracking_20260930.md`.
+- [x] Retry repaired execution: kettle relocation passes after reserving IK
+      tracking margin; latest case is 1/3 objects, 0/1 full tasks (latch control).
+- [x] Execute preselected alternative approaches: three fresh-process repeats
+      pass (3/3 full cleanups, 9/9 relocations, 54/54 arm arrivals), assisted latch
+      only. See `docs/experiments/tamp_approach_validation_20261001.md`.
+- [x] Integrate online alternative-approach selection with read-only collision queries:
+      139 regression tests pass; three fresh MCTS repeats score 2/3 full tasks and
+      7/9 relocations. See `docs/experiments/tamp_auto_approaches_20261001.md`.
+- [ ] Diagnose residual apple tracking and kettle invalid-start failures; verify arm
+      collision geometry and payload sweeps before resuming broader latch expansion.
+- [ ] Measure the full shared agent on frozen valid tasks with explicit model,
+      observations and action budgets; do not label scripted/GT controls as agent results.
+
+## Physical TAMP acceptance (2026-09-26)
+
+Evidence and commands: [physical acceptance](docs/experiments/physical_tamp_acceptance.md).
+The user-selected experiment scope is GT/MCTS only, including the full 200-row
+registry. Oracle teleport and kinematic latch remain separately labeled controls.
+
+- [ ] Pass three matched physical pick/place trials on each original Molmo and
+      RoboCasa fixture, with independent retention, support, contact and actuation audits.
+- [ ] After that gate, validate broader layouts and bounded partial-map observation/replanning.
+- [x] Complete the 24-case protocol, seven small-registry rows, GT floor/tool controls,
+      and all 200 full-registry rows; retain failures, unsupported capabilities and timeouts.
+      Full registry: 54/200 successes; corrected 50-row subset: 18 successes, kept separate.
+      See the [results report](docs/experiments/physical_tamp_acceptance_20260926_results.md).
+- [x] Add scene-backed candidate construction, independent executed reference
+      admission, immutable pose certificates, and final-scene scoring for controls.
+      See [validated registry workflow](docs/experiments/tamp_validated_registry.md).
+- [x] Complete corrected r3 admission and fresh MCTS replay; report construction and
+      reference failures separately from the scored denominator. September 28 pilot:
+      4/8 admitted and 4/4 fresh MCTS replay passes. Full job `20260928_222600_2cf5c6`
+      finished: 25/200 admitted, 21/25 scored successes. No 200-task solvability claim.
+- [ ] Expand scene coverage with geometry-based object selection; verify reference
+      repeatability and diagnose Mars startup failures before broader claims.
+- [ ] Resolve rotational grip slip in RoboCasa and Molmo under the frozen physics
+      and retention bounds; both now have independently verified physical pickups.
+- [x] Revalidate Molmo grasp with open-gripper geometry; approach and physical pickup now pass.
+- [ ] Complete Molmo retained transport and placement. Revalidated route reuse now
+      executes carry, but rotational grip drift exceeds 0.1 rad before release.
+      Release and open-finger retreat have static certificates; physical acceptance is pending.
+- [ ] Add physical adapters and collision coverage for deferred robots before claiming
+      multi-robot physical acceptance. Habitat-OVMM, long-horizon tasks, learned-agent
+      comparisons and hardware remain deferred. Update paper claims only from scored artifacts.
+
 ## Shared query-memory acceptance (2026-09-05, prototype branch)
 
 Canonical plan: [shared-agent acceptance and paper figures](docs/experiments/shared_agent_paper_update.md).

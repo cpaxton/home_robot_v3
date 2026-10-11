@@ -72,6 +72,7 @@ def run_scripted_tool_calls(
     *,
     manip_mode: str,
     context_out: dict[str, Any] | None = None,
+    video_recorder: Any = None,
 ) -> bool:
     """Run agent-shaped tool calls through the live CHAT tool implementation."""
     from emet.agent.tools import get_tools
@@ -86,25 +87,69 @@ def run_scripted_tool_calls(
     print("Scripted tool_calls:")
     print(json.dumps(tool_calls, indent=2))
     ok_all = True
+    handles: dict[str, str] = {}
+    resolved_calls = []
+    media_events = []
     for i, call in enumerate(tool_calls):
         name = str(call.get("name") or "")
         args = dict(call.get("arguments") or {})
+        for key in ("task_ref", "plan_ref"):
+            if args.get(key) == f"${key}":
+                if key not in handles:
+                    print(f"[{i}] missing prior successful {key}", file=sys.stderr)
+                    return False
+                args[key] = handles[key]
+        resolved_calls.append({"name": name, "arguments": args})
         tool = tools_by_name.get(name)
         if tool is None:
             print(f"[{i}] unknown tool {name!r}", file=sys.stderr)
             ok_all = False
             continue
+        if video_recorder is not None:
+            video_recorder.set_status(name, detail=f"requested state: {args.get('state', '')}")
+            time.sleep(1.0)  # Recording-only dwell; do not interpolate joint teleports.
+            video_recorder.dump_paper_stills(f"{i:02d}_before_{name}")
         print(f"[{i}] {name}({args})")
         if tool.func is not None:
             result = tool.func(**args) if args else tool.func()
             print(f"    -> {result}")
-            # CHAT tools return user-facing strings; any failure wording is a
-            # gate failure regardless of which plan/execute stage emitted it.
-            if isinstance(result, str) and "fail" in result.lower():
+            if video_recorder is not None:
+                time.sleep(1.0)  # Allow a rendered observation after the measured receipt.
+                stills = video_recorder.dump_paper_stills(f"{i:02d}_after_{name}_{args.get('state', '')}")
+                try:
+                    public_result = json.loads(result)
+                except (TypeError, ValueError):
+                    public_result = None
+                media_events.append({"tool": name, "requested_state": args.get("state"),
+                                     "result": public_result,
+                                     "stills": {k: str(v) for k, v in stills.items()}})
+                video_recorder.out_path.with_suffix(".json").write_text(
+                    json.dumps({"schema_version": 1, "recording_dwell_s": 1.0,
+                                "events": media_events}, indent=2) + "\n")
+            from emet.controller.task.tamp.api import TAMP_TOOLS
+            if name in TAMP_TOOLS:
+                try:
+                    outcome = json.loads(result)
+                    if outcome['schema_version'] != 1 or outcome['status'] != 'ok':
+                        ok_all = False
+                        break
+                    if name == 'scene_tasks':
+                        handles.pop('task_ref', None)
+                        tasks = outcome['data'].get('tasks') or []
+                        if tasks:
+                            handles['task_ref'] = tasks[0]['task_ref']
+                    elif name == 'plan_pick_place':
+                        handles['plan_ref'] = outcome['data']['plan_ref']
+                except (TypeError, ValueError, KeyError):
+                    ok_all = False
+                    break
+            elif isinstance(result, str) and "fail" in result.lower():
                 ok_all = False
+
         else:
             print(f"[{i}] tool {name!r} has no callable implementation", file=sys.stderr)
             ok_all = False
+    context["_scripted_resolved_calls"] = resolved_calls
     if context_out is not None:
         context_out.update(context)
     return ok_all
@@ -115,7 +160,7 @@ def _planned_receptacle_body(tool_calls: list[dict[str, Any]], context: dict[str
     refs = context.get("_tamp_task_refs")
     if not isinstance(refs, dict):
         return None
-    for call in tool_calls:
+    for call in context.get("_scripted_resolved_calls", tool_calls):
         if str(call.get("name")) != "plan_pick_place":
             continue
         args = call.get("arguments") or {}
@@ -159,6 +204,9 @@ def main() -> int:
         action="store_true",
         help="Record third-person MuJoCo view to MP4 (sets EMET_SIM_THIRD_PERSON=1).",
     )
+    parser.add_argument("--video-overlay", choices=("none", "banner", "border"), default="banner",
+                        help="Optional task/active skill labels; border preserves the full camera view.")
+    parser.add_argument("--video-flags", default="", help="Visible assistance/geometry legend for the recording.")
     parser.add_argument("--video-fps", type=float, default=12.0, help="MP4 sample rate when --record-mp4.")
     parser.add_argument(
         "--video-out",
@@ -279,9 +327,10 @@ def main() -> int:
             # Stand off farther than the base footprint so teleport does not embed the chassis in the table.
             if obj_body and before is not None:
                 os.environ.setdefault("EMET_SIM_NAV_TELEPORT", "1")
-                approach = np.array(
-                    [float(before[0]), float(before[1]) + 0.55, -np.pi / 2],
-                    dtype=np.float64,
+                from emet.controller.task.tamp.task_search import approach_pose_for_object_xy
+
+                approach = approach_pose_for_object_xy(
+                    before[:2], mode=getattr(getattr(robot, "_spec", None), "tamp_approach", "front"),
                 )
                 print(f"Approaching object: move_base_to {approach.tolist()} (nav_teleport)", flush=True)
                 robot.move_base_to(approach, blocking=True, world_frame=True)
@@ -306,6 +355,7 @@ def main() -> int:
                     robot,
                     out,
                     fps=float(args.video_fps),
+                    overlay_style=args.video_overlay, flags=args.video_flags,
                     title="kinematic pick-place",
                 )
                 video.set_status(
@@ -348,6 +398,7 @@ def main() -> int:
                     robot,
                     out,
                     fps=float(args.video_fps),
+                    overlay_style=args.video_overlay, flags=args.video_flags,
                     title=f"{manip_mode} CHAT pick-place",
                 )
                 video.set_status("pick_place", goal=f"{args.object} → {args.receptacle}")
@@ -361,9 +412,10 @@ def main() -> int:
                 tool_calls,
                 manip_mode=manip_mode,
                 context_out=tool_context,
+                video_recorder=video,
             )
             if video is not None:
-                video.set_status("done")
+                video.set_status("done" if ok else "failed", detail="success" if ok else "see paired JSON failure outcome")
                 video.capture_once()
                 mp4 = video.stop()
                 video = None
