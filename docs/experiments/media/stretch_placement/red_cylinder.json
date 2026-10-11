@@ -1,0 +1,493 @@
+{
+  "status": "success",
+  "error": null,
+  "scope": "scripted native-actuator table transfer; not full TAMP acceptance",
+  "object": "object2",
+  "events": [
+    {
+      "stage": "settle / open",
+      "time": 2.0159999999999996,
+      "object": [
+        -0.019999273508226386,
+        -0.5499992181017584,
+        0.5199119111245292
+      ],
+      "ee": [
+        -0.019663354866662312,
+        -0.5145286057390746,
+        0.7085101122810976
+      ],
+      "object_in_ee": [
+        -0.18837659110588217,
+        -0.036628112203777256,
+        -0.0004471933874304403
+      ],
+      "object_speed_m_s": 0.0001297526326578907,
+      "contacts": [
+        [
+          "object2",
+          "table"
+        ],
+        [
+          "object2",
+          "table"
+        ],
+        [
+          "object2",
+          "table"
+        ],
+        [
+          "object2",
+          "table"
+        ],
+        [
+          "object2",
+          "table"
+        ]
+      ]
+    },
+    {
+      "stage": "pregrasp",
+      "time": 5.039999999999667,
+      "object": [
+        -0.01999900519235418,
+        -0.5499989040570878,
+        0.5199118085845578
+      ],
+      "ee": [
+        -0.020020655239597784,
+        -0.47055245912979016,
+        0.5865588513234127
+      ],
+      "object_in_ee": [
+        -0.06572744516900701,
+        -0.08020873856130237,
+        -0.0001661207551496491
+      ],
+      "object_speed_m_s": 0.00015697001804514682,
+      "contacts": [
+        [
+          "object2",
+          "table"
+        ],
+        [
+          "object2",
+          "table"
+        ],
+        [
+          "object2",
+          "table"
+        ],
+        [
+          "object2",
+          "table"
+        ],
+        [
+          "object2",
+          "table"
+        ]
+      ]
+    },
+    {
+      "stage": "grasp approach",
+      "time": 8.063999999999362,
+      "object": [
+        -0.01999953749169922,
+        -0.5499985989024813,
+        0.5199119011677861
+      ],
+      "ee": [
+        -0.02001218155949788,
+        -0.5473689453448556,
+        0.5457415977509592
+      ],
+      "object_in_ee": [
+        -0.02579689471763766,
+        -0.0029312852241614503,
+        -0.00012748782727089216
+      ],
+      "object_speed_m_s": 6.113853966202096e-05,
+      "contacts": [
+        [
+          "object2",
+          "table"
+        ],
+        [
+          "object2",
+          "table"
+        ],
+        [
+          "object2",
+          "table"
+        ],
+        [
+          "object2",
+          "table"
+        ],
+        [
+          "object2",
+          "table"
+        ]
+      ]
+    },
+    {
+      "stage": "close gripper",
+      "time": 10.080000000000036,
+      "object": [
+        -0.020203421364697452,
+        -0.5520671192226954,
+        0.5200847931960548
+      ],
+      "ee": [
+        -0.020286177355683322,
+        -0.5398455299024963,
+        0.5466624552008701
+      ],
+      "object_in_ee": [
+        -0.026466890316203792,
+        -0.012458443013389974,
+        -0.00019268206974830835
+      ],
+      "object_speed_m_s": 0.00015334807869684416,
+      "contacts": [
+        [
+          "object2",
+          "table"
+        ],
+        [
+          "object2",
+          "table"
+        ],
+        [
+          "object2",
+          "table"
+        ],
+        [
+          "object2",
+          "table"
+        ],
+        [
+          "object2",
+          "table"
+        ],
+        [
+          "object2",
+          "rubber_tip_left"
+        ],
+        [
+          "object2",
+          "rubber_tip_left"
+        ],
+        [
+          "object2",
+          "rubber_tip_left"
+        ],
+        [
+          "object2",
+          "rubber_tip_right"
+        ],
+        [
+          "object2",
+          "rubber_tip_right"
+        ],
+        [
+          "object2",
+          "rubber_tip_right"
+        ],
+        [
+          "object2",
+          "rubber_tip_right"
+        ]
+      ]
+    },
+    {
+      "stage": "lift",
+      "time": 13.104000000001045,
+      "object": [
+        -0.020378839073340767,
+        -0.5628346539012228,
+        0.6582488014331168
+      ],
+      "ee": [
+        -0.02000725591301851,
+        -0.548865027221435,
+        0.6852048385994096
+      ],
+      "object_in_ee": [
+        -0.026387508935165567,
+        -0.01501829531515457,
+        0.0002581885969453795
+      ],
+      "object_speed_m_s": 0.0008203563613842808,
+      "contacts": [
+        [
+          "object2",
+          "rubber_tip_left"
+        ],
+        [
+          "object2",
+          "rubber_tip_left"
+        ],
+        [
+          "object2",
+          "rubber_tip_left"
+        ],
+        [
+          "object2",
+          "rubber_tip_left"
+        ],
+        [
+          "object2",
+          "rubber_tip_right"
+        ],
+        [
+          "object2",
+          "rubber_tip_right"
+        ],
+        [
+          "object2",
+          "rubber_tip_right"
+        ],
+        [
+          "object2",
+          "rubber_tip_right"
+        ]
+      ]
+    },
+    {
+      "stage": "transfer",
+      "time": 16.12800000000194,
+      "object": [
+        -0.020237295171712005,
+        -0.7217161980373181,
+        0.6602800953394324
+      ],
+      "ee": [
+        -0.019997871932939254,
+        -0.7064705160396826,
+        0.6877533019292066
+      ],
+      "object_in_ee": [
+        -0.026843520198742227,
+        -0.016330298821627995,
+        0.0001094857102768368
+      ],
+      "object_speed_m_s": 0.00026709062668236626,
+      "contacts": [
+        [
+          "object2",
+          "rubber_tip_left"
+        ],
+        [
+          "object2",
+          "rubber_tip_left"
+        ],
+        [
+          "object2",
+          "rubber_tip_left"
+        ],
+        [
+          "object2",
+          "rubber_tip_left"
+        ],
+        [
+          "object2",
+          "rubber_tip_left"
+        ],
+        [
+          "object2",
+          "rubber_tip_right"
+        ],
+        [
+          "object2",
+          "rubber_tip_right"
+        ],
+        [
+          "object2",
+          "rubber_tip_right"
+        ],
+        [
+          "object2",
+          "rubber_tip_right"
+        ],
+        [
+          "object2",
+          "rubber_tip_right"
+        ]
+      ]
+    },
+    {
+      "stage": "lower onto table",
+      "time": 19.152000000000264,
+      "object": [
+        -0.02039987890903649,
+        -0.7255652241075595,
+        0.5201406141270936
+      ],
+      "ee": [
+        -0.020355007118027117,
+        -0.7063934005817474,
+        0.5500143935694126
+      ],
+      "object_in_ee": [
+        -0.02967204967260564,
+        -0.019482435620198607,
+        -8.774669269004181e-05
+      ],
+      "object_speed_m_s": 0.05786027182327594,
+      "contacts": [
+        [
+          "object2",
+          "table"
+        ],
+        [
+          "object2",
+          "table"
+        ],
+        [
+          "object2",
+          "table"
+        ]
+      ]
+    },
+    {
+      "stage": "release",
+      "time": 21.167999999999147,
+      "object": [
+        -0.019439835727416293,
+        -0.7234656376334316,
+        0.5199120355042874
+      ],
+      "ee": [
+        -0.020091200656950116,
+        -0.7097592423347855,
+        0.5493928538579824
+      ],
+      "object_in_ee": [
+        -0.02931079099474481,
+        -0.01406000071883799,
+        -0.0007759576060563678
+      ],
+      "object_speed_m_s": 9.05802274153398e-05,
+      "contacts": [
+        [
+          "object2",
+          "table"
+        ],
+        [
+          "object2",
+          "table"
+        ],
+        [
+          "object2",
+          "table"
+        ],
+        [
+          "object2",
+          "table"
+        ],
+        [
+          "object2",
+          "table"
+        ]
+      ]
+    },
+    {
+      "stage": "retract",
+      "time": 24.19199999999747,
+      "object": [
+        -0.019439710333977483,
+        -0.7234656135053964,
+        0.5199120378263242
+      ],
+      "ee": [
+        -0.020023949654005998,
+        -0.6114097917049629,
+        0.6263109267596707
+      ],
+      "object_in_ee": [
+        -0.10508866735875982,
+        -0.1132826252036334,
+        -0.0009954501178531644
+      ],
+      "object_speed_m_s": 2.1447595487545426e-05,
+      "contacts": [
+        [
+          "object2",
+          "table"
+        ],
+        [
+          "object2",
+          "table"
+        ],
+        [
+          "object2",
+          "table"
+        ],
+        [
+          "object2",
+          "table"
+        ],
+        [
+          "object2",
+          "table"
+        ]
+      ]
+    },
+    {
+      "stage": "settle / verify",
+      "time": 27.215999999995795,
+      "object": [
+        -0.019439318082340985,
+        -0.7234655270836502,
+        0.5199120380312394
+      ],
+      "ee": [
+        -0.020025386587417444,
+        -0.611407774068498,
+        0.6272272405093118
+      ],
+      "object_in_ee": [
+        -0.10600469113688067,
+        -0.11329534290302107,
+        -0.0010034457975136247
+      ],
+      "object_speed_m_s": 0.00026613166477621754,
+      "contacts": [
+        [
+          "object2",
+          "table"
+        ],
+        [
+          "object2",
+          "table"
+        ],
+        [
+          "object2",
+          "table"
+        ],
+        [
+          "object2",
+          "table"
+        ],
+        [
+          "object2",
+          "table"
+        ]
+      ]
+    }
+  ],
+  "criteria": {
+    "lift_min_m": 0.08,
+    "sustained_bilateral_contact_s": 1.0,
+    "retention_translation_m": 0.025,
+    "placement_xy_m": 0.04,
+    "placement_z_m": 0.015,
+    "release_speed_m_s": 0.01,
+    "release_stable_s": 2.0
+  },
+  "assistance": "ground-truth scripted goals; no latch, weld, or runtime pose writes",
+  "planning_scope": "coupled-joint pose IK; no collision-certified path or agent planning",
+  "source_sha": "b44306014d97c6632d89e6eb3da57eede2dd6291",
+  "script_sha256": "c30d8764a16c8e0551f2dced65f69ef0a23a7591aed659da1bda14cc2d9d5f00"
+}

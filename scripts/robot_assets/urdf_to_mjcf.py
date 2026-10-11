@@ -224,27 +224,28 @@ class UrdfToMjcf:
                 )
         return lines
 
-    def emit_tree(self, body_name: str, T_in: np.ndarray | None = None, indent: str = "    ") -> list[str]:
+    def emit_tree(self, body_name: str, T_in: np.ndarray | None = None, indent: str = "    ",
+                  incoming_joint: ET.Element | None = None) -> list[str]:
         lines = self.emit_body(body_name, T_in if T_in is not None else np.eye(4), indent)
+        # URDF joint origin is the child link frame. A MuJoCo joint must live
+        # on that child body; placing it on the parent rotates the wrong subtree
+        # around the wrong pivot and separates the rendered arm components.
+        if incoming_joint is not None and incoming_joint.get("type") != "fixed":
+            jtype = incoming_joint.get("type")
+            if jtype not in {"revolute", "prismatic", "continuous"}:
+                raise ValueError(f"unsupported URDF joint type: {jtype}")
+            axis_el = incoming_joint.find("axis")
+            axis = [float(x) for x in axis_el.get("xyz").split()] if axis_el is not None else [1., 0., 0.]
+            limit = incoming_joint.find("limit")
+            bounds = ' limited="false"' if jtype == "continuous" else (
+                f' range="{float(limit.get("lower")):.8g} {float(limit.get("upper")):.8g}"')
+            kind = "slide" if jtype == "prismatic" else "hinge"
+            lines.append(f'{indent}  <joint name="{incoming_joint.get("name")}" type="{kind}" '
+                         f'axis="{vstr(axis)}"{bounds} damping="{DEFAULT_DAMPING}" '
+                         f'frictionloss="{DEFAULT_FRICTIONLOSS}"/>')
         for joint in self.children.get(body_name, []):
             child = joint.find("child").get("link")
-            jtype = joint.get("type")
-            T = resolve_joint_transform(joint)
-            if jtype == "fixed":
-                # no <joint> element; the body pos/quat already carries the transform
-                lines.extend(self.emit_tree(child, T, indent + "  "))
-            else:
-                axis = joint.find("axis").get("xyz")
-                axis = [float(x) for x in axis.split()]
-                lim = joint.find("limit")
-                low = float(lim.get("lower"))
-                high = float(lim.get("upper"))
-                lines.append(
-                    f'{indent}  <joint name="{joint.get("name")}" type="hinge" axis="{vstr(axis)}" '
-                    f'range="{low:.6g} {high:.6g}" damping="{DEFAULT_DAMPING}" '
-                    f'frictionloss="{DEFAULT_FRICTIONLOSS}"/>'
-                )
-                lines.extend(self.emit_tree(child, T, indent + "  "))
+            lines.extend(self.emit_tree(child, resolve_joint_transform(joint), indent + "  ", joint))
         lines.append(f"{indent}</body>")
         return lines
 
@@ -253,7 +254,7 @@ class UrdfToMjcf:
 
 
 def wrap_recentered_on_joint(xml: str, *, joint_name: str, wrapper: str = "arm_root") -> str:
-    """Wrap a one-root MJCF body tree so ``joint_name``'s parent body sits at the origin.
+    """Wrap a one-root MJCF body tree so ``joint_name``'s pivot sits at the origin.
 
     Sourccey: ``--recenter-joint shoulder_pan`` makes ``arm_root`` the shoulder pivot
     so ``assemble_sourccey.py`` can mount the fragment at the shoulder.
@@ -276,16 +277,24 @@ def wrap_recentered_on_joint(xml: str, *, joint_name: str, wrapper: str = "arm_r
         for c in p:
             if c.tag == "body":
                 parent_by_id[id(c)] = p
-    accum = np.zeros(3)
+    chain = []
     node: ET.Element | None = owner
-    seen: set[int] = set()
-    while node is not None and id(node) not in seen:
-        seen.add(id(node))
-        pos = node.get("pos")
-        if pos:
-            accum = accum + np.array([float(x) for x in pos.split()[:3]], dtype=np.float64)
+    while node is not None:
+        chain.append(node)
         node = parent_by_id.get(id(node))
-    px, py, pz = float(-accum[0]), float(-accum[1]), float(-accum[2])
+    transform = np.eye(4)
+    for node in reversed(chain):
+        w, x, y, z = [float(v) for v in node.get("quat", "1 0 0 0").split()]
+        rotation = np.array([[1-2*(y*y+z*z), 2*(x*y-z*w), 2*(x*z+y*w)],
+                             [2*(x*y+z*w), 1-2*(x*x+z*z), 2*(y*z-x*w)],
+                             [2*(x*z-y*w), 2*(y*z+x*w), 1-2*(x*x+y*y)]])
+        local = np.eye(4)
+        local[:3, :3] = rotation
+        local[:3, 3] = [float(v) for v in node.get("pos", "0 0 0").split()]
+        transform = transform @ local
+    pivot = next(c for c in owner if c.tag == "joint" and c.get("name") == joint_name)
+    local_pivot = np.array([float(v) for v in pivot.get("pos", "0 0 0").split()])
+    px, py, pz = -(transform[:3, 3] + transform[:3, :3] @ local_pivot)
     inner = "\n".join(f"  {line}" if line else line for line in text.splitlines())
     return f'<body name="{wrapper}" pos="{px:.8g} {py:.8g} {pz:.8g}" quat="1 0 0 0">\n{inner}\n</body>'
 
@@ -299,7 +308,7 @@ def main() -> None:
     ap.add_argument(
         "--recenter-joint",
         type=str,
-        help="Wrap the fragment so this joint's parent body sits at the origin (e.g. shoulder_pan).",
+        help="Wrap the fragment so this joint's pivot sits at the origin (e.g. shoulder_pan).",
     )
     ap.add_argument("--wrap-body", type=str, default="arm_root", help="Wrapper body name for --recenter-joint.")
     ap.add_argument("--out", type=Path, required=True, help="Output XML fragment path.")

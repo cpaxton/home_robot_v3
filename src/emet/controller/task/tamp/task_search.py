@@ -373,9 +373,9 @@ def execute_task_plan(
     def _status(action: str, *, detail: str = "") -> None:
         if video_recorder is None:
             return
-        goal = f"{plan.object_body}"
-        if plan.receptacle_body:
-            goal = f"{plan.object_body} → {plan.receptacle_body}"
+        object_label = next((s.args["object_query"] for s in plan.steps if "object_query" in s.args), "object")
+        receptacle_label = next((s.args["receptacle_query"] for s in plan.steps if "receptacle_query" in s.args), "receptacle")
+        goal = f"{object_label} -> {receptacle_label}"
         video_recorder.set_status(action, goal=goal, detail=detail)
 
     operation_id = None
