@@ -924,10 +924,14 @@ Offline units + scripted table smokes exist; these are the remaining **real / in
 - [x] Remove MuJoCo/EGL import from A* grid helpers; before/after one-frame probe
       reproduces exit 134 then successful Habitat rendering. Repair included in #182.
 - [x] Publish Stretch body-up/XYZ and named actuator controls from the physics
-      process through IPC/ZMQ; stationary live telemetry is now present.
+      process through IPC/ZMQ; merged via #190 (`7f65dbef`). Four focused tests
+      pass; controls use raw simulator units, not normalized joint targets.
+- [x] Reconcile main through #181 → #182 → #184 → #185 after #190; telemetry is
+      owned by main, not duplicated in #185's parent diff. 165 focused tests pass.
 - [ ] Complete repaired-head route acceptance and EQA pairing before promotion;
       a startup fix is not an accuracy result. See `docs/TESTING.md` for job IDs.
-- [ ] Accept #180 → #181 → #182 → #184 on their actual extracted revisions;
+- [x] Land #176 conversation preservation and #180 current-view grounding.
+- [ ] Accept #181 → #182 → #184 → #185 on their actual extracted revisions;
       see `docs/TESTING.md` and `docs/plans/shared_stack_inventory.json`.
       Offline checks are not live acceptance. Keep providers opt-in.
 - [ ] Complete serial paired main/candidate EQA and small OVMM; restore at least

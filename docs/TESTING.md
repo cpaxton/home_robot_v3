@@ -6,6 +6,20 @@ Central map of **how to run tests**, **what each suite validates**, and **where 
 
 ### Extracted shared-agent stack (October 2026)
 
+#### Current review status (2026-10-11)
+
+#176, #180 and [#190](https://github.com/cpaxton/home_robot_v3/pull/190) are
+merged. #190 landed at `7f65dbef`: two new telemetry tests and two existing
+command-snapshot regressions pass. Named actuator values are raw MuJoCo controls,
+not normalized joint targets; virtual base goals are not control entries.
+
+Main has been merged through #181 → #182 → #184 → #185 without rewriting history.
+#185 no longer has telemetry changes relative to its parent. The reconciled tip
+passes **165 focused tests** covering grounding, navigation, inspection recovery,
+wheel contacts, telemetry and the acceptance driver. This is offline verification,
+not EQA/OVMM acceptance. Providers remain opt-in; all four remaining PRs stay draft
+pending their live gates. Older dated notes below describe historical revisions.
+
 #### PR #169 residual audit (2026-10-11)
 
 See the [closure and ownership audit](plans/pr169_closeout.md). The wheel-contact
@@ -42,9 +56,9 @@ and workspace requirements are handed to #179 without reviving obsolete code.
   paired EQA runs both scored 6/12 with identical correctness. A one-frame EGL pass
   is not an EQA accuracy gate; a repaired paired rerun is still required.
 
-Review order: #180 current-view grounding → #181 opt-in providers → #182 measured
-navigation → #184 bounded inspection/recovery → acceptance tooling. #176 remains
-an independent conversation-state fix. Do not merge the legacy #167/#168 containers
+Remaining review order: #181 opt-in providers → #182 measured navigation →
+#184 bounded inspection/recovery → #185 acceptance tooling. #176 and #180 are
+already merged. Do not merge the legacy #167/#168 containers
 wholesale. The [frozen source inventory](plans/shared_stack_inventory.json) records
 every changed source file and commit, including partial extractions and explicitly
 deferred work. Blob equality is accounting, not semantic or performance acceptance.
