@@ -295,6 +295,13 @@
     <position name="right_gripper2" joint="right_gripper_finger_joint2" class="gripper"/>
   </actuator>
 
+  <!-- Oracle stationary-base support. Inactive for navigation and passive/physical
+       support; enabled by the server instead of resetting a floating base each tick. -->
+  <equality>
+    <weld name="emet_stationary_base" body1="world" body2="base_link" active="false"
+          solref="0.004 1" solimp="0.99 0.99 0.001"/>
+  </equality>
+
   <keyframe>
     <!-- Home: torso upright, arms at sides, grippers open -->
     <key name="home" ctrl="0 0 0 0 0 0  0 0 0 0  0 0.5 -0.5 0 0 0  0.04 0.04  0 0.5 -0.5 0 0 0  0.04 0.04"/>

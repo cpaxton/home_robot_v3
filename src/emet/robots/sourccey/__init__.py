@@ -13,12 +13,10 @@
 # This source code is licensed under the license found in the LICENSE file in the root directory
 # of this source tree.
 
-"""Sourccey mobile manipulator (Vulcan Robotics) — vendored MJCF + URDF + ZMQ client.
+"""Sourccey Mk.V: official full assembly adapted to Emet planar simulation.
 
-Assets derived from the updated official hardware repo
-https://github.com/vulcan-forge/sourccey-hardware (``URDF/ArmLeft/ArmLeft.urdf`` arm
-kinematics + meshes; converted to ``sourccey.xml`` by ``scripts/robot_assets/``).
-See ``src/emet/assets/robot/sourccey/NOTICE.md`` and ``docs/robots/sourccey.md``.
+See assets/robot/sourccey/upstream/manifest.json for pinned source revisions.
+The ZMQ client speaks Emet's simulation protocol, not the vendor hardware protocol.
 """
 
 from __future__ import annotations
@@ -46,9 +44,9 @@ def _sourccey_mjcf_path() -> str:
 
 
 def _sourccey_urdf_path() -> str | None:
-    """Vendored official left-arm URDF (canonical; the right arm is its code-side mirror)."""
+    """Unmodified official full-robot Mk.V URDF."""
     mjcf = Path(_sourccey_mjcf_path())
-    urdf = mjcf.parent / "urdf" / "ArmLeft" / "ArmLeft.urdf"
+    urdf = mjcf.parent / "upstream/models/source/SourcceyURDF/SourcceyMkV.urdf"
     return str(urdf.resolve()) if urdf.is_file() else None
 
 
@@ -91,13 +89,13 @@ SOURCCEY_ACTUATOR_NAMES = [
     "right_gripper_act",
 ]
 
-SOURCCEY_CAMERA_NAMES = ["front_left", "front_right", "wrist_left", "wrist_right"]
+SOURCCEY_CAMERA_NAMES = ["front_left", "front_right", "bottom", "wrist_left", "wrist_right"]
 
 # Gripper joint -> actuator name (single revolute gear per side).
 SOURCCEY_GRIPPER_JOINTS = {"left": "left_gripper", "right": "right_gripper"}
 SOURCCEY_GRIPPER_ACTUATORS = {"left": "left_gripper_act", "right": "right_gripper_act"}
 
-# Home keyframe used by robosuite_load_utils / spawns (arms tucked).
+# Raised-arm home used by robosuite_load_utils / spawns.
 SOURCCEY_HOME_KEYFRAME = "sourccey_home"
 
 # Per-arm IK chain (shoulder_pan … wrist_roll). The gripper is a separate actuator
@@ -114,19 +112,21 @@ _ARM_IK_SUFFIXES = (
 def _sourccey_arm_chain(side: str) -> ArmChain:
     joints = tuple(f"{side}_{s}" for s in _ARM_IK_SUFFIXES)
     acts = tuple(f"{side}_{s}_act" for s in (*_ARM_IK_SUFFIXES, "gripper"))
+    suffix = "1" if side == "left" else "2"
+    home = (-0.785, 2.01, -1.570796, 0.691, 0.0) if side == "left" else (-0.801, -2.01, -1.570796, -0.723, 0.0)
     return ArmChain(
         joint_names=joints,
-        ee_body=f"{side}_Gripper-Finger",
+        # Wrist-roll origin is independent of finger opening, as in upstream IK.
+        ee_body=f"Gripper_Base_v1_{suffix}",
         actuator_names=acts,
-        link_bodies=(
-            f"{side}_Arm-Base-Shoulder",
-            f"{side}_Arm-Bicep",
-            f"{side}_Arm-Forearm",
-            f"{side}_Arm-Wrist",
-            f"{side}_Gripper-Base",
-            f"{side}_Gripper-Finger",
+        link_bodies=tuple(
+            f"{name}_v1_{suffix}"
+            for name in ("Shoulder", "Bicep_Left", "Forearm", "Wrist", "Gripper_Base", "Gripper_Finger")
         ),
-        gripper_bodies=(f"{side}_Gripper-Finger",),
+        gripper_bodies=(f"Gripper_Finger_v1_{suffix}",),
+        home_arm_q=home,
+        gripper_open=1.0471975511965976,
+        gripper_closed=-0.08726646259971647,
     )
 
 
@@ -135,9 +135,9 @@ class SourcceyBackend(RobotBackend):
 
     Sim runs through :class:`~emet.simulation.robosuite_server.RobosuiteZmqServer` on the
     vendored MJCF; kinematic pick/place (``capabilities.kinematic_manip``) is advertised.
-    Real-hardware ZMQ support is a stub for now; ``create_client`` returns a
-    ``GenericZmqClient`` so joint/gripper/head plumbing has a target once a real
-    bridge exists.
+    ``create_client`` returns an Emet ``GenericZmqClient`` for simulation. The
+    vendor hardware host uses a different protocol and uncalibrated native units;
+    it requires a separate, calibrated adapter before autonomous Emet use.
     """
 
     def get_spec(self) -> RobotSpec:
@@ -150,19 +150,19 @@ class SourcceyBackend(RobotBackend):
             mjcf_path=_sourccey_mjcf_path(),
             actuator_names=list(SOURCCEY_ACTUATOR_NAMES),
             base_link_name="base_root",
-            footprint=Footprint(width=0.42, length=0.42, width_offset=0.0, length_offset=0.0),
+            footprint=Footprint(width=0.50, length=0.50, width_offset=0.0, length_offset=0.0),
             planar_base_joint_names=("base_x", "base_y", "base_yaw"),
             arm_chain=_sourccey_arm_chain("left"),
             arm_chains={"left": _sourccey_arm_chain("left"), "right": _sourccey_arm_chain("right")},
             advertise_kinematic_manip=True,
-            tamp_approach="side",
+            tamp_approach="front",
             # arm meshes are visual-only in the MJCF; inflate clip erosion + require EE XY inside floor.
             planar_spawn_xy_extra_margin_m=0.25,
             planar_spawn_clip_guard_body_names=(
-                "left_Gripper-Base",
-                "right_Gripper-Base",
-                "left_Arm-Wrist",
-                "right_Arm-Wrist",
+                "Gripper_Base_v1_1",
+                "Gripper_Base_v1_2",
+                "Wrist_v1_1",
+                "Wrist_v1_2",
             ),
             planar_spawn_clip_guard_pad_m=0.25,
             planar_spawn_robocasa_first_clearance_m=0.068,
@@ -177,9 +177,9 @@ class SourcceyBackend(RobotBackend):
         return GenericZmqClient(robot_spec=self.get_spec(), robot_ip=robot_ip, **kwargs)
 
     def get_emote_backend(self) -> EmoteBackend:
-        from emet.controller.emotes.backend import GenericEmoteBackend
+        from emet.robots.sourccey.emote_backend import SourcceyEmoteBackend
 
-        return GenericEmoteBackend(self.get_spec().name)
+        return SourcceyEmoteBackend()
 
     def create_model(self, **kwargs):
         from emet.robots.spec_robot_model import SpecRobotModel

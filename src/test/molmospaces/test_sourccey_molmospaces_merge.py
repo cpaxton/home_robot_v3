@@ -51,7 +51,7 @@ _SKIP = _skip_reason()
 @pytest.mark.timeout(300)
 def test_sourccey_molmospaces_merge_loads():
     """Merge an iTHOR scene with the vendored Sourccey MJCF; the result must load in MuJoCo
-    with the robot's planar-base + arm joints and all 4 cameras present."""
+    with the robot's planar-base + arm joints and all 5 cameras present."""
     import mujoco
     import numpy as np
 
@@ -111,7 +111,7 @@ def test_sourccey_molmospaces_merge_loads():
         for j in ("base_x", "base_y", "base_yaw", "lift", "left_shoulder_pan", "right_elbow_flex", "left_gripper"):
             assert mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, j) >= 0, f"missing joint {j} in merged scene"
         cams = [mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_CAMERA, i) for i in range(m.ncam)]
-        for c in ("front_left", "front_right", "wrist_left", "wrist_right"):
+        for c in ("front_left", "front_right", "bottom", "wrist_left", "wrist_right"):
             assert c in cams, f"missing camera {c} in merged scene"
     finally:
         if out.exists():

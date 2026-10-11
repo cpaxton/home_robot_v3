@@ -1,5 +1,11 @@
 # TAMP GT+MCTS test battery
 
+For corrected experiments, use the [scene-validated registry workflow](tamp_validated_registry.md).
+The historical registry and legacy `--generate` output below do not establish
+solvability. New scored tasks require an executed reference witness and exact
+fixture replay; construction failures are reported separately.
+
+
 Deterministic smoke battery for the TAMP clutter stack — **ground-truth positions + the
 MCTS planner only, no AI models** (no VLM / LLM / detection). Runs on MolmoSpaces iTHOR
 across a (robot × scene) matrix.

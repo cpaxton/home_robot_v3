@@ -174,11 +174,11 @@ run_item() { # name phase timeout_sec cmd...
 write_meta
 log "gate start profile=$PROFILE items='$ITEMS' total=$TOTAL out=$OUT"
 
-CHAT_TOOL_CALLS='[{"name":"scene_tasks","arguments":{"object_filter":"bowl"}},{"name":"plan_pick_place","arguments":{"task_ref":"task:1"}},{"name":"execute_pick_place_plan","arguments":{"plan_ref":"plan:1"}}]'
+CHAT_TOOL_CALLS='[{"name":"scene_tasks","arguments":{"object_filter":"bowl"}},{"name":"plan_pick_place","arguments":{"task_ref":"$task_ref"}},{"name":"execute_pick_place_plan","arguments":{"plan_ref":"$plan_ref"}}]'
 # This is the routine agent test: its calls go through get_tools(), opaque
 # task/plan handles, guarded TAMP execution, and the real rby1 IK path.
-KINEMATIC_TOOL_CALLS='[{"name":"scene_tasks","arguments":{"object_filter":"bowl","robot":"rby1"}},{"name":"plan_pick_place","arguments":{"task_ref":"task:1"}},{"name":"execute_pick_place_plan","arguments":{"plan_ref":"plan:1"}}]'
-STRETCH_TOOL_CALLS='[{"name":"plan_pick_place","arguments":{"object_name":"red cylinder","receptacle_name":"blue cube"}},{"name":"execute_pick_place_plan","arguments":{"plan_ref":"plan:1"}}]'
+KINEMATIC_TOOL_CALLS='[{"name":"scene_tasks","arguments":{"object_filter":"bowl","robot":"rby1"}},{"name":"plan_pick_place","arguments":{"task_ref":"$task_ref"}},{"name":"execute_pick_place_plan","arguments":{"plan_ref":"$plan_ref"}}]'
+STRETCH_TOOL_CALLS='[{"name":"plan_pick_place","arguments":{"object_name":"red cylinder","receptacle_name":"blue cube"}},{"name":"execute_pick_place_plan","arguments":{"plan_ref":"$plan_ref"}}]'
 
 export EMET_ALLOW_SDPA_ATTN=1
 export EMET_SIM_NAV_TELEPORT=1

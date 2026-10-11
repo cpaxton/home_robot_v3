@@ -103,6 +103,32 @@ def test_plan_pick_place_mcts_finds_reachable_task():
     assert names == ["approach", "grasp", "place"]
 
 
+def test_mcts_requires_supplied_navigation_witness():
+    robot = _FakeRobot(
+        {
+            "bowl_gt": _placement(np.array([0.0, 0.0, 1.0]), "Bowl"),
+            "counter_gt": _placement(np.array([1.0, 0.0, 1.0]), "Counter"),
+        }
+    )
+    blocked = {**_cand("bowl", "counter"), "approach_pose": [-0.8, 0.0, 0.0]}
+    clear = {**_cand("bowl", "counter"), "approach_pose": [0.0, -0.8, 1.57]}
+    seen = []
+
+    def validate(pose):
+        seen.append(pose.copy())
+        return bool(pose[1] < -0.5)
+
+    result = plan_pick_place_mcts(
+        robot, candidates=[blocked, clear], approach_validator=validate, mcts_iterations=40, seed=1
+    )
+    assert result.success
+    assert result.steps[0].args["xyt"] == clear["approach_pose"]
+    assert len(seen) == 2
+    result = plan_pick_place_mcts(robot, candidates=[blocked], approach_validator=validate, mcts_iterations=40, seed=1)
+    assert not result.success
+    assert "approach_route_invalid" in result.message
+
+
 def test_mcts_uses_per_object_grasps():
     """Each candidate must ground with its own grasp list, not a mixed flat list."""
     placements = {

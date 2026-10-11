@@ -33,6 +33,8 @@ class ArmManipProfile:
     arm: str = "left"
     home_arm_q: tuple[float, ...] = field(default_factory=tuple)
     gripper_bodies: tuple[str, ...] = field(default_factory=tuple)
+    gripper_open: float = 0.05
+    gripper_closed: float = 0.0
 
     def gripper_contact_bodies(self) -> tuple[str, ...]:
         """Bodies used to test object contact: the fingers/jaws when annotated,
@@ -206,6 +208,8 @@ def _profile_from_arm_chain(spec, chain, *, arm: str) -> ArmManipProfile | None:
         arm=arm,
         home_arm_q=tuple(home_arm_q),
         gripper_bodies=tuple(gripper_bodies),
+        gripper_open=chain.gripper_open,
+        gripper_closed=chain.gripper_closed,
     )
 
 

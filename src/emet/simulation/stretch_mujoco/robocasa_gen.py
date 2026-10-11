@@ -467,21 +467,20 @@ def add_sourccey_to_kitchen(xml: str, robot_pose_attrib: dict) -> str:
             "Sourccey MJCF not found (emet package data). Cannot build Robocasa scene for sourccey."
         )
     root_dir = mjcf.parent.resolve()
-    meshes_abs = (root_dir / "meshes").resolve()
+    # Resolve the compiler mesh directory before moving the include to /tmp.
+    # Mk.V keeps the official source tree rather than flattening mesh filenames.
+    import xml.etree.ElementTree as ET
+
+    root = ET.parse(mjcf).getroot()
+    compiler = root.find("compiler")
+    meshes_abs = (root_dir / compiler.get("meshdir", ".")).resolve()
     if not meshes_abs.is_dir():
         raise FileNotFoundError(f"Sourccey meshes directory missing: {meshes_abs}")
-
-    text = mjcf.read_text(encoding="utf-8")
-    text = text.replace('meshdir="./meshes/"', f'meshdir="{meshes_abs.as_posix()}"')
-    text = text.replace('meshdir="meshes"', f'meshdir="{meshes_abs.as_posix()}"')
-
-    def _abs_mesh_file_attr(m: re.Match) -> str:
-        fname = m.group(1)
-        if fname.startswith("/") or "/" in fname:
-            return m.group(0)
-        return f'file="{(meshes_abs / fname).resolve().as_posix()}"'
-
-    text = re.sub(r'file="([^"]+\.(?:STL|stl|obj))"', _abs_mesh_file_attr, text)
+    compiler.set("meshdir", meshes_abs.as_posix())
+    for mesh in root.findall("asset/mesh"):
+        if mesh.get("file"):
+            mesh.set("file", (meshes_abs / mesh.get("file")).resolve().as_posix())
+    text = ET.tostring(root, encoding="unicode")
     if robot_pose_attrib is not None:
         pos = robot_pose_attrib["pos"]
         quat = robot_pose_attrib["quat"]
