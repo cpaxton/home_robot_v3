@@ -8,6 +8,7 @@
 # license information maybe found below, if so.
 
 from abc import ABC, abstractmethod
+from contextlib import contextmanager
 from typing import Any
 
 from PIL import Image
@@ -105,6 +106,21 @@ class AbstractLLMClient(ABC):
     def get_history(self) -> list[Any]:
         """Get the conversation history."""
         return self.conversation_history.copy()
+
+    @contextmanager
+    def preserve_conversation(self):
+        """Isolate synchronous tool inference that reuses this loaded model.
+
+        Perception may reset the shared client's history for its own prompt.
+        Restore the agent dialogue even if that inference raises. This is not
+        a concurrency guard: model calls must still be serialized.
+        """
+        history, iterations = self.get_history(), self._iterations
+        try:
+            yield
+        finally:
+            self.conversation_history = history
+            self._iterations = iterations
 
     def get_history_as_str(self) -> str:
         """Return the conversation history as a string."""

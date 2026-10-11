@@ -248,7 +248,9 @@ class SparseVoxelMapNavigationSpace(XYT):
         explored: torch.Tensor | None = None,
     ) -> bool:
         """Check to see if state is valid; i.e. if there's any collisions if mask is at right place"""
-        self.last_validity = {"reason": "outside_map"}
+        self.last_validity = {"reason": "invalid_navigation_pose"}
+        if len(state) != 3 or not np.isfinite(np.asarray(state)).all():
+            return False
         assert len(state) == 3
         if isinstance(state, np.ndarray):
             state = torch.from_numpy(state).float()
@@ -286,6 +288,7 @@ class SparseVoxelMapNavigationSpace(XYT):
         crop_obs = obstacles[x0:x1, y0:y1]
         crop_exp = explored[x0:x1, y0:y1]
         if x0 < 0 or y0 < 0 or mask.shape != crop_obs.shape or mask.shape != crop_exp.shape:
+            self.last_validity = {"reason": "footprint_out_of_map"}
             return False
 
         collision = torch.any(crop_obs & mask)
@@ -297,8 +300,8 @@ class SparseVoxelMapNavigationSpace(XYT):
 
         valid = bool((not collision) and is_safe)
         self.last_validity = {
-            "reason": "obstacle" if collision else "unobserved_footprint" if not is_safe else "valid",
-            "explored_fraction": p_is_safe,
+            "reason": "occupied_footprint" if collision else ("unobserved_footprint" if not is_safe else "ok"),
+            "coverage": float(torch.sum(crop_exp & mask) / torch.sum(mask)),
         }
         if not valid:
             missing = (mask & ~crop_exp).nonzero()
@@ -306,7 +309,6 @@ class SparseVoxelMapNavigationSpace(XYT):
                 checked_pose=state.tolist(),
                 footprint_cells=int(mask.sum()),
                 unknown_footprint_cells=len(missing),
-                # Bounded, world-axis offsets from this footprint's grid center.
                 unknown_cell_offsets_m=((missing[:16] - half_dim) * self.voxel_map.grid_resolution).tolist(),
             )
         if debug:

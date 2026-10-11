@@ -139,6 +139,10 @@ def create_obstacle_map(self, parameters):
         rotation_step_size=parameters.get("motion_planner/rotation_step_size", 0.2),
         dilate_frontier_size=parameters.get("motion_planner/frontier/dilate_frontier_size", 2),
         dilate_obstacle_size=parameters.get("motion_planner/frontier/dilate_obstacle_size", 0),
+        obstacle_map_mode=parameters.get("motion_planner/obstacle_map_mode", "legacy_padded"),
+        footprint=self.robot.get_robot_model().get_footprint()
+        if parameters.get("motion_planner/obstacle_map_mode", "legacy_padded") == "physical"
+        else None,
     )
     print("Dynamem create_obstacle_map: NavigationSpace ready", flush=True)
     _min_c = parameters.get("motion_planner/min_clearance_m", None)
