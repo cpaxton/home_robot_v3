@@ -174,8 +174,10 @@ never treated as proof that the scene requires rearrangement.
 
 This is a Python API used by the existing TAMP tools, not an additional CHAT
 tool. The [agent API](tamp.md) describes the public JSON interface. The
-[integration review](../plans/2026-10-09_tamp_merge_and_metrics.md) tracks current
-acceptance blockers; the latest full simulator gate failed.
+[integration review](../plans/2026-10-09_tamp_merge_and_metrics.md) tracks acceptance
+blockers. The [experiment log](../experiments/placement_planning_20261009.md)
+records the October 11 successful assisted CHAT smoke and its limits; native
+contact and repeatability acceptance remain separate gates.
 
 ## Exact private search replay
 

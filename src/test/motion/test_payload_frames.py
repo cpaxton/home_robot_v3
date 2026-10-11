@@ -118,3 +118,20 @@ def test_mesh_payload_bounds_use_vertices_not_inflated_principal_axis_box():
     vertices = np.array(geometry['vertices_ee'])
     np.testing.assert_allclose(vertices.min(axis=0), [1, 2, 3], atol=1e-7)
     np.testing.assert_allclose(vertices.max(axis=0), [1.2, 2.1, 3.3], atol=1e-7)
+
+
+def test_missing_payload_geometry_does_not_stop_receipt_publication():
+    from emet.simulation.robosuite_server import RobosuiteZmqServer
+
+    model, data = scene()
+    server = object.__new__(RobosuiteZmqServer)
+    server._mjmodel, server._mjdata, server._mj_lock = model, data, threading.RLock()
+    server._emet_session = {}
+    server._kinematic_attachments = {'missing': {'ee_body': 'tool'}, 'load': {'ee_body': 'tool'}}
+    message = {'command_receipts': [{'sequence': 7, 'status': 'completed'}]}
+    assert server._attach_emet_session(message) is message
+    assert message['command_receipts'][0]['status'] == 'completed'
+    assert set(server._emet_session['sim_held_object_geometry']) == {'load'}
+    server._kinematic_attachments.clear()
+    server._attach_emet_session({})
+    assert server._emet_session['sim_held_object_geometry'] == {}

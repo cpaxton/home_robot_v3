@@ -1137,11 +1137,16 @@ class RobosuiteZmqServer(BaseZmqServer):
                 self._placement_geometry_dirty = set()
                 # Measure object and EE together. Mixing observation AABBs with
                 # newer joint states invents apparent attachment slip.
-                self._emet_session["sim_held_object_geometry"] = {
-                    body: measured_held_object_geometry(
-                        self._mjmodel, self._mjdata, body, info["ee_body"])
-                    for body, info in getattr(self, "_kinematic_attachments", {}).items()
-                }
+                held_geometry = {}
+                for body, info in getattr(self, "_kinematic_attachments", {}).items():
+                    try:
+                        held_geometry[body] = measured_held_object_geometry(
+                            self._mjmodel, self._mjdata, body, info["ee_body"])
+                    except ValueError as exc:
+                        # Missing volume must reject placement, not stop telemetry
+                        # and command receipts for the whole simulator.
+                        logger.warning(f"Held geometry unavailable for {body!r}: {exc}")
+                self._emet_session["sim_held_object_geometry"] = held_geometry
             message[EMET_ZMQ_SESSION_KEY] = self._emet_session
         return message
 

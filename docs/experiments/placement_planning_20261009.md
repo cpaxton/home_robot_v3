@@ -288,3 +288,58 @@ payload geometry and replay snapshots). The 54 command/runtime, navigation retry
 ZMQ protocol/parity and Stretch snapshot tests pass; Ruff is clean. These results
 validate the dispatch-lock regression and this live timeout check, not a causal
 claim that every earlier timeout had the same source, nor full placement success.
+
+## October 11 rigid attachment and coherent payload geometry
+
+The acknowledgement fix exposed `placement_attachment_changed` after pre-place.
+Two defects were present: assisted attachment maintained only EE-relative position
+(the free object could rotate), and refresh transformed asynchronous world AABB
+corners into a newer EE frame. AABB corners are not corresponding material points
+when the object rotates.
+
+The server now preserves the full measured relative pose, including when the
+semantic object is a welded child of a free root. Privileged payload metadata
+measures a stable root-local volume and EE together under the simulator lock.
+It covers the entire free-root assembly using actual mesh vertices and
+conservative primitive bounds. Observed providers are unchanged; no privileged
+fallback or synthetic hardware sensor was added. The 1 cm attachment guard,
+35 mm arrival threshold, 0.1 rad orientation limit and command deadlines remain.
+
+The first run, `20261011_132632_ece95e` at `a169d8d7`, rejected all support
+candidates: using each mesh's rotated local AABB inflated the bowl footprint to
+about 27 cm. The corrected implementation bounds actual mesh vertices in the
+stable root frame; a tetrahedral-mesh regression detects this inflation.
+
+Full public CHAT rerun **passed**: `20261011_133133_a84009`, source `10076be1`.
+Artifacts: `~/runs/emet/tamp-attachment-tight-20261011/` (`job.log`, two private
+search snapshots). Configuration remains `molmospaces_ithor_train_0`, RBY1,
+bowl → dishwasher, `scene_tasks` → assisted open → plan → execute, with GT
+geometry, object latch/placement assistance and base teleport. EGL rendered on
+the GPU; `--cpu-only` disables neural models, not rendering.
+
+- Initial search returned two paths; measured-pose search returned three.
+- Pre-place executed 505 waypoints; place executed 11; retract also completed.
+- EE position errors: pre-place 0.033263 m, place 0.032666 m, retract 0.032779 m.
+  Orientation errors: pre-place 0.098691 rad, place 0.011669 rad. These pass the
+  existing limits; the pre-place orientation is close to its limit.
+- Corresponding payload vertices changed by less than 9e-16 m across transport
+  and pre-place refresh. A deliberate 3 cm slip still fails the unit regression.
+- Public execution returned `status: ok`, all operations completed, detach
+  returned, and `placement_verified: true`.
+- The existing final-scene smoke check passed: measured object displacement
+  2.3536 m and distance to selected receptacle center 0.1545 m (<0.25 m).
+  This is a proximity check, not a sustained support/contact audit.
+- 575 successful acknowledgements; maximum latency 1.210183 s; no execution
+  timeouts. Cleanup then rejected `cancel_navigation` with “cancellation target
+  has no confirmed stop”. That separate shutdown/control-handoff issue remains;
+  it occurred after the successful task and final-scene check.
+
+Final targeted suite: 117 tests across payload frames, contact tracking,
+placement, simulator geometry publication and the TAMP API; Ruff passes. A final
+error-path regression ensures missing payload volume is omitted (placement then
+fails closed) rather than interrupting simulator telemetry/command receipts.
+That error-path hardening follows the GPU-tested source above.
+
+This is one successful assisted control, not a repeatability rate, learned-agent
+result, native-contact acceptance, or real-robot readiness. Repeat the admitted
+task/robot matrix and strengthen settled support evidence before broader claims.
