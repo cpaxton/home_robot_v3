@@ -1121,7 +1121,10 @@ class RobosuiteZmqServer(BaseZmqServer):
 
     def _attach_emet_session(self, message: dict[str, Any]) -> dict[str, Any]:
         if self._emet_session is not None:
-            from emet.simulation.sim_object_placements import refresh_moved_body_placements
+            from emet.simulation.sim_object_placements import (
+                measured_held_object_geometry,
+                refresh_moved_body_placements,
+            )
 
             with self._mj_lock:
                 if (self._emet_session.get("capabilities") or {}).get("sim_articulation_state"):
@@ -1132,6 +1135,13 @@ class RobosuiteZmqServer(BaseZmqServer):
                     for body in dirty:
                         refresh_moved_body_placements(placements, self._mjmodel, self._mjdata, body)
                 self._placement_geometry_dirty = set()
+                # Measure object and EE together. Mixing observation AABBs with
+                # newer joint states invents apparent attachment slip.
+                self._emet_session["sim_held_object_geometry"] = {
+                    body: measured_held_object_geometry(
+                        self._mjmodel, self._mjdata, body, info["ee_body"])
+                    for body, info in getattr(self, "_kinematic_attachments", {}).items()
+                }
             message[EMET_ZMQ_SESSION_KEY] = self._emet_session
         return message
 
@@ -1166,7 +1176,11 @@ class RobosuiteZmqServer(BaseZmqServer):
             R = np.asarray(self._mjdata.body(ee_id).xmat, dtype=np.float64).reshape(3, 3)
             ee_pos = np.asarray(self._mjdata.body(ee_id).xpos, dtype=np.float64).reshape(3)
             world = ee_pos + R @ offset
-            if set_free_body_pose(self._mjmodel, self._mjdata, body, world, update_dynamics=False):
+            quat = None
+            if "rotation_local" in info:
+                quat = np.empty(4)
+                mujoco.mju_mat2Quat(quat, (R @ info["rotation_local"]).ravel())
+            if set_free_body_pose(self._mjmodel, self._mjdata, body, world, quat, update_dynamics=False):
                 self._patch_emet_session_body_pos(body, world.tolist())
 
     def get_scene_summary(self) -> str:
@@ -2412,6 +2426,7 @@ class RobosuiteZmqServer(BaseZmqServer):
                             self._kinematic_attachments[body] = {
                                 "ee_body": ee,
                                 "offset_local": offset_local,
+                                "rotation_local": R.T @ self._mjdata.body(body_id).xmat.reshape(3, 3),
                             }
                             world = ee_pos + R @ offset_local
                             if not set_free_body_pose(self._mjmodel, self._mjdata, body, world):

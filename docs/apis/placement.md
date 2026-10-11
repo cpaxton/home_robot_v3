@@ -211,3 +211,19 @@ Measured EE arrival uses the existing simulator time-ratio multiplier, capped at
 seconds. The 35 mm acceptance threshold is unchanged; blocked motion still fails.
 `timeout_wall_s` is logged with arrival evidence. Comparisons to older fixed-wall
 waits must report this timing-contract change rather than claim equal wall budgets.
+
+Ground-truth assisted placement requires `sim_held_object_geometry[body]` in
+simulator session metadata: `frame: "end_effector"`, `ee_body`, and finite
+`vertices_ee` (N×3). The server measures stable geometry-local bounding-box
+corners across the entire free-root assembly and the EE in the same locked
+state. These are privileged debug inputs, not simulated hardware sensors.
+Missing geometry or a mismatched EE fails closed; observed-voxel providers
+continue to supply their own coherent `HeldObject` without a GT fallback.
+
+Assisted attachments preserve the measured full relative pose, including
+rotation, for free roots and welded children. Refresh compares corresponding
+material-frame corners with the existing 1 cm tolerance. Rebuilding world AABB
+corners and combining them with a newer EE pose is not a valid slip measurement.
+The published vertices use actual measured transforms, not the saved attachment
+offset, so unexpected relative motion still invalidates a path. This remains
+simulator assistance and is not evidence of a native-contact grasp.

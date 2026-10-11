@@ -679,9 +679,15 @@ class KinematicPickPlaceExecutor:
         if not placements or body not in placements or receptacle not in placements:
             raise ValueError("placement_geometry_missing")
         scene = PlacementScene.from_placements(placements, held_object=body)
-        ee = self._data.body(self.ee_body)
-        payload = HeldObject.from_world_bounds(placements[body]["bounds"],
-                                              ee_position=ee.xpos, ee_rotation=ee.xmat)
+        # Simulator-only, coherent measured geometry. World AABB corners are
+        # not material points and cannot be used to compare attachment frames.
+        session = self.robot.get_emet_session() or {}
+        held = (session.get("sim_held_object_geometry") or {}).get(body)
+        if not isinstance(held, dict) or held.get("frame") != "end_effector":
+            raise ValueError("placement_payload_geometry_missing")
+        if held.get("ee_body") != self.ee_body:
+            raise ValueError("placement_payload_frame_mismatch")
+        payload = HeldObject(held.get("vertices_ee"))
         # A semantic appliance AABB is not a support surface. New simulators
         # publish grounded horizontal collision faces; explicit providers can
         # supply observed patches or interior shelf regions.

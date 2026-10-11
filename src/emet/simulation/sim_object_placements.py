@@ -647,3 +647,39 @@ def refresh_articulated_body_placements(placements, model, data, bodies):
         else:
             placements[name] = {"cat": entry.get("cat", name), "pos": data.xpos[bid].tolist(),
                                 "quat": data.xquat[bid].tolist()}
+
+
+def measured_held_object_geometry(model, data, body, ee_body):
+    """Privileged geometry measured in one locked simulator state, not a sensor.
+
+    Stable geom-local box corners cover the entire free-root assembly (including
+    welded mesh children). Transform them using actual object/EE poses, never
+    the commanded attachment offset. A rigid rotation preserves vertex identity;
+    real slip still changes the result. Caller holds the simulator state lock.
+    """
+    from itertools import product
+
+    from emet.simulation.sim_manipulation import freejoint_ancestor_body_id
+
+    bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, body)
+    eid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, ee_body)
+    if bid < 0 or eid < 0:
+        raise ValueError("Missing payload or end effector")
+    root = freejoint_ancestor_body_id(model, bid)
+    if root is None:
+        raise ValueError("Payload has no free root")
+    mujoco.mj_kinematics(model, data)
+    bodies = [b for b in range(model.nbody) if freejoint_ancestor_body_id(model, b) == root]
+    ids = _geom_ids_for_bodies(model, bodies, data=data)
+    if not ids:
+        raise ValueError("Missing payload geometry")
+    signs = np.array(list(product((-1, 1), repeat=3)))
+    vertices = []
+    ee = data.body(eid)
+    for gid in ids:
+        center, half = model.geom_aabb[gid, :3], model.geom_aabb[gid, 3:]
+        local = center + signs * half
+        world = local @ data.geom_xmat[gid].reshape(3, 3).T + data.geom_xpos[gid]
+        vertices.extend((world - ee.xpos) @ ee.xmat.reshape(3, 3))
+    return {"frame": "end_effector", "ee_body": ee_body,
+            "vertices_ee": np.asarray(vertices).tolist()}

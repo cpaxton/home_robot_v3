@@ -45,7 +45,7 @@ def set_free_body_pose(
 
     MolmoSpaces iTHOR objects use a freejoint root (``…_1_0_0``) with mesh children
     (``…_1_1_0``). GT placements often name the child; teleport the ancestor so the
-    requested body ends near ``pos``. Attachment updates immediately after a
+    requested body reaches ``pos`` and, when supplied, ``quat``. Attachment updates immediately after a
     physics step may use ``update_dynamics=False``: refresh transforms only and
     let the next integrator step rebuild dynamics/contacts.
     """
@@ -62,21 +62,22 @@ def set_free_body_pose(
     jnt_adr = int(model.body_jntadr[free_id])
     qpos_adr = int(model.jnt_qposadr[jnt_adr])
     target = np.asarray(pos, dtype=np.float64).reshape(3)
-    if free_id == body_id:
-        p = target
-    else:
-        # Preserve child offset from freejoint root in world frame (no rotation change).
-        offset = np.asarray(data.body(body_id).xpos, dtype=np.float64).reshape(3) - np.asarray(
-            data.body(free_id).xpos, dtype=np.float64
-        ).reshape(3)
-        p = target - offset
-    data.qpos[qpos_adr : qpos_adr + 3] = p
-    if quat is not None and free_id == body_id:
+    root = data.body(free_id)
+    child = data.body(body_id)
+    root_rotation = root.xmat.reshape(3, 3).copy()
+    offset_local = root_rotation.T @ (child.xpos - root.xpos)
+    if quat is not None:
         q = np.asarray(quat, dtype=np.float64).reshape(4)
-    else:
-        q = np.array(data.qpos[qpos_adr + 3 : qpos_adr + 7], dtype=np.float64)
-        if not np.isfinite(q).all() or abs(float(np.linalg.norm(q)) - 1.0) > 1e-3:
-            q = np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float64)
+        if not np.isfinite(q).all() or np.linalg.norm(q) < 1e-12:
+            return False
+        target_rotation = np.empty(9)
+        mujoco.mju_quat2Mat(target_rotation, q / np.linalg.norm(q))
+        # The requested orientation belongs to the named child, not its root.
+        child_in_root = root_rotation.T @ child.xmat.reshape(3, 3)
+        root_rotation = target_rotation.reshape(3, 3) @ child_in_root.T
+    q = np.empty(4)
+    mujoco.mju_mat2Quat(q, root_rotation.ravel())
+    data.qpos[qpos_adr : qpos_adr + 3] = target - root_rotation @ offset_local
     data.qpos[qpos_adr + 3 : qpos_adr + 7] = q
     # Free joints occupy seven qpos entries but only six velocity DOFs.
     dof_adr = int(model.jnt_dofadr[jnt_adr])
