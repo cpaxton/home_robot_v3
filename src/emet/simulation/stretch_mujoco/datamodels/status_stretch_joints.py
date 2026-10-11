@@ -56,6 +56,9 @@ class StatusStretchJoints:
     # Snapshot from the physics process, not the parent's stale MjData copy.
     base_xyz: list[float] | None = None
     base_up_dot_world_z: float | None = None
+    # Raw MuJoCo data.ctrl in actuator_names order, not normalized joint targets.
+    # In particular the gripper uses simulator units; virtual base translation/
+    # rotation goals are not ctrl entries (the base controller drives the wheels).
     actuator_targets: list[float] | None = None
     actuator_names: list[str] | None = None
 
