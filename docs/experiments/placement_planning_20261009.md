@@ -259,3 +259,32 @@ position error, 0.065 rad orientation error), then failed closed with
 `placement_attachment_changed`, before release. It is not a placement success.
 Clean live validation without the periodic watchdog is required before claiming
 that the original acknowledgement timeout is resolved.
+
+Clean baseline `20261011_111410_11a9ae` at `7a190fc0` completed without an
+acknowledgement timeout or crash, but rejected changed attachment geometry after
+base transport. Its GDB wrapper exit status is not the task score: the public
+execution envelope is partial, with release not attempted.
+
+Fixed-source validation `20261011_111933_a934cf` at `65fd0cef` completed 407
+acknowledged commands with **zero acknowledgement timeouts**, median 0.0511 s,
+maximum 1.3587 s, against the unchanged 5 s acknowledgement deadline. The full
+CHAT sequence was `scene_tasks → set_receptacle_state(open) → plan_pick_place →
+execute_pick_place_plan` in `molmospaces_ithor_train_0` with RBY1, a bowl and the
+dishwasher. This is explicitly assisted kinematic execution with GT geometry and
+teleport base navigation, not native-contact or learned-agent acceptance.
+
+The 360-waypoint pre-place segment reached measured position error 0.033735 m
+and orientation error 0.070452 rad, within the existing 0.035 m / 0.1 rad limits.
+The next refresh rejected `placement_attachment_changed`: corresponding EE-local
+payload corners differed by up to 0.028188 m; the center differed by about 0.026 m.
+The public result is partial / `placement_invalidated`, with release not attempted.
+The source currently derives this volume from asynchronous world AABBs, while the
+assisted latch preserves position but not relative orientation. Establish coherent
+rigid attachment/geometry evidence before changing that guard; do not increase its
+tolerance to make this trial pass.
+
+Artifacts: `~/runs/emet/tamp-timeout-fixed-20261011/` (job log, command timings,
+payload geometry and replay snapshots). The 54 command/runtime, navigation retry,
+ZMQ protocol/parity and Stretch snapshot tests pass; Ruff is clean. These results
+validate the dispatch-lock regression and this live timeout check, not a causal
+claim that every earlier timeout had the same source, nor full placement success.
