@@ -232,3 +232,30 @@ The same ongoing gate's scene00 admission has found three placement paths both
 before and after base transport. That is search evidence only; release, retreat
 and complete cleanup must finish before reporting task success. The gate remains
 not ready because CHAT failed regardless of later admission results.
+
+## October 11 acknowledgement-timeout diagnosis
+
+Command receipt publication held the dispatch lock while deep-copying up to 256
+receipts, including retained base-query contact results. The concurrency regression
+blocks that copy deliberately and verifies that a new command still dispatches,
+that concurrent updates do not mix receipt revisions, and that published results
+cannot mutate tracker state. It fails before the fix. Publication now captures
+receipt dictionaries under the tracker lock and copies their owned, replace-only
+results outside both locks. The command timeout, receipt capacity, identity,
+collision checks, and measured-arrival thresholds are unchanged. The 26 focused
+command protocol tests and Ruff pass.
+
+The initial October 11 crash diagnostics were contaminated by the diagnostic
+`faulthandler.dump_traceback_later` watchdog on this host's Python 3.10.12. A native
+core shows its `dump_frame` freeing code/frame memory concurrently with a servo
+thread. A Python-only receipt-copy reproducer passes roughly 172,000 iterations
+without the watchdog and segfaults immediately with frequent timed dumps. These
+crashes must not be attributed to MuJoCo, GPU, CPU affinity, or robot contact.
+Periodic dumps were removed; the retained native analysis is under
+`~/runs/emet/tamp-timeout-both-20261011/core-thread3.txt`.
+
+The allocator-instrumented diagnostic reached a measured pre-place pose (3.32 cm
+position error, 0.065 rad orientation error), then failed closed with
+`placement_attachment_changed`, before release. It is not a placement success.
+Clean live validation without the periodic watchdog is required before claiming
+that the original acknowledgement timeout is resolved.
