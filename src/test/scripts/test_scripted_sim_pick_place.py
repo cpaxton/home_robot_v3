@@ -117,3 +117,25 @@ def test_failed_planning_cannot_reuse_previous_successful_handle(monkeypatch):
     ]
     assert not script.run_scripted_tool_calls(object(), calls, manip_mode="kinematic")
     assert not execute.called
+
+
+def test_recording_preserves_failed_outcome_before_stopping(monkeypatch, tmp_path):
+    import json
+    from unittest.mock import Mock
+
+    script = _load_script_module()
+    failure = {"schema_version": 1, "status": "error", "code": "articulation_verification_timeout", "data": {}}
+    tool = Mock(return_value=json.dumps(failure))
+    monkeypatch.setattr(agent_tools, "get_tools", lambda _: [SimpleNamespace(name="set_receptacle_state", func=tool)])
+    monkeypatch.setattr(script.time, "sleep", lambda _: None)
+    recorder = Mock(out_path=tmp_path / "cycle.mp4")
+    recorder.dump_paper_stills.return_value = {"third_person": tmp_path / "frame.png"}
+    assert not script.run_scripted_tool_calls(
+        object(), [{"name": "set_receptacle_state", "arguments": {"state": "open", "task_ref": "task:1"}}],
+        manip_mode="kinematic", video_recorder=recorder,
+    )
+    recorded = json.loads((tmp_path / "cycle.json").read_text())
+    assert recorded["events"][0]["result"] == failure
+    assert recorded["events"][0]["requested_state"] == "open"
+    assert recorder.dump_paper_stills.call_count == 2
+    tool.assert_called_once_with(state="open", task_ref="task:1")
