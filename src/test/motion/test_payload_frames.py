@@ -69,7 +69,7 @@ def test_attached_geometry_survives_transport_and_detects_real_slip(body):
     assert not np.allclose(slipped, original, atol=.01, rtol=0)
     np.testing.assert_allclose(np.linalg.norm(slipped - original, axis=1), .03, atol=1e-10)
     # The root geometry is included even when the semantic name selects a child.
-    assert original.shape == (16, 3)
+    assert original.shape == (8, 3)
 
 
 def test_placement_uses_coherent_payload_and_rejects_measured_slip():
@@ -105,3 +105,16 @@ def test_placement_uses_coherent_payload_and_rejects_measured_slip():
     session.clear()
     with pytest.raises(ValueError, match='placement_payload_geometry_missing'):
         executor._placement_geometry('load', 'support')
+
+
+def test_mesh_payload_bounds_use_vertices_not_inflated_principal_axis_box():
+    model = mujoco.MjModel.from_xml_string('''<mujoco><asset>
+      <mesh name="tetra" vertex="0 0 0 .2 0 0 0 .1 0 0 0 .3"/>
+      </asset><worldbody><body name="tool"><geom size=".01"/></body>
+      <body name="load" pos="1 2 3"><freejoint/><geom type="mesh" mesh="tetra"/></body>
+      </worldbody></mujoco>''')
+    data = mujoco.MjData(model)
+    geometry = measured_held_object_geometry(model, data, 'load', 'tool')
+    vertices = np.array(geometry['vertices_ee'])
+    np.testing.assert_allclose(vertices.min(axis=0), [1, 2, 3], atol=1e-7)
+    np.testing.assert_allclose(vertices.max(axis=0), [1.2, 2.1, 3.3], atol=1e-7)

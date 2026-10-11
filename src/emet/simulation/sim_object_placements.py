@@ -652,8 +652,9 @@ def refresh_articulated_body_placements(placements, model, data, bodies):
 def measured_held_object_geometry(model, data, body, ee_body):
     """Privileged geometry measured in one locked simulator state, not a sensor.
 
-    Stable geom-local box corners cover the entire free-root assembly (including
-    welded mesh children). Transform them using actual object/EE poses, never
+    A root-local box covers the entire free-root assembly (including welded
+    mesh children), using actual mesh vertices rather than rotated mesh AABBs.
+    Transform its corners using actual object/EE poses, never
     the commanded attachment offset. A rigid rotation preserves vertex identity;
     real slip still changes the result. Caller holds the simulator state lock.
     """
@@ -677,9 +678,18 @@ def measured_held_object_geometry(model, data, body, ee_body):
     vertices = []
     ee = data.body(eid)
     for gid in ids:
-        center, half = model.geom_aabb[gid, :3], model.geom_aabb[gid, 3:]
-        local = center + signs * half
+        if model.geom_type[gid] == mujoco.mjtGeom.mjGEOM_MESH:
+            mesh = model.geom_dataid[gid]
+            start, count = model.mesh_vertadr[mesh], model.mesh_vertnum[mesh]
+            local = model.mesh_vert[start:start + count]
+        else:
+            center, half = model.geom_aabb[gid, :3], model.geom_aabb[gid, 3:]
+            local = center + signs * half
         world = local @ data.geom_xmat[gid].reshape(3, 3).T + data.geom_xpos[gid]
-        vertices.extend((world - ee.xpos) @ ee.xmat.reshape(3, 3))
+        vertices.extend((world - data.xpos[root]) @ data.xmat[root].reshape(3, 3))
+    vertices = np.asarray(vertices)
+    low, high = vertices.min(axis=0), vertices.max(axis=0)
+    corners = (low + high) / 2 + signs * (high - low) / 2
+    world = corners @ data.xmat[root].reshape(3, 3).T + data.xpos[root]
     return {"frame": "end_effector", "ee_body": ee_body,
-            "vertices_ee": np.asarray(vertices).tolist()}
+            "vertices_ee": ((world - ee.xpos) @ ee.xmat.reshape(3, 3)).tolist()}

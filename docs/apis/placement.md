@@ -214,9 +214,9 @@ waits must report this timing-contract change rather than claim equal wall budge
 
 Ground-truth assisted placement requires `sim_held_object_geometry[body]` in
 simulator session metadata: `frame: "end_effector"`, `ee_body`, and finite
-`vertices_ee` (N×3). The server measures stable geometry-local bounding-box
-corners across the entire free-root assembly and the EE in the same locked
-state. These are privileged debug inputs, not simulated hardware sensors.
+`vertices_ee` (N×3). The server measures a root-local bounding box across the
+entire free-root assembly and the EE in the same locked state. Mesh bounds use
+actual vertices; primitives use conservative local boxes. These are privileged debug inputs, not simulated hardware sensors.
 Missing geometry or a mismatched EE fails closed; observed-voxel providers
 continue to supply their own coherent `HeldObject` without a GT fallback.
 
