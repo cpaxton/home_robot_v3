@@ -622,6 +622,11 @@ class MujocoServer:
             new_status.base.theta,
         ) = self.base_controller.get_base_pose()
 
+        base = self.mjdata.body("base_link")
+        new_status.base_xyz = base.xpos.tolist()
+        new_status.base_up_dot_world_z = float(base.xmat.reshape(3, 3)[2, 2])
+        new_status.actuator_targets = self.mjdata.ctrl.tolist()
+        new_status.actuator_names = [self.mjmodel.actuator(i).name for i in range(self.mjmodel.nu)]
         self.data_proxies.set_status(new_status)
 
     def _to_real_gripper_range(self, pos: float) -> float:
