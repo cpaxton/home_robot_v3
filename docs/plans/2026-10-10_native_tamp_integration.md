@@ -14,10 +14,12 @@ run evidence below is retained and is not rescored by consolidation.
 | Review unit | Base | Includes | Merge gate |
 | --- | --- | --- | --- |
 | #179 Placement and assisted TAMP execution | main | #179, #186 recovery, #187 metrics, #188 assisted articulation, #194 feedback | Resolve placement timeout; pass live placement and containment gates |
-| #193 Capability media and model utilities | #179 | #189 gallery/runner, #191 generic model utilities, #193 Stretch examples | Review final diff and fixture labels; recordings remain scoped controls |
+| #193 Capability media and model utilities | main | #189 gallery/runner, #191 generic model utilities, #193 Stretch examples | Review final diff and fixture labels; recordings remain scoped controls |
 | #195 Native input contracts | #179 | #195 provenance, measured joint evidence, native guards | Review contract tests; native execution remains explicitly unavailable |
 
-#193 and #195 are sibling PRs. The superseded PRs are closed after their
+#193 was extracted onto main on October 11; #195 still depends on #179.
+The assisted open/close media suite stays with #179; the standalone media
+merge does not include the unresolved placement or feedback changes. The superseded PRs are closed after their
 commits are preserved in these branches; no branch history is deleted or
 force-pushed. Consolidation does not confer acceptance or relax any gate.
 The #192 official Sourccey model and generator remain authoritative.

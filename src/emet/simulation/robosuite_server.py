@@ -1304,6 +1304,7 @@ class RobosuiteZmqServer(BaseZmqServer):
         self._ensure_offscreen_framebuffer(_PRIMARY_RW, _PRIMARY_RH)
         if self._primary_renderer is None:
             self._primary_renderer = mujoco.Renderer(self._mjmodel, _PRIMARY_RH, _PRIMARY_RW)
+            self._primary_renderer._scene_option.flags[mujoco.mjtVisFlag.mjVIS_RANGEFINDER] = False
         return self._primary_renderer
 
     def _discard_primary_renderer_unlocked(self) -> None:

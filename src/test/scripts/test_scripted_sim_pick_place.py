@@ -139,3 +139,25 @@ def test_recording_preserves_failed_outcome_before_stopping(monkeypatch, tmp_pat
     assert recorded["events"][0]["requested_state"] == "open"
     assert recorder.dump_paper_stills.call_count == 2
     tool.assert_called_once_with(state="open", task_ref="task:1")
+
+
+def test_recording_preserves_failed_place_outcome_before_stopping(monkeypatch, tmp_path):
+    import json
+    from unittest.mock import Mock
+
+    script = _load_script_module()
+    failure = {"schema_version": 1, "status": "error", "code": "operation_failed", "data": {}}
+    tool = Mock(return_value=json.dumps(failure))
+    monkeypatch.setattr(agent_tools, "get_tools", lambda _: [SimpleNamespace(name="execute_pick_place_plan", func=tool)])
+    monkeypatch.setattr(script.time, "sleep", lambda _: None)
+    recorder = Mock(out_path=tmp_path / "cycle.mp4")
+    recorder.dump_paper_stills.return_value = {"third_person": tmp_path / "frame.png"}
+    assert not script.run_scripted_tool_calls(
+        object(), [{"name": "execute_pick_place_plan", "arguments": {"plan_ref": "plan:1"}}],
+        manip_mode="kinematic", video_recorder=recorder,
+    )
+    recorded = json.loads((tmp_path / "cycle.json").read_text())
+    assert recorded["events"][0]["result"] == failure
+    assert recorded["events"][0]["requested_state"] is None
+    assert recorder.dump_paper_stills.call_count == 2
+    tool.assert_called_once_with(plan_ref="plan:1")
