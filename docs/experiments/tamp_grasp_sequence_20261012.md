@@ -19,3 +19,19 @@ The API test verifies custom executor settings reach approach ranking. Ruff pass
 Fresh live validation is required before attributing the Sourccey failure entirely
 to this mismatch or claiming it is fixed. Extra endpoint solves may increase
 planning time; observe live duration and retain the existing bounded candidate set.
+
+Live job `20261012_184805_ba2706` at `88acfa1a` completed: RBY1 kitchen 0
+passed the full assisted public flow in 441.9 s. Sourccey kitchen 0 was rejected
+at planning, before approach/grasp motion; this is a corrected admission boundary,
+not Sourccey task success. A subsequent JSON-only follow-up exposes the wrapped
+`no_reachable_grasp` reason instead of generic `operation_failed`, preserving the
+private-detail filter. It does not change the GPU-tested planning algorithm.
+
+An offline diagnostic sampled 16 headings at each of five approach radii
+(.25/.35/.45/.55/.65 m) against the same kitchen bowl geometry. No complete
+sequence was found with the current solver/model; the best failed endpoint error
+was about 8.2 cm. This does not prove physical infeasibility. Further work needs
+measured configuration diagnostics and reference-admitted tasks, not looser
+arrival thresholds or object-specific handling. The probe also identified a
+pre-existing limitation worth addressing separately: generic actuator-to-joint
+synchronization does not cover every non-arm joint (for example Sourccey's lift).

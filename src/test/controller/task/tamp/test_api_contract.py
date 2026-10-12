@@ -430,3 +430,13 @@ def test_unavailable_base_validation_rejects_build_and_consumes_plan(monkeypatch
         assert result["recovery"] == "rediscover"
     assert not ground.called and not execute.called and not query.called
     assert bridge.execute_stored_agent_plan_result(robot, context, ref)["code"] == "unknown_plan"
+
+
+@pytest.mark.parametrize("reason, expected", [
+    ("no_plan_within_budget:last_grounding=no_reachable_grasp", "no_reachable_grasp"),
+    ("no_plan_within_budget:last_grounding=private_body_id", "no_plan_within_budget"),
+    ("no_plan_within_budget:candidates=3", "no_plan_within_budget"),
+])
+def test_mcts_grounding_failure_preserves_only_known_public_code(reason, expected):
+    from emet.controller.task.tamp.api import failure_code
+    assert failure_code(reason) == expected
