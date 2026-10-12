@@ -398,9 +398,18 @@ tests pass with zero skips**; the focused affected suite passed 101 tests, and
 Ruff passed. Pytest's periodic traceback watchdog was disabled because of the
 separately reproduced host-level CPython watchdog crash.
 
-The revised full public CHAT smoke `20261012_101729_f324e0` at frozen source
-`32303c8c` is running, with artifacts in
-`~/runs/emet/placement-pose-wait-20261012/`. Merge remains on hold pending this
-result; earlier successes do not validate the corrected release pose or the
-full-pose arrival wait. All of these runs use assisted execution and privileged
-geometry, not native-contact or real-robot acceptance.
+The revised full public CHAT smoke **passed**: `20261012_101729_f324e0`, frozen
+source `32303c8c`, terminal job status `done`. Artifacts:
+`~/runs/emet/placement-pose-wait-20261012/`. Initial search found three paths;
+post-transport search found two. Pre-place executed 675 waypoints and place 12.
+Measured position/orientation errors were 0.034867 m / 0.068379 rad at pre-place
+and 0.034591 m / 0.009639 rad at place. Retract position error was 0.034029 m.
+Public execution returned `ok`, detach returned and `placement_verified` was
+true. Payload corner changes stayed below 2.04e-15 m. There were 751 successful
+acknowledgements, maximum latency 0.707331 s, and no execution timeouts.
+
+The final proximity smoke passed (object displacement 2.3539 m, distance to the
+receptacle center 0.1947 m, threshold 0.25 m). Cleanup then reported the existing
+cancellation rejection. The revised assisted live smoke gate is satisfied;
+sustained support/containment, cross-robot coverage and native execution remain
+unproven. All these runs use privileged geometry and assisted execution.

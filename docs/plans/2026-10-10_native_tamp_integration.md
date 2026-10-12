@@ -176,8 +176,10 @@ official model after contact geometry and available sensing are validated.
 
 ### October 12 review and broader-run checkpoint
 
-PR #179 is ready for review, but merge remains pending the latest full smoke
-`20261012_101729_f324e0` at `32303c8c`. All 243 changed-file tests pass (zero skips).
+PR #179 is ready for review. The latest full assisted smoke
+`20261012_101729_f324e0` at `32303c8c` passed, including release and retract.
+All 243 changed-file tests pass (zero skips). The live smoke gate is satisfied;
+the broader containment/support gate remains unproven.
 The preceding review-head smoke failed before release because arrival waited
 only for position; the fix waits for position and orientation together under the
 unchanged deadline and tolerances.
@@ -191,7 +193,7 @@ See the October 12 section of
 for exact jobs, provenance and limitations. Do not reinterpret the seven-case
 result as 3/3, or treat unsupported cases as successful placement.
 
-After the smoke, retain separate follow-ups for task admission/capability
+Retain separate follow-ups for task admission/capability
 selection, Sourccey initialization, kitchen-1 support-search diagnosis, shutdown
 cancellation, and sustained support/contact scoring. Native execution and live
 observed-geometry providers remain outside this assisted acceptance claim.
