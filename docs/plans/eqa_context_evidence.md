@@ -29,6 +29,59 @@ Next gates, in order:
 
 Keep #199 and #202 draft until their respective evidence gates are met.
 
+## Consolidated validation and review — 2026-10-12
+
+Frozen `0fb37763`, job `20261012_182026_28c8b8`, artifact root
+`/home/cpaxton/runs/emet/context-main-eqa4-20261012`: completed without episode
+errors. Predictions match the pre-main-update pilot exactly:
+
+| Question | Prediction | Gold | Correct |
+| --- | --- | --- | --- |
+| 12 | B | D | No |
+| 14 | C | D | No |
+| 56 | A | C | No |
+| 6 | B | B | Yes |
+
+This is **1/4 vs 1/4**, not restored EQA acceptance. q14's saved context visibly
+contains the fan and sofa. Its final Qwen response says "In the living room",
+but the confirmed earlier assessment says "Next to the TV" and wins the existing
+answer precedence. Record this as model-call disagreement plus a policy choice,
+not exclusively failure to see the object. Do not flip precedence to fit this
+one gold answer: evaluate disagreements on a frozen set separately from view
+selection. q56's context remains a hallway without the needed curtains; its
+final response infers curtain color from wall color. q12 still equates one
+visible table with the room total. Exported image roles now correctly identify
+assessed-view and pre-approach context.
+
+Main subsequently advanced to `b7a1c22d` (#195/#197). Both stack branches include
+that update. The combined contract suite passed **241 tests** before the review
+repairs below. The live result above belongs only to `0fb37763`, not these later
+changes.
+
+### Review disposition (review of the whole #202 ancestry)
+
+The selector-only delta is #202 against #199; the broad diff against main also
+contains the provider/navigation/inspection ancestors. Repairs are isolated
+commits on #199 and inherited by #202, not new selector behavior.
+
+| Finding | Disposition |
+| --- | --- |
+| 1: PIL input crashes SAM2 box segmentation | Fixed in `ef62fdc8`; NumPy/PIL empty, invalid and valid box cases tested. |
+| 2: First sweep rejection loses diagnostics | Fixed in `4eb29acc`; removed duplicate validation, retained first failure, reset stale evidence. |
+| 3: Invalid depth treated as obstruction | Fixed in `b99b05dc`; only measured near rays count, with mixed/all-invalid regression tests. Unknown depth is still not evidence of navigable space. |
+| 4: Fallback clearance reported unknown | Intentional: the 10 m planning sentinel is not measured clearance. Existing obstacle-free test plus a new solver-failure test enforce this distinction. |
+| 5: Exploration policy on precision waypoint | Open: audit callers and test final tolerances/stall behavior before changing policy. |
+| 6: Anchor-less physical investigate | Open: separate optional gaze geometry from valid current-view verification; needs missing-anchor regression and hardware/sim contract test. |
+| 7–8: Route rejection / no corner cutting | Conservative safety behavior; existing corner tests cover blocked diagonals and alternate routes. Partial-route caller compatibility remains to be audited. Do not loosen to improve scores. |
+| 9–10: Wheel contact / head capability | Exact-model drive smoke and actuator-capability check remain required; unit tests do not establish physical acceptance. |
+| 11: Legacy clamped cell conversion | Open: test edge/out-of-map camera rays in both map modes before accepting coverage scores. |
+| 12 and minor cleanup | Nonblocking follow-up: exception text, diff reflow, response retention bounds, dead controller branches, nonfinite telemetry. |
+
+The four focused review files passed **58 tests**, including SAM2 (no skips).
+No live run after these repairs is claimed. Next: clear missing-anchor and
+precision-policy contracts, then a serialized small OVMM smoke; wire timestamped
+view selection separately. Keep all historical results tied to their source SHA.
+
 ## Hypothesis and scope
 
 Object-facing navigation can remove room/relationship context. Preserve the

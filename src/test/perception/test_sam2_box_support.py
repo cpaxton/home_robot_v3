@@ -27,10 +27,15 @@ def test_constructor_shares_one_model_and_honors_device(monkeypatch):
     automatic.assert_called_once_with(builder.return_value)
 
 
-def test_box_support_empty_invalid_and_best_mask():
+@pytest.mark.parametrize("pil_input", [False, True])
+def test_box_support_empty_invalid_and_best_mask(pil_input):
     segmenter = sam.SAM2Perception.__new__(sam.SAM2Perception)
     segmenter.sam_predictor = Mock()
     rgb = np.zeros((30, 40, 3), dtype=np.uint8)
+    if pil_input:
+        from PIL import Image
+
+        rgb = Image.fromarray(rgb)
     assert segmenter.segment(rgb, np.empty((0, 4))).shape == (0, 30, 40)
     segmenter.sam_predictor.set_image.assert_not_called()
     with pytest.raises(ValueError):
@@ -39,6 +44,7 @@ def test_box_support_empty_invalid_and_best_mask():
     masks[1, 5:20, 6:30] = True
     segmenter.sam_predictor.predict.return_value = (masks, np.array([0.1, 0.9, 0.2]), None)
     actual = segmenter.segment(rgb, np.array([[2, 3, 20, 25]]))
+    assert isinstance(segmenter.sam_predictor.set_image.call_args.args[0], np.ndarray)
     assert actual.dtype == bool
     assert np.array_equal(actual[0], masks[1])
     masks[1, 0, 0] = np.nan
