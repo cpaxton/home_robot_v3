@@ -736,6 +736,23 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         )
     )
 
+    @json_tool
+    def set_receptacle_state(task_ref: str, state: str) -> dict:
+        from emet.controller.task.tamp.articulation import set_receptacle_state as apply_state
+        return apply_state(_tamp_robot(), context, task_ref, state)
+
+    tools.append(Tool(
+        name="set_receptacle_state",
+        description="Simulator-assisted open/close of the receptacle selected by task_ref. "
+                    "Teleports one supported joint; verifies state and refreshes geometry. "
+                    "No physical manipulation or door-sweep collision guarantee. Replan afterward.",
+        parameters={"type": "object", "properties": {
+            "task_ref": {"type": "string", "description": "Current scene_tasks handle."},
+            "state": {"type": "string", "enum": ["open", "closed"]},
+        }, "required": ["task_ref", "state"]},
+        func=set_receptacle_state, returns_info=True,
+    ))
+
     # -- scene_tasks ----------------------------------------------------------
     @json_tool
     def scene_tasks(object_filter: str = "", robot: str = "") -> dict:
@@ -811,9 +828,17 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
                 reachability_status = "evaluated"
             except Exception:
                 reachability_status = "unavailable"
+        from emet.simulation.articulation import access_precondition, articulation_for_body
+        def access(ref):
+            if not live_sim or not (session.get("capabilities") or {}).get("sim_articulation_state"):
+                return {"state": "unknown", "required_action": None}
+            group = articulation_for_body(session, ref.receptacle_body)
+            return {"state": group.get("state", "unknown") if group else "not_articulated",
+                    "required_action": access_precondition(session, ref.receptacle_body)}
         return response("scene_tasks", data={
             "tasks": [{"task_ref": ref.ref, "object_name": ref.object_query,
-                       "receptacle_name": ref.receptacle_query, "start_receptacle": ref.start_receptacle}
+                       "receptacle_name": ref.receptacle_query, "start_receptacle": ref.start_receptacle,
+                       "access": access(ref)}
                       for ref in task_refs],
             "pickable_categories": sorted({p.category for p in picks}),
             "receptacle_categories": sorted({r.category for r in recepts}),
