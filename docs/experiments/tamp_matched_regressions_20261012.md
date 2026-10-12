@@ -81,7 +81,10 @@ collision policy; do not suppress all self-collisions.
   `base_pose_validation_unavailable`, with no timeout. The server endpoint
   lacked its Stretch client method. Commit `2e698c20` shares query transport
   across both clients; 16 endpoint/approach checks pass. Corrected live replay
-  `20261012_191644_3ba157` is pending at publication.
+  `20261012_191644_3ba157` passed the full public-tool sequence in 56.8 s,
+  with 10 ACKs (maximum 0.184 s), zero command failures and no timeout. This
+  uses explicit teleport-oracle manipulation/base assistance. #205 merged as
+  `9097d41f`; native-contact execution is still unvalidated.
 
 Native observed providers/execution remain unavailable. None of these assisted
 controls is a native-contact or LLM-agent success claim. Remaining Sourccey

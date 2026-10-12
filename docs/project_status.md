@@ -23,6 +23,12 @@ reported test counts belong to their cited revisions and are not additive.
 
 ## Open PRs and dependencies
 
+The October-12 [matched TAMP regression report](experiments/tamp_matched_regressions_20261012.md)
+records #204's merged grasp-admission fix, passing baseline/candidate RBY1
+controls, the merged #205 Stretch endpoint (public oracle replay passed), and unresolved
+#203 oracle compatibility.
+These newer results do not replace the historical denominators below.
+
 The navigation PR rows below retain the #197 status snapshot; they have not
 been re-reviewed in this TAMP update. #195 has since merged and is removed from
 the open list. Head SHAs identify reviewed source; draft/ready labels describe

@@ -20,7 +20,7 @@ and explicit task admission). Historical evidence below remains unchanged.
 | #195 Native input contracts | main | Merged as `b7a1c22d`; native adapters still unavailable |
 | #204 Grasp sequence admission | main | Merged as `631cfdfd`; assisted RBY1 passed, Sourccey remains unresolved |
 | #203 Dynamic placement metadata | main | Reviewed; oracle fixture/verification compatibility gate remains open |
-| #205 Stretch base endpoint | main | Client wiring corrected; live replay pending |
+| #205 Stretch base endpoint | main | Merged as `9097d41f`; full public Stretch teleport-oracle replay passed |
 
 #195's post-integration motion/TAMP/configuration suite ran 372 tests: 369 passed,
 zero skipped, and three A* start-escape tests failed identically on the main-based
