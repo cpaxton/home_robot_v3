@@ -64,6 +64,12 @@ def read_sim_object_placements(session: dict[str, Any] | None) -> dict[str, dict
             half = extent_half_from_bounds(b)
             if half is not None:
                 entry["extent_half"] = half
+        for field in ("collision_bounds", "support_surfaces"):
+            if field in info:
+                boxes = np.array(info[field], dtype=float, copy=True).reshape(-1, 2, 3)
+                if not np.isfinite(boxes).all() or np.any(boxes[:, 0] > boxes[:, 1]):
+                    raise ValueError(f"Invalid simulator {field}")
+                entry[field] = boxes
         out[str(body_name)] = entry
     return out or None
 

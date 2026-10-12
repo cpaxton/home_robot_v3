@@ -175,11 +175,14 @@ def main():
     source = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     if subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True).strip():
         raise SystemExit("Use a clean frozen checkout for experiment runs")
+    from emet.eval.tamp_comparison import search_protocol
+
     manifest = {
         "schema": 1,
         "suite": args.suite,
         "robot_filter": args.robot,
         "source_sha": source,
+        "search_protocol": search_protocol(),
         "cases": cases,
         "episode_timeout_s": args.episode_timeout,
     }

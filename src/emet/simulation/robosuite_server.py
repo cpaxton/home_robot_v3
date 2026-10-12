@@ -19,7 +19,7 @@ import os
 import threading
 import time
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 import cv2
 import mujoco
@@ -849,9 +849,11 @@ class RobosuiteZmqServer(BaseZmqServer):
         if not self._passive_base_support:
             if weld >= 0:
                 base_id = self._mjmodel.body(self._spec.base_link_name).id
-                if (self._mjmodel.eq_type[weld] != mujoco.mjtEq.mjEQ_WELD
-                        or self._mjmodel.eq_obj1id[weld] != 0
-                        or self._mjmodel.eq_obj2id[weld] != base_id):
+                if (
+                    self._mjmodel.eq_type[weld] != mujoco.mjtEq.mjEQ_WELD
+                    or self._mjmodel.eq_obj1id[weld] != 0
+                    or self._mjmodel.eq_obj2id[weld] != base_id
+                ):
                     raise ValueError("emet_stationary_base must weld world to the robot base")
                 self._mjmodel.eq_data[weld, 3:10] = snap
                 self._mjdata.eq_active[weld] = True
@@ -1046,6 +1048,7 @@ class RobosuiteZmqServer(BaseZmqServer):
             "dof": int(self._spec.dof),
             "sim_set_body_pose": True,
             "sim_set_joint_qpos": True,
+            "sim_articulation_state": True,
             "kinematic_manip": kinematic_ok,
         }
         from emet.robots.head_capability import mujoco_head_capability
@@ -1092,10 +1095,88 @@ class RobosuiteZmqServer(BaseZmqServer):
             data=self._mjdata,
             robot_root_name=self._spec.base_link_name,
         )
+        from emet.simulation.articulation import scene_articulations
+
+        session["sim_articulations"] = scene_articulations(self._mjmodel, self._mjdata, self._spec.base_link_name)
+        session["articulation_revision"] = 0
         return session
+
+    def _refresh_articulation_state(self):
+        """Publish joint evidence and coherent geometry from private data under lock."""
+        from emet.simulation.articulation import articulation_geometry_changed, scene_articulations
+
+        if self._emet_session is None or self._mjmodel is None or self._mjdata is None:
+            return
+        groups = scene_articulations(self._mjmodel, self._mjdata, self._spec.base_link_name)
+        previous = getattr(self, "_articulation_geometry_groups", self._emet_session.get("sim_articulations") or [])
+        previous_by_bodies = {tuple(g["bodies"]): g for g in previous}
+        revision = self._emet_session.get("articulation_revision", 0)
+        forced = revision != getattr(self, "_articulation_geometry_revision", revision)
+        changed = [
+            g for g in groups if forced or articulation_geometry_changed(g, previous_by_bodies.get(tuple(g["bodies"])))
+        ]
+        if changed or len(groups) != len(previous):
+            scratch = mujoco.MjData(self._mjmodel)
+            mujoco.mj_copyData(scratch, self._mjmodel, self._mjdata)
+            env = self._emet_session.get("environment") or {}
+            if env.get("kind") == "molmospaces" and not self._objects_info:
+                from emet.simulation.sim_object_placements import refresh_articulated_body_placements
+
+                bodies = {body for group in changed for body in group["bodies"]}
+                refresh_articulated_body_placements(
+                    self._emet_session["sim_object_placements"], self._mjmodel, scratch, bodies
+                )
+                changed_keys = {tuple(g["bodies"]) for g in changed}
+                geometry_groups = [
+                    g if tuple(g["bodies"]) in changed_keys else previous_by_bodies[tuple(g["bodies"])] for g in groups
+                ]
+            else:
+                # Aggregate fixture maps need their provider's grouping rules.
+                attach_sim_object_placements_to_session(
+                    self._emet_session,
+                    objects_info=self._objects_info,
+                    environment_kind=env.get("kind"),
+                    model=self._mjmodel,
+                    data=scratch,
+                    robot_root_name=self._spec.base_link_name,
+                )
+                geometry_groups = groups
+            self._articulation_geometry_groups = geometry_groups
+        elif not hasattr(self, "_articulation_geometry_groups"):
+            self._articulation_geometry_groups = previous
+        self._articulation_geometry_revision = revision
+        # Keep measured state fresh even when geometry does not need rebuilding.
+        self._emet_session["sim_articulations"] = groups
 
     def _attach_emet_session(self, message: dict[str, Any]) -> dict[str, Any]:
         if self._emet_session is not None:
+            from emet.simulation.sim_object_placements import (
+                measured_held_object_geometry,
+                refresh_moved_body_placements,
+            )
+
+            with self._mj_lock:
+                if (self._emet_session.get("capabilities") or {}).get("sim_articulation_state"):
+                    self._refresh_articulation_state()
+                dirty = getattr(self, "_placement_geometry_dirty", set())
+                placements = self._emet_session.get("sim_object_placements")
+                if isinstance(placements, dict):
+                    for body in dirty:
+                        refresh_moved_body_placements(placements, self._mjmodel, self._mjdata, body)
+                self._placement_geometry_dirty = set()
+                # Measure object and EE together. Mixing observation AABBs with
+                # newer joint states invents apparent attachment slip.
+                held_geometry = {}
+                for body, info in getattr(self, "_kinematic_attachments", {}).items():
+                    try:
+                        held_geometry[body] = measured_held_object_geometry(
+                            self._mjmodel, self._mjdata, body, info["ee_body"]
+                        )
+                    except ValueError as exc:
+                        # Missing volume must reject placement, not stop telemetry
+                        # and command receipts for the whole simulator.
+                        logger.warning(f"Held geometry unavailable for {body!r}: {exc}")
+                self._emet_session["sim_held_object_geometry"] = held_geometry
             message[EMET_ZMQ_SESSION_KEY] = self._emet_session
         return message
 
@@ -1105,23 +1186,22 @@ class RobosuiteZmqServer(BaseZmqServer):
         pos: list[float],
         quat: list[float] | None = None,
     ) -> None:
-        """Update one body entry in cached session GT after ``sim_set_body_pose``."""
+        """Invalidate moved geometry; rebuild at publication, not every physics tick."""
         if self._emet_session is None:
             return
         placements = self._emet_session.get("sim_object_placements")
-        if not isinstance(placements, dict) or body not in placements:
+        if not isinstance(placements, dict):
             return
-        entry = placements[body]
-        if not isinstance(entry, dict):
-            return
-        entry["pos"] = [float(x) for x in pos[:3]]
-        if quat is not None:
-            entry["quat"] = [float(x) for x in quat[:4]]
+        with self._mj_lock:
+            if not hasattr(self, "_placement_geometry_dirty"):
+                self._placement_geometry_dirty = set()
+            self._placement_geometry_dirty.add(body)
 
     def _snap_kinematic_attachments(self) -> None:
         """Keep attached freejoint bodies glued to their EE (kinematic grasp)."""
         if not self._kinematic_attachments or self._mjmodel is None or self._mjdata is None:
             return
+        mujoco.mj_kinematics(self._mjmodel, self._mjdata)
         for body, info in list(self._kinematic_attachments.items()):
             ee = str(info.get("ee_body") or "")
             offset = np.asarray(info.get("offset_local"), dtype=np.float64).reshape(3)
@@ -1131,7 +1211,11 @@ class RobosuiteZmqServer(BaseZmqServer):
             R = np.asarray(self._mjdata.body(ee_id).xmat, dtype=np.float64).reshape(3, 3)
             ee_pos = np.asarray(self._mjdata.body(ee_id).xpos, dtype=np.float64).reshape(3)
             world = ee_pos + R @ offset
-            if set_free_body_pose(self._mjmodel, self._mjdata, body, world):
+            quat = None
+            if "rotation_local" in info:
+                quat = np.empty(4)
+                mujoco.mju_mat2Quat(quat, (R @ info["rotation_local"]).ravel())
+            if set_free_body_pose(self._mjmodel, self._mjdata, body, world, quat, update_dynamics=False):
                 self._patch_emet_session_body_pos(body, world.tolist())
 
     def get_scene_summary(self) -> str:
@@ -1167,35 +1251,38 @@ class RobosuiteZmqServer(BaseZmqServer):
         lines.append("-------------------")
         return "\n".join(lines)
 
-    def get_base_xyt(self) -> np.ndarray:
+    def get_base_xyt(self, data=None) -> np.ndarray:
+        data = self._mjdata if data is None else data
         base_name = self._spec.base_link_name
-        if self._mjdata is None:
+        if data is None:
             return np.zeros(3)
         try:
             with self._mj_lock:
-                if self._mjmodel is not None and self._planar_base_joint_names() is not None:
-                    mujoco.mj_forward(self._mjmodel, self._mjdata)
-                xpos = self._mjdata.body(base_name).xpos
-                xmat = self._mjdata.body(base_name).xmat.reshape(3, 3)
+                if data is self._mjdata and self._mjmodel is not None and self._planar_base_joint_names() is not None:
+                    mujoco.mj_forward(self._mjmodel, data)
+                xpos = data.body(base_name).xpos
+                xmat = data.body(base_name).xmat.reshape(3, 3)
                 theta = np.arctan2(xmat[1, 0], xmat[0, 0])
                 return np.array([xpos[0], xpos[1], theta])
         except Exception as e:
             logger.warning(f"get_base_xyt failed for body {base_name!r}: {e!r}")
             return np.zeros(3)
 
-    def get_base_pose(self) -> np.ndarray | None:
+    def get_base_pose(self, data=None) -> np.ndarray | None:
+        data = self._mjdata if data is None else data
         if self._initial_xyt is None:
             return None
-        xyt = self.get_base_xyt()
+        xyt = self.get_base_xyt(data=data)
         return xyt_global_to_base(xyt, self._initial_xyt)
 
-    def get_joint_state(self):
+    def get_joint_state(self, data=None):
+        data = self._mjdata if data is None else data
         dof = self._spec.dof
         positions = np.zeros(dof)
         velocities = np.zeros(dof)
         efforts = np.zeros(dof)
 
-        if self._mjdata is None:
+        if data is None:
             return positions, velocities, efforts
 
         with self._mj_lock:
@@ -1206,16 +1293,17 @@ class RobosuiteZmqServer(BaseZmqServer):
                         continue
                     qadr = self._mjmodel.jnt_qposadr[jid]
                     vadr = self._mjmodel.jnt_dofadr[jid]
-                    positions[i] = self._mjdata.qpos[qadr]
-                    velocities[i] = self._mjdata.qvel[vadr]
+                    positions[i] = data.qpos[qadr]
+                    velocities[i] = data.qvel[vadr]
                 except Exception:
                     continue
 
         return positions, velocities, efforts
 
-    def _joint_head_qpos(self) -> float | None:
+    def _joint_head_qpos(self, data=None) -> float | None:
         """Head tilt for Rerun / observations (innate_mars ``joint_head`` or xlerobot ``head_tilt_joint``)."""
-        if self._mjmodel is None or self._mjdata is None:
+        data = self._mjdata if data is None else data
+        if self._mjmodel is None or data is None:
             return None
         if self._spec.name == "innate_mars":
             with self._mj_lock:
@@ -1223,14 +1311,14 @@ class RobosuiteZmqServer(BaseZmqServer):
                 if jid < 0:
                     return None
                 qadr = int(self._mjmodel.jnt_qposadr[jid])
-                return float(self._mjdata.qpos[qadr])
+                return float(data.qpos[qadr])
         if self._spec.name == "xlerobot":
             with self._mj_lock:
                 jid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_JOINT, "head_tilt_joint")
                 if jid < 0:
                     return None
                 qadr = int(self._mjmodel.jnt_qposadr[jid])
-                return float(self._mjdata.qpos[qadr])
+                return float(data.qpos[qadr])
         return None
 
     def _close_renderers(self) -> None:
@@ -1322,36 +1410,50 @@ class RobosuiteZmqServer(BaseZmqServer):
             mask = mujoco.MjvOption().geomgroup.copy()
         renderer._scene_option.geomgroup[:] = mask
 
-    def _render_rgb_raw(self, camera_name: str) -> np.ndarray:
-        """RGB uint8 from ``mujoco.Renderer`` at primary resolution (no pixel postprocess)."""
-        cam = self._camera_for_renderer(camera_name)
+    def _capture_render_state(self):
+        """Copy one frame under the physics lock; rasterization must not hold it."""
+        snapshot = mujoco.MjData(self._mjmodel)
         with self._mj_lock:
-            with self._render_lock:
-                renderer = self._get_or_create_primary_renderer()
-                self._configure_renderer_geomgroups_for_camera(renderer, camera_name)
-                renderer.update_scene(self._mjdata, camera=cam)
-                rgb = cast(np.ndarray, renderer.render())
-                return np.asarray(rgb, dtype=np.uint8).copy()
+            mujoco.mj_copyData(snapshot, self._mjmodel, self._mjdata)
+        return snapshot
+
+    def _remember_render_state(self, camera_name, snapshot):
+        # Called with the render lock. Retain the actual frame's camera/robot
+        # state so publishing after a slow render does not use newer geometry.
+        if not hasattr(self, "_camera_render_states"):
+            self._camera_render_states = {}
+        self._camera_render_states[camera_name] = snapshot
+
+    def _render_rgb_raw(self, camera_name: str) -> np.ndarray:
+        """Render private state without stopping physics or measured telemetry."""
+        cam = self._camera_for_renderer(camera_name)
+        snapshot = self._capture_render_state()
+        with self._render_lock:
+            renderer = self._get_or_create_primary_renderer()
+            self._configure_renderer_geomgroups_for_camera(renderer, camera_name)
+            renderer.update_scene(snapshot, camera=cam)
+            rgb = np.asarray(renderer.render(), dtype=np.uint8).copy()
+            self._remember_render_state(camera_name, snapshot)
+            return rgb
 
     def _render_primary_rgb_and_depth_raw(self, camera_name: str) -> tuple[np.ndarray, np.ndarray]:
-        """RGB + depth in one lock scope and one ``Renderer`` pass (avoids EGL framebuffer races)."""
+        """RGB/depth share a private snapshot and one serialized renderer."""
         cam = self._camera_for_renderer(camera_name)
-        with self._mj_lock:
-            with self._render_lock:
-                renderer = self._get_or_create_primary_renderer()
+        snapshot = self._capture_render_state()
+        with self._render_lock:
+            renderer = self._get_or_create_primary_renderer()
+            self._configure_renderer_geomgroups_for_camera(renderer, camera_name)
+            renderer.update_scene(snapshot, camera=cam)
+            rgb = np.asarray(renderer.render(), dtype=np.uint8).copy()
+            renderer.enable_depth_rendering()
+            try:
                 self._configure_renderer_geomgroups_for_camera(renderer, camera_name)
-                renderer.update_scene(self._mjdata, camera=cam)
-                rgb = cast(np.ndarray, renderer.render())
-                rgb = np.asarray(rgb, dtype=np.uint8).copy()
-                renderer.enable_depth_rendering()
-                try:
-                    self._configure_renderer_geomgroups_for_camera(renderer, camera_name)
-                    renderer.update_scene(self._mjdata, camera=cam)
-                    depth = cast(np.ndarray, renderer.render())
-                    depth = np.asarray(depth, dtype=np.float32).copy()
-                finally:
-                    renderer.disable_depth_rendering()
-                return rgb, depth
+                renderer.update_scene(snapshot, camera=cam)
+                depth = np.asarray(renderer.render(), dtype=np.float32).copy()
+            finally:
+                renderer.disable_depth_rendering()
+            self._remember_render_state(camera_name, snapshot)
+            return rgb, depth
 
     def _postprocess_rgb_depth_and_K(
         self, camera_name: str, rgb: np.ndarray, depth: np.ndarray | None
@@ -1410,14 +1512,14 @@ class RobosuiteZmqServer(BaseZmqServer):
         bid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_BODY, body)
         if bid < 0:
             return None
-        with self._mj_lock:
-            with self._render_lock:
-                renderer = self._get_or_create_primary_renderer()
-                renderer._scene_option.geomgroup[:] = mujoco.MjvOption().geomgroup
-                cam = build_base_chase_camera(self._mjmodel, self._mjdata, int(bid))
-                renderer.update_scene(self._mjdata, camera=cam)
-                apply_chase_frustum_near(renderer.scene, near=0.05)
-                rgb = np.asarray(renderer.render(), dtype=np.uint8).copy()
+        snapshot = self._capture_render_state()
+        with self._render_lock:
+            renderer = self._get_or_create_primary_renderer()
+            renderer._scene_option.geomgroup[:] = mujoco.MjvOption().geomgroup
+            cam = build_base_chase_camera(self._mjmodel, snapshot, int(bid))
+            renderer.update_scene(snapshot, camera=cam)
+            apply_chase_frustum_near(renderer.scene, near=0.05)
+            rgb = np.asarray(renderer.render(), dtype=np.uint8).copy()
         return self._apply_optional_mujoco_render_flip_ud(rgb)
 
     def _render_overhead_rgb(self) -> np.ndarray | None:
@@ -1430,14 +1532,14 @@ class RobosuiteZmqServer(BaseZmqServer):
         bid = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_BODY, body)
         if bid < 0:
             return None
-        with self._mj_lock:
-            with self._render_lock:
-                renderer = self._get_or_create_primary_renderer()
-                renderer._scene_option.geomgroup[:] = mujoco.MjvOption().geomgroup
-                cam = build_overhead_camera(self._mjmodel, self._mjdata, int(bid))
-                renderer.update_scene(self._mjdata, camera=cam)
-                apply_chase_frustum_near(renderer.scene, near=0.05)
-                rgb = np.asarray(renderer.render(), dtype=np.uint8).copy()
+        snapshot = self._capture_render_state()
+        with self._render_lock:
+            renderer = self._get_or_create_primary_renderer()
+            renderer._scene_option.geomgroup[:] = mujoco.MjvOption().geomgroup
+            cam = build_overhead_camera(self._mjmodel, snapshot, int(bid))
+            renderer.update_scene(snapshot, camera=cam)
+            apply_chase_frustum_near(renderer.scene, near=0.05)
+            rgb = np.asarray(renderer.render(), dtype=np.uint8).copy()
         return self._apply_optional_mujoco_render_flip_ud(rgb)
 
     def _primary_rgb_and_depth(self, camera_name: str) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -1719,21 +1821,22 @@ class RobosuiteZmqServer(BaseZmqServer):
             self._preserve_joint_ctrl_hold_from_ctrl()
             mujoco.mj_forward(self._mjmodel, self._mjdata)
 
-    def _camera_pose_world(self, camera_name: str) -> np.ndarray:
+    def _camera_pose_world(self, camera_name: str, data=None) -> np.ndarray:
         """4x4 **OpenCV** camera-to-world transform for pinhole unprojection (DynaMem voxel code).
 
         MuJoCo reports ``cam_xmat`` in an OpenGL-style camera frame (+Y up, −Z forward). EMET unprojection
         uses OpenCV-style rays (+Y down image rows, +Z into the scene). For the same physical camera,
         ``R_world_from_cv = R_mujoco @ diag(1,-1,-1)`` so ``p_world = R_mujoco @ (D @ p_cv)``.
         """
-        if self._mjmodel is None or self._mjdata is None:
+        data = self._mjdata if data is None else data
+        if self._mjmodel is None or data is None:
             return np.eye(4, dtype=np.float64)
         with self._mj_lock:
             cam_id = mujoco.mj_name2id(self._mjmodel, mujoco.mjtObj.mjOBJ_CAMERA, camera_name)
             if cam_id < 0:
                 return np.eye(4, dtype=np.float64)
-            R = np.asarray(self._mjdata.cam_xmat[cam_id], dtype=np.float64).reshape(3, 3)
-            pos = np.asarray(self._mjdata.cam_xpos[cam_id], dtype=np.float64).reshape(3)
+            R = np.asarray(data.cam_xmat[cam_id], dtype=np.float64).reshape(3, 3)
+            pos = np.asarray(data.cam_xpos[cam_id], dtype=np.float64).reshape(3)
             # MuJoCo camera frame: +Y up, −Z forward (OpenGL). Point unprojection in emet uses OpenCV
             # camera coordinates (+Y down, +Z forward). World = R_mj @ p_mj; with p_mj = D @ p_cv and
             # D = diag(1,-1,-1), we have p_world = (R_mj @ D) @ p_cv.
@@ -2250,17 +2353,24 @@ class RobosuiteZmqServer(BaseZmqServer):
         with self._mj_lock:
             if self._mjmodel is None or self._mjdata is None:
                 raise RuntimeError("scene not ready")
-            contacts = [teleport_endpoint_contacts(self._mjmodel, self._mjdata, self._spec, pose)
-                        for pose in poses]
-            return {"poses": poses.tolist(), "clear": [not c for c in contacts], "contacts": contacts,
-                    "sim_time": float(self._mjdata.time), "scope": "base_endpoint_only"}
+            contacts = [teleport_endpoint_contacts(self._mjmodel, self._mjdata, self._spec, pose) for pose in poses]
+            return {
+                "poses": poses.tolist(),
+                "clear": [not c for c in contacts],
+                "contacts": contacts,
+                "sim_time": float(self._mjdata.time),
+                "scope": "base_endpoint_only",
+            }
 
     def handle_action(self, action: dict[str, Any]):
         from emet.simulation.physical_execution import audit_physical_action
 
         audit_physical_action(
-            action, source=type(self).__name__,
-            implicit_teleport=("xyt" in action and self._is_molmospaces_session() and molmospaces_nav_teleport_enabled()),
+            action,
+            source=type(self).__name__,
+            implicit_teleport=(
+                "xyt" in action and self._is_molmospaces_session() and molmospaces_nav_teleport_enabled()
+            ),
         )
         if EMET_ACTION_MUJOCO_GROUND_TRUTH_KEY in action:
             path_gt, exclude_robot, as_json = parse_ground_truth_dump_action_field(
@@ -2318,6 +2428,16 @@ class RobosuiteZmqServer(BaseZmqServer):
             if joint and value is not None and self._mjmodel is not None and self._mjdata is not None:
                 with self._mj_lock:
                     ok = set_named_joint_qpos(self._mjmodel, self._mjdata, joint, value)
+                    if self._emet_session is not None:
+                        self._emet_session["articulation_revision"] = (
+                            int(self._emet_session.get("articulation_revision", 0)) + 1
+                        )
+                        self._refresh_articulation_state()
+                        self._emet_session["articulation_result"] = {
+                            "request_id": action[EMET_ACTION_SIM_SET_JOINT_QPOS_KEY].get("request_id"),
+                            "joint": joint,
+                            "applied": bool(ok),
+                        }
                 if ok:
                     logger.info(f"sim_set_joint_qpos: {joint!r} requested={value:.4f}")
                 else:
@@ -2350,6 +2470,7 @@ class RobosuiteZmqServer(BaseZmqServer):
                             self._kinematic_attachments[body] = {
                                 "ee_body": ee,
                                 "offset_local": offset_local,
+                                "rotation_local": R.T @ self._mjdata.body(body_id).xmat.reshape(3, 3),
                             }
                             world = ee_pos + R @ offset_local
                             if not set_free_body_pose(self._mjmodel, self._mjdata, body, world):
@@ -2439,9 +2560,7 @@ class RobosuiteZmqServer(BaseZmqServer):
                         # changing base/attachment poses or reporting arrival.
                         from emet.simulation.teleport_collision import teleport_endpoint_contacts
 
-                        contacts = teleport_endpoint_contacts(
-                            self._mjmodel, self._mjdata, self._spec, (wx, wy, wt)
-                        )
+                        contacts = teleport_endpoint_contacts(self._mjmodel, self._mjdata, self._spec, (wx, wy, wt))
                         if contacts:
                             self._nav_goal_world = None
                             self._contract_navigation_context["endpoint_contacts"] = contacts
@@ -2526,12 +2645,13 @@ class RobosuiteZmqServer(BaseZmqServer):
         height, width = rgb_height_width_for_zmq(rgb)
         depth_u16 = (depth * 1000).astype(np.uint16)
 
-        positions, _, _ = self.get_joint_state()
-        xyt = self.get_base_pose()
+        frame_data = getattr(self, "_camera_render_states", {}).get(primary_cam)
+        positions, _, _ = self.get_joint_state(data=frame_data)
+        xyt = self.get_base_pose(data=frame_data)
         if xyt is None:
             xyt = np.zeros(3)
 
-        cam_pose = self._camera_pose_world(primary_cam)
+        cam_pose = self._camera_pose_world(primary_cam, data=frame_data)
         # ZMQ contract: camera_pose MuJoCo world; gps episode-relative (test_zmq_observation_frame_contract).
 
         message = {
@@ -2541,9 +2661,10 @@ class RobosuiteZmqServer(BaseZmqServer):
             "camera_pose": cam_pose,
             "ee_pose": np.eye(4),
             "joint": positions,
-            "joint_head": self._joint_head_qpos(),
+            "joint_head": self._joint_head_qpos(data=frame_data),
             "gps": xyt[:2],
             "compass": np.array([xyt[2]]),
+            "image_sim_time": None if frame_data is None else float(frame_data.time),
             "rgb_width": width,
             "rgb_height": height,
             "control_mode": self.get_control_mode(),
@@ -2577,7 +2698,9 @@ class RobosuiteZmqServer(BaseZmqServer):
                 if rgb_r.shape[0] == rgb.shape[0] and rgb_r.shape[1] == rgb.shape[1]:
                     message["rgb_right"] = compression.to_jpg(rgb_r)
                     message["camera_K_right"] = K_r
-                    message["camera_pose_right"] = self._camera_pose_world(right_name)
+                    message["camera_pose_right"] = self._camera_pose_world(
+                        right_name, data=getattr(self, "_camera_render_states", {}).get(right_name)
+                    )
             except Exception as e:
                 logger.debug(f"Stereo auxiliary RGB failed for {right_name}: {e!r}")
         if len(cam_names) >= 3 and allow_extra_cams:
@@ -2587,7 +2710,9 @@ class RobosuiteZmqServer(BaseZmqServer):
                     rgb_t, K_t = self._primary_rgb_only_with_K(tertiary)
                     message["rgb_tertiary"] = compression.to_jpg(rgb_t)
                     message["camera_K_tertiary"] = K_t
-                    message["camera_pose_tertiary"] = self._camera_pose_world(tertiary)
+                    message["camera_pose_tertiary"] = self._camera_pose_world(
+                        tertiary, data=getattr(self, "_camera_render_states", {}).get(tertiary)
+                    )
                     message["camera_name_tertiary"] = tertiary
                 except Exception as e:
                     logger.debug(f"Tertiary RGB failed for {tertiary}: {e!r}")
@@ -2656,7 +2781,10 @@ class RobosuiteZmqServer(BaseZmqServer):
             EMET_ZMQ_SIM_TIME_RATIO_KEY: self._physics_fps_counter.sim_to_real_ratio,
             EMET_ZMQ_ROBOT_ID_KEY: self._spec.name,
         }
-        return self._attach_emet_session(message)
+        # Scene geometry is published on the full observation stream. Rebuilding
+        # it here couples fast feedback to mesh scans and can starve physics.
+        # Omit the session rather than stamp cached geometry with a new step.
+        return message
 
     @override
     def get_servo_message(self) -> dict[str, Any]:
@@ -2716,7 +2844,31 @@ class RobosuiteZmqServer(BaseZmqServer):
             "step": self._last_step,
             "at_goal": self._at_goal,
         }
-        return self._attach_emet_session(message)
+        # Scene geometry is published on the full observation stream. Rebuilding
+        # it here couples fast feedback to mesh scans and can starve physics.
+        # Omit the session rather than stamp cached geometry with a new step.
+        return message
+
+    def _step_physics_tick(self) -> None:
+        """Keep each integrator step atomic, allowing feedback between substeps.
+
+        Furnished-scene contact/attachment updates can make a batch expensive.
+        Holding the lock for the whole batch starves state publication precisely
+        when measured feedback is needed. The timestep and step count stay fixed.
+        """
+        for index in range(self._mj_substeps_per_tick):
+            with self._mj_lock:
+                if index == 0:
+                    self._step_planar_yaw_slew()
+                self._step_controlled_physics_once()
+                self._physics_steps_executed += 1
+                self._maybe_report_fall_over()
+                finished = self._max_sim_steps is not None and self._physics_steps_executed >= self._max_sim_steps
+            if finished:
+                break
+            # Python locks do not guarantee a waiting publisher wins the next
+            # acquisition. Yield outside the lock before another complete step.
+            time.sleep(0)
 
     def _sim_loop(self) -> None:
         """Step the MuJoCo simulation at the configured rate."""
@@ -2724,14 +2876,7 @@ class RobosuiteZmqServer(BaseZmqServer):
             self._ctrl_debug_emit_apply_logs = True
             logger.info("[mujoco_ctrl_debug] headless _sim_loop: apply logging enabled")
         while self._running:
-            with self._mj_lock:
-                self._step_planar_yaw_slew()
-                for _ in range(self._mj_substeps_per_tick):
-                    self._step_controlled_physics_once()
-                    self._physics_steps_executed += 1
-                    self._maybe_report_fall_over()
-                    if self._max_sim_steps is not None and self._physics_steps_executed >= self._max_sim_steps:
-                        break
+            self._step_physics_tick()
             if self._max_sim_steps is not None and self._physics_steps_executed >= self._max_sim_steps:
                 logger.info(f"MuJoCo step limit reached (--steps {self._max_sim_steps}); stopping simulation loop.")
                 self._running = False
@@ -2762,16 +2907,10 @@ class RobosuiteZmqServer(BaseZmqServer):
                     self._ctrl_debug_emit_apply_logs = True
                     logger.info("[mujoco_ctrl_debug] passive viewer: apply logging enabled")
                 while self._running and viewer.is_running():
-                    # Keep mj_step and viewer.sync under the same lock: sync uses mj_copyDataVisual
-                    # and must not overlap Renderer / mj_forward on other ZMQ threads.
+                    self._step_physics_tick()
+                    # sync reads live data, so it retains the same exclusion as
+                    # an individual step without locking the entire batch.
                     with self._mj_lock:
-                        self._step_planar_yaw_slew()
-                        for _ in range(self._mj_substeps_per_tick):
-                            self._step_controlled_physics_once()
-                            self._physics_steps_executed += 1
-                            self._maybe_report_fall_over()
-                            if self._max_sim_steps is not None and self._physics_steps_executed >= self._max_sim_steps:
-                                break
                         viewer.sync()
                     if self._max_sim_steps is not None and self._physics_steps_executed >= self._max_sim_steps:
                         logger.info(f"MuJoCo step limit reached (--steps {self._max_sim_steps}); closing viewer loop.")
