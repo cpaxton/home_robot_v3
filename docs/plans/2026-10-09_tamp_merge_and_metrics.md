@@ -153,11 +153,11 @@ are authorized or performed by this review.
 
 ## Documentation acceptance
 
-- [Agent API](../apis/tamp.md): canonical tool inputs/JSON outputs, discovery →
+- [Agent API](../api/tamp.md): canonical tool inputs/JSON outputs, discovery →
   plan → execute example, errors/recovery, handle lifetime, partial effects,
   assistance and evidence limits. Current tools are `scene_tasks`,
   `plan_pick_place`, `execute_pick_place_plan`, and `pick_place`.
-- [Placement API](../apis/placement.md): Python planning interface (not a new
+- [Placement API](../api/placement.md): Python planning interface (not a new
   CHAT tool), frames/units, support/payload/voxel contracts, defaults and budgets,
   pure planning versus execution, scope and unsupported geometry.
 - Composition PR must update schema examples and tool metadata together with

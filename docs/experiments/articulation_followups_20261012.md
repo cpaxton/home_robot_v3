@@ -36,7 +36,7 @@ All 98 tests passed (zero skips) across TAMP, scripted selection, Stretch teleme
 and camera-frame contracts. New regressions require measured state after command
 receipt, reject missing snapshots, verify geometry refresh, and ensure no
 unsupported task is silently actuated. Ruff passes. See
-[the articulation API](../apis/tamp_articulation.md).
+[the articulation API](../api/tamp_articulation.md).
 
 #195 now targets main but needs a restack/conflict review after its parent was
 squash-merged; its native-execution work is not validated by these assisted tests.
