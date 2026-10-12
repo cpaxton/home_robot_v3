@@ -401,3 +401,23 @@ def test_command_refresh_moves_geometry_for_welded_children_and_rotates_bounds()
         for field in ("pos", "quat", "bounds", "collision_bounds", "support_surfaces"):
             np.testing.assert_allclose(placements[body][field], expected[body][field])
     assert not np.allclose(placements["object_root"]["bounds"], old)
+
+
+def test_degenerate_box_face_does_not_abort_placement_entry():
+    import mujoco
+
+    from emet.simulation.sim_object_placements import _box_support_patch, _placement_entry_from_geom_ids
+
+    assert _box_support_patch([0, 0, 0], np.eye(3), [0, .1, .1]) is None
+    assert _box_support_patch([0, 0, 0], np.eye(3), [.1, 0, .1]) is None
+    # A zero normal thickness still has a usable two-dimensional top face.
+    assert _box_support_patch([0, 0, 0], np.eye(3), [.1, .1, 0]) is not None
+    tiny = _box_support_patch([0, 0, 0], np.eye(3), [1e-12, .1, .1])
+    assert tiny is not None and np.isfinite(tiny).all()
+    model = mujoco.MjModel.from_xml_string('<mujoco><worldbody><geom type="box" size=".1 .1 .1"/></worldbody></mujoco>')
+    data = mujoco.MjData(model)
+    mujoco.mj_forward(model, data)
+    model.geom_size[0, 0] = 0
+    entry = _placement_entry_from_geom_ids(model, data, [0], cat='degenerate')
+    assert entry is not None and len(entry['support_surfaces']) == 0
+    assert len(entry['collision_bounds']) == 1

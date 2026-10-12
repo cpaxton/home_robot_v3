@@ -248,8 +248,16 @@ def _box_support_patch(position, rotation, half_size):
     projected = edges[:2]
     # A point is inside the parallelogram iff abs(inv(projected) @ delta) <= 1.
     # Bound this over all four corners of an axis-aligned centered rectangle.
+    if not np.isfinite(projected).all() or np.any(half_size[tangent_axes] <= 0):
+        return None
     half = np.abs(projected).sum(axis=1)
-    scale = 1.0 / np.max(np.abs(np.linalg.inv(projected)) @ half)
+    try:
+        inverse = np.linalg.inv(projected)
+    except np.linalg.LinAlgError:
+        return None
+    scale = 1.0 / np.max(np.abs(inverse) @ half)
+    if not np.isfinite(scale) or scale <= 0:
+        return None
     half *= scale
     top = center[2] + np.abs(edges[2]).sum()
     return np.array([np.r_[center[:2] - half, top], np.r_[center[:2] + half, top]])
