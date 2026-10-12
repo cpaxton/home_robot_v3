@@ -62,6 +62,9 @@ class StatusStretchJoints:
     actuator_targets: list[float] | None = None
     actuator_names: list[str] | None = None
 
+    # Privileged simulator state for coherent fixture geometry, never robot sensors.
+    scene_qpos: list[float] | None = None
+
     def __getitem__(self, name: str):
         """For backward compatibility: allows access with the square brackets []"""
         return getattr(self, name)

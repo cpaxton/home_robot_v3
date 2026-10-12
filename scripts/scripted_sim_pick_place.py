@@ -136,8 +136,27 @@ def run_scripted_tool_calls(
                     if name == 'scene_tasks':
                         handles.pop('task_ref', None)
                         tasks = outcome['data'].get('tasks') or []
-                        if tasks:
-                            handles['task_ref'] = tasks[0]['task_ref']
+                        # Only auto-select a task whose advertised actions support
+                        # the remaining script. Explicit task_ref calls are unchanged.
+                        requested_states = {
+                            c.get("arguments", {}).get("state") for c in tool_calls[i + 1:]
+                            if c.get("name") == "set_receptacle_state"
+                            and c.get("arguments", {}).get("task_ref") == "$task_ref"
+                        }
+                        candidates = [t for t in tasks if requested_states.issubset(
+                            set((t.get("access") or {}).get("available_actions", [])))]
+                        if candidates:
+                            selected = candidates[0]
+                            handles['task_ref'] = selected['task_ref']
+                            print("TASK_ADMISSION " + json.dumps({"selection": "advertised_actions",
+                                "requested_states": sorted(requested_states),
+                                "total_tasks": len(tasks), "eligible_tasks": len(candidates),
+                                "selected_task_ref": selected['task_ref']}))
+                        elif requested_states:
+                            print("TASK_ADMISSION " + json.dumps({"code": "articulation_unsupported",
+                                "requested_states": sorted(requested_states), "total_tasks": len(tasks),
+                                "eligible_tasks": 0}))
+                            return False
                     elif name == 'plan_pick_place':
                         handles['plan_ref'] = outcome['data']['plan_ref']
                 except (TypeError, ValueError, KeyError):
