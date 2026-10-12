@@ -93,3 +93,36 @@ def access_precondition(session, body):
     if not group.get("supported"):
         return "articulation_unsupported"
     return None if group.get("state") == "open" else "receptacle_requires_open"
+
+
+def articulation_geometry_changed(current, previous, *, tolerance=1e-6):
+    """Compare against the last geometry rebuild, not the last telemetry sample.
+
+    Joint jitter below one micrometre/microradian does not rescan meshes. State
+    transitions and structural changes always refresh; accumulated drift does too.
+    """
+    if previous is None:
+        return True
+    ignored = {"position", "joint_positions"}
+    if {k: v for k, v in current.items() if k not in ignored} != {
+        k: v for k, v in previous.items() if k not in ignored
+    }:
+        return True
+    a, b = current.get("joint_positions", {}), previous.get("joint_positions", {})
+    return a.keys() != b.keys() or any(
+        not np.isfinite(a[k]) or not np.isfinite(b[k]) or abs(a[k] - b[k]) > tolerance for k in a
+    )
+
+
+def articulation_access(session, body):
+    """Public access evidence and available assisted actions for task admission."""
+    caps = session.get("capabilities") or {}
+    if not caps.get("sim_articulation_state"):
+        return {"state": "unknown", "required_action": None, "available_actions": []}
+    group = articulation_for_body(session, body)
+    from emet.simulation.physical_execution import physical_execution_enabled
+    actionable = (group and group.get("supported") and caps.get("sim_set_joint_qpos")
+                  and session.get("is_simulation") and not physical_execution_enabled())
+    return {"state": group.get("state", "unknown") if group else "not_articulated",
+            "required_action": access_precondition(session, body),
+            "available_actions": ["open", "closed"] if actionable else []}

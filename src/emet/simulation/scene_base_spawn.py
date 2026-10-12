@@ -67,7 +67,6 @@ from emet.simulation.spawn_planar import (
     infer_planar_anchor_body_name,
     planar_spawn_footprint_xy_margin_m,
     try_xlerobot_molmospaces_planar_spawn,
-    world_se2_to_planar_qpos,
     write_planar_base_xyt,
 )
 from emet.simulation.spawn_robocasa import (
@@ -162,7 +161,6 @@ __all__ = [
     "want_molmospaces_autoplace",
     "want_robocasa_freejoint_autoplace",
     "want_robocasa_planar_autoplace",
-    "world_se2_to_planar_qpos",
     "worst_robot_nonfloor_contact_dist",
     "write_freejoint_base_xyzw",
     "write_planar_base_xyt",

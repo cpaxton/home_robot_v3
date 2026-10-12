@@ -248,8 +248,16 @@ def _box_support_patch(position, rotation, half_size):
     projected = edges[:2]
     # A point is inside the parallelogram iff abs(inv(projected) @ delta) <= 1.
     # Bound this over all four corners of an axis-aligned centered rectangle.
+    if not np.isfinite(projected).all() or np.any(half_size[tangent_axes] <= 0):
+        return None
     half = np.abs(projected).sum(axis=1)
-    scale = 1.0 / np.max(np.abs(np.linalg.inv(projected)) @ half)
+    try:
+        inverse = np.linalg.inv(projected)
+    except np.linalg.LinAlgError:
+        return None
+    scale = 1.0 / np.max(np.abs(inverse) @ half)
+    if not np.isfinite(scale) or scale <= 0:
+        return None
     half *= scale
     top = center[2] + np.abs(edges[2]).sum()
     return np.array([np.r_[center[:2] - half, top], np.r_[center[:2] + half, top]])
@@ -647,3 +655,53 @@ def refresh_articulated_body_placements(placements, model, data, bodies):
         else:
             placements[name] = {"cat": entry.get("cat", name), "pos": data.xpos[bid].tolist(),
                                 "quat": data.xquat[bid].tolist()}
+
+
+def measured_held_object_geometry(model, data, body, ee_body):
+    """Privileged geometry measured in one locked simulator state, not a sensor.
+
+    A root-local box covers the entire free-root assembly (including welded
+    mesh children), using actual mesh vertices rather than rotated mesh AABBs.
+    Transform its corners using actual object/EE poses, never
+    the commanded attachment offset. A rigid rotation preserves vertex identity;
+    real slip still changes the result. Caller holds the simulator state lock.
+    """
+    from itertools import product
+
+    from emet.simulation.sim_manipulation import freejoint_ancestor_body_id
+
+    bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, body)
+    eid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, ee_body)
+    if bid < 0 or eid < 0:
+        raise ValueError("Missing payload or end effector")
+    root = freejoint_ancestor_body_id(model, bid)
+    if root is None:
+        raise ValueError("Payload has no free root")
+    mujoco.mj_kinematics(model, data)
+    bodies = [b for b in range(model.nbody) if freejoint_ancestor_body_id(model, b) == root]
+    ids = _geom_ids_for_bodies(model, bodies, data=data)
+    if not ids:
+        raise ValueError("Missing payload geometry")
+    signs = np.array(list(product((-1, 1), repeat=3)))
+    vertices = []
+    ee = data.body(eid)
+    for gid in ids:
+        if model.geom_type[gid] == mujoco.mjtGeom.mjGEOM_MESH:
+            mesh = model.geom_dataid[gid]
+            start, count = model.mesh_vertadr[mesh], model.mesh_vertnum[mesh]
+            local = model.mesh_vert[start:start + count]
+        else:
+            center, half = model.geom_aabb[gid, :3], model.geom_aabb[gid, 3:]
+            local = center + signs * half
+        world = local @ data.geom_xmat[gid].reshape(3, 3).T + data.geom_xpos[gid]
+        vertices.extend((world - data.xpos[root]) @ data.xmat[root].reshape(3, 3))
+    vertices = np.asarray(vertices)
+    low, high = vertices.min(axis=0), vertices.max(axis=0)
+    corners = (low + high) / 2 + signs * (high - low) / 2
+    world = corners @ data.xmat[root].reshape(3, 3).T + data.xpos[root]
+    body_pose = np.eye(4)
+    body_pose[:3, :3] = ee.xmat.reshape(3, 3).T @ data.xmat[bid].reshape(3, 3)
+    body_pose[:3, 3] = (data.xpos[bid] - ee.xpos) @ ee.xmat.reshape(3, 3)
+    return {"frame": "end_effector", "ee_body": ee_body,
+            "body_pose_ee": body_pose.tolist(),
+            "vertices_ee": ((world - ee.xpos) @ ee.xmat.reshape(3, 3)).tolist()}

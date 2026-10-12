@@ -132,6 +132,7 @@ class PlacementScene:
 class HeldObject:
     """Conservative object vertices in the EE frame, with an explicit attachment transform."""
     vertices_ee: np.ndarray
+    body_pose_ee: np.ndarray | None = None
 
     def __post_init__(self):
         vertices = np.array(self.vertices_ee, dtype=float, copy=True)
@@ -141,6 +142,31 @@ class HeldObject:
             raise ValueError("Held-object volume must have positive extent")
         vertices.setflags(write=False)
         object.__setattr__(self, "vertices_ee", vertices)
+        if self.body_pose_ee is not None:
+            pose = np.array(self.body_pose_ee, dtype=float, copy=True)
+            if (pose.shape != (4, 4) or not np.isfinite(pose).all()
+                    or not np.allclose(pose[3], [0, 0, 0, 1])
+                    or not np.allclose(pose[:3, :3].T @ pose[:3, :3], np.eye(3), atol=1e-6)
+                    or not np.isclose(np.linalg.det(pose[:3, :3]), 1)):
+                raise ValueError("Rigid body pose in EE frame required")
+            pose.setflags(write=False)
+            object.__setattr__(self, "body_pose_ee", pose)
+
+    def release_pose(self, object_center, ee_rotation):
+        """World pose of the named body that centers the planned payload volume.
+
+        The semantic mesh child or freejoint origin need not be its volume center.
+        This is for explicit simulator assistance, not physical release sensing.
+        """
+        if self.body_pose_ee is None:
+            raise ValueError("placement_payload_body_pose_missing")
+        rotation = np.asarray(ee_rotation, dtype=float).reshape(3, 3)
+        vertices = self.vertices_ee @ rotation.T
+        offset = (vertices.min(axis=0) + vertices.max(axis=0)) / 2
+        position = np.asarray(object_center) - offset + rotation @ self.body_pose_ee[:3, 3]
+        quat = np.empty(4)
+        mujoco.mju_mat2Quat(quat, (rotation @ self.body_pose_ee[:3, :3]).ravel())
+        return position, quat
 
     @classmethod
     def from_world_bounds(cls, bounds, *, ee_position, ee_rotation):

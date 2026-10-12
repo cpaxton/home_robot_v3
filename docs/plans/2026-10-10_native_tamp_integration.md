@@ -5,23 +5,34 @@ native-observed and native-debug presets; existing defaults unchanged. Privilege
 inputs remain available for debugging and independent scoring. They must not leak
 into observed execution or be represented as real robot sensors.
 
-## Current PR map — October 10 consolidation
+## Current PR map — October 12 integration
 
-This table supersedes earlier stack dispositions in this and the September/
-October planning notes. Main includes #177, #178, #192, and #196. Historical
-run evidence below is retained and is not rescored by consolidation.
+Main includes #177, #178, #179 (consolidated placement/assisted TAMP), #190,
+#192, #193, #196, #200 (planar startup), and #201 (measured Stretch articulation
+and explicit task admission). Historical evidence below remains unchanged.
 
-| Review unit | Base | Includes | Merge gate |
-| --- | --- | --- | --- |
-| #179 Placement and assisted TAMP execution | main | #179, #186 recovery, #187 metrics, #188 assisted articulation, #194 feedback | Resolve placement timeout; pass live placement and containment gates |
-| #193 Capability media and model utilities | #179 | #189 gallery/runner, #191 generic model utilities, #193 Stretch examples | Review final diff and fixture labels; recordings remain scoped controls |
-| #195 Native input contracts | #179 | #195 provenance, measured joint evidence, native guards | Review contract tests; native execution remains explicitly unavailable |
+| Review unit | Base | State and remaining gate |
+| --- | --- | --- |
+| #179 Placement and assisted TAMP | main | Merged; assisted RBY1 smoke passed; sustained support remains unproven |
+| #193 Capability media and model utilities | main | Merged; recordings remain scoped controls |
+| #200 Planar startup fix | main | Merged; live Sourccey startup/open-close passed |
+| #201 Articulation and admission | main | Merged; Stretch and kitchen-2 open-close passed |
+| #195 Native input contracts | main | Integrated main without rewriting history; native adapters still unavailable |
 
-#193 and #195 are sibling PRs. The superseded PRs are closed after their
-commits are preserved in these branches; no branch history is deleted or
-force-pushed. Consolidation does not confer acceptance or relax any gate.
-The #192 official Sourccey model and generator remain authoritative.
-#190 and the separately owned navigation #181–185 remain outside this cleanup.
+#195's post-integration motion/TAMP/configuration suite ran 372 tests: 369 passed,
+zero skipped, and three A* start-escape tests failed identically on the main-based
+baseline. Those unrelated fixtures construct a mock `get_navigation_map` that
+cannot return the expected two arrays. No TAMP/native test failed. All merged
+placement, articulation and startup fixes are preserved; the net implementation
+is the 16-file native-contract change, not a reintroduction of the old stack.
+
+The next acceptance run must use the new supported-action admission policy and
+retain every attempted case. Do not rescore the historical 3/7 placement run.
+Open/close success does not establish arm placement, sustained support or native
+execution. #195 still returns explicit native-unavailable errors in run-agent
+until scene/execution adapters and observed providers are implemented.
+
+The sections below retain historical investigations and their original results.
 
 The previously queued `20261009_175205_1cc9bd` is terminal. Open/close passed.
 Placement found paths, completed grasp, then returned `placement_stale_observation`
@@ -207,3 +218,27 @@ existing placement/containment gates. Next native implementation gate: wire a
 Stretch actuator adapter and observed geometry/evidence providers through the
 public tools, with independent privileged scoring. Sourccey follows on #192's
 official model after contact geometry and available sensing are validated.
+
+### October 12 review and broader-run checkpoint
+
+PR #179 is ready for review. The latest full assisted smoke
+`20261012_101729_f324e0` at `32303c8c` passed, including release and retract.
+All 243 changed-file tests pass (zero skips). The live smoke gate is satisfied;
+the broader containment/support gate remains unproven.
+The preceding review-head smoke failed before release because arrival waited
+only for position; the fix waits for position and orientation together under the
+unchanged deadline and tolerances.
+
+The broader frozen run at `48d5307b` finished 3/7: all three RBY1 kitchen-0 repeats
+passed, two cases rejected unsupported articulation, Sourccey failed startup,
+and kitchen 1 produced no accepted support candidates. Sourccey's same startup
+failure reproduces on main `7f65dbef`; it is a separate initialization follow-up.
+See the October 12 section of
+[placement experiment evidence](../experiments/placement_planning_20261009.md)
+for exact jobs, provenance and limitations. Do not reinterpret the seven-case
+result as 3/3, or treat unsupported cases as successful placement.
+
+Retain separate follow-ups for task admission/capability
+selection, Sourccey initialization, kitchen-1 support-search diagnosis, shutdown
+cancellation, and sustained support/contact scoring. Native execution and live
+observed-geometry providers remain outside this assisted acceptance claim.

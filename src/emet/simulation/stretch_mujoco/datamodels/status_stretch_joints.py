@@ -53,6 +53,17 @@ class StatusStretchJoints:
     # Numeric form of sim_to_real_time_ratio_msg: sim seconds per wall-clock second.
     # Optional so older status dicts still deserialize; None until the FPS counter has a sample.
     sim_to_real_ratio: float | None = None
+    # Snapshot from the physics process, not the parent's stale MjData copy.
+    base_xyz: list[float] | None = None
+    base_up_dot_world_z: float | None = None
+    # Raw MuJoCo data.ctrl in actuator_names order, not normalized joint targets.
+    # In particular the gripper uses simulator units; virtual base translation/
+    # rotation goals are not ctrl entries (the base controller drives the wheels).
+    actuator_targets: list[float] | None = None
+    actuator_names: list[str] | None = None
+
+    # Privileged simulator state for coherent fixture geometry, never robot sensors.
+    scene_qpos: list[float] | None = None
 
     def __getitem__(self, name: str):
         """For backward compatibility: allows access with the square brackets []"""

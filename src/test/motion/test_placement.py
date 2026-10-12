@@ -10,7 +10,6 @@ import pytest
 from emet.motion.placement import (
     placement_base_candidates,
     plan_placement_paths,
-    surface_placement_centers,
     validated_dense_path,
 )
 from emet.motion.placement_geometry import HeldObject, PlacementCollisionChecker, PlacementScene
@@ -108,14 +107,6 @@ def test_gt_only_excludes_held_object_and_requires_bounds():
     assert scene.collides([[2.1]*3, [2.2]*3])
     with pytest.raises(ValueError, match="Missing scene bounds"):
         PlacementScene.from_placements({"held": {}, "support": {}}, held_object="held")
-
-
-def test_surface_targets_fit_whole_payload(rig):
-    _, _, payload = rig
-    points = surface_placement_centers([[-.3, -.3, -.2], [.3, .3, 0]], payload=payload, ee_rotation=np.eye(3))
-    assert len(points) == 25
-    assert all(np.isclose(p[2], .05) for p in points)
-    assert surface_placement_centers([[0]*3, [.01]*3], payload=payload, ee_rotation=np.eye(3)) == []
 
 
 @pytest.mark.parametrize("source", ["ground_truth", "observed_voxels"])

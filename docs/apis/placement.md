@@ -164,8 +164,8 @@ truncation separately from a complete search with no accepted candidates.
 budget flag to the caller. These are evidence for a future rearrangement planner,
 not a minimal blocker set or a claim that an obstacle is movable. Unknown-space
 predicates, full arm paths, measured state and attachment checks remain mandatory.
-A fixed-grid helper remains available for controlled comparisons. Pose orientation
-is still fixed to the measured orientation; failure is not a proof of infeasibility.
+The executor uses a single free-region surface sampler. Pose orientation
+is fixed in world coordinates across candidate base yaws; failure is not a proof of infeasibility.
 
 IK effort is capped both globally (96 calls by default) and per base endpoint
 (12 calls). An unreachable current base must not exhaust the budget before other
@@ -174,8 +174,10 @@ never treated as proof that the scene requires rearrangement.
 
 This is a Python API used by the existing TAMP tools, not an additional CHAT
 tool. The [agent API](tamp.md) describes the public JSON interface. The
-[integration review](../plans/2026-10-09_tamp_merge_and_metrics.md) tracks current
-acceptance blockers; the latest full simulator gate failed.
+[integration review](../plans/2026-10-09_tamp_merge_and_metrics.md) tracks acceptance
+blockers. The [experiment log](../experiments/placement_planning_20261009.md)
+records the October 11 successful assisted CHAT smoke and its limits; native
+contact and repeatability acceptance remain separate gates.
 
 ## Exact private search replay
 
@@ -211,3 +213,34 @@ Measured EE arrival uses the existing simulator time-ratio multiplier, capped at
 seconds. The 35 mm acceptance threshold is unchanged; blocked motion still fails.
 `timeout_wall_s` is logged with arrival evidence. Comparisons to older fixed-wall
 waits must report this timing-contract change rather than claim equal wall budgets.
+
+Ground-truth assisted placement requires `sim_held_object_geometry[body]` in
+simulator session metadata: `frame: "end_effector"`, `ee_body`, and finite
+`vertices_ee` (N×3). The server measures a root-local bounding box across the
+entire free-root assembly and the EE in the same locked state. Mesh bounds use
+actual vertices; primitives use conservative local boxes. These are privileged debug inputs, not simulated hardware sensors.
+Missing geometry or a mismatched EE fails closed; observed-voxel providers
+continue to supply their own coherent `HeldObject` without a GT fallback.
+
+Assisted attachments preserve the measured full relative pose, including
+rotation, for free roots and welded children. Refresh compares corresponding
+material-frame corners with the existing 1 cm tolerance. Rebuilding world AABB
+corners and combining them with a newer EE pose is not a valid slip measurement.
+The published vertices use actual measured transforms, not the saved attachment
+offset, so unexpected relative motion still invalidates a path. This remains
+simulator assistance and is not evidence of a native-contact grasp.
+
+
+Assisted release additionally requires `body_pose_ee` (a rigid 4×4 transform) in
+held-object metadata. It converts the selected payload-volume center into the
+named body's world origin and orientation before snapping. This handles offset
+meshes and welded children; absent body-pose evidence fails before detach.
+`HeldObject.body_pose_ee` is optional for pure planning and must be supplied by a
+provider that requests assisted release. Real release still needs a physical
+controller and measured support/retention evidence.
+
+`from_voxels` and `from_pointcloud` are provider-facing geometry adapters, not a
+second automatic execution path. No live observed-geometry provider is shipped
+here. Voxel-mode execution without an explicit provider rejects the request.
+Large base-yaw changes may make the fixed-world-orientation IK infeasible; this
+bounded search does not establish that placement is impossible.

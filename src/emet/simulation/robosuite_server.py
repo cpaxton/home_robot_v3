@@ -1095,21 +1095,29 @@ class RobosuiteZmqServer(BaseZmqServer):
 
     def _refresh_articulation_state(self):
         """Publish joint evidence and coherent geometry from private data under lock."""
-        from emet.simulation.articulation import scene_articulations
+        from emet.simulation.articulation import articulation_geometry_changed, scene_articulations
         if self._emet_session is None or self._mjmodel is None or self._mjdata is None:
             return
         groups = scene_articulations(self._mjmodel, self._mjdata, self._spec.base_link_name)
-        if groups != self._emet_session.get("sim_articulations"):
+        previous = getattr(self, "_articulation_geometry_groups",
+                           self._emet_session.get("sim_articulations") or [])
+        previous_by_bodies = {tuple(g["bodies"]): g for g in previous}
+        revision = self._emet_session.get("articulation_revision", 0)
+        forced = revision != getattr(self, "_articulation_geometry_revision", revision)
+        changed = [g for g in groups if forced or articulation_geometry_changed(
+            g, previous_by_bodies.get(tuple(g["bodies"])))]
+        if changed or len(groups) != len(previous):
             scratch = mujoco.MjData(self._mjmodel)
             mujoco.mj_copyData(scratch, self._mjmodel, self._mjdata)
             env = self._emet_session.get("environment") or {}
             if env.get("kind") == "molmospaces" and not self._objects_info:
                 from emet.simulation.sim_object_placements import refresh_articulated_body_placements
-                previous = self._emet_session.get("sim_articulations") or []
-                changed = [g for g in groups if g not in previous]
                 bodies = {body for group in changed for body in group["bodies"]}
                 refresh_articulated_body_placements(
                     self._emet_session["sim_object_placements"], self._mjmodel, scratch, bodies)
+                changed_keys = {tuple(g["bodies"]) for g in changed}
+                geometry_groups = [g if tuple(g["bodies"]) in changed_keys else
+                                   previous_by_bodies[tuple(g["bodies"])] for g in groups]
             else:
                 # Aggregate fixture maps need their provider's grouping rules.
                 attach_sim_object_placements_to_session(
@@ -1117,11 +1125,20 @@ class RobosuiteZmqServer(BaseZmqServer):
                     environment_kind=env.get("kind"), model=self._mjmodel, data=scratch,
                     robot_root_name=self._spec.base_link_name,
                 )
-            self._emet_session["sim_articulations"] = groups
+                geometry_groups = groups
+            self._articulation_geometry_groups = geometry_groups
+        elif not hasattr(self, "_articulation_geometry_groups"):
+            self._articulation_geometry_groups = previous
+        self._articulation_geometry_revision = revision
+        # Keep measured state fresh even when geometry does not need rebuilding.
+        self._emet_session["sim_articulations"] = groups
 
     def _attach_emet_session(self, message: dict[str, Any]) -> dict[str, Any]:
         if self._emet_session is not None:
-            from emet.simulation.sim_object_placements import refresh_moved_body_placements
+            from emet.simulation.sim_object_placements import (
+                measured_held_object_geometry,
+                refresh_moved_body_placements,
+            )
 
             with self._mj_lock:
                 if (self._emet_session.get("capabilities") or {}).get("sim_articulation_state"):
@@ -1132,6 +1149,18 @@ class RobosuiteZmqServer(BaseZmqServer):
                     for body in dirty:
                         refresh_moved_body_placements(placements, self._mjmodel, self._mjdata, body)
                 self._placement_geometry_dirty = set()
+                # Measure object and EE together. Mixing observation AABBs with
+                # newer joint states invents apparent attachment slip.
+                held_geometry = {}
+                for body, info in getattr(self, "_kinematic_attachments", {}).items():
+                    try:
+                        held_geometry[body] = measured_held_object_geometry(
+                            self._mjmodel, self._mjdata, body, info["ee_body"])
+                    except ValueError as exc:
+                        # Missing volume must reject placement, not stop telemetry
+                        # and command receipts for the whole simulator.
+                        logger.warning(f"Held geometry unavailable for {body!r}: {exc}")
+                self._emet_session["sim_held_object_geometry"] = held_geometry
             message[EMET_ZMQ_SESSION_KEY] = self._emet_session
         return message
 
@@ -1166,7 +1195,11 @@ class RobosuiteZmqServer(BaseZmqServer):
             R = np.asarray(self._mjdata.body(ee_id).xmat, dtype=np.float64).reshape(3, 3)
             ee_pos = np.asarray(self._mjdata.body(ee_id).xpos, dtype=np.float64).reshape(3)
             world = ee_pos + R @ offset
-            if set_free_body_pose(self._mjmodel, self._mjdata, body, world, update_dynamics=False):
+            quat = None
+            if "rotation_local" in info:
+                quat = np.empty(4)
+                mujoco.mju_mat2Quat(quat, (R @ info["rotation_local"]).ravel())
+            if set_free_body_pose(self._mjmodel, self._mjdata, body, world, quat, update_dynamics=False):
                 self._patch_emet_session_body_pos(body, world.tolist())
 
     def get_scene_summary(self) -> str:
@@ -1304,6 +1337,7 @@ class RobosuiteZmqServer(BaseZmqServer):
         self._ensure_offscreen_framebuffer(_PRIMARY_RW, _PRIMARY_RH)
         if self._primary_renderer is None:
             self._primary_renderer = mujoco.Renderer(self._mjmodel, _PRIMARY_RH, _PRIMARY_RW)
+            self._primary_renderer._scene_option.flags[mujoco.mjtVisFlag.mjVIS_RANGEFINDER] = False
         return self._primary_renderer
 
     def _discard_primary_renderer_unlocked(self) -> None:
@@ -2411,6 +2445,7 @@ class RobosuiteZmqServer(BaseZmqServer):
                             self._kinematic_attachments[body] = {
                                 "ee_body": ee,
                                 "offset_local": offset_local,
+                                "rotation_local": R.T @ self._mjdata.body(body_id).xmat.reshape(3, 3),
                             }
                             world = ee_pos + R @ offset_local
                             if not set_free_body_pose(self._mjmodel, self._mjdata, body, world):
@@ -2704,6 +2739,7 @@ class RobosuiteZmqServer(BaseZmqServer):
             "base_xyz": base_xyz,
             "base_up_dot_world_z": base_up,
             "actuator_targets": joint_targets,
+            "actuator_names": list(self._spec.actuator_names),
             "ee_pose": np.eye(4),
             "joint_positions": q,
             "joint_velocities": dq,

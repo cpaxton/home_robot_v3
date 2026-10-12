@@ -423,8 +423,9 @@ class KinematicPickPlaceExecutor:
                 return reason is None
             time.sleep(min(.01, max(0., deadline - time.monotonic())))
 
-    def _wait_measured_ee(self, target: np.ndarray, *, timeout_s: float = 3.0) -> tuple[bool, float]:
-        """Require measured joint FK to reach the IK target before attaching."""
+    def _wait_measured_ee(self, target: np.ndarray, *, timeout_s: float = 3.0,
+                          target_rotation=None) -> tuple[bool, float]:
+        """Wait for measured position and optional orientation within one deadline."""
         if not np.isfinite(timeout_s) or timeout_s < 0:
             raise ValueError("Measured arrival requires a finite nonnegative timeout")
         # Match trajectory/sleep timing to the advertised simulation rate. Three
@@ -432,27 +433,46 @@ class KinematicPickPlaceExecutor:
         wall_timeout = self._scaled_dt(timeout_s) if timeout_s else 0.0
         deadline = time.monotonic() + wall_timeout
         error = float('inf')
+        orientation_error = float('inf') if target_rotation is not None else 0.0
+        if target_rotation is not None:
+            from scipy.spatial.transform import Rotation
+            target_rotation = np.asarray(target_rotation, dtype=float).reshape(3, 3)
+            if (not np.isfinite(target_rotation).all()
+                    or not np.allclose(target_rotation.T @ target_rotation, np.eye(3), atol=1e-6)
+                    or not np.isclose(np.linalg.det(target_rotation), 1)):
+                raise ValueError("Rigid target rotation required")
         observed = None
         while True:
             if self._sync_qpos_from_robot():
                 observed = np.asarray(self._data.body(self.ee_body).xpos).copy()
                 error = float(np.linalg.norm(observed - target))
+                if target_rotation is not None:
+                    actual = self._data.body(self.ee_body).xmat.reshape(3, 3)
+                    orientation_error = (float(Rotation.from_matrix(target_rotation @ actual.T).magnitude())
+                                         if np.isfinite(actual).all() else float('inf'))
             else:
                 observed = None
                 error = float('inf')
-            if error <= self.ik_tol_m or time.monotonic() >= deadline:
+                orientation_error = float('inf') if target_rotation is not None else 0.0
+            accepted = error <= self.ik_tol_m and orientation_error <= .1
+            if accepted or time.monotonic() >= deadline:
                 break
             time.sleep(.05)
         self.last_ee_verification = {
             'target_xyz': np.asarray(target).tolist(),
             'observed_xyz': None if observed is None else observed.tolist(),
             'error_m': error if np.isfinite(error) else None,
-            'tolerance_m': self.ik_tol_m, 'accepted': bool(error <= self.ik_tol_m),
+            'tolerance_m': self.ik_tol_m, 'accepted': bool(accepted),
             'timeout_wall_s': wall_timeout,
         }
+        if target_rotation is not None:
+            self.last_ee_verification.update({
+                'orientation_error_rad': orientation_error if np.isfinite(orientation_error) else None,
+                'orientation_tolerance_rad': .1,
+            })
         self.last_ee_verification.update(self._joint_tracking_evidence())
         logger.info('KinematicPickPlace measured EE: ' + json.dumps(self.last_ee_verification))
-        return error <= self.ik_tol_m, error
+        return bool(accepted), error
 
     def _joint_tracking_evidence(self) -> dict[str, Any]:
         """Separate the planner target, server-held commands, and observed joints."""
@@ -679,9 +699,15 @@ class KinematicPickPlaceExecutor:
         if not placements or body not in placements or receptacle not in placements:
             raise ValueError("placement_geometry_missing")
         scene = PlacementScene.from_placements(placements, held_object=body)
-        ee = self._data.body(self.ee_body)
-        payload = HeldObject.from_world_bounds(placements[body]["bounds"],
-                                              ee_position=ee.xpos, ee_rotation=ee.xmat)
+        # Simulator-only, coherent measured geometry. World AABB corners are
+        # not material points and cannot be used to compare attachment frames.
+        session = self.robot.get_emet_session() or {}
+        held = (session.get("sim_held_object_geometry") or {}).get(body)
+        if not isinstance(held, dict) or held.get("frame") != "end_effector":
+            raise ValueError("placement_payload_geometry_missing")
+        if held.get("ee_body") != self.ee_body:
+            raise ValueError("placement_payload_frame_mismatch")
+        payload = HeldObject(held.get("vertices_ee"), body_pose_ee=held.get("body_pose_ee"))
         # A semantic appliance AABB is not a support surface. New simulators
         # publish grounded horizontal collision faces; explicit providers can
         # supply observed patches or interior shelf regions.
@@ -790,8 +816,6 @@ class KinematicPickPlaceExecutor:
             contact_bodies=(self.ee_body, *self.profile.gripper_contact_bodies()))
 
     def _execute_placement_segment(self, path, target, rotation, checker):
-        from scipy.spatial.transform import Rotation
-
         from emet.motion.mujoco_arm_ik import joint_qpos_addrs
         from emet.motion.placement import validated_dense_path
 
@@ -810,16 +834,12 @@ class KinematicPickPlaceExecutor:
             self._stream_arm_q(point)
             self._sleep(self.traj_dt)
         self._last_cmd_q = dense[-1].copy()
-        ok, error = self._wait_measured_ee(target)
-        actual = self._data.body(self.ee_body).xmat.reshape(3, 3)
-        orientation_error = float(Rotation.from_matrix(rotation @ actual.T).magnitude())
+        ok, error = self._wait_measured_ee(target, target_rotation=rotation)
         if not isinstance(self.last_ee_verification, dict):
             self._last_motion_failure = "missing_pose_evidence"
             return False, error
-        self.last_ee_verification.update({"orientation_error_rad": orientation_error,
-            "orientation_tolerance_rad": .1, "accepted": bool(ok and orientation_error <= .1)})
         logger.info("Placement measured pose: " + json.dumps(self.last_ee_verification))
-        if not ok or orientation_error > .1:
+        if not ok:
             self._last_motion_failure = "tracking_failed"
             return False, error
         return True, error
@@ -903,15 +923,20 @@ class KinematicPickPlaceExecutor:
                 return KinematicPickPlaceResult(False, body, self.ee_body, None, p_err, self._stage_failure(stage))
         # Detach first so per-step kinematic snap cannot pull the freejoint back to the EE,
         # then oracle-snap like OVMM manip_mode=sim and score before physics drops a mid-air COM.
+        try:
+            release_position, release_quat = checker.payload.release_pose(place, selected.ee_rotation)
+        except ValueError:
+            return KinematicPickPlaceResult(False, body, self.ee_body, None, None,
+                                            "placement_geometry_unavailable")
         self.last_release_evidence = {"detach_command": "unknown", "placement_verified": None}
         robot_zmq_detach_body(self.robot, body)
         self.last_release_evidence["detach_command"] = "returned"
-        robot_zmq_set_body_pose(self.robot, body, place)
+        robot_zmq_set_body_pose(self.robot, body, release_position, quat=release_quat)
         self._sleep(0.25)
         ok_place, p_err = self._verify_place_xy(body, place[:2])
         if not ok_place:
             # Freejoint children can lag one publish step after detach+snap.
-            robot_zmq_set_body_pose(self.robot, body, place)
+            robot_zmq_set_body_pose(self.robot, body, release_position, quat=release_quat)
             self._sleep(0.2)
             ok_place, p_err = self._verify_place_xy(body, place[:2])
         self.last_release_evidence["placement_verified"] = bool(ok_place)

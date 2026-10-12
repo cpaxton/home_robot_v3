@@ -11,6 +11,7 @@
 # Copyright (c) Hello Robot, Inc.
 # Stretch-only MuJoCo ZMQ server. Imported only when --robot stretch to avoid loading pinocchio/hppfcl for rby1/galaxea_r1.
 
+import copy
 import threading
 import time
 import timeit
@@ -288,6 +289,8 @@ class MujocoZmqServer(BaseZmqServer):
 
         self._camera_data = None
         self._status = None
+        self._articulation_lock = threading.RLock()
+        self._articulation_model = None
         self._initial_xyt = None
         self._manip_xyt = None
 
@@ -763,6 +766,7 @@ class MujocoZmqServer(BaseZmqServer):
             "dof": int(spec.dof),
             "sim_set_body_pose": True,
             "sim_set_joint_qpos": True,
+            "sim_articulation_state": False,
         }
         session: dict[str, Any] = {
             EMET_ZMQ_SESSION_SCHEMA_VERSION_KEY: CURRENT_EMET_ZMQ_SESSION_SCHEMA_VERSION,
@@ -778,6 +782,7 @@ class MujocoZmqServer(BaseZmqServer):
             session["spawn_floor_map"] = self._environment_descriptor["spawn_floor_map"]
         env_kind = env.get("kind") if isinstance(env, dict) else None
         gt_model, gt_data = self._gt_model_data_for_session()
+        self._articulation_model = gt_model
         attach_sim_object_placements_to_session(
             session,
             objects_info=self.objects_info,
@@ -872,9 +877,59 @@ class MujocoZmqServer(BaseZmqServer):
             init = np.zeros(3, dtype=np.float64)
         return xyt_global_to_base(raw, init)
 
+    def _refresh_articulation_state(self):
+        """Reconstruct fixture FK only from a measured physics-process snapshot.
+
+        The parent's MjData and XML defaults are not live joint measurements.
+        This privileged state stays in simulator metadata, not robot sensors.
+        Caller holds _articulation_lock.
+        """
+        import mujoco
+
+        from emet.simulation.articulation import articulation_geometry_changed, scene_articulations
+
+        session = self._emet_session
+        model = self._articulation_model
+        values = getattr(self._status, "scene_qpos", None)
+        if session is None:
+            return
+        caps = session.setdefault("capabilities", {})
+        caps["sim_articulation_state"] = False
+        if model is None or values is None:
+            return
+        qpos = np.asarray(values, dtype=float)
+        if qpos.shape != (model.nq,) or not np.isfinite(qpos).all():
+            return
+        scratch = mujoco.MjData(model)
+        scratch.qpos[:] = qpos
+        mujoco.mj_kinematics(model, scratch)
+        groups = scene_articulations(model, scratch, "base_link")
+        previous = getattr(self, "_articulation_geometry_groups", [])
+        old = {tuple(g["bodies"]): g for g in previous}
+        changed = [g for g in groups if articulation_geometry_changed(g, old.get(tuple(g["bodies"])))]
+        if changed or len(previous) != len(groups):
+            env = session.get("environment") or {}
+            if env.get("kind") == "molmospaces" and not self.objects_info:
+                from emet.simulation.sim_object_placements import refresh_articulated_body_placements
+                refresh_articulated_body_placements(session["sim_object_placements"], model,
+                    scratch, {body for group in changed for body in group["bodies"]})
+                keys = {tuple(g["bodies"]) for g in changed}
+                self._articulation_geometry_groups = [g if tuple(g["bodies"]) in keys
+                    else old[tuple(g["bodies"])] for g in groups]
+            else:
+                attach_sim_object_placements_to_session(session, objects_info=self.objects_info,
+                    environment_kind=env.get("kind"), model=model, data=scratch, robot_root_name="base_link")
+                self._articulation_geometry_groups = groups
+        session["sim_articulations"] = groups
+        caps["sim_articulation_state"] = True
+
     def _attach_emet_session(self, message: dict[str, Any]) -> dict[str, Any]:
-        if self._emet_session is not None:
-            message[EMET_ZMQ_SESSION_KEY] = self._emet_session
+        if self._emet_session is None:
+            return message
+        with self._articulation_lock:
+            if self._emet_session is not None:
+                self._refresh_articulation_state()
+                message[EMET_ZMQ_SESSION_KEY] = copy.deepcopy(self._emet_session)
         return message
 
     @override
@@ -939,6 +994,14 @@ class MujocoZmqServer(BaseZmqServer):
             joint, value = parse_sim_set_joint_qpos_action(action[EMET_ACTION_SIM_SET_JOINT_QPOS_KEY])
             if joint and value is not None:
                 measured = self.robot_sim.set_joint_qpos(joint, value, wait=True, timeout=2.0)
+                with self._articulation_lock:
+                    if self._emet_session is not None:
+                        self._emet_session["articulation_revision"] = int(
+                            self._emet_session.get("articulation_revision", 0)) + 1
+                        self._emet_session["articulation_result"] = {
+                            "request_id": action[EMET_ACTION_SIM_SET_JOINT_QPOS_KEY].get("request_id"),
+                            "joint": joint, "applied": measured is not None and bool(np.isfinite(measured)),
+                        }
                 if measured is not None:
                     logger.info(f"sim_set_joint_qpos: {joint!r} requested={value:.4f} measured={measured:.4f}")
                 else:
@@ -1119,6 +1182,10 @@ class MujocoZmqServer(BaseZmqServer):
             return None
         message = {
             "base_pose": base_pose,
+            "base_xyz": getattr(self._status, "base_xyz", None),
+            "base_up_dot_world_z": getattr(self._status, "base_up_dot_world_z", None),
+            "actuator_targets": getattr(self._status, "actuator_targets", None),
+            "actuator_names": getattr(self._status, "actuator_names", None),
             "ee_pose": ee_pose,
             "joint_positions": q,
             "joint_velocities": dq,

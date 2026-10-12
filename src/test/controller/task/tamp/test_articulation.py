@@ -216,3 +216,89 @@ def test_articulation_refresh_does_not_rescan_unaffected_scene(monkeypatch):
     server._refresh_articulation_state()
     assert server._emet_session["sim_object_placements"]["unrelated"] is untouched
     assert set(touched) == {server._mjmodel.body("fixture").id, server._mjmodel.body("door").id}
+
+
+def test_articulation_jitter_publishes_measured_state_without_rescan(monkeypatch):
+    from emet.simulation import sim_object_placements
+
+    server = server_fixture()
+    server._refresh_articulation_state()
+    original = sim_object_placements.refresh_articulated_body_placements
+    calls = []
+    def tracked(*args):
+        calls.append(1)
+        return original(*args)
+    monkeypatch.setattr(sim_object_placements, 'refresh_articulated_body_placements', tracked)
+    for position in (2e-7, 4e-7, 6e-7, 8e-7):
+        server._mjdata.qpos[-1] = position
+        server._refresh_articulation_state()
+        assert server._emet_session['sim_articulations'][0]['position'] == position
+    assert not calls
+    # Drift is compared to the geometry baseline, not just the previous sample.
+    server._mjdata.qpos[-1] = 1.2e-6
+    server._refresh_articulation_state()
+    assert len(calls) == 1
+    server._emet_session['articulation_revision'] += 1
+    server._refresh_articulation_state()
+    assert len(calls) == 2
+
+
+def stretch_robot():
+    from emet.simulation.mujoco_server_stretch import MujocoZmqServer
+    from emet.simulation.sim_manipulation import set_named_joint_qpos
+    from emet.simulation.sim_object_placements import placements_from_mujoco_model, placements_to_session_dict
+    model, data = fixture()
+    server = object.__new__(MujocoZmqServer)
+    server._articulation_lock = threading.RLock()
+    server._articulation_model = model
+    server._status = SimpleNamespace(scene_qpos=data.qpos.tolist())
+    server.objects_info = None
+    server._emet_session = {'is_simulation': True, 'environment': {'kind': 'molmospaces'},
+        'capabilities': {'sim_set_joint_qpos': True},
+        'sim_object_placements': placements_to_session_dict(placements_from_mujoco_model(model, data))}
+    def set_joint(joint, value, **kwargs):
+        assert set_named_joint_qpos(model, data, joint, value)
+        server._status = SimpleNamespace(scene_qpos=data.qpos.tolist())
+        return float(data.joint(joint).qpos[0])
+    server.robot_sim = SimpleNamespace(set_joint_qpos=set_joint, stop=lambda: None)
+    return Robot(server), data
+
+
+def test_stretch_measured_snapshot_open_close_and_geometry():
+    from emet.simulation.articulation import articulation_access
+    robot, data = stretch_robot()
+    ctx = context(robot)
+    before = robot.get_emet_session()
+    assert articulation_access(before, 'fixture')['available_actions'] == ['open', 'closed']
+    closed = copy.deepcopy(before['sim_object_placements']['door']['collision_bounds'])
+    for state in ['open', 'closed']:
+        result = set_receptacle_state(robot, ctx, 'task:test', state, timeout_s=.2)
+        assert result['status'] == 'ok'
+        assert result['data']['verified']
+    after = robot.get_emet_session()
+    assert after['articulation_revision'] == 2
+    np.testing.assert_allclose(after['sim_object_placements']['door']['collision_bounds'], closed)
+    data.qpos[-1] = 1.57
+    robot.server._status.scene_qpos = data.qpos.tolist()
+    opened = robot.get_emet_session()
+    assert not np.allclose(opened['sim_object_placements']['door']['collision_bounds'], closed)
+    # A captured response must not be mutated by future publication.
+    assert before['sim_articulations'][0]['state'] == 'closed'
+
+
+def test_stretch_missing_snapshot_never_uses_xml_defaults_as_measurement():
+    robot, _ = stretch_robot()
+    ctx = context(robot)
+    robot.server._status.scene_qpos = None
+    assert not robot.get_emet_session()['capabilities']['sim_articulation_state']
+    assert set_receptacle_state(robot, ctx, 'task:test', 'open')['code'] == 'articulation_unsupported'
+    assert not robot.sent
+
+
+def test_stretch_receipt_without_new_measured_state_does_not_verify():
+    robot, _ = stretch_robot()
+    ctx = context(robot)
+    robot.server.robot_sim.set_joint_qpos = lambda *args, **kwargs: 1.57
+    result = set_receptacle_state(robot, ctx, 'task:test', 'open', timeout_s=.01)
+    assert result['code'] == 'articulation_verification_timeout'
+    assert not result['data']['verified']

@@ -261,3 +261,29 @@ def test_measured_arrival_scales_slow_sim_budget_without_accepting_blockage(monk
     assert ex.last_ee_verification["timeout_wall_s"] == 3 / ratio
     assert clock[0] <= 3 / ratio + .05
     assert (error <= .035) is accepted
+
+
+@pytest.mark.parametrize('case', ['settles', 'rotation_blocked', 'position_blocked', 'stale'])
+def test_pose_arrival_waits_for_both_components_under_one_deadline(monkeypatch, case):
+    from scipy.spatial.transform import Rotation
+
+    from emet.controller.manipulation import kinematic_pick_place as module
+
+    clock = [0.]
+    monkeypatch.setattr(module, 'time', SimpleNamespace(
+        monotonic=lambda: clock[0], sleep=lambda dt: clock.__setitem__(0, clock[0] + dt)))
+    ex = object.__new__(KinematicPickPlaceExecutor)
+    ex.robot = SimpleNamespace(_state={})
+    ex.ee_body, ex.ik_tol_m = 'tool', .035
+    ex._data = SimpleNamespace(body=lambda _: SimpleNamespace(
+        xpos=np.array([.1 if case == 'position_blocked' else 0., 0., 0.]),
+        xmat=Rotation.from_euler('z', .12 if case == 'rotation_blocked' or clock[0] < .5 else .05).as_matrix()))
+    ex._sync_qpos_from_robot = lambda: case != 'stale' or clock[0] < .3
+    ex._joint_tracking_evidence = lambda: {}
+    accepted, _ = ex._wait_measured_ee(np.zeros(3), timeout_s=1., target_rotation=np.eye(3))
+    assert accepted == (case == 'settles')
+    assert .5 <= clock[0] <= 1.05
+    assert ex.last_ee_verification['timeout_wall_s'] == 1.
+    assert ex.last_ee_verification['accepted'] == accepted
+    if not accepted:
+        assert clock[0] >= 1.
