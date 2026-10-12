@@ -152,7 +152,9 @@ def failure_code(message: str) -> str:
         "ambiguous_object_use_scene_tasks": "ambiguous_object",
         "ambiguous_receptacle_use_scene_tasks": "ambiguous_receptacle",
     }.get(message, message)
-    parts = message.split(":")
+    # MCTS wraps a bounded grounding failure; preserve only its known code,
+    # never arbitrary body identifiers or planner details from that wrapper.
+    parts = [part.removeprefix("last_grounding=") for part in message.split(":")]
     for part in reversed(parts):
         if part in PLACEMENT_CODES:
             return part
@@ -194,6 +196,7 @@ def failure_code(message: str) -> str:
         "object_not_in_live_scene",
         "receptacle_not_in_live_scene",
         "no_reachable_grasp",
+        "no_plan_within_budget",
         "no_grasp_candidates",
         "object_not_in_gt",
         "execution_error",
@@ -205,4 +208,4 @@ def failure_code(message: str) -> str:
         "planner_error",
         "approach_failed",
     }
-    return parts[0] if parts[0] in allowed else "operation_failed"
+    return next((part for part in reversed(parts) if part in allowed), "operation_failed")
