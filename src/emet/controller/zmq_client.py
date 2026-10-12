@@ -1538,6 +1538,12 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         next_action = {"base_velocity": {"v": forward, "w": rotational}}
         self.send_action(next_action)
 
+    def check_base_poses(self, poses, *, timeout: float = 10.0) -> dict:
+        """Read-only GT endpoint validation on advertising simulators."""
+        from emet.core.command_client import check_base_poses
+
+        return check_base_poses(self, poses, timeout=timeout)
+
     def send_action(
         self,
         next_action: dict[str, Any],
