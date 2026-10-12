@@ -173,3 +173,25 @@ existing placement/containment gates. Next native implementation gate: wire a
 Stretch actuator adapter and observed geometry/evidence providers through the
 public tools, with independent privileged scoring. Sourccey follows on #192's
 official model after contact geometry and available sensing are validated.
+
+### October 12 review and broader-run checkpoint
+
+PR #179 is ready for review, but merge remains pending the latest full smoke
+`20261012_101729_f324e0` at `32303c8c`. All 243 changed-file tests pass (zero skips).
+The preceding review-head smoke failed before release because arrival waited
+only for position; the fix waits for position and orientation together under the
+unchanged deadline and tolerances.
+
+The broader frozen run at `48d5307b` finished 3/7: all three RBY1 kitchen-0 repeats
+passed, two cases rejected unsupported articulation, Sourccey failed startup,
+and kitchen 1 produced no accepted support candidates. Sourccey's same startup
+failure reproduces on main `7f65dbef`; it is a separate initialization follow-up.
+See the October 12 section of
+[placement experiment evidence](../experiments/placement_planning_20261009.md)
+for exact jobs, provenance and limitations. Do not reinterpret the seven-case
+result as 3/3, or treat unsupported cases as successful placement.
+
+After the smoke, retain separate follow-ups for task admission/capability
+selection, Sourccey initialization, kitchen-1 support-search diagnosis, shutdown
+cancellation, and sustained support/contact scoring. Native execution and live
+observed-geometry providers remain outside this assisted acceptance claim.
