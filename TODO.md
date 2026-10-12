@@ -921,6 +921,14 @@ Offline units + scripted table smokes exist; these are the remaining **real / in
 - [ ] **Paper figures**: keep regenerating `manip_figures` / chase-cam MP4s from scripted TAMP on the scene used in the paper; check in paths under `~/runs/emet/` only (not repo blobs).
 ## Extracted shared-agent review stack (2026-10-09)
 
+- [ ] Complete exact-head readiness gates in `docs/plans/shared_stack_readiness.md`.
+      Oct 12 EQA replay remains main 4/4 vs integration 1/4; do not promote upper slices.
+- [x] Separate optional coverage into #198; move measured-head repair to #184 and
+      isolated evidence / job-ordering repairs to #185.
+- [ ] Rerun Molmo after preserving the configured venv interpreter; old wrapper
+      discovery errors are infrastructure failures, not scored misses.
+- [ ] Rerun #198 coverage ablation after flat-parameter dispatch repair; the old
+      nominal coverage run actually used `local` and is not effect evidence.
 - [x] Remove MuJoCo/EGL import from A* grid helpers; before/after one-frame probe
       reproduces exit 134 then successful Habitat rendering. Repair included in #182.
 - [x] Publish Stretch body-up/XYZ and named actuator controls from the physics

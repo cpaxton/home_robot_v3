@@ -4,6 +4,10 @@ Central map of **how to run tests**, **what each suite validates**, and **where 
 
 ## Run from this repo
 
+Current slice ownership, reproduced failures and exact-head gates are tracked in
+[the stack readiness ledger](plans/shared_stack_readiness.md). Coverage is now
+separate PR #198; integrated pilot results do not clear the public slice heads.
+
 ### Extracted shared-agent stack (October 2026)
 
 #### Current review status (2026-10-11)
