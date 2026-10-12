@@ -35,9 +35,11 @@ class RRT(Planner):
         p_sample_goal: float = 0.1,
         goal_tolerance: float = 1e-4,
         max_iter: int = 100,
+        rng=None,
     ):
         """Create RRT planner with configuration"""
         super().__init__(space, validate_fn)
+        self.rng = rng
         self.p_sample_goal = p_sample_goal
         self.goal_tolerance = goal_tolerance
         self.max_iter = max_iter
@@ -122,7 +124,7 @@ class RRT(Planner):
         if force_sample_goal or next_state is not None:
             should_sample_goal = True
         else:
-            should_sample_goal = random() < self.p_sample_goal
+            should_sample_goal = (self.rng.random() if self.rng is not None else random()) < self.p_sample_goal
 
         # If we do not pass in any nodes, use the planner's stored set of nodes
         if nodes is None:

@@ -776,6 +776,31 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         )
     )
 
+    @json_tool
+    def set_receptacle_state(task_ref: str, state: str) -> dict:
+        from emet.controller.task.tamp.articulation import set_receptacle_state as apply_state
+
+        return apply_state(_tamp_robot(), context, task_ref, state)
+
+    tools.append(
+        Tool(
+            name="set_receptacle_state",
+            description="Simulator-assisted open/close of the receptacle selected by task_ref. "
+            "Teleports one supported joint; verifies state and refreshes geometry. "
+            "No physical manipulation or door-sweep collision guarantee. Replan afterward.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "task_ref": {"type": "string", "description": "Current scene_tasks handle."},
+                    "state": {"type": "string", "enum": ["open", "closed"]},
+                },
+                "required": ["task_ref", "state"],
+            },
+            func=set_receptacle_state,
+            returns_info=True,
+        )
+    )
+
     # -- scene_tasks ----------------------------------------------------------
     @json_tool
     def scene_tasks(object_filter: str = "", robot: str = "") -> dict:
@@ -857,6 +882,11 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
                 reachability_status = "evaluated"
             except Exception:
                 reachability_status = "unavailable"
+        from emet.simulation.articulation import articulation_access
+
+        def access(ref):
+            return articulation_access(session if live_sim else {}, ref.receptacle_body)
+
         return response(
             "scene_tasks",
             data={
@@ -866,6 +896,7 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
                         "object_name": ref.object_query,
                         "receptacle_name": ref.receptacle_query,
                         "start_receptacle": ref.start_receptacle,
+                        "access": access(ref),
                     }
                     for ref in task_refs
                 ],
