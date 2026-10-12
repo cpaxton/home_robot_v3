@@ -11,6 +11,28 @@ import pytest
 from emet.controller.dynamem import look
 
 
+def test_canonical_config_selects_coverage_through_runtime_parameters(monkeypatch, tmp_path):
+    from pathlib import Path
+
+    from emet.core.parameters import get_parameters
+    from emet.eval.benchmark_dynagraph import enable_query_driven_memory
+    from emet.eval.ovmm_find_phase import apply_backend_parameters
+
+    root = Path(__file__).resolve().parents[3]
+    config = tmp_path / "coverage.yaml"
+    config.write_text(f"extends: {root}/configs/emet/default.yaml\nmapping:\n  scan_profile: coverage\n")
+    monkeypatch.setenv("EMET_CONFIG", str(config))
+    params = apply_backend_parameters(get_parameters("dynav_config.yaml", robot="stretch"), "lazy_graph")
+    enable_query_driven_memory(params, "lazy_graph")
+    assert params.get("scan_profile", "local") == "coverage"
+    agent = SimpleNamespace(parameters=params, robot=SimpleNamespace(move_to_nav_posture=Mock()))
+    scan = Mock(return_value={"ok": True, "profile": "coverage"})
+    monkeypatch.setattr(look, "_coverage_scan_agent", scan)
+    assert look.rotate_in_place(agent)["profile"] == "coverage"
+    scan.assert_called_once_with(agent, deadline=None)
+    agent.robot.move_to_nav_posture.assert_called_once()
+
+
 @pytest.fixture
 def rig(monkeypatch):
     now = [0.0]

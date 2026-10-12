@@ -678,7 +678,7 @@ def maybe_save_rerun_recording(self) -> None:
 def rotate_in_place(self, *, n_steps: int | None = None, profile=None, deadline=None):
     if profile is None:
         params = getattr(self, "parameters", None)
-        profile = params.get("mapping/scan_profile", "local") if params is not None else "local"
+        profile = params.get("scan_profile", "local") if params is not None else "local"
     if profile == "coverage":
         self.robot.move_to_nav_posture()
         return _coverage_scan_agent(self, deadline=deadline)
