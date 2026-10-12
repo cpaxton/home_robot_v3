@@ -165,12 +165,19 @@ def test_kinematic_bridge_tries_collision_and_ik_alternatives(monkeypatch):
     robot = Robot()
     robot.check_base_poses = lambda poses: {"poses": np.asarray(poses).tolist(), "clear": [False] + [True] * 15}
     seen = []
-    executor = SimpleNamespace(_ensure_model=lambda: True, _model=None, _data=None, ee_body="tool", joint_names=["arm"])
+    executor = SimpleNamespace(_ensure_model=lambda: True, _model=None, _data=None, ee_body="tool",
+                               joint_names=["arm"], pregrasp_standoff_m=.18, lift_m=.22,
+                               ik_tol_m=.024, ik_max_iters=123)
     monkeypatch.setattr(kinematic_pick_place, "KinematicPickPlaceExecutor", lambda *a, **k: executor)
     monkeypatch.setattr(task_search, "_sync_executor_base_to_xyt", lambda ex, pose: seen.append(pose.copy()))
-    monkeypatch.setattr(
-        task_search, "rank_grasps_by_ik", lambda *a, **k: [(0, 0.001 if len(seen) > 1 else 1.0, len(seen) > 1)]
-    )
+    def rank(*args, **kwargs):
+        assert kwargs["pregrasp_standoff_m"] == .18
+        assert kwargs["lift_m"] == .22
+        assert kwargs["ik_tol_m"] == .006
+        assert kwargs["ik_max_iters"] == 123
+        return [(0, 0.001 if len(seen) > 1 else 1.0, len(seen) > 1)]
+
+    monkeypatch.setattr(task_search, "rank_grasps_by_ik", rank)
     result = bridge.build_agent_pick_place_plan(robot, "bowl", "table", seed=0)
     assert result.mode == "kinematic"
     assert result.plan.success, result.reason
