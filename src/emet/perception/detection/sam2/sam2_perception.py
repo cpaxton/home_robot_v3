@@ -112,6 +112,8 @@ class SAM2Perception(PerceptionModule):
         Returns:
             masks: boolean masks of shape (N, H, W)
         """
+        # OWLSAM supplies PIL images; normalize before shape validation.
+        image = np.asarray(image)
         xyxy = np.asarray(xyxy)
         if xyxy.size == 0:
             return np.empty((0, *image.shape[:2]), dtype=bool)
