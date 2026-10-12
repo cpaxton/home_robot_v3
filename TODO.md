@@ -3,6 +3,20 @@
 Short checklist for agent/hardware polish that is not worth a full plan doc yet.
 Strike through or move to a PR when done.
 
+## Shared evidence/navigation stack (#199 / #202)
+
+- [x] Validate main integration: frozen `0fb37763` EQA diagnostic 1/4, unchanged
+      from parent; no infrastructure errors. Not restored EQA acceptance.
+- [x] Fix reviewed SAM2 PIL input, lost sweep diagnostics, and invalid-depth
+      obstruction; retain unknown measured clearance for planning fallbacks.
+- [ ] Clear anchor-less investigate, precision waypoint policy, map-edge coverage,
+      and exact-model wheel/head checks before claiming stack acceptance.
+- [ ] Integrate timestamped shared view history and actual pre-turn capture;
+      compare selectors on fixed histories, then EQA/small OVMM.
+- [ ] Audit assessment/final-answer disagreements separately from view selection;
+      do not tune answer precedence to q14. See
+      [consolidated evidence and review](docs/plans/eqa_context_evidence.md).
+
 ## TAMP simulator API readiness (2026-10-05)
 
 - [x] Reclaim disposable pip caches; preserve source worktrees, datasets and run evidence.
