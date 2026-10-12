@@ -17,7 +17,7 @@ import numpy as np
 
 from emet.motion.arm_rrt import joint_limits_from_model, make_arm_validate_fn, plan_arm_joint_path
 from emet.motion.mujoco_arm_ik import joint_qpos_addrs, solve_pose_ik
-from emet.motion.placement_geometry import HeldObject, PlacementCollisionChecker, PlacementScene, bounds_array
+from emet.motion.placement_geometry import HeldObject, PlacementCollisionChecker, PlacementScene
 from emet.utils.logger import Logger
 
 logger = Logger(__name__)
@@ -40,30 +40,6 @@ class PlacementSearchResult:
     geometry_source: str = ""
     collision_scope: str = "sampled_arm_and_payload;base_endpoint_only"
     path_failures: list[dict] = field(default_factory=list)
-
-
-def surface_placement_centers(surface_bounds, *, payload: HeldObject, ee_rotation, clearance_m=.02, grid_size=5):
-    """Candidate object-box centers above an explicitly selected horizontal support.
-
-    Bounds must describe the support region, not the center of an appliance or an
-    inferred interior shelf. The whole footprint must fit, with clearance.
-    """
-    lo, hi = bounds_array(surface_bounds)
-    if grid_size not in (1, 3, 5, 7):
-        raise ValueError("Support grid size must be 1, 3, 5 or 7")
-    if not np.isfinite(clearance_m) or clearance_m <= 0:
-        raise ValueError("Positive finite support clearance required")
-    rotated = payload.vertices_ee @ np.asarray(ee_rotation).reshape(3, 3).T
-    half = np.ptp(rotated, axis=0) / 2
-    low, high = lo[:2] + half[:2] + clearance_m, hi[:2] - half[:2] - clearance_m
-    if np.any(low > high):
-        return []
-    center = (low + high) / 2
-    xs = np.linspace(low[0], high[0], grid_size) if grid_size > 1 else [center[0]]
-    ys = np.linspace(low[1], high[1], grid_size) if grid_size > 1 else [center[1]]
-    xy = np.unique(np.array([(x, y) for x in xs for y in ys]), axis=0)
-    xy = sorted(xy, key=lambda point: float(np.linalg.norm(point - center)))
-    return [np.r_[point, hi[2] + half[2] + clearance_m] for point in xy]
 
 
 def placement_base_candidates(center_xy, *, current_xyt, radii=(.55, .75, .95), count=16, yaw_offset=0.):
@@ -143,6 +119,9 @@ def plan_placement_paths(
     original = probe.qpos.copy()
     qadr = joint_qpos_addrs(model, joint_names)
     start_q = original[qadr].copy()
+    # Freeze measured world orientation across base yaws. This is not an
+    # orientation search or an uprightness guarantee; a large yaw change may
+    # exhaust IK even when another object orientation would be feasible.
     rotation = probe.body(ee_body).xmat.reshape(3, 3).copy()
     rotated = payload.vertices_ee @ rotation.T
     center_offset = (rotated.min(axis=0) + rotated.max(axis=0)) / 2

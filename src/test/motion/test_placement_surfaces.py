@@ -2,7 +2,6 @@
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 import numpy as np
 
-from emet.motion.placement import surface_placement_centers
 from emet.motion.placement_geometry import HeldObject, PlacementScene
 from emet.motion.placement_surfaces import free_surface_centers
 
@@ -17,7 +16,8 @@ def test_finds_off_grid_gap_for_full_object():
     scene = PlacementScene([[[0, 0, .001], [.25, 1, .4]], [[.43, 0, .001], [1, 1, .4]]],
                            source="observed_voxels", workspace=[[-1]*3, [2]*3])
     obj = payload()
-    grid = surface_placement_centers(support, payload=obj, ee_rotation=np.eye(3))
+    grid = [np.array([x, y, .07]) for x in (.07, .285, .5, .715, .93)
+            for y in (.07, .285, .5, .715, .93)]
     assert all(scene.collides([point - .05, point + .05]) for point in grid)
     result = free_surface_centers(support, scene=scene, payload=obj, ee_rotation=np.eye(3))
     assert result.centers
@@ -51,7 +51,7 @@ def test_unknown_space_and_candidate_budget():
 
 def test_candidate_truncation_is_reported_only_when_distinct_centers_are_omitted():
     scene = PlacementScene([], source="ground_truth")
-    args = dict(scene=scene, payload=payload(), ee_rotation=np.eye(3))
+    args = {"scene": scene, "payload": payload(), "ee_rotation": np.eye(3)}
     small = free_surface_centers([[0, 0, 0], [1, 1, 0]], max_centers=1, **args)
     exact = free_surface_centers([[0, 0, 0], [1, 1, 0]], max_centers=5, **args)
     assert len(small.centers) == 1 and small.budget_exhausted
