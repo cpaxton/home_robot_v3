@@ -91,6 +91,11 @@ explicitly. The targeted SAM2/controller/config suite passes 12 tests. This was
 an actual shared-process integration problem, not a reason to isolate the tests
 or clear another component's global state.
 
+Final combined rerun at #202 `7611a900`: **300 passed**, no skips, two SWIG
+deprecation warnings (23.79 seconds, one CPU core). This covers the same 241
+contracts plus the 58 review checks and config-isolation regression, in one
+process. It does not replace the outstanding live motion/OVMM gates.
+
 ## Hypothesis and scope
 
 Object-facing navigation can remove room/relationship context. Preserve the
