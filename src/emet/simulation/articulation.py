@@ -112,3 +112,17 @@ def articulation_geometry_changed(current, previous, *, tolerance=1e-6):
     return a.keys() != b.keys() or any(
         not np.isfinite(a[k]) or not np.isfinite(b[k]) or abs(a[k] - b[k]) > tolerance for k in a
     )
+
+
+def articulation_access(session, body):
+    """Public access evidence and available assisted actions for task admission."""
+    caps = session.get("capabilities") or {}
+    if not caps.get("sim_articulation_state"):
+        return {"state": "unknown", "required_action": None, "available_actions": []}
+    group = articulation_for_body(session, body)
+    from emet.simulation.physical_execution import physical_execution_enabled
+    actionable = (group and group.get("supported") and caps.get("sim_set_joint_qpos")
+                  and session.get("is_simulation") and not physical_execution_enabled())
+    return {"state": group.get("state", "unknown") if group else "not_articulated",
+            "required_action": access_precondition(session, body),
+            "available_actions": ["open", "closed"] if actionable else []}

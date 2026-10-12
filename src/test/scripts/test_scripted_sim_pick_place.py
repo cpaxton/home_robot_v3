@@ -161,3 +161,31 @@ def test_recording_preserves_failed_place_outcome_before_stopping(monkeypatch, t
     assert recorded["events"][0]["requested_state"] is None
     assert recorder.dump_paper_stills.call_count == 2
     tool.assert_called_once_with(plan_ref="plan:1")
+
+
+def test_articulation_admission_selects_supported_task_and_reports_exclusion(monkeypatch, capsys):
+    import json
+    script = _load_script_module()
+    sent = []
+    tasks = [
+        {'task_ref': 'unsupported', 'access': {'available_actions': []}},
+        {'task_ref': 'supported', 'access': {'available_actions': ['open', 'closed']}},
+    ]
+    def discover():
+        return json.dumps({'schema_version': 1, 'status': 'ok', 'data': {'tasks': tasks}})
+    def act(**args):
+        sent.append(args)
+        return json.dumps({'schema_version': 1, 'status': 'ok', 'data': {}})
+    monkeypatch.setattr(agent_tools, 'get_tools', lambda context: [
+        SimpleNamespace(name='scene_tasks', func=discover),
+        SimpleNamespace(name='set_receptacle_state', func=act)])
+    calls = [{'name': 'scene_tasks'}, {'name': 'set_receptacle_state',
+             'arguments': {'task_ref': '$task_ref', 'state': 'open'}}]
+    assert script.run_scripted_tool_calls(object(), calls, manip_mode='kinematic')
+    assert sent == [{'task_ref': 'supported', 'state': 'open'}]
+    assert '"eligible_tasks": 1' in capsys.readouterr().out
+    tasks.pop()
+    sent.clear()
+    assert not script.run_scripted_tool_calls(object(), calls, manip_mode='kinematic')
+    assert not sent
+    assert '"eligible_tasks": 0' in capsys.readouterr().out

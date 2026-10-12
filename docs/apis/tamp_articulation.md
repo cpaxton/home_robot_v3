@@ -80,3 +80,22 @@ remains unchanged. Unsupported first tasks fail rather than being skipped.
 A composed open → pick/place → close run is a new assisted track. Retain the
 original closed-goal failures, record joint teleport assistance, and do not pool
 this score with physical manipulation or the prior no-opening baseline.
+
+### Stretch measurements and task admission
+
+Stretch's physics process now includes a privileged `scene_qpos` snapshot in its
+internal status message. The ZMQ server reconstructs articulation state and
+fixture geometry from that snapshot, not XML defaults or the parent's stale
+simulation data. `sim_articulation_state` is advertised only when a finite,
+correctly sized snapshot is available. Joint-command results carry the request
+ID; a receipt alone cannot verify open/close without measured state matching.
+This is simulator-only metadata, not an added real-robot sensor.
+
+`scene_tasks` includes `access.available_actions` (`["open", "closed"]` or `[]`).
+The scripted runner resolves `$task_ref` to the first task supporting all requested
+articulation states. It logs JSON `TASK_ADMISSION` evidence with total and eligible
+counts and the selected handle. If no eligible task exists, the case fails before
+actuation; it is not removed from the benchmark denominator. Explicit task handles
+are never silently substituted. Multi-joint and ambiguous fixtures remain
+unsupported. This selection policy differs from the historical first-task run;
+that run remains 3/7 and must not be rescored.
