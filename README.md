@@ -53,17 +53,31 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 **2. Clone the repo and install the project:**
 
 ```bash
-git clone <this-repo>
-cd home_robot_v3   # or your clone directory
+git clone https://github.com/cpaxton/home_robot_v3.git
+cd home_robot_v3
 ```
 
-**Option A — one-shot script (recommended):**
+**Standalone alternative (clone + install):** requires Bash and Git, plus access
+to this repository. From the directory where you want the checkout:
 
 ```bash
-./install.sh              # dev (+ dynamem if SAM-2 submodule); simulation is opt-in
-./install.sh -y           # non-interactive apt + link; does not add sim unless --sim / --all / profile=full
+curl -fsSL https://raw.githubusercontent.com/cpaxton/home_robot_v3/main/scripts/bootstrap_install.sh | bash -s -- -y --no-sim
+cd home_robot_v3
+```
+
+This creates a new checkout and runs its installer. Omit `--no-sim` for the
+existing full-profile default. Set `EMET_INSTALL_DIR` on the **bash** side of the
+pipe for another destination; existing directories are refused. See
+[standalone installation](docs/install_details.md#standalone-installation)
+for branch/tag selection and private-repository access.
+
+**Option A — install from the checkout (recommended):**
+
+```bash
+./install.sh              # full profile: dev + dynamem + simulation
+./install.sh -y           # non-interactive apt + link; same full-profile default
 ./install.sh --sim        # add MuJoCo sim extra + clone robosuite/robocasa (large)
-./install.sh --profile=full   # legacy: enable sim without --sim (same as EMET_INSTALL_PROFILE=full)
+./install.sh --profile=standard   # simulation opt-in (add --sim to enable)
 ./install.sh --no-sim     # skip simulation (no third_party clone)
 # With sim on, MolmoSpaces (``.venv-molmospaces``) installs when ``packages/emet_molmospaces`` exists unless you pass:
 ./install.sh --no-molmospaces   # skip MolmoSpaces venv (lighter / CI)
@@ -410,7 +424,7 @@ Clone the repo, then install with [Astral uv](https://docs.astral.sh/uv/) as in 
 pre-commit install
 ```
 
-A plain `uv sync` installs **default dependency groups** (dev, sim, hand_tracker, dynamem, da3) and works without cloning simulation repos; **robosuite/robocasa** still come from `./install.sh --sim` / `emet install sim`. `./install.sh` defaults to **no** Robocasa clone (use `--sim` or `EMET_INSTALL_PROFILE=full` for the old behavior). With sim enabled, MolmoSpaces (``.venv-molmospaces``) installs automatically when ``packages/emet_molmospaces`` is present unless you pass ``--no-molmospaces``. Use `./install.sh --no-sam2` or `uv sync --no-group dynamem` if the SAM-2 submodule is absent.
+A plain `uv sync` installs **default dependency groups** (dev, sim, hand_tracker, dynamem, da3) and works without cloning simulation repos; **robosuite/robocasa** still come from `./install.sh --sim` / `emet install sim`. `./install.sh` defaults to **profile=full**, including simulation setup. Use `--no-sim` or `--profile=standard` to skip the Robocasa/robosuite setup. With sim enabled, MolmoSpaces (``.venv-molmospaces``) installs automatically when ``packages/emet_molmospaces`` is present unless you pass ``--no-molmospaces``. Use `./install.sh --no-sam2` or `uv sync --no-group dynamem` if the SAM-2 submodule is absent.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for more information, and [debug](docs/debug.md) / [update](docs/update.md) for troubleshooting. You can test most code in [simulation](docs/simulation.md) without a physical robot. Simulation and MolmoSpaces optional env toggles: [docs/environment_variables.md](docs/environment_variables.md) ([MolmoSpaces-specific](docs/molmospaces_environment_variables.md)).
 
