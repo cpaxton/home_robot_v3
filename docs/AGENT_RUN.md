@@ -6,7 +6,7 @@
 inspection remain in draft #181 → #182 → #184 → #185. Placement #179 and native
 input contracts #195 are also unmerged; the latter does not yet wire native
 scene/execution adapters into `run agent`. See [project status](project_status.md)
-and the [main TAMP API contract](apis/tamp.md) before selecting a workflow.
+and the [main TAMP API contract](api/tamp.md) before selecting a workflow.
 
 Canonical entry: **`uv run emet run agent`** (or bare `emet run agent` after `uv sync`). Full flag list: `uv run emet run agent --help`.
 
@@ -289,4 +289,4 @@ uv run python scripts/scripted_sim_pick_place.py --start-sim \
 - Manual: with sim up, `timeout 15 uv run emet run agent --no-llm -c Q --robot stretch`
 
 TAMP tools return a consistent versioned JSON result on every path. See the
-[canonical TAMP API](apis/tamp.md) for schemas, recovery actions, and simulator limits.
+[canonical TAMP API](api/tamp.md) for schemas, recovery actions, and simulator limits.

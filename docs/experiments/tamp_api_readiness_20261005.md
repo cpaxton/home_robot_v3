@@ -21,7 +21,7 @@ planning was absent at implementation start; this task did not change `uv.lock`.
 
 ## Implementation and checks
 
-The [canonical API](../apis/tamp.md) defines the consistent JSON contract and
+The [canonical API](../api/tamp.md) defines the consistent JSON contract and
 recovery actions for all four tools. New guards cover server boot identity,
 finite full poses, endpoint revalidation, stale measured state, and failed
 placement submotions. The incorrect 1-rad shoulder-stall diagnosis was corrected
