@@ -138,6 +138,31 @@ Readiness additionally requires three reference-admitted cleanup fixtures
 passing. Preserve admission failures and failed repeats; do not substitute easier
 fixtures or pool assisted historical scores with new results.
 
+## Native execution integration (not yet enabled)
+
+`agent.manip_mode=physical` is reserved for actuator/contact execution. It never
+falls back to a legacy controller or object teleportation. Its input selection is
+`agent.tamp_inputs=observed` by default, or explicit `privileged` in simulation.
+Current CHAT integration refuses this mode until its scene/execution adapter is
+available: observed discovery returns `observed_scene_unavailable` without reading
+simulator metadata; debug mode returns `native_execution_unavailable`. These are
+integration guards, not a claim that native agent manipulation is ready. Existing
+teleport/kinematic defaults are unchanged; no native preset is promoted yet.
+The same native guard rejects simulator-assisted `set_receptacle_state`, including
+a task handle obtained before switching execution modes.
+
+The shared physical executor now requires an observed object-pose provider and
+observed collision provider by default. Object poses carry an observation ID,
+source and receive time; missing, stale or privileged evidence cannot verify an
+observed grasp. The existing physical benchmark explicitly selects privileged
+inputs. Native dynamics and realistic sensor inputs are separate requirements.
+
+The Stretch and generic clients expose `get_joint_state_evidence()`, an immutable
+position vector paired atomically with its local receive timestamp. Native
+adapters can reject unknown/stale feedback without racing two separate reads.
+This is receive freshness, not a sensor capture timestamp or evidence of contact;
+no missing effort, object pose, or localization values are synthesized.
+
 ## Current placement and recovery limitations
 
 Placement has no separate public CHAT tool: it runs within execution of the
