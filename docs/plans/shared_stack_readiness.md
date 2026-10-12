@@ -44,6 +44,58 @@ protocol. Frozen outputs are `pair-eqa4-{main,candidate}-20261012`,
 `postwheel-route-20261012`, and `postwheel-coverage-20261012` under the same run root.
 Do not modify their source trees or overwrite results.
 
+## Integration diagnosis update (2026-10-12)
+
+Manual review of arrival RGB, decision images, and agentic traces narrows the
+failure mode; prefix attribution is still pending, not a passed acceptance gate.
+
+| Question | Main versus integration | Interpretation |
+| --- | --- | --- |
+| q14 fan location | Same arrival XYZ; integration turns 30 degrees. Main image includes sofa/window; integration centers fan/plant and loses sofa. | Integration assessment guesses "next to the TV" without a visible TV. Object visibility is not sufficient room/relationship evidence. |
+| q56 bookshelf room | Same arrival XYZ; integration turns 130 degrees. Main arrival RGB includes blue curtains; integration faces shelf without curtains. | Assessment infers white curtains from white walls. This is contextual evidence loss plus model overconfidence, not failure to translate to the goal. |
+| q12 bedside-table count | Same arrival XYZ; integration turns 50 degrees and sees a partial bedroom instead of mostly wall. | Main's correct answer came from `mcq_debias`, not a successful visual count. Integration commits to one visible table; that does not establish the room total. |
+
+Main's fourth success, q6, came from `uniform_prior`. Thus 4/4 versus 1/4 is
+the scored outcome, not four strong visual successes versus one. These four
+diagnostic questions do not estimate general benchmark accuracy.
+
+There is also a pre-existing evidence handoff gap: q12/q56 assess the retained
+voxel view `1099511627790`, but `select_obs_ids_for_verified_answer` only accepts
+graph observations. Submission records `force_obs_ids=null` and
+`last_eqa_obs_ids=[]`; saved final-answer inputs are older navigation views.
+The final model abstains or disagrees, while the existing answer resolver
+prioritizes the earlier confirmed assessment. q14 does attach graph obs16;
+its salvaged living-room answer still loses to the confirmed assessment.
+Do not conflate final-call reasoning with the scored answer's provenance.
+
+Recommended repair boundary: preserve captured-view RGB through final answer
+selection without manufacturing object nodes, and supply bounded context views
+alongside object-facing views. Test exact evidence identity first; then paired
+EQA and small OVMM. Do not revert measured heading correctness or introduce
+question-specific answer rules based on these examples.
+
+Diagnostic export also deletes `images/` during recorder flush, leaving stale
+query-image links in traces. This review used retained decision images and
+trajectory-matched arrival frames instead; `frames/rgb_0016.png` is a simulator
+step, not graph observation16. Preserve per-query evidence in a separate repair.
+
+The original prefix jobs never ran episodes: after changing into SOURCE_DIR,
+the driver copied itself via a now-invalid relative path. Fixed and pushed in
+#185 commit `f2281e35`; 27 acceptance-driver tests pass, including a new real
+cross-checkout relative-invocation regression. Failed artifacts are preserved.
+Retry jobs (exclusive GPU, seed0, q12/14/56/6):
+
+- #181: `20261012_101709_3947df` (`slice181-eqa4-retry-1012`); EGL preflight passed,
+  episode loop started.
+- #182: `20261012_101732_85b60d` (`slice182-eqa4-retry-1012`).
+- #184: `20261012_101755_169aec` (`slice184-eqa4-retry-1012`).
+
+Exact #182 route probe completed with 51 frames and no reported failures at
+`/home/cpaxton/runs/emet/slice182-route-20261012/summary.json`; native Molmo
+startup/stationary render also completed under #185. Neither clears EQA or
+learned room-find acceptance. Original #198 paired jobs hit the same driver
+failure and remain pending a rerun; they produced no scan comparison.
+
 ## Run and disposition protocol
 
 Use `scripts/run_extracted_acceptance.sh` through CPU-safe, GPU-exclusive jobs.
