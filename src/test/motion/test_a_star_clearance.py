@@ -64,6 +64,21 @@ def test_clearance_fallback_is_not_reported_as_measured_free_space():
     assert planner.measured_clearance_at_xy((-1, 0)) is None
 
 
+def test_distance_solver_failure_does_not_fabricate_measured_clearance(monkeypatch):
+    import skfmm
+
+    def fail(*args, **kwargs):
+        raise ValueError("distance field unavailable")
+
+    monkeypatch.setattr(skfmm, "distance", fail)
+    obs = np.zeros((10, 10), dtype=bool)
+    obs[0, 0] = True
+    planner = AStar(_FakeSpace(_FakeVoxelMap(obs, np.ones_like(obs))), min_clearance_m=0)
+    assert planner.clearance_at_xy((0.5, 0.5)) == 10.0
+    assert planner.measured_clearance_at_xy((0.5, 0.5)) is None
+    assert planner.measured_clearance_at_xy((0.0, 0.0)) == 0.0
+
+
 @pytest.mark.parametrize("multi", [False, True])
 def test_search_does_not_connect_free_cells_through_blocked_diagonal(multi):
     obs = np.array([[False, True], [True, False]])
