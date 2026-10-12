@@ -7,7 +7,7 @@
 
 ![PickPlaceFullTask](https://github.com/user-attachments/assets/a1db635c-03b5-48e8-9167-45f09bc8a9b2)
 
-**Stretch AI** is designed to help researchers and developers build intelligent behaviors for the [Stretch 3](https://hello-robot.com/stretch-3-product) mobile manipulator from [Hello Robot](https://hello-robot.com/). It contains code for:
+**Emet** (`emet`) is a research stack for embodied agents, dynamic scene-graph memory, navigation, and manipulation across robot and simulator backends. It builds on **Stretch AI** for the [Stretch 3](https://hello-robot.com/stretch-3-product) mobile manipulator from [Hello Robot](https://hello-robot.com/). Capabilities and validation differ by embodiment; see [supported robots](docs/robots/supported_robots.md). It contains code for:
 
 - grasping
 - manipulation
@@ -21,6 +21,23 @@
 Much of the code is licensed under the Apache 2.0 license. See the [LICENSE](LICENSE) file for more information. Parts of it are derived from the Meta [HomeRobot](https://github.com/facebookresearch/home-robot) project and are licensed under the [MIT license](META_LICENSE).
 
 **Docs:** see the [Documentation map](#documentation-map) below for an outline of `docs/` (what to edit when updating agentic EQA, eval, sim, paper tracks, etc.).
+
+## Current status
+
+As of **2026-10-12**, reviewed `main` is `7f65dbef`. The
+[project status](docs/project_status.md) records merged work, all seven open PRs,
+paper evidence, and remaining acceptance gates.
+
+- Main includes shared current-view grounding, isolated VLM tool inference,
+  measured simulator TAMP tools, Stretch telemetry, and scoped robot recordings.
+- The opt-in grounding/navigation/recovery stack remains in draft PRs
+  **#181 → #182 → #184 → #185**. Live EQA regressions and learned find acceptance
+  remain open. Placement **#179** reports one successful assisted RBY1 run;
+  native input contracts **#195** still lack live agent adapters.
+- The [Dynagraph paper](paper/main.tex) contains historical HM-EQA results and
+  partial simulator controls. Larger learned OVMM, SQA3D, dynamic exploration,
+  and physical manipulation acceptance are unfinished. Recorded demos and
+  offline test counts have narrower scope than those benchmarks.
 
 ## Installation (Astral uv)
 
@@ -37,7 +54,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 ```bash
 git clone <this-repo>
-cd home_robot_v2   # or your clone directory
+cd home_robot_v3   # or your clone directory
 ```
 
 **Option A — one-shot script (recommended):**
@@ -296,6 +313,7 @@ Use this outline when updating docs or finding the right page. Prefer editing th
 
 | Doc | When to use |
 |-----|-------------|
+| [project_status.md](docs/project_status.md) | Dated main/open-PR inventory, paper evidence, and next acceptance gates |
 | [first_test.md](docs/first_test.md) | Interactive agent in sim (table or MolmoSpaces); copy-paste prompts |
 | [cli.md](docs/cli.md) | `emet serve` / `run` / `test` / `eval` / `jobs` / `hmeqa` flags (verify with `--help`) |
 | [deploy.md](docs/deploy.md) | Stretch + Mars bridge deploy (`emet deploy --robot …` / `emet mars`) + LAN Orin LLM; wrist Arducam |
@@ -407,7 +425,7 @@ uv run emet test --no-sim           # faster; skip sim integration tests
 uv run emet test -v src/test/memory/test_memory_backends_smoke.py
 ```
 
-**Dynagraph (this branch):** unit tests for explore-loop and graph memory, plus an optional multi-robot Robocasa floor-metrics harness (~20 min). See [docs/TESTING.md](docs/TESTING.md) and [docs/dynagraph_robocasa_e2e.md](docs/dynagraph_robocasa_e2e.md).
+**Dynagraph:** unit tests for explore-loop and graph memory, plus an optional multi-robot Robocasa floor-metrics harness (~20 min). See [docs/TESTING.md](docs/TESTING.md) and [docs/dynagraph_robocasa_e2e.md](docs/dynagraph_robocasa_e2e.md).
 
 ### Updating Code on the Robot
 

@@ -1,5 +1,13 @@
 # Testing index
 
+**Acceptance status (2026-10-12):** [project status](project_status.md) separates
+main from the draft shared-agent stack, the additional acceptance integration
+branch, and the placement/native-contract PRs. Offline passes and measured route
+checks do not clear the repeated EQA losses or learned find gates. #179 reports
+one assisted placement success; admitted-fixture repeatability and stronger
+support evidence remain open. This index describes how to test, not certification
+that all listed capabilities have passed live acceptance.
+
 Central map of **how to run tests**, **what each suite validates**, and **where detailed write-ups live**. From the repo root, use **`uv sync`** then **`uv run emet test`** (see [cli.md](cli.md#testing)).
 
 ## Run from this repo

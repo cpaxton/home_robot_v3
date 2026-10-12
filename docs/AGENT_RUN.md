@@ -1,5 +1,13 @@
 # Running the embodied agent (`emet run agent`)
 
+**Implementation status (2026-10-12):** main includes conversation isolation
+(#176), shared current-view grounding (#180), and structured simulator TAMP tools
+(#178). Additional grounding providers, measured navigation, and bounded
+inspection remain in draft #181 → #182 → #184 → #185. Placement #179 and native
+input contracts #195 are also unmerged; the latter does not yet wire native
+scene/execution adapters into `run agent`. See [project status](project_status.md)
+and the [main TAMP API contract](apis/tamp.md) before selecting a workflow.
+
 Canonical entry: **`uv run emet run agent`** (or bare `emet run agent` after `uv sync`). Full flag list: `uv run emet run agent --help`.
 
 ## Quick start

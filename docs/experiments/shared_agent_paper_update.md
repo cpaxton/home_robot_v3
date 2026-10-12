@@ -1,5 +1,10 @@
 # Shared-agent paper update and figure plan
 
+**Current inventory:** see [project status (2026-10-12)](../project_status.md)
+for merged work, remaining PRs, latest acceptance evidence, and specific LaTeX
+inconsistencies. The dated pilot notes below preserve their original source and
+assistance scope; they are not acceptance results for current main.
+
 ## Claim boundary
 
 The intended contribution is one agent and one evidence lifecycle across EQA,

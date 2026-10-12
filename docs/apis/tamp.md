@@ -1,5 +1,15 @@
 # Agent-facing TAMP simulator API
 
+**Branch scope (2026-10-12):** this page documents the tools on main (#178).
+Collision-aware placement and assisted articulation are in unmerged
+[#179](https://github.com/cpaxton/home_robot_v3/pull/179); observed/privileged
+input contracts are in its descendant
+[#195](https://github.com/cpaxton/home_robot_v3/pull/195). Native scene/execution
+adapters and observed geometry providers remain unwired there. The reported
+single #179 assisted placement pass does not establish native-agent acceptance.
+See [project status](../project_status.md#latest-evidence-supersedes-older-pr-prose)
+for exact tested revisions and remaining gates.
+
 All four CHAT tools (`scene_tasks`, `plan_pick_place`, `execute_pick_place_plan`,
 `pick_place`) return one JSON object encoded as tool-result text. This replaces
 prose-only outputs. Parse the JSON once; never infer success from `message`.
