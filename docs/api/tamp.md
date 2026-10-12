@@ -1,5 +1,15 @@
 # Agent-facing TAMP simulator API
 
+**Branch scope (2026-10-12, refreshed after #201):** main includes structured
+tools (#178), collision-aware placement and assisted articulation (#179), and
+measured Stretch articulation/task admission (#201). See the
+[placement API](placement.md) and [articulation API](tamp_articulation.md).
+Observed/privileged input contracts remain in unmerged
+[#195](https://github.com/cpaxton/home_robot_v3/pull/195), now based on main;
+native scene/execution adapters and observed geometry providers remain unwired.
+See [project status](../project_status.md#latest-evidence-supersedes-older-pr-prose)
+for tested revisions, the broader 3/7 assisted run, and remaining gates.
+
 All four CHAT tools (`scene_tasks`, `plan_pick_place`, `execute_pick_place_plan`,
 `pick_place`) return one JSON object encoded as tool-result text. This replaces
 prose-only outputs. Parse the JSON once; never infer success from `message`.
