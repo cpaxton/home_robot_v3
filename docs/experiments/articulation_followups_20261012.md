@@ -40,3 +40,15 @@ unsupported task is silently actuated. Ruff passes. See
 
 #195 now targets main but needs a restack/conflict review after its parent was
 squash-merged; its native-execution work is not validated by these assisted tests.
+
+## Independent review follow-ups
+
+Independent review approved the implementation with no blocking findings. Before
+scaling scene size or telemetry rate, profile physics-process status serialization
+and ZMQ publication separately. Candidate optimizations are skipping FK and
+articulation scans for unchanged measured snapshots, reusing private MjData, and
+reducing full-qpos IPC traffic. Preserve measured-state freshness, coherent
+geometry, and request correlation in any optimization; do not replace measurements
+with commanded values. `available_actions` describes supported target states
+(including idempotent requests), not a requirement to transition. Before the first
+valid snapshot, the capability intentionally remains unavailable.
