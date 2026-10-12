@@ -2,6 +2,33 @@
 
 Branch: `fix/eqa-context-evidence`, based on #184 at `48b56aeb`.
 
+## Main integration — 2026-10-12
+
+Merged main `9dd46c9c` (placement/TAMP #179, spawn-state #200,
+articulation #201) into this branch. Conflict resolution preserves both
+articulation access in scene-task metadata and model-derived measured head
+capabilities. No evidence-selection defaults changed.
+
+Validation: 120 focused tests passed on the merged #199 source; 173 passed on
+the dependent #202 branch, including view selection, EQA evidence/answering,
+OVMM routing, navigation/floor recovery, head arrival/capabilities, scene-task
+extraction and articulation. These are contract tests, not new task scores.
+
+Next gates, in order:
+
+1. Re-run the frozen four-question EQA diagnostic on the updated source; retain
+   exact prompts/images and distinguish infrastructure failures from wrong answers.
+2. Integrate #202 into the shared captured-view path, preserving acquisition
+   timestamps. The current store has no timestamp field; do not substitute
+   retention time and present it as acquisition time.
+3. Capture actual arrival-before-turn evidence at the navigation boundary.
+   The current final yaw is part of the trajectory; a pre-approach image cannot
+   be relabeled as an arrival/pre-turn image. Preserve clearance checks.
+4. Compare selection on fixed histories, then paired EQA and small OVMM.
+   Keep historical context out of current-view manipulation grounding.
+
+Keep #199 and #202 draft until their respective evidence gates are met.
+
 ## Hypothesis and scope
 
 Object-facing navigation can remove room/relationship context. Preserve the
