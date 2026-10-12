@@ -687,7 +687,7 @@ class KinematicPickPlaceExecutor:
             raise ValueError("placement_payload_geometry_missing")
         if held.get("ee_body") != self.ee_body:
             raise ValueError("placement_payload_frame_mismatch")
-        payload = HeldObject(held.get("vertices_ee"))
+        payload = HeldObject(held.get("vertices_ee"), body_pose_ee=held.get("body_pose_ee"))
         # A semantic appliance AABB is not a support surface. New simulators
         # publish grounded horizontal collision faces; explicit providers can
         # supply observed patches or interior shelf regions.
@@ -909,15 +909,20 @@ class KinematicPickPlaceExecutor:
                 return KinematicPickPlaceResult(False, body, self.ee_body, None, p_err, self._stage_failure(stage))
         # Detach first so per-step kinematic snap cannot pull the freejoint back to the EE,
         # then oracle-snap like OVMM manip_mode=sim and score before physics drops a mid-air COM.
+        try:
+            release_position, release_quat = checker.payload.release_pose(place, selected.ee_rotation)
+        except ValueError:
+            return KinematicPickPlaceResult(False, body, self.ee_body, None, None,
+                                            "placement_geometry_unavailable")
         self.last_release_evidence = {"detach_command": "unknown", "placement_verified": None}
         robot_zmq_detach_body(self.robot, body)
         self.last_release_evidence["detach_command"] = "returned"
-        robot_zmq_set_body_pose(self.robot, body, place)
+        robot_zmq_set_body_pose(self.robot, body, release_position, quat=release_quat)
         self._sleep(0.25)
         ok_place, p_err = self._verify_place_xy(body, place[:2])
         if not ok_place:
             # Freejoint children can lag one publish step after detach+snap.
-            robot_zmq_set_body_pose(self.robot, body, place)
+            robot_zmq_set_body_pose(self.robot, body, release_position, quat=release_quat)
             self._sleep(0.2)
             ok_place, p_err = self._verify_place_xy(body, place[:2])
         self.last_release_evidence["placement_verified"] = bool(ok_place)

@@ -699,5 +699,9 @@ def measured_held_object_geometry(model, data, body, ee_body):
     low, high = vertices.min(axis=0), vertices.max(axis=0)
     corners = (low + high) / 2 + signs * (high - low) / 2
     world = corners @ data.xmat[root].reshape(3, 3).T + data.xpos[root]
+    body_pose = np.eye(4)
+    body_pose[:3, :3] = ee.xmat.reshape(3, 3).T @ data.xmat[bid].reshape(3, 3)
+    body_pose[:3, 3] = (data.xpos[bid] - ee.xpos) @ ee.xmat.reshape(3, 3)
     return {"frame": "end_effector", "ee_body": ee_body,
+            "body_pose_ee": body_pose.tolist(),
             "vertices_ee": ((world - ee.xpos) @ ee.xmat.reshape(3, 3)).tolist()}

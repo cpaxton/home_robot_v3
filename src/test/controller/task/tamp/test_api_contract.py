@@ -197,7 +197,7 @@ def test_stale_joint_observation_cannot_pass_arrival():
 
 @pytest.mark.parametrize("failure", ["approach", "retract", "release", "missing_receptacle",
                                      "no_path", "invalidated", "preplace", "place", "runtime", "timeout",
-                                     "move_exception", "attachment_changed", "state_search", "state_refresh"])
+                                     "move_exception", "attachment_changed", "state_search", "state_refresh", "success", "missing_body_pose"])
 def test_place_does_not_hide_failed_submotions(monkeypatch, failure):
     from emet.controller.manipulation import kinematic_pick_place as module
 
@@ -213,7 +213,8 @@ def test_place_does_not_hide_failed_submotions(monkeypatch, failure):
 
     selected = SimpleNamespace(base_xyt=np.zeros(3), object_center=np.ones(3),
         ee_targets=(np.ones(3), np.ones(3)), ee_rotation=np.eye(3), segments=([np.zeros(3)], [np.zeros(3)]))
-    checker = SimpleNamespace(payload=HeldObject(np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]])),
+    checker = SimpleNamespace(payload=HeldObject(np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]]),
+        body_pose_ee=None if failure == "missing_body_pose" else np.eye(4)),
                               margin=0., released_bounds=None)
     calls = []
 
@@ -249,7 +250,14 @@ def test_place_does_not_hide_failed_submotions(monkeypatch, failure):
         object_gt_body="object_private",
         receptacle_gt_body="missing" if failure == "missing_receptacle" else "receptacle_private",
     )
-    assert not result.success
+    assert result.success == (failure == "success")
+    if failure == "success":
+        assert calls == [{"approach_base": True}, {"approach_base": False}]
+        assert ex._refresh_placement_checker.call_count == 2
+        detach.assert_called_once()
+    if failure == "missing_body_pose":
+        detach.assert_not_called()
+        assert result.message == "placement_geometry_unavailable"
     if failure in {"state_search", "state_refresh"}:
         assert result.message == ("placement_stale_observation" if failure == "state_search" else "placement_missing_joint_state")
     if failure in {"approach", "missing_receptacle", "no_path", "invalidated", "preplace", "place", "runtime",

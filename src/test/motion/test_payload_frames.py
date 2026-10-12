@@ -135,3 +135,25 @@ def test_missing_payload_geometry_does_not_stop_receipt_publication():
     server._kinematic_attachments.clear()
     server._attach_emet_session({})
     assert server._emet_session['sim_held_object_geometry'] == {}
+
+
+@pytest.mark.parametrize('body', ['root', 'load'])
+def test_release_centers_offset_geometry_instead_of_body_origin(body):
+    from emet.motion.placement_geometry import HeldObject
+
+    model, data = scene()
+    metadata = measured_held_object_geometry(model, data, body, 'tool')
+    payload = HeldObject(metadata['vertices_ee'], body_pose_ee=metadata['body_pose_ee'])
+    rotation = Rotation.from_euler('xyz', [.8, -.4, 1.2]).as_matrix()
+    target = np.array([2., 3., 1.])
+    pos, quat = payload.release_pose(target, rotation)
+    assert not np.allclose(pos, target)
+    assert set_free_body_pose(model, data, body, pos, quat)
+    # Re-measure actual geometry after the assisted snap, including the root and child.
+    released = measured_held_object_geometry(model, data, body, 'tool')
+    ee = data.body('tool')
+    world = np.array(released['vertices_ee']) @ ee.xmat.reshape(3, 3).T + ee.xpos
+    np.testing.assert_allclose((world.min(0) + world.max(0)) / 2, target, atol=1e-10)
+    planned = payload.vertices_ee @ rotation.T
+    np.testing.assert_allclose(world.min(0), target - np.ptp(planned, axis=0) / 2, atol=1e-10)
+    np.testing.assert_allclose(world.max(0), target + np.ptp(planned, axis=0) / 2, atol=1e-10)
