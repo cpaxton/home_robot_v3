@@ -124,8 +124,8 @@ def exploration_view_quality(depth):
     """Judge central free viewing distance, not target presence or brightness.
 
     Missing depth is unknown, never evidence of an obstruction. The conservative
-    gate triggers only when most central rays hit very close geometry or have
-    no valid range; blank walls farther away remain legitimate observations.
+    gate triggers only when most central rays have measured very close geometry;
+    invalid rays do not vote for obstruction or establish navigable free space.
     """
     if depth is None:
         return {"obstructed": False, "reason": "depth_unavailable"}
@@ -138,12 +138,12 @@ def exploration_view_quality(depth):
     center = depth[h // 4 : 3 * h // 4, w // 4 : 3 * w // 4]
     valid = np.isfinite(center) & (center > 0)
     near = valid & (center < 0.6)
-    blocked_fraction = float(np.mean(~valid | near))
+    blocked_fraction = float(np.mean(near))
     return {
         "obstructed": blocked_fraction >= 0.8,
         "blocked_fraction": blocked_fraction,
         "valid_fraction": float(valid.mean()),
-        "reason": "central_depth",
+        "reason": "central_depth" if valid.any() else "depth_unavailable",
     }
 
 
