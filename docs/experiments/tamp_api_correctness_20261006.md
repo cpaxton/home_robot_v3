@@ -20,7 +20,7 @@ three fixtures was admitted, and that fixture passed two of three repeats.
   evidence. Placement failure before arm motion no longer reports the preceding
   grasp's successful EE measurement as placement evidence.
 
-The [canonical API](../apis/tamp.md) describes the unchanged version-1 envelope
+The [canonical API](../api/tamp.md) describes the unchanged version-1 envelope
 and updated lifecycle rules. Shared planners accept an optional placements input;
 legacy callers retain live-read defaults. Agent plan builds must carry their
 original snapshot before a handle can be stored.

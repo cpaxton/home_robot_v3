@@ -6,7 +6,7 @@ not obstacle removal or object-specific planner exceptions.
 
 Implemented: simulator joint-state descriptors, verified assisted JSON action,
 geometry refresh, pre-pick goal access checks, and plan invalidation. See
-[contract and limits](../apis/tamp_articulation.md). Unsupported fixtures remain
+[contract and limits](../api/tamp_articulation.md). Unsupported fixtures remain
 visible with a rejection reason instead of disappearing from the denominator.
 
 Validation: 154 focused tests pass across TAMP APIs, articulation, scene geometry,

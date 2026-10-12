@@ -1,5 +1,15 @@
 # Agent-facing TAMP simulator API
 
+**Branch scope (2026-10-12, refreshed after #201):** main includes structured
+tools (#178), collision-aware placement and assisted articulation (#179), and
+measured Stretch articulation/task admission (#201). See the
+[placement API](placement.md) and [articulation API](tamp_articulation.md).
+Observed/privileged input contracts remain in unmerged
+[#195](https://github.com/cpaxton/home_robot_v3/pull/195), now based on main;
+native scene/execution adapters and observed geometry providers remain unwired.
+See [project status](../project_status.md#latest-evidence-supersedes-older-pr-prose)
+for tested revisions, the broader 3/7 assisted run, and remaining gates.
+
 All four CHAT tools (`scene_tasks`, `plan_pick_place`, `execute_pick_place_plan`,
 `pick_place`) return one JSON object encoded as tool-result text. This replaces
 prose-only outputs. Parse the JSON once; never infer success from `message`.
@@ -127,6 +137,31 @@ Readiness additionally requires three reference-admitted cleanup fixtures
 (scene00/02/12 cleanup0), three fresh process repeats each, with all nine tasks
 passing. Preserve admission failures and failed repeats; do not substitute easier
 fixtures or pool assisted historical scores with new results.
+
+## Native execution integration (not yet enabled)
+
+`agent.manip_mode=physical` is reserved for actuator/contact execution. It never
+falls back to a legacy controller or object teleportation. Its input selection is
+`agent.tamp_inputs=observed` by default, or explicit `privileged` in simulation.
+Current CHAT integration refuses this mode until its scene/execution adapter is
+available: observed discovery returns `observed_scene_unavailable` without reading
+simulator metadata; debug mode returns `native_execution_unavailable`. These are
+integration guards, not a claim that native agent manipulation is ready. Existing
+teleport/kinematic defaults are unchanged; no native preset is promoted yet.
+The same native guard rejects simulator-assisted `set_receptacle_state`, including
+a task handle obtained before switching execution modes.
+
+The shared physical executor now requires an observed object-pose provider and
+observed collision provider by default. Object poses carry an observation ID,
+source and receive time; missing, stale or privileged evidence cannot verify an
+observed grasp. The existing physical benchmark explicitly selects privileged
+inputs. Native dynamics and realistic sensor inputs are separate requirements.
+
+The Stretch and generic clients expose `get_joint_state_evidence()`, an immutable
+position vector paired atomically with its local receive timestamp. Native
+adapters can reject unknown/stale feedback without racing two separate reads.
+This is receive freshness, not a sensor capture timestamp or evidence of contact;
+no missing effort, object pose, or localization values are synthesized.
 
 ## Current placement and recovery limitations
 

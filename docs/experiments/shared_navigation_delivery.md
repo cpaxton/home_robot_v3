@@ -1,5 +1,9 @@
 # Shared navigation delivery and review ledger
 
+**Current review map:** [project status (2026-10-12)](../project_status.md).
+Main now includes #166, #176, #180, and #190. The remaining extracted draft stack
+is #181 → #182 → #184 → #185. Dated closeout notes below are historical.
+
 ## September 9 PR closeout
 
 #162, #163, #164 and #165 merged as `40afd551`, `4dbb6eb3`, `9b6df34f`
