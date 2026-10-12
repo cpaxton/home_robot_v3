@@ -494,6 +494,47 @@ def refresh_moved_body_placements(placements, model, data, body):
     placements.update(updated)
 
 
+class DynamicPlacementTracker:
+    """Refresh privileged free-object geometry when measured qpos changes.
+
+    Cache topology and compare against the last published pose, so stationary
+    objects avoid geometry scans and small changes accumulate. Caller holds the
+    simulator state lock. This does not provide a real-robot observation source.
+    """
+
+    def __init__(self):
+        self._model = None
+        self._placements = None
+        self._keys = ()
+        self._roots = {}
+        self._published = {}
+
+    def refresh(self, placements, model, data, *, forced_bodies=()):
+        from emet.simulation.sim_manipulation import freejoint_ancestor_body_id
+
+        keys = tuple(placements)
+        if self._model is not model or self._placements is not placements or self._keys != keys:
+            self._model, self._placements, self._keys = model, placements, keys
+            self._roots, self._published = {}, {}
+            for name in keys:
+                bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, name)
+                root = freejoint_ancestor_body_id(model, bid) if bid >= 0 else None
+                if root is not None:
+                    joint = int(model.body_jntadr[root])
+                    self._roots[root] = (name, int(model.jnt_qposadr[joint]))
+        forced = set()
+        for name in forced_bodies:
+            bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, name)
+            if bid >= 0:
+                forced.add(freejoint_ancestor_body_id(model, bid))
+        for root, (name, address) in self._roots.items():
+            pose = data.qpos[address:address + 7]
+            previous = self._published.get(root)
+            if root in forced or previous is None or not np.allclose(pose, previous, atol=1e-6, rtol=0):
+                refresh_moved_body_placements(placements, model, data, name)
+                self._published[root] = pose.copy()
+
+
 def build_sim_object_placements_for_session(
     *,
     objects_info: dict[str, Any] | None,

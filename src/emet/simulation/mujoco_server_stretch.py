@@ -920,6 +920,12 @@ class MujocoZmqServer(BaseZmqServer):
                 attach_sim_object_placements_to_session(session, objects_info=self.objects_info,
                     environment_kind=env.get("kind"), model=model, data=scratch, robot_root_name="base_link")
                 self._articulation_geometry_groups = groups
+        placements = session.get("sim_object_placements")
+        if isinstance(placements, dict):
+            from emet.simulation.sim_object_placements import DynamicPlacementTracker
+            if not hasattr(self, "_dynamic_placement_tracker"):
+                self._dynamic_placement_tracker = DynamicPlacementTracker()
+            self._dynamic_placement_tracker.refresh(placements, model, scratch)
         session["sim_articulations"] = groups
         caps["sim_articulation_state"] = True
 
