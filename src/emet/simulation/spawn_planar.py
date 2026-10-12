@@ -59,53 +59,6 @@ def infer_planar_anchor_body_name(model: mujoco.MjModel, joint_names: tuple[str,
     return str(name) if name else None
 
 
-def world_se2_to_planar_qpos(
-    model: mujoco.MjModel,
-    data: mujoco.MjData,
-    *,
-    anchor_body_name: str,
-    world_x: float,
-    world_y: float,
-    world_yaw: float,
-) -> tuple[float, float, float]:
-    """Map desired ``base_link`` world *(x, y, yaw)* to planar *(slide_x, slide_y, hinge_yaw)* qpos.
-
-    Slides move along the anchor body's local X/Y; after Robocasa merge, ``base_root`` is often
-    translated and yawed, so **world** coordinates must not be written directly to the joints.
-    """
-    try:
-        mujoco.mj_forward(model, data)
-    except mujoco.FatalError as e:
-        raise ValueError(f"mj_forward failed for planar anchor FK: {e}") from e
-    bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, anchor_body_name)
-    if bid < 0:
-        raise ValueError(f"planar anchor body {anchor_body_name!r} not found")
-    R = np.asarray(data.body(bid).xmat, dtype=np.float64).reshape(3, 3)
-    pr = np.asarray(data.body(bid).xpos, dtype=np.float64)
-    delta_xy = np.array([float(world_x) - pr[0], float(world_y) - pr[1]], dtype=np.float64)
-    M = R[:2, :2]
-    try:
-        q_vec = np.linalg.solve(M, delta_xy)
-    except np.linalg.LinAlgError:
-        q_vec, *_ = np.linalg.lstsq(M, delta_xy, rcond=None)
-    qx, qy = float(q_vec[0]), float(q_vec[1])
-
-    cw = float(math.cos(float(world_yaw)))
-    sw = float(math.sin(float(world_yaw)))
-    rhs = np.array([cw, sw], dtype=np.float64)
-    try:
-        j_dir = np.linalg.solve(M, rhs)
-    except np.linalg.LinAlgError:
-        j_dir, *_ = np.linalg.lstsq(M, rhs, rcond=None)
-    nj = float(np.linalg.norm(j_dir))
-    if nj < 1e-9:
-        j_yaw = 0.0
-    else:
-        j_dir = j_dir / nj
-        j_yaw = float(math.atan2(float(j_dir[1]), float(j_dir[0])))
-    return (qx, qy, j_yaw)
-
-
 def write_planar_base_xyt(
     model: mujoco.MjModel,
     data: mujoco.MjData,
