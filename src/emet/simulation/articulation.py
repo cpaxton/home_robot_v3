@@ -93,3 +93,22 @@ def access_precondition(session, body):
     if not group.get("supported"):
         return "articulation_unsupported"
     return None if group.get("state") == "open" else "receptacle_requires_open"
+
+
+def articulation_geometry_changed(current, previous, *, tolerance=1e-6):
+    """Compare against the last geometry rebuild, not the last telemetry sample.
+
+    Joint jitter below one micrometre/microradian does not rescan meshes. State
+    transitions and structural changes always refresh; accumulated drift does too.
+    """
+    if previous is None:
+        return True
+    ignored = {"position", "joint_positions"}
+    if {k: v for k, v in current.items() if k not in ignored} != {
+        k: v for k, v in previous.items() if k not in ignored
+    }:
+        return True
+    a, b = current.get("joint_positions", {}), previous.get("joint_positions", {})
+    return a.keys() != b.keys() or any(
+        not np.isfinite(a[k]) or not np.isfinite(b[k]) or abs(a[k] - b[k]) > tolerance for k in a
+    )

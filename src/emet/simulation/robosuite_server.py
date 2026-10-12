@@ -1095,21 +1095,29 @@ class RobosuiteZmqServer(BaseZmqServer):
 
     def _refresh_articulation_state(self):
         """Publish joint evidence and coherent geometry from private data under lock."""
-        from emet.simulation.articulation import scene_articulations
+        from emet.simulation.articulation import articulation_geometry_changed, scene_articulations
         if self._emet_session is None or self._mjmodel is None or self._mjdata is None:
             return
         groups = scene_articulations(self._mjmodel, self._mjdata, self._spec.base_link_name)
-        if groups != self._emet_session.get("sim_articulations"):
+        previous = getattr(self, "_articulation_geometry_groups",
+                           self._emet_session.get("sim_articulations") or [])
+        previous_by_bodies = {tuple(g["bodies"]): g for g in previous}
+        revision = self._emet_session.get("articulation_revision", 0)
+        forced = revision != getattr(self, "_articulation_geometry_revision", revision)
+        changed = [g for g in groups if forced or articulation_geometry_changed(
+            g, previous_by_bodies.get(tuple(g["bodies"])))]
+        if changed or len(groups) != len(previous):
             scratch = mujoco.MjData(self._mjmodel)
             mujoco.mj_copyData(scratch, self._mjmodel, self._mjdata)
             env = self._emet_session.get("environment") or {}
             if env.get("kind") == "molmospaces" and not self._objects_info:
                 from emet.simulation.sim_object_placements import refresh_articulated_body_placements
-                previous = self._emet_session.get("sim_articulations") or []
-                changed = [g for g in groups if g not in previous]
                 bodies = {body for group in changed for body in group["bodies"]}
                 refresh_articulated_body_placements(
                     self._emet_session["sim_object_placements"], self._mjmodel, scratch, bodies)
+                changed_keys = {tuple(g["bodies"]) for g in changed}
+                geometry_groups = [g if tuple(g["bodies"]) in changed_keys else
+                                   previous_by_bodies[tuple(g["bodies"])] for g in groups]
             else:
                 # Aggregate fixture maps need their provider's grouping rules.
                 attach_sim_object_placements_to_session(
@@ -1117,7 +1125,13 @@ class RobosuiteZmqServer(BaseZmqServer):
                     environment_kind=env.get("kind"), model=self._mjmodel, data=scratch,
                     robot_root_name=self._spec.base_link_name,
                 )
-            self._emet_session["sim_articulations"] = groups
+                geometry_groups = groups
+            self._articulation_geometry_groups = geometry_groups
+        elif not hasattr(self, "_articulation_geometry_groups"):
+            self._articulation_geometry_groups = previous
+        self._articulation_geometry_revision = revision
+        # Keep measured state fresh even when geometry does not need rebuilding.
+        self._emet_session["sim_articulations"] = groups
 
     def _attach_emet_session(self, message: dict[str, Any]) -> dict[str, Any]:
         if self._emet_session is not None:

@@ -216,3 +216,28 @@ def test_articulation_refresh_does_not_rescan_unaffected_scene(monkeypatch):
     server._refresh_articulation_state()
     assert server._emet_session["sim_object_placements"]["unrelated"] is untouched
     assert set(touched) == {server._mjmodel.body("fixture").id, server._mjmodel.body("door").id}
+
+
+def test_articulation_jitter_publishes_measured_state_without_rescan(monkeypatch):
+    from emet.simulation import sim_object_placements
+
+    server = server_fixture()
+    server._refresh_articulation_state()
+    original = sim_object_placements.refresh_articulated_body_placements
+    calls = []
+    def tracked(*args):
+        calls.append(1)
+        return original(*args)
+    monkeypatch.setattr(sim_object_placements, 'refresh_articulated_body_placements', tracked)
+    for position in (2e-7, 4e-7, 6e-7, 8e-7):
+        server._mjdata.qpos[-1] = position
+        server._refresh_articulation_state()
+        assert server._emet_session['sim_articulations'][0]['position'] == position
+    assert not calls
+    # Drift is compared to the geometry baseline, not just the previous sample.
+    server._mjdata.qpos[-1] = 1.2e-6
+    server._refresh_articulation_state()
+    assert len(calls) == 1
+    server._emet_session['articulation_revision'] += 1
+    server._refresh_articulation_state()
+    assert len(calls) == 2
