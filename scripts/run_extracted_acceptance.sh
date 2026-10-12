@@ -20,7 +20,7 @@ export EMET_SIM_NAV_TELEPORT=0 EMET_MOLMOSPACES_NAV_TELEPORT=0
 export PYTHONPATH="$ROOT/src:$ROOT/packages/emet_habitat${PYTHONPATH:+:$PYTHONPATH}"
 unset EMET_VL_ENDPOINT EMET_SIM_EVAL_CONFIG EMET_SIM_EVAL_TRACE
 git rev-parse HEAD > "$out/source.txt"
-cp "${BASH_SOURCE[0]}" "$out/driver.sh"
+cp "$DRIVER_ROOT/scripts/run_extracted_acceptance.sh" "$out/driver.sh"
 sha256sum uv.lock configs/emet/default.yaml configs/ovmm/find_phase_episodes.yaml > "$out/input_hashes.txt"
 sha256sum "$DRIVER_ROOT/scripts/run_dev_loop.sh" "$DRIVER_ROOT/scripts/check_acceptance_metrics.py" >> "$out/input_hashes.txt"
 "${EMET_PY:-$ROOT/.venv/bin/python}" -c 'from importlib.metadata import distributions; print("\n".join(sorted(d.metadata.get("Name", "unknown") + "==" + d.version for d in distributions())))' > "$out/packages.txt"

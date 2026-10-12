@@ -82,6 +82,48 @@ def test_driver_syntax_and_invalid_phase(tmp_path):
     assert "Usage:" in result.stderr
 
 
+def test_relative_driver_invocation_preserves_driver_after_source_chdir(tmp_path):
+    source = tmp_path / "source"
+    source.mkdir()
+    subprocess.run(["git", "init", "-q", str(source)], check=True)
+    for name in ("uv.lock", "configs/emet/default.yaml", "configs/ovmm/find_phase_episodes.yaml"):
+        path = source / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("fixture\n")
+    subprocess.run(["git", "-C", str(source), "add", "."], check=True)
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(source),
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.invalid",
+            "-c",
+            "core.hooksPath=/dev/null",
+            "commit",
+            "-qm",
+            "fixture",
+        ],
+        check=True,
+    )
+    sha = subprocess.check_output(["git", "-C", str(source), "rev-parse", "HEAD"], text=True).strip()
+    out = tmp_path / "results"
+    # Stop at package inventory: exercise real provenance setup without a model or simulator.
+    env = dict(os.environ, SOURCE_DIR=str(source), SOURCE_SHA=sha, OUT_DIR=str(out), EMET_PY="/bin/false")
+    result = subprocess.run(
+        ["bash", "scripts/run_extracted_acceptance.sh", "eqa"],
+        cwd=ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode != 0
+    assert (out / "driver.sh").read_bytes() == DRIVER.read_bytes()
+    assert len((out / "input_hashes.txt").read_text().splitlines()) == 5
+
+
 @pytest.mark.parametrize("failure", ["wrong_sha", "dirty", "staged", "untracked", "existing_output"])
 def test_driver_rejects_unfrozen_inputs_before_creating_output(tmp_path, failure):
     repo = tmp_path / "source"
