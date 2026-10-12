@@ -82,6 +82,15 @@ No live run after these repairs is claimed. Next: clear missing-anchor and
 precision-policy contracts, then a serialized small OVMM smoke; wire timestamped
 view selection separately. Keep all historical results tied to their source SHA.
 
+Combined-suite follow-up: collecting the SAM2 tests alongside navigation tests
+exposed eight controller-initialization failures (291 passed): SAM2 initializes
+Hydra globally, while the control loader tried to initialize it again. Repair
+`e6d3c032` loads the existing standalone control YAML with OmegaConf without
+touching global Hydra state; unsupported Hydra defaults composition fails
+explicitly. The targeted SAM2/controller/config suite passes 12 tests. This was
+an actual shared-process integration problem, not a reason to isolate the tests
+or clear another component's global state.
+
 ## Hypothesis and scope
 
 Object-facing navigation can remove room/relationship context. Preserve the
