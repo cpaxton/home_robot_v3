@@ -227,3 +227,60 @@ def test_malformed_input_cannot_crash_or_start_motion(action):
     robot = Robot()
     assert not robot.dispatch_command(action)
     assert robot.starts == 0
+
+
+def test_slow_receipt_publication_does_not_block_dispatch_or_mix_revisions(monkeypatch):
+    """A large query result must not monopolize the command/receipt locks."""
+    from emet.core import command_tracker
+
+    robot = Robot()
+    identity = {**robot.command_tracker.metadata(), "client_session_id": "client", "sequence": 0}
+    robot.command_tracker.accept(identity, {})
+    robot.command_tracker.transition("client", 0, "running", result={"clear": [False]})
+    copying, release, dispatched = threading.Event(), threading.Event(), threading.Event()
+    messages, errors = [], []
+    original_copy = command_tracker.deepcopy
+
+    def slow_copy(value):
+        if threading.current_thread() is publisher:
+            copying.set()
+            if not release.wait(3):
+                raise AssertionError("publisher was not released")
+        return original_copy(value)
+
+    def publish():
+        try:
+            messages.append(robot.command_message({}))
+        except BaseException as exc:
+            errors.append(exc)
+
+    def dispatch():
+        try:
+            robot.command_tracker.transition("client", 0, "succeeded", result={"clear": [True]})
+            robot.dispatch_command({"command": {**identity, "sequence": 1}, "joint": [0.]})
+            dispatched.set()
+        except BaseException as exc:
+            errors.append(exc)
+
+    publisher = threading.Thread(target=publish)
+    writer = threading.Thread(target=dispatch)
+    monkeypatch.setattr(command_tracker, "deepcopy", slow_copy)
+    publisher.start()
+    try:
+        assert copying.wait(1)
+        writer.start()
+        assert dispatched.wait(1), "publishing receipt history blocks new command dispatch"
+    finally:
+        release.set()
+        publisher.join(3)
+        if writer.ident is not None:
+            writer.join(3)
+    assert not publisher.is_alive() and not writer.is_alive()
+    assert not errors
+    old = messages[0]["command_receipts"][0]
+    assert old["status"] == "running" and old["result"] == {"clear": [False]}
+    latest = robot.command_tracker.snapshot()
+    assert latest[0]["status"] == "succeeded" and latest[0]["result"] == {"clear": [True]}
+    assert latest[1]["status"] == "succeeded"
+    latest[0]["result"]["clear"][0] = False
+    assert robot.command_tracker.snapshot()[0]["result"] == {"clear": [True]}

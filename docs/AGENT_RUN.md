@@ -3,8 +3,9 @@
 **Implementation status (2026-10-12):** main includes conversation isolation
 (#176), shared current-view grounding (#180), and structured simulator TAMP tools
 (#178). Additional grounding providers, measured navigation, and bounded
-inspection remain in draft #181 → #182 → #184 → #185. Placement #179 and native
-input contracts #195 are also unmerged; the latter does not yet wire native
+inspection remain in draft #181 → #182 → #184 → #185, with follow-ups #198/#199/#202.
+Placement #179 and measured articulation #201 are now on main. Native
+input contracts #195 remain unmerged and do not yet wire native
 scene/execution adapters into `run agent`. See [project status](project_status.md)
 and the [main TAMP API contract](api/tamp.md) before selecting a workflow.
 
@@ -290,3 +291,7 @@ uv run python scripts/scripted_sim_pick_place.py --start-sim \
 
 TAMP tools return a consistent versioned JSON result on every path. See the
 [canonical TAMP API](api/tamp.md) for schemas, recovery actions, and simulator limits.
+
+For placement geometry and replay, see [the placement API](api/placement.md).
+For controlled improvements and provenance-linked figures, see
+[paired TAMP metrics](experiments/tamp_paired_metrics.md).

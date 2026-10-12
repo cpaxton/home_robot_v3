@@ -35,7 +35,12 @@ _WORLD_CAM[:3, 3] = [4.1, -1.9, 1.2]
 
 
 def _minimal_stretch_server() -> MujocoZmqServer:
+    import threading
+
     server = MujocoZmqServer.__new__(MujocoZmqServer)
+    server._articulation_lock = threading.RLock()
+    server._articulation_model = None
+    server._status = None
     server._initial_xyt = _ORIGIN.copy()
     server._last_step = 0
     server.recv_address = "tcp://127.0.0.1:1"

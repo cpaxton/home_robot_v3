@@ -24,15 +24,17 @@ Much of the code is licensed under the Apache 2.0 license. See the [LICENSE](LIC
 
 ## Current status
 
-As of **2026-10-12**, reviewed `main` is `7f65dbef`. The
-[project status](docs/project_status.md) records merged work, all seven open PRs,
+As of **2026-10-12**, reviewed `main` is `9dd46c9c`. The
+[project status](docs/project_status.md) records merged work, nine open implementation PRs,
 paper evidence, and remaining acceptance gates.
 
 - Main includes shared current-view grounding, isolated VLM tool inference,
   measured simulator TAMP tools, Stretch telemetry, and scoped robot recordings.
 - The opt-in grounding/navigation/recovery stack remains in draft PRs
   **#181 → #182 → #184 → #185**. Live EQA regressions and learned find acceptance
-  remain open. Placement **#179** reports one successful assisted RBY1 run;
+  remain open, with follow-ups **#198/#199/#202**. Placement **#179** and
+  startup/articulation fixes **#200/#201** are merged; broader placement remains
+  partially validated (historical **3/7** assisted run). Unmerged
   native input contracts **#195** still lack live agent adapters.
 - The [Dynagraph paper](paper/main.tex) contains historical HM-EQA results and
   partial simulator controls. Larger learned OVMM, SQA3D, dynamic exploration,

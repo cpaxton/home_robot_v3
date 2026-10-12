@@ -602,6 +602,18 @@ CHAT_SKILL_SPECS: tuple[SkillSpec, ...] = (
         returns_info=True,
     ),
     SkillSpec(
+        name="set_receptacle_state",
+        modes=frozenset({AgentMode.CHAT}),
+        description="Returns schema_version=1 JSON. Simulator-assisted receptacle open/close "
+                    "using a scene_tasks handle; joint teleport, no collision guarantee. "
+                    "Verify status and replan afterward; partial means inspect before continuing.",
+        parameters={"type": "object", "properties": {
+            "task_ref": {"type": "string", "description": "Current scene_tasks handle."},
+            "state": {"type": "string", "enum": ["open", "closed"]},
+        }, "required": ["task_ref", "state"]},
+        returns_info=True,
+    ),
+    SkillSpec(
         name="scene_tasks",
         modes=frozenset({AgentMode.CHAT}),
         description=(

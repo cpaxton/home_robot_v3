@@ -1,7 +1,7 @@
 # Project status: main, open PRs, and paper
 
-Snapshot: **2026-10-12**. Reviewed main:
-[`7f65dbeff6ef81fc824da25497b420b57dc1cc16`](https://github.com/cpaxton/home_robot_v3/commit/7f65dbeff6ef81fc824da25497b420b57dc1cc16).
+Snapshot: **2026-10-12**, refreshed after #179/#200/#201 merged. Reviewed main:
+[`9dd46c9c93d74a7f2203d7aeef2c8d0365b8b301`](https://github.com/cpaxton/home_robot_v3/commit/9dd46c9c93d74a7f2203d7aeef2c8d0365b8b301).
 This is a documentation audit of source, PR descriptions/comments, and checked-in
 experiment records. No new robot, simulator, or benchmark runs were performed;
 reported test counts belong to their cited revisions and are not additive.
@@ -16,54 +16,75 @@ reported test counts belong to their cited revisions and are not additive.
 | Physical TAMP checks, scene-validated benchmarks, structured agent tools | [#177](https://github.com/cpaxton/home_robot_v3/pull/177), [#178](https://github.com/cpaxton/home_robot_v3/pull/178) | [API contract](api/tamp.md) and [reference-admitted fixtures](experiments/tamp_validated_registry.md); no general native-agent success claim. |
 | Sourccey Mk.V model, standalone media/model tools, freejoint velocity fix | [#192](https://github.com/cpaxton/home_robot_v3/pull/192), [#193](https://github.com/cpaxton/home_robot_v3/pull/193), [#196](https://github.com/cpaxton/home_robot_v3/pull/196) | [Stretch table controls](experiments/2026-10-09_stretch_placement_media.md) pass scoped contact/release checks; historical rejected Sourccey media remains rejected. |
 | Measured Stretch diagnostics over IPC/ZMQ | [#190](https://github.com/cpaxton/home_robot_v3/pull/190) | Telemetry is owned by main, not the acceptance PR. |
+| Placement, assisted articulation/recovery, metrics and feedback | [#179](https://github.com/cpaxton/home_robot_v3/pull/179) | Latest full assisted smoke passed; broader historical run remains 3/7, with support/containment acceptance open. |
+| Planar spawn correction | [#200](https://github.com/cpaxton/home_robot_v3/pull/200) | Sourccey startup corruption fixed; successful initialization is not collision-free spawn or manipulation acceptance. |
+| Measured Stretch articulation and capability-aware task admission | [#201](https://github.com/cpaxton/home_robot_v3/pull/201) | Verified assisted open/close controls; selected-task policy changed, so the older 3/7 run is not rescored. |
 
 ## Open PRs and dependencies
 
-All seven open PRs at the snapshot are listed below. Head SHAs identify reviewed
+The nine open implementation PRs are listed below; status/install PR #197 is
+the separate documentation change carrying this snapshot. Head SHAs identify reviewed
 source; draft/ready labels describe GitHub state, not experimental acceptance.
 
 | PR | Head | Base | GitHub state | Current scope / remaining work |
 | --- | --- | --- | --- | --- |
 | [#181](https://github.com/cpaxton/home_robot_v3/pull/181) | `dc106273` | `main` | Draft | Opt-in Qwen/depth/SAM grounding providers. Default remains YOLOE; needs extracted-revision live acceptance. |
 | [#182](https://github.com/cpaxton/home_robot_v3/pull/182) | `1319ea6d` | #181 | Draft | Measured navigation, fresh-map clearance, Habitat import boundary, and wheel-contact repair; rerun physical gates after the physics change. |
-| [#184](https://github.com/cpaxton/home_robot_v3/pull/184) | `b5d04a01` | #182 | Draft | Bounded head inspection and same-waypoint floor recovery; EQA/room acceptance remains open. |
-| [#185](https://github.com/cpaxton/home_robot_v3/pull/185) | `76ce7f8c` | #184 | Draft | Frozen-source acceptance driver and legacy disposition inventory. Reconciled stack reports 165 focused passes, without live task acceptance. |
-| [#179](https://github.com/cpaxton/home_robot_v3/pull/179) | `48d5307b` | `main` | Ready for review | Consolidated placement, assisted articulation/recovery, metrics and feedback. One assisted full-task pass; repeatability, settled support, and shutdown follow-up remain. |
-| [#195](https://github.com/cpaxton/home_robot_v3/pull/195) | `ceaec939` | #179 | Ready for review | Observed/privileged input boundaries and immutable measured-joint evidence; native scene/execution adapters and observed geometry providers remain unwired. |
+| [#184](https://github.com/cpaxton/home_robot_v3/pull/184) | `48b56aeb` | #182 | Draft | Bounded head inspection, measured head-arrival repair and same-waypoint recovery; EQA/room acceptance remains open. |
+| [#185](https://github.com/cpaxton/home_robot_v3/pull/185) | `0ba16692` | #184 | Draft | Frozen-source acceptance driver, isolated evidence, prerequisite ordering and legacy disposition inventory; live acceptance remains open. |
+| [#195](https://github.com/cpaxton/home_robot_v3/pull/195) | `ceaec939` | `main` | Ready for review | Observed/privileged input boundaries and immutable measured-joint evidence; native scene/execution adapters and observed geometry providers remain unwired. |
 | [#183](https://github.com/cpaxton/home_robot_v3/pull/183) | `6676ca99` | `main` | Ready for review; conflicts reported | Accumulated experimental source, inventoried in #185 as represented/partial/deferred. Coordinate residuals through the extraction stack; it is not a wholesale landing candidate. |
+| [#198](https://github.com/cpaxton/home_robot_v3/pull/198) | `59f70026` | #184 | Draft | Opt-in measured coverage scan; corrected local/coverage pair and multiple starting headings remain pending. Not a prerequisite for the original stack. |
+| [#199](https://github.com/cpaxton/home_robot_v3/pull/199) | `17455893` | #184 | Draft | Assessed camera evidence and pre-approach context. Paired diagnostic remains 1/4 vs 1/4; no accuracy improvement. |
+| [#202](https://github.com/cpaxton/home_robot_v3/pull/202) | `e0c8b2d1` | #199 | Draft | Auditable view-selection policies and offline comparisons; no live agent wiring or accuracy claim. |
 
-Review order is **#181 → #182 → #184 → #185** and **#179 → #195**.
+Review order is **#181 → #182 → #184 → #185**, with separate follow-ups
+**#184 → #198** and **#184 → #199 → #202**. **#195** now targets main after
+its former parent #179 merged.
 Merged #176/#180/#190 are no longer pending stack layers. Placement consolidation
 preserves #186/#187/#188/#194; these are not additional active PRs. #183 remains
 open even though legacy #167/#168/#169 review containers were superseded.
 
 ### Latest evidence supersedes older PR prose
 
-**Placement:** #179's description still says the live task times out and should
-remain draft. Its October 11 follow-up and
-[experiment log at the reviewed head](https://github.com/cpaxton/home_robot_v3/blob/48d5307be2269f7efe04a9a6ef3df997afe84721/docs/experiments/placement_planning_20261009.md#october-11-rigid-attachment-and-coherent-payload-geometry)
-report GPU job `20261011_133133_a84009`, source `10076be1`, completing RBY1
-bowl → dishwasher through public CHAT tools: pickup, transport, placement,
-verification, and retract. It recorded 575 successful acknowledgements without
-execution timeouts. The final `48d5307b` adds error-path hardening after that run.
-The run used GT geometry, object latch/placement assistance, assisted opening,
-and base teleport. Its final scorer checks proximity, not sustained support.
-Shutdown then rejected `cancel_navigation` with “cancellation target has no
-confirmed stop”. One assisted pass does not establish repeatability or native
-contact success. The draft wording in #179/#195 is stale relative to GitHub state.
+**Placement:** #179 is merged as `ccd69863`. Its
+[October 12 evidence](experiments/placement_planning_20261009.md) records a full
+assisted smoke pass at `32303c8c` (job `20261012_101729_f324e0`), including
+release and retract. The broader run at `48d5307b` remains **3/7**: three RBY1
+kitchen-0 passes, two unsupported-articulation rejections, Sourccey startup
+failure, and no accepted kitchen-1 support candidates. Do not report this as
+3/3 or native-contact acceptance. GT geometry, latch/placement assistance and
+base teleport remain explicit. Sustained support/containment and shutdown
+follow-ups are open.
+
+**Subsequent fixes:** [#200 startup evidence](experiments/sourccey_startup_20261012.md)
+and [#201 articulation evidence](experiments/articulation_followups_20261012.md)
+record successful managed open/close controls on October 12. Capability-aware
+selection changes the task policy; these controls do not rescore the older 3/7
+placement run. Stretch lift-initialization timeout/teardown errors remain
+separate issues. Neither fix claims full placement or native-contact acceptance.
 
 **Shared-agent acceptance:** the separate integration branch
 [`review/acceptance-current-main` at `cd92cb1b`](https://github.com/cpaxton/home_robot_v3/blob/cd92cb1b80e48407e92655a71da5e3a7f08e4e6f/docs/TESTING.md)
-contains additional head-arrival and opt-in coverage-scan work beyond the public
-stack. Its ledger reports frozen candidate EQA **5/12 vs main 8/12**, with losses
+records the earlier integrated head-arrival and opt-in scan diagnostics. Those
+changes are now extracted into #184 and #198; do not treat the old integration
+revision as acceptance of their current heads. Its ledger reports frozen candidate EQA **5/12 vs main 8/12**, with losses
 reproduced on a four-question replay (**1/4 vs 4/4**). Isolated #180 scored **4/4
 on both arms**. Both old-main and candidate S0 runs failed object/receptacle find;
 RoboCasa failed asset preflight. A measured route gate passed 50/50 waypoints,
 but predates the later wheel-contact extraction and cannot accept that change.
-The October 11 model-free scan completed 16 captures; manual visibility review
-and four-heading coverage gates remain open. The earlier NVIDIA driver mismatch
+The earlier October 11 model-free scan completed 16 captures. #198 now records
+manual visibility evidence for the integrated scan at `cd92cb1b`, but multiple
+starting-heading and exact-head gates remain open. The nominal learned coverage
+run actually selected `local`; #198 fixes the dispatch and still needs a corrected
+paired ablation. The earlier NVIDIA driver mismatch
 is recorded as resolved. These are revision-specific diagnostics, not results
 for current main or a blanket acceptance of the public PR heads.
+
+The [#199 diagnostic](https://github.com/cpaxton/home_robot_v3/pull/199) preserves
+assessed RGB plus older pre-approach context through final answering, but its
+paired q12/q14/q56/q6 trial scores 1/4 on both parent and treatment. #202 proposes
+offline view selection; neither PR establishes a repair of the EQA losses.
 
 ## Paper evidence and remaining inconsistencies
 
@@ -106,9 +127,9 @@ No experiments were rescored or rerun for these documentation/paper corrections.
 2. Review scan visibility, test four initial headings/opposite-side fixtures,
    rerun navigation after wheel-contact changes, then compare learned S0 find.
    Preflight room assets before recording task outcomes.
-3. Repeat #179 on admitted fixtures/robots, audit settled support, and resolve
+3. Repeat the merged placement stack on admitted fixtures/robots, audit settled support, and resolve
    shutdown behavior. Keep GT-assisted, native-contact, and learned-agent rows
-   separate. Restack/review #195 against the accepted parent; wire providers and
+   separate. Review #195 against updated main; wire providers and
    adapters before claiming native `run agent` execution.
 4. Reconcile paper provenance, then fill missing benchmark cells only from
    frozen, scored runs with failure denominators and assistance labels.
