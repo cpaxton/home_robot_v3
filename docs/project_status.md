@@ -19,12 +19,14 @@ reported test counts belong to their cited revisions and are not additive.
 | Placement, assisted articulation/recovery, metrics and feedback | [#179](https://github.com/cpaxton/home_robot_v3/pull/179) | Latest full assisted smoke passed; broader historical run remains 3/7, with support/containment acceptance open. |
 | Planar spawn correction | [#200](https://github.com/cpaxton/home_robot_v3/pull/200) | Sourccey startup corruption fixed; successful initialization is not collision-free spawn or manipulation acceptance. |
 | Measured Stretch articulation and capability-aware task admission | [#201](https://github.com/cpaxton/home_robot_v3/pull/201) | Verified assisted open/close controls; selected-task policy changed, so the older 3/7 run is not rescored. |
+| Native input contracts | [#195](https://github.com/cpaxton/home_robot_v3/pull/195) | Merged as `b7a1c22d`; input provenance and feedback guards are available, while native adapters remain unwired. |
 
 ## Open PRs and dependencies
 
-The nine open implementation PRs are listed below; status/install PR #197 is
-the separate documentation change carrying this snapshot. Head SHAs identify reviewed
-source; draft/ready labels describe GitHub state, not experimental acceptance.
+The navigation PR rows below retain the #197 status snapshot; they have not
+been re-reviewed in this TAMP update. #195 has since merged and is removed from
+the open list. Head SHAs identify reviewed source; draft/ready labels describe
+GitHub state, not experimental acceptance.
 
 | PR | Head | Base | GitHub state | Current scope / remaining work |
 | --- | --- | --- | --- | --- |
@@ -32,15 +34,14 @@ source; draft/ready labels describe GitHub state, not experimental acceptance.
 | [#182](https://github.com/cpaxton/home_robot_v3/pull/182) | `1319ea6d` | #181 | Draft | Measured navigation, fresh-map clearance, Habitat import boundary, and wheel-contact repair; rerun physical gates after the physics change. |
 | [#184](https://github.com/cpaxton/home_robot_v3/pull/184) | `48b56aeb` | #182 | Draft | Bounded head inspection, measured head-arrival repair and same-waypoint recovery; EQA/room acceptance remains open. |
 | [#185](https://github.com/cpaxton/home_robot_v3/pull/185) | `0ba16692` | #184 | Draft | Frozen-source acceptance driver, isolated evidence, prerequisite ordering and legacy disposition inventory; live acceptance remains open. |
-| [#195](https://github.com/cpaxton/home_robot_v3/pull/195) | `ceaec939` | `main` | Ready for review | Observed/privileged input boundaries and immutable measured-joint evidence; native scene/execution adapters and observed geometry providers remain unwired. |
 | [#183](https://github.com/cpaxton/home_robot_v3/pull/183) | `6676ca99` | `main` | Ready for review; conflicts reported | Accumulated experimental source, inventoried in #185 as represented/partial/deferred. Coordinate residuals through the extraction stack; it is not a wholesale landing candidate. |
 | [#198](https://github.com/cpaxton/home_robot_v3/pull/198) | `59f70026` | #184 | Draft | Opt-in measured coverage scan; corrected local/coverage pair and multiple starting headings remain pending. Not a prerequisite for the original stack. |
 | [#199](https://github.com/cpaxton/home_robot_v3/pull/199) | `17455893` | #184 | Draft | Assessed camera evidence and pre-approach context. Paired diagnostic remains 1/4 vs 1/4; no accuracy improvement. |
 | [#202](https://github.com/cpaxton/home_robot_v3/pull/202) | `e0c8b2d1` | #199 | Draft | Auditable view-selection policies and offline comparisons; no live agent wiring or accuracy claim. |
 
 Review order is **#181 → #182 → #184 → #185**, with separate follow-ups
-**#184 → #198** and **#184 → #199 → #202**. **#195** now targets main after
-its former parent #179 merged.
+**#184 → #198** and **#184 → #199 → #202**. The TAMP stack through **#195**
+is merged; native scene/execution adapters remain unwired.
 Merged #176/#180/#190 are no longer pending stack layers. Placement consolidation
 preserves #186/#187/#188/#194; these are not additional active PRs. #183 remains
 open even though legacy #167/#168/#169 review containers were superseded.
@@ -129,8 +130,8 @@ No experiments were rescored or rerun for these documentation/paper corrections.
    Preflight room assets before recording task outcomes.
 3. Repeat the merged placement stack on admitted fixtures/robots, audit settled support, and resolve
    shutdown behavior. Keep GT-assisted, native-contact, and learned-agent rows
-   separate. Review #195 against updated main; wire providers and
-   adapters before claiming native `run agent` execution.
+   separate. #195 is merged; wire providers and adapters before claiming native
+   `run agent` execution.
 4. Reconcile paper provenance, then fill missing benchmark cells only from
    frozen, scored runs with failure denominators and assistance labels.
 
