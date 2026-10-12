@@ -117,103 +117,72 @@ def write_planar_base_xyt(
     anchor_body_name: str | None = None,
     base_body_name: str = "base_link",
 ) -> bool:
-    """Set planar joints so *base_body_name* reaches world ``(world_x, world_y, world_yaw)`` after ``mj_forward``.
+    """Set a world SE(2) pose using the actual slide and hinge Jacobians.
 
-    Joint values are **not** raw world XY when the anchor body (parent of the first slide) is rotated
-    or shifted (Robocasa merged robots). Pass ``anchor_body_name`` or rely on inference from
-    ``joint_names[0]``.
-
-    After dynamics (e.g. :meth:`RobosuiteZmqServer._stabilize_physics_state_after_load`), the kinematic
-    subtree can sit in a state where a single analytic step does not match FK; we run a few Gauss–Newton
-    style corrections in slide space, then yaw, until the reported *base* pose matches within tight
-    tolerance.
+    A body carrying both slides and yaw rotates with yaw, but its slide axes do
+    not. Using that body's rotation as a slide Jacobian diverges at nonzero yaw.
+    Solve on private data and commit only a finite, FK-verified pose. Failed
+    candidates leave the caller's state (including contacts and controls) intact.
+    ``anchor_body_name`` remains accepted for compatibility; joint FK determines
+    the mapping, including transformed ancestors and offsets to the base body.
     """
-    for jn in joint_names:
-        if mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, jn) < 0:
-            return False
-    anchor = anchor_body_name or infer_planar_anchor_body_name(model, joint_names)
-    if anchor is None:
+    target = np.asarray([world_x, world_y, world_yaw], dtype=float)
+    if not np.isfinite(target).all() or len(set(joint_names)) != 3:
         return False
+    ids = [mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, name) for name in joint_names]
+    bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, base_body_name)
+    if min(ids) < 0 or bid < 0:
+        return False
+    if list(model.jnt_type[ids]) != [mujoco.mjtJoint.mjJNT_SLIDE,
+                                    mujoco.mjtJoint.mjJNT_SLIDE, mujoco.mjtJoint.mjJNT_HINGE]:
+        return False
+    qadr, vadr = model.jnt_qposadr[ids], model.jnt_dofadr[ids]
+    probe = mujoco.MjData(model)
+    mujoco.mj_copyData(probe, model, data)
+    # Start from the reference rather than carrying errors between candidates.
+    probe.qpos[qadr] = model.qpos0[qadr]
+    probe.qvel[vadr] = 0
+    jacp, jacr = np.zeros((3, model.nv)), np.zeros((3, model.nv))
     try:
-        qx, qy, j_yaw = world_se2_to_planar_qpos(
-            model,
-            data,
-            anchor_body_name=anchor,
-            world_x=float(world_x),
-            world_y=float(world_y),
-            world_yaw=float(world_yaw),
-        )
-    except ValueError:
-        return False
-    vals = (qx, qy, j_yaw)
-    qadr_x = qadr_y = qadr_yaw = -1
-    for jn, val in zip(joint_names, vals, strict=True):
-        jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, jn)
-        qadr = int(model.jnt_qposadr[jid])
-        vadr = int(model.jnt_dofadr[jid])
-        data.qpos[qadr] = float(val)
-        if vadr >= 0:
-            data.qvel[vadr] = 0.0
-        if jn == joint_names[0]:
-            qadr_x = qadr
-        elif jn == joint_names[1]:
-            qadr_y = qadr
+        for _ in range(12):
+            mujoco.mj_kinematics(model, probe)
+            mujoco.mj_comPos(model, probe)
+            rotation = probe.body(bid).xmat.reshape(3, 3)
+            yaw = math.atan2(rotation[1, 0], rotation[0, 0])
+            error = np.r_[target[:2] - probe.body(bid).xpos[:2],
+                          math.atan2(math.sin(target[2] - yaw), math.cos(target[2] - yaw))]
+            if not np.isfinite(error).all():
+                return False
+            if np.linalg.norm(error[:2]) <= 1e-6 and abs(error[2]) <= 1e-6:
+                break
+            mujoco.mj_jacBody(model, probe, jacp, jacr, bid)
+            # Derivative of atan2(R[1,0], R[0,0]) with respect to each DOF.
+            direction = rotation[:, 0]
+            denom = float(direction[0] ** 2 + direction[1] ** 2)
+            if denom < 1e-8:
+                return False
+            derivative = np.cross(jacr[:, vadr].T, direction)
+            yaw_jac = (direction[0] * derivative[:, 1] - direction[1] * derivative[:, 0]) / denom
+            jac = np.vstack((jacp[:2, vadr], yaw_jac))
+            if not np.isfinite(jac).all() or np.linalg.cond(jac) > 1e8:
+                return False
+            probe.qpos[qadr] += np.linalg.solve(jac, error)
         else:
-            qadr_yaw = qadr
-    for a in range(model.nu):
-        jid_tr = int(model.actuator_trnid[a, 0])
-        if jid_tr < 0:
-            continue
-        jname = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_JOINT, jid_tr)
-        if jname is not None and jname in joint_names:
-            data.ctrl[a] = 0.0
-
-    bid_bl = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, base_body_name)
-    bid_a = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, anchor)
-    if bid_bl >= 0 and bid_a >= 0 and qadr_x >= 0 and qadr_y >= 0 and qadr_yaw >= 0:
-        try:
-            for _ in range(12):
-                mujoco.mj_forward(model, data)
-                ex = float(world_x) - float(data.body(bid_bl).xpos[0])
-                ey = float(world_y) - float(data.body(bid_bl).xpos[1])
-                if ex * ex + ey * ey < 2.25e-6:
-                    break
-                R = np.asarray(data.body(bid_a).xmat, dtype=np.float64).reshape(3, 3)
-                M = R[:2, :2]
-                delta = np.array([ex, ey], dtype=np.float64)
-                try:
-                    dq = np.linalg.solve(M, delta)
-                except np.linalg.LinAlgError:
-                    dq, *_ = np.linalg.lstsq(M, delta, rcond=None)
-                data.qpos[qadr_x] = float(data.qpos[qadr_x]) + float(dq[0])
-                data.qpos[qadr_y] = float(data.qpos[qadr_y]) + float(dq[1])
-            for _ in range(8):
-                mujoco.mj_forward(model, data)
-                xmat = np.asarray(data.body(bid_bl).xmat, dtype=np.float64).reshape(3, 3)
-                cur = float(math.atan2(xmat[1, 0], xmat[0, 0]))
-                err = float(np.arctan2(np.sin(float(world_yaw) - cur), np.cos(float(world_yaw) - cur)))
-                if abs(err) < 5e-4:
-                    break
-                data.qpos[qadr_yaw] = float(data.qpos[qadr_yaw]) + err
-        except mujoco.FatalError:
             return False
-
-    for jn in joint_names:
-        jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, jn)
-        vadr = int(model.jnt_dofadr[jid])
-        if vadr >= 0:
-            data.qvel[vadr] = 0.0
-    for a in range(model.nu):
-        jid_tr = int(model.actuator_trnid[a, 0])
-        if jid_tr < 0:
-            continue
-        jname = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_JOINT, jid_tr)
-        if jname is not None and jname in joint_names:
-            data.ctrl[a] = 0.0
-    try:
-        mujoco.mj_forward(model, data)
-    except mujoco.FatalError:
+        values = probe.qpos[qadr]
+        if not np.isfinite(values).all():
+            return False
+        for jid, value in zip(ids, values, strict=True):
+            if model.jnt_limited[jid] and not model.jnt_range[jid, 0] <= value <= model.jnt_range[jid, 1]:
+                return False
+        for aid in range(model.nu):
+            if (model.actuator_trntype[aid] in (mujoco.mjtTrn.mjTRN_JOINT, mujoco.mjtTrn.mjTRN_JOINTINPARENT)
+                    and int(model.actuator_trnid[aid, 0]) in ids):
+                probe.ctrl[aid] = 0.0
+        mujoco.mj_forward(model, probe)
+    except (mujoco.FatalError, np.linalg.LinAlgError):
         return False
+    mujoco.mj_copyData(data, model, probe)
     return True
 
 
@@ -302,6 +271,10 @@ def find_planar_base_xyt(
 
     Returns world ``(x, y, yaw)`` matching :func:`get_base_xyt`-style conventions, or ``None``.
     """
+    # A rejected search must not leave its final trial pose in the live scene.
+    live_data = data
+    data = mujoco.MjData(model)
+    mujoco.mj_copyData(data, model, live_data)
     anchor_resolved = anchor_body_name or infer_planar_anchor_body_name(model, joint_names)
     if anchor_resolved is None:
         spawn_dbg("planar_find: could not infer anchor body for first planar joint; abort")
@@ -518,6 +491,7 @@ def find_planar_base_xyt(
                             if skip_pose:
                                 continue
                     spawn_dbg(f"planar_find: OK pass={tag!r} xy=({x:.3f},{y:.3f}) yaw={yaw:.3f} worst={worst:.5f}")
+                    mujoco.mj_copyData(live_data, model, data)
                     return (float(x), float(y), float(yaw))
     spawn_dbg(f"planar_find: failed scene={scene_label!r} profile={spawn_profile!r}")
     return None
