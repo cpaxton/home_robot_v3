@@ -39,3 +39,32 @@ claim follows from four diagnostic questions.
 Known unrelated test failure on the parent:
 `test_voxel_sim_upgrades_full_frame_absent_to_present` expects PRESENT without
 RGB while the assessment returns ABSENT. Do not weaken it to clear this pilot.
+
+## Completed pilot — 2026-10-12
+
+Frozen candidate `189fa8ef`, job `20261012_152553_12264b`, output
+`/home/cpaxton/runs/emet/context-eqa4-20261012`: **1/4**, identical per-question
+outcomes to parent #184 (q12/q14/q56 wrong, q6 correct). No infrastructure errors.
+The 247 focused tests passed. The known missing-RGB failure was reproduced on
+the exact parent separately; it is not introduced by this change.
+
+Manually inspected the final image packets and assessment prompts:
+
+- q12: assessment and final answering both receive bedside-table arrival RGB
+  plus the earlier doorway view. Qwen reports one visible table as the total.
+- q14: earlier context clearly includes the sofa/window and fan, but Qwen still
+  selects "next to the TV" with contradictory reasoning. Evidence handoff works;
+  this instance is not fixed by adding the context image.
+- q56: earlier context is a hallway view without curtains. Qwen again infers
+  white curtains from white walls. This frame cannot restore the blue curtains
+  visible from the old arrival heading.
+
+Keep draft. This supports the handoff contract, **not** an accuracy improvement
+or selection of pre-approach context as the final strategy. The next targeted
+diagnostic should compare actual pre-turn/post-turn arrival views, rather than
+assuming the last retained frame has the missing context. No larger sweep yet.
+
+The pilot exporter labels images without graph IDs `nav_fallback` even when
+the explicit packet supplied them. Prompt text and saved pixels identify the
+actual inputs. A subsequent metadata-only repair adds explicit `assessed_view`
+and `pre_approach_context` roles; original pilot artifacts are not rewritten.
