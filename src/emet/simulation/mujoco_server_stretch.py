@@ -929,8 +929,56 @@ class MujocoZmqServer(BaseZmqServer):
         with self._articulation_lock:
             if self._emet_session is not None:
                 self._refresh_articulation_state()
+                message["sim_base_pose_query"] = self._base_pose_query_qpos() is not None
                 message[EMET_ZMQ_SESSION_KEY] = copy.deepcopy(self._emet_session)
         return message
+
+    def _base_pose_query_qpos(self):
+        """Return a measured snapshot only when this model supports base queries."""
+        import mujoco
+
+        model = getattr(self, "_articulation_model", None)
+        values = getattr(getattr(self, "_status", None), "scene_qpos", None)
+        if model is None or values is None:
+            return None
+        qpos = np.asarray(values, dtype=float)
+        if qpos.shape != (model.nq,) or not np.isfinite(qpos).all():
+            return None
+        base = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, self.get_robot_spec().base_link_name)
+        joint = int(model.body_jntadr[base]) if base >= 0 else -1
+        # Stretch's simulator root is a free joint. Do not advertise support for
+        # an incompatible/custom model and fail later inside endpoint probing.
+        if joint < 0 or model.jnt_type[joint] != mujoco.mjtJoint.mjJNT_FREE:
+            return None
+        return qpos.copy()
+
+    def check_base_poses(self, poses):
+        """Privileged read-only endpoint query from the physics-process snapshot.
+
+        This checks full robot contacts at each endpoint, not a swept base path.
+        The parent XML/default pose is never used as a live measurement.
+        """
+        import mujoco
+
+        from emet.simulation.teleport_collision import teleport_endpoint_contacts
+
+        poses = np.asarray(poses, dtype=float)
+        if poses.ndim != 2 or poses.shape[1] != 3 or not 1 <= len(poses) <= 32 or not np.isfinite(poses).all():
+            raise ValueError("expected 1..32 finite world XYT poses")
+        with self._articulation_lock:
+            qpos = self._base_pose_query_qpos()
+            if qpos is None:
+                raise RuntimeError("measured simulator scene unavailable for base pose validation")
+            model = self._articulation_model
+            spec = self.get_robot_spec()
+        # Collision probing uses only private data; do not block publication or
+        # articulation commands while checking an entire candidate batch.
+        scratch = mujoco.MjData(model)
+        scratch.qpos[:] = qpos
+        contacts = [teleport_endpoint_contacts(model, scratch, spec, pose) for pose in poses]
+        return {"poses": poses.tolist(), "clear": [not c for c in contacts],
+                "contacts": contacts, "scope": "base_endpoint_only",
+                "source": "measured_simulator_snapshot"}
 
     @override
     def handle_action(self, action: dict[str, Any]):
