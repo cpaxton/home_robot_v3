@@ -4,8 +4,8 @@
 tools (#178), collision-aware placement and assisted articulation (#179), and
 measured Stretch articulation/task admission (#201). See the
 [placement API](placement.md) and [articulation API](tamp_articulation.md).
-Observed/privileged input contracts remain in unmerged
-[#195](https://github.com/cpaxton/home_robot_v3/pull/195), now based on main;
+Observed/privileged input contracts merged in
+[#195](https://github.com/cpaxton/home_robot_v3/pull/195) as `b7a1c22d`;
 native scene/execution adapters and observed geometry providers remain unwired.
 See [project status](../project_status.md#latest-evidence-supersedes-older-pr-prose)
 for tested revisions, the broader 3/7 assisted run, and remaining gates.
@@ -67,7 +67,7 @@ Task handles have a random registry namespace and remain stable within a session
 including filtered discovery. Scene/server changes create a new namespace. Plan
 handles also have a random context namespace; neither handle type is reusable
 across contexts. These opaque strings do not expose server boot IDs.
-The scripted smoke runner supports `$task_ref` (first task in the preceding
+The scripted smoke runner supports `$task_ref` (first task supporting the script’s requested articulation states in the preceding
 successful discovery) and `$plan_ref` (preceding successful plan). These are
 runner substitutions, not arguments understood by the public tools. Failed
 planning stops dependent execution; scoring uses the resolved task reference.
