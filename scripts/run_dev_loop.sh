@@ -21,7 +21,7 @@
 #   DEV_OVMM_EP    OVMM episode id (default robocasa_rby1_pp_s1)
 #   HABITAT_BIN    emet-habitat executable (default $ROOT/.venv-habitat/bin/emet-habitat)
 set -euo pipefail
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ROOT="${DEV_SOURCE_DIR:-$(cd "$(dirname "$0")/.." && pwd)}"
 cd "$ROOT"
 
 SEED="${DEV_SEED:-0}"

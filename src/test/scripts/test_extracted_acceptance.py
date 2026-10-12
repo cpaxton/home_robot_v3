@@ -3,6 +3,7 @@
 """Offline acceptance-driver guards; no simulator or model startup."""
 
 import json
+import os
 import runpy
 import subprocess
 import sys
@@ -42,8 +43,36 @@ def test_full_runner_probe_exit_status(monkeypatch, capsys, ok):
 
 def test_acceptance_preflight_precedes_episode_loop():
     driver = DRIVER.read_text()
-    assert driver.index("scripts/check_habitat_runtime.py") < driver.index("bash scripts/run_dev_loop.sh")
+    assert driver.index("scripts/check_habitat_runtime.py") < driver.index(
+        'bash "$DRIVER_ROOT/scripts/run_dev_loop.sh"'
+    )
     assert "set -euo pipefail" in driver
+
+
+@pytest.mark.parametrize("phase", ["eqa", "room"])
+@pytest.mark.parametrize("kind", ["pass", "miss", "error", "empty", "malformed", "missing", "duplicate"])
+def test_metrics_require_a_scored_episode(tmp_path, phase, kind):
+    validate = runpy.run_path(str(ROOT / "scripts/check_acceptance_metrics.py"))["validate_metrics"]
+    outcome = kind == "pass"
+    row = {"correct": outcome} if phase == "eqa" else {"find_object_success": outcome, "find_recep_success": outcome}
+    if kind == "error":
+        row["error"] = "simulator startup failed"
+    if kind == "missing":
+        row = {}
+    text = json.dumps(row)
+    if kind == "empty":
+        text = ""
+    elif kind == "malformed":
+        text = "{bad"
+    elif kind == "duplicate":
+        text += "\n" + text
+    path = tmp_path / "metrics.json"
+    path.write_text(text)
+    if kind in ("pass", "miss"):
+        validate(phase, path)
+    else:
+        with pytest.raises(ValueError):
+            validate(phase, path)
 
 
 def test_driver_syntax_and_invalid_phase(tmp_path):
@@ -51,6 +80,52 @@ def test_driver_syntax_and_invalid_phase(tmp_path):
     result = subprocess.run(["bash", str(DRIVER), "invalid"], capture_output=True, text=True)
     assert result.returncode == 2
     assert "Usage:" in result.stderr
+
+
+@pytest.mark.parametrize("failure", ["wrong_sha", "dirty", "staged", "untracked", "existing_output"])
+def test_driver_rejects_unfrozen_inputs_before_creating_output(tmp_path, failure):
+    repo = tmp_path / "source"
+    repo.mkdir()
+
+    def git(*args):
+        return subprocess.check_output(["git", "-C", str(repo), *args], text=True).strip()
+
+    git("init", "-q")
+    tracked = repo / "tracked.txt"
+    tracked.write_text("original\n")
+    git("add", "tracked.txt")
+    git(
+        "-c",
+        "user.name=Test",
+        "-c",
+        "user.email=test@example.invalid",
+        "-c",
+        "core.hooksPath=/dev/null",
+        "commit",
+        "-qm",
+        "fixture",
+    )
+    sha = git("rev-parse", "HEAD")
+    out = tmp_path / "results"
+    if failure == "wrong_sha":
+        sha = "0" * 40
+    elif failure in ("dirty", "staged"):
+        tracked.write_text("modified\n")
+        if failure == "staged":
+            git("add", "tracked.txt")
+    elif failure == "untracked":
+        (repo / "untracked.txt").touch()
+    else:
+        out.mkdir()
+        (out / "preserve.txt").write_text("evidence")
+    env = dict(os.environ, SOURCE_DIR=str(repo), SOURCE_SHA=sha, OUT_DIR=str(out))
+    result = subprocess.run(["bash", str(DRIVER), "eqa"], env=env, capture_output=True, text=True)
+    assert result.returncode != 0
+    if failure == "existing_output":
+        assert list(out.iterdir()) == [out / "preserve.txt"]
+        assert (out / "preserve.txt").read_text() == "evidence"
+    else:
+        assert not out.exists()
 
 
 @pytest.mark.parametrize("robot", ["stretch", "rby1"])
