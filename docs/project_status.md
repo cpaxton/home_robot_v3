@@ -81,26 +81,23 @@ and [the benchmark runbook](paper_benchmarks.md) for table mapping.
 | TAMP clutter | Historical S1 latch/teleport signal rows are populated. | Full registry and learned/physical acceptance remain pending; new scored fixtures need reference admission. |
 | Capability media | Two native-actuator Stretch table examples and historical Habitat views. | Scripted, deliberately simple controls; rejected Sourccey recording is labeled. #179's assisted run is a separate evidence class. |
 
-The paper needs a provenance-focused follow-up before stronger claims:
+The paper now distinguishes the completed August slice from future current-stack
+work, removes unsupported published `n=113` labels, and scopes the method prose
+to the historical per-observation controller. Accuracy values are preserved;
+semantics interpretation remains explicitly unresolved.
 
-1. Abstract/conclusion still describe a full-113 comparison as in progress;
-   distinguish the completed historical August sweep from a future current-stack
-   evaluation. Results also retain stale “next experiments” language.
-2. `05_results.tex` assigns `n=113` to published GraphEQA rows, while the maintained
-   [results doc](experiments/habitat_eqa_results.md#prior-art-grapheqa-paper)
-   records the published count as unreported and the released runner's selection
-   as 114. Keep historical emet q0–112, released-filter parity, and OpenEQA
-   separate; OpenEQA is not wired into this harness.
-3. Reconcile “partial semantics” table labels with disabled-GT runner policy and
-   historical rescore/semantics strata using each run's actual manifest. A current
-   default cannot establish what an archived run used.
-4. Method prose about per-step graph writes does not fully describe the opt-in
-   lazy/query-driven lifecycle. Follow the
-   [shared-agent paper plan](experiments/shared_agent_paper_update.md), gated on
-   paired evidence, before updating abstract claims or adding new method results.
+### Places to update when evidence changes
 
-This documentation PR preserves paper tables and raw historical records. It
-neither rescored experiments nor promoted PR/offline evidence into paper results.
+| Update location | Trigger / remaining work |
+| --- | --- |
+| [Benchmark evidence status](paper_benchmarks.md#evidence-status-2026-10-12) and [experiment index](experiments/README.md) | A scored track completes or its acceptance status changes; update the corresponding paper cells and runbook together. |
+| [Paper follow-up ledger](experiments/shared_agent_paper_update.md#follow-up-ledger-2026-10-12) | P1–P7 link to exact LaTeX files and define completion evidence for method, provenance, each result track, and media. Matching `UPDATE[Pn]` source comments mark edit locations. |
+| [HM-EQA interpretation](experiments/habitat_eqa_results.md#interpretation) and [results source](../paper/sections/05_results.tex) | Resolve run manifests, semantics exposure, episode selection, and scoring policy before claiming matched or GT-free comparisons. |
+| [Agent implementation status](AGENT_RUN.md) and [TAMP branch scope](apis/tamp.md) | Relevant PRs land and adapters become available; remove pending-branch wording only for the merged functionality. |
+| [Testing acceptance status](TESTING.md) and [next gates](#next-gates) | New revision-specific live acceptance evidence supersedes the failures/partial controls recorded here. |
+| [README current status](../README.md#current-status) and [open PR inventory](#open-prs-and-dependencies) | Main or PR state changes; refresh the dated snapshot and exact source links. |
+
+No experiments were rescored or rerun for these documentation/paper corrections.
 
 ## Next gates
 
