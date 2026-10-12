@@ -1,5 +1,31 @@
 # Shared-agent paper update and figure plan
 
+**Current inventory:** see [project status (2026-10-12)](../project_status.md)
+for merged work, remaining PRs, latest acceptance evidence, and specific LaTeX
+inconsistencies. The dated pilot notes below preserve their original source and
+assistance scope; they are not acceptance results for current main.
+
+## Follow-up ledger (2026-10-12)
+
+Search paper sources with `rg 'UPDATE\[P[1-7]\]' paper/sections`.
+Markers identify the edit location; the completion gates below determine when
+it is justified to replace pending language or strengthen a claim. All are open.
+
+| ID | Edit location | Required evidence / completion gate |
+| --- | --- | --- |
+| P1 | [Method scope](../../paper/sections/03_method.tex), then [abstract](../../paper/sections/00_abstract.tex) and [conclusion](../../paper/sections/06_conclusion.tex) | Resolve shared-agent regression gates; freeze per-row source/config and paired results before describing lazy/query-driven admission as the evaluated method. |
+| P2 | [Historical results](../../paper/sections/05_results.tex), [parity appendix](../../paper/sections/appendix/05_habitat_eqa_parity.tex), [HM-EQA provenance](habitat_eqa_results.md) | Audit archived semantics flags, question IDs, scoring version, and upstream selection/version. Reconcile 113 historical rows vs released-filter parity before asserting GT-free or matched comparisons. |
+| P3 | [OVMM results](../../paper/sections/05_results.tex), [find-phase runbook](ovmm_find_phase.md) | Pass visibility/learned-find gates, then populate backend × tier cells from frozen scored runs with failure denominators. Keep GT oracle rows distinct. |
+| P4 | [SQA3D results](../../paper/sections/05_results.tex), [SQA3D runbook](sqa3d.md) | Produce val aggregates by replay mode, EM@1, and infrastructure outcomes; attach source/config and episode selection. |
+| P5 | [Dynamic results](../../paper/sections/05_results.tex), [dynamic runbook](dynamic_exploration.md) | Supply scored phase 1/2/3 aggregates, including failed episodes, staleness and recovery evidence. |
+| P6 | [TAMP results](../../paper/sections/05_results.tex), [TAMP appendix](../../paper/sections/appendix/09_tamp_clutter.tex), [fixture admission](tamp_validated_registry.md) | Repeat admitted fixtures, audit settled support and shutdown, and separately validate native and learned execution. Merged #179 retains a 3/7 broader assisted result; #200/#201 controls do not establish placement acceptance. |
+| P7 | [Capability appendix](../../paper/sections/appendix/11_capability_media.tex), [Stretch media record](2026-10-09_stretch_placement_media.md) | New recordings need exact source, fixture, checks, artifact manifest, and assistance labels; preserve rejected historical media labels. |
+
+After any gate changes, update [project status](../project_status.md#next-gates),
+[benchmark evidence status](../paper_benchmarks.md#evidence-status-2026-10-12),
+and the relevant result/runbook together. The October wording corrections do
+not close these empirical or provenance gates.
+
 ## Claim boundary
 
 The intended contribution is one agent and one evidence lifecycle across EQA,

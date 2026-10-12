@@ -5,25 +5,34 @@ native-observed and native-debug presets; existing defaults unchanged. Privilege
 inputs remain available for debugging and independent scoring. They must not leak
 into observed execution or be represented as real robot sensors.
 
-## Current PR map — October 10 consolidation
+## Current PR map — October 12 integration
 
-This table supersedes earlier stack dispositions in this and the September/
-October planning notes. Main includes #177, #178, #192, and #196. Historical
-run evidence below is retained and is not rescored by consolidation.
+Main includes #177, #178, #179 (consolidated placement/assisted TAMP), #190,
+#192, #193, #196, #200 (planar startup), and #201 (measured Stretch articulation
+and explicit task admission). Historical evidence below remains unchanged.
 
-| Review unit | Base | Includes | Merge gate |
-| --- | --- | --- | --- |
-| #179 Placement and assisted TAMP execution | main | #179, #186 recovery, #187 metrics, #188 assisted articulation, #194 feedback | Resolve placement timeout; pass live placement and containment gates |
-| #193 Capability media and model utilities | main | #189 gallery/runner, #191 generic model utilities, #193 Stretch examples | Review final diff and fixture labels; recordings remain scoped controls |
-| #195 Native input contracts | #179 | #195 provenance, measured joint evidence, native guards | Review contract tests; native execution remains explicitly unavailable |
+| Review unit | Base | State and remaining gate |
+| --- | --- | --- |
+| #179 Placement and assisted TAMP | main | Merged; assisted RBY1 smoke passed; sustained support remains unproven |
+| #193 Capability media and model utilities | main | Merged; recordings remain scoped controls |
+| #200 Planar startup fix | main | Merged; live Sourccey startup/open-close passed |
+| #201 Articulation and admission | main | Merged; Stretch and kitchen-2 open-close passed |
+| #195 Native input contracts | main | Integrated main without rewriting history; native adapters still unavailable |
 
-#193 was extracted onto main on October 11; #195 still depends on #179.
-The assisted open/close media suite stays with #179; the standalone media
-merge does not include the unresolved placement or feedback changes. The superseded PRs are closed after their
-commits are preserved in these branches; no branch history is deleted or
-force-pushed. Consolidation does not confer acceptance or relax any gate.
-The #192 official Sourccey model and generator remain authoritative.
-#190 and the separately owned navigation #181–185 remain outside this cleanup.
+#195's post-integration motion/TAMP/configuration suite ran 372 tests: 369 passed,
+zero skipped, and three A* start-escape tests failed identically on the main-based
+baseline. Those unrelated fixtures construct a mock `get_navigation_map` that
+cannot return the expected two arrays. No TAMP/native test failed. All merged
+placement, articulation and startup fixes are preserved; the net implementation
+is the 16-file native-contract change, not a reintroduction of the old stack.
+
+The next acceptance run must use the new supported-action admission policy and
+retain every attempted case. Do not rescore the historical 3/7 placement run.
+Open/close success does not establish arm placement, sustained support or native
+execution. #195 still returns explicit native-unavailable errors in run-agent
+until scene/execution adapters and observed providers are implemented.
+
+The sections below retain historical investigations and their original results.
 
 The previously queued `20261009_175205_1cc9bd` is terminal. Open/close passed.
 Placement found paths, completed grasp, then returned `placement_stale_observation`
@@ -81,6 +90,17 @@ wheel odometry. Metric depth/localization availability must be validated; missin
 capabilities stay unsupported. Physical door opening, automatic clutter clearing,
 and real-hardware commissioning are outside this increment.
 
+### Input-contract implementation
+
+`feat/tamp-native-contracts` begins the input boundary: immutable, source-tagged,
+fresh object poses; provider-based retention/lift checks; explicit privileged
+selection by legacy physical evaluations; no physical-mode fallback into legacy
+controllers or teleport; no GT task discovery while observed adapters are absent.
+The focused input/physical/API/config suite passes 105 tests. This is a guarded
+integration layer, not completed native CHAT execution or an observed-scene
+provider. Adapter, geometry, perception, inspection, and live acceptance work in
+the execution order above remains open.
+
 ### Live telemetry rerun — still failing
 
 Diagnostic job `20261010_122429_d89b27`, implementation `5dc29884`, terminated
@@ -97,6 +117,15 @@ at 1.4 ms, moved-bowl geometry at 10 ms, and refreshing all articulated bodies
 at 202 ms with one BLAS thread. These costs alone do not explain the six-second
 gap. The next diagnostic must capture server and client thread stacks/timings
 at the failed transition before further changes or threshold adjustments.
+
+### Review branches
+
+- #194 `fix/tamp-render-telemetry`: independent on current main, 42 focused tests.
+- #195 `feat/tamp-native-input-boundary`: stacked on #194; 95 tests at its first
+  head, followed by 45 passing API/input tests after adding stored-plan execution
+  guards and simulation-only privileged-mode cases. A stored assisted handle may
+  not bypass a subsequent physical-mode request.
+- Neither PR promotes native execution or unblocks #179's live acceptance gate.
 
 ### Physics-batch lock correction
 
@@ -143,6 +172,22 @@ changes concern generic conversion, floors, and recording. Validation: 198 tests
 on the restacked #193 chain; 30 model/converter checks on #191 (overlapping);
 8 paired-metric tests on #187. These do not replace live placement or native-agent
 acceptance. No production merge is justified by unit-test totals alone.
+
+### Native boundary validation and corrected fixtures
+
+The final combined input/physical/API/config/protocol/client suite passes 124
+tests on #195's current ancestry; Ruff passes for the changed runtime files.
+Stretch and generic clients expose immutable joint-position evidence with an
+atomic receive timestamp. Physical-mode requests are guarded during discovery,
+planning, direct pick/place, stored-plan execution, and environment overrides.
+The native execution adapters and observed geometry/perception are still absent;
+this does not enable `run agent` physical manipulation.
+
+#189 now explicitly requests `object2` (red cylinder) and `table` in table media
+controls, and rejects a mismatched receptacle before manipulation. Corrected
+cases use `*_cylinder_to_table_v2` fixture identities in the JSON manifest.
+Eight focused runner tests pass. No new live score is attached to these fixtures;
+old object-on-cube failures remain unchanged.
 
 ### Latest terminal result and merge checkpoint
 

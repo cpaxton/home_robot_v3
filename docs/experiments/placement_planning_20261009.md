@@ -9,7 +9,7 @@ completion. This establishes a geometric approach failure, not a tracking failur
 
 The isolated `feat/placement-collision-planning` branch starts at `046a4eae`.
 It adds generic 3D scene/payload geometry, bounded multi-candidate placement
-search, and kinematic-executor integration. See [the API](../apis/placement.md)
+search, and kinematic-executor integration. See [the API](../api/placement.md)
 for geometry assumptions and unsupported execution guarantees. There are no
 object-category exceptions or relaxed measured-arrival thresholds.
 

@@ -2,17 +2,18 @@
 \label{app:habitat_eqa_parity}
 
 This appendix records how the \texttt{emet} Habitat EQA harness compares to the reference GraphEQA Habitat stack~\citep{saxena2024grapheqa}, what is intentionally different, and interim accuracy on our development machine.
-The harness drives \texttt{GraphEQAMemory} / \texttt{DynagraphController} inside Habitat-Sim rather than ROS + Hydra; HM-EQA uses 113 multiple-choice questions (Explore-EQA indices 0--112) with scene init poses from the public CSVs.
+The harness drives \texttt{GraphEQAMemory} / \texttt{DynagraphController} inside Habitat-Sim rather than ROS + Hydra; our historical HM-EQA slice uses 113 multiple-choice questions (Explore-EQA indices 0--112), distinct from the released GraphEQA semantic-filtered selection with scene init poses from the public CSVs.
 OpenEQA support is a planned harness milestone (phase H in \texttt{docs/plans/HABITAT\_EQA\_HARNESS.md}); not yet wired.
 
+% UPDATE[P2]: Audit upstream selection/version and archived semantics; see paper follow-up ledger.
 \subsection{Official GraphEQA simulation numbers (HM-EQA)}
 
-Table~\ref{tab:grapheqa_official_hmeqa} reproduces GraphEQA Table~1 (HM-EQA column): success rate on 113 questions, mean VLM planning steps over \emph{successful} trials, and mean trajectory length over successful trials~\citep{saxena2024grapheqa}.
+Table~\ref{tab:grapheqa_official_hmeqa} reproduces GraphEQA Table~1 (HM-EQA column): success rate (episode count unreported in that table), mean VLM planning steps over \emph{successful} trials, and mean trajectory length over successful trials~\citep{saxena2024grapheqa}.
 Methods marked $\dagger$ are author reimplementations of Explore-EQA with newer VLMs.
 
 \begin{table}[t]
   \centering
-  \caption{GraphEQA paper baselines on HM-EQA (113 questions, Habitat-Sim).}
+  \caption{GraphEQA paper baselines on HM-EQA (Habitat-Sim; published episode count unreported).}
   \label{tab:grapheqa_official_hmeqa}
   \small
   \begin{tabular}{@{}lccc@{}}
@@ -48,11 +49,11 @@ Items marked \emph{partial} depend on downloaded HM3D semantic assets (only a su
     \toprule
     Component & GraphEQA (ref.) & Ours & Status \\
     \midrule
-    HM-EQA 113-question slice & indices 0--112 & \texttt{--paper-subset} default & Match \\
+    HM-EQA selection & semantic-filtered released set & historical indices 0--112 & Different selection \\
     Per-question enrich labels & \texttt{explore\_eqa\_dataset\_enrich\_labels.yaml} & bundled YAML + \texttt{seed\_object\_hints} & Match \\
     Camera / agent & 120$^\circ$, 1.5\,m, $-30^\circ$, 640$\times$480 & \texttt{HabitatEQASimulator} & Match \\
     Planning budget & 20 VLM steps, 10 nav substeps & CLI defaults & Match \\
-    HM3D GT semantics (sim) & all train scenes w/ data & auto if \texttt{.semantic.glb} exists & \textbf{Partial} \\
+    HM3D GT semantics (sim) & all train scenes w/ data & run-specific enable/disable & Audit manifests \\
     Scene graph & Hydra 5-layer 3DSG & \texttt{GraphEQAMemory} object graph & Different stack \\
     Exploration planner & TSDF + enriched frontiers & fluid voxel \texttt{sample\_frontier} (+ optional graph frontier nodes) & Partial \\
     Navigation execution & navmesh shortest path & \texttt{find\_path\_to\_xy} + trajectory follow; Image-$N$ viewpoint/standoff & Match \\
@@ -70,7 +71,7 @@ Items marked \emph{partial} depend on downloaded HM3D semantic assets (only a su
 
 \textbf{Ground-truth semantics.}
 When GraphEQA sets \texttt{use\_semantic\_data: True}, every HM-EQA episode is assumed to have HM3D semantic annotations.
-Our harness enables the Habitat semantic sensor when \texttt{.semantic.glb} is present for the scene; on a typical cache with train semantics partially downloaded, \textbf{37/113} paper questions and \textbf{14/49} unique paper scenes had semantic assets at the time of writing---the remainder fall back to depth voxel mapping and VLM (or keyword) graph labels.
+In historical auto-semantics configurations, the harness enabled the Habitat semantic sensor when \texttt{.semantic.glb} is present for the scene; on a typical cache with train semantics partially downloaded, \textbf{37/113} paper questions and \textbf{14/49} unique paper scenes had semantic assets at the time of writing---the remainder fall back to depth voxel mapping and VLM (or keyword) graph labels.
 
 \textbf{Frontier planning (fluid map vs.\ graph nodes).}
 Both DynaMem and GraphEQA share the same \emph{fluid} 2D frontier: reachable free-space edges on the voxel grid (\texttt{get\_outside\_frontier}), minus explored cells.
@@ -142,9 +143,9 @@ Numbers are \emph{not} comparable to Table~\ref{tab:grapheqa_official_hmeqa} unt
 \end{table}
 
 \noindent\textbf{Takeaway.}
-Official GraphEQA on HM-EQA is \textbf{63.5\%} (GPT-4o) to \textbf{67.0\%} (Gemini-2.5Pro) on all 113 questions with full GT semantics.
+Official GraphEQA on HM-EQA is \textbf{63.5\%} (GPT-4o) to \textbf{67.0\%} (Gemini-2.5Pro) with full GT semantics; the published table does not report the episode count.
 Our harness reaches \textbf{41.6\%} on the full set with gemma-3-4b-it ($\sim$22\,pp below GPT-4o) and \textbf{34--50\%} on smaller slices with 3--8B local VLMs---above 25\% chance; dynagraph beats static\_graph on the matched 3B slices (+3\,pp balanced-32, +12.5\,pp canonical-8), while the July-nav held-out-8 favored static\_graph until harness tuning (Section~\ref{sec:hmeqa_results}).
 The June 2026 grounding fixes (phrase \texttt{CONFIRMED\_MEMORY}, location MCQ, nav) lift search-style questions (e.g.\ Q17) without obvious overfit on an eight-question held-out draw (50\%).
-\textbf{More experiments are required} before claiming parity with Explore-EQA or GraphEQA: at minimum a full 113-question Qwen3-VL-8B sweep and semantics-coverage ablation (see \texttt{docs/experiments/habitat\_eqa\_results.md}).
+\textbf{More experiments are required} before claiming parity with Explore-EQA or GraphEQA: a current-stack matched evaluation on the released selection and a semantics on/off ablation; the historical August q0--112 Qwen3-VL-8B sweep is already recorded (see \texttt{docs/experiments/habitat\_eqa\_results.md}).
 Mock GraphEQA vs.\ Dynagraph match at 100\% on Q0--5 (grading sanity).
 Frontier v2 (graph nodes on) underperformed gemma paper repro on Q0--19 (\textbf{25\%} vs.\ \textbf{40\%}); fluid vs.\ node ablation remains pending.

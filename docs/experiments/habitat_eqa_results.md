@@ -1,5 +1,12 @@
 # Habitat HM-EQA — results vs prior art
 
+**Status audit (2026-10-12):** the August historical q0–112 sweep below is
+complete and includes explicitly labeled rescoring. It does not validate the
+current shared-agent PR stack; [project status](../project_status.md) records
+those live regressions and remaining gates. Published GraphEQA numbers, the
+released runner's semantic-filtered set, and emet's historical 113-row slice
+must remain distinct.
+
 Recorded numbers for the Dynagraph paper and parity appendix. **JSONL paths** live under `~/.cache/habitat_eqa/results/` unless noted.
 
 **Method id rename (2026-07-29):** the public HM-EQA / OVMM backend id is now **`static_graph`** (profile `static_graph`). Historical tables and JSONL tags below may still say `graph_eqa` — treat those as the same zero-merge baseline. CLI still accepts `--method graph_eqa` as an alias.
@@ -60,7 +67,7 @@ optional graph frontier nodes, navmesh nav — see
 |--------|-----|---|----------|-----------|
 | graph_eqa repro | gemma-3-4b-it | **113** | **41.6%** (47/113) | `graph_eqa_gemma3_paper_q0-112.jsonl` |
 
-This was our best **full-benchmark** number at 4B — still **~20–25 pp below** GraphEQA API baselines, but above random (25%) and in the ballpark of Explore-EQA if semantics + VLM tier were matched. The post-nav 8B sweep below (44.2% dynagraph) supersedes it at 8B.
+This was our best **full-benchmark** number at 4B — still **~20–25 pp below** GraphEQA API baselines, but above random (25%) and in the ballpark of Explore-EQA if semantics + VLM tier were matched. The post-nav 8B sweep below records 44.2% Dynagraph before rescoring and 49.6% after the documented scoring fix.
 
 ### Full benchmark — post–July-nav (Qwen3-VL-8B, 2026-08-13)
 
@@ -212,27 +219,27 @@ On balanced-32 and paper slices at 3B/8B, **dynagraph ≥ graph_eqa** (+1–3 pp
 
 ## Interpretation
 
-| Comparison | Gap | Likely cause |
-|------------|-----|--------------|
-| Us (41.6% / 113, gemma-3-4b) vs GraphEQA GPT-4o (63.5%) | ~−22 pp | Weaker local VLM + partial semantics + different graph stack |
-| Us (44.2% / 113, dynagraph, Qwen3-VL-8B + July nav) vs GraphEQA GPT-4o (63.5%) | ~−19 pp | Local 8B VLM + partial semantics; nav/memory gains close ~3 pp of the tier gap |
-| Us (87.5%, hold-out-8 graph_eqa, Qwen3-VL-8B + July nav) vs random (25%) | +62.5 pp | Nav stack works on search slice; small n |
-| Us (50%, hold-out-8 dynagraph pre-nav) vs post-nav graph_eqa (87.5%) | +37.5 pp | Nav + baseline graph path >> dynagraph extras on holdout |
-| Us (44.2% dynagraph vs 37.2% static_graph, full 113 @ 8B) | **+7 pp** | Dynagraph memory (merge/staleness + CONFIRMED_MEMORY) holds at scale |
-| Us (40–50%, bal-32 / paper-20 @ 8B) vs Explore-EQA (51.7%) | ~parity | Now comparable: full 113 @ 8B = 44.2% |
-| dynagraph vs graph_eqa (bal-32 @ 8B post-nav) | +3 pp (13/32 vs 12/32) | Debias/memory help on average; hurt on some holdout eps |
+The historical August q0–112 run records **49.6% Dynagraph vs 47.8%
+static_graph after rescoring** (+1.8 percentage points). Before the scoring fix,
+it was 44.2% vs 37.2% (+7 points). Use the rescored pair together; do not mix
+scoring policies or describe the older +7-point gap as the current result.
 
-We are **not** yet competitive with published GraphEQA on the full benchmark. We **are** above chance; post-nav balanced-32 favored dynagraph slightly (+1 pp) while holdout favored graph_eqa (+4 pp) before harness tuning.
+Published GraphEQA results use a different episode selection, VLM tier, semantics,
+and graph stack. Their accuracy is contextual prior art, not a matched causal
+comparison. Small held-out and balanced slices also vary with policy and run;
+neither these historical results nor mock smokes establish acceptance of the
+October shared-agent stack. Resolve archived semantics exposure from per-run
+manifests before asserting a matched GT-free comparison.
 
 ## Dynagraph cross-environment tuning (2026-07)
 
-Unified harness config: [`configs/benchmarks/dynagraph.yaml`](../configs/benchmarks/dynagraph.yaml) + `apply_dynagraph_harness()`. **Tuned `habitat_eqa` dynagraph defaults** (Qwen3-VL-8B target):
+Unified harness config: [`configs/benchmarks/dynagraph.yaml`](../../configs/benchmarks/dynagraph.yaml) + `apply_dynagraph_harness()`. **Tuned `habitat_eqa` dynagraph defaults** (Qwen3-VL-8B target):
 
 | Flag | Tuned default | Rationale |
 |------|---------------|-----------|
 | `memory_summary` | on | SigLIP CONFIRMED_MEMORY helps search questions |
 | `mcq_debias` | **off** | 8B model: debias flipped correct answers on holdout (e.g. Q68 B→A) |
-| `explore_when_uncovered` | **off** (ablation winner) | `no_explore` arm **8/8** holdout vs 3/8 pre-tune; `conservative` partial 5/5 |
+| `explore_when_uncovered` | **conservative** (current method default) | Historical `off` arm scored **8/8** holdout; it remains an ablation, not the default. |
 
 Ablation matrix **complete** (`dynagraph_tune_20260706_110513`): see [representative_sample_results.md](representative_sample_results.md). Cross-benchmark sample: `./scripts/run_representative_benchmark_sample.sh`.
 
@@ -246,7 +253,7 @@ Ablation matrix **complete** (`dynagraph_tune_20260706_110513`): see [representa
 
 \*Partial JSONL on some arms from early resume.
 
-**In progress:** full-113 post-nav sweep (Qwen3-VL-8B, dynagraph + static_graph) — job `hmeqa-paper113-d1`, see [Full benchmark — post–July-nav](#full-benchmark--postjuly-nav-qwen3-vl-8b-2026-08-13). Representative cross-benchmark sample `rep_sample_20260706` (OVMM, SQA3D, dynamic explore, figures) also pending.
+**Completed historical sweep:** Qwen3-VL-8B Dynagraph + static_graph q0–112, job `hmeqa-paper113-d1`; see the August results and rescore above. Current-stack evaluation and released-filter parity are separate gates. The July representative sample is documented in [representative_sample_results.md](representative_sample_results.md).
 
 **Merge policy (2026-07-11; clarified 2026-07-29):** HM-EQA **`dynagraph`** (`harness.habitat_eqa` → `unified_eqa`) uses **0.45 m merge / staleness 256**, matching interactive/agent memory. HM-EQA **`static_graph`** (legacy method tag `graph_eqa`) uses profile **`static_graph`** (merge/staleness **0**, Dynagraph extras off) — the GraphEQA-inspired comparison row. Historical JSONL / table labels may still say `graph_eqa`; they map to `static_graph`. Keep `smoke` at true zero-merge for CI only — do not use it as a paper method default.
 
