@@ -50,6 +50,9 @@ def _jsonify_placement_entry(info: dict[str, Any]) -> dict[str, Any]:
     quat = info.get("quat")
     if quat is not None:
         out["quat"] = [float(x) for x in np.asarray(quat, dtype=np.float64).reshape(-1)[:4]]
+    for field, size in (("body_pos", 3), ("body_quat", 4)):
+        if field in info:
+            out[field] = np.asarray(info[field], dtype=float).reshape(size).tolist()
     bounds = info.get("bounds")
     if bounds is not None:
         b = np.asarray(bounds, dtype=np.float64).reshape(2, 3)
@@ -322,6 +325,9 @@ def placements_from_mujoco_fixture_groups(
         cat = _label_from_fixture_group(group_key, wizard_cats)
         entry = _placement_entry_from_geom_ids(model, data, geom_ids, cat=cat)
         if entry is not None:
+            bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, group_key)
+            if bid >= 0:
+                entry.update(body_pos=data.xpos[bid].copy(), body_quat=data.xquat[bid].copy())
             out[group_key] = entry
     return out
 
@@ -380,6 +386,7 @@ def placements_from_mujoco_model(
         entry = _placement_entry_from_geom_ids(model, data, geom_ids, cat=cat)
         if entry is None:
             continue
+        entry.update(body_pos=data.xpos[bid].copy(), body_quat=data.xquat[bid].copy())
         out[name] = entry
         if max_bodies is not None and len(out) >= max_bodies:
             break
@@ -452,6 +459,9 @@ def overlay_live_mujoco_body_poses(
                 else:
                     entry["pos"] = np.asarray(data.body(bid).xpos, dtype=np.float64).reshape(3)
                     entry["quat"] = np.asarray(data.body(bid).xquat, dtype=np.float64).reshape(4)
+        bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, str(key))
+        if bid >= 0:
+            entry.update(body_pos=data.xpos[bid].copy(), body_quat=data.xquat[bid].copy())
         merged = _jsonify_placement_entry(entry)
         if merged.get("pos"):
             raw[str(key)] = merged
@@ -486,11 +496,13 @@ def refresh_moved_body_placements(placements, model, data, body):
         ids = _geom_ids_for_bodies(model, [child], data=data)
         live = _placement_entry_from_geom_ids(model, data, ids, cat=str(entry.get("cat", name)))
         if live is not None:
-            updated[name] = _jsonify_placement_entry({**entry, **live})
+            updated[name] = _jsonify_placement_entry({**entry, **live,
+                "body_pos": data.xpos[child], "body_quat": data.xquat[child]})
         else:
             # Do not retain stale geometry when a current volume is unavailable.
             updated[name] = {"cat": entry.get("cat", name), "pos": data.xpos[child].tolist(),
-                             "quat": data.xquat[child].tolist()}
+                             "quat": data.xquat[child].tolist(), "body_pos": data.xpos[child].tolist(),
+                             "body_quat": data.xquat[child].tolist()}
     placements.update(updated)
 
 
@@ -526,7 +538,9 @@ class DynamicPlacementTracker:
         for name in forced_bodies:
             bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, name)
             if bid >= 0:
-                forced.add(freejoint_ancestor_body_id(model, bid))
+                root = freejoint_ancestor_body_id(model, bid)
+                if root is not None:
+                    forced.add(root)
         for root, (name, address) in self._roots.items():
             pose = data.qpos[address:address + 7]
             previous = self._published.get(root)
@@ -692,10 +706,12 @@ def refresh_articulated_body_placements(placements, model, data, bodies):
         ids = _geom_ids_for_bodies(model, [bid], data=data)
         live = _placement_entry_from_geom_ids(model, data, ids, cat=str(entry.get("cat", name)))
         if live is not None:
-            placements[name] = _jsonify_placement_entry({**entry, **live})
+            placements[name] = _jsonify_placement_entry({**entry, **live,
+                "body_pos": data.xpos[bid], "body_quat": data.xquat[bid]})
         else:
             placements[name] = {"cat": entry.get("cat", name), "pos": data.xpos[bid].tolist(),
-                                "quat": data.xquat[bid].tolist()}
+                                "quat": data.xquat[bid].tolist(), "body_pos": data.xpos[bid].tolist(),
+                                "body_quat": data.xquat[bid].tolist()}
 
 
 def measured_held_object_geometry(model, data, body, ee_body):

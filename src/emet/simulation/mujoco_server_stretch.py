@@ -810,25 +810,6 @@ class MujocoZmqServer(BaseZmqServer):
             return model, data
         return None, None
 
-    def _patch_emet_session_body_pos(
-        self,
-        body: str,
-        pos: list[float],
-        quat: list[float] | None = None,
-    ) -> None:
-        """Update one body entry in cached session GT (Stretch sim runs MuJoCo in a subprocess)."""
-        if self._emet_session is None:
-            return
-        placements = self._emet_session.get("sim_object_placements")
-        if not isinstance(placements, dict) or body not in placements:
-            return
-        entry = placements[body]
-        if not isinstance(entry, dict):
-            return
-        entry["pos"] = [float(x) for x in pos[:3]]
-        if quat is not None:
-            entry["quat"] = [float(x) for x in quat[:4]]
-
     def _is_molmospaces_session(self) -> bool:
         env = self._environment_descriptor
         if isinstance(env, dict) and env.get("kind") == "molmospaces":
@@ -1039,9 +1020,9 @@ class MujocoZmqServer(BaseZmqServer):
                     wait=True,
                     timeout=2.0,
                 )
-                if ok:
-                    self._patch_emet_session_body_pos(body, pos, quat)
-                else:
+                # Publication reconstructs geometry from measured scene_qpos.
+                # Never substitute a requested body origin for an AABB center.
+                if not ok:
                     logger.warning("sim_set_body_pose failed for body %r", body)
 
         if EMET_ACTION_SIM_SET_JOINT_QPOS_KEY in action:
