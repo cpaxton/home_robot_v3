@@ -129,3 +129,49 @@ Record source and driver hashes. Keep model/seed/budgets identical across pairs.
 For each slice: update its PR with exact parent/head, commands, artifacts and
 limitations; mark ready only when its gates pass; request focused review.
 After parent merges, retarget and rerun affected gates. No automatic main merge.
+
+## October 12 evening: evidence selection and S0 coverage
+
+- #199 main integration at `0fb37763`: EQA q12/14/56/6 remains **1/4** with
+  identical predictions and no episode errors. q14's final Qwen answer is
+  correct but loses to earlier confirmed-assessment precedence. This policy
+  disagreement is separate from missing context on q56 and partial count on q12.
+- Review repairs: SAM2 PIL input, lost first-sweep diagnostics, invalid-depth
+  obstruction, and SAM2/Hydra controller initialization fixed. Combined suite
+  passed 300 tests before subsequent integration work. Fallback clearance stays
+  unknown by design; no synthetic 10 m value is exposed as measured clearance.
+- #199 `4cbfc959`, job `20261012_211901_076023`,
+  `/home/cpaxton/runs/emet/review-s0-20261012`: **0/2 find phases**, both scored,
+  no infrastructure failure. The retained assessment view shows sky/empty floor,
+  not the requested objects. This is not a manipulation trial.
+- Model-free Stretch probe `20261012_212729_4d8354`, source `005f0d9a`,
+  `/home/cpaxton/runs/emet/stretch-view-probe-20261012`: **5 frames, no probe
+  failures**. Base remains upright (~0.999995 up-dot), four turns succeed under
+  exploration tolerances. Objects appear at heading ~-1.88 rad (about 250 degrees
+  around the initial heading), outside the original 4-view 0/45/90/135 scan.
+  View 03 visibly contains the red cylinder, blue cube and table. This is a
+  scoped wheel/camera control check, not precision approach or task acceptance.
+- Actual Stretch MJCF head capability resolves to pan [-4.04,1.73], tilt
+  [-1.53,0.79], both head actuators gear=1 and position bias=-80. This closes
+  the model-definition concern, not hardware head-motion acceptance.
+- #202 `1c5d85df`: optional existing-history selection, actual Habitat pre-turn
+  capture, acquisition timestamps, and identical labeled assessment/final packets.
+  431 focused tests passed. Defaults unchanged; no current-only grounding relaxed.
+  Initial pilot `20261012_212607_6652d0` was **cancelled, not scored** after finding
+  that Habitat's valid X,Z,Y world basis has negative determinant. Correction
+  `a410ef7c` accepts consistent orthonormal reflected bases and rejects mixed
+  handedness; 45 focused tests pass, including actual Habitat transforms.
+
+Queued serial comparisons (do not modify their source checkouts until done):
+
+| Job | Frozen source | Intervention | Artifact root |
+| --- | --- | --- | --- |
+| `20261012_213032_b11224` | #202 `a410ef7c` | Pose-selected current/pre-turn/history; Qwen8B int4, same EQA questions/budgets | `/home/cpaxton/runs/emet/selected-eqa4-retry-20261012` |
+| `20261012_213404_0f6a06` | #199 `9df2a382` | Same four S0 scan images, now spaced 90 degrees; same find/model budgets | `/home/cpaxton/runs/emet/fullscan-s0-20261012` |
+
+The S0 intervention changes angular coverage (135 → 270 degrees commanded),
+not image count; do not call it an unchanged motion-budget comparison. The
+eight-view default retains 45-degree spacing. Failed scan turns now stop rather
+than count a repeated view as coverage. The map-boundary repair `005f0d9a` also
+prevents legacy clamping from inventing visible border cells (15 tests pass).
+The scan change has 40 focused passes. Performance is **not yet restored**.
