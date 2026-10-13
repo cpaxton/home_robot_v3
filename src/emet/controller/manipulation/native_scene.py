@@ -7,6 +7,7 @@ import copy
 import hashlib
 import time
 
+import mujoco
 import numpy as np
 
 from emet.controller.manipulation.native_inputs import ObservationUnavailable
@@ -21,7 +22,14 @@ def model_signature(model):
                   'geom_contype', 'geom_conaffinity', 'geom_friction', 'mesh_vert',
                   'mesh_face', 'actuator_trnid', 'actuator_ctrlrange', 'actuator_gainprm',
                   'actuator_biasprm', 'eq_data', 'pair_geom1', 'pair_geom2', 'exclude_signature'):
-        digest.update(np.asarray(getattr(model, field)).tobytes())
+        values = np.asarray(getattr(model, field))
+        if field in ('body_pos', 'body_quat'):
+            # A free body's initial pose is replaced by measured qpos in FK.
+            # Bind its geometry/inertia, but allow different fixture initial poses.
+            values = values.copy()
+            free_bodies = model.jnt_bodyid[model.jnt_type == mujoco.mjtJoint.mjJNT_FREE]
+            values[free_bodies] = 0
+        digest.update(values.tobytes())
     return digest.hexdigest()
 
 

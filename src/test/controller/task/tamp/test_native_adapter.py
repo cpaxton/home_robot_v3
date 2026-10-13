@@ -103,3 +103,10 @@ def test_native_model_mismatch_rejects_before_actuation(native):
     assert call('scene_tasks')['code'] == 'native_model_mismatch'
     robot.arm_to.assert_not_called()
     robot.open_gripper.assert_not_called()
+
+
+def test_model_binding_allows_free_initial_pose_but_not_geometry():
+    def load(position='0 0 1', size='.02'):
+        return mujoco.MjModel.from_xml_string(f'<mujoco><worldbody><body pos="{position}"><freejoint/><geom type="box" size="{size} .02 .02"/></body></worldbody></mujoco>')
+    assert model_signature(load()) == model_signature(load(position='1 0 1'))
+    assert model_signature(load()) != model_signature(load(size='.03'))
