@@ -181,6 +181,19 @@ def test_physical_inspection_rejects_missing_camera_geometry():
     ex.agent.robot.head_to.assert_not_called()
 
 
+def test_anchorless_physical_view_remains_available_for_visual_verification():
+    ex = arrival_executor()
+    capture = {"ok": True, "obs_id": 1}
+    result = aim_arrival_view(ex, capture, None)
+    assert result["ok"] and result["obs_id"] == 1
+    assert result["aim_status"] == "unavailable"
+    assert result["aim_reason"] == "missing_target_anchor"
+    assert "target_in_frame" not in result
+    assert "verified" not in result
+    ex.agent.robot.head_to.assert_not_called()
+    ex._tool_capture_and_update.assert_not_called()
+
+
 def test_head_limit_is_exposed_before_sending_impossible_command():
     from emet.robots.head_capability import STRETCH_LEGACY_HEAD
 

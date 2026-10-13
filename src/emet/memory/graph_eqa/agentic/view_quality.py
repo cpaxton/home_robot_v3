@@ -31,6 +31,11 @@ def aim_arrival_view(executor, capture, target_xyz):
         if projection.get("target_in_frame") is True:
             return capture
         if projection.get("target_in_frame") is None:
+            if target_xyz is None:
+                # A search/view handle need not have localized object geometry.
+                # Keep the captured RGB available for verification; this makes
+                # no claim of visibility and never authorizes manipulation.
+                return {**capture, "aim_status": "unavailable", "aim_reason": "missing_target_anchor"}
             # Preserve nonphysical adapters; physical inspection must have geometry.
             if not isinstance(getattr(robot, "_seq_id", None), int):
                 return capture
