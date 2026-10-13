@@ -683,7 +683,7 @@ class SparseVoxelMap(DynamemVoxelEQAMixin, DynamemVoxelLocalizeMixin, SparseVoxe
             instance_image=instance_image,
             instance_classes=instance_classes,
             instance_scores=instance_scores,
-            info={"image_timing": image_timing} if image_timing else {},
+            image_timing=image_timing,
         )
         if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
             print(f"[update] add()={time.time() - _t_pr0:.3f}s", flush=True)

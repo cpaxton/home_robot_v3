@@ -51,13 +51,38 @@ def test_spin_in_place_grows_voxel_map():
 
     counts = []
     for yaw in np.linspace(0.0, 2 * np.pi, 8, endpoint=False):
-        vm.process_rgbd_images(rgb, depth, K, _pose_at(0.0, 0.0, float(yaw)), base_xyt=np.array([0.0, 0.0, float(yaw)]))
+        timing = {"head_cam_left": {"timestamp_ns": (len(counts) + 1) * 10**9, "clock_domain": "test"}}
+        vm.process_rgbd_images(
+            rgb,
+            depth,
+            K,
+            _pose_at(0.0, 0.0, float(yaw)),
+            base_xyt=np.array([0.0, 0.0, float(yaw)]),
+            image_timing=timing,
+        )
+        assert vm.observations[-1].info["image_timing"] == timing
         counts.append(_n_points(vm))
 
     assert counts[0] > 0
     assert counts == sorted(counts), f"spin erased mapped points: {counts}"
     # A full 360 deg scan with a ~74 deg FOV must see far more than the first frame.
     assert counts[-1] > 3 * counts[0], f"spin added almost nothing: {counts}"
+    from types import SimpleNamespace
+
+    from emet.memory.graph_eqa.agentic.view_history import select_assessment_history
+
+    executor = SimpleNamespace(
+        agent=SimpleNamespace(
+            parameters={"eqa": {"view_selection": {"policy": "pose"}}},
+            voxel_map=vm,
+            robot=SimpleNamespace(),
+        ),
+        _append_trace=lambda event: None,
+    )
+    selection = select_assessment_history(executor, rgb)
+    assert selection is not None
+    assert selection.views[0].frame.timestamp_s == 8.0
+    assert selection.views[0].frame.view_id == "8"
 
 
 def test_clear_points_keeps_geometry_where_depth_has_no_return():
