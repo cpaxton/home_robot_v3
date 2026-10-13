@@ -110,3 +110,14 @@ def test_model_binding_allows_free_initial_pose_but_not_geometry():
         return mujoco.MjModel.from_xml_string(f'<mujoco><worldbody><body pos="{position}"><freejoint/><geom type="box" size="{size} .02 .02"/></body></worldbody></mujoco>')
     assert model_signature(load()) == model_signature(load(position='1 0 1'))
     assert model_signature(load()) != model_signature(load(size='.03'))
+
+
+def test_native_arm_acknowledgement_leaves_arrival_to_measured_executor(native):
+    robot, _, context, _ = native
+    robot.switch_to_manipulation_mode = Mock()
+    robot.arm_to.return_value = True
+    adapter = context['_native_tamp_adapter']
+    executor = adapter._executor('object1')
+    assert executor.command_joints(adapter.data.qpos[executor.qadr].copy())
+    assert robot.arm_to.call_args.kwargs['blocking'] is False
+    assert executor.joint_tolerance == .03

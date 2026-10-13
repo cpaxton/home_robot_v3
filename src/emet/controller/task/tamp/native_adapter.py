@@ -129,7 +129,10 @@ class NativeTableAdapter:
             head = [float(self.data.qpos[self.model.joint(name).qposadr[0]])
                     for name in ('joint_head_pan', 'joint_head_tilt')]
             self.robot.switch_to_manipulation_mode()
-            return self.robot.arm_to(cmd, head=head, blocking=True, timeout=15, min_time=.1)
+            # The physical executor owns measured convergence and retention checks.
+            # The client's generic "stopped moving" heuristic rejects loaded grasps
+            # even inside the executor's unchanged 0.03 joint tolerance.
+            return self.robot.arm_to(cmd, head=head, blocking=False)
         return PhysicalPickPlaceExecutor(self.robot, model=self.model, data=self.data,
             ee_body=chain.ee_body, joint_names=joints, collision=checker,
             synchronize=self.synchronize, command_joints=command,
@@ -287,8 +290,12 @@ class NativeTableAdapter:
                 entry = placements_from_mujoco_model(self.model, scratch)[plan.object_body]
                 error = np.linalg.norm(np.asarray(entry['pos'])[:2]-plan.goal[:2])
                 joint = int(self.model.body(plan.object_body).jntadr[0])
-                speed = np.linalg.norm(self.data.qvel[self.model.jnt_dofadr[joint]:self.model.jnt_dofadr[joint]+3])
-                valid = plan.support_body in contacts and not {'rubber_tip_left','rubber_tip_right'} & contacts and error <= .04 and speed <= .01
+                dof = self.model.jnt_dofadr[joint]
+                speed = np.linalg.norm(self.data.qvel[dof:dof+3])
+                spin = np.linalg.norm(self.data.qvel[dof+3:dof+6])
+                height_error = abs(float(entry['pos'][2]) - (plan.goal[2]-.02))
+                valid = (plan.support_body in contacts and not {'rubber_tip_left','rubber_tip_right'} & contacts
+                         and error <= .04 and height_error <= .025 and speed <= .01 and spin <= .1)
             else:
                 ee = self.data.body(plan.executor.ee_body)
                 relative = ee.xmat.reshape(3,3).T @ (self.data.body(plan.object_body).xpos-ee.xpos)
