@@ -405,9 +405,9 @@ class PhysicalPickPlaceExecutor:
                 if not self.payload_retained():
                     return PhysicalMotionResult(False, "payload_not_retained", phase)
                 residual = joint_residual(path[-1])
-                displacement = self.data.qpos[self.qadr] - anchor
-                if (not np.isfinite(residual) or residual > self.joint_tolerance
-                        or np.max(np.abs(displacement)) > .002):
+                if not np.isfinite(residual):
+                    return PhysicalMotionResult(False, "invalid_measured_joint_state", phase)
+                if residual > self.joint_tolerance or joint_residual(anchor) > .002:
                     anchor = self.data.qpos[self.qadr].copy()
                     stable_since = time.monotonic()
                 elif time.monotonic() - stable_since >= self.endpoint_settle_s:
