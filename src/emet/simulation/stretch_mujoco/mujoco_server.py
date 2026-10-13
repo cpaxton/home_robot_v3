@@ -626,6 +626,9 @@ class MujocoServer:
         new_status.base_xyz = base.xpos.tolist()
         new_status.base_up_dot_world_z = float(base.xmat.reshape(3, 3)[2, 2])
         new_status.scene_qpos = self.mjdata.qpos.tolist()
+        new_status.scene_qvel = self.mjdata.qvel.tolist()
+        new_status.scene_time = float(self.mjdata.time)
+        new_status.scene_captured_at = time.time()
         new_status.actuator_targets = self.mjdata.ctrl.tolist()
         new_status.actuator_names = [self.mjmodel.actuator(i).name for i in range(self.mjmodel.nu)]
         self.data_proxies.set_status(new_status)

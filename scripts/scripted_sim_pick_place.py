@@ -71,6 +71,7 @@ def run_scripted_tool_calls(
     tool_calls: list[dict[str, Any]],
     *,
     manip_mode: str,
+    tamp_inputs: str = "observed",
     context_out: dict[str, Any] | None = None,
     video_recorder: Any = None,
 ) -> bool:
@@ -81,7 +82,7 @@ def run_scripted_tool_calls(
     # live session, select the requested manipulation capability, and validate
     # the one-shot plan. A direct KinematicPickPlaceExecutor call skips all of
     # those agent-facing contracts.
-    context: dict[str, Any] = {"robot": robot, "manip_mode": manip_mode}
+    context: dict[str, Any] = {"robot": robot, "manip_mode": manip_mode, "tamp_inputs": tamp_inputs}
     tools_by_name = {t.name: t for t in get_tools(context)}
 
     print("Scripted tool_calls:")
@@ -199,6 +200,8 @@ def main() -> int:
         default=None,
         help="Sim YAML when using --start-sim. Default: default_table_rby1 (kinematic) or default_table_stretch (teleport).",
     )
+    parser.add_argument("--physical-audit", help="Required JSONL actuation audit path for physical mode.")
+    parser.add_argument("--tamp-inputs", choices=("observed", "privileged"), default="observed")
     parser.add_argument("--start-sim", action="store_true", help="Spawn headless mujoco_server from --sim.")
     parser.add_argument("--robot", default=None, help="Override robot id (default: from --sim or stretch).")
     parser.add_argument("--robot-ip", default="127.0.0.1")
@@ -207,9 +210,9 @@ def main() -> int:
     parser.add_argument("--receptacle", default="blue cube", help="Receptacle query for pick_place.")
     parser.add_argument(
         "--manip-mode",
-        choices=("teleport", "kinematic"),
+        choices=("teleport", "kinematic", "physical"),
         default=None,
-        help="teleport (GT snap) or kinematic (IK+RRT+attach). Default: EMET_MANIP_MODE or teleport.",
+        help="teleport (GT snap), kinematic (IK+RRT+attach), or physical (native contact). Default: EMET_MANIP_MODE or teleport.",
     )
     parser.add_argument(
         "--tool-calls-json",
@@ -245,6 +248,15 @@ def main() -> int:
     from emet.simulation.sim_manipulation import resolve_agent_manip_mode
 
     manip_mode_early = resolve_agent_manip_mode(config_mode=args.manip_mode or env_manip_mode() or "teleport")
+    if manip_mode_early == "physical":
+        if not args.physical_audit:
+            parser.error("physical mode requires --physical-audit")
+        audit_path = Path(args.physical_audit).resolve()
+        audit_path.parent.mkdir(parents=True, exist_ok=True)
+        os.environ["EMET_PHYSICAL_AUDIT"] = str(audit_path)
+        os.environ["EMET_PHYSICAL_EXECUTION"] = "1"
+        os.environ["EMET_SIM_NAV_TELEPORT"] = "0"
+        os.environ["EMET_MOLMOSPACES_NAV_TELEPORT"] = "0"
     if args.sim is None:
         args.sim = (
             "configs/sim/default_table_rby1.yaml"
@@ -442,6 +454,7 @@ def main() -> int:
                 robot,
                 tool_calls,
                 manip_mode=manip_mode,
+                tamp_inputs=args.tamp_inputs,
                 context_out=tool_context,
                 video_recorder=video,
             )
@@ -455,6 +468,12 @@ def main() -> int:
         if args.articulation_cycle:
             print(json.dumps({"schema_version": 1, "track": "assisted_articulation_cycle",
                               "success": bool(ok), "placement_tested": False}))
+            return 0 if ok else 1
+        if manip_mode == "physical":
+            # The native tool verifies sustained measured support at its sampled target.
+            # Distance to the center of an entire table is not a placement criterion.
+            print(json.dumps({"schema_version": 1, "track": "native_tamp_debug",
+                              "success": bool(ok), "inputs": args.tamp_inputs}))
             return 0 if ok else 1
         # Re-resolve after manip (session placements patched in place)
         after = _placement_pos(robot, obj_body) if obj_body else None
