@@ -1196,6 +1196,7 @@ class MujocoZmqServer(BaseZmqServer):
         message = {
             "rgb": rgb,
             "depth": depth,
+            "head_cam_left/image_timing": cam_data.image_timing_for(StretchCameras.cam_d435i_rgb),
             "camera_K": self.head_K,
             "camera_pose": head_cam_world,
             "ee_pose": ee_world,
@@ -1313,6 +1314,7 @@ class MujocoZmqServer(BaseZmqServer):
             "ee_cam/color_camera_K": scale_camera_matrix(self.ee_K, self.ee_image_scaling),
             "ee_cam/depth_camera_K": scale_camera_matrix(self.ee_K, self.ee_image_scaling),
             "ee_cam/color_image": compressed_ee_color_image,
+            "ee_cam/image_timing": cam_data.image_timing_for(StretchCameras.cam_d405_rgb),
             "ee_cam/depth_image": compressed_ee_depth_image,
             "ee_cam/color_image/shape": ee_color_image.shape,
             "ee_cam/depth_image/shape": ee_depth_image.shape,
@@ -1323,6 +1325,7 @@ class MujocoZmqServer(BaseZmqServer):
             "head_cam/color_camera_K": scale_camera_matrix(self.head_K, self.image_scaling),
             "head_cam/depth_camera_K": scale_camera_matrix(self.head_K, self.image_scaling),
             "head_cam/color_image": compressed_head_color_image,
+            "head_cam_left/image_timing": cam_data.image_timing_for(StretchCameras.cam_d435i_rgb),
             "head_cam/depth_image": compressed_head_depth_image,
             "head_cam/color_image/shape": head_color_image.shape,
             "head_cam/depth_image/shape": head_depth_image.shape,
