@@ -61,9 +61,11 @@ in these trials.
 - Native articulation is unavailable rather than falling back to joint teleport.
   Observed mode rejects before reading privileged metadata.
 
-At `aea983b1`, **215 targeted tests passed, zero failures/skips** (JUnit artifact
-`/tmp/native-final-tests.xml`). Additional release regressions cover wrong support
-height and a still-spinning object. Ruff passed on changed Python files.
+At `f6e638f4`, **218 targeted tests passed, zero failures/skips**. Release regressions
+cover wrong support height and a still-spinning object. JUnit and runner artifacts
+are archived under `tamp-native-agent-20261013-r6/validation/`. The independently
+reviewable executor fix is [#208](https://github.com/cpaxton/home_robot_v3/pull/208),
+with 73 motion/contact tests passing on its own branch. Ruff passed on changed Python files.
 A prior repeated model-compilation test run stalled inside MuJoCo; the test fixture
 now compiles once and gives each test fresh state. A diagnostic CPU replay also
 segfaulted; later diagnostic jobs used the managed CPU-safe launcher.

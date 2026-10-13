@@ -49,9 +49,11 @@ calibrated sensing, transforms, controller limits, and hardware validation.
 ## Merge boundaries
 
 1. Existing contact-baseline evidence (#207) stays separate from implementation.
-2. Native public-tool integration: experimental privileged Stretch adapter and
+2. Executor settling and failure attribution (#208): independent measured-motion
+   fixes; optional endpoint settling defaults off for existing callers.
+3. Native public-tool integration: experimental privileged Stretch adapter and
    its live evidence, with observed mode still rejecting unavailable providers.
-3. Observed exploration integration: perception providers and discovery/geometry
+4. Observed exploration integration: perception providers and discovery/geometry
    wiring, with independent GT scoring and no claim of hardware acceptance.
 
 Each implementation PR needs passing targeted regressions and concrete live
