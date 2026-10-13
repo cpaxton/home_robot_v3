@@ -148,7 +148,7 @@ def main():
             rows.append(row)
             print(json.dumps(row), flush=True)
     summary = {'scope': 'privileged CPU public tools; in-process actuator facade; no ZMQ or exploration',
-               'source_sha': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
+               'source_sha': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=Path(__file__).resolve().parents[1], text=True).strip(),
                'cluttered': args.cluttered, 'cases': rows,
                'passed': sum(r['passed'] for r in rows), 'total': len(rows)}
     (args.output / 'summary.json').write_text(json.dumps(summary, indent=2))

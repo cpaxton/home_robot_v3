@@ -224,7 +224,14 @@ class NativeTableAdapter:
                         home.qpos[self.model.joint('joint_'+name).qposadr[0]] = self.model.key_ctrl[0, self.model.actuator(name).id]
                     mujoco.mj_kinematics(self.model, home)
                     pinch_offset = self._pinch_center_offset()
-                    frames = [home.body(executor.ee_body).xmat.reshape(3, 3).copy(), rotation]
+                    home_rotation = home.body(executor.ee_body).xmat.reshape(3, 3).copy()
+                    # A slight pitched approach avoids rolling rounded payloads
+                    # out of the angled pads. Search the same robot-centric
+                    # frames for every object, then certify and measure the grasp.
+                    pitch = np.pi / 12
+                    c, sn = np.cos(pitch), np.sin(pitch)
+                    tilted = home_rotation @ np.array([[c, sn, 0], [-sn, c, 0], [0, 0, 1]])
+                    frames = [tilted, home_rotation, rotation]
                     error, failed_phase = 'no_plan_within_budget', 'grasp'
                     accepted = False
                     for frame in frames:

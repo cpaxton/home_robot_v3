@@ -124,3 +124,20 @@ original object arrangement. The separated fixture only changes initial object
 positions before physics; execution uses actuator commands exclusively. JSON
 artifacts include tool responses, execution events, commands, and final measured
 state. This does not test IPC, cameras, an LLM, navigation, or observed perception.
+
+The first live follow-up, `tamp-native-agent-20261013-r7` (job
+`20261013_131820_fba5b2`, source `004c2386`), completed the box transfer:
+141.3 seconds wall time, 185 audited commands, zero forbidden commands.
+The paired CPU suite passed 3/3 box trials but failed 3/3 cylinder trials on
+retention; these are deliberately separate denominators. Its original summary
+recorded the job launcher's checkout SHA rather than the evaluated script's
+checkout; source attribution is corrected in subsequent harness revisions.
+
+The cylinder exposed a grasp-orientation issue rather than a missing path.
+Changing height/depth alone did not fix it. A bounded pitch diagnostic passed
+both shapes at 0.25 and 0.30 rad; at 0.35 rad the cylinder failed retention.
+Lower jaw preload also passed in a diagnostic, but no gripper preset or force
+model was changed. The planner now tries a 15-degree robot-centric pitched frame
+before the existing level/measured frames, for every object. The unhelpful
+experimental contact-centroid refinement was removed. Full collision planning
+and unchanged measured retention checks remain mandatory for each candidate.
