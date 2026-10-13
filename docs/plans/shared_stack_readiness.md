@@ -175,3 +175,26 @@ eight-view default retains 45-degree spacing. Failed scan turns now stop rather
 than count a repeated view as coverage. The map-boundary repair `005f0d9a` also
 prevents legacy clamping from inventing visible border cells (15 tests pass).
 The scan change has 40 focused passes. Performance is **not yet restored**.
+
+### Live comparison follow-up
+
+- Full-scan S0 `20261012_213404_0f6a06` completed at `9df2a382`: **2/2 find
+  phases**, versus 0/2 at `4cbfc959`. Both objects localized from grounded
+  objects, one investigation round and one navigation per phase; 164.7 s total.
+  The saved assessment image visibly contains the red cylinder and blue cube.
+  Four mapping images were retained in both runs, but angular coverage increased;
+  this is a single-scene diagnostic, **not manipulation or general acceptance**.
+- Selector retry `20261012_213032_b11224` was cancelled after its trace showed
+  `view_selection_unavailable/current_acquisition_not_retained`: acquisition
+  timing was nested under `Frame.info["info"]` rather than the expected metadata
+  key. Its q12 fallback answer is not evidence about the selector. Fix `7c5b43f1`
+  passes timing directly through voxel ingestion; 12 tests pass, including an
+  actual mapping-to-selection boundary test. Both cancelled selector pilots must
+  remain excluded from treatment accuracy.
+- Corrected selector job `20261012_213834_3df84b`, frozen #202 `7c5b43f1`,
+  `/home/cpaxton/runs/emet/selected-eqa4-live-20261012`, runs q56 first, then
+  q12/14/6. Audit selected roles, timestamps and pixels before scoring efficacy.
+- Room extension `20261012_214251_680c7a`, frozen #199 `9df2a382`,
+  `/home/cpaxton/runs/emet/fullscan-room-20261012`, queues RoboCasa then Molmo
+  find-only acceptance behind EQA on the exclusive GPU lock. No parallel heavy
+  experiments, no hardware motion, no default selector change.
