@@ -367,11 +367,18 @@ def assess_view_with_vlm(
         images = [view.frame.rgb for view in selected_views.views]
         if not images or len(images) > 4 or not np.array_equal(images[0], rgb):
             raise ValueError("Selected evidence must start with current RGB and fit the four-image budget")
+        answerability_scope = (
+            "Answerability may use the labeled historical context; "
+            if is_mcq
+            else "For find/localize, answerable requires the target to be visible in Image 1. "
+            "Historical context can guide another look but cannot establish current localization; "
+        )
         user += (
             "\n"
             + selected_views.prompt_labels()
-            + "\nJudge present from Image 1 only. Answerability may use the labeled historical context; "
-            "do not assume unseen landmarks or count the same object twice.\n"
+            + "\nJudge present from Image 1 only. "
+            + answerability_scope
+            + "do not assume unseen landmarks or count the same object twice.\n"
         )
     vl = getattr(client, "_vl", None)
     if vl is not None and hasattr(vl, "generate_multimodal"):
