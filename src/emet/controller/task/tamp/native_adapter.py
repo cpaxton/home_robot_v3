@@ -169,7 +169,6 @@ class NativeTableAdapter:
                 point = np.asarray(placements[obj]['pos'])
                 rotation = self.data.body(executor.ee_body).xmat.reshape(3, 3).copy()
                 surfaces = np.asarray(placements[support]['support_surfaces'])
-                half = np.ptp(placements[obj]['bounds'], axis=0)/2
                 before = self.data.qpos.copy()
                 try:
                     # The navigation wrist frame is not necessarily a valid grasp frame.
@@ -212,38 +211,58 @@ class NativeTableAdapter:
                         return self._failure('plan_pick_place', error, phase=failed_phase)
                     executor.grasp_paths = paths
                     lifted = self.data.qpos.copy()
-                    # Bounded alternatives on the actual support, with full arm/payload path checks.
-                    for delta in ([0, -.16], [0, .16], [-.16, 0], [.16, 0], [0, -.24], [0, .24]):
-                        xy = point[:2] + delta
+                    # Reuse the placement stack's obstacle-subtracted support search.
+                    from emet.motion.placement_geometry import HeldObject, PlacementScene
+                    from emet.motion.placement_surfaces import free_surface_centers
+                    lifted_placements = placements_from_mujoco_model(self.model, self.data)
+                    robot_ids = body_subtree(self.model, 'base_link')
+                    scene_entries = {name: entry for name, entry in lifted_placements.items()
+                                     if self.model.body(name).id not in robot_ids}
+                    scene = PlacementScene.from_placements(scene_entries, held_object=obj)
+                    ee = self.data.body(executor.ee_body)
+                    payload = HeldObject.from_world_bounds(lifted_placements[obj]['bounds'],
+                        ee_position=ee.xpos, ee_rotation=ee.xmat.reshape(3, 3))
+                    # Stationary reach is local: include clipped subpatches near the
+                    # grasp, rather than only centers across the whole tabletop.
+                    patches = list(surfaces)
+                    for radius in (.08, .16, .32):
                         for surface in surfaces:
-                            if np.any(xy-half[:2] < surface[0,:2]+.005) or np.any(xy+half[:2] > surface[1,:2]-.005):
-                                continue
-                            goal = np.r_[xy, surface[1,2]+half[2]+.02]
-                            self.data.qpos[:] = lifted
-                            mujoco.mj_kinematics(self.model, self.data)
-                            executor.place_targets = self._place_targets(executor, obj, goal, rotation)
-                            # Pure planning: never call the measured-state replan here, which would reset the hypothetical lift.
-                            candidates = []
-                            for i, (target, rot) in enumerate(executor.place_targets):
-                                if i == 2:
-                                    executor.collision.set_payload(self.model, self.data, None)
-                                    _, error = executor.plan_gripper_open()
-                                    if error:
-                                        break
-                                path, error = executor.plan_pose(target, rot)
+                            patch = surface.copy()
+                            patch[0, :2] = np.maximum(patch[0, :2], point[:2]-radius)
+                            patch[1, :2] = np.minimum(patch[1, :2], point[:2]+radius)
+                            if np.all(patch[0, :2] < patch[1, :2]):
+                                patches.append(patch)
+                    centers = free_surface_centers(patches, scene=scene, payload=payload,
+                        ee_rotation=rotation, max_centers=64).centers
+                    centers.sort(key=lambda center: float(np.linalg.norm(center[:2]-point[:2])))
+                    for goal in centers:
+                        if np.linalg.norm(goal[:2]-point[:2]) < .04:
+                            continue
+                        self.data.qpos[:] = lifted
+                        mujoco.mj_kinematics(self.model, self.data)
+                        executor.place_targets = self._place_targets(executor, obj, goal, rotation)
+                        # Pure planning: never call the measured-state replan here, which would reset the hypothetical lift.
+                        candidates = []
+                        for i, (target, rot) in enumerate(executor.place_targets):
+                            if i == 2:
+                                executor.collision.set_payload(self.model, self.data, None)
+                                _, error = executor.plan_gripper_open()
                                 if error:
                                     break
-                                candidates.append(path)
-                            if len(candidates) == 3:
-                                executor.place_paths = candidates
-                                ref = f'plan:{self.namespace}:{uuid.uuid4().hex}'
-                                self.plans[ref] = NativePlan(obj, support, initial, goal, rotation, executor, self.boot)
-                                return response('plan_pick_place', data=self._data(plan_ref=ref,
-                                    planned_ops=['grasp', 'place'], completed_ops=[], failed_stage=None, measurements=[]))
-                            executor.collision.set_payload(self.model, self.data, None)
-                            self.data.qpos[:] = lifted
-                            mujoco.mj_kinematics(self.model, self.data)
-                            executor.collision.set_payload(self.model, self.data, obj, executor.ee_body)
+                            path, error = executor.plan_pose(target, rot)
+                            if error:
+                                break
+                            candidates.append(path)
+                        if len(candidates) == 3:
+                            executor.place_paths = candidates
+                            ref = f'plan:{self.namespace}:{uuid.uuid4().hex}'
+                            self.plans[ref] = NativePlan(obj, support, initial, goal, rotation, executor, self.boot)
+                            return response('plan_pick_place', data=self._data(plan_ref=ref,
+                                planned_ops=['grasp', 'place'], completed_ops=[], failed_stage=None, measurements=[]))
+                        executor.collision.set_payload(self.model, self.data, None)
+                        self.data.qpos[:] = lifted
+                        mujoco.mj_kinematics(self.model, self.data)
+                        executor.collision.set_payload(self.model, self.data, obj, executor.ee_body)
                     return self._failure('plan_pick_place', 'no_plan_within_budget')
                 finally:
                     self.data.qpos[:] = before
