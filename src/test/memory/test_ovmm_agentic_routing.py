@@ -345,6 +345,28 @@ def test_siglip_seed_is_not_a_voxel_detection():
     assert out.get("status") != "DETECTIONS_REMAIN"
 
 
+@pytest.mark.parametrize("toward", ["", "unexplored frontier", "near the counter"])
+def test_frontier_direction_hint_preserves_task_for_picker(toward):
+    question = "Where is the jar on the counter?"
+    ex = _executor(question=question)
+    ex._hypotheses = []
+    ex._robot_xyt_world = lambda: np.array([0.0, 0.0, 0.0])
+    ex.agent._vlm_frontier_choice.return_value = None
+    ex.agent._siglip_guided_frontier.return_value = None
+    ex.agent._best_frontier_point_from_graph.return_value = None
+    ex.agent.run_exploration.return_value = False
+    ex._tool_capture_and_update = lambda: {"ok": False}
+    with patch("emet.controller.habitat_nav.pick_uncovered_explore_target", return_value=None) as fallback:
+        ex._tool_explore_frontier(toward=toward)
+    passed_question = ex.agent._vlm_frontier_choice.call_args.args[0]
+    assert passed_question.startswith(question)
+    assert fallback.call_args.kwargs["question"] == passed_question
+    if toward:
+        assert passed_question == f"{question}\nExploration direction hint: {toward}"
+    else:
+        assert passed_question == question
+
+
 @pytest.mark.parametrize("has_graph", [True, False])
 @pytest.mark.parametrize("grounded_capture", [False, True])
 def test_stalled_voxel_investigate_scores_current_view_without_look_around(has_graph, grounded_capture):
