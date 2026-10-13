@@ -13,7 +13,7 @@ from emet.motion.algo.a_star import AStar
 def _planner_with_map(obs: np.ndarray, *, start_escape_max_ring: int) -> AStar:
     space = MagicMock()
     space.is_valid = lambda *a, **k: True
-    space.voxel_map.get_2d_map.return_value = (obs, np.ones_like(obs, dtype=bool))
+    space.get_navigation_map.return_value = (obs, np.ones_like(obs, dtype=bool))
     return AStar(space, start_escape_max_ring=start_escape_max_ring)
 
 
@@ -42,6 +42,6 @@ def test_astar_default_start_escape_matches_dynav_config():
     space = MagicMock()
     space.is_valid = lambda *a, **k: True
     obs = np.zeros((5, 5), dtype=bool)
-    space.voxel_map.get_2d_map.return_value = (obs, np.ones_like(obs, dtype=bool))
+    space.get_navigation_map.return_value = (obs, np.ones_like(obs, dtype=bool))
     planner = AStar(space)
     assert planner.start_escape_max_ring == 8
