@@ -20,7 +20,9 @@ from typing import Literal
 
 import numpy as np
 
-Policy = Literal["recency", "pose", "embedding", "coverage", "hybrid"]
+from emet.memory.view_coverage import CoverageObjective
+
+Policy = Literal["recency", "pose", "embedding", "coverage", "weighted_coverage", "hybrid"]
 FEATURES = ("recency", "pose", "embedding", "coverage", "relevance", "saliency")
 
 
@@ -100,7 +102,7 @@ class SelectionConfig:
     weights: tuple[float, ...] = (0.1, 0.3, 0.2, 0.2, 0.15, 0.05)
 
     def __post_init__(self):
-        if self.policy not in ("recency", "pose", "embedding", "coverage", "hybrid"):
+        if self.policy not in ("recency", "pose", "embedding", "coverage", "weighted_coverage", "hybrid"):
             raise ValueError("unknown view selection policy")
         if not isinstance(self.max_images, int) or not isinstance(self.max_candidates, int):
             raise ValueError("image and candidate budgets must be integers")
@@ -186,6 +188,7 @@ def select_views(
     config: SelectionConfig = SelectionConfig(),
     query_embedding: np.ndarray | None = None,
     embedding_space: str | None = None,
+    coverage_objective: CoverageObjective | None = None,
 ) -> ViewSelection:
     """Pin current/pre-turn evidence, then greedy diversity within a recent pool.
 
@@ -202,6 +205,10 @@ def select_views(
     if pre_turn_id is not None and pre_turn_id not in by_id:
         raise ValueError("pre-turn view must be retained when specified")
     current = by_id[current_id]
+    if config.policy == "weighted_coverage" and coverage_objective is None:
+        raise ValueError("weighted_coverage requires an explicit coverage objective")
+    if coverage_objective is not None and coverage_objective.scope_id != current.scope_id:
+        raise ValueError("coverage objective and current view must share scope")
     excluded = {}
     eligible = []
     for frame in frames:
@@ -260,6 +267,8 @@ def select_views(
             hashes.add(digest)
             unique.append(frame)
     coverage_universe = set().union(*(f.visible_cells or () for f in unique))
+    if config.policy == "weighted_coverage" and any(f.visible_cells is None for f in unique):
+        raise ValueError("weighted_coverage requires visible_cells for every candidate (empty is allowed)")
     covered: set[str] = set()
     selected: list[SelectedView] = []
 
@@ -284,6 +293,9 @@ def select_views(
             if frame.embedding is not None and query_embedding is not None
             else None,
             "saliency": frame.saliency,
+            "weighted_coverage": coverage_objective.marginal(frame.visible_cells, covered)
+            if coverage_objective is not None and frame.visible_cells is not None
+            else None,
         }
 
     while unique and len(selected) < config.max_images:
@@ -307,11 +319,18 @@ def select_views(
             frame = max(sorted(unique, key=lambda f: f.view_id), key=rank)
             score, _ = rank(frame)
             values = features(frame)
+            if config.policy == "weighted_coverage" and score <= 0:
+                break  # Up to N images: do not pad with zero-information frames.
         role = "current" if frame.view_id == current_id else "pre_turn" if frame.view_id == pre_turn_id else "context"
         selected.append(SelectedView(frame, role, current.timestamp_s - frame.timestamp_s, score, values))
         covered.update(frame.visible_cells or ())
         unique.remove(frame)
-    excluded.update({f.view_id: "image_budget" for f in unique})
+    remaining_reason = (
+        "no_marginal_coverage"
+        if config.policy == "weighted_coverage" and len(selected) < config.max_images
+        else "image_budget"
+    )
+    excluded.update({f.view_id: remaining_reason for f in unique})
     pairs = [p for a, b in combinations(selected, 2) if (p := _pose_distance(a.frame, b.frame)) is not None]
     embedding_pairs = [
         (1 - _cosine(a.frame.embedding, b.frame.embedding)) / 2
@@ -334,4 +353,16 @@ def select_views(
         "feature_support": {name: sum(v.features[name] is not None for v in selected) for name in FEATURES},
         "selection_ms": (perf_counter() - started) * 1000,
     }
+    if coverage_objective is not None:
+        candidate_weight = coverage_objective.weight(coverage_universe)
+        selected_weight = coverage_objective.weight(covered)
+        metrics["weighted_coverage"] = {
+            "scope_id": coverage_objective.scope_id,
+            "visibility_source": coverage_objective.visibility_source,
+            "objective_weight": coverage_objective.weight(coverage_objective.cell_weights),
+            "candidate_weight": candidate_weight,
+            "selected_weight": selected_weight,
+            "candidate_fraction": selected_weight / candidate_weight if candidate_weight else None,
+            "selected_cells": sorted(covered & coverage_objective.cell_weights.keys()),
+        }
     return ViewSelection(selected, excluded, metrics, config)
