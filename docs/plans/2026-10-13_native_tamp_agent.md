@@ -8,6 +8,12 @@ tool execution or exploration. Keep its denominator separate.
 
 ## Gate 1: stationary native public-tool execution
 
+Controlled positives now pass at `d1d451c5`: 4/4 live ZMQ transfers and 6/6
+separate CPU transfers, with both shapes represented. The original cluttered
+scene refuses before actuation. See the [execution report](../experiments/tamp_native_agent_20261013.md)
+for the distinct denominators and remaining scope; this does not complete Gates
+2 or 3.
+
 Implement `scene_tasks -> plan_pick_place -> execute_pick_place_plan` for the
 packaged Stretch table scene with explicit privileged simulator inputs. Reuse the
 physical executor, collision checker, and ordinary arm/gripper controllers.

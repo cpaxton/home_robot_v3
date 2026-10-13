@@ -370,12 +370,14 @@ class NativeTableAdapter:
                 return self._failure('execute_pick_place_plan', 'unknown_plan')
             completed = []
             started = False
+            phase = None
             try:
                 self.synchronize(self.data)
                 if plan.boot != self.boot or np.max(np.abs(self.data.qpos-plan.initial)) > .01:
                     return self._failure('execute_pick_place_plan', 'scene_changed_replan')
                 ex = plan.executor
                 started = True
+                phase = 'grasp'
                 result = ex.grasp_only('', object_gt_body=plan.object_body)
                 if not result.success:
                     return self._failure('execute_pick_place_plan', result.message, started=True, phase=result.phase)
@@ -385,6 +387,7 @@ class NativeTableAdapter:
                 self.synchronize(self.data)
                 ex.place_targets = self._place_targets(ex, plan.object_body, plan.goal, plan.rotation)
                 ex.transport = lambda: PhysicalMotionResult(True, 'stationary', 'transport')
+                phase = 'place'
                 result = ex.place_only('', object_gt_body=plan.object_body, receptacle_gt_body=plan.support_body)
                 if not result.success:
                     return self._failure('execute_pick_place_plan', result.message, completed=completed, phase=result.phase)
@@ -394,8 +397,14 @@ class NativeTableAdapter:
                 return response('execute_pick_place_plan', data=self._data(plan_ref=plan_ref,
                     planned_ops=['grasp','place'], completed_ops=completed, failed_stage=None,
                     measurements=[{'source':'simulator_ground_truth','bilateral_hold_s':1.,'stable_support_s':2.}]))
+            except TimeoutError:
+                # The command may already have reached the controller. Preserve
+                # partial progress and prohibit reuse of this consumed handle.
+                return self._failure('execute_pick_place_plan', 'command_outcome_unknown',
+                                     completed=completed, started=started, phase=phase)
             except (ObservationUnavailable, ValueError, RuntimeError) as exc:
-                return self._failure('execute_pick_place_plan', str(exc), completed=completed, started=started)
+                return self._failure('execute_pick_place_plan', str(exc), completed=completed,
+                                     started=started, phase=phase)
 
 
 def adapter_for(context, robot):

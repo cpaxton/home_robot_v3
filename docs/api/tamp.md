@@ -7,8 +7,8 @@ measured Stretch articulation/task admission (#201). See the
 Observed/privileged input contracts merged in
 [#195](https://github.com/cpaxton/home_robot_v3/pull/195) as `b7a1c22d`;
 This branch adds a stationary Stretch native-debug adapter for the packaged table
-scene. Observed geometry providers remain unwired; live native execution currently
-fails at lift. See the [integration report](../experiments/tamp_native_agent_20261013.md).
+scene. Controlled native transfers pass for both test shapes; observed geometry
+providers remain unwired. See the [integration report](../experiments/tamp_native_agent_20261013.md).
 See [project status](../project_status.md#latest-evidence-supersedes-older-pr-prose)
 for tested revisions, the broader 3/7 assisted run, and remaining gates.
 
@@ -245,3 +245,16 @@ This requires no additional contact sensor. Native debug execution uses measured
 simulation time for settling, bounded by a 30-second wall watchdog per wait;
 ordinary hardware executors keep wall-clock timing. Simulator snapshots and final
 contact checks remain explicitly privileged debug evidence.
+
+The native candidate search tries a 15-degree pitched robot frame before the
+level and measured frames, for all objects. Every accepted candidate still needs
+arm/payload collision validation and measured hold/release verification. The
+current controlled acceptance is 4/4 live ZMQ and 6/6 separate CPU transfers;
+this is not validation of clutter rearrangement, native base navigation, or
+observed-input exploration.
+
+If a native command acknowledgement times out after execution starts, the result
+is `partial` with `code: command_outcome_unknown`, the last attempted operation,
+and any completed operations. The handle remains consumed. Inspect measured
+state before replanning: a missing acknowledgement does not mean the controller
+failed to receive the command, and the tool does not automatically replay it.

@@ -1,8 +1,10 @@
 # Native public-tool integration — 2026-10-13
 
-Status: experimental integration, **not merge-ready acceptance**. Native execution
-is wired through the existing public JSON tools on a stationary Stretch table
-scene, with explicit privileged inputs. Observed exploration remains unavailable.
+Status: **stationary native integration passes its controlled live gate**. The
+final grasp/timing revision `d1d451c5` completed 4/4 live ZMQ transfers and 6/6
+separate CPU contact transfers through the public JSON tools. Inputs are explicitly
+privileged. Observed exploration, native navigation, and LLM selection remain
+unvalidated; these small repeated fixtures are not a general task success rate.
 
 The earlier contact baseline (#207) is 6/6 scripted actuator transfers. Its
 controller path and fixture are different from this live ZMQ tool experiment;
@@ -30,8 +32,8 @@ fixture. R5 passed measured arrival but crossed the unchanged retention limit:
 6.0 mm translation and 0.10033 rad rotation relative to the grasp reference.
 R6 added endpoint settling and cumulative gripper-drift rejection; it stopped on
 wrist-pitch tracking error of 0.03169 rad (limit 0.03). R5/R6 had 74/72 audited
-commands respectively, with zero forbidden commands. These are **zero completed
-native tool transfers**, not new successes or regression percentages.
+commands respectively, with zero forbidden commands. At those revisions there were **zero completed native tool transfers**. Later
+results below supersede the integration status, without rescoring these failures.
 
 Offline inspection of the r6 snapshot found bilateral fingertip/object contacts
 and no fingertip/table contacts. The object was about 7 mm above its initial
@@ -72,9 +74,10 @@ segfaulted; later diagnostic jobs used the managed CPU-safe launcher.
 
 ## Remaining acceptance gates
 
-Complete live native transfers, including the cylinder and fresh repeats; retain
-and resolve the cluttered negative. Then validate LLM task selection and consecutive
-tasks before adding exploration with observed object and voxel geometry. See the
+The separated stationary fixtures now pass. The original cluttered scene still
+rejects planning without actuation; solving it may require another approach or
+rearrangement. Next validate consecutive tasks and LLM task selection, then
+exploration with observed object and voxel geometry. See the
 [native-to-exploration plan](../plans/2026-10-13_native_tamp_agent.md).
 
 ## Artifacts and reproduction
@@ -115,7 +118,7 @@ Managed CPU diagnostics `20261013_131331_d22d6e` and
 `20261013_131416_eaddd3` completed a box transfer with the calibrated grasp.
 The second is an ablation with feedback correction disabled; consequently the
 experimental feedback correction was removed. These are in-process diagnostics,
-not live ZMQ acceptance. Live retesting and both-shape repeats remain required.
+not live ZMQ acceptance. The later live and both-shape repeats are recorded below.
 
 Reproducible CPU regression (public JSON tool registry, in-process actuators):
 `scripts/eval_native_table_contact.py --output PATH --object both --trials 3`.
@@ -141,3 +144,46 @@ model was changed. The planner now tries a 15-degree robot-centric pitched frame
 before the existing level/measured frames, for every object. The unhelpful
 experimental contact-centroid refinement was removed. Full collision planning
 and unchanged measured retention checks remain mandatory for each candidate.
+
+
+## Final controlled acceptance
+
+All completed at source **`d1d451c57cec73cffad050a032df1401461051f6`**:
+
+| Check | Result | Managed job / artifact directory under `/home/cpaxton/runs/emet/` |
+| --- | --- | --- |
+| Live public JSON tools, two fresh trials per shape | **4/4**, 740 audited commands, zero forbidden actions | `20261013_133302_3a681f`; `tamp-native-acceptance-20261013/` |
+| CPU public tools, three fresh trials per shape | **6/6** | `20261013_133304_33f050`; `tamp-native-contact-final-20261013/` |
+| Original clutter, stationary planning control | Rejected before actuation; zero commands | `20261013_133327_b6dccd`; `tamp-native-clutter-control-20261013/` |
+
+The live runs took 129.8, 131.5, 136.0, and 131.3 seconds. Each verified a
+one-second bilateral hold and two seconds of settled released support, using
+measured simulator time. No attachment, body pose write, joint teleport, or base
+teleport was used. Controller gains, gripper close preset, 0.03 joint tolerance,
+and 0.02 m / 0.1 rad retention limits were unchanged. Planning and execution
+shared the same collision checks. Do not pool these results with #207's scripted
+baseline, or treat them as observed-input or exploration acceptance.
+
+The 87 focused motion/native checks and 135 additional contract/publication/eval
+checks passed after the timing and calibration change. The 11 native checks were
+rerun after the final pitched-candidate change. No remote CI checks were listed
+for the draft PR; these are local validation results.
+
+Two additional CPU fault controls at `d1d451c5` passed (job
+`20261013_134422_0dffe8`, `tamp-native-faults-20261013/`): an acknowledged but
+unexecuted close command fails retention, and an acknowledged but unexecuted arm
+command fails measured tracking. Both return `partial`, require inspection, and
+report no completed operation.
+
+Post-batch exception handling also fixes an independently reproduced command ACK
+timeout: the outer generic tool boundary previously converted it to `error` and
+lost partial progress. Native execution now returns `command_outcome_unknown`,
+preserves the attempted/completed stages, and keeps the plan consumed. Injected
+timeouts at grasp and placement verify this separately; it changes no successful
+motion path, and the live results above retain their original source SHA.
+
+After the ACK-timeout fix, **61 native/API tests passed**, including both new
+fault injections (which failed before the fix). Across the relevant batches,
+224 distinct regression cases passed with no failures/skips; the final native/API
+subset supersedes its earlier results. XML/log evidence is archived in the live
+acceptance directory's `validation/` folder.

@@ -155,3 +155,26 @@ def test_pinch_calibration_uses_pad_centers_and_preserves_measured_state(native)
     plan = adapter.plans[ref]
     point, rotation = plan.executor.grasp_targets[1]
     np.testing.assert_allclose(point + rotation @ offset, data.body(plan.object_body).xpos, atol=.001)
+
+
+@pytest.mark.parametrize('phase', ['grasp', 'place'])
+def test_command_ack_timeout_preserves_partial_execution_and_consumes_plan(native, monkeypatch, phase):
+    _, _, context, call = native
+    adapter = context['_native_tamp_adapter']
+    ref = make_plan(call)
+    executor = adapter.plans[ref].executor
+    executor.grasp_only = Mock(return_value=SimpleNamespace(success=True))
+    executor.place_only = Mock(return_value=SimpleNamespace(success=True))
+    getattr(executor, phase + '_only').side_effect = TimeoutError('private command sequence: outcome unknown')
+    monkeypatch.setattr(adapter, '_verify', lambda *args, **kwargs: True)
+    result = call('execute_pick_place_plan', plan_ref=ref)
+    assert result['status'] == 'partial'
+    assert result['code'] == 'command_outcome_unknown'
+    assert result['data']['execution_started'] is True
+    assert result['data']['completed_ops'] == ([] if phase == 'grasp' else ['grasp'])
+    assert result['data']['failed_stage'] == phase
+    assert result['recovery'] == 'inspect'
+    assert 'private command' not in json.dumps(result)
+    assert call('execute_pick_place_plan', plan_ref=ref)['code'] == 'unknown_plan'
+    if phase == 'grasp':
+        executor.place_only.assert_not_called()

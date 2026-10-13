@@ -182,6 +182,7 @@ def failure_code(message: str) -> str:
         "native_model_mismatch", "native_robot_unsupported", "invalid_measured_state",
         "task_not_found", "payload_not_retained", "object_not_lifted", "base_drift_during_arm",
         "unknown_plan",
+        "command_outcome_unknown",
         "scene_changed_replan",
         "invalid_plan",
         "not_simulation",
