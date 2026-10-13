@@ -472,7 +472,15 @@ def _tool_investigate(
                 {"max_cosine": record.retrieval_score, "yoloe_hit": True},
                 self.agent.voxel_map,
             )
-            cap = {"ok": True, "obs_id": grounding["obs_id"], "status": "GROUNDED_ARRIVAL"}
+            if captured_view(self, cap.get("obs_id")) is not None:
+                # Geometry and view IDs have different jobs. Keep verification
+                # on the captured pixels, not a newer live frame fetched through
+                # the admitted object's handle. This query is already grounded.
+                if not hasattr(self, "_view_grounding_attempts"):
+                    self._view_grounding_attempts = set()
+                self._view_grounding_attempts.add((int(cap["obs_id"]), record.query))
+            else:
+                cap = {"ok": True, "obs_id": grounding["obs_id"], "status": "GROUNDED_ARRIVAL"}
             self._last_capture_status = "OK"
     cap_adv = isinstance(cap, dict) and cap.get("ok") and cap.get("obs_id") is not None
     station_oid = None

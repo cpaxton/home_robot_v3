@@ -346,7 +346,8 @@ def test_siglip_seed_is_not_a_voxel_detection():
 
 
 @pytest.mark.parametrize("has_graph", [True, False])
-def test_stalled_voxel_investigate_scores_current_view_without_look_around(has_graph):
+@pytest.mark.parametrize("grounded_capture", [False, True])
+def test_stalled_voxel_investigate_scores_current_view_without_look_around(has_graph, grounded_capture):
     """Arrival yaw faces the object — do not pan before assess."""
     ex = _executor(question="Where is the red cylinder on the table?")
     oid = -3_000_000
@@ -398,12 +399,29 @@ def test_stalled_voxel_investigate_scores_current_view_without_look_around(has_g
     ex._pin_eqa_look_obs = lambda *_a, **_k: None  # type: ignore[method-assign]
     ex._refresh_room_after_motion = lambda: None  # type: ignore[method-assign]
     ex._attach_gt = lambda *_a, **_k: None  # type: ignore[method-assign]
+    if grounded_capture:
+        from emet.memory.graph_eqa.agentic.views import VIEW_ID_BASE, CapturedView, ground_confirmed_view
+        from emet.memory.query_candidates import QueryCandidates
+
+        ex.agent.query_driven_memory = True
+        ex.agent.query_candidates = QueryCandidates()
+        record = ex.agent.query_candidates.propose("red cylinder", 1, 1, hyp.xyz)
+        assert record.handle == oid
+        view_id = VIEW_ID_BASE + 2
+        ex._captured_views = {view_id: CapturedView(view_id, 2, np.zeros((8, 8, 3), dtype=np.uint8), None)}
+        ex._tool_capture_and_update = lambda: {"ok": True, "obs_id": view_id, "status": "NEW_VIEW"}
+        ex.agent.ground_query_candidate.return_value = {"ok": True, "obs_id": 77, "xyz": hyp.xyz.tolist()}
+        ex._record_voxel_score_hit = MagicMock()
     out = ex._tool_investigate(oid)
     assert out["ok"] is True
     assert "verify" in events
     assert events.index("verify") == 0
     assert verified
-    assert int(verified[0]["obs_id"]) == 6
+    assert int(verified[0]["obs_id"]) == (view_id if grounded_capture else 6)
+    if grounded_capture:
+        assert ex._grounded_obs_id == 77
+        assert ground_confirmed_view(ex, view_id, "red cylinder") is None
+        ex.agent.ground_query_view.assert_not_called()
 
 
 def test_voxel_only_investigate_resolves_anchor_without_graph():
