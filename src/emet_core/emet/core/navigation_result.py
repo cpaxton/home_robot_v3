@@ -63,6 +63,14 @@ class ArrivalMonitor:
         self.last_fresh = now
         result["corrections"] = self.corrections
         xy, yaw = result["xy_error"], result["yaw_error"]
+        # Steering toward the waypoint may initially worsen its final-yaw
+        # error. Keep this progress contract in sync with the full package.
+        approach_yaw = None
+        if xy > policy.xy_tolerance:
+            goal = self.context["resolved_goal"]
+            measured_pose = result["measured_pose"]
+            bearing_error = math.atan2(goal[1] - measured_pose[1], goal[0] - measured_pose[0]) - measured_pose[2]
+            approach_yaw = abs(math.atan2(math.sin(bearing_error), math.cos(bearing_error)))
         inside = status == "succeeded"
         if inside and stopped:
             self.outside_since = None
@@ -104,15 +112,18 @@ class ArrivalMonitor:
             return "correct", {**result, "corrections": self.corrections}
         self.outside_since = None
         if self.progress is None:
-            self.progress = (now, xy, yaw)
-        elif now - self.progress[0] >= policy.progress_seconds:
-            _, old_xy, old_yaw = self.progress
-            improved = (old_xy > policy.xy_tolerance and old_xy - xy >= 0.01) or (
-                old_yaw > policy.yaw_tolerance and old_yaw - yaw >= 0.02
-            )
+            self.progress = (now, sample_time, xy, yaw, approach_yaw)
+        elif (
+            now - self.progress[0] >= policy.progress_seconds
+            and sample_time - self.progress[1] >= policy.progress_seconds
+        ):
+            _, _, old_xy, old_yaw, old_approach_yaw = self.progress
+            improved = old_xy - xy >= 0.01 or old_yaw - yaw >= 0.02
+            if approach_yaw is not None and old_approach_yaw is not None:
+                improved = improved or old_approach_yaw - approach_yaw >= 0.02
             if not improved and not inside:
                 return "failed", {**result, "reason": "navigation stalled"}
-            self.progress = (now, xy, yaw)
+            self.progress = (now, sample_time, xy, yaw, approach_yaw)
         return None
 
 
