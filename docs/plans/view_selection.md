@@ -2,7 +2,8 @@
 
 `emet.memory.view_selection` is a standalone, NumPy-only evidence selector for
 EQA, OVMM and TAMP. It creates no instances, acquires no images, runs no models,
-and changes no live defaults. It is a follow-up to #199, whose two-image pilot
+and changes no live defaults. An opt-in shared-history adapter now connects it
+to assessment and final answering. It is a follow-up to #199, whose two-image pilot
 fixed evidence delivery but did not improve its four-question score.
 
 ## API and contracts
@@ -116,12 +117,39 @@ recover curtains that were never captured.
 
 ## Remaining integration
 
-1. Capture and timestamp true arrival-before-turn evidence without bypassing
-   navigation safety. Retain intermediate keyframes independently of object nodes.
-2. Adapt the shared captured-view store to `ViewFrame`; use a single bounded
-   history rather than adding a robot-specific cache. Include world-frame and
-   embedding/map-version identifiers.
-3. Feed the same `ViewSelection` images and labels to assessment/final answering;
-   persist its audit next to the exact RGB packet. Preserve current-only grounding.
+### Opt-in adapter (2026-10-12)
+
+Set `eqa.view_selection: {policy: pose, max_images: 4}` in the controller
+parameters, or `EMET_EQA_VIEW_SELECTION_POLICY=pose` for a frozen experiment.
+Default behavior is unchanged. Selection uses existing voxel-frame history,
+not a second rolling RGB cache, and obeys the final-answer image limit (at most
+four). Missing current acquisition metadata explicitly falls back to the old
+packet and emits `view_selection_unavailable`; do not score that as selector
+acceptance. Only pose and recency have live features in this first adapter.
+
+Mapping preserves `Observations.image_timing` in frame metadata. Habitat stamps
+its synchronous render completion with a monotonic timestamp and retains one
+observation at the actual path-to-final-yaw boundary, without issuing extra
+motion. That is the pre-turn pin. Other adapters do not yet supply this capture;
+they must not manufacture it from a pre-approach image. Existing hardware capture
+timestamps are preserved when supplied; missing simulator/legacy timestamps
+remain missing.
+
+The selected images and individual time/role labels reach both assessment and
+final answering. Audit rows record selection/exclusions. Grounding still uses
+only current RGB-D. A labeled packet that would be truncated or deduplicated at
+submission is rejected rather than silently relabeled.
+
+This implementation is not an accuracy result. Run the four-question diagnostic
+before the broader paired dev set; separately audit answer-policy disagreement.
+
+### Remaining gates
+
+1. Validate Habitat's actual pre-turn capture in saved pilot images and extend
+   the same acquisition contract to the MuJoCo/physical adapters.
+2. Verify clock/frame scopes across episode resets and supply cached embeddings
+   or observed map cells before testing those selectors online.
+3. Audit the exact selected RGB packet and labels in live assessment/final
+   answering, including graph-backed and voxel-only paths.
 4. Re-run the EQA diagnostic pair and small OVMM gate before changing defaults.
    This module alone does not claim to repair #199's remaining failures.

@@ -105,8 +105,12 @@ def test_submit_preserves_assessed_voxel_images_without_graph_observation():
     ex._count_find_obs_ids = lambda: []
     images = [np.full((8, 8, 3), value, dtype=np.uint8) for value in (10, 20)]
     ex._assessed_images = {view_id: images}
+    ex._assessed_image_metadata = {
+        view_id: {"evidence_labels": ["current", "earlier"], "evidence_roles": ["current", "context"]}
+    }
     ex._do_submit_answer()
     assert gm.query_answer.call_args.kwargs["evidence_images"] is images
+    assert gm.query_answer.call_args.kwargs["evidence_labels"] == ["current", "earlier"]
     assert gm.query_answer.call_args.kwargs["force_obs_ids"] == []
 
 
