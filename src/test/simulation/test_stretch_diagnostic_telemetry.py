@@ -20,6 +20,7 @@ def test_physics_status_copies_pose_and_named_controls():
     actuator = SimpleNamespace(length=[0.1], velocity=[0.0])
     proxy = Mock()
     physics = SimpleNamespace(
+        _native_model_signature="physics-model",
         mjdata=SimpleNamespace(
             time=12.0,
             ctrl=controls,
@@ -41,6 +42,7 @@ def test_physics_status_copies_pose_and_named_controls():
     restored = StatusStretchJoints.from_dict(status.to_dict())
     assert restored.scene_qpos == [.1, .2]
     assert restored.scene_qvel == [.3, .4]
+    assert restored.scene_model_signature == "physics-model"
     assert restored.scene_time == 12.0
     assert restored.scene_captured_at > 0
     assert restored.base_xyz == [1.0, 2.0, 0.1]

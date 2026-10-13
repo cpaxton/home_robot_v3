@@ -64,6 +64,7 @@ class StatusStretchJoints:
 
     # Privileged simulator state for coherent fixture geometry, never robot sensors.
     scene_qpos: list[float] | None = None
+    scene_model_signature: str | None = None
     scene_qvel: list[float] | None = None
     scene_time: float | None = None
     scene_captured_at: float | None = None

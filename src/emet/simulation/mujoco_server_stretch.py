@@ -918,16 +918,13 @@ class MujocoZmqServer(BaseZmqServer):
                 self._refresh_articulation_state()
                 message["sim_base_pose_query"] = self._base_pose_query_qpos() is not None
                 # Privileged debug state, never a hardware observation source.
-                from emet.controller.manipulation.native_scene import model_signature
                 from emet.simulation.sim_object_placements import is_default_table_environment
                 status = self._status
                 env = self._emet_session.get("environment") or {}
                 if (is_default_table_environment(env.get("kind")) and self._articulation_model is not None
                         and getattr(status, "scene_captured_at", None) is not None):
-                    if not hasattr(self, "_native_model_signature"):
-                        self._native_model_signature = model_signature(self._articulation_model)
                     message["native_tamp_snapshot"] = {
-                        "source": "simulator_ground_truth", "model_signature": self._native_model_signature,
+                        "source": "simulator_ground_truth", "model_signature": status.scene_model_signature,
                         "qpos": status.scene_qpos, "qvel": status.scene_qvel,
                         "sim_time": status.scene_time, "captured_at": status.scene_captured_at,
                     }

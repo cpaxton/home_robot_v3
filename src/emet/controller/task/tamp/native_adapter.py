@@ -40,8 +40,8 @@ class NativeTableAdapter:
 
     def __init__(self, robot, *, model=None):
         if model is None:
-            from emet.simulation.mujoco_server import _load_default_scene_with_robot
-            model = _load_default_scene_with_robot('stretch')
+            from emet.simulation.mujoco_server_stretch import default_scene_xml_path
+            model = mujoco.MjModel.from_xml_path(default_scene_xml_path)
         self.robot, self.model = robot, model
         self.signature = model_signature(model)
         self.data = mujoco.MjData(model)

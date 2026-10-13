@@ -13,13 +13,13 @@ import pytest
 
 from emet.agent.tools import get_tools
 from emet.controller.manipulation.native_scene import model_signature
-from emet.simulation.mujoco_server import _load_default_scene_with_robot
+from emet.simulation.mujoco_server_stretch import default_scene_xml_path
 from emet.simulation.robosuite_load_utils import snap_joint_qpos_to_ctrl_for_position_actuators
 
 
 @pytest.fixture
 def native():
-    model = _load_default_scene_with_robot('stretch')
+    model = mujoco.MjModel.from_xml_path(default_scene_xml_path)
     data = mujoco.MjData(model)
     data.ctrl[:] = model.key_ctrl[0]
     data.ctrl[model.actuator('gripper').id] = .04
@@ -88,3 +88,11 @@ def test_observed_mode_never_reads_privileged_metadata(native):
     result = json.loads(tools['scene_tasks'].func())
     assert result['code'] == 'observed_scene_unavailable'
     robot.get_emet_session.assert_not_called()
+
+
+def test_native_model_mismatch_rejects_before_actuation(native):
+    robot, _, _, call = native
+    robot._state['native_tamp_snapshot']['model_signature'] = 'different-physics-model'
+    assert call('scene_tasks')['code'] == 'native_model_mismatch'
+    robot.arm_to.assert_not_called()
+    robot.open_gripper.assert_not_called()
