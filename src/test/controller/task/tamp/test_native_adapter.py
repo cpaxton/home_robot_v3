@@ -121,3 +121,23 @@ def test_native_arm_acknowledgement_leaves_arrival_to_measured_executor(native):
     assert executor.command_joints(adapter.data.qpos[executor.qadr].copy())
     assert robot.arm_to.call_args.kwargs['blocking'] is False
     assert executor.joint_tolerance == .03
+
+
+@pytest.mark.parametrize('fault, expected', [(None, True), ('height', False), ('spinning', False)])
+def test_release_verification_requires_correct_height_and_settled_rotation(native, monkeypatch, fault, expected):
+    import emet.controller.task.tamp.native_adapter as module
+    _, _, context, _ = native
+    adapter = context['_native_tamp_adapter']
+    adapter.data.qvel[:] = 0
+    goal = adapter.data.body('object1').xpos.copy() + [0, 0, .02]
+    if fault == 'height':
+        goal[2] += .1
+    if fault == 'spinning':
+        joint = adapter.model.body('object1').jntadr[0]
+        adapter.data.qvel[adapter.model.jnt_dofadr[joint]+3] = .2
+    clock = [0.]
+    monkeypatch.setattr(module.time, 'monotonic', lambda: clock[0])
+    monkeypatch.setattr(module.time, 'sleep', lambda dt: clock.__setitem__(0, clock[0]+dt))
+    monkeypatch.setattr(adapter, 'synchronize', lambda data: setattr(data, 'time', data.time+.05))
+    plan = SimpleNamespace(object_body='object1', support_body='table', goal=goal)
+    assert adapter._verify(plan, released=True, seconds=1.) is expected
