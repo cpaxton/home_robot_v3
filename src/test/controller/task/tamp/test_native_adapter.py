@@ -13,13 +13,19 @@ import pytest
 
 from emet.agent.tools import get_tools
 from emet.controller.manipulation.native_scene import model_signature
+from emet.controller.task.tamp.native_adapter import NativeTableAdapter
 from emet.simulation.mujoco_server_stretch import default_scene_xml_path
 from emet.simulation.robosuite_load_utils import snap_joint_qpos_to_ctrl_for_position_actuators
 
 
+@pytest.fixture(scope="module")
+def table_model():
+    return mujoco.MjModel.from_xml_path(default_scene_xml_path)
+
+
 @pytest.fixture
-def native():
-    model = mujoco.MjModel.from_xml_path(default_scene_xml_path)
+def native(table_model):
+    model = table_model
     data = mujoco.MjData(model)
     data.ctrl[:] = model.key_ctrl[0]
     data.ctrl[model.actuator('gripper').id] = .04
@@ -34,7 +40,8 @@ def native():
             'captured_at': time.time()}}, arm_to=Mock(), open_gripper=Mock(), close_gripper=Mock(),
         get_emet_session=lambda: {'is_simulation': True, 'sim_object_placements': {
             'object1': {'cat': 'blue cube'}, 'object2': {'cat': 'red cylinder'}, 'table': {'cat': 'table'}}})
-    context = {'robot': robot, 'manip_mode': 'physical', 'tamp_inputs': 'privileged'}
+    context = {'robot': robot, 'manip_mode': 'physical', 'tamp_inputs': 'privileged',
+               '_native_tamp_adapter': NativeTableAdapter(robot, model=model)}
     tools = {t.name: t for t in get_tools(context)}
     def call(name, **kwargs):
         return json.loads(tools[name].func(**kwargs))

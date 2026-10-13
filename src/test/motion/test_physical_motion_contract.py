@@ -204,7 +204,7 @@ def test_navigation_posture_requires_collision_path_and_measured_tracking():
         command_joints=lambda q: calls.append(q) or True,
     )
     path, error = executor.plan_joint_target(np.array([1.0]))
-    assert path is None and error == "arm_path_failed:invalid_start" and not calls
+    assert path is None and error == "arm_path_failed:invalid_start:collision" and not calls
     # With a clear scene, a successful controller return still needs state progress.
     m.geom_pos[m.geom("wall").id] = [2, 0, 0]
     path, error = executor.plan_joint_target(np.array([0.2]))

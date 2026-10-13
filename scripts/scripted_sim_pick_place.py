@@ -200,6 +200,7 @@ def main() -> int:
         default=None,
         help="Sim YAML when using --start-sim. Default: default_table_rby1 (kinematic) or default_table_stretch (teleport).",
     )
+    parser.add_argument("--native-debug-output", help="Optional privileged snapshot/events JSON for native diagnostics.")
     parser.add_argument("--physical-audit", help="Required JSONL actuation audit path for physical mode.")
     parser.add_argument("--tamp-inputs", choices=("observed", "privileged"), default="observed")
     parser.add_argument("--start-sim", action="store_true", help="Spawn headless mujoco_server from --sim.")
@@ -470,6 +471,14 @@ def main() -> int:
                               "success": bool(ok), "placement_tested": False}))
             return 0 if ok else 1
         if manip_mode == "physical":
+            if args.native_debug_output:
+                from emet.controller.manipulation.native_scene import read_snapshot
+                adapter = tool_context.get("_native_tamp_adapter")
+                _, snapshot = read_snapshot(robot)
+                debug_path = Path(args.native_debug_output)
+                debug_path.parent.mkdir(parents=True, exist_ok=True)
+                debug_path.write_text(json.dumps({"snapshot": snapshot,
+                    "events": adapter.events if adapter else []}, indent=2) + "\n")
             # The native tool verifies sustained measured support at its sampled target.
             # Distance to the center of an entire table is not a placement criterion.
             print(json.dumps({"schema_version": 1, "track": "native_tamp_debug",

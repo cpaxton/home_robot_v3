@@ -7,6 +7,7 @@ GT snapshots are explicit debug inputs. Observed discovery/execution is separate
 """
 from __future__ import annotations
 
+import logging
 import threading
 import time
 import uuid
@@ -71,6 +72,7 @@ class NativeTableAdapter:
                 'collision_scope': 'sampled_arm_and_payload', **extra}
 
     def _failure(self, tool, reason, *, completed=(), phase=None, started=False):
+        logging.getLogger(__name__).warning("Native TAMP %s failed at %s: %s", tool, phase, reason)
         return response(tool, code=failure_code(reason), status='partial' if completed or started else 'error',
                         data=self._data(completed_ops=list(completed), failed_stage=phase, execution_started=started),
                         recovery='inspect' if completed or started else None)

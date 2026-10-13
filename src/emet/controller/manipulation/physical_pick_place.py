@@ -166,7 +166,7 @@ class PhysicalPickPlaceExecutor:
             if self.collision.payload_body is not None and self.collision.configuration_collides(self.model, self.data):
                 return None, "arm_goal_revalidation_failed"
             return path.waypoints, None
-        return None, f"arm_path_failed:{path.reason}"
+        return None, f"arm_path_failed:{path.reason}:{path.detail}" if path.detail else f"arm_path_failed:{path.reason}"
 
     def prepare_for_navigation(self, path):
         return self._execute_path("navigation_posture", path)
