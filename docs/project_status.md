@@ -25,8 +25,10 @@ reported test counts belong to their cited revisions and are not additive.
 
 The October-12 [matched TAMP regression report](experiments/tamp_matched_regressions_20261012.md)
 records #204's merged grasp-admission fix, passing baseline/candidate RBY1
-controls, the merged #205 Stretch endpoint (public oracle replay passed), and unresolved
-#203 oracle compatibility.
+controls, the merged #205 Stretch endpoint (public oracle replay passed), and the original
+#203 oracle compatibility failures. The subsequent [oracle coordinate fix](experiments/tamp_oracle_coordinates_20261012.md)
+resolves those failures: both requested Stretch cases admitted and passed fresh
+replay (3/3 cleanup and 8/8 navigation relocations).
 These newer results do not replace the historical denominators below.
 
 The navigation PR rows below retain the #197 status snapshot; they have not
