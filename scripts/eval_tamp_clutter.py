@@ -239,7 +239,7 @@ def _placement_category_map(placements: dict[str, dict[str, Any]], metadata: dic
         cat = str(info.get("category") or "").strip()
         for body in (info.get("name_map") or {}).get("bodies") or {}:
             if body in placements:
-                out[str(body)] = {"cat": cat, "static": static}
+                out[str(body)] = {"cat": cat, "static": static, "instance": str(_root)}
     return out
 
 
@@ -265,7 +265,15 @@ def _pickable_bodies(
             return False
         return True
 
-    cands = sorted(b for b in placements if is_clutter(b))
+    # Metadata body names can identify welded parts of the same object. Moving
+    # one part moves the assembly: they cannot be scattered independently.
+    seen = {cat_map[b].get("instance", b) for b in exclude_bodies if b in cat_map}
+    cands = []
+    for body in sorted(b for b in placements if is_clutter(b)):
+        instance = cat_map[body].get("instance", body)
+        if instance not in seen:
+            cands.append(body)
+            seen.add(instance)
     return cands[:n]
 
 
