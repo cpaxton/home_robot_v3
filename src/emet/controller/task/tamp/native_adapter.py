@@ -138,7 +138,7 @@ class NativeTableAdapter:
             synchronize=self.synchronize, command_joints=command,
             coupled_groups=(tuple(f'joint_arm_l{i}' for i in range(4)),),
             gripper_open_configuration=chain.gripper_open_configuration,
-            base_body='base_link', input_mode='privileged', event=lambda **row: self.events.append(row))
+            base_body='base_link', input_mode='privileged', endpoint_settle_s=.3, event=lambda **row: self.events.append(row))
 
     def _place_targets(self, executor, obj, goal, rotation):
         # Compute the measured/predicted payload offset, not a category-specific center assumption.
