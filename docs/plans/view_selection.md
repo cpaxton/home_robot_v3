@@ -382,3 +382,47 @@ for additional unseen frozen episodes before any live default change.
 Validation: 80 focused selector/history/captured-view/assessment tests pass,
 including legacy pose invariance when quality metadata is supplied. Both
 experimental policies remain opt-in; main and live defaults are unchanged.
+
+## Staged live hill-climb (2026-10-13)
+
+Implemented opt-in RGB-D history integration: retained depth/K/optical pose
+provide cached surface support; the investigated hypothesis is explicitly
+associated with the arrival capture so camera XYZ cannot become the target.
+Coverage uses fixed 0.2 m cells, sigma 1.5 m, range 4 m, stride 4, quality
+reference 1024 and context credit 0.5. Missing target/registered geometry emits
+`view_selection_fallback` and uses pose. Acquisition failures retain the
+existing unavailable path. World scope resets with the retained history.
+
+`scripts/run_view_selection_pairs.py` runs fresh processes serially, alternating
+arm order, recording source/config fingerprints, exact commands, elapsed time,
+metrics and uniquely named episode bundles. Invoke only under CPU-safe,
+GPU-exclusive `emet jobs`. It requires clean frozen revisions and pins local
+Qwen3-VL-8B int4; one infrastructure retry is retained, wrong answers are not
+retried. Defaults are the four-question diagnostic, seed 0, four arms:
+
+- Historical #181: `dc106273f4f87cc2cb3a911aa6f99dac7adb2c25`.
+- Current harness unchanged evidence path.
+- Current harness pose selection.
+- Current harness context/detail quality selection.
+
+Next gates (not completed by unit tests or frozen-image answers):
+
+1. Audit q6/q12/q14/q56 live packets, policy activation/fallbacks and first
+   divergent actions. Separate failure to acquire, retain, select, deliver,
+   reason, or reconcile assessment/final answers.
+2. Historical/pose/quality on dev IDs 2,6,12,14,15,16,25,28,31,56,65,68;
+   seeds 0,1,2, with seed 0 first. Require positive total paired accuracy gain
+   over pose, gains in at least two seeds, no extra wrong commitments, and
+   accuracy at least the freshly rerun historical system.
+3. Reserve 8,17,21,29,38,49,79,88 (seeds 0,1) for confirmation of that winner;
+   these are not globally unseen. No promotion after a confirmation loss.
+4. Pair pose/candidate on RBY1 table S0, RoboCasa S1 and Molmo iTHOR index 0,
+   seeds 0,1, through shared agentic find/current-view grounding. No new unsafe
+   grounding or net task-success loss; zero-success controls are not acceptance.
+
+Median runtime must remain within 10% of pose. Report per-question paired
+wins/losses, seed variability, abstentions, wrong commitments, movement and
+infrastructure errors. Repeated seeds are not independent new questions.
+Keep live defaults unchanged; no Habitat OVMM/full sweep/hardware expansion.
+If quality loses, retain pose; if pose loses to history, diagnose the harness
+rather than continuing to tune image-selection thresholds.
