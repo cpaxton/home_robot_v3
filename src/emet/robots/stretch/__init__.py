@@ -26,7 +26,6 @@ from emet.robots.base import ArmChain, RobotBackend, RobotSpec
 if TYPE_CHECKING:
     from emet.controller.emotes.backend import EmoteBackend
     from emet.controller.zmq_client import StretchZmqClient
-from emet.robots.footprint import Footprint
 
 STRETCH_JOINT_NAMES = [
     "base_x",
@@ -81,7 +80,7 @@ class StretchBackend(RobotBackend):
             joint_names=STRETCH_JOINT_NAMES,
             camera_names=STRETCH_CAMERA_NAMES,
             urdf_path=MANIP_STRETCH_URDF,
-            footprint=Footprint(width=0.34, length=0.33, width_offset=0.0, length_offset=-0.1),
+            footprint=HelloStretchKinematics.get_footprint(),
             sim_uses_stretch_mujoco_zmq=True,
             arm_chain=STRETCH_ARM_CHAIN,
             # look_around pans: robots.stretch.mapping.look_around_head_sweep in configs/emet/default.yaml
