@@ -90,8 +90,11 @@ def test_simulator_query_reports_contacts_without_changing_state():
         server.check_base_poses([[0, 0, 0]] * 33)
 
 
-def test_read_only_query_result_crosses_command_protocol():
+@pytest.mark.parametrize("client_kind", ["generic", "stretch"])
+def test_read_only_query_result_crosses_command_protocol(client_kind):
     from emet.controller.generic_zmq_client import GenericZmqClient
+    from emet.controller.zmq_client import StretchZmqClient
+    client_type = GenericZmqClient if client_kind == "generic" else StretchZmqClient
     class Server(CommandRuntime):
         def __init__(self):
             self.initialize_commands()
@@ -108,9 +111,9 @@ def test_read_only_query_result_crosses_command_protocol():
         client._state = server.command_message({'sim_base_pose_query': True})
     client.send_message = send
     client.send_action = lambda payload, **kwargs: send_command(client, payload, **kwargs)
-    result = GenericZmqClient.check_base_poses(client, [[1, 0, 0], [0, 0, 0]])
+    result = client_type.check_base_poses(client, [[1, 0, 0], [0, 0, 0]])
     assert result['clear'] == [False, True]
     assert server.command_tracker.snapshot()[-1]['status'] == 'succeeded'
     client._state['sim_base_pose_query'] = False
     with pytest.raises(RuntimeError, match='does not advertise'):
-        GenericZmqClient.check_base_poses(client, [[0, 0, 0]])
+        client_type.check_base_poses(client, [[0, 0, 0]])
