@@ -1,11 +1,18 @@
 # Copyright (c) Chris Paxton 2026
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 import json
+from dataclasses import replace
 
 import numpy as np
 import pytest
 
-from emet.memory.view_coverage import CoverageGrid, CoverageObjective, depth_surface_cells, gaussian_coverage_objective
+from emet.memory.view_coverage import (
+    CoverageGrid,
+    CoverageObjective,
+    depth_surface_cells,
+    depth_surface_quality,
+    gaussian_coverage_objective,
+)
 from emet.memory.view_selection import SelectionConfig, ViewFrame, select_views
 
 
@@ -30,6 +37,88 @@ def test_hill_and_weighted_union():
     assert objective.weight(["near", "near"]) == 1
     assert 0 < objective.cell_weights["far"] < 0.02
     assert objective.marginal({"near", "far"}, {"near"}) == objective.cell_weights["far"]
+
+
+def test_quality_credits_best_observation_not_sum_and_rewards_upgrades():
+    objective = CoverageObjective("map", {"a": 1, "b": 1}, "depth")
+    frames = [
+        replace(frame(1, {"a"}), cell_quality={"a": 1.0}),
+        replace(frame(2, {"b"}), cell_quality={"b": 0.5}),
+        replace(frame(3, {"a"}), cell_quality={"a": 0.25}),
+    ]
+    result = select_views(
+        frames,
+        current_id="3",
+        coverage_objective=objective,
+        config=SelectionConfig(policy="quality_coverage", max_images=3),
+    )
+    assert [v.frame.view_id for v in result.views] == ["3", "1", "2"]
+    assert [v.features["quality_coverage"] for v in result.views] == [0.25, 0.75, 0.5]
+    assert result.metrics["weighted_coverage"]["selected_quality_weight"] == 1.5
+    assert objective.quality_marginal({"a": 0.5}, {"a": 1.0}) == 0
+
+
+def test_all_one_quality_reproduces_binary_weighted_coverage():
+    objective = CoverageObjective("map", {"a": 1, "b": 2, "c": 3}, "depth")
+    frames = [
+        replace(frame(i, cells), cell_quality=dict.fromkeys(cells, 1.0))
+        for i, cells in [(1, {"c"}), (2, {"a", "b"}), (3, {"a"})]
+    ]
+    kwargs = {"current_id": "3", "coverage_objective": objective}
+    a = select_views(frames, config=SelectionConfig(policy="weighted_coverage"), **kwargs)
+    b = select_views(frames, config=SelectionConfig(policy="quality_coverage"), **kwargs)
+    assert [v.frame.view_id for v in a.views] == [v.frame.view_id for v in b.views]
+
+
+def test_quality_metadata_does_not_change_legacy_pose_selection():
+    frames = [frame(i, {"a"}) for i in (1, 2, 3)]
+    plain = select_views(frames, current_id="3", config=SelectionConfig(policy="pose", max_images=2))
+    enriched = select_views(
+        [replace(f, cell_quality={"a": i / 3}) for i, f in enumerate(frames, 1)],
+        current_id="3",
+        config=SelectionConfig(policy="pose", max_images=2),
+    )
+    assert [v.frame.view_id for v in plain.views] == [v.frame.view_id for v in enriched.views]
+    assert [v.score for v in plain.views] == [v.score for v in enriched.views]
+
+
+def test_quality_input_validation():
+    with pytest.raises(ValueError, match="exactly"):
+        replace(frame(1, {"a"}), cell_quality={"b": 1.0})
+    with pytest.raises(ValueError, match="finite"):
+        replace(frame(1, {"a"}), cell_quality={"a": float("nan")})
+    with pytest.raises(ValueError, match="cell_quality"):
+        select_views(
+            [frame(3, {"a"})],
+            current_id="3",
+            coverage_objective=CoverageObjective("map", {"a": 1}, "depth"),
+            config=SelectionConfig(policy="quality_coverage"),
+        )
+
+
+def test_pixel_support_quality_preserves_context_and_saturates():
+    quality = depth_surface_quality(
+        np.ones((2, 2)),
+        np.eye(3),
+        np.eye(4),
+        grid=CoverageGrid(10),
+        max_depth_m=4,
+        pixel_stride=1,
+        reference_pixels=8,
+        context_credit=0.5,
+    )
+    assert quality == {"0,0": 0.75}
+    full = depth_surface_quality(
+        np.ones((2, 2)),
+        np.eye(3),
+        np.eye(4),
+        grid=CoverageGrid(10),
+        max_depth_m=4,
+        pixel_stride=1,
+        reference_pixels=2,
+        context_credit=0.5,
+    )
+    assert full == {"0,0": 1.0}
 
 
 def test_pins_current_then_values_local_novelty_not_total_cells():

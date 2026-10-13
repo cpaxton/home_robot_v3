@@ -17,11 +17,18 @@ from types import SimpleNamespace
 import numpy as np
 from PIL import Image, ImageDraw
 
-from emet.memory.view_coverage import CoverageGrid, depth_surface_cells, gaussian_coverage_objective
+from emet.memory.view_coverage import (
+    CoverageGrid,
+    depth_surface_cells,
+    depth_surface_quality,
+    gaussian_coverage_objective,
+)
 from emet.memory.view_selection import SelectionConfig, ViewFrame, select_views
 
 
-def build_case(source, out, sigma, depth_replay=None, max_images=4, max_depth_m=4.0):
+def build_case(
+    source, out, sigma, depth_replay=None, max_images=4, max_depth_m=4.0, quality_coverage=False, reference_pixels=64
+):
     out.mkdir(parents=True, exist_ok=False)
     decision = source / "eqa_decisions/iter_001"
     current_pixels = np.asarray(Image.open(decision / "image_1.png").convert("RGB"))
@@ -77,6 +84,7 @@ def build_case(source, out, sigma, depth_replay=None, max_images=4, max_depth_m=
         pose = np.eye(4)
         pose[:3, :3] = [[-np.sin(yaw), 0, np.cos(yaw)], [np.cos(yaw), 0, np.sin(yaw)], [0, 1, 0]]
         pose[:3, 3] = [x, y, 0]
+        quality = None
         if replay is not None:
             with np.load(depth_replay / replay_rows[i]["geometry"], allow_pickle=False) as geometry:
                 pose = geometry["camera_pose"]
@@ -89,7 +97,22 @@ def build_case(source, out, sigma, depth_replay=None, max_images=4, max_depth_m=
                     pixel_stride=4,
                 )
                 cells = cells & frozenset(keys)  # Same ROI for weighted/uniform coverage.
-        frames.append(ViewFrame(str(i), str(source), float(i), pixels[i], camera_pose=pose, visible_cells=cells))
+                if quality_coverage:
+                    quality = depth_surface_quality(
+                        geometry["depth"],
+                        geometry["intrinsics"],
+                        pose,
+                        grid=CoverageGrid(resolution),
+                        max_depth_m=max_depth_m,
+                        reference_pixels=reference_pixels,
+                        context_credit=0.5,
+                    )
+                    quality = {cell: quality[cell] for cell in cells}
+        frames.append(
+            ViewFrame(
+                str(i), str(source), float(i), pixels[i], camera_pose=pose, visible_cells=cells, cell_quality=quality
+            )
+        )
         path = out / f"frame-{i:04d}.png"
         Image.fromarray(pixels[i]).save(path)
         saved.append(
@@ -100,11 +123,17 @@ def build_case(source, out, sigma, depth_replay=None, max_images=4, max_depth_m=
                 "image_path": path.name,
                 "camera_pose": pose.tolist(),
                 "visible_cells": sorted(cells),
+                "cell_quality": quality,
             }
         )
     settings = {"max_images": max_images, "max_candidates": len(frames), "max_age_s": len(frames) + 1}
     selections = {}
-    for policy in ["recency", "pose", "coverage", "weighted_coverage"]:
+    policies = ["recency", "pose", "coverage", "weighted_coverage"]
+    if quality_coverage:
+        if replay is None:
+            raise ValueError("quality comparison requires measured depth")
+        policies = ["pose", "weighted_coverage", "quality_coverage"]
+    for policy in policies:
         selections[policy] = select_views(
             frames,
             current_id=str(current["frame_idx"]),
@@ -122,6 +151,9 @@ def build_case(source, out, sigma, depth_replay=None, max_images=4, max_depth_m=
         "target_xy": target.tolist(),
         "sigma_m": sigma,
         "coverage_max_depth_m": max_depth_m if replay else None,
+        "quality_proxy": {"reference_pixels": reference_pixels, "context_credit": 0.5, "pixel_stride": 4}
+        if quality_coverage
+        else None,
         "assumptions": "Sequence indices disable age pruning. Target is an unverified recorded hypothesis. "
         + (
             "RGB and depth co-rendered; actual optical poses. Replay differences recorded separately."
@@ -171,6 +203,17 @@ def main():
     parser.add_argument("--sigma-m", type=float, default=1.5)
     parser.add_argument("--max-images", type=int, choices=[1, 2, 3, 4], default=4)
     parser.add_argument("--coverage-max-depth-m", type=float, default=4.0)
+    parser.add_argument(
+        "--reference-pixels",
+        type=float,
+        default=64,
+        help="Pixel-support saturation scale; experimental, not calibrated confidence",
+    )
+    parser.add_argument(
+        "--quality-coverage",
+        action="store_true",
+        help="Compare old pose, binary weighted coverage and context/detail coverage",
+    )
     parser.add_argument("--infer", action="store_true")
     parser.add_argument("--repeats", type=int, default=3)
     args = parser.parse_args()
@@ -178,7 +221,19 @@ def main():
     if len(replays) != len(args.episode):
         parser.error("supply one --depth-replay per --episode")
     cases = [
-        (p.name, *build_case(p, args.output / p.name, args.sigma_m, replay, args.max_images, args.coverage_max_depth_m))
+        (
+            p.name,
+            *build_case(
+                p,
+                args.output / p.name,
+                args.sigma_m,
+                replay,
+                args.max_images,
+                args.coverage_max_depth_m,
+                args.quality_coverage,
+                args.reference_pixels,
+            ),
+        )
         for p, replay in zip(args.episode, replays, strict=True)
     ]
     if not args.infer:

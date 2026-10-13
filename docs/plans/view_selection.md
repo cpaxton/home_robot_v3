@@ -317,3 +317,68 @@ Artifacts: `/tmp/emet-depth-weighted-inference-n{2,4}-20261013/`,
 `/tmp/emet-depth-isolated-views-20261013.jsonl`. The render audit for q14 has
 worst RGB MAE 0.00372/255 and final MAE 0.00055/255. Figures named
 `comparison.jpg` show the exact selected evidence per policy.
+
+### Context/detail quality ablation
+
+`quality_coverage` is a separate experimental policy; binary weighted coverage
+and the old pose selector are retained unchanged. Its objective is
+`sum(w[c] * max(q(view,c) for view in selected) for c in cells)`.
+Repeated sightings do not add credit, but an observation with higher pixel
+support can improve a cell's best quality. `ViewFrame.cell_quality` is explicit,
+immutable, bounded to [0,1] and must describe exactly its visible cells. Setting
+every quality to one reproduces binary weighted coverage (unit tested).
+
+The tested proxy is `0.5 + 0.5 * min(pixel_support / 64, 1)` for visible cells.
+The context floor preserves credit for wide views rather than selecting only
+close-ups. Pixel support is estimated from valid depth samples times stride
+squared at a fixed RGB resolution. The floor, reference support and Gaussian
+width were not fitted to answer labels. This is **not** calibrated perceptual
+confidence: vertical surfaces share XY cells, repeated pixels within one cell
+can depict different heights, and sufficient pixel support does not establish
+semantic recognition. The generic selector accepts other quality estimators
+without changing the objective or the legacy policies.
+
+The offline audit's `--quality-coverage` compares old pose, binary weighted,
+quality weighted and current-only on identical paired RGB-D frames, prompts,
+model, seeds and a four-image maximum. This isolates selection; it is **not**
+an end-to-end comparison against old main, whose acquisition/retention differs.
+Job `20261013_160824_cf2553`; artifacts under
+`/tmp/emet-context-detail-inference-20261013/`. Live defaults remain unchanged.
+
+The first 36 calls completed: all three selectors answer q56 correctly 3/3;
+pose answers q12 correctly 3/3 while binary and quality coverage answer one
+3/3. On q14 pose abstains 3/3; both coverage policies choose the wrong TV
+relation 3/3. At the 64-pixel reference, 95–99% of weighted cells in key context
+views saturate, and the quality policy selects identical packets to binary
+coverage for q12/q14. This setting does not test a meaningful detail trade-off
+on those cases, and is not a positive result.
+
+One stronger, fixed 1024-pixel reference was queued based on that feature
+saturation, not a search over answer accuracy. The context floor stays 0.5;
+all other settings stay fixed. It changes q12 to frames 78/57/63/40 and q56 to
+78/50/59/55; q14 stays 47/2/22/40. Old pose and binary coverage remain controls.
+Job `20261013_161112_bbe6c8`, artifacts
+`/tmp/emet-context-detail1024-inference-20261013/`.
+
+The second 36 calls completed with the following answers (three repeated
+inferences per packet, not independent episodes):
+
+| Diagnostic | Old pose | Binary coverage | Quality coverage, 1024 pixels |
+| --- | --- | --- | --- |
+| q56 bookshelf room | Correct 3/3 | Correct 3/3 | Correct 3/3 |
+| q12 bedside-table count | Correct 3/3 | Incorrect 3/3 | Correct 3/3 |
+| q14 fan location | Abstain 3/3 | Incorrect 3/3 | Incorrect 3/3 |
+
+Current-only answers q12 incorrectly and abstains on q56/q14 in all repeats.
+Manual inspection of the comparison sheets confirms the new q12 packet
+contains both a wide bedroom view and a closer supporting view showing the
+tables; q56 retains bookshelf/curtain room context. q14's packet is unchanged.
+The quality objective recovers the count diagnostic but does not outperform
+the old selector overall: its wrong fan answer is worse than abstention.
+This supports testing context plus detail, not declaring performance restored.
+Do not tune further against these three answer labels. Freeze this candidate
+for additional unseen frozen episodes before any live default change.
+
+Validation: 80 focused selector/history/captured-view/assessment tests pass,
+including legacy pose invariance when quality metadata is supplied. Both
+experimental policies remain opt-in; main and live defaults are unchanged.

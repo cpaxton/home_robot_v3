@@ -63,6 +63,13 @@ def depth_surface_cells(
     Stride and depth range are explicit experimental knobs, not confidence
     thresholds. The world transform must already use the map's planar XY axes.
     """
+    world_xy = _depth_surface_world_xy(
+        depth, intrinsics, camera_to_world, max_depth_m=max_depth_m, pixel_stride=pixel_stride
+    )
+    return grid.observed_cells(world_xy)
+
+
+def _depth_surface_world_xy(depth, intrinsics, camera_to_world, *, max_depth_m, pixel_stride):
     depth = np.asarray(depth, dtype=float)
     k = np.asarray(intrinsics, dtype=float)
     pose = np.asarray(camera_to_world, dtype=float)
@@ -87,7 +94,43 @@ def depth_surface_cells(
     rays = np.stack([xx.ravel(), yy.ravel(), np.ones(z.size)], axis=1)[valid] @ np.linalg.inv(k).T
     points = rays * z[valid, None]
     world = points @ pose[:3, :3].T + pose[:3, 3]
-    return grid.observed_cells(world[:, :2])
+    return world[:, :2]
+
+
+def depth_surface_quality(
+    depth,
+    intrinsics,
+    camera_to_world,
+    *,
+    grid: CoverageGrid,
+    max_depth_m: float,
+    pixel_stride: int = 4,
+    reference_pixels: float = 64,
+    context_credit: float = 0.5,
+) -> dict[str, float]:
+    """Pixel-support proxy, NOT calibrated perceptual confidence.
+
+    Quality = context_credit + (1-context_credit)*min(pixel_support/ref, 1).
+    Nonzero context credit preserves value for wider views; max quality across
+    views prevents double credit. Stride-squared scaling approximates full-image
+    support and assumes the same RGB resolution for all candidates. XY collapses
+    height, so vertical surfaces can have large support; this is an ablation.
+    """
+    if not math.isfinite(reference_pixels) or reference_pixels <= 0:
+        raise ValueError("reference_pixels must be finite and positive")
+    if not math.isfinite(context_credit) or not 0 <= context_credit <= 1:
+        raise ValueError("context_credit must be in [0, 1]")
+    xy = _depth_surface_world_xy(depth, intrinsics, camera_to_world, max_depth_m=max_depth_m, pixel_stride=pixel_stride)
+    indices = np.floor((xy - grid.origin_xy) / grid.resolution_m)
+    if np.any(np.abs(indices) >= 2**53):
+        raise ValueError("cell indices exceed exact integer representation")
+    unique, counts = np.unique(indices, axis=0, return_counts=True)
+    return {
+        f"{int(x)},{int(y)}": float(
+            context_credit + (1 - context_credit) * min(1, n * pixel_stride**2 / reference_pixels)
+        )
+        for (x, y), n in zip(unique, counts, strict=True)
+    }
 
 
 @dataclass(frozen=True)
@@ -112,6 +155,11 @@ class CoverageObjective:
 
     def marginal(self, visible, covered) -> float:
         return self.weight(set(visible) - set(covered))
+
+    def quality_marginal(self, quality, best) -> float:
+        return math.fsum(
+            self.cell_weights.get(cell, 0) * max(0, q - best.get(cell, 0)) for cell, q in sorted(quality.items())
+        )
 
 
 def gaussian_coverage_objective(

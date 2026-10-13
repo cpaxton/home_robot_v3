@@ -27,6 +27,8 @@ def compare_manifest(path: Path, *, max_images: int = 4) -> dict:
     policies = ["recency", "pose", "embedding", "coverage", "hybrid"]
     if objective is not None:
         policies.append("weighted_coverage")
+        if all(f.cell_quality is not None for f in frames):
+            policies.append("quality_coverage")
     return {
         policy: select_views(
             frames,
