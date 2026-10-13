@@ -90,3 +90,56 @@ def test_real_preturn_capture_is_pinned_but_stale_one_is_not():
     ex.agent.robot.pre_turn_observation.image_timing["head_cam_left"]["timestamp_ns"] = 6000000000
     result = select_assessment_history(ex, rgb)
     assert all(v.role != "pre_turn" for v in result.views)
+
+
+def quality_executor():
+    ex = executor()
+    ex.agent.parameters["eqa"]["view_selection"]["policy"] = "quality_coverage"
+    ex._inspection_target_by_obs = {7: np.array([0.0, 0.0, 1.0])}
+    for frame in ex.agent.voxel_map.observations:
+        frame.depth = np.ones((4, 4))
+        frame.camera_K = np.eye(3)
+    return ex
+
+
+def test_live_quality_uses_registered_depth_and_caches_per_retained_frame():
+    ex = quality_executor()
+    rgb = ex.agent.voxel_map.observations[-1].rgb
+    result = select_assessment_history(ex, rgb, target_obs_id=7)
+    assert result.config.policy == "quality_coverage"
+    assert result.views[0].frame.cell_quality
+    cache = dict(ex._view_surface_cache)
+    select_assessment_history(ex, rgb, target_obs_id=7)
+    assert all(ex._view_surface_cache[k] is v for k, v in cache.items())
+
+
+def test_quality_missing_geometry_falls_back_to_pose_explicitly():
+    ex = quality_executor()
+    rgb = ex.agent.voxel_map.observations[-1].rgb
+    ex._inspection_target_by_obs[7] = None
+    assert select_assessment_history(ex, rgb, target_obs_id=7).config.policy == "pose"
+    assert ex._append_trace.call_args_list[-2].args[0]["reason"] == "missing_target_geometry"
+    ex._inspection_target_by_obs[7] = np.zeros(3)
+    ex.agent.voxel_map.observations[-1].depth = np.ones((2, 2))
+    assert select_assessment_history(ex, rgb, target_obs_id=7).config.policy == "pose"
+    assert ex._append_trace.call_args_list[-2].args[0]["reason"] == "missing_or_unregistered_depth"
+
+
+def test_history_reset_replaces_world_scope_and_surface_cache():
+    ex = quality_executor()
+    result = select_assessment_history(ex, ex.agent.voxel_map.observations[-1].rgb, target_obs_id=7)
+    old_scope = result.views[0].frame.scope_id
+    replacement = quality_executor()
+    ex.agent.voxel_map.observations = replacement.agent.voxel_map.observations
+    result = select_assessment_history(ex, ex.agent.voxel_map.observations[-1].rgb, target_obs_id=7)
+    assert result.views[0].frame.scope_id != old_scope
+    assert ex._view_surface_cache["1"][0] is replacement.agent.voxel_map.observations[0]
+
+
+def test_all_invalid_depth_does_not_fabricate_coverage():
+    ex = quality_executor()
+    for frame in ex.agent.voxel_map.observations:
+        frame.depth[:] = np.nan
+    result = select_assessment_history(ex, ex.agent.voxel_map.observations[-1].rgb, target_obs_id=7)
+    assert result.config.policy == "pose"
+    assert ex._append_trace.call_args_list[-2].args[0]["reason"] == "no_observed_target_local_cells"

@@ -487,6 +487,13 @@ def _tool_investigate(
     # Only a successful capture advance counts as a new station view.
     if cap_adv:
         station_oid = int(cap["obs_id"])
+        # A captured view's XYZ is a camera position, not the investigated
+        # object's location. Preserve the actual hypothesis for view selection.
+        if not hasattr(self, "_inspection_target_by_obs"):
+            self._inspection_target_by_obs = {}
+        self._inspection_target_by_obs[station_oid] = self._hypothesis_nav_anchor_xyz(oid)
+        while len(self._inspection_target_by_obs) > 32:
+            del self._inspection_target_by_obs[next(iter(self._inspection_target_by_obs))]
         if not hasattr(self, "_inspection_context_by_obs"):
             self._inspection_context_by_obs = {}
         if context_view is not None:
