@@ -135,9 +135,23 @@ def test_release_verification_requires_correct_height_and_settled_rotation(nativ
     if fault == 'spinning':
         joint = adapter.model.body('object1').jntadr[0]
         adapter.data.qvel[adapter.model.jnt_dofadr[joint]+3] = .2
+    executor = adapter._executor('object1')
     clock = [0.]
     monkeypatch.setattr(module.time, 'monotonic', lambda: clock[0])
     monkeypatch.setattr(module.time, 'sleep', lambda dt: clock.__setitem__(0, clock[0]+dt))
     monkeypatch.setattr(adapter, 'synchronize', lambda data: setattr(data, 'time', data.time+.05))
-    plan = SimpleNamespace(object_body='object1', support_body='table', goal=goal)
+    plan = SimpleNamespace(object_body='object1', support_body='table', goal=goal, executor=executor)
     assert adapter._verify(plan, released=True, seconds=1.) is expected
+
+
+def test_pinch_calibration_uses_pad_centers_and_preserves_measured_state(native):
+    _, data, context, call = native
+    adapter = context['_native_tamp_adapter']
+    before = adapter.data.qpos.copy()
+    offset = adapter._pinch_center_offset()
+    assert np.isfinite(offset).all() and np.linalg.norm(offset) < .05
+    np.testing.assert_array_equal(adapter.data.qpos, before)
+    ref = make_plan(call)
+    plan = adapter.plans[ref]
+    point, rotation = plan.executor.grasp_targets[1]
+    np.testing.assert_allclose(point + rotation @ offset, data.body(plan.object_body).xpos, atol=.001)

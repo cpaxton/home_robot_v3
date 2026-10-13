@@ -138,7 +138,49 @@ class NativeTableAdapter:
             synchronize=self.synchronize, command_joints=command,
             coupled_groups=(tuple(f'joint_arm_l{i}' for i in range(4)),),
             gripper_open_configuration=chain.gripper_open_configuration,
-            base_body='base_link', input_mode='privileged', endpoint_settle_s=.3, event=lambda **row: self.events.append(row))
+            base_body='base_link', input_mode='privileged', endpoint_settle_s=.3,
+            use_sim_time=True, position_tolerance_m=.003,
+            event=lambda **row: self.events.append({"sim_time": float(self.data.time), **row}))
+
+    def _pinch_center_offset(self):
+        """Nominal opposing contact midpoint in the EE frame, from robot geometry.
+
+        The named grasp frame is ahead of the pads. Centering an object on that
+        frame (with an extra height offset) pinches its upper edge and torques
+        the compliant fingertips during lift. This calibration uses robot
+        geometry only; it is not a live contact sensor or an object pose write.
+        """
+        scratch = mujoco.MjData(self.model)
+        mujoco.mj_copyData(scratch, self.model, self.data)
+        for name in ('joint_gripper_slide', 'joint_gripper_finger_left_open',
+                     'joint_gripper_finger_right_open', 'rubber_left_x',
+                     'rubber_left_y', 'rubber_right_x', 'rubber_right_y'):
+            scratch.qpos[self.model.joint(name).qposadr[0]] = 0.
+        mujoco.mj_kinematics(self.model, scratch)
+        pads_by_side = []
+        centers = []
+        for name in ('rubber_tip_left', 'rubber_tip_right'):
+            body = self.model.body(name)
+            pads = [g for g in range(int(body.geomadr[0]), int(body.geomadr[0] + body.geomnum[0]))
+                    if self.model.geom_contype[g] or self.model.geom_conaffinity[g]]
+            if len(pads) != 1:
+                raise ValueError('native_model_mismatch')
+            pads_by_side.append(pads[0])
+            centers.append(scratch.geom_xpos[pads[0]])
+        # The pads are angled boxes: first contact is on their inward support
+        # edge, not at the box center. Center those opposing contact surfaces.
+        axis = centers[1] - centers[0]
+        axis /= np.linalg.norm(axis)
+        contacts = []
+        for g, direction in zip(pads_by_side, (axis, -axis), strict=True):
+            if self.model.geom_type[g] != mujoco.mjtGeom.mjGEOM_BOX:
+                raise ValueError('native_model_mismatch')
+            rotation = scratch.geom_xmat[g].reshape(3, 3)
+            local = rotation.T @ direction
+            vertex = np.where(np.abs(local) > .01, np.sign(local), 0.) * self.model.geom_size[g]
+            contacts.append(scratch.geom_xpos[g] + rotation @ vertex)
+        ee = scratch.body(STRETCH_ARM_CHAIN.ee_body)
+        return ee.xmat.reshape(3, 3).T @ (np.mean(contacts, axis=0) - ee.xpos)
 
     def _place_targets(self, executor, obj, goal, rotation):
         # Compute the measured/predicted payload offset, not a category-specific center assumption.
@@ -181,6 +223,7 @@ class NativeTableAdapter:
                     for name in ('wrist_yaw', 'wrist_pitch', 'wrist_roll'):
                         home.qpos[self.model.joint('joint_'+name).qposadr[0]] = self.model.key_ctrl[0, self.model.actuator(name).id]
                     mujoco.mj_kinematics(self.model, home)
+                    pinch_offset = self._pinch_center_offset()
                     frames = [home.body(executor.ee_body).xmat.reshape(3, 3).copy(), rotation]
                     error, failed_phase = 'no_plan_within_budget', 'grasp'
                     accepted = False
@@ -191,8 +234,9 @@ class NativeTableAdapter:
                             mujoco.mj_kinematics(self.model, self.data)
                             c, sn = np.cos(yaw), np.sin(yaw)
                             rotation = np.array([[c, -sn, 0], [sn, c, 0], [0, 0, 1]]) @ frame
-                            executor.grasp_targets = [(point + delta, rotation) for delta in
-                                                      ([0, .08, .07], [0, 0, .03], [0, 0, .20])]
+                            grasp = point - rotation @ pinch_offset
+                            executor.grasp_targets = [(grasp + delta, rotation) for delta in
+                                                      ([0, .08, .04], [0, 0, 0], [0, 0, .17])]
                             _, error = executor.plan_gripper_open()
                             if error:
                                 return self._failure('plan_pick_place', error, phase='gripper_open')
@@ -275,10 +319,11 @@ class NativeTableAdapter:
                 return self._failure('plan_pick_place', str(exc))
 
     def _verify(self, plan, *, released, seconds):
+        self.synchronize(self.data)
         start = None
-        deadline = time.monotonic() + 12
+        active = plan.executor._settling_window(12.)
         reference = None
-        while time.monotonic() < deadline:
+        while active():
             self.synchronize(self.data)
             scratch = mujoco.MjData(self.model)
             mujoco.mj_copyData(scratch, self.model, self.data)

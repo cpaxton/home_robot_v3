@@ -93,3 +93,34 @@ with `--manip-mode physical --tamp-inputs privileged --physical-audit PATH
 --native-debug-output PATH`. Launch live runs through `emet jobs run --need-mib 3000`
 and retain the exact source checkout until the job finishes. No LLM is used in
 these deterministic tool-routing tests.
+
+## Execution follow-up: contact calibration and simulator timing
+
+Controlled CPU replay isolated two effects. R6's loaded wrist tracked about
+0.023 rad short after settling, versus about 0.005 rad without the payload.
+The live simulator advanced only 7.32 physics seconds in a 46.4-second run;
+wall-only motion deadlines therefore did not allow the intended settling time.
+The native adapter now uses physics time for settling, with an independent
+30-second wall watchdog. Hardware/default executors retain wall-clock timing.
+
+The grasp also targeted the named EE frame 3 cm above the object center. That
+frame is not the contact point. Even centering the tilted pad boxes leaves their
+inward contact edges about 17 mm off-center, generating payload rotation under
+load. Native grasp calibration now derives the opposing support edges from the
+robot's collision geometry and centers those on the payload. Grasp IK uses a
+3 mm positional target tolerance. Model gains, gripper preset, joint arrival
+limits, and payload-retention limits are unchanged.
+
+Managed CPU diagnostics `20261013_131331_d22d6e` and
+`20261013_131416_eaddd3` completed a box transfer with the calibrated grasp.
+The second is an ablation with feedback correction disabled; consequently the
+experimental feedback correction was removed. These are in-process diagnostics,
+not live ZMQ acceptance. Live retesting and both-shape repeats remain required.
+
+Reproducible CPU regression (public JSON tool registry, in-process actuators):
+`scripts/eval_native_table_contact.py --output PATH --object both --trials 3`.
+Use `emet jobs run --no-gpu-exclusive --cpu-safe`. `--cluttered` preserves the
+original object arrangement. The separated fixture only changes initial object
+positions before physics; execution uses actuator commands exclusively. JSON
+artifacts include tool responses, execution events, commands, and final measured
+state. This does not test IPC, cameras, an LLM, navigation, or observed perception.

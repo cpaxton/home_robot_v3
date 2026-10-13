@@ -238,3 +238,10 @@ require inspection of the held object and current scene before recovery; a faile
 refresh never causes release. This distinguishes a state-stream failure from
 changed obstacle geometry. A bounded wait is a recovery mechanism, not evidence
 that the original live failure was caused by receiver starvation.
+
+Native Stretch grasp calibration uses the opposing finger-pad contact edges from
+the bound robot model, rather than treating the named EE frame as the pinch point.
+This requires no additional contact sensor. Native debug execution uses measured
+simulation time for settling, bounded by a 30-second wall watchdog per wait;
+ordinary hardware executors keep wall-clock timing. Simulator snapshots and final
+contact checks remain explicitly privileged debug evidence.
