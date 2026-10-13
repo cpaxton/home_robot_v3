@@ -810,25 +810,6 @@ class MujocoZmqServer(BaseZmqServer):
             return model, data
         return None, None
 
-    def _patch_emet_session_body_pos(
-        self,
-        body: str,
-        pos: list[float],
-        quat: list[float] | None = None,
-    ) -> None:
-        """Update one body entry in cached session GT (Stretch sim runs MuJoCo in a subprocess)."""
-        if self._emet_session is None:
-            return
-        placements = self._emet_session.get("sim_object_placements")
-        if not isinstance(placements, dict) or body not in placements:
-            return
-        entry = placements[body]
-        if not isinstance(entry, dict):
-            return
-        entry["pos"] = [float(x) for x in pos[:3]]
-        if quat is not None:
-            entry["quat"] = [float(x) for x in quat[:4]]
-
     def _is_molmospaces_session(self) -> bool:
         env = self._environment_descriptor
         if isinstance(env, dict) and env.get("kind") == "molmospaces":
@@ -920,6 +901,12 @@ class MujocoZmqServer(BaseZmqServer):
                 attach_sim_object_placements_to_session(session, objects_info=self.objects_info,
                     environment_kind=env.get("kind"), model=model, data=scratch, robot_root_name="base_link")
                 self._articulation_geometry_groups = groups
+        placements = session.get("sim_object_placements")
+        if isinstance(placements, dict):
+            from emet.simulation.sim_object_placements import DynamicPlacementTracker
+            if not hasattr(self, "_dynamic_placement_tracker"):
+                self._dynamic_placement_tracker = DynamicPlacementTracker()
+            self._dynamic_placement_tracker.refresh(placements, model, scratch)
         session["sim_articulations"] = groups
         caps["sim_articulation_state"] = True
 
@@ -1033,9 +1020,9 @@ class MujocoZmqServer(BaseZmqServer):
                     wait=True,
                     timeout=2.0,
                 )
-                if ok:
-                    self._patch_emet_session_body_pos(body, pos, quat)
-                else:
+                # Publication reconstructs geometry from measured scene_qpos.
+                # Never substitute a requested body origin for an AABB center.
+                if not ok:
                     logger.warning("sim_set_body_pose failed for body %r", body)
 
         if EMET_ACTION_SIM_SET_JOINT_QPOS_KEY in action:

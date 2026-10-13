@@ -52,8 +52,18 @@ def task_contract(ep):
 def certificate_error(fixture, *, scene_fingerprint, execution_mode, clearance_m, start):
     saved = dict(fixture)
     expected = saved.pop('sha256', None)
-    if saved.get('schema') != 1 or expected != fingerprint(saved) or not saved.get('reference_success'):
+    if saved.get('schema') != 2 or expected != fingerprint(saved) or not saved.get('reference_success'):
         return 'invalid_fixture_certificate'
+    for row in saved.get('clutter', []):
+        for field, size in (('pos', 3), ('body_pos', 3), ('body_quat', 4)):
+            try:
+                value = np.asarray(row.get(field), dtype=float)
+            except (TypeError, ValueError):
+                return 'invalid_fixture_body_pose'
+            if value.shape != (size,) or not np.isfinite(value).all():
+                return 'invalid_fixture_body_pose'
+            if field == 'body_quat' and abs(np.linalg.norm(value) - 1) > 1e-6:
+                return 'invalid_fixture_body_pose'
     if saved.get('scene_fingerprint') != scene_fingerprint:
         return 'fixture_scene_mismatch'
     if saved.get('execution_mode') != execution_mode:
@@ -222,7 +232,7 @@ def _construct_layout(ep, placements, categories, start, *, bin_body, candidates
                 rejected.append({'landmark': landmark, 'radius_m': radius, 'reason': proof['reason']})
                 continue
             fixture = {
-                'schema': 1, 'robot_start_xy': np.asarray(start).tolist(),
+                'schema': 2, 'robot_start_xy': np.asarray(start).tolist(),
                 'landmark_body': landmark, 'bin_body': bin_body,
                 'goal_xy': None if goal is None else goal.tolist(), 'clearance_m': clearance_m,
                 'clutter': [{'body': b, 'cat': categories[b]['cat'], 'pos': updates[b],

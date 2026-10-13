@@ -19,7 +19,7 @@ and explicit task admission). Historical evidence below remains unchanged.
 | #201 Articulation and admission | main | Merged; Stretch and kitchen-2 open-close passed |
 | #195 Native input contracts | main | Merged as `b7a1c22d`; native adapters still unavailable |
 | #204 Grasp sequence admission | main | Merged as `631cfdfd`; assisted RBY1 passed, Sourccey remains unresolved |
-| #203 Dynamic placement metadata | main | Reviewed; oracle fixture/verification compatibility gate remains open |
+| #203 Dynamic placement metadata and oracle coordinates | main | 2/2 fresh Stretch oracle admissions and replays pass; includes body-origin and independent-instance fixes |
 | #205 Stretch base endpoint | main | Merged as `9097d41f`; full public Stretch teleport-oracle replay passed |
 
 #195's post-integration motion/TAMP/configuration suite ran 372 tests: 369 passed,
