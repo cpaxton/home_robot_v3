@@ -170,21 +170,46 @@ class NativeTableAdapter:
                 rotation = self.data.body(executor.ee_body).xmat.reshape(3, 3).copy()
                 surfaces = np.asarray(placements[support]['support_surfaces'])
                 half = np.ptp(placements[obj]['bounds'], axis=0)/2
-                executor.grasp_targets = [(point + delta, rotation) for delta in
-                                          ([0, .08, .07], [0, 0, .03], [0, 0, .20])]
                 before = self.data.qpos.copy()
                 try:
-                    _, error = executor.plan_gripper_open()
-                    if error:
-                        return self._failure('plan_pick_place', error)
-                    paths = []
-                    for phase, (target, rot) in zip(('pregrasp', 'grasp', 'lift'), executor.grasp_targets, strict=True):
-                        if phase == 'lift':
-                            executor.collision.set_payload(self.model, self.data, obj, executor.ee_body)
-                        path, error = executor.plan_pose(target, rot)
-                        if error:
-                            return self._failure('plan_pick_place', error)
-                        paths.append(path)
+                    # The navigation wrist frame is not necessarily a valid grasp frame.
+                    # Search bounded wrist yaw alternatives around measured and home frames.
+                    home = mujoco.MjData(self.model)
+                    mujoco.mj_copyData(home, self.model, self.data)
+                    for name in ('wrist_yaw', 'wrist_pitch', 'wrist_roll'):
+                        home.qpos[self.model.joint('joint_'+name).qposadr[0]] = self.model.key_ctrl[0, self.model.actuator(name).id]
+                    mujoco.mj_kinematics(self.model, home)
+                    frames = [home.body(executor.ee_body).xmat.reshape(3, 3).copy(), rotation]
+                    error, failed_phase = 'no_plan_within_budget', 'grasp'
+                    accepted = False
+                    for frame in frames:
+                        for yaw in (0., -.35, .35, -.7, .7, -1.57, 1.57):
+                            self.data.qpos[:] = before
+                            executor.collision.set_payload(self.model, self.data, None)
+                            mujoco.mj_kinematics(self.model, self.data)
+                            c, sn = np.cos(yaw), np.sin(yaw)
+                            rotation = np.array([[c, -sn, 0], [sn, c, 0], [0, 0, 1]]) @ frame
+                            executor.grasp_targets = [(point + delta, rotation) for delta in
+                                                      ([0, .08, .07], [0, 0, .03], [0, 0, .20])]
+                            _, error = executor.plan_gripper_open()
+                            if error:
+                                return self._failure('plan_pick_place', error, phase='gripper_open')
+                            paths = []
+                            for phase, (target, rot) in zip(('pregrasp', 'grasp', 'lift'), executor.grasp_targets, strict=True):
+                                if phase == 'lift':
+                                    executor.collision.set_payload(self.model, self.data, obj, executor.ee_body)
+                                path, error = executor.plan_pose(target, rot)
+                                if error:
+                                    failed_phase = phase
+                                    break
+                                paths.append(path)
+                            if len(paths) == 3:
+                                accepted = True
+                                break
+                        if accepted:
+                            break
+                    if not accepted:
+                        return self._failure('plan_pick_place', error, phase=failed_phase)
                     executor.grasp_paths = paths
                     lifted = self.data.qpos.copy()
                     # Bounded alternatives on the actual support, with full arm/payload path checks.
