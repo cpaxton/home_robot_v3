@@ -65,9 +65,9 @@ class ViewFrame:
                 pose.shape != (4, 4)
                 or not np.allclose(pose[3], [0, 0, 0, 1])
                 or not np.allclose(pose[:3, :3].T @ pose[:3, :3], np.eye(3), atol=1e-4)
-                or not np.isclose(np.linalg.det(pose[:3, :3]), 1, atol=1e-4)
+                or not np.isclose(abs(np.linalg.det(pose[:3, :3])), 1, atol=1e-4)
             ):
-                raise ValueError("camera_pose must be a rigid world-from-optical transform")
+                raise ValueError("camera_pose must be an orthonormal world-from-optical transform")
         if self.embedding is not None:
             if (
                 self.embedding.ndim != 1
@@ -221,6 +221,11 @@ def select_views(
             eligible.append(frame)
     if pre_turn_id in excluded:
         raise ValueError(f"invalid pre-turn view: {excluded[pre_turn_id]}")
+    # World axes may be left-handed (e.g. Habitat X,Z,Y voxel coordinates).
+    # Distances and dot products remain valid, but one scope must not mix bases.
+    handedness = {int(np.sign(np.linalg.det(f.camera_pose[:3, :3]))) for f in eligible if f.camera_pose is not None}
+    if len(handedness) > 1:
+        raise ValueError("camera poses in one scope must share world-basis handedness")
     pins = [current] + ([by_id[pre_turn_id]] if pre_turn_id and pre_turn_id != current_id else [])
     pool = pins + sorted(
         (f for f in eligible if f.view_id not in {p.view_id for p in pins}),

@@ -32,7 +32,9 @@ audit = selection.to_dict()          # JSON-safe; does not embed image bytes
 - Required `scope_id` identifies one episode/world/map frame; timestamps must
   use the same acquisition clock. Reject other scopes and future/old frames.
   A caller-specified invalid pre-turn frame raises rather than silently lying.
-- Pose is a rigid world-from-optical transform, +Z forward, translation in meters.
+- Pose is an orthonormal world-from-optical transform, +Z forward, translation in meters.
+  Reflected world bases such as Habitat's X,Z,Y map axes are supported; one scope
+  must use consistent handedness. No projection or navigation transform is changed.
   Missing pose is unknown, not zero displacement. Roll alone adds no pose novelty.
 - Embeddings require `embedding_space` naming encoder/checkpoint/preprocessing;
   mismatched dimensions/spaces are rejected. Supply cached CLIP/SigLIP features;

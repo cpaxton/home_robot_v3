@@ -62,6 +62,20 @@ def test_selection_disabled_by_default(monkeypatch):
     assert select_assessment_history(ex, ex.agent.voxel_map.observations[-1].rgb) is None
 
 
+def test_habitat_voxel_axis_permutation_is_valid_selection_geometry():
+    from emet.habitat.coordinates import habitat_observation_camera_pose
+
+    ex = executor()
+    for i, frame in enumerate(ex.agent.voxel_map.observations):
+        body = np.eye(4)
+        body[0, 3] = i
+        frame.camera_pose = habitat_observation_camera_pose(body, floor_y=0, sensor_height=1.5)
+        assert np.linalg.det(frame.camera_pose[:3, :3]) < 0
+    result = select_assessment_history(ex, ex.agent.voxel_map.observations[-1].rgb)
+    assert len(result.views) == 4
+    assert result.metrics["mean_translation_m"] > 0
+
+
 def test_real_preturn_capture_is_pinned_but_stale_one_is_not():
     ex = executor()
     ex.agent.robot.pre_turn_observation = SimpleNamespace(
