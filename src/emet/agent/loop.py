@@ -1394,7 +1394,7 @@ def run_agent_with_robot(
                     if debug_llm or verbose_tools:
                         print(
                             colored("[→ LLM follow-up user message]", "magenta"),
-                            followup,
+                            current_input,
                             sep="\n",
                             flush=True,
                         )
