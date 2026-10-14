@@ -216,3 +216,20 @@ payload/obstacle geometry into the same contracts. Its acceptance starts from
 exploration without privileged task handles. Hardware validation must replace
 simulator contact/pose checks with supported, calibrated sensor evidence;
 privileged contacts remain available only for explicit debugging and evaluation.
+
+### Observed discovery hook implementation (October 14)
+
+The read-only provider contract is now connected to `scene_tasks` and the Python
+`run_agent_with_robot(observed_tamp_provider=...)` entrypoint. It validates tracked
+object/support evidence and publishes discovery-only proposals. CHAT stops after
+these proposals rather than attempting unavailable manipulation. Tests cover the
+real tool registry and real CHAT loop with an injected provider, including no
+simulator metadata reads, stale/future/privileged rejection, and no execution
+from discovery-only results. Two-cycle orchestration and plan-only requests also
+have controlled-backend CHAT-loop tests.
+
+This completes the provider/agent boundary, not Gate 3: no default memory/tracker
+provider is installed and no new observed live trial has passed. Next connect a
+real tracker and observed support estimator, then test discovery from camera
+observations before enabling any observed planning. See the
+[API contract](../api/tamp.md#observed-discovery-integration-hook).

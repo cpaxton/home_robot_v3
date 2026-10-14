@@ -16,7 +16,13 @@ def tamp_followup(user_goal: str, results: list[str]) -> str | None:
     for line in results:
         prefix, sep, body = line.partition('] ')
         name = prefix.removeprefix('[')
-        if not sep or name not in TAMP_TOOLS or not ToolOutcome.coerce(name, body).ok:
+        if not sep or name not in TAMP_TOOLS:
+            return None
+        outcome = ToolOutcome.coerce(name, body)
+        if not outcome.ok:
+            return None
+        if outcome.payload.get('data', {}).get('discovery_only') is True:
+            # A proposal provider cannot authorize a motion-capable next step.
             return None
     return (
         f'Original user request:\n{user_goal}\n\n[Tool results]\n' + '\n'.join(results)

@@ -815,6 +815,12 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
     @json_tool
     def scene_tasks(object_filter: str = "", robot: str = "") -> dict:
         """Enumerate pick-and-place options from the current scene as a compact digest."""
+        if _tamp_manip_mode().strip().lower() == "physical":
+            executor = context.get("executor")
+            inputs = str(getattr(executor, "_tamp_inputs", None) or context.get("tamp_inputs") or "observed")
+            if inputs == "observed":
+                from emet.controller.task.tamp.observed_discovery import discover_observed_tasks
+                return discover_observed_tasks(context.get("observed_tamp_provider"), object_filter, robot)
         native_error = _native_input_gate()
         if native_error:
             return response("scene_tasks", code=native_error)
@@ -909,8 +915,8 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         Tool(
             name="scene_tasks",
             description=(
-                "Enumerate candidate pick-and-place tasks from the current sim scene: pickable objects "
-                "with grasp assets, receptacle sites, and proposed tasks (object -> start_recep -> goal_recep)."
+                "Enumerate candidate pick-and-place tasks from the configured input provider. "
+                "Observed discovery_only proposals do not enable planning or execution."
             ),
             parameters={
                 "type": "object",

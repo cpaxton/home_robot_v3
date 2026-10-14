@@ -366,3 +366,36 @@ The subsequent [held-out and actual CHAT gate](../experiments/tamp_native_heldou
 records placement failures and bounded session recovery. See
 [run-agent TAMP sessions](../AGENT_RUN.md#bounded-multi-step-tamp-sessions) for the
 round budget and explicit camera-free diagnostic mode.
+
+## Observed discovery integration hook
+
+Python embedders of `run_agent_with_robot` can pass `observed_tamp_provider`, an
+`ObservedTaskProvider` from
+`emet.controller.task.tamp.observed_discovery`. The tool context uses the same key.
+The provider declares `input_mode = "observed"` and implements `observe_tasks()`
+to return one coherent tuple of `ObservedTaskCandidate` values. Each candidate
+contains semantic object/receptacle names and independently observed object and
+support `ObjectPoseEvidence`. Labels alone are insufficient to establish a support.
+
+Both poses must use `rgbd_tracking` or `stereo_tracking`, preserve their original
+observation receive times, and be at most two seconds old. Discovery does not renew
+those times. Unknown/occluded entities must be omitted; empty observations return
+an empty task list. Stale, future-dated, or privileged evidence rejects the entire
+snapshot, including evidence excluded by the caller's category filter. Receive
+freshness alone is not a claim of synchronized sensor capture or calibrated poses.
+
+`scene_tasks` returns the existing versioned JSON envelope, with
+`data.inputs = "observed"`, `discovery_only = true`, `planning_available = false`,
+and `execution_available = false`. Task entries contain opaque per-discovery
+handles, semantic names, world positions, sources and observation ages. These are
+proposals, not executable plan handles or certified affordances. The CHAT loop
+summarizes this result and stops the turn instead of continuing into manipulation.
+Native planning/execution gates remain unchanged and still reject observed mode.
+
+This is an integration hook, **not a default perception provider**. The CLI does
+not yet construct one from DynaMem or GraphEQA. Without explicit injection,
+observed discovery continues to return `observed_scene_unavailable`. The next
+step is a memory/tracker implementation that can actually supply the required
+object/support evidence; observed obstacle/payload geometry and execution
+verification remain separate prerequisites for motion. No simulator state is
+used as a substitute.

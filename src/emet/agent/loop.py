@@ -24,7 +24,10 @@ import timeit
 from collections.abc import Callable
 from contextlib import nullcontext
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from emet.controller.task.tamp.observed_discovery import ObservedTaskProvider
 
 import click
 import numpy as np
@@ -582,6 +585,7 @@ def run_agent_with_robot(
     agent_section: Any | None = None,
     state_only_sim: bool = False,
     max_tool_rounds: int = _MAX_TOOL_ROUNDS,
+    observed_tamp_provider: ObservedTaskProvider | None = None,
     **kwargs: Any,
 ) -> None:
     """Start robot, optional memory load, optional Discord; run command loop with tools.
@@ -589,6 +593,10 @@ def run_agent_with_robot(
     If *commands* is a non-empty list, each entry is fed as a user turn
     (LLM mode) or manual command (no-LLM mode) instead of reading stdin.
     The agent exits after all commands are consumed.
+
+    *observed_tamp_provider* supplies read-only observed task proposals to
+    ``scene_tasks``. This Python integration hook does not enable native planning
+    or execution; the CLI currently has no default perception-backed provider.
 
     *shutdown_sim_subprocess*, when set, is called after ``robot_client.stop()`` so a sim
     started with ``emet run agent --start-sim`` can exit as soon as the ZMQ client disconnects
@@ -809,6 +817,7 @@ def run_agent_with_robot(
         "executor": executor,
         "robot": robot_client,
         "memory_backend": voxel_memory_backend,
+        "observed_tamp_provider": observed_tamp_provider,
         "graph_memory": _gm,
         "graph_memory_backend": _graph_backend,
         "scene_graph_processor": getattr(executor.agent, "_open_vocab_sg_processor", None),
@@ -1387,7 +1396,7 @@ def run_agent_with_robot(
                             _send_to_discord(fallback)
                         print_terminal(
                             f"turn done in {timeit.default_timer() - turn_t0:.1f}s "
-                            f"(forced final after {max_tool_rounds} rounds)",
+                            f"(forced final after {_round + 1} rounds)",
                             color="cyan",
                         )
                         break
