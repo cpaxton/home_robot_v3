@@ -110,7 +110,15 @@ class ManipulationControl:
         self.target = np.where(np.isfinite(measured), measured, self.target)
         self.velocity[:] = 0
         self.last_action[:] = 0
-        # Preserve bounded grip; an uncertain payload must not be released.
+        measured_grip = float(self.data.qpos[self.grip_q])
+        if self.release_authorized:
+            # Freeze an authorized release at its measured position on fault.
+            self.grip_reference = measured_grip
+            self.grip_target = measured_grip
+        else:
+            # Discard residual grip relaxation and return to the phase target.
+            self.grip_target = self.grip_reference
+        self.release_authorized = False
         self.apply()
 
     def apply(self):

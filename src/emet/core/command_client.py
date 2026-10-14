@@ -179,13 +179,16 @@ def check_base_poses(client, poses, *, timeout: float = 10.0) -> dict:
         receipt = command_receipt(client, action)
         if receipt and receipt["status"] == "succeeded":
             result = receipt.get("result", {})
-            if (result.get("poses") != points.tolist() or len(result.get("clear", [])) != len(points)
-                    or any(type(v) is not bool for v in result["clear"])):
+            if (
+                result.get("poses") != points.tolist()
+                or len(result.get("clear", [])) != len(points)
+                or any(type(v) is not bool for v in result["clear"])
+            ):
                 raise RuntimeError("invalid base pose validation response")
             return result
         if receipt and receipt["status"] in {"failed", "rejected", "cancelled"}:
             raise RuntimeError(f"base pose query failed: {receipt.get('reason')}")
-        time.sleep(.02)
+        time.sleep(0.02)
     raise TimeoutError("base pose query did not complete")
 
 

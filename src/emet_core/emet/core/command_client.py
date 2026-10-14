@@ -162,6 +162,36 @@ def close_command_session(client):
         logging.getLogger(__name__).warning("Control handoff not confirmed: %s", exc)
 
 
+def check_base_poses(client, poses, *, timeout: float = 10.0) -> dict:
+    """Query advertised simulator endpoints through correlated command receipts."""
+    import numpy as np
+
+    if not isinstance(client._state, dict) or client._state.get("sim_base_pose_query") is not True:
+        raise RuntimeError("simulator does not advertise base pose validation")
+    points = np.asarray(poses, dtype=float)
+    if points.ndim != 2 or points.shape[1] != 3 or not 1 <= len(points) <= 32 or not np.isfinite(points).all():
+        raise ValueError("expected 1..32 finite world XYT poses")
+    if not np.isfinite(timeout) or timeout <= 0:
+        raise ValueError("query timeout must be positive and finite")
+    deadline = time.monotonic() + timeout
+    action = client.send_action({"sim_check_base_poses": points.tolist()}, timeout=timeout)
+    while time.monotonic() < deadline:
+        receipt = command_receipt(client, action)
+        if receipt and receipt["status"] == "succeeded":
+            result = receipt.get("result", {})
+            if (
+                result.get("poses") != points.tolist()
+                or len(result.get("clear", [])) != len(points)
+                or any(type(v) is not bool for v in result["clear"])
+            ):
+                raise RuntimeError("invalid base pose validation response")
+            return result
+        if receipt and receipt["status"] in {"failed", "rejected", "cancelled"}:
+            raise RuntimeError(f"base pose query failed: {receipt.get('reason')}")
+        time.sleep(0.02)
+    raise TimeoutError("base pose query did not complete")
+
+
 def send_reactive_goal(client, *, base=None, arm=None, timeout=10.0):
     goal = {"frame": "world"}
     if base is not None:

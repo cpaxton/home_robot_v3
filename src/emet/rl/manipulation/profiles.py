@@ -42,6 +42,27 @@ class ManipulationProfile:
         }
 
 
+# The archived Stretch MJCF couples a finger-joint range [-0.376, 0.560] rad
+# linearly to the gripper slide range [-0.020, 0.040] m. The reset's closed
+# finger target is -0.300 rad; map it through that coupling instead of treating
+# the resulting slide target as an unexplained jaw-position constant.
+STRETCH_FINGER_RANGE_RAD = (-0.376, 0.560)
+STRETCH_SLIDE_RANGE_M = (-0.020, 0.040)
+STRETCH_CLOSED_FINGER_RAD = -0.300
+
+
+def stretch_finger_to_slide(finger_position_rad):
+    finger_lower, finger_upper = STRETCH_FINGER_RANGE_RAD
+    slide_lower, slide_upper = STRETCH_SLIDE_RANGE_M
+    if not finger_lower <= finger_position_rad <= finger_upper:
+        raise ValueError("finger position is outside the archived Stretch MJCF range")
+    fraction = (finger_position_rad - finger_lower) / (finger_upper - finger_lower)
+    return slide_lower + fraction * (slide_upper - slide_lower)
+
+
+STRETCH_CLOSED_SLIDE_M = stretch_finger_to_slide(STRETCH_CLOSED_FINGER_RAD)
+
+
 MARS = ManipulationProfile(
     "innate_mars",
     tuple((f"joint{i}",) for i in range(1, 6)),
@@ -73,7 +94,7 @@ STRETCH = ManipulationProfile(
     "joint_gripper_slide",
     "gripper",
     0.04,
-    (-0.3 + 0.376) / 0.936 * 0.06 - 0.02,
+    STRETCH_CLOSED_SLIDE_M,
     0.02,
     "link_grasp_center",
     ("rubber_tip_left", "rubber_tip_right"),

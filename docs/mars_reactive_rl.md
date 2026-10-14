@@ -5,10 +5,11 @@ PPO training, a deterministic baseline, and reactive control in the existing
 Mars MuJoCo server. `BaseZmqServer` continues to own transport and command
 receipts. The default controller remains `legacy`.
 
-This is a simulation development path. It does not enable Mars hardware motion,
-replace Nav2, or claim that a learned policy is better than the baseline.
-Stretch's base-velocity and nonblocking joint-position commands are the reference
-actuation interface. Hardware publishers and perception adapters are follow-on work.
+The reactive ZMQ runtime currently supports Innate Mars in the MuJoCo simulation.
+It does not enable Mars hardware motion or replace Nav2. Stretch support in this
+package is limited to simulation, training, and offline TAMP regression; no live
+Stretch command adapter is provided. Hardware publishers and perception adapters
+are follow-on work, and no learned policy is claimed to beat the baseline.
 
 ## Start with base-only control
 

@@ -7,10 +7,16 @@ import pytest
 from emet.rl.manipulation.control import ManipulationControl
 from emet.rl.manipulation.fixtures import evidence, load_case
 from emet.rl.manipulation.models import build_manipulation_model
-from emet.rl.manipulation.profiles import STRETCH, ModelAdmissionError
+from emet.rl.manipulation.profiles import STRETCH, STRETCH_CLOSED_SLIDE_M, ModelAdmissionError, stretch_finger_to_slide
 from emet.rl.manipulation.safety import ContactMonitor, retention_error
 
 pytestmark = pytest.mark.sim
+
+
+def test_stretch_closed_gripper_reference_is_derived_from_archived_coupling():
+    assert STRETCH.gripper_closed == pytest.approx(STRETCH_CLOSED_SLIDE_M)
+    assert stretch_finger_to_slide(-0.376) == pytest.approx(-0.020)
+    assert stretch_finger_to_slide(0.560) == pytest.approx(0.040)
 
 
 def test_frozen_goals_and_failures_unchanged():
@@ -40,12 +46,27 @@ def test_grip_corrections_are_bounded_and_release_requires_authorization():
     assert control.grip_target <= 0.05 * 0.06 + 1e-12
     with pytest.raises(ValueError, match="authorization"):
         control.set_reference(control.positions(), phase="release")
-    before = control.grip_target
+    control.grip_target = control.grip_reference + 0.001
     control.stop()
+    assert control.grip_target == control.grip_reference
+    assert not control.release_authorized
     control.accept(np.ones(6))
-    assert control.grip_target == before
+    assert control.grip_target == control.grip_reference
     control.set_reference(control.positions())
     assert control.stopped  # A new goal cannot clear a safety latch.
+
+
+def test_fault_during_authorized_release_freezes_measured_gripper_position():
+    model, _ = build_manipulation_model("stretch")
+    data = mujoco.MjData(model)
+    control = ManipulationControl(model, data, STRETCH)
+    control.initialize([0.55, 0.15, 0, -0.26, 0], STRETCH.gripper_closed)
+    control.set_reference(control.positions(), phase="release", release=True)
+    measured = (STRETCH.gripper_closed + STRETCH.gripper_open) / 2
+    data.qpos[control.grip_q] = measured
+    control.stop()
+    assert control.grip_target == pytest.approx(measured)
+    assert not control.release_authorized
 
 
 def test_support_detector_observes_lift_without_impacts():

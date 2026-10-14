@@ -51,16 +51,22 @@ class CommandRuntime(ReactiveRuntime):
         if message is None:
             return None
         with self._command_lock:
-            return {
-                **message,
-                "command_protocol": {
-                    **self.command_tracker.metadata(),
-                    "navigation_policies": list(self.navigation_policy_names()),
-                    "reactive_control": self.supports_reactive_control(),
-                },
-                "command_receipts": self.command_tracker.snapshot(),
-                "command_error": self._command_error,
+            protocol = {
+                **self.command_tracker.metadata(),
+                "navigation_policies": list(self.navigation_policy_names()),
+                "reactive_control": self.supports_reactive_control(),
             }
+            error = self._command_error
+        # A retained base-query result can be large. Publishers must not hold
+        # the dispatch lock while copying receipt history. The tracker captures
+        # coherent revisions independently; clients already merge revisions
+        # across the asynchronous observation/state/servo streams.
+        return {
+            **message,
+            "command_protocol": protocol,
+            "command_receipts": self.command_tracker.snapshot(),
+            "command_error": error,
+        }
 
     def dispatch_command(self, action):
         with self._command_lock:

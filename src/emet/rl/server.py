@@ -83,7 +83,11 @@ class ReactiveController:
                         if self.policy is None
                         else self.policy(obs)
                     )
-                    if time.monotonic() - begin > MARS.control_dt:
+                    # The servo executes under the physics lock. Allow one
+                    # missed 20 Hz interval for inference and host scheduling;
+                    # the command's own deadline and stale-physics watchdog
+                    # still bound end-to-end motion.
+                    if time.monotonic() - begin > 2 * MARS.control_dt:
                         raise RuntimeError("policy control deadline exceeded")
                     c.accept_action(action)
                 self.next_tick = c.data.time + MARS.control_dt

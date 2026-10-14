@@ -79,14 +79,26 @@ def test_stale_physics_fails_and_cancellation_requires_measured_stop(server):
     assert not np.any(server._mjdata.ctrl[server._reactive_controller.control.base_act])
 
 
-def test_slow_policy_stops_before_actuating(server):
-    def slow(obs):
+def test_policy_can_run_past_one_control_interval_but_misses_overall_budget(server):
+    def slightly_slow(obs):
         time.sleep(0.06)
         return np.ones(7)
 
-    server._reactive_controller.policy = slow
+    server._reactive_controller.policy = slightly_slow
     client = connection(server)
     action = send_reactive_goal(client, base=[1, 0, 0])
+    server._step_controlled_physics_once()
+    server.poll_navigation_command()
+    client._state = server.command_message({})
+    assert server._reactive_controller.outcome is None
+    assert np.any(server._mjdata.ctrl[server._reactive_controller.control.base_act])
+
+    def too_slow(obs):
+        time.sleep(0.12)
+        return np.ones(7)
+
+    server._reactive_controller.policy = too_slow
+    server._reactive_controller.next_tick = server._mjdata.time
     server._step_controlled_physics_once()
     server.poll_navigation_command()
     client._state = server.command_message({})
