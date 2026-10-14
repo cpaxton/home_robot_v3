@@ -52,7 +52,7 @@ class LiveTableRobot:
 
 
 @contextmanager
-def live_table_robot(sim_path, output, model):
+def live_table_robot(sim_path, output, model, *, initialize=True):
     from emet.config.sim_launch_config import load_sim_launch_config_from_path
     from emet.eval.sim_eval_session import (
         connect_benchmark_robot,
@@ -62,6 +62,8 @@ def live_table_robot(sim_path, output, model):
 
     repo = Path(__file__).resolve().parents[3]
     config = load_sim_launch_config_from_path(str(sim_path))
+    if not initialize and not config.no_cameras:
+        raise ValueError("Read-only scoring connection requires no_cameras")
     client = None
     with (output / 'server.log').open('w') as log:
         server = launch_benchmark_sim_server(config, repo=repo, cpu_only=False, server_stderr=log)
@@ -72,8 +74,9 @@ def live_table_robot(sim_path, output, model):
                                           enable_rerun_server=False, start_immediately=False, state_only=True)
                 if not client.start():
                     raise RuntimeError('camera-free simulator did not publish valid state')
-                client.move_to_nav_posture()
-                client.set_velocity(v=30., w=15.)
+                if initialize:
+                    client.move_to_nav_posture()
+                    client.set_velocity(v=30., w=15.)
             else:
                 client = connect_benchmark_robot(config, server.port_offset, enable_rerun_server=False)
             yield LiveTableRobot(client, model)

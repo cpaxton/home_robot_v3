@@ -50,3 +50,28 @@ def test_state_only_start_requires_explicit_camera_free_simulation(opt_in, simul
     client._state_only = opt_in
     client._state = {EMET_ZMQ_SESSION_KEY: {'is_simulation': simulation, 'capabilities': {'num_cameras': cameras}}}
     assert client._state_only_startup_ready() is expected
+
+
+def test_read_only_observer_never_claims_command_ownership(monkeypatch, tmp_path):
+    from unittest.mock import Mock
+
+    from emet.config import sim_launch_config
+    from emet.controller import zmq_client
+    from emet.eval import sim_eval_session
+
+    client = Mock()
+    client.start.return_value = True
+    monkeypatch.setattr(zmq_client, 'StretchZmqClient', lambda **kw: client)
+    monkeypatch.setattr(sim_launch_config, 'load_sim_launch_config_from_path',
+                        lambda path: SimpleNamespace(no_cameras=True))
+    server = SimpleNamespace(port_offset=360)
+    monkeypatch.setattr(sim_eval_session, 'launch_benchmark_sim_server', lambda *a, **kw: server)
+    cleanup = Mock()
+    monkeypatch.setattr(sim_eval_session, 'terminate_benchmark_sim_server', cleanup)
+    monkeypatch.setattr(live, 'LiveTableRobot', lambda client, model: client)
+    with live.live_table_robot(tmp_path / 'sim.yaml', tmp_path, None, initialize=False) as observer:
+        assert observer is client
+        client.move_to_nav_posture.assert_not_called()
+        client.set_velocity.assert_not_called()
+    client.stop.assert_called_once()
+    cleanup.assert_called_once_with(server)

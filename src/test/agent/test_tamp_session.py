@@ -57,3 +57,17 @@ def test_real_chat_loop_continues_success_but_cannot_dispatch_final_tools(monkey
     else:
         assert 'Do not call any more tools' in llm.call_args_list[1].args[1]
     robot.stop.assert_called_once()
+
+
+@pytest.mark.parametrize('kwargs', [
+    {'robot': 'rby1'}, {'memory_backend': 'dynagraph'}, {'eqa': True},
+    {'vl_include_camera': True}, {'input_path': '/saved/map'}, {'use_llm': False},
+])
+def test_camera_free_mode_rejects_incompatible_sessions_before_connecting(monkeypatch, kwargs):
+    connect = MagicMock()
+    monkeypatch.setattr(loop, 'StretchZmqClient', connect)
+    options = {'robot': 'stretch', 'memory_backend': 'dynamem', 'use_llm': True, 'state_only_sim': True}
+    options.update(kwargs)
+    with pytest.raises(ValueError, match='state_only_sim requires'):
+        loop.run_agent_with_robot(**options)
+    connect.assert_not_called()

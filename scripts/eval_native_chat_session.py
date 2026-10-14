@@ -63,7 +63,7 @@ def main():
     for command in commands:
         cli += ['--command', command]
     model = mujoco.MjModel.from_xml_path(default_scene_xml_path)
-    with live_table_robot(args.live_sim, out, model) as robot:
+    with live_table_robot(args.live_sim, out, model, initialize=False) as robot:
         initial = goal_predicates(robot, goals)
         protocol = {'source_sha': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=repo, text=True).strip(),
                     'cli': cli, 'goals': goals, 'initial_predicates': initial,
