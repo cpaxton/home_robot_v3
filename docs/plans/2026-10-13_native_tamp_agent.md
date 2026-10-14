@@ -65,6 +65,21 @@ calibrated sensing, transforms, controller limits, and hardware validation.
 Each implementation PR needs passing targeted regressions and concrete live
 results. Do not promote a default preset or merge on unit tests alone.
 
+## Integration follow-up: CHAT batches and composition
+
+The next branch, `feat/tamp-native-composition`, fixes JSON outcome accounting
+and prevents a failed TAMP call from executing the remainder of a precomputed
+CHAT batch. At `9b44dd7f`, four scripted CHAT-dispatched CPU episodes each complete
+two consecutive transfers without resetting physics. This is a repeated-object
+integration control, not LLM or multi-object task acceptance.
+
+Two-object fixtures still lack a validated reference sequence. On the
+depth-separated fixture, trying the cylinder first also fails pregrasp planning;
+do not blame only the earlier box placement or score this as an agent failure.
+The next planner investigation needs explicit source/target regions and retained
+candidate rejection evidence, then a verified full sequence before LLM scoring.
+See [the composition report](../experiments/tamp_native_composition_20261013.md).
+
 ## October 13 review: finish the agent-facing milestone
 
 Current stack: #207 records an independent scripted contact baseline; merge #208

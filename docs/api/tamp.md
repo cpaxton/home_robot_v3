@@ -258,3 +258,28 @@ is `partial` with `code: command_outcome_unknown`, the last attempted operation,
 and any completed operations. The handle remains consumed. Inspect measured
 state before replanning: a missing acknowledgement does not mean the controller
 failed to receive the command, and the tool does not automatically replay it.
+
+### CHAT composition and failure handling
+
+CHAT decodes the versioned TAMP envelope for outcome accounting. `status: partial`
+or `error` cannot become success because the accompanying message sounds positive.
+Malformed TAMP responses also fail outcome accounting. EQA and legacy non-TAMP
+results retain their existing interpretation.
+
+A non-successful TAMP call stops the remainder of that model-generated tool batch.
+A JSON `dispatch` result with `code: batch_stopped` lists `unattempted_tools`.
+The agent session stays alive and receives the failure for inspection or replanning
+on its next turn. This is a batch boundary, not an autonomous recovery policy or
+a persistent motion interlock: fresh state and appropriate recovery must still
+precede a new plan. Successful execution should be followed by reading its result
+and rediscovering before planning the next manipulation.
+
+For native composition diagnostics, `scripts/eval_native_table_contact.py` accepts
+`--steps N` (default 1) for repeated transfers without resetting physics, or
+`--sequence object1 object2` for an explicit fixture sequence. `--separation`
+and `--separation-axis x|y` alter initial fixture positions only. Every step goes
+through the CHAT dispatcher, reacquires a task, and plans from measured state;
+a failed call stops the sequence. After a successful step, the evaluator checks
+released support for all objects already placed, using privileged simulator
+state. These are scripted CPU integration checks, not LLM, live ZMQ, exploration,
+or hardware acceptance. Launch them through managed CPU jobs.

@@ -325,7 +325,9 @@ CHAT_SKILL_SPECS: tuple[SkillSpec, ...] = (
             "Returns schema_version=1 JSON with status, code, data, and recovery; inspect these fields, "
             "not message text. For partial execution, inspect the scene before planning another action. "
             "Execute a plan_ref returned by plan_pick_place after rechecking the live scene "
-            "and manipulation capability. Plans are one-shot and stale plans are refused."
+            "and manipulation capability. Plans are one-shot and stale plans are refused. "
+            "After each execution, read its outcome and rediscover before planning the next task. "
+            "A partial or unknown outcome requires inspection, never replay of the consumed plan."
         ),
         parameters={
             "type": "object",
@@ -619,9 +621,10 @@ CHAT_SKILL_SPECS: tuple[SkillSpec, ...] = (
         description=(
             "Returns schema_version=1 JSON with status, code, data, and recovery; inspect these fields, "
             "not message text. For partial execution, inspect the scene before planning another action. "
-            "Enumerate candidate pick-and-place tasks from the current sim scene (MolmoSpaces / iTHOR): "
-            "pickable objects with grasp assets, receptacle sites, and proposed tasks with reachability "
-            "priors computed from the active robot's arm profile. Returns opaque semantic task_ref handles "
+            "Enumerate candidate pick-and-place tasks supported by the current simulator adapter. "
+            "Candidates are not promises of reachable grasps or feasible placement. Inspect the "
+            "returned mode, inputs, and assistance before use; native contact does not imply "
+            "observed perception or native articulation. Returns opaque semantic task_ref handles "
             "for plan_pick_place without exposing simulator body IDs. Use when asked 'what can you pick "
             "up and where can you put it'."
         ),
