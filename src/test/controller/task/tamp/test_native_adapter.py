@@ -11,6 +11,7 @@ import mujoco
 import numpy as np
 import pytest
 
+import emet.motion.placement_surfaces as surfaces_module
 from emet.agent.tools import get_tools
 from emet.controller.manipulation.native_scene import model_signature
 from emet.controller.task.tamp.native_adapter import NativeTableAdapter
@@ -242,7 +243,6 @@ def test_shared_ik_budget_restores_private_state_and_never_actuates(native):
 
 
 def test_failed_placement_resumes_grasp_search(native, monkeypatch):
-    import emet.motion.placement_surfaces as surfaces_module
     _, _, context, call = native
     adapter = context['_native_tamp_adapter']
     original = adapter._grasp_candidates
@@ -262,3 +262,11 @@ def test_failed_placement_resumes_grasp_search(native, monkeypatch):
     result = call('plan_pick_place', object_name='blue', receptacle_name='table')
     assert result['code'] == 'no_plan_within_budget'
     assert len(resumed) == 2
+
+
+def test_unknown_native_task_requests_rediscovery(native):
+    robot, _, _, call = native
+    result = call('plan_pick_place', task_ref='invented_task')
+    assert result['code'] == 'unknown_task_ref'
+    assert result['recovery'] == 'rediscover'
+    robot.arm_to.assert_not_called()

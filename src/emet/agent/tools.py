@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from typing import Any
 
@@ -1675,6 +1676,9 @@ def get_tool_descriptions_for_prompt(tools: list[Tool]) -> str:
         if props:
             arg_names = ", ".join(props.keys())
             lines.append(f"- {t.name}({arg_names}): {t.description}")
+            # Local text-only clients do not receive the separate API tools
+            # parameter. Preserve types, optionality, nested bounds and meanings.
+            lines.append("  Arguments (JSON Schema): " + json.dumps(t.parameters, separators=(",", ":")))
         else:
             lines.append(f"- {t.name}(): {t.description}")
     return "\n".join(lines)

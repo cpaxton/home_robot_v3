@@ -310,7 +310,7 @@ CHAT_SKILL_SPECS: tuple[SkillSpec, ...] = (
                 },
                 "task_ref": {
                     "type": "string",
-                    "description": "Optional semantic task handle returned by scene_tasks.",
+                    "description": "Optional task handle: copy verbatim from scene_tasks. Omit when using object/receptacle names; never invent a handle.",
                 },
                 "object_name": {
                     "type": "string",
@@ -341,7 +341,7 @@ CHAT_SKILL_SPECS: tuple[SkillSpec, ...] = (
             "properties": {
                 "plan_ref": {
                     "type": "string",
-                    "description": "Opaque plan handle returned by plan_pick_place.",
+                    "description": "Opaque plan handle: copy verbatim from plan_pick_place; never invent or reuse a consumed handle.",
                 }
             },
             "required": ["plan_ref"],
@@ -640,11 +640,11 @@ CHAT_SKILL_SPECS: tuple[SkillSpec, ...] = (
             "properties": {
                 "object_filter": {
                     "type": "string",
-                    "description": "Optional category substring to limit proposed tasks (e.g. 'bowl').",
+                    "description": "Optional single category substring (e.g. 'bowl'). Omit to list all; do not concatenate multiple object names.",
                 },
                 "robot": {
                     "type": "string",
-                    "description": "Optional robot id (e.g. 'sourccey', 'rby1') to also report which objects its arm can reach.",
+                    "description": "Optional robot identifier (e.g. 'stretch', 'sourccey', 'rby1'). Omit to use the connected robot; never put input or execution mode here.",
                 },
             },
             "required": [],

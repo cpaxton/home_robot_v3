@@ -312,3 +312,9 @@ world-XY `placement_region`; it constrains the whole released object, not merely
 its center. Inspect the returned mode and `planning_rejections`. A bounded search
 failure does not prove rearrangement is necessary or the task is impossible.
 See [native placement regions](api/tamp.md#native-placement-regions-and-bounded-grasp-search).
+
+Local text-model prompts include the same argument JSON Schemas as structured
+tool-calling clients. Nested arrays, required fields, and parameter descriptions
+must remain visible; stripping them to argument names caused native TAMP calls
+to confuse robot identity with input mode and to invent task handles. Unknown
+native task handles request rediscovery rather than inspection.

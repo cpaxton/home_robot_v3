@@ -266,7 +266,7 @@ class NativeTableAdapter:
                         return self._failure('plan_pick_place', 'ambiguous_object' if matches else 'task_not_found')
                     selected = matches[0]
                 if selected is None:
-                    return self._failure('plan_pick_place', 'task_not_found')
+                    return self._failure('plan_pick_place', 'unknown_task_ref')
                 obj, support = selected[:2]
                 initial = self.data.qpos.copy()
                 executor = self._executor(obj)
