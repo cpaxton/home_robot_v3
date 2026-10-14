@@ -24,6 +24,7 @@ from emet.agent.prompt import AgentPromptBuilder, parse_tool_calls_response
 from emet.agent.tools import get_tools
 from emet.controller.manipulation import physical_pick_place
 from emet.controller.task.tamp import native_adapter
+from emet.llms.openai_client import OpenaiClient
 from emet.llms.qwen_client import Qwen25Client
 from emet.simulation.mujoco_server_stretch import default_scene_xml_path
 from emet.simulation.sim_object_placements import placements_from_mujoco_model
@@ -63,7 +64,11 @@ def main():
     parser.add_argument('--max-turns', type=int, default=12)
     parser.add_argument('--model-size', default='3B', choices=['1.5B', '3B'])
     parser.add_argument('--seed', type=int, default=0)
+    parser.add_argument('--base-url', help='Existing remote OpenAI-compatible inference endpoint')
+    parser.add_argument('--remote-model', help='Exact model ID served by --base-url')
     args = parser.parse_args()
+    if bool(args.base_url) != bool(args.remote_model):
+        parser.error('--base-url and --remote-model must be supplied together')
     if args.max_turns < 1:
         parser.error('--max-turns must be positive')
     args.output.mkdir(parents=True, exist_ok=True)
@@ -95,14 +100,20 @@ def main():
                    + json.dumps({'red cylinder': goals['object2'], 'blue cube': goals['object1']}))
     source = subprocess.check_output(['git', 'rev-parse', 'HEAD'],
                                     cwd=Path(__file__).resolve().parents[1], text=True).strip()
-    protocol = {'source_sha': source, 'model': f'Qwen/Qwen2.5-{args.model_size}-Instruct',
+    protocol = {'source_sha': source, 'model': args.remote_model or f'Qwen/Qwen2.5-{args.model_size}-Instruct',
                 'seed': args.seed, 'max_turns': args.max_turns, 'device': args.device,
+                'inference': 'remote' if args.base_url else 'local',
+                'remote_sampling': 'server defaults; seed is local only' if args.base_url else None,
                 'scope': 'LLM-selected CHAT tools; CPU native contact; privileged inputs; no live IPC',
                 'goals': goals, 'instruction': instruction, 'system_prompt': str(prompt),
                 'initial_predicates': goal_predicates(robot, goals)}
     (args.output / 'protocol.json').write_text(json.dumps(protocol, indent=2))
     set_seed(args.seed)
-    client = Qwen25Client(prompt, model_size=args.model_size, device=args.device, quantization=None, max_tokens=256)
+    if args.base_url:
+        client = OpenaiClient(prompt, model=args.remote_model, base_url=args.base_url)
+        client._openai = client._openai.with_options(timeout=120, max_retries=0)
+    else:
+        client = Qwen25Client(prompt, model_size=args.model_size, device=args.device, quantization=None, max_tokens=256)
     history, trace = [], []
     clock = SimpleNamespace(monotonic=lambda: float(robot.data.time), sleep=robot.step)
     old_physical, old_native = physical_pick_place.time, native_adapter.time
