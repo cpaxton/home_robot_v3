@@ -454,6 +454,7 @@ def _run_vlm_view_assess(
         tried_obs_ids=sorted(self._tried.keys()),
         n_rounds=self._round,
         n_nav=self._n_nav + self._n_explore,
+        include_progress=os.environ.get("EMET_EQA_ASSESS_PROGRESS", "1") != "0",
     )
     from emet.eval.agentic_vlm_assess import unique_image_arrays
 

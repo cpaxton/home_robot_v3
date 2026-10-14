@@ -190,6 +190,7 @@ def build_inventory_brief(
     tried_obs_ids: list[int] | None = None,
     n_rounds: int = 0,
     n_nav: int = 0,
+    include_progress: bool = True,
 ) -> str:
     """Neutral map/status context for VLM assess — no SigLIP/OWL verdicts.
 
@@ -197,14 +198,18 @@ def build_inventory_brief(
     appear here or they bias ``present`` / MCQ answers (e.g. ABSENT → "None").
     """
     labels = [str(x) for x in (graph_labels or []) if str(x).strip()][:12]
-    parts = [
-        f"observations_seen={int(n_observations)}",
-        f"rounds={int(n_rounds)}",
-        f"nav_steps={int(n_nav)}",
-    ]
+    parts = (
+        [
+            f"observations_seen={int(n_observations)}",
+            f"rounds={int(n_rounds)}",
+            f"nav_steps={int(n_nav)}",
+        ]
+        if include_progress
+        else []
+    )
     if labels:
         parts.append("graph_labels=" + ", ".join(labels))
-    if tried_obs_ids:
+    if tried_obs_ids and include_progress:
         parts.append("tried_obs_ids=" + ",".join(str(i) for i in tried_obs_ids[-12:]))
     return "\n".join(parts)
 

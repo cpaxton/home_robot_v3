@@ -736,3 +736,37 @@ answers. Removing target yielded No/Yes/No. Exact-live and inventory-removed
 each produced two wrong Yes plus one truncated JSON. Text cleanup does not
 resolve current-image presence/co-location here. Keep the failure visible in
 acceptance and assess wider primary views separately before adding new checks.
+
+### Repair ownership and simple prompt ablation
+
+The 25/36 versus 21/36 comparison is between labeling arms on the integrated
+stack. It is not a paired comparison to current main. A fresh matched main gate
+is required before stating that the new stack is ahead/behind main.
+
+Assign repairs by changed behavior, retaining original commits for review:
+
+| Owner | Repair commits / scope | Verification |
+| --- | --- | --- |
+| #182 measured navigation | `68e263ff` waypoint alignment as progress; `da022908` navigation-map fixtures; `35d2a7f4` stowed Stretch collision envelope | Arrival-monitor and footprint tests, physical route smoke, small OVMM |
+| #184 inspection/recovery | `8afd343f` preserve task while routing frontier hints | Task-routing tests and frontier investigation smoke |
+| #199 assessed evidence | `ac3a3abb` historical context cannot authorize current localization; `b6fdda7f` retain captured arrival view after grounding | Assessment and OVMM routing tests; current-view find gate |
+| #198 optional coverage scan | `005f0d9a` grid-edge rays; `9df2a382` full-heading distribution (already inherited in #199/#202) | Map-edge and heading tests, optional scan ablation |
+| Transport/simulator repair below consumers | `17211f35` acquisition timestamps through Stretch camera IPC/ZMQ | Camera timing and ZMQ observation tests; old-message compatibility |
+| #202 selector and follow-up slices | Model-free coverage module; opt-in live adapter; `27d9a6a7` bounded approach captures; `654f33f1` provenance labels; visual audit/paired runner | Selector/history tests, three-seed EQA, small OVMM |
+| #199 follow-up if accepted | Existing assessment inventory without planning status | Exact prompt ablation, paired live EQA; preserve planner status |
+
+These are ownership assignments, not claims that owner remote heads already
+contain every repair. Before moving commits, reconcile each with current main
+and destination head, remove duplicates, and preserve separate evidence. The
+timestamp repair is cross-cutting and should not be buried in selector review.
+Approach capture touches shared waypoint execution but its purpose is evidence
+retention, so review it as a separate bounded-history slice above contracts.
+
+The prompt experiment adds `include_progress` to the existing inventory builder
+and `EMET_EQA_ASSESS_PROGRESS=0` as an evaluation override. It omits observation
+counts, navigation/round counters, and tried IDs while retaining graph labels.
+There is no extra model call, confirmation stage, retry, or new assessment
+module. Planning still receives its usual state. The original default remains
+enabled. Runner arms `spatial_progress` and `spatial_visual` otherwise match;
+run 12 questions × two arms, seed 0. 63 focused tests pass. Do not promote this
+text change merely because it causes abstention in q14.

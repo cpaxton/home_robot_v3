@@ -32,11 +32,16 @@ def stopping_overrides(arm):
 
 
 def provenance_overrides(arm):
-    if arm not in {"labels_role", "labels_spatial"}:
+    if arm not in {"labels_role", "labels_spatial", "spatial_progress", "spatial_visual"}:
         return {}
     return {
         **stopping_overrides("stop_single"),
-        "EMET_EQA_VIEW_SPATIAL_LABELS": "1" if arm == "labels_spatial" else "0",
+        "EMET_EQA_VIEW_SPATIAL_LABELS": "0" if arm == "labels_role" else "1",
+        **(
+            {"EMET_EQA_ASSESS_PROGRESS": "0" if arm == "spatial_visual" else "1"}
+            if arm in {"spatial_progress", "spatial_visual"}
+            else {}
+        ),
     }
 
 
@@ -228,6 +233,8 @@ if __name__ == "__main__":
             "stop_corroborated",
             "labels_role",
             "labels_spatial",
+            "spatial_progress",
+            "spatial_visual",
         ],
         default=["historical", "unchanged", "pose", "quality_coverage"],
     )

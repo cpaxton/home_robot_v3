@@ -188,6 +188,19 @@ def test_assess_view_does_not_turn_choice_text_into_first_letter():
     assert "MCQ letter A-D" not in prompt
 
 
+def test_visual_inventory_omits_progress_but_retains_graph_labels():
+    brief = build_inventory_brief(
+        n_observations=9,
+        n_rounds=3,
+        n_nav=2,
+        tried_obs_ids=[17],
+        graph_labels=["sink", "towel"],
+        include_progress=False,
+    )
+    assert brief == "graph_labels=sink, towel"
+    assert build_inventory_brief(include_progress=False) == ""
+
+
 def test_build_inventory_brief_excludes_detector_proposal():
     """SigLIP/OWL verdicts must not enter assess inventory (they color answers)."""
     brief = build_inventory_brief(
