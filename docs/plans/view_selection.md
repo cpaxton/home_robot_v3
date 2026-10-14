@@ -478,3 +478,39 @@ answers. Keep historical and current pose controls for any subsequent repair.
 Validation: 84 focused selector/history/assessment/captured-view tests passed;
 commit hooks including ruff and mypy passed. No main edits, pushes, model
 changes, hardware motion, or parallel GPU experiments were performed.
+
+### Approach-retention repair and diagnostic
+
+Source `27d9a6a7`, job `20261013_221001_6a7747`, artifacts
+`/tmp/emet-approach-retention-eqa4-20261013/`. All eight paired episodes
+completed without retries or infrastructure failures. Pose and pose+approach
+both score **2/4** (q6/q56 correct; q12/q14 wrong). Median episode times are
+32.23 s and 32.72 s respectively. This is a contract repair, not an accuracy win.
+
+`EMET_EQA_RETAIN_APPROACH_VIEWS=1` enables a bounded 32-frame, query-local
+RGB-D evidence buffer. It samples already acquired images after 0.25 m camera
+translation or 15 degrees optical-axis change. Habitat feeds action renders;
+the shared ZMQ waypoint path feeds waypoint-arrival observations (not yet
+continuous in-motion transport). No maps or object instances are inserted by
+this buffer. Missing acquisition metadata is not fabricated. Captures own their
+arrays; snapshot count is bounded and the buffer is replaced per query.
+
+The paired driver has a `pose_approach` arm; selector, pins, image budget,
+navigation, prompts and answer precedence remain unchanged. Exact ordered
+packets are saved under each episode's `selected_views/NNNN/`, with PNGs,
+geometry and pixel hashes. These files were verified after episode completion.
+99 focused tests pass, including ownership/bounds/motion sampling, missing
+timestamps, history integration, Habitat capture, serial waypoint aborts and
+packet export. Commit hooks pass.
+
+Visual audit: q12 now selects approach views showing **both** bedside tables.
+Qwen nevertheless says one and claims no second table appears in history.
+The previous missing-candidate issue is fixed for that example; answer
+correctness is not. q14's pose selector retains the same misleading-to-Qwen
+context despite additional candidates. Do not adjust answer labels or invent
+task-specific count/relation rules to force these diagnostics to pass.
+
+Next: broaden to the fixed 12-question dev set, first seed 0, with historical,
+pose and pose_approach arms. This is an attribution pilot for a retention repair,
+not promotion of the failed quality objective. Keep three-seed confirmation
+and small OVMM pending; no merge/default change follows from a single seed.
