@@ -167,6 +167,7 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
             ee_link_name: The name of the end effector link
             manip_mode_controlled_joints: The joints to control in manipulation mode
             port_offset: Added to all default port numbers (e.g. 100 → 4501-4504)
+            state_only: Opt into state-only startup for explicitly camera-free simulations.
             allow_missing_depth: If True, accept observations without a depth JP2 (RGB-only); pair with ``depth_source: auto|da3`` in DynaMem YAML.
         """
         if port_offset:
@@ -1939,8 +1940,11 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         if not getattr(self, '_state_only', False) or not isinstance(self._state, dict):
             return False
         session = self._state.get(EMET_ZMQ_SESSION_KEY)
-        return (isinstance(session, dict) and session.get('is_simulation') is True
-                and (session.get('capabilities') or {}).get('num_cameras') == 0)
+        if not isinstance(session, dict) or session.get('is_simulation') is not True:
+            return False
+        capabilities = session.get('capabilities')
+        return (isinstance(capabilities, dict) and type(capabilities.get('num_cameras')) is int
+                and capabilities['num_cameras'] == 0)
 
     def start(self) -> bool:
         """Start running blocking thread in a separate thread. This will wait for observations to come in and update internal state.
@@ -1972,8 +1976,8 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         t0 = timeit.default_timer()
         startup_timeout = getattr(self, "_zmq_startup_timeout", 60.0)
         next_progress_log = t0 + 5.0
-        while self._state is None or (not self._state_only_startup_ready()
-                                     and (self._obs is None or self._servo is None)):
+        while self._state is None or ((self._obs is None or self._servo is None)
+                                     and not self._state_only_startup_ready()):
             time.sleep(0.1)
             t1 = timeit.default_timer()
             if t1 >= next_progress_log:

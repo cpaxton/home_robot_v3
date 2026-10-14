@@ -341,7 +341,8 @@ in this in-process harness; remote hosting does not establish live execution.
 
 To evaluate the same regional agent goals against a live server, add
 `--live-sim PATH_TO_SIM_YAML` to `scripts/eval_native_table_agent.py` and launch
-through a managed GPU job. Use a matching packaged Stretch scene with fixture
+through a managed job. Reserve the GPU when rendering GPU camera images. Use
+a matching packaged Stretch scene with fixture
 initial transforms set before startup. The harness enables the physical actuation
 audit, reads fresh measured snapshots, and records simulator time on both sides
 of every inference request. Passing requires physics progress during inference,
@@ -349,3 +350,11 @@ a clean nonempty actuation audit, and the same independent stable final-goal
 checks. Remote inference avoids local model weights but the simulator still
 needs its GPU reservation. The scope remains privileged and stationary; this
 is not exploration or observed-input acceptance.
+
+For this privileged text-only evaluator, `no_cameras: true` in the simulator YAML
+avoids rendering and local GPU use entirely. The harness opts into
+`StretchZmqClient(state_only=True)`: missing image streams are permitted only
+when state explicitly advertises `is_simulation=true` and integer
+`capabilities.num_cameras=0`. Default clients and hardware still require their
+normal startup streams. No image observations are fabricated. This mode does
+not validate visual exploration or perception.

@@ -4,9 +4,9 @@
 """Bounded LLM selection over native CHAT tools on the frozen two-object fixture.
 
 Uses the run-agent prompt, parser and dispatcher, with an in-process actuator
-facade and privileged simulator geometry. It does not launch the interactive CLI,
-test IPC, or establish observed perception. Run as a managed job; reserve the GPU
-when selecting --device cuda.
+facade or a live ZMQ simulator and privileged geometry. It does not launch the
+interactive CLI or establish observed perception. Run as a managed job; reserve
+the GPU for local CUDA inference or hardware-accelerated camera rendering.
 """
 import argparse
 import json
@@ -68,7 +68,7 @@ def main():
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--base-url', help='Existing remote OpenAI-compatible inference endpoint')
     parser.add_argument('--remote-model', help='Exact model ID served by --base-url')
-    parser.add_argument('--live-sim', type=Path, help='Launch a live ZMQ simulator from this config; requires managed GPU job')
+    parser.add_argument('--live-sim', type=Path, help='Launch a live ZMQ simulator from this config; use a managed job')
     args = parser.parse_args()
     if bool(args.base_url) != bool(args.remote_model):
         parser.error('--base-url and --remote-model must be supplied together')
@@ -121,6 +121,8 @@ def run_episode(args, robot, model):
                 'scope': ('LLM-selected CHAT tools; live ZMQ native contact; privileged inputs' if args.live_sim
                           else 'LLM-selected CHAT tools; CPU native contact; privileged inputs; no live IPC'),
                 'physics_during_inference': bool(args.live_sim),
+                'sim_config': args.live_sim.read_text() if args.live_sim else None,
+                'cpu_affinity': sorted(os.sched_getaffinity(0)),
                 'goals': goals, 'instruction': instruction, 'system_prompt': str(prompt),
                 'initial_predicates': goal_predicates(robot, goals)}
     (args.output / 'protocol.json').write_text(json.dumps(protocol, indent=2))
