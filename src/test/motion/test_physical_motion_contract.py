@@ -724,3 +724,25 @@ def test_endpoint_settling_rejects_motion_even_within_arrival_tolerance(monkeypa
         command_joints=lambda q: True, endpoint_settle_s=.3, joint_settle_timeout_s=1.)
     result = executor._execute_path('grasp', [np.array([0.]), np.array([0.])])
     assert not result.success and result.message == 'arm_tracking_failed'
+
+
+@pytest.mark.parametrize('rate', [0., .1, 1.])
+def test_settling_uses_physics_clock_with_wall_watchdog(monkeypatch, rate):
+    import emet.controller.manipulation.physical_pick_place as module
+    clock = [0.]
+    monkeypatch.setattr(module.time, 'monotonic', lambda: clock[0])
+    m = model()
+    d = mujoco.MjData(m)
+    ex = module.PhysicalPickPlaceExecutor(SimpleNamespace(), model=m, data=d,
+        ee_body='ee', joint_names=['yaw'], collision=MujocoSceneCollisionChecker(m, robot_body='robot'),
+        synchronize=lambda state: None, command_joints=lambda q: True, input_mode='privileged',
+        use_sim_time=True, settling_wall_timeout_s=20.)
+    active = ex._settling_window(1.)
+    while active():
+        clock[0] += .05
+        d.time += rate*.05
+    assert clock[0] <= 20.1
+    if rate:
+        assert 1. <= d.time <= 1.05
+    else:
+        assert clock[0] >= 20.

@@ -48,7 +48,7 @@ def test_explicit_kinematic_calls_use_live_chat_tools(monkeypatch):
         [{"name": "plan_pick_place", "arguments": {"task_ref": "task:1"}}],
         manip_mode="kinematic",
     )
-    assert context_seen == {"robot": robot, "manip_mode": "kinematic"}
+    assert context_seen == {"robot": robot, "manip_mode": "kinematic", "tamp_inputs": "observed"}
     assert args_seen == {"task_ref": "task:1"}
 
 

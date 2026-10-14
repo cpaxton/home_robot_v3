@@ -51,6 +51,8 @@ class PhysicalPickPlaceExecutor:
         joint_tolerance: float = 0.03,
         joint_settle_timeout_s: float = 5.0,
         endpoint_settle_s: float = 0.0,
+        use_sim_time: bool = False,
+        settling_wall_timeout_s: float = 30.0,
         position_tolerance_m: float = 0.01,
         orientation_tolerance_rad: float = 0.1,
         base_body: str | None = None,
@@ -81,6 +83,10 @@ class PhysicalPickPlaceExecutor:
         if not np.isfinite(endpoint_settle_s) or not 0 <= endpoint_settle_s < joint_settle_timeout_s:
             raise ValueError("Endpoint settling must fit within the joint settling timeout")
         self.endpoint_settle_s = float(endpoint_settle_s)
+        if not np.isfinite(settling_wall_timeout_s) or settling_wall_timeout_s <= 0:
+            raise ValueError("Positive finite settling wall timeout required")
+        self.use_sim_time = bool(use_sim_time)
+        self.settling_wall_timeout_s = float(settling_wall_timeout_s)
         self.position_tolerance_m, self.orientation_tolerance_rad = position_tolerance_m, orientation_tolerance_rad
         self.qadr = joint_qpos_addrs(model, self.joint_names)
         self.base_body = base_body
@@ -93,6 +99,18 @@ class PhysicalPickPlaceExecutor:
         self.place_targets: list = []
         self.transport: Callable | None = None
         self.payload_body: str | None = None
+
+    def _motion_time(self):
+        return float(self.data.time) if self.use_sim_time else time.monotonic()
+
+    def _settling_window(self, duration):
+        """Physics duration in simulation, with an independent stalled-clock bound."""
+        started, wall = self._motion_time(), time.monotonic()
+        def active():
+            elapsed = self._motion_time() - started
+            return (np.isfinite(elapsed) and 0 <= elapsed < duration
+                    and (not self.use_sim_time or time.monotonic() - wall < self.settling_wall_timeout_s))
+        return active
 
     def plan_pose(self, position, rotation):
         """Plan from the offline current state; caller preserves candidate state."""
@@ -255,8 +273,9 @@ class PhysicalPickPlaceExecutor:
         self.synchronize(self.data)
         start_sim_time = float(self.data.time)
         previous = float(position())
-        started = stable_since = time.monotonic()
-        while time.monotonic() - started < timeout_s:
+        active = self._settling_window(timeout_s)
+        stable_since = self._motion_time()
+        while active():
             time.sleep(0.05)
             self.synchronize(self.data)
             current = float(position())
@@ -264,9 +283,9 @@ class PhysicalPickPlaceExecutor:
                 return PhysicalMotionResult(False, "invalid_gripper_feedback", "grasp")
             # Accumulate small drift relative to the stable-interval anchor.
             if abs(current - previous) > 0.01:
-                stable_since = time.monotonic()
+                stable_since = self._motion_time()
                 previous = current
-            if time.monotonic() - stable_since >= 0.3 and self.data.time - start_sim_time >= 0.25:
+            if self._motion_time() - stable_since >= 0.3 and self.data.time - start_sim_time >= 0.25:
                 self.event(phase="gripper_settled", measured=current, controller_success=True)
                 return PhysicalMotionResult(True, "gripper_settled", "grasp")
         return PhysicalMotionResult(False, "gripper_settling_timeout", "grasp")
@@ -372,8 +391,8 @@ class PhysicalPickPlaceExecutor:
             # A client may acknowledge within a looser tolerance before the
             # simulator has applied/settled the command. Wait for measured
             # convergence, retaining the same certificate tolerance.
-            settle_deadline = time.monotonic() + self.joint_settle_timeout_s
-            while ok and np.isfinite(residual) and residual > self.joint_tolerance and time.monotonic() < settle_deadline:
+            active = self._settling_window(self.joint_settle_timeout_s)
+            while ok and np.isfinite(residual) and residual > self.joint_tolerance and active():
                 time.sleep(0.05)
                 self.synchronize(self.data)
                 if base_drifted():
@@ -395,10 +414,10 @@ class PhysicalPickPlaceExecutor:
         if self.endpoint_settle_s:
             # A waypoint tolerance can be reached while the arm is still moving.
             # Contact transitions need a settled endpoint, not merely an ACK.
-            deadline = time.monotonic() + self.joint_settle_timeout_s
-            stable_since = time.monotonic()
+            active = self._settling_window(self.joint_settle_timeout_s)
+            stable_since = self._motion_time()
             anchor = self.data.qpos[self.qadr].copy()
-            while time.monotonic() < deadline:
+            while active():
                 time.sleep(.05)
                 self.synchronize(self.data)
                 if base_drifted():
@@ -410,8 +429,8 @@ class PhysicalPickPlaceExecutor:
                     return PhysicalMotionResult(False, "invalid_measured_joint_state", phase)
                 if residual > self.joint_tolerance or joint_residual(anchor) > self.ENDPOINT_STILLNESS_TOLERANCE:
                     anchor = self.data.qpos[self.qadr].copy()
-                    stable_since = time.monotonic()
-                elif time.monotonic() - stable_since >= self.endpoint_settle_s:
+                    stable_since = self._motion_time()
+                elif self._motion_time() - stable_since >= self.endpoint_settle_s:
                     break
             else:
                 return PhysicalMotionResult(False, "arm_tracking_failed", phase, residual)

@@ -6,7 +6,9 @@ measured Stretch articulation/task admission (#201). See the
 [placement API](placement.md) and [articulation API](tamp_articulation.md).
 Observed/privileged input contracts merged in
 [#195](https://github.com/cpaxton/home_robot_v3/pull/195) as `b7a1c22d`;
-native scene/execution adapters and observed geometry providers remain unwired.
+This branch adds a stationary Stretch native-debug adapter for the packaged table
+scene. Controlled native transfers pass for both test shapes; observed geometry
+providers remain unwired. See the [integration report](../experiments/tamp_native_agent_20261013.md).
 See [project status](../project_status.md#latest-evidence-supersedes-older-pr-prose)
 for tested revisions, the broader 3/7 assisted run, and remaining gates.
 
@@ -87,8 +89,8 @@ servers invalidate stored plans.
 
 Guarded agent planning and stored execution require an advertised
 `sim_base_pose_query: true` endpoint and a callable client `check_base_poses`.
-The in-process Robosuite server provides it; the Stretch MuJoCo server currently
-does not. An unsupported provider returns `base_pose_validation_unavailable`
+The in-process Robosuite server and the measured-snapshot Stretch MuJoCo server
+provide it (Stretch support merged in #205). An unsupported provider returns `base_pose_validation_unavailable`
 before grounding or motion, with `recovery: "rediscover"`: connect to a provider
 with endpoint validation, rediscover its tasks, and request a new plan. Repeating
 the same request on an unsupported provider cannot fix it. Capability loss also
@@ -138,18 +140,35 @@ Readiness additionally requires three reference-admitted cleanup fixtures
 passing. Preserve admission failures and failed repeats; do not substitute easier
 fixtures or pool assisted historical scores with new results.
 
-## Native execution integration (not yet enabled)
+## Native execution integration (experimental debug adapter)
 
-`agent.manip_mode=physical` is reserved for actuator/contact execution. It never
-falls back to a legacy controller or object teleportation. Its input selection is
-`agent.tamp_inputs=observed` by default, or explicit `privileged` in simulation.
-Current CHAT integration refuses this mode until its scene/execution adapter is
-available: observed discovery returns `observed_scene_unavailable` without reading
-simulator metadata; debug mode returns `native_execution_unavailable`. These are
-integration guards, not a claim that native agent manipulation is ready. Existing
-teleport/kinematic defaults are unchanged; no native preset is promoted yet.
-The same native guard rejects simulator-assisted `set_receptacle_state`, including
-a task handle obtained before switching execution modes.
+`agent.manip_mode=physical` selects actuator/contact execution. It never falls
+back to object teleportation or attachment. Inputs default to
+`agent.tamp_inputs=observed`; observed discovery currently returns
+`observed_scene_unavailable` before reading simulator metadata.
+
+Explicit `privileged` inputs enable the packaged **Stretch default table scene**
+adapter. The existing four tools discover stationary pick/place tasks, validate
+arm and payload paths on private MuJoCo state, then execute through normal client
+arm/gripper commands. Planning has no actuation. Execution consumes its plan
+handle, rechecks measured scene state, and replans from measured joints. It verifies
+one second of bilateral hold and two seconds of settled support after release.
+These checks use **simulator ground truth**, not inferred tactile sensors. Public
+results label `geometry_source: simulator_ground_truth`, `base_motion: stationary`,
+and `assistance: []` (no runtime latch/teleport; privileged perception remains explicit).
+
+A model signature and server boot identity bind the adapter to the snapshot.
+Physics capture and client receive timestamps must both be fresh within two
+seconds. Missing snapshots, unsupported models, and stale state reject execution.
+Native `set_receptacle_state` returns `native_articulation_unavailable`; it never
+uses assisted articulation. Other robot/scene adapters and navigation are outside
+this initial native integration. Existing assisted defaults are unchanged.
+
+The scripted public-tool validation accepts `--manip-mode physical
+--tamp-inputs privileged --physical-audit PATH`; the audit rejects simulator
+teleport, attachment, and direct joint-setting commands. Passing this validation
+would establish deterministic public-tool execution, **not LLM task selection,
+exploration, observed perception, or hardware readiness**.
 
 The shared physical executor now requires an observed object-pose provider and
 observed collision provider by default. Object poses carry an observation ID,
@@ -219,3 +238,23 @@ require inspection of the held object and current scene before recovery; a faile
 refresh never causes release. This distinguishes a state-stream failure from
 changed obstacle geometry. A bounded wait is a recovery mechanism, not evidence
 that the original live failure was caused by receiver starvation.
+
+Native Stretch grasp calibration uses the opposing finger-pad contact edges from
+the bound robot model, rather than treating the named EE frame as the pinch point.
+This requires no additional contact sensor. Native debug execution uses measured
+simulation time for settling, bounded by a 30-second wall watchdog per wait;
+ordinary hardware executors keep wall-clock timing. Simulator snapshots and final
+contact checks remain explicitly privileged debug evidence.
+
+The native candidate search tries a 15-degree pitched robot frame before the
+level and measured frames, for all objects. Every accepted candidate still needs
+arm/payload collision validation and measured hold/release verification. The
+current controlled acceptance is 4/4 live ZMQ and 6/6 separate CPU transfers;
+this is not validation of clutter rearrangement, native base navigation, or
+observed-input exploration.
+
+If a native command acknowledgement times out after execution starts, the result
+is `partial` with `code: command_outcome_unknown`, the last attempted operation,
+and any completed operations. The handle remains consumed. Inspect measured
+state before replanning: a missing acknowledgement does not mean the controller
+failed to receive the command, and the tool does not automatically replay it.
