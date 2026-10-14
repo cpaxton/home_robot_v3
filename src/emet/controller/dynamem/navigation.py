@@ -22,6 +22,7 @@ from emet.controller.habitat_nav import (
     goal_key_xy,
     pick_uncovered_explore_target,
 )
+from emet.core.navigation_result import UNOBSERVED_FOOTPRINT_STATUS, sweep_rejection_status
 from emet.motion.algo.a_star import AStar
 from emet.utils.logger import Logger
 
@@ -84,7 +85,8 @@ def _filter_unsafe_nav_traj(
             return [], "missing_measured_start", None
         valid, reason = validate_navigation_sweep(self.space, start_xyt, poses)
         if not valid:
-            return [], f"rejected_swept_footprint:{reason}", None
+            self._last_nav_sweep_failure = dict(getattr(self.space, "last_validity", {}) or {})
+            return [], sweep_rejection_status(reason), None
     planner = getattr(self, "planner", None)
     if planner is None:
         return list(traj), None, None
@@ -112,7 +114,7 @@ def _filter_unsafe_nav_traj(
         valid, reason = validate_navigation_sweep(self.space, start_xyt, body)
         if not valid:
             self._last_nav_sweep_failure = dict(getattr(self.space, "last_validity", {}) or {})
-            return [], f"rejected_swept_footprint:{reason}", None
+            return [], sweep_rejection_status(reason), None
 
     start_xy = None
     if start_xyt is not None:
@@ -178,7 +180,7 @@ def _mark_nav_goal_blocked(self, *, reason: str = "aborted_waypoint_timeout") ->
     space = getattr(self, "space", None)
     if space is not None:
         space.traj = None
-    if reason == "rejected_swept_footprint:unobserved_footprint":
+    if reason == UNOBSERVED_FOOTPRINT_STATUS:
         # Missing sensor coverage is not evidence that the destination is
         # unreachable. Keep the failed route invalidated, but let a new plan
         # recheck it after sensing rather than blacklisting it for the episode.
@@ -295,7 +297,7 @@ def _record_arrival_coverage(self, before):
         )
 
 
-def _execute_validated_waypoints(self, waypoints, timeout):
+def _execute_validated_waypoints(self, waypoints, timeout, *, explore_goal=False):
     """Use server-owned arrival; recheck physical segments from measured poses."""
     physical = getattr(getattr(self, "space", None), "obstacle_map_mode", None) == "physical"
     segments = [[waypoint] for waypoint in waypoints] if physical else [waypoints]
@@ -303,7 +305,7 @@ def _execute_validated_waypoints(self, waypoints, timeout):
         if physical:
             self.planner.reset()
             _, reason, _ = self._filter_unsafe_nav_traj(
-                segment, start_xyt=self._current_planning_xyt(), explore_goal=True
+                segment, start_xyt=self._current_planning_xyt(), explore_goal=explore_goal
             )
             if reason:
                 self._record_nav_plan_fields(
@@ -419,7 +421,9 @@ def execute_action(self, text: str) -> tuple[bool | None, np.ndarray | None]:
         before_motion_coverage = _sensor_coverage(self)
         if route.finished:
             if res:
-                exec_ok, failure_reason = _execute_validated_waypoints(self, res, nav_timeout)
+                exec_ok, failure_reason = _execute_validated_waypoints(
+                    self, res, nav_timeout, explore_goal=plan_meta.get("mode") == "exploration"
+                )
                 if exec_ok is False:
                     self._record_nav_plan_fields(outcome=failure_reason)
                     self._mark_nav_goal_blocked(reason=failure_reason)
@@ -435,7 +439,9 @@ def execute_action(self, text: str) -> tuple[bool | None, np.ndarray | None]:
             self._record_nav_plan_fields(outcome="ok")
             return True, route.target_xyz
         # Chunk: execute, grow the voxel/graph at this pose, resume leftover.
-        exec_ok, failure_reason = _execute_validated_waypoints(self, res, nav_timeout)
+        exec_ok, failure_reason = _execute_validated_waypoints(
+            self, res, nav_timeout, explore_goal=plan_meta.get("mode") == "exploration"
+        )
         if exec_ok is False:
             self._record_nav_plan_fields(outcome=failure_reason)
             self._mark_nav_goal_blocked(reason=failure_reason)
