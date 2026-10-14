@@ -234,3 +234,42 @@ or an ablation separating identity reporting from selector validation.
 Remaining gates are unchanged: held-out tasks/scenes, live physics during model
 inference through ZMQ, observed geometry, and exploration. No new PR was opened
 for this follow-up.
+
+## October 14 stack integration and IK hardening
+
+Reviews approved #209–#212 with non-blocking notes. The #208 prerequisite was
+also approved; its duplicate gripper-drift condition was combined, the endpoint
+stillness threshold named, and the path-error expression parenthesized. Its 82
+targeted tests passed. Integration of #209 passed 98 targeted tests, and #211
+passed 63 contract/dispatch tests. The articulation membership concern was already
+addressed in `TAMP_TOOLS`; explicit batch-stop coverage now includes
+`set_receptacle_state`. Outcome accounting documents that `ToolOutcome.status`
+stores the reason code, while the envelope status determines success.
+
+Pose IK now resolves native joint names once before the iterative loop, uses
+cached coordinate indices/bounds, and rejects non-finite seed state and solver
+parameters, repeated/empty controlled joints, and unsupported joint types before
+native kinematics. These changes remove repeated native named-view access at the
+previous crash site and guard invalid inputs; they do **not** establish the
+original segfault's root cause or prove unrestricted-CPU stability. Keep the
+documented CPU affinity and managed-job settings. No acceptance tolerance or
+collision check was weakened. Scorer extraction from the script remains an
+optional organizational follow-up, with the existing independent scoring tests.
+
+Managed final agent job `20261014_013312_b6bba3`, source `26dd4e06`, completed
+**3/3 full two-object episodes and 6/6 transfers**. Results are under
+`/home/cpaxton/runs/emet/native-tamp-merge-validation-20261014/`; validation logs
+and source-specific protocol/trace files are retained there. Turns were 5, 6, 6;
+model-call times were 57.29, 67.55, 67.91 seconds. Each episode issued 186
+ordinary actuator commands. Trials 2 and 3 recovered from one malformed response
+each. There were no IK, physical execution, or infrastructure failures. Same
+Caliban model, fixture, prompt, budgets, scoring, and privileged in-process scope
+as before; this remains a development repeatability result.
+
+The combined suite passed **226 tests with no failures/errors/skips**, both
+before and after final main integration.
+The final main integration at `1d4b7216` preserves the paper changes and has
+identical `src/`, `scripts/`, and `configs/` content to the passing agent source.
+The remaining milestone is live ZMQ agent execution with physics continuing
+during inference, then held-out tasks and observed exploration. These gates
+remain separate from this merged native-tool foundation.
