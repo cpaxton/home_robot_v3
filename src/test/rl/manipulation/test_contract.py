@@ -91,6 +91,17 @@ def test_mars_missing_support_geometry_blocks_training():
         build_manipulation_model("innate_mars")
 
 
+def test_mars_gripper_uses_rectangular_urdf_contact_jaws():
+    model, _ = build_manipulation_model("innate_mars", diagnostics=True)
+    for name in ("link61_contact", "link62_contact"):
+        geom = model.geom(name)
+        assert model.geom_type[geom.id] == mujoco.mjtGeom.mjGEOM_BOX
+        np.testing.assert_allclose(model.geom_size[geom.id], [0.024, 0.008, 0.01945])
+        np.testing.assert_allclose(model.geom_pos[geom.id], [0.024, 0, 0])
+        assert model.geom_contype[geom.id] == 1
+        assert model.geom_conaffinity[geom.id] == 1
+
+
 def test_grip_corrections_are_bounded_and_release_requires_authorization():
     model, _ = build_manipulation_model("stretch")
     data = mujoco.MjData(model)
