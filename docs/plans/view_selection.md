@@ -426,3 +426,55 @@ infrastructure errors. Repeated seeds are not independent new questions.
 Keep live defaults unchanged; no Habitat OVMM/full sweep/hardware expansion.
 If quality loses, retain pose; if pose loses to history, diagnose the harness
 rather than continuing to tune image-selection thresholds.
+
+### Completed live attribution: no promotion
+
+Job `20261013_200028_8e8cbc` completed all 16 episodes, no retries or
+infrastructure failures. Current source `0206f3e5`; historical source
+`dc106273`. Results and frozen command/config manifests are in
+`/tmp/emet-view-hillclimb-eqa4-20261013/`; episode bundles are under
+`~/.cache/habitat_eqa/episodes/emet-view-hillclimb-eqa4-20261013/`.
+
+| Arm | q6 | q12 | q14 | q56 | Correct | Median seconds |
+| --- | --- | --- | --- | --- | --- | --- |
+| Historical #181 | T | T | T | T | 4/4 | 41.51 |
+| Current unchanged | T | F | F | F | 1/4 | 35.59 |
+| Current pose | T | F | F | T | 2/4 | 32.70 |
+| Current quality | T | F | F | T | 2/4 | 34.15 |
+
+Historical q6 is `uniform_prior` (0.25 confidence); historical q12 is
+`mcq_debias` after the assessor abstained. These are not four verified visual
+successes. Both selector arms recover q56, with the bookshelf and blue curtains
+visibly together in the saved context image. The quality arm actually used
+quality selection on q12/q14/q56; q6 was assessed after frontier exploration
+without a localized target, so its explicit pose fallback is appropriate and
+must not count as quality-policy acceptance.
+
+Manual inspection and retained-history audit establish:
+
+- q12 has 14 mapped observations: 13 at spawn, then one at arrival. Rendered
+  approach frames exist in the episode video/frame log but were not candidates
+  in the live history. The submitted packet has near-identical current and
+  pre-turn closeups plus hallway/living-room context. The offline wider bedroom
+  packet cannot be reproduced merely by rescoring these retained frames.
+- q14 historical/current arrival XY matches. Current final yaw differs by
+  approximately 30 degrees and removes the sofa from the primary view. Qwen
+  still chooses the TV relation when history supplies wider room context.
+  This is not proof that a different coverage weight will repair reasoning.
+- Some per-assessment `query_png` trace paths do not exist after export. Saved
+  final `eqa_decisions` packets and rendered frames supported the visual audit,
+  but per-call artifact completeness needs repair before claiming that gate.
+
+Decision: the quality objective does not improve over pose here; defaults stay
+unchanged. Do not launch the 12-question/3-seed, reserved confirmation, or OVMM
+promotion stages for this candidate. Regression recovery is **not achieved**.
+The next isolated experiment should address evidence retention during approach,
+using a bounded shared captured-view mechanism without creating extra object
+instances, with pose held fixed. Audit current/pre-turn redundancy separately;
+do not combine acquisition, pinning, prompt and answer-precedence changes.
+Do not revert safe object-facing navigation just to recover lucky fallback
+answers. Keep historical and current pose controls for any subsequent repair.
+
+Validation: 84 focused selector/history/assessment/captured-view tests passed;
+commit hooks including ruff and mypy passed. No main edits, pushes, model
+changes, hardware motion, or parallel GPU experiments were performed.
