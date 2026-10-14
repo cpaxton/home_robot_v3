@@ -1,16 +1,14 @@
 # Agent-facing TAMP simulator API
 
-**Branch scope (2026-10-12, refreshed after #201):** main includes structured
-tools (#178), collision-aware placement and assisted articulation (#179), and
-measured Stretch articulation/task admission (#201). See the
-[placement API](placement.md) and [articulation API](tamp_articulation.md).
-Observed/privileged input contracts merged in
-[#195](https://github.com/cpaxton/home_robot_v3/pull/195) as `b7a1c22d`;
-This branch adds a stationary Stretch native-debug adapter for the packaged table
-scene. Controlled native transfers pass for both test shapes; observed geometry
-providers remain unwired. See the [integration report](../experiments/tamp_native_agent_20261013.md).
-See [project status](../project_status.md#latest-evidence-supersedes-older-pr-prose)
-for tested revisions, the broader 3/7 assisted run, and remaining gates.
+Start with the [TAMP overview](../tamp.md) for the workflow and architecture, or
+the [agent tool index](../agent_tools.md) for the complete tool inventory.
+Main through #212 includes structured tools, collision-aware placement,
+simulator-assisted articulation, observed/privileged input contracts, and the
+stationary Stretch native-debug adapter for the packaged table scene. Observed
+geometry providers remain unwired. See the [placement API](placement.md),
+[articulation API](tamp_articulation.md), and
+[latest live agent report](../experiments/tamp_native_live_agent_20261014.md) for
+tested revisions and remaining gates; assisted and native results are separate.
 
 All four CHAT tools (`scene_tasks`, `plan_pick_place`, `execute_pick_place_plan`,
 `pick_place`) return one JSON object encoded as tool-result text. This replaces
