@@ -87,6 +87,7 @@ class ToolOutcome:
                     or not isinstance(envelope.get("data"), dict)):
                 return cls(ok=False, status="invalid_tool_result", tool=tool,
                            payload={"recovery": "inspect"})
+            # Outcome.status stores the machine-readable reason code for the ledger.
             return cls(ok=envelope["status"] == "ok" and envelope["code"] == "ok",
                        status=envelope["code"], note=str(envelope.get("message", "")),
                        tool=tool, payload=dict(envelope))

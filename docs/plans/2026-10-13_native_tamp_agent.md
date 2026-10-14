@@ -80,6 +80,29 @@ The next planner investigation needs explicit source/target regions and retained
 candidate rejection evidence, then a verified full sequence before LLM scoring.
 See [the composition report](../experiments/tamp_native_composition_20261013.md).
 
+## Region-goal reference and first LLM integration acceptance
+
+The `fix/native-tamp-sequence-planning` follow-up now has a two-object reference
+with both region predicates false initially. Bounded steeper/height-adjusted
+grasps clear the diagnosed gripper/body collision, explicit placement regions
+preserve the task goal, and grasp search backtracks when downstream placement
+fails. Rejection counts and a shared IK budget remain visible to the caller.
+
+At `0841c997`, two fresh two-object reference episodes and two separate repeated-
+object controls pass. The first local Qwen2.5-3B-Instruct selector failed without
+actuation; the local CHAT prompt omitted argument schemas. After schema and
+handle guidance fixes at `e1a76582`, the same seed/goals pass a complete native
+two-object episode through the shared prompt/parser/dispatcher. Final independent
+support/region scoring passes. See the [region integration report](../experiments/tamp_native_regions_20261013.md)
+for separate denominators, the failed trial, source revisions, and artifacts.
+
+This advances Gate 2 but does not complete it: the selector uses privileged,
+pre-grounded labels/regions and an in-process controller facade. Next validate
+repeat/held-out tasks, then the same LLM sequence over live ZMQ with physics
+running during inference. Keep native task-order search, navigation, and observed
+exploration as separate measurable gates; do not promote this small development
+result to general task success or hardware readiness.
+
 ## October 13 review: finish the agent-facing milestone
 
 Current stack: #207 records an independent scripted contact baseline; merge #208

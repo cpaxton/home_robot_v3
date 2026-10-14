@@ -440,3 +440,10 @@ def test_unavailable_base_validation_rejects_build_and_consumes_plan(monkeypatch
 def test_mcts_grounding_failure_preserves_only_known_public_code(reason, expected):
     from emet.controller.task.tamp.api import failure_code
     assert failure_code(reason) == expected
+
+
+def test_unsupported_adapter_does_not_ignore_placement_region():
+    tools = {t.name: t for t in get_tools({})}
+    result = decoded(tools['plan_pick_place'].func(object_name='bowl', receptacle_name='table',
+                                                placement_region=[[0, 0], [1, 1]]))
+    assert result['code'] == 'placement_region_unsupported'

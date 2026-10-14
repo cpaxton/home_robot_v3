@@ -296,14 +296,21 @@ CHAT_SKILL_SPECS: tuple[SkillSpec, ...] = (
             "not message text. For partial execution, inspect the scene before planning another action. "
             "Plan, but do not execute, a pick-and-place task. Prefer a task_ref returned by "
             "scene_tasks; otherwise provide object_name and receptacle_name. Returns the "
-            "capability path, chosen grasp, and guarded plan handle."
+            "capability path and guarded plan handle. Optional placement_region constrains the "
+            "whole object footprint in world XY; currently supported only by native privileged Stretch."
         ),
         parameters={
             "type": "object",
             "properties": {
+                "placement_region": {
+                    "type": "array", "minItems": 2, "maxItems": 2,
+                    "items": {"type": "array", "minItems": 2, "maxItems": 2,
+                              "items": {"type": "number"}},
+                    "description": "Optional world-frame XY bounds [[xmin,ymin],[xmax,ymax]] in meters. Use grounded geometry, never guessed coordinates.",
+                },
                 "task_ref": {
                     "type": "string",
-                    "description": "Optional semantic task handle returned by scene_tasks.",
+                    "description": "Optional task handle: copy verbatim from scene_tasks. Omit when using object/receptacle names; never invent a handle.",
                 },
                 "object_name": {
                     "type": "string",
@@ -334,7 +341,7 @@ CHAT_SKILL_SPECS: tuple[SkillSpec, ...] = (
             "properties": {
                 "plan_ref": {
                     "type": "string",
-                    "description": "Opaque plan handle returned by plan_pick_place.",
+                    "description": "Opaque plan handle: copy verbatim from plan_pick_place; never invent or reuse a consumed handle.",
                 }
             },
             "required": ["plan_ref"],
@@ -633,11 +640,11 @@ CHAT_SKILL_SPECS: tuple[SkillSpec, ...] = (
             "properties": {
                 "object_filter": {
                     "type": "string",
-                    "description": "Optional category substring to limit proposed tasks (e.g. 'bowl').",
+                    "description": "Optional single category substring (e.g. 'bowl'). Omit to list all; do not concatenate multiple object names.",
                 },
                 "robot": {
                     "type": "string",
-                    "description": "Optional robot id (e.g. 'sourccey', 'rby1') to also report which objects its arm can reach.",
+                    "description": "Optional robot identifier (e.g. 'stretch', 'sourccey', 'rby1'). Omit to use the connected robot; never put input or execution mode here.",
                 },
             },
             "required": [],
