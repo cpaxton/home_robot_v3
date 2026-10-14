@@ -75,7 +75,7 @@ def response(
             else "rediscover"
             if code
             in {
-                "unknown_task_ref",
+                "unknown_task_ref", "task_selector_mismatch",
                 "ambiguous_object",
                 "ambiguous_receptacle",
                 "metadata_unavailable",
@@ -205,7 +205,7 @@ def failure_code(message: str) -> str:
         "object_not_in_gt",
         "execution_error",
         "manipulation_unavailable",
-        "unknown_task_ref",
+        "unknown_task_ref", "task_selector_mismatch",
         "ambiguous_object",
         "ambiguous_receptacle",
         "provide_task_ref_or_object_and_receptacle",

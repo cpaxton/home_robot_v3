@@ -35,6 +35,8 @@ class NativePlan:
     executor: PhysicalPickPlaceExecutor
     boot: str
     placement_region: np.ndarray | None = None
+    object_name: str = ""
+    receptacle_name: str = ""
 
 
 class NativeTableAdapter:
@@ -82,10 +84,10 @@ class NativeTableAdapter:
         self.events.append({'phase': 'planning_rejection', 'stage': phase, 'code': code,
                             'detail': reason, 'contacts': list(executor.collision.last_contacts) if code == 'collision' else []})
 
-    def _failure(self, tool, reason, *, completed=(), phase=None, started=False):
+    def _failure(self, tool, reason, *, completed=(), phase=None, started=False, identity=None):
         logging.getLogger(__name__).warning("Native TAMP %s failed at %s: %s", tool, phase, reason)
         return response(tool, code=failure_code(reason), status='partial' if completed or started else 'error',
-                        data=self._data(completed_ops=list(completed), failed_stage=phase, execution_started=started,
+                        data=self._data(**(identity or {}), completed_ops=list(completed), failed_stage=phase, execution_started=started,
                             **({'planning_rejections': dict(self.planning_rejections),
                                 'planning_ik_calls': self.planning_ik_calls, 'max_ik_calls': self.max_planning_ik_calls}
                                if tool == 'plan_pick_place' else {})),
@@ -267,6 +269,12 @@ class NativeTableAdapter:
                     selected = matches[0]
                 if selected is None:
                     return self._failure('plan_pick_place', 'unknown_task_ref')
+                # A handle identifies one task; redundant names must confirm that
+                # identity, never silently redirect or contradict the requested move.
+                identity = dict(zip(('object_name', 'receptacle_name'), selected[2:], strict=True))
+                if task_ref and any(given and given.strip().casefold() != expected.strip().casefold()
+                                    for given, expected in zip((object_name, receptacle_name), selected[2:], strict=True)):
+                    return self._failure('plan_pick_place', 'task_selector_mismatch', identity=identity)
                 obj, support = selected[:2]
                 initial = self.data.qpos.copy()
                 executor = self._executor(obj)
@@ -354,8 +362,8 @@ class NativeTableAdapter:
                             if len(candidates) == 3:
                                 executor.place_paths = candidates
                                 ref = f'plan:{self.namespace}:{uuid.uuid4().hex}'
-                                self.plans[ref] = NativePlan(obj, support, initial, goal, rotation, executor, self.boot, region)
-                                return response('plan_pick_place', data=self._data(plan_ref=ref,
+                                self.plans[ref] = NativePlan(obj, support, initial, goal, rotation, executor, self.boot, region, **identity)
+                                return response('plan_pick_place', data=self._data(**identity, plan_ref=ref,
                                     planned_ops=['grasp', 'place'], completed_ops=[], failed_stage=None, measurements=[],
                                     planning_rejections=dict(self.planning_rejections),
                                     planning_ik_calls=self.planning_ik_calls, max_ik_calls=self.max_planning_ik_calls,
@@ -420,21 +428,26 @@ class NativeTableAdapter:
             plan = self.plans.pop(plan_ref, None)
             if plan is None:
                 return self._failure('execute_pick_place_plan', 'unknown_plan')
+            identity = {'object_name': plan.object_name, 'receptacle_name': plan.receptacle_name}
+
+            def fail(reason, **kwargs):
+                return self._failure('execute_pick_place_plan', reason, identity=identity, **kwargs)
+
             completed = []
             started = False
             phase = None
             try:
                 self.synchronize(self.data)
                 if plan.boot != self.boot or np.max(np.abs(self.data.qpos-plan.initial)) > .01:
-                    return self._failure('execute_pick_place_plan', 'scene_changed_replan')
+                    return fail('scene_changed_replan')
                 ex = plan.executor
                 started = True
                 phase = 'grasp'
                 result = ex.grasp_only('', object_gt_body=plan.object_body)
                 if not result.success:
-                    return self._failure('execute_pick_place_plan', result.message, started=True, phase=result.phase)
+                    return fail(result.message, started=True, phase=result.phase)
                 if not self._verify(plan, released=False, seconds=1):
-                    return self._failure('execute_pick_place_plan', 'grasp_verification_failed', started=True, phase='lift')
+                    return fail('grasp_verification_failed', started=True, phase='lift')
                 completed.append('grasp')
                 self.synchronize(self.data)
                 ex.place_targets = self._place_targets(ex, plan.object_body, plan.goal, plan.rotation)
@@ -442,21 +455,21 @@ class NativeTableAdapter:
                 phase = 'place'
                 result = ex.place_only('', object_gt_body=plan.object_body, receptacle_gt_body=plan.support_body)
                 if not result.success:
-                    return self._failure('execute_pick_place_plan', result.message, completed=completed, phase=result.phase)
+                    return fail(result.message, completed=completed, phase=result.phase)
                 if not self._verify(plan, released=True, seconds=2):
-                    return self._failure('execute_pick_place_plan', 'placement_verify_failed', completed=completed, phase='release')
+                    return fail('placement_verify_failed', completed=completed, phase='release')
                 completed.append('place')
-                return response('execute_pick_place_plan', data=self._data(plan_ref=plan_ref,
+                return response('execute_pick_place_plan', data=self._data(**identity, plan_ref=plan_ref,
                     planned_ops=['grasp','place'], completed_ops=completed, failed_stage=None,
                     measurements=[{'source':'simulator_ground_truth','bilateral_hold_s':1.,'stable_support_s':2.,
                                    'placement_region_verified': plan.placement_region is not None}]))
             except TimeoutError:
                 # The command may already have reached the controller. Preserve
                 # partial progress and prohibit reuse of this consumed handle.
-                return self._failure('execute_pick_place_plan', 'command_outcome_unknown',
+                return fail('command_outcome_unknown',
                                      completed=completed, started=started, phase=phase)
             except (ObservationUnavailable, ValueError, RuntimeError) as exc:
-                return self._failure('execute_pick_place_plan', str(exc), completed=completed,
+                return fail(str(exc), completed=completed,
                                      started=started, phase=phase)
 
 

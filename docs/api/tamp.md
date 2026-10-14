@@ -312,6 +312,17 @@ in privileged diagnostic events, outside the public response.
 
 The frozen two-object region file is
 `configs/eval/native_table_two_object_regions.json` (cylinder goal, then box goal).
+
+Native planning accepts either a task handle or semantic names. If names accompany
+a handle, they must match that task's full published names (ignoring case and
+outer whitespace); a contradiction returns `task_selector_mismatch` with
+`recovery="rediscover"` before planning or motion. The error identifies the task
+selected by the handle. Successful plan results and consumed-plan execution
+results, including failures, carry `object_name` and `receptacle_name`. These
+semantic labels are saved in the plan and do not expose private simulator IDs.
+An operation's `ok` verifies that selected operation, not every goal in a
+multi-step task.
+
 Use the contact harness with `--sequence object2 object1 --separation .15
 --separation-axis y --placement-regions PATH`. The separate
 `scripts/eval_native_table_agent.py` evaluates LLM selection with the CHAT

@@ -73,7 +73,10 @@ def test_changed_scene_consumes_native_plan_before_any_motion(native):
     robot, _, _, call = native
     ref = make_plan(call)
     robot._state['native_tamp_snapshot']['qpos'][0] += .05
-    assert call('execute_pick_place_plan', plan_ref=ref)['code'] == 'scene_changed_replan'
+    result = call('execute_pick_place_plan', plan_ref=ref)
+    assert result['code'] == 'scene_changed_replan'
+    assert result['data']['object_name'] == 'blue cube'
+    assert result['data']['receptacle_name'] == 'table'
     assert call('execute_pick_place_plan', plan_ref=ref)['code'] == 'unknown_plan'
     robot.arm_to.assert_not_called()
     robot.open_gripper.assert_not_called()
@@ -270,3 +273,49 @@ def test_unknown_native_task_requests_rediscovery(native):
     assert result['code'] == 'unknown_task_ref'
     assert result['recovery'] == 'rediscover'
     robot.arm_to.assert_not_called()
+
+
+@pytest.mark.parametrize('names', [
+    {'object_name': 'red cylinder'},
+    {'receptacle_name': 'other table'},
+])
+def test_conflicting_task_selectors_rejected_before_planning(native, monkeypatch, names):
+    robot, data, context, call = native
+    adapter = context['_native_tamp_adapter']
+    task = call('scene_tasks', object_filter='blue')['data']['tasks'][0]
+    before = data.qpos.copy()
+    executor = Mock(side_effect=AssertionError('must not plan conflicting selectors'))
+    monkeypatch.setattr(adapter, '_executor', executor)
+    result = call('plan_pick_place', task_ref=task['task_ref'], **names)
+    assert result['code'] == 'task_selector_mismatch'
+    assert result['recovery'] == 'rediscover'
+    assert result['data']['object_name'] == 'blue cube'
+    assert result['data']['receptacle_name'] == 'table'
+    assert not adapter.plans
+    executor.assert_not_called()
+    robot.arm_to.assert_not_called()
+    robot.open_gripper.assert_not_called()
+    robot.close_gripper.assert_not_called()
+    np.testing.assert_array_equal(data.qpos, before)
+
+
+def test_matching_selectors_keep_identity_through_execution(native, monkeypatch):
+    _, _, context, call = native
+    adapter = context['_native_tamp_adapter']
+    task = call('scene_tasks', object_filter='blue')['data']['tasks'][0]
+    result = call('plan_pick_place', task_ref=task['task_ref'],
+                  object_name=' BLUE CUBE ', receptacle_name='Table')
+    assert result['status'] == 'ok', result
+    ref = result['data']['plan_ref']
+    plan = adapter.plans[ref]
+    monkeypatch.setattr(plan.executor, 'grasp_only', lambda *a, **k: SimpleNamespace(success=True))
+    monkeypatch.setattr(plan.executor, 'place_only', lambda *a, **k: SimpleNamespace(success=True))
+    monkeypatch.setattr(adapter, '_verify', lambda *a, **k: True)
+    # Semantic identity is frozen into the plan, not looked up from mutable tasks.
+    adapter.tasks.clear()
+    executed = call('execute_pick_place_plan', plan_ref=ref)
+    assert executed['status'] == 'ok', executed
+    for envelope in (result, executed):
+        assert envelope['data']['object_name'] == 'blue cube'
+        assert envelope['data']['receptacle_name'] == 'table'
+        assert 'object1' not in json.dumps(envelope)
