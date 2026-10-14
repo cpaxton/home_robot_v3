@@ -96,6 +96,8 @@ def select_assessment_history(executor, rgb, *, target_obs_id=None):
         settings["policy"] = os.environ["EMET_EQA_VIEW_SELECTION_POLICY"]
     if not settings:
         return None
+    if "EMET_EQA_VIEW_SPATIAL_LABELS" in os.environ:
+        settings["spatial_labels"] = os.environ["EMET_EQA_VIEW_SPATIAL_LABELS"] == "1"
     limit = min(4, get_eqa_vl_int(executor.agent.parameters, "eqa_max_images", 4))
     if limit <= 0:
         return None

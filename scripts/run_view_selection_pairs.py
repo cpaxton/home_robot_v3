@@ -31,6 +31,15 @@ def stopping_overrides(arm):
     }
 
 
+def provenance_overrides(arm):
+    if arm not in {"labels_role", "labels_spatial"}:
+        return {}
+    return {
+        **stopping_overrides("stop_single"),
+        "EMET_EQA_VIEW_SPATIAL_LABELS": "1" if arm == "labels_spatial" else "0",
+    }
+
+
 def run(args):
     roots = {"historical": args.historical.resolve(), "current": args.current.resolve()}
     revisions = {}
@@ -105,6 +114,7 @@ def run(args):
                     env["EMET_EQA_VIEW_SELECTION_POLICY"] = "pose"
                     env["EMET_EQA_RETAIN_APPROACH_VIEWS"] = "1"
                 env.update(stopping_overrides(arm))
+                env.update(provenance_overrides(arm))
                 for attempt in range(2):
                     case = out / f"s{seed}-q{qid}-{arm}-attempt{attempt}"
                     case.mkdir()
@@ -148,6 +158,7 @@ def run(args):
                                 "policy": env.get("EMET_EQA_VIEW_SELECTION_POLICY", "disabled"),
                                 "retain_approach": env.get("EMET_EQA_RETAIN_APPROACH_VIEWS", "0"),
                                 "stopping_overrides": stopping_overrides(arm),
+                                "provenance_overrides": provenance_overrides(arm),
                             },
                             indent=2,
                         )
@@ -215,6 +226,8 @@ if __name__ == "__main__":
             "pose_approach",
             "stop_single",
             "stop_corroborated",
+            "labels_role",
+            "labels_spatial",
         ],
         default=["historical", "unchanged", "pose", "quality_coverage"],
     )

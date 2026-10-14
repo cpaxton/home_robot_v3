@@ -576,3 +576,17 @@ serves live selected-view prompts and frozen replay; the audit manifest saves
 the actual prompt labels. Compare `labeled_full` / `spatial_full` on identical
 saved pixels with `--provenance-only`, three repeats. No camera motion, image
 selection, stopping-policy, or task-specific prompt changes in this comparison.
+
+The provenance replay completed 108/108 assessments. q12 changed wrong One to
+correct Two in all three repeats; q14 wrong TV became abstention in all three;
+q56 remained correct. q31 stayed wrong twice and abstained once. q68 had mixed
+packet-level abstention changes, including loss of a previously correct answer.
+This is not a general no-regression result.
+
+Next live test: `labels_role` versus `labels_spatial`, the same 12 questions,
+seed 0, 24 serial episodes. Both use pose+approach and single-view confirmation;
+only `EMET_EQA_VIEW_SPATIAL_LABELS` differs. Spatial labels remain opt-in via
+`SelectionConfig.spatial_labels` (default false). Score paired accuracy,
+confirmation provenance, rounds, and whether deferred answers recover before
+budget exhaustion. Freeze code before launch; do not change viewing distance
+or stopping alongside the labeling intervention.

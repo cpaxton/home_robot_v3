@@ -102,6 +102,7 @@ class ViewFrame:
 @dataclass(frozen=True)
 class SelectionConfig:
     policy: Policy = "pose"
+    spatial_labels: bool = False
     max_images: int = 4
     max_candidates: int = 32
     max_age_s: float = 60.0
@@ -161,6 +162,8 @@ class ViewSelection:
     config: SelectionConfig
 
     def prompt_labels(self) -> str:
+        if not self.config.spatial_labels:
+            return "\n".join(view.label(i) for i, view in enumerate(self.views, 1))
         return spatial_packet_labels(
             [
                 {"label": view.label(i), "timestamp_s": view.frame.timestamp_s, "camera_pose": view.frame.camera_pose}

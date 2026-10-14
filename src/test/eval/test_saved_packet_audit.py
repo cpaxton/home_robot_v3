@@ -25,6 +25,15 @@ def test_stopping_arms_only_differ_in_confirmation():
     assert script.stopping_overrides("pose") == {}
 
 
+def test_provenance_arms_only_differ_in_labels():
+    script = load_script("run_view_selection_pairs")
+    role = script.provenance_overrides("labels_role")
+    spatial = script.provenance_overrides("labels_spatial")
+    assert {key for key in role if role[key] != spatial[key]} == {"EMET_EQA_VIEW_SPATIAL_LABELS"}
+    assert role["EMET_EQA_AGENTIC_SINGLE_VIEW_CONFIRM"] == "1"
+    assert spatial["EMET_EQA_RETAIN_APPROACH_VIEWS"] == "1"
+
+
 def test_gallery_preserves_pixels_escapes_question_and_marks_roles(tmp_path):
     script = load_script("assess_saved_view_packets")
     episode = tmp_path / "input/s0-q12-pose_approach-attempt0/q0012_lazy_graph"

@@ -33,6 +33,16 @@ def ids(result):
     return [v.frame.view_id for v in result.views]
 
 
+def test_spatial_label_ablation_preserves_selected_images():
+    frames = [frame(1), frame(2), frame(3)]
+    role = select_views(frames, current_id="3", config=SelectionConfig())
+    spatial = select_views(frames, current_id="3", config=SelectionConfig(spatial_labels=True))
+    assert ids(role) == ids(spatial)
+    assert "Capture sequence=" not in role.prompt_labels()
+    assert "Capture sequence=" in spatial.prompt_labels()
+    assert spatial.to_dict()["prompt_labels"] == spatial.prompt_labels()
+
+
 def test_spatial_labels_use_capture_order_and_optical_forward():
     from emet.memory.view_selection import spatial_packet_labels
 
