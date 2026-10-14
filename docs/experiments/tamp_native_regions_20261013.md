@@ -189,3 +189,48 @@ This remains stationary, privileged, in-process native-contact execution.
 Physics pauses during inference. The result does not establish live ZMQ timing,
 observed perception, exploration, navigation, or general agent reliability, and
 must not be pooled with the earlier local Qwen2.5-3B result.
+
+## Selector validation and repeat trials
+
+Implemented at `57232014` on the same integration branch. Native planning now
+rejects contradictory handle/name selectors with `task_selector_mismatch` and
+`recovery="rediscover"` before constructing the motion executor. Redundant names
+must match the full published semantic label, ignoring case and outer whitespace.
+The rejection reports the handle's selected object/receptacle. Successful plans
+save these semantic identities, and execution results retain them on success,
+stale-plan rejection, or partial failure. Private simulator body IDs stay private.
+
+The targeted native adapter, API contract, and CHAT dispatch regression suite
+passed **92 tests, zero failures/errors/skips** using the prescribed CPU affinity
+(`taskset -c 0-7,12-31`, one BLAS/OpenMP thread). New regressions check object and
+receptacle conflicts before planning/actuation, matching selectors, saved identity
+after task-cache removal, and identity on stale-plan failure. Ruff passed. The
+initial run without that affinity restriction crashed inside MuJoCo IK during
+the existing grasp-search backtracking test; it was incomplete, not a test pass.
+The completed suite's XML/logs are archived with the rerun below. The crash's
+root cause has not been established by this change.
+
+Managed job `20261013_223600_e935eb`, artifacts:
+`/home/cpaxton/runs/emet/native-caliban-selector-fixed-20261013/`.
+Model revision and serving-file hash matched the earlier Caliban batch. Prompt,
+goals, initial fixture, 12-turn budget, planner/controller, and physical scoring
+were unchanged; the API validation and response identity fields changed.
+
+| Trial | Both goals | Turns | Successful transfers | Model-call seconds |
+| --- | --- | --- | --- | --- |
+| 1 | Pass | 5 | 2 | 56.20 |
+| 2 | Pass | 5 | 2 | 55.74 |
+| 3 | Pass | 6 | 2 | 67.44 |
+
+**3/3 complete episodes, 6/6 transfers**, with 186 ordinary commands per episode
+and no infrastructure failures. Trial 3 recovered from one malformed JSON turn;
+the other episodes used five valid tool calls. Both goals remained independently
+verified for two seconds. No conflicting selectors occurred in this rerun, so
+live model recovery from `task_selector_mismatch` is not demonstrated; refusal
+before motion is covered by the targeted regressions. The small 2/3 → 3/3
+comparison is useful integration evidence, not a statistical reliability claim
+or an ablation separating identity reporting from selector validation.
+
+Remaining gates are unchanged: held-out tasks/scenes, live physics during model
+inference through ZMQ, observed geometry, and exploration. No new PR was opened
+for this follow-up.
