@@ -770,3 +770,16 @@ module. Planning still receives its usual state. The original default remains
 enabled. Runner arms `spatial_progress` and `spatial_visual` otherwise match;
 run 12 questions × two arms, seed 0. 63 focused tests pass. Do not promote this
 text change merely because it causes abstention in q14.
+
+The live progress-text ablation completed 24/24 episodes: existing inventory
+9/12 with 40 total rounds; progress-free inventory 8/12 with 48 rounds. q25
+lost its correct visual answer; q14 still ended wrong. Keep the original prompt
+default. The offline abstention effect does not justify promoting removal.
+
+Next matched-main gate freezes main `b2b71216` and the current candidate, uses
+the same 12 questions, seeds 0/1/2, local Qwen3-VL-8B int4, and the same CLI
+budgets. Main uses its native implementation; the candidate uses pose+approach
+and spatial labels with the original progress inventory. Record config hashes
+for both. This compares complete systems rather than attributing every default
+or implementation difference to provenance. 72 serial episodes; inspect paired
+accuracy, evidence provenance, runtime, and infrastructure failures.

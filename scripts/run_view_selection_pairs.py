@@ -47,6 +47,10 @@ def provenance_overrides(arm):
 
 def run(args):
     roots = {"historical": args.historical.resolve(), "current": args.current.resolve()}
+    if "main" in args.arms:
+        if args.main is None:
+            raise ValueError("--main is required for the main comparison arm")
+        roots["main"] = args.main.resolve()
     revisions = {}
     for name, root in roots.items():
         if git(root, "status", "--porcelain", "--untracked-files=no"):
@@ -83,7 +87,7 @@ def run(args):
         for index, qid in enumerate(args.ids):
             order = args.arms if (index + seed) % 2 == 0 else list(reversed(args.arms))
             for arm in order:
-                name = "historical" if arm == "historical" else "current"
+                name = arm if arm in {"historical", "main"} else "current"
                 root = roots[name]
                 if git(root, "rev-parse", "HEAD") != revisions[name] or git(root, "diff", "HEAD", "--stat"):
                     raise RuntimeError(f"frozen source changed: {root}")
@@ -216,6 +220,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--current", type=Path, required=True)
     parser.add_argument("--historical", type=Path, required=True)
+    parser.add_argument("--main", type=Path, help="Frozen current-main checkout for matched comparisons")
     parser.add_argument("--habitat-bin", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--ids", type=int, nargs="+", default=[6, 12, 14, 56])
@@ -225,6 +230,7 @@ if __name__ == "__main__":
         nargs="+",
         choices=[
             "historical",
+            "main",
             "unchanged",
             "pose",
             "quality_coverage",
