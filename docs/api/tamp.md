@@ -314,7 +314,16 @@ The frozen two-object region file is
 `configs/eval/native_table_two_object_regions.json` (cylinder goal, then box goal).
 Use the contact harness with `--sequence object2 object1 --separation .15
 --separation-axis y --placement-regions PATH`. The separate
-`scripts/eval_native_table_agent.py` evaluates local Qwen selection with the CHAT
+`scripts/eval_native_table_agent.py` evaluates LLM selection with the CHAT
 prompt/parser/dispatcher and independent region/support scoring; it is not the
 interactive `run agent` CLI or a live ZMQ run. Its `--device` defaults to `cpu`;
 `--device cuda` requires a managed GPU reservation. Both harnesses require managed jobs.
+
+For an existing remote OpenAI-compatible server, supply both
+`--base-url http://HOST:8000/v1 --remote-model MODEL_ID`. This uses the ordinary
+OpenAI-compatible agent client and loads no local model weights. Remote requests
+have a 120-second timeout and no automatic retries; the managed runner should
+also bound total episode time. Remote decoding uses the server defaults, and
+`--seed` only controls the local process. Archive the served model revision and
+sampling configuration alongside results. Physics still pauses during inference
+in this in-process harness; remote hosting does not establish live execution.

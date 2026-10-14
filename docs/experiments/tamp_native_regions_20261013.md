@@ -138,3 +138,54 @@ The schema change applies to all local CHAT tool descriptions, not only TAMP.
 For the default empty-context registry (30 tools), the tools block grows from
 9,012 to 12,524 characters. Structured API tool schemas and EQA tool membership
 are unchanged. Full interactive-session model behavior still needs its own check.
+
+## Caliban remote agent repeatability trials
+
+Source `3e61f34e`, managed job `20261013_215016_50a36b`, artifacts:
+`/home/cpaxton/runs/emet/native-caliban-agent-20261013/`. Caliban was reachable
+through the configured SSH alias/LAN despite its stale supplied Tailscale entry.
+The existing server supplied `Qwen/Qwen3-VL-8B-Instruct` in float16 on Orin;
+no local model weights or local GPU reservation were needed. Model revision:
+`0c351dd01ed87e9c1b53cbc748cba10e6187ff3b`. Remote serving source SHA:
+`d07af78ac75d844ebcede886eada7e3b3b231828`; server file SHA256 and runner are
+archived under `validation/`. The server uses `do_sample=False`. Local seed 0
+does not seed the remote model. These are fresh fixture repetitions with new
+opaque handles, not independent random samples or held-out scenes.
+
+The same two initially unmet goals, 12-turn budget, CHAT prompt/parser/dispatcher,
+and independent whole-footprint/support/stillness scorer were used throughout.
+No controller, planner, prompt, or scoring changes were made during the batch.
+
+| Trial | Both goals | Turns | Commanded transfers passing physical checks | Model-call seconds |
+| --- | --- | --- | --- | --- |
+| 1 | Fail | 12 | 2 (cylinder twice) | 98.09 |
+| 2 | Pass | 6 | 2 | 66.73 |
+| 3 | Pass | 5 | 2 | 59.17 |
+
+**2/3 episodes passed; 6/6 commanded transfers passed their physical checks.**
+These denominators measure different things. Each episode issued 186 ordinary
+arm/gripper commands. There were no request timeouts or infrastructure failures.
+Model-call seconds exclude physics and orchestration. Five relevant tests passed
+(three independent region-scoring tests and two existing client-history tests),
+and Ruff passed for the remote harness change.
+
+Trial 1 discovered tasks correctly, then passed the cylinder's `task_ref` with
+`object_name="blue cube"` when requesting the second move. The native API gives
+the handle precedence and ignored the contradictory name, so it moved the
+cylinder into the cube's region. Both transfers individually succeeded, but
+neither final object goal was met. The model subsequently claimed completion;
+the independent evaluator correctly failed the episode. Trial 2 recovered from
+one malformed JSON response and completed both goals. Trial 3 completed in five
+valid tool turns. The successful trials did not rediscover between transfers,
+despite the instruction to do so; existing task handles remain valid.
+
+Next interface fix: reject conflicting handle/name selectors before planning,
+with an explicit rediscovery hint; return the selected semantic object and
+receptacle in plan/execution results so the agent can inspect what actually
+happened. Add contract regressions, then rerun this frozen batch separately.
+Do not treat per-operation `ok` as proof that the whole requested task is done.
+
+This remains stationary, privileged, in-process native-contact execution.
+Physics pauses during inference. The result does not establish live ZMQ timing,
+observed perception, exploration, navigation, or general agent reliability, and
+must not be pooled with the earlier local Qwen2.5-3B result.
