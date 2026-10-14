@@ -746,3 +746,35 @@ def test_settling_uses_physics_clock_with_wall_watchdog(monkeypatch, rate):
         assert 1. <= d.time <= 1.05
     else:
         assert clock[0] >= 20.
+
+
+@pytest.mark.parametrize('parameter', ['tol_m', 'tol_rad', 'damping', 'step'])
+@pytest.mark.parametrize('value', [float('nan'), float('inf')])
+def test_pose_ik_rejects_nonfinite_solver_parameters(parameter, value):
+    m = model()
+    d = mujoco.MjData(m)
+    before = d.qpos.copy()
+    with pytest.raises(ValueError, match='finite rigid target'):
+        solve_pose_ik(m, d, ee_body='robot', joint_names=['yaw'],
+                      target_pos=[0, 0, 0], target_rotation=np.eye(3), **{parameter: value})
+    np.testing.assert_array_equal(d.qpos, before)
+
+
+def test_pose_ik_rejects_nonfinite_seed_before_kinematics(monkeypatch):
+    m = model()
+    d = mujoco.MjData(m)
+    d.qpos[0] = np.nan
+    def forbidden(*args):
+        raise AssertionError('invalid seed reached native kinematics')
+    monkeypatch.setattr(mujoco, 'mj_kinematics', forbidden)
+    with pytest.raises(ValueError, match='finite initial joint state'):
+        solve_pose_ik(m, d, ee_body='robot', joint_names=['yaw'],
+                      target_pos=[0, 0, 0], target_rotation=np.eye(3))
+
+
+@pytest.mark.parametrize('joints', [[], ['yaw', 'yaw']])
+def test_pose_ik_rejects_duplicate_or_empty_joint_coordinates(joints):
+    m = model()
+    with pytest.raises(ValueError, match='distinct controlled joints'):
+        solve_pose_ik(m, mujoco.MjData(m), ee_body='robot', joint_names=joints,
+                      target_pos=[0, 0, 0], target_rotation=np.eye(3))

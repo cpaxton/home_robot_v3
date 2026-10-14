@@ -35,13 +35,14 @@ def test_invalid_tamp_outcome_is_not_success(result):
 
 @pytest.mark.parametrize('status,code', [('partial', 'command_outcome_unknown'),
                                         ('error', 'scene_changed_replan'), ('ok', 'ok')])
-def test_dispatch_stops_precomputed_batch_on_failure(status, code):
-    execute = Mock(return_value=json.dumps(response('execute_pick_place_plan', status=status, code=code)))
+@pytest.mark.parametrize("tool", ["execute_pick_place_plan", "set_receptacle_state"])
+def test_dispatch_stops_precomputed_batch_on_failure(status, code, tool):
+    execute = Mock(return_value=json.dumps(response(tool, status=status, code=code)))
     next_action = Mock(return_value='moved')
     tools = {name: SimpleNamespace(func=fn, returns_info=True, to_executor=lambda args: [])
-             for name, fn in [('execute_pick_place_plan', execute), ('move_forward', next_action)]}
+             for name, fn in [(tool, execute), ('move_forward', next_action)]}
     keep_running, results, has_info = _dispatch_tool_calls([
-        {'name': 'execute_pick_place_plan', 'arguments': {'plan_ref': 'plan:1'}},
+        {'name': tool, 'arguments': {'plan_ref': 'plan:1'}},
         {'name': 'move_forward', 'arguments': {}}], tools, Mock())
     assert keep_running and has_info  # stop the batch, not the agent session
     assert next_action.call_count == (1 if status == 'ok' else 0)
