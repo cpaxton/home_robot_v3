@@ -36,6 +36,7 @@ def _executor(env):
         command_joints=lambda _: False,
         coupled_groups=tuple(group for group in profile.joint_groups if len(group) > 1),
         base_body=profile.base_body,
+        input_mode="privileged",
     )
     executor.payload_body = checker.payload_body
     return executor

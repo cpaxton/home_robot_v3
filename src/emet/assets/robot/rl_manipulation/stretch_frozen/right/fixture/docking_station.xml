@@ -22,10 +22,10 @@
     <mesh file="link_docking_base_collision_2.obj" />
     <mesh file="link_docking_base_collision_3.obj" />
     <mesh file="link_docking_base_collision_4.obj" />
-
+     
     <mesh file="link_docking_base_collision_6.obj" />
     <mesh file="link_docking_base_collision_7.obj" />
-
+     
     <mesh file="link_docking_base_collision_9.obj" />
     <mesh file="link_docking_base_collision_10.obj" />
     <mesh file="link_docking_base_collision_11.obj" />
@@ -52,10 +52,10 @@
       <geom mesh="link_docking_base_collision_2" class="collision_ds" />
       <geom mesh="link_docking_base_collision_3" class="collision_ds" />
       <geom mesh="link_docking_base_collision_4" class="collision_ds" />
-
+       
       <geom mesh="link_docking_base_collision_6" class="collision_ds" />
       <geom mesh="link_docking_base_collision_7" class="collision_ds" />
-
+       
       <geom mesh="link_docking_base_collision_9" class="collision_ds" />
       <geom mesh="link_docking_base_collision_10" class="collision_ds" />
       <geom mesh="link_docking_base_collision_11" class="collision_ds" />

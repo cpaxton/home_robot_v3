@@ -1,5 +1,5 @@
 <mujoco model="scene_environment">
-
+  
   <statistic center="0 0 .75" extent="1.2" meansize="0.05" />
 
   <visual>
@@ -10,7 +10,7 @@
 
   <asset>
     <material name="floor" rgba=".1 .1 .1 1" reflectance="0.1" />
-
+    
     <material name="wood" rgba="0.4 0.28 0.15 1" />
     <material name="object" rgba=".2 .2 .2 1" />
     <texture type="skybox" builtin="gradient" rgb1="0.44 0.80 1.00" rgb2="1 1 1" width="512" height="3072" />

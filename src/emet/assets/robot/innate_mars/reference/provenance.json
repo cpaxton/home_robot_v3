@@ -3,7 +3,7 @@
   "revision": "9e10601a124992068762528806f02c56ebc76f55",
   "files": {
     "maurice.urdf": "3e1dadfa4e3e10085691962dfa06e3fb2e9508663f7631829c17307e4f077b41",
-    "arm.srdf": "56c1fd590050832f54452e46200c47d43562ddab1d28e395898f2a5a958825cc"
+    "arm.srdf": "72f67c20b8e090b09be9ac3688a88b06d09360d1ae43f9fecb9b9780d0cb8aa3"
   },
   "meshes": {
     "base.STL": "e725a419bbe85a9346a0187aff6b9c1fd3bcf9cf6cc1f1c4164777134b31f5ca",

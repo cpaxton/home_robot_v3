@@ -1,7 +1,7 @@
 <mujoco model="stretch">
   <compiler angle="radian" assetdir="/tmp/emet-native-live-20261014/src/emet/assets/robot/assets" />
 
-
+  
   <option integrator="implicitfast" impratio="20" cone="elliptic">
     <flag multiccd="enable" />
   </option>
@@ -24,8 +24,8 @@
         <general ctrlrange="0 0.52" gainprm="150" biasprm="0 -100 -10" forcerange="-56 56" />
       </default>
       <default class="head">
-
-
+        
+        
         <joint axis="0 0 1" damping="0.5" armature="0.01" />
         <position kp="80" kv="5" forcerange="-25 25" />
         <default class="head_pan">
@@ -349,7 +349,7 @@
                     <geom material="Aruco_Inner_Wrist_Sticker" mesh="link_aruco_inner_wrist" class="visual" mass="3.6E-06" />
                     <geom mesh="link_aruco_inner_wrist" class="collision" />
                   </body>
-
+                  
                   <body name="link_wrist_yaw" pos="0.083 -0.03075 0" quat="-1 -1 0 0" gravcomp="1">
                     <joint name="joint_wrist_yaw" class="wrist_yaw" />
                     <geom material="Generic_Black" mesh="link_wrist_yaw" mass="0.1445" class="visual" />
@@ -381,7 +381,7 @@
                             </body>
                           </body>
                           <body name="link_grasp_center" pos="0 0 0.23" euler="-1.5707963267949 -1.5707963267948 0"> </body>
-
+                          
                             <body name="link_gripper_slider" euler="0 0 0" pos="0 0 0" gravcomp="1">
                               <joint name="joint_gripper_slide" class="finger_slide" />
                               <geom type="box" size=".03 .005 .005" mass=".05" class="visual" rgba="0 0 0 0" />
@@ -397,7 +397,7 @@
                                   <joint name="rubber_left_x" type="hinge" axis="1 0 0" damping=".01" stiffness="1" springref="0" />
                                   <joint name="rubber_left_y" type="hinge" axis="0 1 0" damping=".01" stiffness="1" springref="0" />
                                   <geom class="visual" mesh="link_SG3_gripper_left_fingertip" mass="0.005" material="suction_rubber" />
-
+                                  
                                   <geom type="box" size="0.02 0.02 0.01" pos="0 0 0.01" class="rubber" />
                                 </body>
                                 <body name="link_SG3_gripper_left_finger_aruco" pos="-0.14425 0.0014877 -0.005189" euler="0.19199 0.95993 3.1312">
@@ -417,7 +417,7 @@
                                   <joint name="rubber_right_x" type="hinge" axis="1 0 0" damping=".01" stiffness="1" springref="0" />
                                   <joint name="rubber_right_y" type="hinge" axis="0 1 0" damping=".01" stiffness="1" springref="0" />
                                   <geom class="visual" material="suction_rubber" mesh="link_SG3_gripper_right_fingertip" mass="0.005" />
-
+                                  
                                   <geom type="box" size="0.02 0.02 0.01" pos="0 0 0.01" class="rubber" />
                                 </body>
                                 <body name="link_SG3_gripper_right_finger_aruco" pos="0.14426 0 0.005189" euler="-2.9496 -0.95993 3.1416">
