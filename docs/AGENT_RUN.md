@@ -319,3 +319,28 @@ tool-calling clients. Nested arrays, required fields, and parameter descriptions
 must remain visible; stripping them to argument names caused native TAMP calls
 to confuse robot identity with input mode and to invent task handles. Unknown
 native task handles request rediscovery rather than inspection.
+
+### Bounded multi-step TAMP sessions
+
+Successful TAMP tool results can continue the user's original task within the
+round budget. `--max-tool-rounds` defaults to 3 (range 1–32); use a larger budget,
+for example 12, for discovery, planning, execution, and rediscovery across objects.
+A failed/partial/unknown TAMP outcome ends that turn with a summary; no action
+returned by that final summary executes. Inspect before an explicit recovery
+turn. A request only to plan does not authorize execution.
+
+`--state-only-sim --memory-backend dynamem` is an explicit camera-free Stretch
+simulation diagnostic. It requires LLM CHAT, no EQA/camera input or checkpoint,
+and server metadata advertising zero cameras. It loads no perception models and
+exposes only TAMP tools and `quit`. Use explicit `--robot-ip 127.0.0.1` and matching
+ports for a local simulator, because an active connection profile can otherwise
+supply the host. Native tests also select `agent.manip_mode=physical` and
+`agent.tamp_inputs=privileged`. This mode does not validate observed exploration.
+See the [held-out/CLI experiment](experiments/tamp_native_heldout_chat_20261014.md)
+and [CLI evaluator](../scripts/eval_native_chat_session.py) for recorded commands
+and independent scoring.
+
+Remote OpenAI-compatible inference keeps ZMQ telemetry running. Local model
+inference retains the existing stream-pause behavior for decode/load contention.
+This distinction prevents stale-snapshot rejection when a remote model returns a
+native manipulation call; it does not relax the observation freshness limit.

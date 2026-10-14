@@ -63,8 +63,14 @@ establish held-out scene performance, visual exploration, or hardware readiness.
 The report records earlier failed/aborted infrastructure attempts and the remaining
 native-runtime uncertainty alongside the successes.
 
-The next acceptance steps are varied initial placements, explicit recovery cases,
-and integrated `run agent` exploration with observed grounding and navigation.
+The subsequent [held-out placement gate](experiments/tamp_native_heldout_chat_20261014.md)
+completed **0/2 episodes**: one retention failure and one measured fingertip/table
+collision. Robust placement remains open. That report also tracks actual CHAT
+session integration and failure boundaries. After fixing remote telemetry freshness,
+the actual `run agent` CLI passed one familiar-fixture episode with two transfers
+and an initial invalid-plan rejection. This does not change the held-out failures.
+Observed grounding, navigation, and
+exploration are later acceptance gates.
 Keep assisted, scripted, in-process LLM, and live LLM results separate.
 
 ## Implementation and detailed references

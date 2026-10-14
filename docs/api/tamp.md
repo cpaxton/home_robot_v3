@@ -361,3 +361,8 @@ not validate visual exploration or perception.
 The [live agent experiment](../experiments/tamp_native_live_agent_20261014.md)
 records two successful two-goal episodes with physics advancing during every
 model call, plus the IK binding mitigation and its remaining runtime uncertainty.
+
+The subsequent [held-out and actual CHAT gate](../experiments/tamp_native_heldout_chat_20261014.md)
+records placement failures and bounded session recovery. See
+[run-agent TAMP sessions](../AGENT_RUN.md#bounded-multi-step-tamp-sessions) for the
+round budget and explicit camera-free diagnostic mode.
