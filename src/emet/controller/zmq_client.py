@@ -34,6 +34,7 @@ from emet.core.robot import AbstractRobotClient
 from emet.core.zmq_obs_codec import decode_zmq_obs_images_inplace
 from emet.core.zmq_protocol import (
     EMET_ZMQ_ROBOT_ID_KEY,
+    EMET_ZMQ_SESSION_KEY,
     emet_session_cache_update,
     emet_session_manipulation_supported,
     is_stretch_family,
@@ -149,6 +150,7 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         resend_all_actions: bool = False,
         publish_observations: bool = False,
         allow_missing_depth: bool = False,
+        state_only: bool = False,
     ):
         """
         Create a client to communicate with the robot over ZMQ.
@@ -185,6 +187,8 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         if parameters is None:
             parameters = get_parameters("default_planner.yaml")
         self._parameters = parameters
+        # Opt-in only; start() additionally requires a camera-free simulation advertisement.
+        self._state_only = bool(state_only)
         self._allow_missing_depth = allow_missing_depth
 
         env = os.environ.get("EMET_ZMQ_STARTUP_TIMEOUT", "").strip()
@@ -1930,6 +1934,14 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         )
         return False
 
+    def _state_only_startup_ready(self) -> bool:
+        """Explicit camera-free simulation mode; never waive real-robot streams."""
+        if not getattr(self, '_state_only', False) or not isinstance(self._state, dict):
+            return False
+        session = self._state.get(EMET_ZMQ_SESSION_KEY)
+        return (isinstance(session, dict) and session.get('is_simulation') is True
+                and (session.get('capabilities') or {}).get('num_cameras') == 0)
+
     def start(self) -> bool:
         """Start running blocking thread in a separate thread. This will wait for observations to come in and update internal state.
 
@@ -1960,7 +1972,8 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         t0 = timeit.default_timer()
         startup_timeout = getattr(self, "_zmq_startup_timeout", 60.0)
         next_progress_log = t0 + 5.0
-        while self._obs is None or self._state is None or self._servo is None:
+        while self._state is None or (not self._state_only_startup_ready()
+                                     and (self._obs is None or self._servo is None)):
             time.sleep(0.1)
             t1 = timeit.default_timer()
             if t1 >= next_progress_log:

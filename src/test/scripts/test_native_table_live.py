@@ -37,3 +37,16 @@ def test_live_wait_has_wall_watchdog(monkeypatch):
     monkeypatch.setattr(live.time, 'monotonic', lambda: next(ticks))
     with pytest.raises(TimeoutError, match='stopped advancing'):
         robot.step(.05)
+
+
+@pytest.mark.parametrize('opt_in,simulation,cameras,expected', [
+    (True, True, 0, True), (False, True, 0, False),
+    (True, False, 0, False), (True, True, 2, False), (True, True, None, False),
+])
+def test_state_only_start_requires_explicit_camera_free_simulation(opt_in, simulation, cameras, expected):
+    from emet.controller.zmq_client import StretchZmqClient
+    from emet.core.zmq_protocol import EMET_ZMQ_SESSION_KEY
+    client = object.__new__(StretchZmqClient)
+    client._state_only = opt_in
+    client._state = {EMET_ZMQ_SESSION_KEY: {'is_simulation': simulation, 'capabilities': {'num_cameras': cameras}}}
+    assert client._state_only_startup_ready() is expected

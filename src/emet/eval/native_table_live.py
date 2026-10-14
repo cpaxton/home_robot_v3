@@ -66,7 +66,16 @@ def live_table_robot(sim_path, output, model):
     with (output / 'server.log').open('w') as log:
         server = launch_benchmark_sim_server(config, repo=repo, cpu_only=False, server_stderr=log)
         try:
-            client = connect_benchmark_robot(config, server.port_offset, enable_rerun_server=False)
+            if config.no_cameras:
+                from emet.controller.zmq_client import StretchZmqClient
+                client = StretchZmqClient(robot_ip='127.0.0.1', port_offset=server.port_offset,
+                                          enable_rerun_server=False, start_immediately=False, state_only=True)
+                if not client.start():
+                    raise RuntimeError('camera-free simulator did not publish valid state')
+                client.move_to_nav_posture()
+                client.set_velocity(v=30., w=15.)
+            else:
+                client = connect_benchmark_robot(config, server.port_offset, enable_rerun_server=False)
             yield LiveTableRobot(client, model)
         finally:
             try:
