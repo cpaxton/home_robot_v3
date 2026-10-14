@@ -218,6 +218,7 @@ def update(self, *, full_perception: bool | None = None):
     if run_full:
         run_infer_full = True
     depth: np.ndarray | None
+    depth_reused = False
     if (
         not run_infer_full
         and self._depth_source in ("da3", "auto")
@@ -226,9 +227,11 @@ def update(self, *, full_perception: bool | None = None):
         and self._da3_last_depth.shape[:2] == rgb.shape[:2]
     ):
         depth = np.asarray(self._da3_last_depth, dtype=np.float32).copy()
+        depth_reused = True
         self._depth_map_from_da3_infer = True
         if self._depth_source == "auto" and sensor_depth is not None and np.asarray(sensor_depth).size > 0:
             depth = np.asarray(sensor_depth, dtype=np.float32)
+            depth_reused = False
             self._depth_map_from_da3_infer = False
     elif (
         not run_infer_full
@@ -237,6 +240,7 @@ def update(self, *, full_perception: bool | None = None):
         and self._lingbot_last_depth.shape[:2] == rgb.shape[:2]
     ):
         depth = np.asarray(self._lingbot_last_depth, dtype=np.float32).copy()
+        depth_reused = True
         self._depth_map_from_da3_infer = True
     else:
         depth = self._resolve_depth_map(
@@ -307,7 +311,13 @@ def update(self, *, full_perception: bool | None = None):
         if org is not None:
             self._cached_navigation_origin_xyt = np.asarray(org, dtype=np.float64).reshape(-1)[:3].copy()
 
-    self.voxel_map.process_rgbd_images(rgb, depth, K, camera_pose, base_xyt=base_xyt, full_perception=run_full)
+    self.voxel_map.process_rgbd_images(
+        rgb, depth, K, camera_pose, base_xyt=base_xyt, full_perception=run_full,
+        # Reused inferred depth does not describe this newly received frame.
+        received_monotonic=None if depth_reused else getattr(obs, 'received_monotonic', None),
+        depth_evidence_source=('estimated_depth_pointcloud' if self._depth_source == 'lingbot'
+                               or getattr(self, '_depth_map_from_da3_infer', False) else 'rgbd_pointcloud'),
+    )
     if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
         print(f"[update] process_rgbd={time.monotonic():.3f}", flush=True)
     robot_xy = None

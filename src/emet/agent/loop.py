@@ -595,8 +595,9 @@ def run_agent_with_robot(
     The agent exits after all commands are consumed.
 
     *observed_tamp_provider* supplies read-only observed task proposals to
-    ``scene_tasks``. This Python integration hook does not enable native planning
-    or execution; the CLI currently has no default perception-backed provider.
+    ``scene_tasks``. Otherwise the existing open-vocabulary scene-graph processor
+    supplies its RGBD proposal provider when enabled. Discovery does not enable
+    native planning or execution.
 
     *shutdown_sim_subprocess*, when set, is called after ``robot_client.stop()`` so a sim
     started with ``emet run agent --start-sim`` can exit as soon as the ZMQ client disconnects
@@ -817,7 +818,10 @@ def run_agent_with_robot(
         "executor": executor,
         "robot": robot_client,
         "memory_backend": voxel_memory_backend,
-        "observed_tamp_provider": observed_tamp_provider,
+        "observed_tamp_provider": (
+            observed_tamp_provider if observed_tamp_provider is not None else
+            getattr(getattr(executor.agent, '_open_vocab_sg_processor', None), 'observed_tamp_provider', None)
+        ),
         "graph_memory": _gm,
         "graph_memory_backend": _graph_backend,
         "scene_graph_processor": getattr(executor.agent, "_open_vocab_sg_processor", None),

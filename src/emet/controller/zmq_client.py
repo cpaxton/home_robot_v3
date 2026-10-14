@@ -1232,6 +1232,8 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
 
     def _update_obs(self, obs):
         """Update observation internally with lock"""
+        obs = dict(obs)
+        obs['_received_monotonic'] = time.monotonic()
         with self._obs_lock:
             self._obs = obs
             self._last_step = max(self._last_step, int(obs["step"]))
@@ -1385,6 +1387,7 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
                 xyz=self._obs["xyz"],
                 lidar_points=self._obs["lidar_points"],
                 lidar_timestamp=self._obs["lidar_timestamp"],
+                received_monotonic=self._obs.get('_received_monotonic'),
                 emet_session=read_emet_session(self._obs),
             )
             observation.joint = self._obs.get("joint", None)

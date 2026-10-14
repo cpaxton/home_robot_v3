@@ -591,6 +591,8 @@ class SparseVoxelMap(DynamemVoxelEQAMixin, DynamemVoxelLocalizeMixin, SparseVoxe
         *,
         base_xyt: np.ndarray | None = None,
         full_perception: bool = True,
+        received_monotonic: float | None = None,
+        depth_evidence_source: str = 'rgbd_pointcloud',
     ):
         """
         Process rgbd images for Dynamem
@@ -746,7 +748,8 @@ class SparseVoxelMap(DynamemVoxelEQAMixin, DynamemVoxelLocalizeMixin, SparseVoxe
                     depth=original_depth,
                     intrinsics=original_intrinsics,
                     camera_pose=original_pose,
-                    world_xyz=world_xyz,
+                    received_monotonic=received_monotonic,
+                    depth_evidence_source=depth_evidence_source,
                 )
             except Exception as e:
                 from emet.utils.logger import warning as _warn_colored

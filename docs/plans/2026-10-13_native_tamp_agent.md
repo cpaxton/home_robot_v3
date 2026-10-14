@@ -228,8 +228,25 @@ simulator metadata reads, stale/future/privileged rejection, and no execution
 from discovery-only results. Two-cycle orchestration and plan-only requests also
 have controlled-backend CHAT-loop tests.
 
-This completes the provider/agent boundary, not Gate 3: no default memory/tracker
-provider is installed and no new observed live trial has passed. Next connect a
-real tracker and observed support estimator, then test discovery from camera
-observations before enabling any observed planning. See the
+The existing open-vocabulary RGBD processor now supplies a provider automatically
+when that backend is enabled. The provider uses segmented points from a single
+frame and geometric horizontal-patch proposals, with the original local RGBD
+receive time propagated through mapping. No accumulated geometry or cached
+localization is promoted to fresh evidence. Depth-estimator outputs have a
+distinct provenance label and position estimates do not invent an orientation.
+
+CPU tests exercise the real processor/depth projection, tool registry and CHAT
+wiring with controlled segmentation. Gate 3 still needs a live camera/segmentation
+trial and observed planning geometry/verification. Next validate discovery from
+camera observations before enabling observed planning. See the
 [API contract](../api/tamp.md#observed-discovery-integration-hook).
+
+
+Validation for the RGBD provider connection: 103 selected CPU tests passed across
+observed discovery, CHAT continuation/dispatch, scoring, scene graph, navigation,
+voxel mapping and DynaMem module/controller checks. After the cached-depth guard,
+19 focused discovery/DynaMem checks passed, including two regressions that exercise
+the real mapping update path. Ruff and diff checks passed. An earlier frame-contract
+batch skipped seven RoboCasa-dependent tests because that checkout lacks the
+RoboCasa dependency; those skips are not acceptance evidence. No new live detector
+trial or GPU experiment was run in this implementation step.

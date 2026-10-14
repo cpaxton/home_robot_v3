@@ -142,8 +142,9 @@ fixtures or pool assisted historical scores with new results.
 
 `agent.manip_mode=physical` selects actuator/contact execution. It never falls
 back to object teleportation or attachment. Inputs default to
-`agent.tamp_inputs=observed`; observed discovery currently returns
-`observed_scene_unavailable` before reading simulator metadata.
+`agent.tamp_inputs=observed`. Observed discovery uses the enabled open-vocabulary
+RGBD processor; without a provider it returns `observed_scene_unavailable`.
+Observed planning and execution remain unavailable.
 
 Explicit `privileged` inputs enable the packaged **Stretch default table scene**
 adapter. The existing four tools discover stationary pick/place tasks, validate
@@ -374,11 +375,14 @@ Python embedders of `run_agent_with_robot` can pass `observed_tamp_provider`, an
 `emet.controller.task.tamp.observed_discovery`. The tool context uses the same key.
 The provider declares `input_mode = "observed"` and implements `observe_tasks()`
 to return one coherent tuple of `ObservedTaskCandidate` values. Each candidate
-contains semantic object/receptacle names and independently observed object and
-support `ObjectPoseEvidence`. Labels alone are insufficient to establish a support.
+contains semantic object/receptacle names and object/support evidence. Tracked
+poses can use `ObjectPoseEvidence` (`rgbd_tracking` or `stereo_tracking`); segmented
+depth positions use `ObservedPositionEvidence` (`rgbd_pointcloud` or
+`estimated_depth_pointcloud`). Position evidence carries no inferred rotation.
+Labels alone are insufficient to establish a support.
 
-Both poses must use `rgbd_tracking` or `stereo_tracking`, preserve their original
-observation receive times, and be at most two seconds old. Discovery does not renew
+Both estimates preserve their original observation receive times and must be at
+most two seconds old. Discovery does not renew
 those times. Unknown/occluded entities must be omitted; empty observations return
 an empty task list. Stale, future-dated, or privileged evidence rejects the entire
 snapshot, including evidence excluded by the caller's category filter. Receive
@@ -392,10 +396,33 @@ proposals, not executable plan handles or certified affordances. The CHAT loop
 summarizes this result and stops the turn instead of continuing into manipulation.
 Native planning/execution gates remain unchanged and still reject observed mode.
 
-This is an integration hook, **not a default perception provider**. The CLI does
-not yet construct one from DynaMem or GraphEQA. Without explicit injection,
-observed discovery continues to return `observed_scene_unavailable`. The next
-step is a memory/tracker implementation that can actually supply the required
-object/support evidence; observed obstacle/payload geometry and execution
-verification remain separate prerequisites for motion. No simulator state is
-used as a substitute.
+With `--memory-backend open_vocab`, `run agent` automatically uses the
+`RgbdTaskProvider` attached to its existing scene-graph processor. Explicit Python
+injection takes precedence. No new detector or tracking model is introduced. The
+provider uses only the current segmented RGBD frame; accumulated scene-graph
+bounds, cached semantic localizations and simulator metadata are not inputs.
+
+The provider proposes small segmented objects (robust extent 1–30 cm) and broad
+horizontal upper depth patches (at least 15 cm in each horizontal direction and
+0.03 square metres, with 30 depth points in a 2 cm height band). These geometric
+heuristics produce task candidates, not support/load-bearing or graspability
+certificates. Each object is paired with other observed support candidates in
+that frame. Estimated depth is labeled separately from sensor RGBD. Unknown,
+empty or untimestamped frames clear the proposals; a processing failure also
+clears the previous frame before processing starts.
+
+Stretch stamps its RGBD receive time locally when a full observation arrives.
+The timestamp travels with that observation through depth resolution, mapping
+and scene-graph segmentation; reading or reprocessing the same frame does not
+renew it. Reused inferred depth is not stamped with a newer image's receive time
+and cannot produce fresh proposals. Slow processing can make the result stale,
+which is rejected. This is
+local receive freshness, not a hardware capture-time or clock-synchronization
+claim. Other robot clients must supply the same local observation provenance
+before they can produce fresh proposals.
+
+The camera-free diagnostic and plain `dynamem`/GraphEQA presets do not activate
+this processor and still need an explicit provider for discovery. Observed
+obstacle/payload geometry and execution verification remain prerequisites for
+motion. Live camera/segmentation acceptance is still pending; tests use controlled
+segmentation with real depth unprojection and the actual processor/tool paths.

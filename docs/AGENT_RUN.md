@@ -344,3 +344,21 @@ Remote OpenAI-compatible inference keeps ZMQ telemetry running. Local model
 inference retains the existing stream-pause behavior for decode/load contention.
 This distinction prevents stale-snapshot rejection when a remote model returns a
 native manipulation call; it does not relax the observation freshness limit.
+
+
+### Observed task discovery
+
+With the existing `open_vocab` memory backend and `agent.manip_mode=physical`,
+`agent.tamp_inputs=observed`, `scene_tasks` reads proposals from the current
+segmented RGBD frame. It reports object positions and horizontal support
+candidates with observation ages and sensor/estimated-depth provenance. The
+original Stretch RGBD receive time is preserved through mapping and segmentation.
+Reading memory does not renew it. Empty, missing, failed or stale observations
+cannot authorize manipulation.
+
+This requires camera observations and the configured scene-graph detector;
+`--state-only-sim` cannot exercise it. Plain voxel/GraphEQA presets do not install
+this provider. Python embedders can inject another `observed_tamp_provider`.
+Discovery results explicitly report `discovery_only`; CHAT summarizes and stops.
+Observed planning/execution remain unavailable pending collision geometry and
+verification providers. See the [provider contract](api/tamp.md#observed-discovery-integration-hook).

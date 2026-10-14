@@ -166,3 +166,27 @@ def test_observed_provider_reaches_real_chat_tools_and_forces_discovery_summary(
     assert 'Do not call any more tools' in llm.call_args_list[1].args[1]
     robot.get_emet_session.assert_not_called()
     robot.arm_to.assert_not_called()
+
+
+def test_chat_automatically_uses_existing_scene_graph_provider(monkeypatch):
+    from types import SimpleNamespace
+
+    from emet.agent.tools import get_tools
+    from emet.controller.task.tamp.observed_discovery import RgbdTaskProvider
+
+    robot = setup_chat_loop(monkeypatch)
+    executor = loop.DynamemTaskExecutor()
+    provider = RgbdTaskProvider()
+    executor.agent._open_vocab_sg_processor = SimpleNamespace(observed_tamp_provider=provider)
+    def real_tools(context):
+        assert context['observed_tamp_provider'] is provider
+        context['executor']._manip_mode = 'physical'
+        context['executor']._tamp_inputs = 'observed'
+        return get_tools(context)
+    monkeypatch.setattr(loop, 'get_tools', real_tools)
+    monkeypatch.setattr(loop, '_call_llm', MagicMock(side_effect=[
+        ('{"tool_calls":[{"name":"scene_tasks","arguments":{}}]}', .1),
+        ('{"message":"No fresh task proposals yet","tool_calls":[]}', .1)]))
+    loop.run_agent_with_robot(discord=False, use_llm=True, commands=['Discover tasks'],
+                              device='cpu', thinking_status=False)
+    robot.get_emet_session.assert_not_called()

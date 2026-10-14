@@ -71,6 +71,8 @@ class SceneGraphProcessor:
         self._visual_encoder = visual_encoder
         self._segmenter = segmenter
         self._step = 0
+        from emet.controller.task.tamp.observed_discovery import RgbdTaskProvider
+        self.observed_tamp_provider = RgbdTaskProvider()
 
     @property
     def text_encoder(self):
@@ -162,6 +164,8 @@ class SceneGraphProcessor:
         camera_pose: np.ndarray,
         world_xyz: Tensor | None = None,
         vocabulary: list[str] | None = None,
+        received_monotonic: float | None = None,
+        depth_evidence_source: str = 'rgbd_pointcloud',
     ) -> list[int]:
         """Process a single RGBD frame and update the scene graph.
 
@@ -177,6 +181,8 @@ class SceneGraphProcessor:
             List of node IDs that were updated/created
         """
         self._step += 1
+        # A failed new frame must not leave a previous proposal active.
+        self.observed_tamp_provider.update(())
         H, W = rgb.shape[:2]
 
         # Compute world xyz if not provided
@@ -238,6 +244,9 @@ class SceneGraphProcessor:
                 dinov3_embedding=dinov3_emb,
             )
             observations.append(obs)
+
+        self.observed_tamp_provider.update(
+            observations, received_monotonic=received_monotonic, source=depth_evidence_source)
 
         # Update scene graph
         node_ids = self.scene_graph.add_observations_batch(observations)
