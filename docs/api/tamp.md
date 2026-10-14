@@ -338,3 +338,14 @@ also bound total episode time. Remote decoding uses the server defaults, and
 `--seed` only controls the local process. Archive the served model revision and
 sampling configuration alongside results. Physics still pauses during inference
 in this in-process harness; remote hosting does not establish live execution.
+
+To evaluate the same regional agent goals against a live server, add
+`--live-sim PATH_TO_SIM_YAML` to `scripts/eval_native_table_agent.py` and launch
+through a managed GPU job. Use a matching packaged Stretch scene with fixture
+initial transforms set before startup. The harness enables the physical actuation
+audit, reads fresh measured snapshots, and records simulator time on both sides
+of every inference request. Passing requires physics progress during inference,
+a clean nonempty actuation audit, and the same independent stable final-goal
+checks. Remote inference avoids local model weights but the simulator still
+needs its GPU reservation. The scope remains privileged and stationary; this
+is not exploration or observed-input acceptance.

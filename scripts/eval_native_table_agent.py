@@ -10,7 +10,9 @@ when selecting --device cuda.
 """
 import argparse
 import json
+import os
 import subprocess
+from contextlib import nullcontext
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -66,18 +68,30 @@ def main():
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--base-url', help='Existing remote OpenAI-compatible inference endpoint')
     parser.add_argument('--remote-model', help='Exact model ID served by --base-url')
+    parser.add_argument('--live-sim', type=Path, help='Launch a live ZMQ simulator from this config; requires managed GPU job')
     args = parser.parse_args()
     if bool(args.base_url) != bool(args.remote_model):
         parser.error('--base-url and --remote-model must be supplied together')
     if args.max_turns < 1:
         parser.error('--max-turns must be positive')
     args.output.mkdir(parents=True, exist_ok=True)
+    model = mujoco.MjModel.from_xml_path(default_scene_xml_path)
+    if args.live_sim:
+        from emet.eval.native_table_live import live_table_robot
+        os.environ['EMET_PHYSICAL_EXECUTION'] = '1'
+        os.environ['EMET_PHYSICAL_AUDIT'] = str((args.output / 'actuation.jsonl').resolve())
+        connection = live_table_robot(args.live_sim, args.output, model)
+    else:
+        connection = nullcontext(ContactRobot(model, 'object1', separation=.15, separation_axis='y'))
+    with connection as robot:
+        return run_episode(args, robot, model)
+
+
+def run_episode(args, robot, model):
     regions = json.loads(args.placement_regions.read_text())
     if len(regions) != 2:
-        parser.error('Expected cylinder and box regions, in that order')
+        raise ValueError('Expected cylinder and box regions, in that order')
     goals = dict(zip(('object2', 'object1'), regions, strict=True))
-    model = mujoco.MjModel.from_xml_path(default_scene_xml_path)
-    robot = ContactRobot(model, 'object1', separation=.15, separation_axis='y')
     adapter = native_adapter.NativeTableAdapter(robot, model=model)
     original_sync = adapter.synchronize
 
@@ -104,7 +118,9 @@ def main():
                 'seed': args.seed, 'max_turns': args.max_turns, 'device': args.device,
                 'inference': 'remote' if args.base_url else 'local',
                 'remote_sampling': 'server defaults; seed is local only' if args.base_url else None,
-                'scope': 'LLM-selected CHAT tools; CPU native contact; privileged inputs; no live IPC',
+                'scope': ('LLM-selected CHAT tools; live ZMQ native contact; privileged inputs' if args.live_sim
+                          else 'LLM-selected CHAT tools; CPU native contact; privileged inputs; no live IPC'),
+                'physics_during_inference': bool(args.live_sim),
                 'goals': goals, 'instruction': instruction, 'system_prompt': str(prompt),
                 'initial_predicates': goal_predicates(robot, goals)}
     (args.output / 'protocol.json').write_text(json.dumps(protocol, indent=2))
@@ -119,14 +135,20 @@ def main():
     old_physical, old_native = physical_pick_place.time, native_adapter.time
     terminal = 'turn_budget_exhausted'
     try:
-        physical_pick_place.time = native_adapter.time = clock
+        if not args.live_sim:
+            physical_pick_place.time = native_adapter.time = clock
         for turn in range(args.max_turns):
             text = instruction + '\nPrevious tool outcomes:\n' + '\n'.join(history)
             client.reset()
+            robot.refresh()
+            sim_before = float(robot.data.time)
             raw, seconds = _call_llm(client, text, None, False, reset_context=True)
+            robot.refresh()
+            sim_after = float(robot.data.time)
             parsed = parse_tool_calls_response(raw)
             calls = parsed.get('tool_calls', [])
-            row = {'turn': turn, 'response': raw, 'calls': calls, 'model_wall_s': seconds}
+            row = {'turn': turn, 'response': raw, 'calls': calls, 'model_wall_s': seconds,
+                   'sim_time_before_inference': sim_before, 'sim_time_after_inference': sim_after}
             trace.append(row)
             # Enforce the experiment's one-action observation boundary.
             if len(calls) != 1 or calls[0].get('name') not in tools:
@@ -154,7 +176,13 @@ def main():
         physical_pick_place.time, native_adapter.time = old_physical, old_native
         (args.output / 'trace.json').write_text(json.dumps(trace, indent=2))
         (args.output / 'execution.json').write_text(json.dumps({'events': adapter.events, 'commands': robot.commands}, indent=2))
-    result = {'passed': terminal == 'goals_verified', 'terminal': terminal,
+    inference_progress = all(r['sim_time_after_inference'] > r['sim_time_before_inference'] for r in trace)
+    audit_path = args.output / 'actuation.jsonl'
+    audit = [json.loads(line) for line in audit_path.read_text().splitlines()] if audit_path.exists() else []
+    audit_ok = bool(audit) and not any(row.get('forbidden') for row in audit)
+    result = {'passed': terminal == 'goals_verified' and (not args.live_sim or (inference_progress and audit_ok)),
+              'terminal': terminal, 'physics_advanced_during_all_inference_calls': inference_progress,
+              'audit_commands': len(audit), 'forbidden_commands': sum(bool(row.get('forbidden')) for row in audit),
               'final_predicates': goal_predicates(robot, goals), 'turns': len(trace)}
     (args.output / 'summary.json').write_text(json.dumps(result, indent=2))
     print(json.dumps(result), flush=True)
