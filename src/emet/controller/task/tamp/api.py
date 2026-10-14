@@ -178,6 +178,7 @@ def failure_code(message: str) -> str:
                 return code
     allowed = {
         "invalid_tamp_inputs", "observed_scene_unavailable",
+        "invalid_placement_region", "placement_region_unavailable", "placement_region_unsupported",
         "privileged_inputs_require_simulation", "native_execution_unavailable",
         "native_model_mismatch", "native_robot_unsupported", "invalid_measured_state",
         "task_not_found", "payload_not_retained", "object_not_lifted", "base_drift_during_arm",

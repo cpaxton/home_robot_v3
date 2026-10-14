@@ -306,3 +306,9 @@ this does not certify later model choices as safe. Read each execution outcome,
 rediscover measured state, and obtain a fresh plan before continuing a multi-step
 manipulation. Never replay a consumed plan after an unknown command outcome.
 See [the TAMP API](api/tamp.md) for input/execution modes and their limitations.
+
+For native privileged Stretch, `plan_pick_place` also accepts an optional grounded
+world-XY `placement_region`; it constrains the whole released object, not merely
+its center. Inspect the returned mode and `planning_rejections`. A bounded search
+failure does not prove rearrangement is necessary or the task is impossible.
+See [native placement regions](api/tamp.md#native-placement-regions-and-bounded-grasp-search).

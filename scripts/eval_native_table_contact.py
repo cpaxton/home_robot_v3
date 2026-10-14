@@ -97,7 +97,7 @@ class ContactRobot:
         return float((self.data.actuator('gripper').length[0] + .02) / .06 * .936 - .376)
 
 
-def run_case(model, object_body, *, cluttered=False, steps=1, sequence=None, separation=None, separation_axis="x"):
+def run_case(model, object_body, *, cluttered=False, steps=1, sequence=None, separation=None, separation_axis="x", placement_regions=None):
     sequence = sequence or [object_body] * steps
     robot = ContactRobot(model, object_body, cluttered=cluttered, separation=separation, separation_axis=separation_axis)
     adapter = native_adapter.NativeTableAdapter(robot, model=model)
@@ -129,7 +129,8 @@ def run_case(model, object_body, *, cluttered=False, steps=1, sequence=None, sep
             row = next((r for r in rows if r['receptacle_name'] == 'table'), None)
             if row is None:
                 break
-            plan = call('plan_pick_place', task_ref=row['task_ref'])
+            region = placement_regions[step] if placement_regions else None
+            plan = call('plan_pick_place', task_ref=row['task_ref'], placement_region=region)
             if plan['status'] != 'ok':
                 break
             stored = adapter.plans[plan['data']['plan_ref']]
@@ -141,6 +142,7 @@ def run_case(model, object_body, *, cluttered=False, steps=1, sequence=None, sep
                             for previous in released_plans.values())
             completed_steps.append({'step': step, 'object_body': selected_object,
                                     'previous_placements_preserved': preserved,
+                                    'placement_region': region,
                                     'position': robot.data.body(selected_object).xpos.tolist(),
                                     'sim_time': float(robot.data.time)})
             if not preserved:
@@ -160,6 +162,7 @@ def main():
     parser.add_argument('--object', choices=['object1', 'object2', 'both'], default='both')
     parser.add_argument('--trials', type=int, default=1)
     parser.add_argument('--cluttered', action='store_true')
+    parser.add_argument('--placement-regions', type=Path, help='JSON list of world XY goal bounds, one per sequence step.')
     parser.add_argument('--sequence', nargs='+', choices=['object1', 'object2'])
     parser.add_argument('--separation-axis', choices=['x', 'y'], default='x')
     parser.add_argument('--separation', type=float, help='Initial fixture separation (meters); +x or -y from the box.')
@@ -169,6 +172,9 @@ def main():
         parser.error('--steps must be positive')
     if args.trials < 1:
         parser.error('--trials must be positive')
+    regions = json.loads(args.placement_regions.read_text()) if args.placement_regions else None
+    if regions is not None and (not isinstance(regions, list) or len(regions) != (len(args.sequence) if args.sequence else args.steps)):
+        parser.error('--placement-regions must have one region per step')
     args.output.mkdir(parents=True, exist_ok=True)
     source_sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'],
         cwd=Path(__file__).resolve().parents[1], text=True).strip()
@@ -178,7 +184,7 @@ def main():
     for obj in objects:
         for trial in range(args.trials):
             result = run_case(model, obj, cluttered=args.cluttered, steps=args.steps,
-                              sequence=args.sequence, separation=args.separation, separation_axis=args.separation_axis)
+                              sequence=args.sequence, separation=args.separation, separation_axis=args.separation_axis, placement_regions=regions)
             path = args.output / f'{obj}-{trial}.json'
             path.write_text(json.dumps(result, indent=2, allow_nan=False))
             row = {'object': obj, 'trial': trial, 'passed': result['passed'], 'artifact': str(path)}
@@ -187,7 +193,7 @@ def main():
     summary = {'scope': 'privileged CPU public tools via scripted CHAT dispatch; in-process actuators; no LLM, ZMQ or exploration',
                'source_sha': source_sha,
                'cluttered': args.cluttered, 'steps_per_episode': len(args.sequence) if args.sequence else args.steps,
-               'sequence': args.sequence, 'initial_separation_m': args.separation, 'separation_axis': args.separation_axis, 'cases': rows,
+               'sequence': args.sequence, 'placement_regions': regions, 'initial_separation_m': args.separation, 'separation_axis': args.separation_axis, 'cases': rows,
                'passed': sum(r['passed'] for r in rows), 'total': len(rows)}
     (args.output / 'summary.json').write_text(json.dumps(summary, indent=2))
     return 0 if summary['passed'] == summary['total'] else 1

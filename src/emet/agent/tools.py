@@ -661,12 +661,15 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         task_ref: str = "",
         object_name: str = "",
         receptacle_name: str = "",
+        placement_region: list[list[float]] | None = None,
     ) -> dict:
         from emet.controller.task.tamp.agent_bridge import store_agent_plan
 
         if _tamp_manip_mode().strip().lower() == "physical":
             error = _native_input_gate()
-            return response("plan_pick_place", code=error) if error else _native_adapter().plan(task_ref, object_name, receptacle_name)
+            return response("plan_pick_place", code=error) if error else _native_adapter().plan(task_ref, object_name, receptacle_name, placement_region)
+        if placement_region is not None:
+            return response("plan_pick_place", code="placement_region_unsupported")
         build = _build_tamp_plan(
             task_ref=task_ref,
             object_name=object_name,

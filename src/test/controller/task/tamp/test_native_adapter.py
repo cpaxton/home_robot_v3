@@ -123,7 +123,7 @@ def test_native_arm_acknowledgement_leaves_arrival_to_measured_executor(native):
     assert executor.joint_tolerance == .03
 
 
-@pytest.mark.parametrize('fault, expected', [(None, True), ('height', False), ('spinning', False)])
+@pytest.mark.parametrize('fault, expected', [(None, True), ('height', False), ('spinning', False), ('region', False)])
 def test_release_verification_requires_correct_height_and_settled_rotation(native, monkeypatch, fault, expected):
     import emet.controller.task.tamp.native_adapter as module
     _, _, context, _ = native
@@ -140,7 +140,8 @@ def test_release_verification_requires_correct_height_and_settled_rotation(nativ
     monkeypatch.setattr(module.time, 'monotonic', lambda: clock[0])
     monkeypatch.setattr(module.time, 'sleep', lambda dt: clock.__setitem__(0, clock[0]+dt))
     monkeypatch.setattr(adapter, 'synchronize', lambda data: setattr(data, 'time', data.time+.05))
-    plan = SimpleNamespace(object_body='object1', support_body='table', goal=goal, executor=executor)
+    region = np.array([goal[:2] - [.005, .1], goal[:2] + [.005, .1]]) if fault == 'region' else None
+    plan = SimpleNamespace(object_body='object1', support_body='table', goal=goal, executor=executor, placement_region=region)
     assert adapter._verify(plan, released=True, seconds=1.) is expected
 
 
@@ -178,3 +179,86 @@ def test_command_ack_timeout_preserves_partial_execution_and_consumes_plan(nativ
     assert call('execute_pick_place_plan', plan_ref=ref)['code'] == 'unknown_plan'
     if phase == 'grasp':
         executor.place_only.assert_not_called()
+
+
+@pytest.mark.parametrize('region', [[[0, 0], [0, 1]], [[1, 0], [0, 1]],
+                                     [[0, 0], [1, float('nan')]], [0, 1], 'bad'])
+def test_invalid_placement_region_never_actuates(native, region):
+    robot, _, _, call = native
+    result = call('plan_pick_place', object_name='blue', receptacle_name='table', placement_region=region)
+    assert result['code'] == 'invalid_placement_region'
+    robot.arm_to.assert_not_called()
+    robot.open_gripper.assert_not_called()
+
+
+def test_region_constrains_goal_and_is_copied_into_plan(native):
+    robot, _, context, call = native
+    region = [[-.12, -.75], [.10, -.55]]
+    result = call('plan_pick_place', object_name='blue', receptacle_name='table', placement_region=region)
+    assert result['status'] == 'ok', result
+    plan = context['_native_tamp_adapter'].plans[result['data']['plan_ref']]
+    np.testing.assert_array_equal(plan.placement_region, region)
+    assert np.all(plan.goal[:2] >= np.asarray(region)[0])
+    assert np.all(plan.goal[:2] <= np.asarray(region)[1])
+    region[0][0] = -100
+    assert plan.placement_region[0, 0] == -.12
+    assert result['data']['placement_goal']['frame'] == 'world'
+    robot.arm_to.assert_not_called()
+
+
+def test_region_outside_support_is_refused(native):
+    _, _, _, call = native
+    result = call('plan_pick_place', object_name='blue', receptacle_name='table',
+                  placement_region=[[10, 10], [11, 11]])
+    assert result['code'] == 'placement_region_unavailable'
+
+
+def test_rejection_evidence_keeps_collision_when_later_ik_fails(native):
+    _, _, context, call = native
+    adapter = context['_native_tamp_adapter']
+    ex = adapter._executor('object1')
+    ex.plan_pose = Mock(side_effect=[(None, 'arm_path_failed:invalid_goal:collision')] +
+                                  [(None, 'pose_ik_failed:private_detail')] * 100)
+    adapter._executor = Mock(return_value=ex)
+    result = call('plan_pick_place', object_name='blue', receptacle_name='table')
+    assert result['code'] == 'no_plan_within_budget'
+    assert result['data']['planning_rejections']['pregrasp:collision'] == 1
+    assert result['data']['planning_rejections']['pregrasp:ik_failed'] > 0
+    assert 'private_detail' not in json.dumps(result)
+
+
+def test_shared_ik_budget_restores_private_state_and_never_actuates(native):
+    robot, _, context, call = native
+    adapter = context['_native_tamp_adapter']
+    initial = adapter.data.qpos.copy()
+    adapter.max_planning_ik_calls = 1
+    result = call('plan_pick_place', object_name='blue', receptacle_name='table')
+    assert result['code'] == 'no_plan_within_budget'
+    assert result['data']['planning_ik_calls'] == 1
+    assert result['data']['max_ik_calls'] == 1
+    np.testing.assert_array_equal(adapter.data.qpos, initial)
+    robot.arm_to.assert_not_called()
+    assert not adapter.plans
+
+
+def test_failed_placement_resumes_grasp_search(native, monkeypatch):
+    import emet.motion.placement_surfaces as surfaces_module
+    _, _, context, call = native
+    adapter = context['_native_tamp_adapter']
+    original = adapter._grasp_candidates
+    resumed = []
+
+    def grasp_candidates(*args):
+        for candidate in original(*args):
+            yield candidate
+            resumed.append(True)
+            # Deliberately empty placement domain must advance the generator.
+            if len(resumed) == 2:
+                return
+
+    monkeypatch.setattr(adapter, '_grasp_candidates', grasp_candidates)
+    monkeypatch.setattr(surfaces_module, 'free_surface_centers',
+                        lambda *a, **k: SimpleNamespace(centers=[]))
+    result = call('plan_pick_place', object_name='blue', receptacle_name='table')
+    assert result['code'] == 'no_plan_within_budget'
+    assert len(resumed) == 2

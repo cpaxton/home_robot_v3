@@ -283,3 +283,37 @@ a failed call stops the sequence. After a successful step, the evaluator checks
 released support for all objects already placed, using privileged simulator
 state. These are scripted CPU integration checks, not LLM, live ZMQ, exploration,
 or hardware acceptance. Launch them through managed CPU jobs.
+
+### Native placement regions and bounded grasp search
+
+`plan_pick_place` optionally accepts `placement_region: [[xmin, ymin], [xmax, ymax]]`
+in world-frame meters. Coordinates must come from grounded geometry or an explicit
+fixture goal. The native privileged Stretch adapter clips the selected support to
+this region and searches for placements containing the full object footprint.
+Measured release verification checks the whole footprint against the requested
+region with a 5 mm tolerance, in addition to sustained support, position, and
+velocity checks. The native planner retains its 2 cm placement clearance margins;
+very narrow regions can therefore be rejected even if an idealized object fits.
+Other adapters return `placement_region_unsupported` rather than ignoring the goal.
+Malformed/nonfinite/empty bounds return `invalid_placement_region`; a region not
+overlapping the support returns `placement_region_unavailable`.
+
+Native grasp search tries the existing 15-degree approach, bounded 45/60-degree
+approaches with object-height-derived pinch offsets, then level/measured frames.
+Every candidate uses the same collision, tracking, and retention checks. A grasp
+with no downstream placement now resumes grasp search. A shared limit of 256
+pose-IK calls bounds grasp and placement exploration. `no_plan_within_budget`
+means this search did not find a complete plan, not proof of infeasibility.
+`planning_rejections` preserves sanitized per-stage failure counts instead of
+attributing the whole search to the last failed wrist candidate. Public plan
+responses include `planning_ik_calls`, `max_ik_calls`, the requested region, and
+the proposed `placement_goal` in the world frame. Raw colliding body names stay
+in privileged diagnostic events, outside the public response.
+
+The frozen two-object region file is
+`configs/eval/native_table_two_object_regions.json` (cylinder goal, then box goal).
+Use the contact harness with `--sequence object2 object1 --separation .15
+--separation-axis y --placement-regions PATH`. The separate
+`scripts/eval_native_table_agent.py` evaluates local Qwen selection with the CHAT
+prompt/parser/dispatcher and independent region/support scoring; it is not the
+interactive `run agent` CLI or a live ZMQ run. Both harnesses require managed jobs.
