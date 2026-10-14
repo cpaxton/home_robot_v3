@@ -55,7 +55,7 @@ def main():
                         'do not plan or move anything in this turn.')
     commands.append(instruction)
     cli = [sys.executable, '-m', 'emet.app.run_agent', '--config', str(repo / 'configs/emet/default.yaml'),
-           '--robot', 'stretch', '--device', 'cpu', '--memory-backend', 'dynamem',
+           '--robot', 'stretch', '--robot-ip', '127.0.0.1', '--device', 'cpu', '--memory-backend', 'dynamem',
            '--state-only-sim', '--max-tool-rounds', '12', '--no-discord', '--no-vl-camera',
            '--headless', '--debug-tools', '--port-offset', str(config.port_offset),
            '--llm', f'openai@{args.base_url}#{args.remote_model}',
