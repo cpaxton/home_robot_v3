@@ -3,8 +3,11 @@
 
 """Adapt the existing voxel-frame history to the optional shared view selector."""
 
+import hashlib
+import json
 import os
 from dataclasses import replace
+from pathlib import Path
 from uuid import uuid4
 
 import numpy as np
@@ -18,6 +21,31 @@ from emet.memory.view_selection import SelectionConfig, ViewFrame, select_views
 
 def _numpy(value):
     return value.detach().cpu().numpy() if hasattr(value, "detach") else np.asarray(value)
+
+
+def _dump_selection(executor, selection):
+    """Persist the exact ordered packet independently of graph/debug exporters."""
+    root = getattr(executor.agent, "_episode_debug_dir", None)
+    if not root:
+        return
+    from emet.memory.graph_eqa.eqa.query_images import save_rgb_png
+
+    sequence = getattr(executor, "_view_selection_sequence", 0) + 1
+    executor._view_selection_sequence = sequence
+    directory = Path(root) / "selected_views" / f"{sequence:04d}"
+    try:
+        directory.mkdir(parents=True, exist_ok=True)
+        record = selection.to_dict()
+        for index, (selected, row) in enumerate(zip(selection.views, record["views"], strict=True), 1):
+            pixels = selected.frame.rgb
+            filename = f"image_{index}.png"
+            save_rgb_png(directory / filename, pixels)
+            row["image"] = filename
+            row["rgb_sha256"] = hashlib.sha256(pixels.tobytes()).hexdigest()
+            row["camera_pose"] = None if selected.frame.camera_pose is None else selected.frame.camera_pose.tolist()
+        (directory / "manifest.json").write_text(json.dumps(record, indent=2) + "\n")
+    except OSError as error:
+        executor._append_trace({"event": "view_selection_artifact_error", "reason": str(error)})
 
 
 def _coverage_inputs(executor, frames, sources, target_xy, scope):
@@ -104,6 +132,19 @@ def select_assessment_history(executor, rgb, *, target_obs_id=None):
         executor._append_trace({"event": "view_selection_unavailable", "reason": "current_acquisition_not_retained"})
         return None
     current_id = frames[-1].view_id
+    current_scope = frames[-1].scope_id
+    approach = getattr(executor.agent.robot, "navigation_view_history", None)
+    for view in approach.views if approach is not None else ():
+        frames.append(
+            ViewFrame(
+                view.view_id,
+                f"{scope}:{view.clock_domain}",
+                view.timestamp_ns / 1e9,
+                view.rgb,
+                camera_pose=view.camera_pose,
+            )
+        )
+        sources[view.view_id] = view
     pre_turn_id = None
     before = getattr(executor.agent.robot, "pre_turn_observation", None)
     if before is not None:
@@ -112,8 +153,8 @@ def select_assessment_history(executor, rgb, *, target_obs_id=None):
         if (
             isinstance(stamp, (int, float))
             and np.isfinite(stamp)
-            and f"{scope}:{clock}" == frames[-1].scope_id
-            and 0 <= frames[-1].timestamp_s - stamp / 1e9 <= config.max_age_s
+            and f"{scope}:{clock}" == current_scope
+            and 0 <= next(f.timestamp_s for f in frames if f.view_id == current_id) - stamp / 1e9 <= config.max_age_s
         ):
             pre_turn_id = f"pre-turn:{stamp}"
             frames.append(
@@ -147,4 +188,5 @@ def select_assessment_history(executor, rgb, *, target_obs_id=None):
         frames, current_id=current_id, pre_turn_id=pre_turn_id, config=config, coverage_objective=objective
     )
     executor._append_trace({"event": "view_selection", **selection.to_dict()})
+    _dump_selection(executor, selection)
     return selection

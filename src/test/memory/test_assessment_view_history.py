@@ -143,3 +143,39 @@ def test_all_invalid_depth_does_not_fabricate_coverage():
     result = select_assessment_history(ex, ex.agent.voxel_map.observations[-1].rgb, target_obs_id=7)
     assert result.config.policy == "pose"
     assert ex._append_trace.call_args_list[-2].args[0]["reason"] == "no_observed_target_local_cells"
+
+
+def test_approach_views_join_pool_without_becoming_current_or_graph_objects():
+    from emet.memory.approach_views import ApproachViewHistory
+
+    ex = executor()
+    buffer = ex.agent.robot.navigation_view_history = ApproachViewHistory()
+    pose = np.eye(4)
+    pose[0, 3] = 2
+    obs = SimpleNamespace(
+        rgb=np.full((4, 4, 3), 77, dtype=np.uint8),
+        camera_pose=pose,
+        image_timing={"head_cam_left": {"timestamp_ns": 4500000000, "clock_domain": "sim"}},
+    )
+    assert buffer.add(obs)
+    result = select_assessment_history(ex, ex.agent.voxel_map.observations[-1].rgb)
+    assert result.views[0].frame.view_id == "5"
+    assert "approach:1" in [v.frame.view_id for v in result.views]
+    assert len(ex.agent.voxel_map.observations) == 5
+
+
+def test_exact_selected_packet_is_saved_in_order(tmp_path):
+    import hashlib
+    import json
+
+    from PIL import Image
+
+    ex = executor()
+    ex.agent._episode_debug_dir = str(tmp_path)
+    result = select_assessment_history(ex, ex.agent.voxel_map.observations[-1].rgb)
+    directory = tmp_path / "selected_views" / "0001"
+    manifest = json.loads((directory / "manifest.json").read_text())
+    for selected, row in zip(result.views, manifest["views"], strict=True):
+        pixels = np.asarray(Image.open(directory / row["image"]))
+        assert np.array_equal(pixels, selected.frame.rgb)
+        assert hashlib.sha256(pixels.tobytes()).hexdigest() == row["rgb_sha256"]

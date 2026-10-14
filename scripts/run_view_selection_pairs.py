@@ -89,6 +89,9 @@ def run(args):
                 )
                 if arm in {"pose", "quality_coverage"}:
                     env["EMET_EQA_VIEW_SELECTION_POLICY"] = arm
+                if arm == "pose_approach":
+                    env["EMET_EQA_VIEW_SELECTION_POLICY"] = "pose"
+                    env["EMET_EQA_RETAIN_APPROACH_VIEWS"] = "1"
                 for attempt in range(2):
                     case = out / f"s{seed}-q{qid}-{arm}-attempt{attempt}"
                     case.mkdir()
@@ -130,6 +133,7 @@ def run(args):
                                 "command": command,
                                 "revision": revisions[name],
                                 "policy": env.get("EMET_EQA_VIEW_SELECTION_POLICY", "disabled"),
+                                "retain_approach": env.get("EMET_EQA_RETAIN_APPROACH_VIEWS", "0"),
                             },
                             indent=2,
                         )
@@ -189,7 +193,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--arms",
         nargs="+",
-        choices=["historical", "unchanged", "pose", "quality_coverage"],
+        choices=["historical", "unchanged", "pose", "quality_coverage", "pose_approach"],
         default=["historical", "unchanged", "pose", "quality_coverage"],
     )
     raise SystemExit(run(parser.parse_args()))

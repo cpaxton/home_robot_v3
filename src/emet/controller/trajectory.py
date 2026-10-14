@@ -37,4 +37,10 @@ def execute_waypoints(robot, trajectory, *, relative, world_frame, per_waypoint_
                 getattr(robot, "_command_receipt", None),
             )
             return False
+        history = getattr(robot, "navigation_view_history", None)
+        if history is not None:
+            try:
+                history.add(robot.get_observation())
+            except (RuntimeError, TimeoutError, ValueError) as exc:
+                logger.warning("Approach evidence unavailable after waypoint: %s", exc)
     return True

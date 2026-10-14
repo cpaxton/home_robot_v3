@@ -38,3 +38,19 @@ def test_observation_preserves_render_acquisition_timestamp(monkeypatch):
     )
     monkeypatch.setattr(robot_client, "habitat_rgb_depth_to_observations", lambda **kwargs: SimpleNamespace())
     assert robot.get_observation().image_timing["head_cam_left"]["timestamp_ns"] == 12345
+
+
+def test_navigation_step_retains_existing_observation_without_map_or_extra_step():
+    robot = HabitatRobotClient.__new__(HabitatRobotClient)
+    robot._sim = SimpleNamespace(step=Mock(return_value="rendered"))
+    robot._sync_pose_from_sim = Mock()
+    robot._post_step_hooks = []
+    robot._pending_nav = {"phase": "path"}
+    robot.navigation_view_history = SimpleNamespace(add=Mock())
+    robot.get_observation = Mock(return_value="registered RGB-D")
+    assert robot._sim_step("move_forward") == "rendered"
+    robot._sim.step.assert_called_once_with("move_forward")
+    robot.navigation_view_history.add.assert_called_once_with("registered RGB-D")
+    robot._pending_nav = {"phase": "done"}
+    robot._sim_step("turn_left")
+    assert robot.navigation_view_history.add.call_count == 1
