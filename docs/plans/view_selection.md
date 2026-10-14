@@ -652,3 +652,72 @@ not machine-local image files, are version-controlled for reuse in docs/paper.
 3. If gains survive repeats, run small OVMM non-regression before promotion.
    Wider primary viewpoints remain a separate intervention. Do not combine
    camera-distance, stopping, model, and label changes in one claimed ablation.
+
+### Three-seed replication and text attribution
+
+Jobs `20261014_084459_1efb95` and `20261014_094809_553991` together completed
+72/72 paired live episodes. All are development questions, repeated across
+seeds; do not treat them as 72 independent scenes.
+
+| Seed | Role labels | Spatial labels |
+| --- | --- | --- |
+| 0 | 6/12 | 8/12 |
+| 1 | 6/12 | 8/12 |
+| 2 | 9/12 | 9/12 |
+| Total | 21/36 | 25/36 |
+
+q12's direct visual recovery repeats in seeds 0 and 1; both arms are correct
+in seed 2. Across paired question/seed cases there are five wins and one loss.
+Two wins change fallback answers (q15 twice); q12 twice and q25 once are
+visual-answer gains. The loss is
+q68 seed 0. Aggregate VLM-suggested answers: 15/20 correct for role labels,
+18/22 for spatial labels; these conditional buckets are not randomized subsets.
+
+Text attribution retry `20261014_103218_08ba56` completed 27 calls after the
+initial runner failed before inference (wrong multi-image API). Same saved
+pixels and exact live prompts, separately removing target/inventory:
+
+- q14: exact live yielded one wrong TV answer and two abstentions; removing
+  inventory yielded three abstentions; removing target yielded three wrong TV
+  answers. Removing both or replaying the saved offline prompt abstained three
+  times. Inventory sensitivity is supported; a specific field is not isolated.
+- q68: exact live and inventory-removed each yielded two wrong Yes answers and
+  one **truncated, invalid JSON response**, not an abstention. Removing target,
+  with or without inventory, yielded No/Yes/No. Removing inventory does not fix
+  this case. The current image is a wall/door; the model's present=true conflicts
+  with current-view evidence. No safe rule based only on prose is established.
+
+Follow-up `text-fields-20261014` isolates graph-label text from status counters
+on identical pixels and retains the original controls. No answer-policy or
+navigation changes are bundled into the labeling candidate.
+
+### Draft stack landing plan (GitHub inventory checked 2026-10-14)
+
+| PR | Dependency / scope | Remaining gate before ready |
+| --- | --- | --- |
+| #181 | main; optional grounding providers | Exact-head provider audit and default EQA/small-OVMM checks |
+| #182 | #181; measured navigation | Exact-head route, physical wheel-drive smoke, EQA/small-OVMM |
+| #184 | #182; inspection/floor recovery | Same-waypoint recovery, missing-anchor and precision approach checks |
+| #199 | #184; assessed/context evidence | Carry shared-contract repairs to owner; paired EQA and current-view localization |
+| #202 | #199; generic view selector | Selector-only review; integrate provenance/retention as separately reviewable slices after acceptance |
+| #185 | #184; acceptance tooling | Refresh frozen revisions and results after owner slices land |
+| #198 | #184; optional measured scanning | Independent corrected scan ablation; do not block the core stack on it |
+| #183 | legacy experiment branch | Reconcile disposition against extracted owners, then retire with links |
+
+#213 native TAMP and #214 reactive manipulation are separate work streams.
+Do not change or merge them as part of this evidence-selection checkpoint.
+
+Order: audit current main and ownership; land #181 → #182 → #184 → #199 →
+#202 with exact-head review/tests at each step. Refresh acceptance #185 as
+parents move. Keep optional scan #198 separate. This branch includes 43 changed
+files beyond the local #202 tracking ref, including shared camera timing,
+navigation and task-routing repairs; do not merge the whole experimental branch
+as if it were only a labeling patch. Attribute those repairs to their owner PRs
+and retain lightweight provenance/approach-buffer/visual-audit slices above
+#202. Review current remote heads before cherry-picking or retargeting.
+
+Promotion requires the 3-seed EQA comparison plus small Molmo/RoboCasa OVMM
+non-regression and review of the remaining current-view contract failures.
+The 25/36 result is promising but not full stack acceptance. No PR was marked
+ready or merged during this inventory; descriptions still contain older gates
+and must be rewritten against their final heads when those gates are cleared.
