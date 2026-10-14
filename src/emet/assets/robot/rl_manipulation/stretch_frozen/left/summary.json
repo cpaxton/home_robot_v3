@@ -1,0 +1,42 @@
+{
+  "passed": false,
+  "terminal": "partial_execution_requires_recovery",
+  "physics_advanced_during_all_inference_calls": true,
+  "audit_commands": 190,
+  "forbidden_commands": 0,
+  "final_predicates": {
+    "object2": {
+      "in_region": true,
+      "supported": false,
+      "settled": false,
+      "satisfied": false,
+      "bounds_xy": [
+        [
+          -0.04533345014059814,
+          -0.7999784922485996
+        ],
+        [
+          -0.0031313565804287763,
+          -0.7530479886964322
+        ]
+      ]
+    },
+    "object1": {
+      "in_region": false,
+      "supported": true,
+      "settled": true,
+      "satisfied": false,
+      "bounds_xy": [
+        [
+          -0.06447707514509168,
+          -0.6538948274342645
+        ],
+        [
+          0.04043766747926232,
+          -0.5489800848099106
+        ]
+      ]
+    }
+  },
+  "turns": 3
+}

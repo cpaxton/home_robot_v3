@@ -54,8 +54,12 @@ class CommandTracker:
         if type(sequence) is not int or sequence < 0:
             raise ValueError("invalid command sequence")
         digest = hashlib.sha256(json.dumps(payload, sort_keys=True, allow_nan=False).encode()).hexdigest()
-        navigation = "xyt" in payload
-        timeout = float(payload.get("nav_timeout_s", 30.0))
+        navigation = "xyt" in payload or "reactive_goal" in payload
+        timeout = float(
+            payload.get("reactive_timeout_s", 10.0)
+            if "reactive_goal" in payload
+            else payload.get("nav_timeout_s", 30.0)
+        )
         if navigation and (not math.isfinite(timeout) or timeout <= 0):
             raise ValueError("navigation timeout must be positive and finite")
         key = (session, sequence)
@@ -78,7 +82,12 @@ class CommandTracker:
                 raise ValueError("stale or evicted command; execution forbidden")
             self._session = session
             self._high_water = sequence
-            busy = self._active is not None and not set(payload) <= {"cancel_navigation", "say"}
+            busy = self._active is not None and not set(payload) <= {
+                "cancel_navigation",
+                "cancel_reactive_goal",
+                "update_reactive_goal",
+                "say",
+            }
             receipt = {
                 **self.metadata(),
                 "client_session_id": session,

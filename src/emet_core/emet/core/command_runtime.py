@@ -11,9 +11,10 @@ import threading
 import time
 
 from emet.core.command_tracker import CommandTracker
+from emet.core.reactive_runtime import REACTIVE_KEYS, ReactiveRuntime
 
 
-class CommandRuntime:
+class CommandRuntime(ReactiveRuntime):
     def initialize_commands(self):
         self.command_tracker = CommandTracker()
         self._command_lock = threading.RLock()
@@ -21,10 +22,16 @@ class CommandRuntime:
         self._navigation_fault = False
         self._command_error = None
         self._arrival_monitor = None
+        self._reactive_command = None
+        self._reactive_fault = False
 
     def navigation_policy_names(self):
         """Adapters opt in only when timestamped measurements and correction work."""
         return ()
+
+    def check_base_poses(self, poses):
+        """Optional read-only simulator endpoint query; never a movement command."""
+        raise NotImplementedError("base pose query is not supported by this adapter")
 
     def navigation_policy_measurement(self):
         raise NotImplementedError
@@ -49,6 +56,7 @@ class CommandRuntime:
                 "command_protocol": {
                     **self.command_tracker.metadata(),
                     "navigation_policies": list(self.navigation_policy_names()),
+                    "reactive_control": self.supports_reactive_control(),
                 },
                 "command_receipts": self.command_tracker.snapshot(),
                 "command_error": self._command_error,
@@ -63,6 +71,7 @@ class CommandRuntime:
                 return False
             payload = {k: v for k, v in action.items() if k not in {"command", "step"}}
             try:
+                self._validate_reactive_payload(payload)
                 if "step" in action and (type(action["step"]) is not int or action["step"] < 0):
                     raise ValueError("invalid telemetry step")
                 if "xyt" in payload:
@@ -94,7 +103,9 @@ class CommandRuntime:
                 return False
             session, sequence = receipt["client_session_id"], receipt["sequence"]
             try:
-                if payload == {"release_control": True}:
+                if REACTIVE_KEYS.intersection(payload):
+                    self._dispatch_reactive(payload, session, sequence)
+                elif payload == {"release_control": True}:
                     self.command_tracker.release_control(session)
                     self.command_tracker.transition(session, sequence, "succeeded")
                 elif "cancel_navigation" in payload:
@@ -127,6 +138,11 @@ class CommandRuntime:
                     if self._navigation_fault:
                         raise RuntimeError("stop could not be confirmed")
                     self.command_tracker.transition(session, sequence, "succeeded")
+                elif "sim_check_base_poses" in payload:
+                    if set(payload) != {"sim_check_base_poses"}:
+                        raise ValueError("base pose query must be a standalone command")
+                    result = self.check_base_poses(payload["sim_check_base_poses"])
+                    self.command_tracker.transition(session, sequence, "succeeded", result=result)
                 elif "xyt" in payload:
                     # Install identity before starting the adapter; dispatch is serialized.
                     self._navigation_command = (session, sequence, None)
@@ -153,6 +169,7 @@ class CommandRuntime:
 
     def poll_navigation_command(self):
         with self._command_lock:
+            self.poll_reactive_command()
             if self._navigation_command is None or self._navigation_fault:
                 return
             if self.command_tracker.expired_navigation() is not None:

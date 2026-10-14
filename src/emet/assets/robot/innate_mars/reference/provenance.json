@@ -1,0 +1,19 @@
+{
+  "source": "innate-os/ros2_ws/src/maurice_bot/maurice_sim",
+  "revision": "9e10601a124992068762528806f02c56ebc76f55",
+  "files": {
+    "maurice.urdf": "3e1dadfa4e3e10085691962dfa06e3fb2e9508663f7631829c17307e4f077b41",
+    "arm.srdf": "56c1fd590050832f54452e46200c47d43562ddab1d28e395898f2a5a958825cc"
+  },
+  "meshes": {
+    "base.STL": "e725a419bbe85a9346a0187aff6b9c1fd3bcf9cf6cc1f1c4164777134b31f5ca",
+    "head.STL": "3852748e253644f9e9d710e92d11a15fee06cc9eeb4ed0d595eeedfebc03bd55",
+    "link1.STL": "9eb892e67efe447e802009cbbeaf46c30c86d46c08563858c9d26f1cee286587",
+    "link2.STL": "d8fe401af1ee98323ff128eeaab64945533ccf6e5a836ae1252fb571b6d70182",
+    "link3.STL": "71956e0cd0b868c46200af5e1b0a5191207fc056e0878fbba9dffbdd023add40",
+    "link4.STL": "2f1c87f188ddd71479f30d2e20c488b3d7eb30b4d19d4aec572e70d4c0529fae",
+    "link5.STL": "e668681a8f62060382c73f11630a1a752b11332012791886b1e21bfceeff54d0",
+    "link61.STL": "b57b1b055e3d0bb8eda43ae23604219a1155c01f4fcecfea6d3560494280e40e",
+    "link62.STL": "44df6c24e9af8cc1bc5a0feb179d23c7039c590e45dff7e5a388363f79b5f0ba"
+  }
+}
