@@ -64,11 +64,11 @@ def test_oracle_command_is_actuator_only_and_stop_cannot_release_payload():
         assert robot.arm_to([0, q[0], q[1], q[4], q[3], q[2]], head=[0, 0], blocking=False)
         assert robot.servo.grip_reference == env.profile.gripper_open
         assert robot.close_gripper(blocking=False)
-        target = robot.servo.grip_target
+        assert robot.servo.grip_target != robot.servo.grip_reference
         robot.failure = "stale_observation"
         robot.servo.stop()
         assert not robot.open_gripper(blocking=True)
-        assert robot.servo.grip_target == target
+        assert robot.servo.grip_target == robot.servo.grip_reference
         robot.data.qpos[robot.servo.q[0]] = np.nan
         robot.servo.stop()
         assert np.isfinite(robot.data.ctrl).all()

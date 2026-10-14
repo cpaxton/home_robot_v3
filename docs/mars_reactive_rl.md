@@ -741,16 +741,32 @@ training resets randomize object placement and do not select the frozen TAMP
 cases. Carry initialization closes the fingers and lifts through actuator-driven
 simulation. There is no runtime object attachment. Actor observations contain
 proprioceptive/reference history, while retention and contact outcome labels use
-simulator ground truth. Full release remains an explicit executor operation.
+simulator ground truth. Training randomizes payload mass and payload-surface
+friction without changing wheel or table traction. The disturbance scenario
+applies a randomized, ramped 1–4 N and 0.03–0.20 N·m wrench to the end effector
+for 0.30–0.60 s, with one fixed wrench per event; the object moves only through
+simulated grasp contacts. Training ramps disturbance magnitude over its first
+20 disturbance episodes, starting at 0.5–1 N and 0.01–0.04 N·m. Evaluation uses
+the full force range. Full release remains an explicit executor operation.
 
-This implementation is experimental. The 1,024-step smoke run completed, but
-loaded tasks did not pass their success gates; it is not evidence of improved
-grasping or safe deployment. Frozen cases are archived with checksums, but their
-historical event traces lack complete physics snapshots. The oracle harness below
-now plans and physically executes from those fixtures; it does not claim exact
-replay of the original live CHAT timing. Mars manipulation training is blocked
-by missing authoritative wheel/support geometry; diagnostic free-base simulation
-is not a substitute for that geometry.
+The simulated position servo also has a slow integral tracking trim, capped at
+0.04 rad for revolute joints and 0.04 m for linear joints, to remove steady load
+sag while preserving the trajectory slew and acceleration limits. This trim is
+a simulation calibration and is not evidence that Stretch hardware has matching
+gains or force limits. Under it, the existing seed-0 carry checkpoint passed
+all five fixed carry validation seeds; the disturbance cases still need targeted
+training and larger held-out evaluation.
+
+This implementation is experimental and not ready for hardware deployment. With
+the bounded servo trim, the seed-0 checkpoint passed all five fixed carry seeds,
+but passed only two of five randomized disturbance episodes; three of those
+failures crossed the unchanged retention limit before the disturbance pulse began.
+Frozen cases are archived with checksums, but their historical event traces lack
+complete physics snapshots. The oracle harness below plans and physically
+executes from those fixtures; it does not claim exact replay of the original live
+CHAT timing. Mars manipulation training is blocked by missing authoritative
+wheel/support geometry; diagnostic free-base simulation is not a substitute for
+that geometry.
 
 The separate `risk.py` predictor estimates explicit outcomes for a particular
 robot, model and controller: completion, retention loss, excessive contact and

@@ -5,9 +5,23 @@ import numpy as np
 import pytest
 
 from emet.rl.manipulation.control import ManipulationControl
+from emet.rl.manipulation.env import (
+    DISTURBANCE_FORCE_N,
+    DISTURBANCE_TORQUE_NM,
+    ManipulationConfig,
+    ManipulationEnv,
+    sample_disturbance,
+)
 from emet.rl.manipulation.fixtures import evidence, load_case
 from emet.rl.manipulation.models import build_manipulation_model
-from emet.rl.manipulation.profiles import STRETCH, STRETCH_CLOSED_SLIDE_M, ModelAdmissionError, stretch_finger_to_slide
+from emet.rl.manipulation.profiles import (
+    STRETCH,
+    STRETCH_CLOSED_SLIDE_M,
+    TRACKING_TRIM_GAIN,
+    TRACKING_TRIM_LIMIT,
+    ModelAdmissionError,
+    stretch_finger_to_slide,
+)
 from emet.rl.manipulation.safety import ContactMonitor, retention_error
 
 pytestmark = pytest.mark.sim
@@ -17,6 +31,48 @@ def test_stretch_closed_gripper_reference_is_derived_from_archived_coupling():
     assert STRETCH.gripper_closed == pytest.approx(STRETCH_CLOSED_SLIDE_M)
     assert stretch_finger_to_slide(-0.376) == pytest.approx(-0.020)
     assert stretch_finger_to_slide(0.560) == pytest.approx(0.040)
+
+
+def test_disturbance_randomizes_world_frame_end_effector_wrench():
+    wrench = sample_disturbance(np.random.default_rng(31))
+    assert wrench.shape == (6,)
+    assert np.isfinite(wrench).all()
+    assert DISTURBANCE_FORCE_N[0] <= np.linalg.norm(wrench[:3]) <= DISTURBANCE_FORCE_N[1]
+    assert DISTURBANCE_TORQUE_NM[0] <= np.linalg.norm(wrench[3:]) <= DISTURBANCE_TORQUE_NM[1]
+    mild = sample_disturbance(np.random.default_rng(31), difficulty=0)
+    assert 0.5 <= np.linalg.norm(mild[:3]) <= 1.0
+    assert 0.01 <= np.linalg.norm(mild[3:]) <= 0.04
+
+
+def test_payload_friction_randomization_does_not_change_support_traction():
+    env = ManipulationEnv(ManipulationConfig(scenario="reach"))
+    try:
+        _, info = env.reset(seed=17)
+        payload_geom = env.model.body_geomadr[env.payload]
+        expected = env.friction.copy()
+        expected[payload_geom, 0] *= info["randomization"]["friction_factor"]
+        np.testing.assert_allclose(env.model.geom_friction, expected)
+    finally:
+        env.close()
+
+
+def test_disturbance_is_a_ramped_wrench_on_the_hand_not_the_payload():
+    env = ManipulationEnv(ManipulationConfig(scenario="disturbance"))
+    try:
+        _, info = env.reset(seed=0)
+        assert not info["initialization_failed"]
+        env.disturbance_start = 0
+        env.disturbance_steps = 6
+        env.disturbance_wrench = np.array([2, 0, 0, 0, 0.1, 0])
+        env.step(np.zeros(env.action_space.shape))
+        np.testing.assert_array_equal(env.data.xfrc_applied[env.control.ee], 0)
+        env.step(np.zeros(env.action_space.shape))
+        np.testing.assert_allclose(env.data.xfrc_applied[env.control.ee], env.disturbance_wrench * 0.5)
+        env.step(np.zeros(env.action_space.shape))
+        np.testing.assert_allclose(env.data.xfrc_applied[env.control.ee], env.disturbance_wrench)
+        np.testing.assert_array_equal(env.data.xfrc_applied[env.payload], 0)
+    finally:
+        env.close()
 
 
 def test_frozen_goals_and_failures_unchanged():
@@ -67,6 +123,22 @@ def test_fault_during_authorized_release_freezes_measured_gripper_position():
     control.stop()
     assert control.grip_target == pytest.approx(measured)
     assert not control.release_authorized
+
+
+def test_tracking_trim_is_slow_and_bounded_to_compensate_load_error():
+    model, _ = build_manipulation_model("stretch")
+    data = mujoco.MjData(model)
+    control = ManipulationControl(model, data, STRETCH)
+    control.initialize([0.55, 0.15, 0, -0.26, 0], 0)
+    pitch = 3
+    control.target[pitch] += 0.03
+    control._trim_time = float(data.time) - 0.1
+    control.apply()
+    assert control.tracking_integral[pitch] == pytest.approx(0.003)
+    assert data.ctrl[control.act[pitch]] == pytest.approx(control.target[pitch] + TRACKING_TRIM_GAIN * 0.003)
+    control.tracking_integral[pitch] = TRACKING_TRIM_LIMIT / TRACKING_TRIM_GAIN
+    control.apply()
+    assert data.ctrl[control.act[pitch]] <= control.target[pitch] + TRACKING_TRIM_LIMIT
 
 
 def test_support_detector_observes_lift_without_impacts():

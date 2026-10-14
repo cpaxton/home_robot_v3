@@ -4,6 +4,9 @@ from dataclasses import asdict, dataclass
 
 import numpy as np
 
+TRACKING_TRIM_GAIN = 0.5
+TRACKING_TRIM_LIMIT = 0.04
+
 
 @dataclass(frozen=True)
 class ManipulationProfile:
@@ -21,12 +24,14 @@ class ManipulationProfile:
     finger_bodies: tuple[str, str]
     wheel_bodies: tuple[str, ...]
     base_body: str
-    version: int = 1
+    version: int = 2
     dt: float = 0.05
     history_steps: int = 20
     grip_fraction: float = 0.05
     grip_rate_fraction: float = 0.25
     unsafe_force: float = 30.0  # Experimental simulator ceiling, not a damage rating.
+    tracking_trim_gain: float = TRACKING_TRIM_GAIN
+    tracking_trim_limit: float = TRACKING_TRIM_LIMIT
 
     @property
     def arm_size(self):

@@ -95,7 +95,7 @@ class Monitor(BaseCallback):
 
 def train(args):
     torch.set_num_threads(1)
-    config = ManipulationConfig(robot=args.robot)
+    config = ManipulationConfig(robot=args.robot, disturbance_curriculum=True)
     # Admit the model before starting workers or a tracking run.
     probe = ManipulationEnv(config)
     fingerprint = probe.fingerprint

@@ -15,6 +15,23 @@ from emet.rl.manipulation.safety import ContactMonitor, relative_pose, retention
 
 SCENARIOS = ("reach", "pregrasp", "carry", "place", "disturbance")
 MIXTURE = (0.25, 0.20, 0.30, 0.15, 0.10)
+DISTURBANCE_FORCE_N = (1.0, 4.0)
+DISTURBANCE_TORQUE_NM = (0.03, 0.20)
+DISTURBANCE_WARMUP_EPISODES = 20
+
+
+def sample_disturbance(rng, difficulty=1.0):
+    """Draw a short world-frame wrench for a compliant end-effector push."""
+    difficulty = float(np.clip(difficulty, 0, 1))
+    force_direction = rng.normal(size=3)
+    force_direction /= np.linalg.norm(force_direction)
+    torque_direction = rng.normal(size=3)
+    torque_direction /= np.linalg.norm(torque_direction)
+    force_range = (0.5 + 0.5 * difficulty, 1.0 + 3.0 * difficulty)
+    torque_range = (0.01 + 0.02 * difficulty, 0.04 + 0.16 * difficulty)
+    force = force_direction * rng.uniform(*force_range)
+    torque = torque_direction * rng.uniform(*torque_range)
+    return np.r_[force, torque]
 
 
 def running_cost(*, dt, force, jerk, action, rotation, translation):
@@ -40,6 +57,7 @@ class ManipulationConfig:
     horizon: float = 8.0
     initialization_attempts: int = 20
     diagnostics: bool = False
+    disturbance_curriculum: bool = False
 
     def __post_init__(self):
         if self.robot not in PROFILES or self.scenario not in (*SCENARIOS, "mixed"):
@@ -67,6 +85,7 @@ class ManipulationEnv(gym.Env):
         self.mass = self.model.body_mass.copy()
         self.inertia = self.model.body_inertia.copy()
         self.friction = self.model.geom_friction.copy()
+        self.disturbance_episodes = 0
         self._done = True
 
     def _tick(self, action, *, score=True):
@@ -96,7 +115,10 @@ class ManipulationEnv(gym.Env):
         m.body_mass[self.payload] *= mass_factor
         m.body_inertia[self.payload] *= mass_factor
         friction_factor = self.np_random.uniform(0.8, 1.2)
-        m.geom_friction[:, 0] *= friction_factor
+        payload_geom = m.body_geomadr[self.payload]
+        # Randomize the manipulated object's grip friction only. Scaling every
+        # geom also changes table and wheel/floor traction, confounding carry.
+        m.geom_friction[payload_geom, 0] *= friction_factor
         mujoco.mj_setConst(m, d)
         if p.robot == "stretch":
             q = np.array(
@@ -138,6 +160,16 @@ class ManipulationEnv(gym.Env):
         self.monitor.reset()
         self.initial_object_height = float(d.xpos[self.payload, 2])
         self.randomization = {"mass_factor": mass_factor, "friction_factor": friction_factor}
+        if self.scenario == "disturbance":
+            horizon_steps = int(self.config.horizon / p.dt)
+            latest_start = max(10, horizon_steps - 12)
+            self.disturbance_start = int(self.np_random.integers(10, latest_start + 1))
+            self.disturbance_steps = int(self.np_random.integers(6, 13))
+            self.disturbance_wrench = sample_disturbance(self.np_random, self.disturbance_difficulty)
+        else:
+            self.disturbance_start = None
+            self.disturbance_steps = 0
+            self.disturbance_wrench = np.zeros(6)
         if self.scenario == "reach":
             return True
         if self.scenario == "pregrasp":
@@ -180,6 +212,15 @@ class ManipulationEnv(gym.Env):
             if self.config.scenario == "mixed"
             else self.config.scenario
         )
+        if self.scenario == "disturbance":
+            self.disturbance_difficulty = (
+                min(1.0, self.disturbance_episodes / DISTURBANCE_WARMUP_EPISODES)
+                if self.config.disturbance_curriculum
+                else 1.0
+            )
+            self.disturbance_episodes += 1
+        else:
+            self.disturbance_difficulty = 1.0
         self.initialization_rejections = 0
         self.initialization_failed = True
         for _ in range(self.config.initialization_attempts):
@@ -251,6 +292,9 @@ class ManipulationEnv(gym.Env):
             "is_success": False,
             "unsafe_contact": self.monitor.peak_force > self.profile.unsafe_force,
             "randomization": getattr(self, "randomization", {}),
+            "disturbance_force_n": float(np.linalg.norm(getattr(self, "disturbance_wrench", np.zeros(6))[:3])),
+            "disturbance_torque_nm": float(np.linalg.norm(getattr(self, "disturbance_wrench", np.zeros(6))[3:])),
+            "disturbance_difficulty": getattr(self, "disturbance_difficulty", 1.0),
             "source": "simulator_ground_truth_evaluation",
             "diagnostics_only": self.config.diagnostics,
         }
@@ -267,11 +311,24 @@ class ManipulationEnv(gym.Env):
             return self.control.observe(), -20.0, True, False, {**self._info(), "code": "initialization_failed"}
         self.actions.append(action.copy())
         action = self.actions.pop(0)
-        if self.scenario == "disturbance" and self.steps == 20:
-            self.data.xfrc_applied[self.payload, :3] = self.np_random.uniform(-1, 1, 3)
-            self._disturbed = True
-        if self.steps == 25:
-            self.data.xfrc_applied[:] = 0
+        if self.scenario == "disturbance":
+            end = self.disturbance_start + self.disturbance_steps
+            if self.disturbance_start <= self.steps < end:
+                # Perturb the hand, so the held object is disturbed through
+                # the real simulated grasp contacts rather than by teleporting
+                # a force directly onto the payload.
+                elapsed = self.steps - self.disturbance_start
+                remaining = end - self.steps - 1
+                ramp = 3
+                ramp_up = np.clip(elapsed / (ramp - 1), 0, 1)
+                ramp_down = np.clip(remaining / (ramp - 1), 0, 1)
+                ramp_up = ramp_up**2 * (3 - 2 * ramp_up)
+                ramp_down = ramp_down**2 * (3 - 2 * ramp_down)
+                envelope = min(ramp_up, ramp_down)
+                self.data.xfrc_applied[self.control.ee] = self.disturbance_wrench * envelope
+                self._disturbed |= envelope > 0
+            else:
+                self.data.xfrc_applied[self.control.ee] = 0
         evidence = self._tick(action)
         dt = self.profile.dt
         velocity = self.control.velocities()
@@ -336,7 +393,7 @@ class ManipulationEnv(gym.Env):
         if self.scenario == "pregrasp":
             settled &= self._lift_commanded and self.data.xpos[self.payload, 2] - self.initial_object_height > 0.04
         if self.scenario == "disturbance":
-            settled &= self._disturbed and self.steps >= 25
+            settled &= self._disturbed and self.steps >= self.disturbance_start + self.disturbance_steps
         self.settle_time = self.settle_time + dt if settled else 0
         unsafe = self.monitor.peak_force > self.profile.unsafe_force
         invalid = invalid_physics(self.data)

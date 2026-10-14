@@ -19,6 +19,8 @@ class ManipulationControl:
         )
         self.grip_limits = model.joint(profile.gripper_joint).range.copy()
         self.ee = model.body(profile.ee_body).id
+        self.tracking_integral = np.zeros(profile.arm_size)
+        self._trim_time = float(data.time)
         self.reset()
 
     def positions(self):
@@ -57,6 +59,8 @@ class ManipulationControl:
         self.history = None
         self.last_action = np.zeros(self.profile.arm_size + 1)
         self._history_time = None
+        self.tracking_integral[:] = 0
+        self._trim_time = float(self.data.time)
         self.apply()
 
     def set_reference(self, reference, *, phase="reach", grip=None, release=False):
@@ -122,7 +126,18 @@ class ManipulationControl:
         self.apply()
 
     def apply(self):
-        self.data.ctrl[self.act] = self.target
+        now = float(self.data.time)
+        elapsed = max(0.0, now - self._trim_time)
+        if elapsed >= self.model.opt.timestep - 1e-9 and not self.stopped:
+            tracking_error = self.target - self.positions()
+            self.tracking_integral = np.clip(
+                self.tracking_integral + tracking_error * elapsed,
+                -self.profile.tracking_trim_limit / self.profile.tracking_trim_gain,
+                self.profile.tracking_trim_limit / self.profile.tracking_trim_gain,
+            )
+            self._trim_time = now
+        trim = self.profile.tracking_trim_gain * self.tracking_integral
+        self.data.ctrl[self.act] = np.clip(self.target + trim, self.limits[:, 0], self.limits[:, 1])
         self.data.ctrl[self.grip_act] = self.grip_target
         for name in ("left_wheel_vel", "right_wheel_vel", "base_x", "base_y", "base_yaw"):
             index = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_ACTUATOR, name)

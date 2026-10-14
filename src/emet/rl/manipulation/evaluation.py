@@ -13,7 +13,7 @@ def evaluate(policy=None, *, config=None, episodes=20, seed=200000, scenarios=SC
         raise ValueError("episodes must be positive")
     rows = []
     for scenario_index, scenario in enumerate(scenarios):
-        env = ManipulationEnv(replace(config, scenario=scenario))
+        env = ManipulationEnv(replace(config, scenario=scenario, disturbance_curriculum=False))
         if policy is not None and (policy.robot != config.robot or policy.manifest["fingerprint"] != env.fingerprint):
             raise ValueError("evaluation policy/model mismatch")
         try:
