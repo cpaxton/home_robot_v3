@@ -59,6 +59,7 @@ from emet.core import get_parameters
 from emet.core.parameters import Parameters
 from emet.llms import get_llm_client
 from emet.llms.base import AbstractLLMClient, AbstractVLLMClient
+from emet.llms.openai_client import OpenaiClient
 from emet.memory.backend import get_memory_backend
 from emet.memory.utils import print_memory_view_help_on_quit
 from emet.robots import ROBOT_REGISTRY
@@ -408,9 +409,11 @@ def _call_llm(
     set, a daemon only emits heartbeats — it must not run the model.
 
     When *robot* supports ``pause_streams``, ZMQ JPEG/depth decode is paused for the
-    duration of generate (avoids multi-minute hangs after loading while streams spin).
+    duration of local generate (avoids multi-minute hangs while streams spin).
+    Remote OpenAI-compatible inference keeps telemetry live: pausing it can leave
+    an immediately dispatched manipulation tool with a stale measured snapshot.
     """
-    with paused_robot_streams(robot):
+    with nullcontext() if isinstance(llm_client, OpenaiClient) else paused_robot_streams(robot):
         return _call_llm_body(
             llm_client,
             text,
@@ -929,8 +932,6 @@ def run_agent_with_robot(
                             )
                     except Exception as warm_err:
                         logger.warning("VL prefix cache warm failed: %s", warm_err)
-            from emet.llms.openai_client import OpenaiClient
-
             if isinstance(llm_client, OpenaiClient):
                 openai_tools_param = [t.schema() for t in tools]
         except Exception as e:

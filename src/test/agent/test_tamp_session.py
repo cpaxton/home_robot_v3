@@ -71,3 +71,20 @@ def test_camera_free_mode_rejects_incompatible_sessions_before_connecting(monkey
     with pytest.raises(ValueError, match='state_only_sim requires'):
         loop.run_agent_with_robot(**options)
     connect.assert_not_called()
+
+
+@pytest.mark.parametrize('remote', [True, False])
+def test_remote_inference_keeps_telemetry_live_local_load_guard_preserved(monkeypatch, remote):
+    from emet.llms.openai_client import OpenaiClient
+
+    robot = MagicMock()
+    client = object.__new__(OpenaiClient) if remote else object()
+
+    def generate(*args, **kwargs):
+        assert robot.pause_streams.call_count == (0 if remote else 1)
+        robot.resume_streams.assert_not_called()
+        return 'reply', .5
+
+    monkeypatch.setattr(loop, '_call_llm_body', generate)
+    assert loop._call_llm(client, 'move objects', None, False, robot=robot) == ('reply', .5)
+    assert robot.resume_streams.call_count == (0 if remote else 1)
