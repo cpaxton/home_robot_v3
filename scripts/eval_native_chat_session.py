@@ -17,7 +17,7 @@ import mujoco
 from eval_native_table_agent import goal_predicates
 
 from emet.config.sim_launch_config import load_sim_launch_config_from_path
-from emet.eval.native_chat_scoring import failure_boundaries
+from emet.eval.native_chat_scoring import failure_boundaries, integration_evidence
 from emet.eval.native_table_live import live_table_robot
 from emet.simulation.mujoco_server_stretch import default_scene_xml_path
 from emet.utils.process_tree import popen_session, terminate_process_tree
@@ -93,6 +93,7 @@ def main():
                 pass
         rejection_seen = any(e.get('code') == 'unknown_plan' for e in envelopes)
         result = {'task_passed': rc == 0 and stable and not any(r['satisfied'] for r in initial.values()),
+                  'agent_integration': integration_evidence(rows),
                   'cli_exit_code': rc, 'failure_boundaries': failure_boundaries(rows),
                   'requested_rejection_observed': rejection_seen if args.reject_first else None,
                   'final_predicates': goal_predicates(robot, goals), 'tool_outcomes': envelopes,

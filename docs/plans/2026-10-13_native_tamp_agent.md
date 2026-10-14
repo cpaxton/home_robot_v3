@@ -6,6 +6,47 @@ JSON tools. Native contact and observed perception are separate acceptance gates
 The earlier 6/6 scripted Stretch contact result does not establish either public
 tool execution or exploration. Keep its denominator separate.
 
+## October 14: agent integration ownership and next gates
+
+The live `run agent` CLI now completes the familiar two-object task with Caliban
+inference. Both frozen held-out placements still fail physically; see the
+[live CHAT report](../experiments/tamp_native_heldout_chat_20261014.md).
+Grasp retention and fingertip control are assigned to the separate RL/control
+workstream. Preserve those cases and tolerances as regression tests; integration
+work must not relax them or count a safe stop as task completion.
+
+Proceed on the agent interface without waiting for grasp tuning:
+
+1. **Separate integration evidence from physical outcomes.** The CHAT evaluator
+   now reports `agent_integration`: dispatched TAMP outcome counts, JSON contract
+   validity, and whether a failed/partial result stopped subsequent dispatch until
+   a new user turn. Unexercised checks are `null`, not passes. Physical predicates
+   and the overall acceptance gate remain unchanged. These checks do not certify
+   goal interpretation, physical recovery, or observed grounding.
+2. **Wire observed task discovery first, read-only.** Bridge memory objects and
+   support estimates to timestamped task evidence and opaque handles. Test missing,
+   stale, ambiguous and occluded observations; forbid simulator metadata access in
+   observed mode. Keep native execution unavailable until both observed collision
+   geometry and execution verification have providers. A model path or a semantic
+   object label alone is not an observed geometry provider.
+3. **Compose discovery with navigation in ordinary CHAT.** Validate exploration,
+   grounding and measured arrival independently, then refresh object/support
+   evidence before manipulation planning. The current `--state-only-sim` fixture
+   is camera-free and cannot validate this gate. Use Caliban for inference and
+   schedule camera/perception resources separately from the occupied local GPU.
+4. **Validate multi-step intent and failure handling.** Freeze tasks with explicit
+   goals, prerequisite discovery/navigation, plan-only requests, stale handles,
+   partial execution and unknown command outcomes. Assess actual dispatched calls,
+   not promises in assistant prose. No automatic held-object recovery until a
+   verified recovery capability exists. Report goal coverage separately from the
+   result-contract and stop checks.
+
+Keep the existing familiar fixture as an end-to-end integration control, and
+report the frozen held-out failures alongside it. When RL/control changes arrive,
+rerun the same fixtures through the same tools to measure physical improvement.
+Do not block read-only observed discovery on those controller changes or bypass
+the observed-input gate to manufacture an exploration success.
+
 ## Gate 1: stationary native public-tool execution
 
 Controlled positives now pass at `d1d451c5`: 4/4 live ZMQ transfers and 6/6

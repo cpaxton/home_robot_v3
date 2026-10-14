@@ -167,3 +167,30 @@ guard or supplying ground truth under an observed label is not integration.
    Only after that gate improves, expand initializations and integrate observed
    providers. General physical recovery needs its own verified skill; a safe stop
    and a new planning turn do not resolve an uncertain held object.
+## Agent integration follow-up: separate control ownership
+
+Grasp retention and fingertip control are now owned by the separate RL/control
+workstream. The physical results below remain unchanged. Agent integration can
+advance independently; it must preserve the same stop behavior and retain these
+failures as paired regression cases.
+
+The offline `integration_evidence` scorer was applied to existing CHAT logs
+without rerunning physics or rewriting the original summaries:
+
+| Existing run | Successful TAMP calls | Error results | Partial results | Valid result contracts | Stop after failure |
+| --- | ---: | ---: | ---: | --- | --- |
+| `native-chat-cli-recovery-telemetry-20261014` | 6 | 1 | 0 | pass | pass |
+| `native-chat-cli-heldout-left-observer-20261014` | 2 | 0 | 1 | pass | pass |
+| `native-chat-cli-heldout-right-observer-20261014` | 1 | 1 | 0 | pass | pass |
+
+These are contract/dispatch checks, not three successful robot tasks. Goal
+interpretation, goal coverage, physical recovery, observed grounding, navigation
+and exploration are explicitly unassessed by this scorer. Empty traces and
+unexercised failure paths produce `null`, not a passing check. Future CLI
+evaluations include this evidence under `agent_integration`; their existing
+physical and overall acceptance predicates are unchanged.
+
+Validation: 41 CPU-only tests passed across `test_native_chat_scoring.py`,
+`test_tamp_session.py` and `test_tamp_dispatch_recovery.py`; Ruff and diff checks
+passed. No new simulator trial or local GPU work was required. The next
+integration steps are in the [updated plan](../plans/2026-10-13_native_tamp_agent.md#october-14-agent-integration-ownership-and-next-gates).
