@@ -75,7 +75,7 @@ def prepare(root, output):
     return cases
 
 
-def infer(cases, output, repeats):
+def infer(cases, output, repeats, provenance_only=False):
     import numpy as np
     import torch
     from PIL import Image
@@ -83,6 +83,7 @@ def infer(cases, output, repeats):
     from emet.core.parameters import get_parameters
     from emet.eval.agentic_vlm_assess import assess_view_with_vlm
     from emet.llms.graph_eqa_vlm import build_graph_eqa_vlm_clients
+    from emet.memory.view_selection import spatial_packet_labels
 
     params = get_parameters("configs/emet/default.yaml")
     (output / "eqa_config.json").write_text(json.dumps(dict(params.get("eqa") or {}), indent=2, default=str))
@@ -91,14 +92,22 @@ def infer(cases, output, repeats):
         for case in cases:
             arrays = [np.asarray(Image.open(output / row["path"]).convert("RGB")) for row in case["views"]]
             for repeat in range(repeats):
-                arms = ["legacy_single", "labeled_single", "labeled_pair", "labeled_full"]
+                arms = (
+                    ["labeled_full", "spatial_full"]
+                    if provenance_only
+                    else ["legacy_single", "labeled_single", "labeled_pair", "labeled_full"]
+                )
                 if repeat % 2:
                     arms.reverse()
                 for arm in arms:
                     count = (
-                        len(arrays) if arm == "labeled_full" else (min(2, len(arrays)) if arm == "labeled_pair" else 1)
+                        len(arrays)
+                        if arm in {"labeled_full", "spatial_full"}
+                        else (min(2, len(arrays)) if arm == "labeled_pair" else 1)
                     )
                     labels = "\n".join(row["label"] for row in case["views"][:count])
+                    if arm == "spatial_full":
+                        labels = spatial_packet_labels(case["views"][:count])
                     packet = SimpleNamespace(
                         views=[SimpleNamespace(frame=SimpleNamespace(rgb=rgb)) for rgb in arrays[:count]],
                         prompt_labels=lambda: labels,
@@ -126,8 +135,13 @@ if __name__ == "__main__":
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--infer", action="store_true")
     parser.add_argument("--repeats", type=int, default=3)
+    parser.add_argument(
+        "--provenance-only",
+        action="store_true",
+        help="Compare identical full packets with/without capture sequence and camera pose labels",
+    )
     args = parser.parse_args()
     cases = prepare(args.root, args.output)
     print(f"Exported {len(cases)} packets to {args.output / 'index.html'}", flush=True)
     if args.infer:
-        infer(cases, args.output, args.repeats)
+        infer(cases, args.output, args.repeats, args.provenance_only)

@@ -33,6 +33,32 @@ def ids(result):
     return [v.frame.view_id for v in result.views]
 
 
+def test_spatial_labels_use_capture_order_and_optical_forward():
+    from emet.memory.view_selection import spatial_packet_labels
+
+    pose = np.eye(4)
+    pose[:3, 3] = [1, 2, 3]
+    labels = spatial_packet_labels(
+        [
+            {"label": "Image 1 current", "timestamp_s": 20, "camera_pose": pose},
+            {"label": "Image 2 historical", "timestamp_s": 10, "camera_pose": None},
+            {"label": "Image 3 simultaneous", "timestamp_s": 20, "camera_pose": pose},
+        ]
+    )
+    assert "Image 1 current Capture sequence=2" in labels
+    assert "Image 2 historical Capture sequence=1; camera position/direction unknown" in labels
+    assert "Image 3 simultaneous Capture sequence=2" in labels
+    assert "XYZ=(1.00, 2.00, 3.00) m" in labels
+    assert "viewing direction=(0.00, 0.00, 1.00)" in labels
+
+
+def test_spatial_labels_reject_invalid_pose():
+    from emet.memory.view_selection import spatial_packet_labels
+
+    with pytest.raises(ValueError, match="finite 4x4"):
+        spatial_packet_labels([{"label": "Image 1", "timestamp_s": 0, "camera_pose": np.eye(3)}])
+
+
 def test_current_and_pre_turn_pinned_with_honest_labels_and_budget():
     result = select_views(
         [frame(1), frame(2), frame(3)], current_id="3", pre_turn_id="1", config=SelectionConfig(max_images=2)

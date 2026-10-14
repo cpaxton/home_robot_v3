@@ -161,12 +161,18 @@ class ViewSelection:
     config: SelectionConfig
 
     def prompt_labels(self) -> str:
-        return "\n".join(view.label(i) for i, view in enumerate(self.views, 1))
+        return spatial_packet_labels(
+            [
+                {"label": view.label(i), "timestamp_s": view.frame.timestamp_s, "camera_pose": view.frame.camera_pose}
+                for i, view in enumerate(self.views, 1)
+            ]
+        )
 
     def to_dict(self) -> dict:
         """JSON-safe audit record; pixels/embeddings stay outside the manifest."""
         return {
             "config": asdict(self.config),
+            "prompt_labels": self.prompt_labels(),
             "views": [
                 {
                     "view_id": v.frame.view_id,
@@ -183,6 +189,37 @@ class ViewSelection:
             "excluded": self.excluded,
             "metrics": self.metrics,
         }
+
+
+def spatial_packet_labels(rows) -> str:
+    """Describe same-world captures without confusing display order with time.
+
+    Input timestamps must share a clock and poses a world frame (the selector
+    enforces both). Sequence ranks are packet-local, not global sensor IDs;
+    simultaneous captures share a rank. Missing poses remain explicitly unknown.
+    """
+    times = sorted({float(row["timestamp_s"]) for row in rows})
+    if not all(math.isfinite(t) for t in times):
+        raise ValueError("Capture timestamps must be finite")
+    lines = [
+        "Capture sequence is chronological within this packet (1 = earliest); "
+        "image display order is different. Positions are camera XYZ in meters in "
+        "one shared world frame; directions are camera optical-forward unit vectors "
+        "in that frame. These are camera poses, not object locations."
+    ]
+    for row in rows:
+        sequence = times.index(float(row["timestamp_s"])) + 1
+        pose = row.get("camera_pose")
+        geometry = "camera position/direction unknown"
+        if pose is not None:
+            pose = np.asarray(pose, dtype=float)
+            if pose.shape != (4, 4) or not np.all(np.isfinite(pose)):
+                raise ValueError("Camera pose must be a finite 4x4 transform")
+            xyz = ", ".join(f"{x:.2f}" for x in pose[:3, 3])
+            forward = ", ".join(f"{x:.2f}" for x in pose[:3, 2])
+            geometry = f"camera XYZ=({xyz}) m; viewing direction=({forward})"
+        lines.append(f"{row['label']} Capture sequence={sequence}; {geometry}.")
+    return "\n".join(lines)
 
 
 def _cosine(a: np.ndarray, b: np.ndarray) -> float:

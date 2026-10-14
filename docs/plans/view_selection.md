@@ -548,3 +548,31 @@ out counting context, q14 loses the sofa, and q56 wider context shows bookshelf
 and blue curtains together. Investigate a wider viewing position separately;
 do not relabel an earlier image as the robot's current physical view, weaken
 manipulation visibility checks, or tune on answer labels.
+
+### Completed packet/stopping comparison and provenance follow-up
+
+At `52f1bcd8`, both jobs completed: 216 offline assessments (18 saved packets,
+four presentation arms, three repeats) and 24 live episodes. Single-view
+confirmation scored 7/12 versus corroborated 6/12; total decision rounds were
+47 versus 63. q12 remained wrong after four corroborated rounds; q14 confirmed
+immediately via phrase corroboration. Do not promote this stopping change.
+
+Fixed captures: q12 answered One in all arms/repeats. q14 single-image arms
+abstained; pair/full answered the wrong TV relation. q56 single-image arms
+abstained; pair/full correctly selected blue curtains. q31 single-image arms
+were correct, pair/full wrong in this offline diagnostic (live runs were
+correct). Inventory and target hints were omitted uniformly, so these are
+presentation diagnostics, not exact reproductions of live decisions.
+
+Historical q12's latest correct result was `mcq_debias` after eight rounds,
+following an initial visual abstention. It was not a successful early visual
+count. Earlier offline wider-view successes are different captured evidence.
+
+Follow-up adds capture-sequence ranks (earliest=1 within packet), world camera
+XYZ in meters, and world optical-forward direction. Display order and capture
+order remain distinct; simultaneous timestamps share a sequence rank, unknown
+poses remain unknown. No object locations are inferred. The shared formatter
+serves live selected-view prompts and frozen replay; the audit manifest saves
+the actual prompt labels. Compare `labeled_full` / `spatial_full` on identical
+saved pixels with `--provenance-only`, three repeats. No camera motion, image
+selection, stopping-policy, or task-specific prompt changes in this comparison.
