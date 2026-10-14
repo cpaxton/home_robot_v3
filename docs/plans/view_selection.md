@@ -590,3 +590,65 @@ only `EMET_EQA_VIEW_SPATIAL_LABELS` differs. Spatial labels remain opt-in via
 confirmation provenance, rounds, and whether deferred answers recover before
 budget exhaustion. Freeze code before launch; do not change viewing distance
 or stopping alongside the labeling intervention.
+
+## Checkpoint report: live provenance pilot, 2026-10-14
+
+Status: promising candidate, **not merge/default acceptance**. Feature branch
+`feat/target-local-view-coverage`; evaluated source `939e5563`. No changes to
+main. Spatial labels remain opt-in. The shared harness uses packet-local capture
+sequence and camera-world geometry; no task-specific answer rules were added.
+
+### Evidence and reproducibility
+
+Job `20261014_084459_1efb95` completed 24/24 episodes without infrastructure
+failures. Paired seed 0, question IDs `2 6 12 14 15 16 25 28 31 56 65 68`.
+Both arms use local Qwen3-VL-8B-Instruct int4, pose selection, approach retention,
+single-view confirmation, and identical exploration/movement budgets. Only
+`EMET_EQA_VIEW_SPATIAL_LABELS` differs. Artifacts and invocation manifests:
+`/tmp/emet-provenance-eqa12-s0-20261014/`; images and traces:
+`~/.cache/habitat_eqa/episodes/emet-provenance-eqa12-s0-20261014/`.
+
+| Arm | Correct | VLM-suggested correct/total | Fallback correct/total | Decision rounds |
+| --- | --- | --- | --- | --- |
+| Role-only labels | 6/12 | 5/7 | 1/5 | 47 |
+| Sequence + XYZ + direction | 8/12 | 7/9 | 1/3 | 39 |
+
+Paired wins: q12 (One → Two), q25 (wrong fallback → correct visual answer),
+q15 (wrong → correct fallback). Paired loss: q68 (correct fallback → wrong
+committed answer). q14 remains wrong. This is net +2 on one development seed,
+not a statistically established improvement. Fallback successes count; q15's
+gain is less diagnostic than q12. No latest small-OVMM acceptance has been run.
+
+### Failure audit
+
+- q14 offline/live packets have **identical PNG SHA-256 hashes for all four
+  images**. Their camera poses also match. Live supplies target `standing fan`
+  and inventory (`observations_seen=2`, `rounds=0`, `nav_steps=1`, graph labels
+  `frontier, leave fan`, tried observation ID); offline omitted target/inventory.
+  Relative ages and the pre-turn ID differ between captures. Offline abstention
+  therefore cannot be credited as live recovery. Text context/model sampling
+  remains to be isolated; camera framing alone does not explain this mismatch.
+- q68 initially says No without seeing the ironing board, later abstains, then
+  commits Yes at round 6. Its reason places the ironing board in historical
+  Image 4 and says inventory/context imply co-location with the sofa. The
+  `single_view_present` confirmation accepts that assessment. This shows a
+  context/co-location failure, not evidence that additional exploration reliably
+  recovered the answer. Do not add a question-specific rejection rule.
+
+### Validation and next gates
+
+61 focused selector/history/assessment/runner tests pass; commit hooks pass.
+Gallery exporter keeps original PNGs and separates assessment packets from
+episode-level final answers. The earlier gallery is at
+`/tmp/emet-eqa-packet-gallery-20261014/index.html`; the exporter and manifests,
+not machine-local image files, are version-controlled for reuse in docs/paper.
+
+1. Freeze this checkpoint and run paired seeds 1 and 2 with the same 12 questions
+   and unchanged two arms, serial GPU/CPU-safe execution. Aggregate paired
+   differences across seeds, provenance, rounds and failures; no threshold tuning.
+2. Reproduce q14 with exact live prompt plus identical saved pixels, then remove
+   target/inventory separately if needed. Inspect q68's final historical/current
+   packet before changing any evidence-consistency contract.
+3. If gains survive repeats, run small OVMM non-regression before promotion.
+   Wider primary viewpoints remain a separate intervention. Do not combine
+   camera-distance, stopping, model, and label changes in one claimed ablation.
