@@ -250,3 +250,12 @@ the real mapping update path. Ruff and diff checks passed. An earlier frame-cont
 batch skipped seven RoboCasa-dependent tests because that checkout lacks the
 RoboCasa dependency; those skips are not acceptance evidence. No new live detector
 trial or GPU experiment was run in this implementation step.
+
+
+The subsequent [real detector/camera diagnostic](../experiments/tamp_observed_discovery_20261014.md)
+found CPU inference too slow for the two-second receive-age gate and incorrectly
+labeled tabletop regions as blue cubes. Public discovery rejected the stale
+frame; observed task success has not been established. Detector/device/label
+adapter fixes are covered by 35 focused regressions, and 43 broader agent/config
+checks pass. The next gate requires semantic verification, object-part identity
+handling and faster perception, plus separate camera/physics throughput work.

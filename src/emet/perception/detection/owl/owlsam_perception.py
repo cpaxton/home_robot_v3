@@ -41,7 +41,7 @@ class OWLSAMProcessor(OwlPerception):
         # Considering SAM2 is not installed by default, we would not import it unless we need to use it.
         from emet.perception.detection.sam2 import SAM2Perception
 
-        self.sam_model = SAM2Perception(configuration="s")
+        self.sam_model = SAM2Perception(configuration="s", device=self.device)
 
     def reset_vocab(self, texts: list[str] | None = None):
         if texts is None:
@@ -90,13 +90,13 @@ class OWLSAMProcessor(OwlPerception):
 
         # Early exit if no detections
         if len(results["boxes"]) == 0:
-            return np.zeros_like(rgb[..., 0]), np.zeros_like(rgb[..., 0]), {}
+            return np.zeros_like(rgb[..., 0]), -np.ones(rgb.shape[:2], dtype=int), {}
 
         # Generate SAM masks for all detections
         boxes = results["boxes"]
         masks = self.sam_model.segment(image=image, xyxy=boxes)
         if len(masks) == 0:
-            return np.zeros_like(rgb[..., 0]), np.zeros_like(rgb[..., 0]), {}
+            return np.zeros_like(rgb[..., 0]), -np.ones(rgb.shape[:2], dtype=int), {}
         torch.Tensor(masks).bool()[0]
 
         # Process metadata

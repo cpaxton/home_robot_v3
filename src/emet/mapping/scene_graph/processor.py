@@ -114,6 +114,10 @@ class SceneGraphProcessor:
         seg_cfg = self.config.get("segmentation", {})
         primary = seg_cfg.get("primary", "sam3")
 
+        if primary in {'owlsam', 'sam2'}:
+            return self._build_fallback_segmenter(primary, seg_cfg)
+        if primary != 'sam3':
+            raise ValueError(f'Unknown primary segmenter: {primary}')
         if primary == "sam3":
             try:
                 from emet.perception.detection.sam3 import SAM3Perception
@@ -152,6 +156,7 @@ class SceneGraphProcessor:
             sam2_cfg = seg_cfg.get("sam2", {})
             return SAM2Perception(
                 configuration=sam2_cfg.get("configuration", "l"),
+                device=self.device,
             )
         else:
             raise ValueError(f"Unknown fallback segmenter: {name}")
@@ -283,6 +288,8 @@ class SceneGraphProcessor:
         detections = []
         labels = task_obs.get("labels", [])
         scores = task_obs.get("instance_scores", np.array([]))
+        classes = task_obs.get('instance_classes', [])
+        texts = getattr(seg, 'texts', vocabulary)
 
         unique_ids = np.unique(inst)
         for uid in unique_ids:
@@ -293,6 +300,10 @@ class SceneGraphProcessor:
                 continue
 
             label = labels[int(uid)] if int(uid) < len(labels) else "object"
+            if int(uid) >= len(labels) and int(uid) < len(classes):
+                class_id = int(classes[int(uid)])
+                if 0 <= class_id < len(texts):
+                    label = texts[class_id].removeprefix('a photo of a ')
             score = float(scores[int(uid)]) if int(uid) < len(scores) else 1.0
             ys, xs = np.where(mask)
             bbox = np.array([xs.min(), ys.min(), xs.max(), ys.max()])

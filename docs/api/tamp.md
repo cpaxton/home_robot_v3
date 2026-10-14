@@ -424,5 +424,8 @@ before they can produce fresh proposals.
 The camera-free diagnostic and plain `dynamem`/GraphEQA presets do not activate
 this processor and still need an explicit provider for discovery. Observed
 obstacle/payload geometry and execution verification remain prerequisites for
-motion. Live camera/segmentation acceptance is still pending; tests use controlled
-segmentation with real depth unprojection and the actual processor/tool paths.
+motion. The first real camera/detector diagnostic rejected stale evidence after 16.5 s
+of CPU processing and exposed incorrect support labels. Live discovery acceptance
+is still pending; see the [diagnostic report](../experiments/tamp_observed_discovery_20261014.md).
+Controlled segmentation tests cover real depth projection and the processor/tool
+paths, but do not establish detector accuracy.
