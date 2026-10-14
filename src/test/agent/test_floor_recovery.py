@@ -16,7 +16,8 @@ from emet.controller.dynamem import look
 
 
 @pytest.mark.parametrize("in_frame", [False, True])
-def test_targeted_floor_aim_is_bounded_and_projection_does_not_clear_map(monkeypatch, in_frame):
+@pytest.mark.parametrize("max_observations", [1, 2])
+def test_targeted_floor_aim_is_bounded_and_projection_does_not_clear_map(monkeypatch, in_frame, max_observations):
     pose = np.eye(4)
     pose[2, 3] = -1
     obs = SimpleNamespace(
@@ -59,8 +60,8 @@ def test_targeted_floor_aim_is_bounded_and_projection_does_not_clear_map(monkeyp
 
     capture_mock = Mock(side_effect=capture)
     monkeypatch.setattr(look, "observe_floor", capture_mock)
-    result = look.observe_blocked_floor(agent)
-    assert capture_mock.call_count == (1 if in_frame else 2)
+    result = look.observe_blocked_floor(agent, max_observations=max_observations)
+    assert capture_mock.call_count == (1 if in_frame else max_observations)
     assert result["observation"]["footprint_after"]["pose_valid"] is False
     attempt = result["observation"]["targeted_floor"]["attempts"][-1]
     assert attempt["after"]["target_in_frame"] is in_frame
