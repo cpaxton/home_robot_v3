@@ -30,6 +30,9 @@ class PhysicalMotionResult:
 
 
 class PhysicalPickPlaceExecutor:
+    # Maximum joint motion during the stricter endpoint stillness window.
+    ENDPOINT_STILLNESS_TOLERANCE = 0.002
+
     execution_mode = "physical"
 
     def __init__(
@@ -170,7 +173,7 @@ class PhysicalPickPlaceExecutor:
             if self.collision.payload_body is not None and self.collision.configuration_collides(self.model, self.data):
                 return None, "arm_goal_revalidation_failed"
             return path.waypoints, None
-        return None, f"arm_path_failed:{path.reason}:{path.detail}" if path.detail else f"arm_path_failed:{path.reason}"
+        return None, (f"arm_path_failed:{path.reason}:{path.detail}" if path.detail else f"arm_path_failed:{path.reason}")
 
     def prepare_for_navigation(self, path):
         return self._execute_path("navigation_posture", path)
@@ -259,15 +262,13 @@ class PhysicalPickPlaceExecutor:
             current = float(position())
             if not np.isfinite([current, previous]).all():
                 return PhysicalMotionResult(False, "invalid_gripper_feedback", "grasp")
+            # Accumulate small drift relative to the stable-interval anchor.
             if abs(current - previous) > 0.01:
                 stable_since = time.monotonic()
+                previous = current
             if time.monotonic() - stable_since >= 0.3 and self.data.time - start_sim_time >= 0.25:
                 self.event(phase="gripper_settled", measured=current, controller_success=True)
                 return PhysicalMotionResult(True, "gripper_settled", "grasp")
-            # Keep the beginning of the stable interval, not the previous sample:
-            # small per-sample drift must accumulate and reset the settling window.
-            if abs(current - previous) > 0.01:
-                previous = current
         return PhysicalMotionResult(False, "gripper_settling_timeout", "grasp")
 
     def _replan_at_measured_pose(self, phases, targets, *, object_body, grasp, open_gripper_geometry=True):
@@ -407,7 +408,7 @@ class PhysicalPickPlaceExecutor:
                 residual = joint_residual(path[-1])
                 if not np.isfinite(residual):
                     return PhysicalMotionResult(False, "invalid_measured_joint_state", phase)
-                if residual > self.joint_tolerance or joint_residual(anchor) > .002:
+                if residual > self.joint_tolerance or joint_residual(anchor) > self.ENDPOINT_STILLNESS_TOLERANCE:
                     anchor = self.data.qpos[self.qadr].copy()
                     stable_since = time.monotonic()
                 elif time.monotonic() - stable_since >= self.endpoint_settle_s:
