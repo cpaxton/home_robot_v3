@@ -30,6 +30,9 @@ class PhysicalMotionResult:
 
 
 class PhysicalPickPlaceExecutor:
+    # Maximum joint motion during the stricter endpoint stillness window.
+    ENDPOINT_STILLNESS_TOLERANCE = 0.002
+
     execution_mode = "physical"
 
     def __init__(
@@ -47,6 +50,7 @@ class PhysicalPickPlaceExecutor:
         event: Callable = lambda **kwargs: None,
         joint_tolerance: float = 0.03,
         joint_settle_timeout_s: float = 5.0,
+        endpoint_settle_s: float = 0.0,
         position_tolerance_m: float = 0.01,
         orientation_tolerance_rad: float = 0.1,
         base_body: str | None = None,
@@ -74,6 +78,9 @@ class PhysicalPickPlaceExecutor:
         if not np.isfinite(joint_settle_timeout_s) or joint_settle_timeout_s <= 0:
             raise ValueError("Positive finite joint settling timeout required")
         self.joint_settle_timeout_s = float(joint_settle_timeout_s)
+        if not np.isfinite(endpoint_settle_s) or not 0 <= endpoint_settle_s < joint_settle_timeout_s:
+            raise ValueError("Endpoint settling must fit within the joint settling timeout")
+        self.endpoint_settle_s = float(endpoint_settle_s)
         self.position_tolerance_m, self.orientation_tolerance_rad = position_tolerance_m, orientation_tolerance_rad
         self.qadr = joint_qpos_addrs(model, self.joint_names)
         self.base_body = base_body
@@ -166,7 +173,7 @@ class PhysicalPickPlaceExecutor:
             if self.collision.payload_body is not None and self.collision.configuration_collides(self.model, self.data):
                 return None, "arm_goal_revalidation_failed"
             return path.waypoints, None
-        return None, f"arm_path_failed:{path.reason}"
+        return None, (f"arm_path_failed:{path.reason}:{path.detail}" if path.detail else f"arm_path_failed:{path.reason}")
 
     def prepare_for_navigation(self, path):
         return self._execute_path("navigation_posture", path)
@@ -255,12 +262,13 @@ class PhysicalPickPlaceExecutor:
             current = float(position())
             if not np.isfinite([current, previous]).all():
                 return PhysicalMotionResult(False, "invalid_gripper_feedback", "grasp")
+            # Accumulate small drift relative to the stable-interval anchor.
             if abs(current - previous) > 0.01:
                 stable_since = time.monotonic()
+                previous = current
             if time.monotonic() - stable_since >= 0.3 and self.data.time - start_sim_time >= 0.25:
                 self.event(phase="gripper_settled", measured=current, controller_success=True)
                 return PhysicalMotionResult(True, "gripper_settled", "grasp")
-            previous = current
         return PhysicalMotionResult(False, "gripper_settling_timeout", "grasp")
 
     def _replan_at_measured_pose(self, phases, targets, *, object_body, grasp, open_gripper_geometry=True):
@@ -383,6 +391,29 @@ class PhysicalPickPlaceExecutor:
                 controller_success=bool(ok),
             )
             if not ok or residual > self.joint_tolerance:
+                return PhysicalMotionResult(False, "arm_tracking_failed", phase, residual)
+        if self.endpoint_settle_s:
+            # A waypoint tolerance can be reached while the arm is still moving.
+            # Contact transitions need a settled endpoint, not merely an ACK.
+            deadline = time.monotonic() + self.joint_settle_timeout_s
+            stable_since = time.monotonic()
+            anchor = self.data.qpos[self.qadr].copy()
+            while time.monotonic() < deadline:
+                time.sleep(.05)
+                self.synchronize(self.data)
+                if base_drifted():
+                    return PhysicalMotionResult(False, "base_drift_during_arm", phase)
+                if not self.payload_retained():
+                    return PhysicalMotionResult(False, "payload_not_retained", phase)
+                residual = joint_residual(path[-1])
+                if not np.isfinite(residual):
+                    return PhysicalMotionResult(False, "invalid_measured_joint_state", phase)
+                if residual > self.joint_tolerance or joint_residual(anchor) > self.ENDPOINT_STILLNESS_TOLERANCE:
+                    anchor = self.data.qpos[self.qadr].copy()
+                    stable_since = time.monotonic()
+                elif time.monotonic() - stable_since >= self.endpoint_settle_s:
+                    break
+            else:
                 return PhysicalMotionResult(False, "arm_tracking_failed", phase, residual)
         self.event(phase=f"{phase}_complete", controller_success=True, residual=residual)
         return PhysicalMotionResult(True, "ok", phase, residual)

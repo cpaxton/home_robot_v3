@@ -204,7 +204,7 @@ def test_navigation_posture_requires_collision_path_and_measured_tracking():
         command_joints=lambda q: calls.append(q) or True,
     )
     path, error = executor.plan_joint_target(np.array([1.0]))
-    assert path is None and error == "arm_path_failed:invalid_start" and not calls
+    assert path is None and error == "arm_path_failed:invalid_start:collision" and not calls
     # With a clear scene, a successful controller return still needs state progress.
     m.geom_pos[m.geom("wall").id] = [2, 0, 0]
     path, error = executor.plan_joint_target(np.array([0.2]))
@@ -690,3 +690,37 @@ def test_release_and_retreat_check_open_fingers_and_preserve_payload(obstacle_x)
     np.testing.assert_array_equal(d.qpos, before)
     np.testing.assert_array_equal(checker.payload_transform, transform)
     assert checker.payload_body == 'target' and executor.payload_body == 'target'
+
+
+def test_gripper_slow_drift_is_not_motor_settling(monkeypatch):
+    import emet.controller.manipulation.physical_pick_place as module
+    clock = [0.0]
+    monkeypatch.setattr(module.time, 'monotonic', lambda: clock[0])
+    monkeypatch.setattr(module.time, 'sleep', lambda dt: clock.__setitem__(0, clock[0] + dt))
+    m = model()
+    d = mujoco.MjData(m)
+    executor = module.PhysicalPickPlaceExecutor(
+        SimpleNamespace(close_gripper=lambda **kwargs: True, get_gripper_position=lambda: .1*clock[0]),
+        input_mode='privileged', model=m, data=d, ee_body='ee', joint_names=['yaw'],
+        collision=MujocoSceneCollisionChecker(m, robot_body='robot'),
+        synchronize=lambda state: setattr(state, 'time', clock[0]), command_joints=lambda q: True)
+    assert not executor._close_gripper_until_still(timeout_s=1.).success
+
+
+def test_endpoint_settling_rejects_motion_even_within_arrival_tolerance(monkeypatch):
+    import emet.controller.manipulation.physical_pick_place as module
+    clock = [0.0]
+    monkeypatch.setattr(module.time, 'monotonic', lambda: clock[0])
+    monkeypatch.setattr(module.time, 'sleep', lambda dt: clock.__setitem__(0, clock[0] + dt))
+    m = model()
+    m.geom_pos[m.geom('wall').id] = [2, 0, 0]
+    d = mujoco.MjData(m)
+    def sync(state):
+        state.qpos[0] = .004 * np.sin(30*clock[0])
+        mujoco.mj_forward(m, state)
+    executor = module.PhysicalPickPlaceExecutor(
+        SimpleNamespace(), input_mode='privileged', model=m, data=d, ee_body='ee', joint_names=['yaw'],
+        collision=MujocoSceneCollisionChecker(m, robot_body='robot'), synchronize=sync,
+        command_joints=lambda q: True, endpoint_settle_s=.3, joint_settle_timeout_s=1.)
+    result = executor._execute_path('grasp', [np.array([0.]), np.array([0.])])
+    assert not result.success and result.message == 'arm_tracking_failed'
