@@ -19,6 +19,18 @@ def git(root, *args):
     return subprocess.check_output(["git", "-C", str(root), *args], text=True).strip()
 
 
+def stopping_overrides(arm):
+    if arm not in {"stop_single", "stop_corroborated"}:
+        return {}
+    return {
+        "EMET_EQA_VIEW_SELECTION_POLICY": "pose",
+        "EMET_EQA_RETAIN_APPROACH_VIEWS": "1",
+        "EMET_EQA_ANSWERABLE_CONFIRM": "1",
+        "EMET_EQA_AGENTIC_NO_EARLY_UNVERIFIED": "1",
+        "EMET_EQA_AGENTIC_SINGLE_VIEW_CONFIRM": "1" if arm == "stop_single" else "0",
+    }
+
+
 def run(args):
     roots = {"historical": args.historical.resolve(), "current": args.current.resolve()}
     revisions = {}
@@ -92,6 +104,7 @@ def run(args):
                 if arm == "pose_approach":
                     env["EMET_EQA_VIEW_SELECTION_POLICY"] = "pose"
                     env["EMET_EQA_RETAIN_APPROACH_VIEWS"] = "1"
+                env.update(stopping_overrides(arm))
                 for attempt in range(2):
                     case = out / f"s{seed}-q{qid}-{arm}-attempt{attempt}"
                     case.mkdir()
@@ -134,6 +147,7 @@ def run(args):
                                 "revision": revisions[name],
                                 "policy": env.get("EMET_EQA_VIEW_SELECTION_POLICY", "disabled"),
                                 "retain_approach": env.get("EMET_EQA_RETAIN_APPROACH_VIEWS", "0"),
+                                "stopping_overrides": stopping_overrides(arm),
                             },
                             indent=2,
                         )
@@ -193,7 +207,15 @@ if __name__ == "__main__":
     parser.add_argument(
         "--arms",
         nargs="+",
-        choices=["historical", "unchanged", "pose", "quality_coverage", "pose_approach"],
+        choices=[
+            "historical",
+            "unchanged",
+            "pose",
+            "quality_coverage",
+            "pose_approach",
+            "stop_single",
+            "stop_corroborated",
+        ],
         default=["historical", "unchanged", "pose", "quality_coverage"],
     )
     raise SystemExit(run(parser.parse_args()))

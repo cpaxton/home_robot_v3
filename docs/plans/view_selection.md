@@ -514,3 +514,37 @@ Next: broaden to the fixed 12-question dev set, first seed 0, with historical,
 pose and pose_approach arms. This is an attribution pilot for a retention repair,
 not promotion of the failed quality objective. Keep three-seed confirmation
 and small OVMM pending; no merge/default change follows from a single seed.
+
+### Twelve-question result and frozen-packet attribution (2026-10-14)
+
+Seed 0 completed 36/36 episodes at `241a5248`, no infrastructure failures.
+Historical: 8/12 (5/5 VLM-suggested, 3/7 fallback); pose: 7/12 (5/7
+VLM-suggested, 2/5 fallback); pose+approach: 6/12 (5/7 VLM-suggested,
+1/5 fallback). Fallback successes count toward accuracy. No recovery claim.
+q12 changes from historical budget fallback to early wrong commitment; q14
+already stops after one round in both versions, so its error is not earlier
+stopping. A single seed cannot establish the retention effect.
+
+Next diagnostics keep model and budgets fixed:
+
+1. `scripts/assess_saved_view_packets.py`: export original, uncropped packets
+   with question, image roles, age, original image links, and episode-level
+   parsed answer. HTML is portable with adjacent PNGs and print-friendly for
+   documentation; `cases.json` records source and image hashes. Do not mistake
+   an intermediate packet for final submission. Compare historical-style
+   unlabeled single image, labeled single, labeled pair, and full labeled packet
+   from identical captures, three repeats. Inventory/target hints are omitted
+   uniformly: this isolates image/presentation effects, not exact live replay.
+   Model responses are saved separately, including abstentions and reasons.
+2. Paired live driver arms `stop_single` / `stop_corroborated`: both use pose
+   plus approach retention. Only `EMET_EQA_AGENTIC_SINGLE_VIEW_CONFIRM` changes.
+   Corroborated is NOT strict independent two-view agreement: phrase evidence
+   can still confirm, and different observation IDs need not be distinct poses.
+   Keep confirmation and no-early-unverified guards enabled. Run the same 12
+   questions, seed 0; inspect confirmation reasons alongside accuracy and cost.
+
+No navigation-distance changes in these comparisons. The q12 primary crops
+out counting context, q14 loses the sofa, and q56 wider context shows bookshelf
+and blue curtains together. Investigate a wider viewing position separately;
+do not relabel an earlier image as the robot's current physical view, weaken
+manipulation visibility checks, or tune on answer labels.
