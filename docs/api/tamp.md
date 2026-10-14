@@ -316,4 +316,5 @@ Use the contact harness with `--sequence object2 object1 --separation .15
 --separation-axis y --placement-regions PATH`. The separate
 `scripts/eval_native_table_agent.py` evaluates local Qwen selection with the CHAT
 prompt/parser/dispatcher and independent region/support scoring; it is not the
-interactive `run agent` CLI or a live ZMQ run. Both harnesses require managed jobs.
+interactive `run agent` CLI or a live ZMQ run. Its `--device` defaults to `cpu`;
+`--device cuda` requires a managed GPU reservation. Both harnesses require managed jobs.

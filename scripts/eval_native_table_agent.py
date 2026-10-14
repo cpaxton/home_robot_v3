@@ -5,7 +5,8 @@
 
 Uses the run-agent prompt, parser and dispatcher, with an in-process actuator
 facade and privileged simulator geometry. It does not launch the interactive CLI,
-test IPC, or establish observed perception. Run as a managed CPU job.
+test IPC, or establish observed perception. Run as a managed job; reserve the GPU
+when selecting --device cuda.
 """
 import argparse
 import json
@@ -58,6 +59,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--placement-regions', type=Path, required=True)
+    parser.add_argument('--device', choices=['cpu', 'cuda'], default='cpu')
     parser.add_argument('--max-turns', type=int, default=12)
     parser.add_argument('--model-size', default='3B', choices=['1.5B', '3B'])
     parser.add_argument('--seed', type=int, default=0)
@@ -94,13 +96,13 @@ def main():
     source = subprocess.check_output(['git', 'rev-parse', 'HEAD'],
                                     cwd=Path(__file__).resolve().parents[1], text=True).strip()
     protocol = {'source_sha': source, 'model': f'Qwen/Qwen2.5-{args.model_size}-Instruct',
-                'seed': args.seed, 'max_turns': args.max_turns, 'device': 'cpu',
+                'seed': args.seed, 'max_turns': args.max_turns, 'device': args.device,
                 'scope': 'LLM-selected CHAT tools; CPU native contact; privileged inputs; no live IPC',
                 'goals': goals, 'instruction': instruction, 'system_prompt': str(prompt),
                 'initial_predicates': goal_predicates(robot, goals)}
     (args.output / 'protocol.json').write_text(json.dumps(protocol, indent=2))
     set_seed(args.seed)
-    client = Qwen25Client(prompt, model_size=args.model_size, device='cpu', quantization=None, max_tokens=256)
+    client = Qwen25Client(prompt, model_size=args.model_size, device=args.device, quantization=None, max_tokens=256)
     history, trace = [], []
     clock = SimpleNamespace(monotonic=lambda: float(robot.data.time), sleep=robot.step)
     old_physical, old_native = physical_pick_place.time, native_adapter.time
