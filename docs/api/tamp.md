@@ -327,7 +327,8 @@ Use the contact harness with `--sequence object2 object1 --separation .15
 --separation-axis y --placement-regions PATH`. The separate
 `scripts/eval_native_table_agent.py` evaluates LLM selection with the CHAT
 prompt/parser/dispatcher and independent region/support scoring; it is not the
-interactive `run agent` CLI or a live ZMQ run. Its `--device` defaults to `cpu`;
+interactive `run agent` CLI. By default it uses in-process physics; `--live-sim`
+selects live ZMQ execution as described below. Its `--device` defaults to `cpu`;
 `--device cuda` requires a managed GPU reservation. Both harnesses require managed jobs.
 
 For an existing remote OpenAI-compatible server, supply both
@@ -347,8 +348,8 @@ initial transforms set before startup. The harness enables the physical actuatio
 audit, reads fresh measured snapshots, and records simulator time on both sides
 of every inference request. Passing requires physics progress during inference,
 a clean nonempty actuation audit, and the same independent stable final-goal
-checks. Remote inference avoids local model weights but the simulator still
-needs its GPU reservation. The scope remains privileged and stationary; this
+checks. Remote inference avoids local model weights; GPU camera rendering still
+needs a GPU reservation. The scope remains privileged and stationary; this
 is not exploration or observed-input acceptance.
 
 For this privileged text-only evaluator, `no_cameras: true` in the simulator YAML
@@ -358,3 +359,7 @@ when state explicitly advertises `is_simulation=true` and integer
 `capabilities.num_cameras=0`. Default clients and hardware still require their
 normal startup streams. No image observations are fabricated. This mode does
 not validate visual exploration or perception.
+
+The [live agent experiment](../experiments/tamp_native_live_agent_20261014.md)
+records two successful two-goal episodes with physics advancing during every
+model call, plus the IK binding mitigation and its remaining runtime uncertainty.
