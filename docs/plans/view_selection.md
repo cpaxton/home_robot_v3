@@ -721,3 +721,18 @@ non-regression and review of the remaining current-view contract failures.
 The 25/36 result is promising but not full stack acceptance. No PR was marked
 ready or merged during this inventory; descriptions still contain older gates
 and must be rewritten against their final heads when those gates are cleared.
+
+The field-level diagnostic `20261014_105129_189c99` completed 39 calls. q14:
+removing status counters/tried IDs yielded three abstentions; removing only
+graph labels yielded three wrong TV answers. Exact-live control repeated
+wrong/abstain/abstain. Thus progress/status text, rather than graph-label text
+alone, changes answerability in this example; this remains a three-repeat
+development diagnostic. A status-free assessment prompt is a reasonable next
+isolated ablation. Preserve planning progress for the high-level agent; whether
+it belongs in a visual evidence judgment is a separate contract question.
+
+q68: removing either graph labels or status still yielded three wrong Yes
+answers. Removing target yielded No/Yes/No. Exact-live and inventory-removed
+each produced two wrong Yes plus one truncated JSON. Text cleanup does not
+resolve current-image presence/co-location here. Keep the failure visible in
+acceptance and assess wider primary views separately before adding new checks.
