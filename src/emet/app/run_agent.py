@@ -481,6 +481,8 @@ log = Logger(__name__)
         "Default is to discard sim logs so scripted runs stay readable."
     ),
 )
+@click.option("--state-only-sim", is_flag=True, help="Camera-free Stretch simulation TAMP only; requires --memory-backend dynamem. No vision/navigation tools.")
+@click.option("--max-tool-rounds", type=click.IntRange(1, 32), default=3, show_default=True, help="Bound tool rounds per user request; larger budgets permit multi-step TAMP.")
 @click.pass_context
 @emet_config_options()
 def main(
@@ -506,6 +508,8 @@ def main(
     cache_vl_prefix: bool | None,
     agent_name: str,
     commands: tuple[str, ...],
+    state_only_sim: bool = False,
+    max_tool_rounds: int = 3,
     port_offset: int = 0,
     headless: bool = False,
     rerun: bool = False,
@@ -898,6 +902,8 @@ def main(
                 embodied_overlay=runtime.config.embodied_agent() if runtime is not None else None,
                 thinking_status=thinking_status,
                 agent_section=agent_config_resolved.agent_section(),
+                state_only_sim=state_only_sim,
+                max_tool_rounds=max_tool_rounds,
             )
         finally:
             if sim_shutdown is not None:
