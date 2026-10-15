@@ -4,9 +4,11 @@
 tools (#178), collision-aware placement and assisted articulation (#179), and
 measured Stretch articulation/task admission (#201). See the
 [placement API](placement.md) and [articulation API](tamp_articulation.md).
-Observed/privileged input contracts remain in unmerged
-[#195](https://github.com/cpaxton/home_robot_v3/pull/195), now based on main;
-native scene/execution adapters and observed geometry providers remain unwired.
+Observed/privileged input contracts merged in
+[#195](https://github.com/cpaxton/home_robot_v3/pull/195) as `b7a1c22d`;
+This branch adds a stationary Stretch native-debug adapter for the packaged table
+scene. Controlled native transfers pass for both test shapes; observed geometry
+providers remain unwired. See the [integration report](../experiments/tamp_native_agent_20261013.md).
 See [project status](../project_status.md#latest-evidence-supersedes-older-pr-prose)
 for tested revisions, the broader 3/7 assisted run, and remaining gates.
 
@@ -67,7 +69,7 @@ Task handles have a random registry namespace and remain stable within a session
 including filtered discovery. Scene/server changes create a new namespace. Plan
 handles also have a random context namespace; neither handle type is reusable
 across contexts. These opaque strings do not expose server boot IDs.
-The scripted smoke runner supports `$task_ref` (first task in the preceding
+The scripted smoke runner supports `$task_ref` (first task supporting the script’s requested articulation states in the preceding
 successful discovery) and `$plan_ref` (preceding successful plan). These are
 runner substitutions, not arguments understood by the public tools. Failed
 planning stops dependent execution; scoring uses the resolved task reference.
@@ -87,8 +89,8 @@ servers invalidate stored plans.
 
 Guarded agent planning and stored execution require an advertised
 `sim_base_pose_query: true` endpoint and a callable client `check_base_poses`.
-The in-process Robosuite server provides it; the Stretch MuJoCo server currently
-does not. An unsupported provider returns `base_pose_validation_unavailable`
+The in-process Robosuite server and the measured-snapshot Stretch MuJoCo server
+provide it (Stretch support merged in #205). An unsupported provider returns `base_pose_validation_unavailable`
 before grounding or motion, with `recovery: "rediscover"`: connect to a provider
 with endpoint validation, rediscover its tasks, and request a new plan. Repeating
 the same request on an unsupported provider cannot fix it. Capability loss also
@@ -138,18 +140,35 @@ Readiness additionally requires three reference-admitted cleanup fixtures
 passing. Preserve admission failures and failed repeats; do not substitute easier
 fixtures or pool assisted historical scores with new results.
 
-## Native execution integration (not yet enabled)
+## Native execution integration (experimental debug adapter)
 
-`agent.manip_mode=physical` is reserved for actuator/contact execution. It never
-falls back to a legacy controller or object teleportation. Its input selection is
-`agent.tamp_inputs=observed` by default, or explicit `privileged` in simulation.
-Current CHAT integration refuses this mode until its scene/execution adapter is
-available: observed discovery returns `observed_scene_unavailable` without reading
-simulator metadata; debug mode returns `native_execution_unavailable`. These are
-integration guards, not a claim that native agent manipulation is ready. Existing
-teleport/kinematic defaults are unchanged; no native preset is promoted yet.
-The same native guard rejects simulator-assisted `set_receptacle_state`, including
-a task handle obtained before switching execution modes.
+`agent.manip_mode=physical` selects actuator/contact execution. It never falls
+back to object teleportation or attachment. Inputs default to
+`agent.tamp_inputs=observed`; observed discovery currently returns
+`observed_scene_unavailable` before reading simulator metadata.
+
+Explicit `privileged` inputs enable the packaged **Stretch default table scene**
+adapter. The existing four tools discover stationary pick/place tasks, validate
+arm and payload paths on private MuJoCo state, then execute through normal client
+arm/gripper commands. Planning has no actuation. Execution consumes its plan
+handle, rechecks measured scene state, and replans from measured joints. It verifies
+one second of bilateral hold and two seconds of settled support after release.
+These checks use **simulator ground truth**, not inferred tactile sensors. Public
+results label `geometry_source: simulator_ground_truth`, `base_motion: stationary`,
+and `assistance: []` (no runtime latch/teleport; privileged perception remains explicit).
+
+A model signature and server boot identity bind the adapter to the snapshot.
+Physics capture and client receive timestamps must both be fresh within two
+seconds. Missing snapshots, unsupported models, and stale state reject execution.
+Native `set_receptacle_state` returns `native_articulation_unavailable`; it never
+uses assisted articulation. Other robot/scene adapters and navigation are outside
+this initial native integration. Existing assisted defaults are unchanged.
+
+The scripted public-tool validation accepts `--manip-mode physical
+--tamp-inputs privileged --physical-audit PATH`; the audit rejects simulator
+teleport, attachment, and direct joint-setting commands. Passing this validation
+would establish deterministic public-tool execution, **not LLM task selection,
+exploration, observed perception, or hardware readiness**.
 
 The shared physical executor now requires an observed object-pose provider and
 observed collision provider by default. Object poses carry an observation ID,
@@ -219,3 +238,103 @@ require inspection of the held object and current scene before recovery; a faile
 refresh never causes release. This distinguishes a state-stream failure from
 changed obstacle geometry. A bounded wait is a recovery mechanism, not evidence
 that the original live failure was caused by receiver starvation.
+
+Native Stretch grasp calibration uses the opposing finger-pad contact edges from
+the bound robot model, rather than treating the named EE frame as the pinch point.
+This requires no additional contact sensor. Native debug execution uses measured
+simulation time for settling, bounded by a 30-second wall watchdog per wait;
+ordinary hardware executors keep wall-clock timing. Simulator snapshots and final
+contact checks remain explicitly privileged debug evidence.
+
+The native candidate search tries a 15-degree pitched robot frame before the
+level and measured frames, for all objects. Every accepted candidate still needs
+arm/payload collision validation and measured hold/release verification. The
+current controlled acceptance is 4/4 live ZMQ and 6/6 separate CPU transfers;
+this is not validation of clutter rearrangement, native base navigation, or
+observed-input exploration.
+
+If a native command acknowledgement times out after execution starts, the result
+is `partial` with `code: command_outcome_unknown`, the last attempted operation,
+and any completed operations. The handle remains consumed. Inspect measured
+state before replanning: a missing acknowledgement does not mean the controller
+failed to receive the command, and the tool does not automatically replay it.
+
+### CHAT composition and failure handling
+
+CHAT decodes the versioned TAMP envelope for outcome accounting. `status: partial`
+or `error` cannot become success because the accompanying message sounds positive.
+Malformed TAMP responses also fail outcome accounting. EQA and legacy non-TAMP
+results retain their existing interpretation.
+
+A non-successful TAMP call stops the remainder of that model-generated tool batch.
+A JSON `dispatch` result with `code: batch_stopped` lists `unattempted_tools`.
+The agent session stays alive and receives the failure for inspection or replanning
+on its next turn. This is a batch boundary, not an autonomous recovery policy or
+a persistent motion interlock: fresh state and appropriate recovery must still
+precede a new plan. Successful execution should be followed by reading its result
+and rediscovering before planning the next manipulation.
+
+For native composition diagnostics, `scripts/eval_native_table_contact.py` accepts
+`--steps N` (default 1) for repeated transfers without resetting physics, or
+`--sequence object1 object2` for an explicit fixture sequence. `--separation`
+and `--separation-axis x|y` alter initial fixture positions only. Every step goes
+through the CHAT dispatcher, reacquires a task, and plans from measured state;
+a failed call stops the sequence. After a successful step, the evaluator checks
+released support for all objects already placed, using privileged simulator
+state. These are scripted CPU integration checks, not LLM, live ZMQ, exploration,
+or hardware acceptance. Launch them through managed CPU jobs.
+
+### Native placement regions and bounded grasp search
+
+`plan_pick_place` optionally accepts `placement_region: [[xmin, ymin], [xmax, ymax]]`
+in world-frame meters. Coordinates must come from grounded geometry or an explicit
+fixture goal. The native privileged Stretch adapter clips the selected support to
+this region and searches for placements containing the full object footprint.
+Measured release verification checks the whole footprint against the requested
+region with a 5 mm tolerance, in addition to sustained support, position, and
+velocity checks. The native planner retains its 2 cm placement clearance margins;
+very narrow regions can therefore be rejected even if an idealized object fits.
+Other adapters return `placement_region_unsupported` rather than ignoring the goal.
+Malformed/nonfinite/empty bounds return `invalid_placement_region`; a region not
+overlapping the support returns `placement_region_unavailable`.
+
+Native grasp search tries the existing 15-degree approach, bounded 45/60-degree
+approaches with object-height-derived pinch offsets, then level/measured frames.
+Every candidate uses the same collision, tracking, and retention checks. A grasp
+with no downstream placement now resumes grasp search. A shared limit of 256
+pose-IK calls bounds grasp and placement exploration. `no_plan_within_budget`
+means this search did not find a complete plan, not proof of infeasibility.
+`planning_rejections` preserves sanitized per-stage failure counts instead of
+attributing the whole search to the last failed wrist candidate. Public plan
+responses include `planning_ik_calls`, `max_ik_calls`, the requested region, and
+the proposed `placement_goal` in the world frame. Raw colliding body names stay
+in privileged diagnostic events, outside the public response.
+
+The frozen two-object region file is
+`configs/eval/native_table_two_object_regions.json` (cylinder goal, then box goal).
+
+Native planning accepts either a task handle or semantic names. If names accompany
+a handle, they must match that task's full published names (ignoring case and
+outer whitespace); a contradiction returns `task_selector_mismatch` with
+`recovery="rediscover"` before planning or motion. The error identifies the task
+selected by the handle. Successful plan results and consumed-plan execution
+results, including failures, carry `object_name` and `receptacle_name`. These
+semantic labels are saved in the plan and do not expose private simulator IDs.
+An operation's `ok` verifies that selected operation, not every goal in a
+multi-step task.
+
+Use the contact harness with `--sequence object2 object1 --separation .15
+--separation-axis y --placement-regions PATH`. The separate
+`scripts/eval_native_table_agent.py` evaluates LLM selection with the CHAT
+prompt/parser/dispatcher and independent region/support scoring; it is not the
+interactive `run agent` CLI or a live ZMQ run. Its `--device` defaults to `cpu`;
+`--device cuda` requires a managed GPU reservation. Both harnesses require managed jobs.
+
+For an existing remote OpenAI-compatible server, supply both
+`--base-url http://HOST:8000/v1 --remote-model MODEL_ID`. This uses the ordinary
+OpenAI-compatible agent client and loads no local model weights. Remote requests
+have a 120-second timeout and no automatic retries; the managed runner should
+also bound total episode time. Remote decoding uses the server defaults, and
+`--seed` only controls the local process. Archive the served model revision and
+sampling configuration alongside results. Physics still pauses during inference
+in this in-process harness; remote hosting does not establish live execution.

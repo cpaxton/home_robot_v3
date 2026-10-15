@@ -27,7 +27,11 @@ def benchmark_subprocess_env(repo: Path, *, cpu_only: bool) -> dict[str, str]:
     env = dict(os.environ)
     env["PYTHONPATH"] = str(repo / "src") + os.pathsep + env.get("PYTHONPATH", "")
     env.setdefault("MUJOCO_GL", "egl")
-    env["EMET_SIM_NAV_TELEPORT"] = "1"
+    if env.get("EMET_PHYSICAL_EXECUTION") == "1":
+        env["EMET_SIM_NAV_TELEPORT"] = "0"
+        env["EMET_MOLMOSPACES_NAV_TELEPORT"] = "0"
+    else:
+        env["EMET_SIM_NAV_TELEPORT"] = "1"
     env["EMET_ZMQ_STARTUP_TIMEOUT"] = "120"
     env["PYTHONUNBUFFERED"] = "1"
     if cpu_only:

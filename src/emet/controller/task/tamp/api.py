@@ -75,7 +75,7 @@ def response(
             else "rediscover"
             if code
             in {
-                "unknown_task_ref",
+                "unknown_task_ref", "task_selector_mismatch",
                 "ambiguous_object",
                 "ambiguous_receptacle",
                 "metadata_unavailable",
@@ -152,7 +152,9 @@ def failure_code(message: str) -> str:
         "ambiguous_object_use_scene_tasks": "ambiguous_object",
         "ambiguous_receptacle_use_scene_tasks": "ambiguous_receptacle",
     }.get(message, message)
-    parts = message.split(":")
+    # MCTS wraps a bounded grounding failure; preserve only its known code,
+    # never arbitrary body identifiers or planner details from that wrapper.
+    parts = [part.removeprefix("last_grounding=") for part in message.split(":")]
     for part in reversed(parts):
         if part in PLACEMENT_CODES:
             return part
@@ -176,8 +178,12 @@ def failure_code(message: str) -> str:
                 return code
     allowed = {
         "invalid_tamp_inputs", "observed_scene_unavailable",
+        "invalid_placement_region", "placement_region_unavailable", "placement_region_unsupported",
         "privileged_inputs_require_simulation", "native_execution_unavailable",
+        "native_model_mismatch", "native_robot_unsupported", "invalid_measured_state",
+        "task_not_found", "payload_not_retained", "object_not_lifted", "base_drift_during_arm",
         "unknown_plan",
+        "command_outcome_unknown",
         "scene_changed_replan",
         "invalid_plan",
         "not_simulation",
@@ -194,15 +200,16 @@ def failure_code(message: str) -> str:
         "object_not_in_live_scene",
         "receptacle_not_in_live_scene",
         "no_reachable_grasp",
+        "no_plan_within_budget",
         "no_grasp_candidates",
         "object_not_in_gt",
         "execution_error",
         "manipulation_unavailable",
-        "unknown_task_ref",
+        "unknown_task_ref", "task_selector_mismatch",
         "ambiguous_object",
         "ambiguous_receptacle",
         "provide_task_ref_or_object_and_receptacle",
         "planner_error",
         "approach_failed",
     }
-    return parts[0] if parts[0] in allowed else "operation_failed"
+    return next((part for part in reversed(parts) if part in allowed), "operation_failed")

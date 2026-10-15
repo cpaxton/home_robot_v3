@@ -14,6 +14,8 @@ import json
 from dataclasses import dataclass, field
 from typing import Any
 
+from emet.controller.task.tamp.api import SCHEMA_VERSION, TAMP_TOOLS
+
 
 @dataclass
 class ToolOutcome:
@@ -74,11 +76,34 @@ class ToolOutcome:
 
     @classmethod
     def coerce(cls, tool: str, result: Any) -> ToolOutcome:
-        """Accept ToolOutcome, dict-with-ok, or free-form return values."""
+        """Normalize versioned TAMP JSON, EQA dictionaries, and legacy prose."""
         if isinstance(result, ToolOutcome):
             if not result.tool:
                 result.tool = tool
             return result
+        if tool in TAMP_TOOLS:
+            try:
+                envelope = json.loads(result) if isinstance(result, str) else result
+            except (ValueError, TypeError):
+                envelope = None
+            if (
+                not isinstance(envelope, dict)
+                or envelope.get("schema_version") != SCHEMA_VERSION
+                or envelope.get("tool") != tool
+                or not isinstance(envelope.get("status"), str)
+                or envelope.get("status") not in {"ok", "error", "partial"}
+                or not isinstance(envelope.get("code"), str)
+                or not isinstance(envelope.get("data"), dict)
+            ):
+                return cls(ok=False, status="invalid_tool_result", tool=tool, payload={"recovery": "inspect"})
+            # Outcome.status stores the machine-readable reason code for the ledger.
+            return cls(
+                ok=envelope["status"] == "ok" and envelope["code"] == "ok",
+                status=envelope["code"],
+                note=str(envelope.get("message", "")),
+                tool=tool,
+                payload=dict(envelope),
+            )
         if isinstance(result, dict) and "ok" in result:
             return cls.from_eqa_dict(tool, result)
         text = "" if result is None else str(result)
@@ -116,6 +141,7 @@ def maybe_record_tool_attempt(
         "aim_arm_at": "closer_look",
         "take_ee_picture": "closer_look",
         "pick_place": "pick",
+        "execute_pick_place_plan": "pick",
         "pickup": "pick",
         "place": "place",
     }

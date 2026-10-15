@@ -1151,8 +1151,8 @@ class RobosuiteZmqServer(BaseZmqServer):
     def _attach_emet_session(self, message: dict[str, Any]) -> dict[str, Any]:
         if self._emet_session is not None:
             from emet.simulation.sim_object_placements import (
+                DynamicPlacementTracker,
                 measured_held_object_geometry,
-                refresh_moved_body_placements,
             )
 
             with self._mj_lock:
@@ -1161,8 +1161,11 @@ class RobosuiteZmqServer(BaseZmqServer):
                 dirty = getattr(self, "_placement_geometry_dirty", set())
                 placements = self._emet_session.get("sim_object_placements")
                 if isinstance(placements, dict):
-                    for body in dirty:
-                        refresh_moved_body_placements(placements, self._mjmodel, self._mjdata, body)
+                    if not hasattr(self, "_dynamic_placement_tracker"):
+                        self._dynamic_placement_tracker = DynamicPlacementTracker()
+                    self._dynamic_placement_tracker.refresh(
+                        placements, self._mjmodel, self._mjdata, forced_bodies=dirty
+                    )
                 self._placement_geometry_dirty = set()
                 # Measure object and EE together. Mixing observation AABBs with
                 # newer joint states invents apparent attachment slip.

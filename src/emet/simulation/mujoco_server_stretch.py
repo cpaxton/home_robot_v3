@@ -819,25 +819,6 @@ class MujocoZmqServer(BaseZmqServer):
             return model, data
         return None, None
 
-    def _patch_emet_session_body_pos(
-        self,
-        body: str,
-        pos: list[float],
-        quat: list[float] | None = None,
-    ) -> None:
-        """Update one body entry in cached session GT (Stretch sim runs MuJoCo in a subprocess)."""
-        if self._emet_session is None:
-            return
-        placements = self._emet_session.get("sim_object_placements")
-        if not isinstance(placements, dict) or body not in placements:
-            return
-        entry = placements[body]
-        if not isinstance(entry, dict):
-            return
-        entry["pos"] = [float(x) for x in pos[:3]]
-        if quat is not None:
-            entry["quat"] = [float(x) for x in quat[:4]]
-
     def _is_molmospaces_session(self) -> bool:
         env = self._environment_descriptor
         if isinstance(env, dict) and env.get("kind") == "molmospaces":
@@ -941,6 +922,13 @@ class MujocoZmqServer(BaseZmqServer):
                     robot_root_name="base_link",
                 )
                 self._articulation_geometry_groups = groups
+        placements = session.get("sim_object_placements")
+        if isinstance(placements, dict):
+            from emet.simulation.sim_object_placements import DynamicPlacementTracker
+
+            if not hasattr(self, "_dynamic_placement_tracker"):
+                self._dynamic_placement_tracker = DynamicPlacementTracker()
+            self._dynamic_placement_tracker.refresh(placements, model, scratch)
         session["sim_articulations"] = groups
         caps["sim_articulation_state"] = True
 
@@ -950,8 +938,78 @@ class MujocoZmqServer(BaseZmqServer):
         with self._articulation_lock:
             if self._emet_session is not None:
                 self._refresh_articulation_state()
+                message["sim_base_pose_query"] = self._base_pose_query_qpos() is not None
+                # Privileged debug state, never a hardware observation source.
+                from emet.simulation.sim_object_placements import is_default_table_environment
+
+                status = self._status
+                env = self._emet_session.get("environment") or {}
+                if (
+                    is_default_table_environment(env.get("kind"))
+                    and self._articulation_model is not None
+                    and getattr(status, "scene_captured_at", None) is not None
+                ):
+                    message["native_tamp_snapshot"] = {
+                        "source": "simulator_ground_truth",
+                        "model_signature": status.scene_model_signature,
+                        "qpos": status.scene_qpos,
+                        "qvel": status.scene_qvel,
+                        "sim_time": status.scene_time,
+                        "captured_at": status.scene_captured_at,
+                    }
                 message[EMET_ZMQ_SESSION_KEY] = copy.deepcopy(self._emet_session)
         return message
+
+    def _base_pose_query_qpos(self):
+        """Return a measured snapshot only when this model supports base queries."""
+        import mujoco
+
+        model = getattr(self, "_articulation_model", None)
+        values = getattr(getattr(self, "_status", None), "scene_qpos", None)
+        if model is None or values is None:
+            return None
+        qpos = np.asarray(values, dtype=float)
+        if qpos.shape != (model.nq,) or not np.isfinite(qpos).all():
+            return None
+        base = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, self.get_robot_spec().base_link_name)
+        joint = int(model.body_jntadr[base]) if base >= 0 else -1
+        # Stretch's simulator root is a free joint. Do not advertise support for
+        # an incompatible/custom model and fail later inside endpoint probing.
+        if joint < 0 or model.jnt_type[joint] != mujoco.mjtJoint.mjJNT_FREE:
+            return None
+        return qpos.copy()
+
+    def check_base_poses(self, poses):
+        """Privileged read-only endpoint query from the physics-process snapshot.
+
+        This checks full robot contacts at each endpoint, not a swept base path.
+        The parent XML/default pose is never used as a live measurement.
+        """
+        import mujoco
+
+        from emet.simulation.teleport_collision import teleport_endpoint_contacts
+
+        poses = np.asarray(poses, dtype=float)
+        if poses.ndim != 2 or poses.shape[1] != 3 or not 1 <= len(poses) <= 32 or not np.isfinite(poses).all():
+            raise ValueError("expected 1..32 finite world XYT poses")
+        with self._articulation_lock:
+            qpos = self._base_pose_query_qpos()
+            if qpos is None:
+                raise RuntimeError("measured simulator scene unavailable for base pose validation")
+            model = self._articulation_model
+            spec = self.get_robot_spec()
+        # Collision probing uses only private data; do not block publication or
+        # articulation commands while checking an entire candidate batch.
+        scratch = mujoco.MjData(model)
+        scratch.qpos[:] = qpos
+        contacts = [teleport_endpoint_contacts(model, scratch, spec, pose) for pose in poses]
+        return {
+            "poses": poses.tolist(),
+            "clear": [not c for c in contacts],
+            "contacts": contacts,
+            "scope": "base_endpoint_only",
+            "source": "measured_simulator_snapshot",
+        }
 
     @override
     def handle_action(self, action: dict[str, Any]):
@@ -1009,9 +1067,9 @@ class MujocoZmqServer(BaseZmqServer):
                     wait=True,
                     timeout=2.0,
                 )
-                if ok:
-                    self._patch_emet_session_body_pos(body, pos, quat)
-                else:
+                # Publication reconstructs geometry from measured scene_qpos.
+                # Never substitute a requested body origin for an AABB center.
+                if not ok:
                     logger.warning("sim_set_body_pose failed for body %r", body)
 
         if EMET_ACTION_SIM_SET_JOINT_QPOS_KEY in action:
@@ -1176,6 +1234,7 @@ class MujocoZmqServer(BaseZmqServer):
         message = {
             "rgb": rgb,
             "depth": depth,
+            "head_cam_left/image_timing": cam_data.image_timing_for(StretchCameras.cam_d435i_rgb),
             "camera_K": self.head_K,
             "camera_pose": head_cam_world,
             "ee_pose": ee_world,
@@ -1293,6 +1352,7 @@ class MujocoZmqServer(BaseZmqServer):
             "ee_cam/color_camera_K": scale_camera_matrix(self.ee_K, self.ee_image_scaling),
             "ee_cam/depth_camera_K": scale_camera_matrix(self.ee_K, self.ee_image_scaling),
             "ee_cam/color_image": compressed_ee_color_image,
+            "ee_cam/image_timing": cam_data.image_timing_for(StretchCameras.cam_d405_rgb),
             "ee_cam/depth_image": compressed_ee_depth_image,
             "ee_cam/color_image/shape": ee_color_image.shape,
             "ee_cam/depth_image/shape": ee_depth_image.shape,
@@ -1303,6 +1363,7 @@ class MujocoZmqServer(BaseZmqServer):
             "head_cam/color_camera_K": scale_camera_matrix(self.head_K, self.image_scaling),
             "head_cam/depth_camera_K": scale_camera_matrix(self.head_K, self.image_scaling),
             "head_cam/color_image": compressed_head_color_image,
+            "head_cam_left/image_timing": cam_data.image_timing_for(StretchCameras.cam_d435i_rgb),
             "head_cam/depth_image": compressed_head_depth_image,
             "head_cam/color_image/shape": head_color_image.shape,
             "head_cam/depth_image/shape": head_depth_image.shape,
