@@ -19,8 +19,20 @@ into an infrastructure error or claim a task success.
 Related reviewed integration `63016107` includes main's native multi-object TAMP
 tools (#212), timestamp repair (#215), navigation/recovery review fixes, and
 #202's map-scope/current-capture repairs. 392 combined tests pass. Paired room
-job `20261015_083001_7e7aef` is in progress on S0 Stretch, RoboCasa Stretch,
-and MolmoSpaces rby1 against main `801dce82`; final task acceptance remains open.
+job `20261015_083001_7e7aef` completed against main `801dce82`: both S0 arms
+failed their find targets; RoboCasa and Molmo arms hit resource-discovery errors
+(checkout-local Robocasa assets and Molmo venv absent). No task pass.
+Both roots now link the existing shared Robocasa package and Molmo environment;
+asset completeness and wrapper discovery checks pass. Corrected-resource retry
+`20261015_084043_140730` retains original failures and reruns those four cases.
+S0's fast four-view preset samples 0/45/90/135 degrees while the targets are at
+negative Y. Upright telemetry and measured head tilt exclude a fall as the cause
+of its dark assessment images. Standard eight-view S0 diagnostic
+`20261015_083813_207ff7` is running on both arms. Do not infer perception failure
+from an unobserved target direction. All jobs use the serial GPU lock.
+Final-owner default EQA gate `20261015_084243_b8f836` is queued: main `801dce82`
+versus integration `63016107`, the same 12 questions, seed 0, no experimental
+selection overrides. Final task acceptance remains open.
 The earlier candidate's EQA 26/36 versus main 25/36 is a modest development
 result on different frozen revisions; prioritize reliable shared tooling and
 do not present this as a meaningful accuracy gain or this PR's exact-head gate.
