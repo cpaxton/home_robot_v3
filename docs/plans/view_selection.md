@@ -26,6 +26,24 @@ shared tooling. Small Molmo/RoboCasa OVMM and final integrated-head acceptance
 remain open. Merged main includes native multi-object TAMP tools (#212); preserve
 that common tool interface rather than introducing a separate planner here.
 
+Reviewed integration `test/reviewed-shared-agent` now includes main `801dce82`
+(native multi-object TAMP and capture timing), #182's mode/status repair, and
+#184's bounded recovery repair. Resolve base-pose query overlap using main's
+shared `check_base_poses` helper; retain one sweep validation with the shared
+rejection status. Combined evidence, routing, floor recovery, real voxel ingest,
+and TAMP bridge/native/base-query/gate checks: **392 passed**, two dependency
+deprecation warnings. No new model calls or separate TAMP interface were added.
+
+`scripts/run_shared_room_pairs.py` freezes main and candidate revisions and
+runs S0 Stretch, RoboCasa Stretch, and MolmoSpaces rby1 serially, seed 0. Both
+arms use local Qwen3-VL int4, the same existing YOLOE grounding provider,
+physical navigation, no teleportation/cache, four scan headings, six agentic
+rounds and three navigation decisions. This is default-provider find
+non-regression, not a claim to test new SAM providers or manipulation. Record
+commands, configuration/registry/lock/driver hashes, original simulator logs,
+and boolean object/receptacle outcomes. Missing/error results fail the gate;
+task failure also fails acceptance even when the process exits zero.
+
 `emet.memory.view_selection` is a standalone, NumPy-only evidence selector for
 EQA, OVMM and TAMP. It creates no instances, acquires no images, runs no models,
 and changes no live defaults. An opt-in shared-history adapter now connects it
