@@ -364,6 +364,8 @@ def _handle_observe_floor(self, args: dict[str, Any]) -> dict[str, Any]:
     options = {"pan_rad": args.get("pan_rad"), "tilt_rad": args.get("tilt_rad", -1.0)}
     if args.get("target_blocker"):
         options["target_blocker"] = True
+        if "max_observations" in args:
+            options["max_observations"] = args["max_observations"]
     out = observe_floor(self.agent, **options)
     self._last_floor_observation = out
     self._floor_observation_nav_plan = plan

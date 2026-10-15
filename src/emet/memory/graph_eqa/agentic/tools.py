@@ -380,7 +380,9 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
     feedback = navigation_feedback(agent)
     if feedback.get("approach_sampling"):
         text += "\nLast approach sampling (no motion executed): " + json.dumps(feedback["approach_sampling"])
-    if feedback.get("outcome") != "rejected_swept_footprint:unobserved_footprint":
+    from emet.core.navigation_result import UNOBSERVED_FOOTPRINT_STATUS
+
+    if feedback.get("outcome") != UNOBSERVED_FOOTPRINT_STATUS:
         return text
 
     observation = getattr(executor, "_last_floor_observation", None)

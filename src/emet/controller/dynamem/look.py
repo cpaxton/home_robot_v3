@@ -56,7 +56,7 @@ def _rejected_footprint_status(agent, pose):
     }
 
 
-def observe_blocked_floor(agent) -> dict:
+def observe_blocked_floor(agent, *, max_observations: int = 2) -> dict:
     """At most two bounded head captures aimed at one currently unknown cell.
 
     The navigation grid uses a Z=0 floor reference. Projection is an aiming
@@ -94,7 +94,9 @@ def observe_blocked_floor(agent) -> dict:
         return {"ok": False, "status": "invalid_floor_target"}
     attempts = []
     result = {"ok": False, "status": "floor_target_unobservable"}
-    for _ in range(2):
+    if isinstance(max_observations, bool) or not isinstance(max_observations, int) or not 1 <= max_observations <= 2:
+        return {"ok": False, "status": "invalid_floor_observation_budget"}
+    for _ in range(max_observations):
         obs = agent.robot.get_observation()
         if obs is None or obs.rgb is None:
             break
@@ -140,14 +142,16 @@ def observe_blocked_floor(agent) -> dict:
     return result
 
 
-def observe_floor(agent, pan_rad: float | None = None, tilt_rad: float = -1.0, target_blocker: bool = False) -> dict:
+def observe_floor(
+    agent, pan_rad: float | None = None, tilt_rad: float = -1.0, target_blocker: bool = False, max_observations: int = 2
+) -> dict:
     """Stationary head-only observation; never interpret unknown floor as free.
 
     Reject adapters without measured head pose and a fresh-frame sequence. A
     successful capture updates the map, but does not guarantee a safe approach.
     """
     if target_blocker:
-        return observe_blocked_floor(agent)
+        return observe_blocked_floor(agent, max_observations=max_observations)
     if pan_rad is not None and (
         isinstance(pan_rad, bool)
         or not isinstance(pan_rad, (int, float))
