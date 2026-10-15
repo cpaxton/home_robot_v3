@@ -61,6 +61,7 @@ def test_spin_in_place_grows_voxel_map():
             image_timing=timing,
         )
         assert vm.observations[-1].info["image_timing"] == timing
+        assert vm.observations[-1].info["observation_scope_id"] == vm.observation_scope_id
         counts.append(_n_points(vm))
 
     assert counts[0] > 0
@@ -83,6 +84,10 @@ def test_spin_in_place_grows_voxel_map():
     assert selection is not None
     assert selection.views[0].frame.timestamp_s == 8.0
     assert selection.views[0].frame.view_id == "8"
+    previous_epoch = vm.observation_scope_id
+    vm.reset()
+    assert vm.observation_scope_id != previous_epoch
+    assert not vm.observations
 
 
 def test_clear_points_keeps_geometry_where_depth_has_no_return():

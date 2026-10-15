@@ -33,6 +33,25 @@ def ids(result):
     return [v.frame.view_id for v in result.views]
 
 
+def test_budget_cut_opposite_basis_does_not_break_retained_packet():
+    current = frame(3)
+    other = frame(1)
+    reflected = other.camera_pose.copy()
+    reflected[:, 0] *= -1
+    other = replace(other, camera_pose=reflected)
+    result = select_views([other, current], current_id="3", config=SelectionConfig(max_candidates=1, max_images=1))
+    assert ids(result) == ["3"]
+    assert result.excluded["1"] == "candidate_budget"
+
+
+def test_candidate_budget_does_not_discard_preturn_pin():
+    result = select_views(
+        [frame(1), frame(2)], current_id="2", pre_turn_id="1", config=SelectionConfig(max_candidates=1, max_images=1)
+    )
+    assert result.excluded.get("1") != "candidate_budget"
+    assert ids(result) == ["2"]
+
+
 def test_current_and_pre_turn_pinned_with_honest_labels_and_budget():
     result = select_views(
         [frame(1), frame(2), frame(3)], current_id="3", pre_turn_id="1", config=SelectionConfig(max_images=2)

@@ -8,6 +8,7 @@ The integer tool adapter uses a separate positive namespace for voxel frames.
 IDs reference actual retained frames, never fabricated object observations.
 """
 
+from copy import deepcopy
 from dataclasses import dataclass
 
 import numpy as np
@@ -22,6 +23,8 @@ class CapturedView:
     rgb: np.ndarray
     camera_pose: np.ndarray | None
     camera_K: np.ndarray | None = None
+    image_timing: dict | None = None
+    observation_scope_id: str | None = None
 
     @property
     def view_id(self) -> str:
@@ -82,6 +85,8 @@ def retain_latest_view(executor, *, after: int) -> CapturedView | None:
         rgb.copy(),
         None if pose is None else np.asarray(pose).copy(),
         None if intrinsics is None else np.asarray(intrinsics).copy(),
+        deepcopy((getattr(frame, "info", None) or {}).get("image_timing")),
+        (getattr(frame, "info", None) or {}).get("observation_scope_id"),
     )
     if not hasattr(executor, "_captured_views"):
         executor._captured_views = {}

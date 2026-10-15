@@ -46,6 +46,47 @@ def test_unknown_current_acquisition_or_mismatched_pixels_falls_back_explicitly(
     assert select_assessment_history(ex, current.rgb) is None
 
 
+def test_unmapped_current_capture_anchors_preturn_age():
+    ex = executor()
+    current = SimpleNamespace(
+        rgb=np.full((4, 4, 3), 77, dtype=np.uint8),
+        camera_pose=np.eye(4),
+        image_timing={"head_cam_left": {"timestamp_ns": 7_000_000_000, "clock_domain": "sim"}},
+    )
+    ex.agent.robot.pre_turn_observation = SimpleNamespace(
+        rgb=np.full((4, 4, 3), 66, dtype=np.uint8),
+        camera_pose=np.eye(4),
+        image_timing={"head_cam_left": {"timestamp_ns": 6_000_000_000, "clock_domain": "sim"}},
+    )
+    result = select_assessment_history(ex, current.rgb, current_observation=current)
+    assert result.views[0].frame.view_id == "assessment:7000000000"
+    assert result.views[1].role == "pre_turn"
+    assert result.views[1].age_s == 1
+
+
+def test_map_reset_rejects_prior_epoch_frames_even_with_same_clock_and_recent_time():
+    ex = executor()
+    vm = ex.agent.voxel_map
+    vm.observation_scope_id = "old-world"
+    for frame in vm.observations:
+        frame.info["observation_scope_id"] = "old-world"
+    old_scope = select_assessment_history(ex, vm.observations[-1].rgb).views[0].frame.scope_id
+    vm.observation_scope_id = "new-world"
+    # Simulate reintroducing a recently captured old frame into the reused map.
+    newest = SimpleNamespace(
+        rgb=np.full((4, 4, 3), 88, dtype=np.uint8),
+        camera_pose=np.eye(4),
+        info={
+            "observation_scope_id": "new-world",
+            "image_timing": {"head_cam_left": {"timestamp_ns": 6_000_000_000, "clock_domain": "sim"}},
+        },
+    )
+    vm.observations.append(newest)
+    result = select_assessment_history(ex, newest.rgb)
+    assert len(result.views) == 1
+    assert result.views[0].frame.scope_id != old_scope
+
+
 def test_budget_and_clock_domain_are_respected():
     ex = executor()
     ex.agent.parameters["eqa_vl"] = {"eqa_max_images": 2}

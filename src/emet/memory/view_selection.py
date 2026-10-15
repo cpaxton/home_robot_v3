@@ -223,17 +223,18 @@ def select_views(
         raise ValueError(f"invalid pre-turn view: {excluded[pre_turn_id]}")
     # World axes may be left-handed (e.g. Habitat X,Z,Y voxel coordinates).
     # Distances and dot products remain valid, but one scope must not mix bases.
-    handedness = {int(np.sign(np.linalg.det(f.camera_pose[:3, :3]))) for f in eligible if f.camera_pose is not None}
-    if len(handedness) > 1:
-        raise ValueError("camera poses in one scope must share world-basis handedness")
     pins = [current] + ([by_id[pre_turn_id]] if pre_turn_id and pre_turn_id != current_id else [])
     pool = pins + sorted(
         (f for f in eligible if f.view_id not in {p.view_id for p in pins}),
         key=lambda f: (-f.timestamp_s, f.view_id),
     )
-    for frame in pool[config.max_candidates :]:
+    candidate_limit = max(config.max_candidates, len(pins))
+    for frame in pool[candidate_limit:]:
         excluded[frame.view_id] = "candidate_budget"
-    pool = pool[: config.max_candidates]
+    pool = pool[:candidate_limit]
+    handedness = {int(np.sign(np.linalg.det(f.camera_pose[:3, :3]))) for f in pool if f.camera_pose is not None}
+    if len(handedness) > 1:
+        raise ValueError("camera poses in one scope must share world-basis handedness")
     spaces = {(f.embedding_space, f.embedding.shape) for f in pool if f.embedding is not None}
     if len(spaces) > 1:
         raise ValueError("incompatible candidate embedding spaces or dimensions")

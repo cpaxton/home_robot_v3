@@ -459,8 +459,9 @@ def _run_vlm_view_assess(
 
     context_rgb = getattr(self, "_inspection_context_by_obs", {}).get(oid)
     from emet.memory.graph_eqa.agentic.view_history import select_assessment_history
+    from emet.memory.graph_eqa.agentic.views import captured_view
 
-    selection = select_assessment_history(self, rgb)
+    selection = select_assessment_history(self, rgb, current_observation=captured_view(self, oid))
     if selection is not None:
         context_rgb = None
     assessment = assess_view_with_vlm(

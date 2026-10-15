@@ -1,5 +1,31 @@
 # Shared camera-view selection
 
+## Review repairs, 2026-10-15
+
+Map reset now mints an observation scope, recorded by both voxel ingestion paths
+in each retained frame. The adapter rejects earlier scopes even when the clock
+domain and timestamps are recent. Clock domain is no longer the sole identity.
+Captured views carry acquisition timing and map scope; assessment passes its
+actual retained capture to selection. A timed capture absent from the voxel
+history can anchor the packet, so pre-turn age is relative to the assessed
+capture rather than the last map frame. Missing acquisition metadata still
+causes an explicit fallback. Pre-turn evidence predating the current scoped
+history is rejected conservatively.
+
+Current/pre-turn pins survive candidate truncation (image count remains bounded),
+and basis compatibility is checked on the retained pool, so a budget-discarded
+candidate cannot break assessment. 87 focused selector/history/capture/OVMM
+routing/real voxel ingestion tests pass, including reused-map and post-yaw
+unmapped-capture regressions. This is contract validation, not a new live score.
+
+The broader experiment branch's matched 12-question/3-seed pilot completed:
+candidate 26/36, main 25/36; 144 versus 171 decision rounds. These modest
+development differences do not establish a meaningful accuracy improvement or
+validate this repaired owner head. The value under review is robust, auditable
+shared tooling. Small Molmo/RoboCasa OVMM and final integrated-head acceptance
+remain open. Merged main includes native multi-object TAMP tools (#212); preserve
+that common tool interface rather than introducing a separate planner here.
+
 `emet.memory.view_selection` is a standalone, NumPy-only evidence selector for
 EQA, OVMM and TAMP. It creates no instances, acquires no images, runs no models,
 and changes no live defaults. An opt-in shared-history adapter now connects it
