@@ -58,6 +58,14 @@ def goal_predicates(robot, goals):
     return rows
 
 
+def load_placement_regions(path):
+    regions = np.asarray(json.loads(path.read_text()), dtype=float)
+    if (regions.shape != (2, 2, 2) or not np.isfinite(regions).all()
+            or not np.all(regions[:, 0] < regions[:, 1])):
+        raise ValueError('Expected cylinder and box XY regions, each with finite increasing min/max bounds')
+    return regions.tolist()
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
@@ -74,6 +82,10 @@ def main():
         parser.error('--base-url and --remote-model must be supplied together')
     if args.max_turns < 1:
         parser.error('--max-turns must be positive')
+    try:
+        regions = load_placement_regions(args.placement_regions)
+    except (OSError, ValueError, TypeError) as exc:
+        parser.error(str(exc))
     args.output.mkdir(parents=True, exist_ok=True)
     model = mujoco.MjModel.from_xml_path(default_scene_xml_path)
     if args.live_sim:
@@ -84,13 +96,12 @@ def main():
     else:
         connection = nullcontext(ContactRobot(model, 'object1', separation=.15, separation_axis='y'))
     with connection as robot:
-        return run_episode(args, robot, model)
+        return run_episode(args, robot, model, regions=regions)
 
 
-def run_episode(args, robot, model):
-    regions = json.loads(args.placement_regions.read_text())
-    if len(regions) != 2:
-        raise ValueError('Expected cylinder and box regions, in that order')
+def run_episode(args, robot, model, *, regions=None):
+    if regions is None:
+        regions = load_placement_regions(args.placement_regions)
     goals = dict(zip(('object2', 'object1'), regions, strict=True))
     adapter = native_adapter.NativeTableAdapter(robot, model=model)
     original_sync = adapter.synchronize

@@ -52,3 +52,10 @@ def test_invalid_result_and_real_dispatch_after_partial_fail_distinct_checks():
     assert evidence['failure_stop_compliant'] is False
     assert evidence['outcome_counts']['invalid'] == 1
     assert evidence['code_counts']['invalid_tool_result'] == 1
+
+
+def test_second_failed_dispatch_is_still_forbidden_until_new_user_turn():
+    failures = failure_boundaries([failure(), failure()])
+    assert len(failures) == 2
+    assert failures[0]['unexpected_tools'] == ['execute_pick_place_plan']
+    assert failures[1]['unexpected_tools'] == []

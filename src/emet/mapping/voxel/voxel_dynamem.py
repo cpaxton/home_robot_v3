@@ -740,6 +740,9 @@ class SparseVoxelMap(DynamemVoxelEQAMixin, DynamemVoxelLocalizeMixin, SparseVoxe
             if len(valid_xyz) != 0:
                 self.add_to_semantic_memory(valid_xyz, features, valid_rgb)
 
+        # Segmentation uses the original RGB/depth resolution. The mapping
+        # world_xyz above may be resized; let the processor unproject original
+        # depth with original intrinsics so masks and points remain aligned.
         # Update open-vocab scene graph if attached
         if self._scene_graph_processor is not None:
             try:

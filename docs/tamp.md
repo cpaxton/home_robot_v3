@@ -86,3 +86,9 @@ Keep assisted, scripted, in-process LLM, and live LLM results separate.
 | IK, collision, and motion planning | [Motion implementation](../src/emet/motion/) |
 | API and native-adapter regression coverage | [TAMP tests](../src/test/controller/task/tamp/) |
 | Comparing experiments without changing denominators | [Paired metrics](experiments/tamp_paired_metrics.md) |
+
+
+The [PR #213 merge scope](plans/2026-10-15_tamp_213_merge_scope.md) fixes the
+orchestration milestone and records review dispositions, geometry-input changes,
+and follow-up integration points in the incoming perception/navigation/control
+stack. Observed detector improvements remain a separate acceptance gate.

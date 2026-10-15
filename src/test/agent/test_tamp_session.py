@@ -190,3 +190,28 @@ def test_chat_automatically_uses_existing_scene_graph_provider(monkeypatch):
     loop.run_agent_with_robot(discord=False, use_llm=True, commands=['Discover tasks'],
                               device='cpu', thinking_status=False)
     robot.get_emet_session.assert_not_called()
+
+
+def test_real_chat_logs_explicit_user_boundary_before_new_authorized_turn(monkeypatch):
+    from emet.eval.native_chat_scoring import failure_boundaries
+
+    setup_chat_loop(monkeypatch)
+    execute = MagicMock(side_effect=[
+        json.dumps(response('execute_pick_place_plan', status='partial', code='command_outcome_unknown')),
+        json.dumps(response('execute_pick_place_plan'))])
+    tool = Tool(name='execute_pick_place_plan', description='test',
+                parameters={'type': 'object', 'properties': {}}, func=execute, returns_info=True)
+    monkeypatch.setattr(loop, 'get_tools', lambda ctx: [tool])
+    call = json.dumps({'tool_calls': [{'name': tool.name, 'arguments': {}}]})
+    monkeypatch.setattr(loop, '_call_llm', MagicMock(side_effect=[
+        (call, .1), ('{"message":"Stopped","tool_calls":[]}', .1),
+        (call, .1), ('{"message":"Done","tool_calls":[]}', .1)]))
+    commands = ['Try the first task', 'I inspected the scene; execute the next task']
+    loop.run_agent_with_robot(discord=False, use_llm=True, commands=commands,
+                              device='cpu', thinking_status=False)
+    rows = [{'role': c.args[0], 'content': c.args[1]} for c in loop.ChatLog.return_value.log.call_args_list]
+    assert [r['content'] for r in rows if r['role'] == 'user'] == commands
+    assert execute.call_count == 2
+    failures = failure_boundaries(rows)
+    assert len(failures) == 1
+    assert failures[0]['unexpected_tools'] == []

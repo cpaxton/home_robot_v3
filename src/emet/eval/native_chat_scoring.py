@@ -46,6 +46,8 @@ def failure_boundaries(rows):
 
     Assistant prose or proposed calls are not execution evidence: only tool log
     entries count. This checks session control, never physical task success.
+    Input must retain explicit user rows from ChatLog (including scripted turns).
+    Every later dispatch in the failed turn is a violation, even another failure.
     """
     failures, active = [], None
     for row in rows:

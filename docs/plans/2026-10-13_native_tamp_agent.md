@@ -259,3 +259,12 @@ frame; observed task success has not been established. Detector/device/label
 adapter fixes are covered by 35 focused regressions, and 43 broader agent/config
 checks pass. The next gate requires semantic verification, object-part identity
 handling and faster perception, plus separate camera/physics throughput work.
+
+
+### October 15: finish the orchestration milestone
+
+Use the [PR #213 merge scope](2026-10-15_tamp_213_merge_scope.md) for this branch's
+review and merge criteria. Its orchestration acceptance is independent of the
+remaining perception/controller gates above. Coordinate the next observed-input
+adapter with incoming grounding, camera-evidence and view-selection providers;
+keep this PR focused on the existing CHAT tool contracts and their validation.

@@ -371,14 +371,17 @@ def _dispatch_tool_calls(
             gm = getattr(getattr(executor, "agent", None), "graph_memory", None)
             maybe_record_tool_attempt(gm, outcome, source="chat")
 
-        if name in TAMP_TOOLS and not outcome.ok:
-            # Later calls were chosen before the model saw this failure. Return
-            # control for inspection/replanning; do not execute that stale batch.
+        discovery_only = (name in TAMP_TOOLS and isinstance(outcome.payload.get('data'), dict)
+                          and outcome.payload['data'].get('discovery_only') is True)
+        if name in TAMP_TOOLS and (not outcome.ok or discovery_only):
+            # Later calls were chosen before the model saw this boundary. A
+            # discovery-only result also forbids continuing the precomputed batch.
             remaining = [c.get("name", "") for c in tool_calls[call_index + 1:]]
             if remaining:
                 stopped = tamp_response("dispatch", code="batch_stopped",
-                    data={"failed_tool": name, "unattempted_tools": remaining},
-                    recovery=outcome.payload.get("recovery") or "inspect")
+                    data={**({'stopped_tool': name, 'stop_reason': 'discovery_only'} if discovery_only
+                             else {'failed_tool': name}), 'unattempted_tools': remaining},
+                    recovery='none' if discovery_only else outcome.payload.get("recovery") or "inspect")
                 results.append("[dispatch] " + json.dumps(stopped))
             has_info = True
             break
