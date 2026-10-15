@@ -52,9 +52,12 @@ FAILED=()
 if [[ "$PHASE" == all || "$PHASE" == eqa ]]; then
     # Each invocation owns its evidence, even when arms share qids or OUT_DIR.
     # Keep the marker in OUT so the bundle prefix is discoverable after a crash.
-    DEBUG_TAG="dev$(basename "$(mktemp -d "$OUT/.eqa-evidence.XXXXXXXXXX")")"
+    EVIDENCE_RESERVATION="$(mktemp -d "$OUT/.eqa-evidence.XXXXXXXXXX")"
+    trap 'rmdir "$EVIDENCE_RESERVATION"' EXIT
+    DEBUG_TAG="dev$(basename "$EVIDENCE_RESERVATION")"
     printf '%s\n' "$DEBUG_TAG" >> "$OUT/diagnostic_tags.txt"
-    for q in $EQA_IDS; do
+    read -r -a question_ids <<< "$EQA_IDS"
+    for q in "${question_ids[@]}"; do
         echo "=== [eqa] q$q seed=$SEED ($(date -Is)) ==="
         rc=0
         LD_LIBRARY_PATH="$HABITAT_ENV/lib:${LD_LIBRARY_PATH:-}" \

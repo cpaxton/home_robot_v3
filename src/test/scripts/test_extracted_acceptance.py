@@ -2,6 +2,7 @@
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 """Offline acceptance-driver guards; no simulator or model startup."""
 
+import hashlib
 import json
 import os
 import runpy
@@ -47,6 +48,22 @@ def test_acceptance_preflight_precedes_episode_loop():
         'bash "$DRIVER_ROOT/scripts/run_dev_loop.sh"'
     )
     assert "set -euo pipefail" in driver
+
+
+def test_missing_metrics_has_infrastructure_diagnostic(tmp_path):
+    validate = runpy.run_path(str(ROOT / "scripts/check_acceptance_metrics.py"))["validate_metrics"]
+    with pytest.raises(ValueError, match="Infrastructure error: cannot read episode metrics"):
+        validate("eqa", tmp_path / "q12.jsonl")
+
+
+@pytest.mark.parametrize("pretty", [False, True])
+def test_room_metric_object_accepts_pretty_and_jsonl_encoding(tmp_path, pretty):
+    validate = runpy.run_path(str(ROOT / "scripts/check_acceptance_metrics.py"))["validate_metrics"]
+    path = tmp_path / "room.jsonl"
+    path.write_text(
+        json.dumps({"find_object_success": True, "find_recep_success": False}, indent=2 if pretty else None) + "\n"
+    )
+    validate("room", path)
 
 
 @pytest.mark.parametrize("phase", ["eqa", "room"])
@@ -121,7 +138,10 @@ def test_relative_driver_invocation_preserves_driver_after_source_chdir(tmp_path
     )
     assert result.returncode != 0
     assert (out / "driver.sh").read_bytes() == DRIVER.read_bytes()
-    assert len((out / "input_hashes.txt").read_text().splitlines()) == 5
+    hashes = (out / "input_hashes.txt").read_text()
+    assert len(hashes.splitlines()) == 7
+    assert f"{hashlib.sha256(DRIVER.read_bytes()).hexdigest()}  {DRIVER}" in hashes
+    assert str(ROOT / "scripts/check_habitat_runtime.py") in hashes
 
 
 @pytest.mark.parametrize("failure", ["wrong_sha", "dirty", "staged", "untracked", "existing_output"])

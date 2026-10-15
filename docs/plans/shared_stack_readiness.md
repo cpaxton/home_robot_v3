@@ -3,6 +3,28 @@
 Clear slices independently. Non-draft means evidence is ready for review, not
 permission to merge. Keep defaults unchanged; no full sweep or hardware gate.
 
+## Acceptance review repairs — 2026-10-15
+
+The driver now hashes itself and `check_habitat_runtime.py` alongside its other
+inputs. EQA captures the child exit status, reports `failed.txt`, validates each
+requested artifact, then exits with failure; `set -e` no longer skips the checks.
+Metric validation accepts one JSON object or one JSONL episode for either phase,
+and reports missing/malformed artifacts as infrastructure errors without raw
+tracebacks. The actual room writer emits indented JSON objects. Question/episode
+lists use shell arrays, and the empty evidence-tag reservation is removed on
+exit while actual episode evidence remains intact. 30 offline driver/metric
+tests pass, with shell syntax checks. This does not turn a wrong scored episode
+into an infrastructure error or claim a task success.
+
+Related reviewed integration `63016107` includes main's native multi-object TAMP
+tools (#212), timestamp repair (#215), navigation/recovery review fixes, and
+#202's map-scope/current-capture repairs. 392 combined tests pass. Paired room
+job `20261015_083001_7e7aef` is in progress on S0 Stretch, RoboCasa Stretch,
+and MolmoSpaces rby1 against main `801dce82`; final task acceptance remains open.
+The earlier candidate's EQA 26/36 versus main 25/36 is a modest development
+result on different frozen revisions; prioritize reliable shared tooling and
+do not present this as a meaningful accuracy gain or this PR's exact-head gate.
+
 ## Ownership and exact heads
 
 | PR | Ownership | Current gate |

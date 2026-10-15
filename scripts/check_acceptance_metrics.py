@@ -8,8 +8,17 @@ from pathlib import Path
 
 
 def validate_metrics(phase: str, path: Path) -> None:
-    text = path.read_text()
-    rows = [json.loads(line) for line in text.splitlines() if line.strip()] if phase == "eqa" else [json.loads(text)]
+    try:
+        text = path.read_text()
+    except OSError as error:
+        raise ValueError(f"Infrastructure error: cannot read episode metrics {path}: {error}") from error
+    try:
+        rows = [json.loads(text)]
+    except json.JSONDecodeError:
+        try:
+            rows = [json.loads(line) for line in text.splitlines() if line.strip()]
+        except json.JSONDecodeError as error:
+            raise ValueError(f"Infrastructure error: malformed episode metrics {path}: {error}") from error
     if len(rows) != 1:
         raise ValueError(f"Expected one episode result: {path}")
     row = rows[0]
@@ -25,4 +34,7 @@ if __name__ == "__main__":
     parser.add_argument("phase", choices=("eqa", "room"))
     parser.add_argument("path", type=Path)
     args = parser.parse_args()
-    validate_metrics(args.phase, args.path)
+    try:
+        validate_metrics(args.phase, args.path)
+    except ValueError as error:
+        parser.exit(1, f"{error}\n")

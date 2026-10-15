@@ -22,7 +22,8 @@ unset EMET_VL_ENDPOINT EMET_SIM_EVAL_CONFIG EMET_SIM_EVAL_TRACE
 git rev-parse HEAD > "$out/source.txt"
 cp "$DRIVER_ROOT/scripts/run_extracted_acceptance.sh" "$out/driver.sh"
 sha256sum uv.lock configs/emet/default.yaml configs/ovmm/find_phase_episodes.yaml > "$out/input_hashes.txt"
-sha256sum "$DRIVER_ROOT/scripts/run_dev_loop.sh" "$DRIVER_ROOT/scripts/check_acceptance_metrics.py" >> "$out/input_hashes.txt"
+sha256sum "$DRIVER_ROOT/scripts/run_extracted_acceptance.sh" "$DRIVER_ROOT/scripts/check_habitat_runtime.py" \
+    "$DRIVER_ROOT/scripts/run_dev_loop.sh" "$DRIVER_ROOT/scripts/check_acceptance_metrics.py" >> "$out/input_hashes.txt"
 "${EMET_PY:-$ROOT/.venv/bin/python}" -c 'from importlib.metadata import distributions; print("\n".join(sorted(d.metadata.get("Name", "unknown") + "==" + d.version for d in distributions())))' > "$out/packages.txt"
 printf 'seed=%s\nphase=%s\n' "${DEV_SEED:-0}" "$1" > "$out/run.txt"
 case "${1:?eqa or room}" in
@@ -34,17 +35,26 @@ case "${1:?eqa or room}" in
         LD_LIBRARY_PATH="$(dirname "$(dirname "$habitat_bin")")/lib:${LD_LIBRARY_PATH:-}" \
             timeout --signal=TERM --kill-after=20s 180s "$(dirname "$habitat_bin")/python" \
             "$DRIVER_ROOT/scripts/check_habitat_runtime.py" > "$out/habitat_preflight.log" 2>&1
-        DEV_SOURCE_DIR="$ROOT" PHASE=eqa DEV_SEED="${DEV_SEED:-0}" OUT_DIR="$out" bash "$DRIVER_ROOT/scripts/run_dev_loop.sh"
-        test ! -s "$out/failed.txt"
-        for q in ${DEV_EQA_IDS:-2 6 12 14 15 16 25 28 31 56 65 68}; do
-            "${EMET_PY:-$ROOT/.venv/bin/python}" "$DRIVER_ROOT/scripts/check_acceptance_metrics.py" eqa "$out/eqa/q$q.jsonl"
+        rc=0
+        DEV_SOURCE_DIR="$ROOT" PHASE=eqa DEV_SEED="${DEV_SEED:-0}" OUT_DIR="$out" bash "$DRIVER_ROOT/scripts/run_dev_loop.sh" || rc=$?
+        if [[ -s "$out/failed.txt" ]]; then
+            cat "$out/failed.txt" >&2
+            if [[ "$rc" -eq 0 ]]; then rc=1; fi
+        fi
+        read -r -a question_ids <<< "${DEV_EQA_IDS:-2 6 12 14 15 16 25 28 31 56 65 68}"
+        for q in "${question_ids[@]}"; do
+            if ! "${EMET_PY:-$ROOT/.venv/bin/python}" "$DRIVER_ROOT/scripts/check_acceptance_metrics.py" eqa "$out/eqa/q$q.jsonl"; then
+                if [[ "$rc" -eq 0 ]]; then rc=1; fi
+            fi
         done
+        if [[ "$rc" -ne 0 ]]; then exit "$rc"; fi
         ;;
     room)
         export EMET_CONFIG="${ACCEPTANCE_CONFIG:-$DRIVER_ROOT/configs/emet/shared_find_acceptance.yaml}"
         cp "$EMET_CONFIG" "$out/config.yaml"
         # Each phase is bounded; exit/metrics failures are retained and stop the run.
-        for episode in ${FIND_EPISODES:-default_table_s0_distinct_recep robocasa_pp_s1 molmo_ithor_s2_idx0}; do
+        read -r -a episode_ids <<< "${FIND_EPISODES:-default_table_s0_distinct_recep robocasa_pp_s1 molmo_ithor_s2_idx0}"
+        for episode in "${episode_ids[@]}"; do
             timeout --signal=TERM --kill-after=20s 1500s "${EMET_PY:-$ROOT/.venv/bin/python}" -m emet.cli ovmm find \
                 --episodes configs/ovmm/find_phase_episodes.yaml --backend lazy_graph --query-driven-memory \
                 --episode-id "$episode" --seed "${DEV_SEED:-0}" --mapping-rotate-steps 4 \
