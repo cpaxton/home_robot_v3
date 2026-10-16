@@ -3,14 +3,17 @@
 
 import hashlib
 import runpy
+import sys
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
 
 def assets():
     root = Path(__file__).resolve().parents[3]
-    return runpy.run_path(str(root / "scripts/run_shared_room_pairs.py"))["grounding_assets"]
+    with patch.object(sys, "path", [str(root / "scripts"), *sys.path]):
+        return runpy.run_path(str(root / "scripts/run_shared_room_pairs.py"))["grounding_assets"]
 
 
 def test_detector_control_does_not_require_sam(tmp_path):

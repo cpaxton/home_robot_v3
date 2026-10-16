@@ -10,6 +10,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from check_acceptance_metrics import validate_record
+
 
 def git(root, *args):
     return subprocess.check_output(["git", "-C", str(root), *args], text=True).strip()
@@ -50,6 +52,9 @@ def run(args):
         "grounding_backend": args.grounding_backend,
         "grounding_assets": assets,
         "driver_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+        "validator_sha256": hashlib.sha256(
+            Path(__file__).with_name("check_acceptance_metrics.py").read_bytes()
+        ).hexdigest(),
         "scope": "find only, physical navigation, local Qwen3-VL int4; not manipulation acceptance",
     }
     (args.output / "manifest.json").write_text(json.dumps(manifest, indent=2))
@@ -158,18 +163,19 @@ def run(args):
                 metrics = json.loads(metrics_path.read_text())
             except (OSError, ValueError):
                 pass
-            complete = (
-                result.returncode == 0
-                and isinstance(metrics, dict)
-                and not metrics.get("error")
-                and all(type(metrics.get(key)) is bool for key in ["find_object_success", "find_recep_success"])
-            )
+            validation_error = None
+            try:
+                validate_record("room", metrics, metrics_path)
+            except ValueError as error:
+                validation_error = str(error)
+            complete = result.returncode == 0 and validation_error is None
             success = bool(complete and metrics["find_object_success"] and metrics["find_recep_success"])
             row = {
                 "episode": episode,
                 "arm": arm,
                 "exit_code": result.returncode,
                 "complete": complete,
+                "validation_error": validation_error,
                 "success": success,
                 "metrics": metrics,
                 "artifact_dir": str(case),

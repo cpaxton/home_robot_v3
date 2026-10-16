@@ -7,6 +7,15 @@ import json
 from pathlib import Path
 
 
+def validate_record(phase: str, row: object, path: Path) -> None:
+    errors = ("error", "agentic_find_error", "agentic_find_error_recep")
+    if not isinstance(row, dict) or any(row.get(key) for key in errors):
+        raise ValueError(f"Infrastructure error in {path}: {row}")
+    fields = ("correct",) if phase == "eqa" else ("find_object_success", "find_recep_success")
+    if any(type(row.get(field)) is not bool for field in fields):
+        raise ValueError(f"Missing boolean outcome {fields}: {path}")
+
+
 def validate_metrics(phase: str, path: Path) -> None:
     try:
         text = path.read_text()
@@ -21,12 +30,7 @@ def validate_metrics(phase: str, path: Path) -> None:
             raise ValueError(f"Infrastructure error: malformed episode metrics {path}: {error}") from error
     if len(rows) != 1:
         raise ValueError(f"Expected one episode result: {path}")
-    row = rows[0]
-    if not isinstance(row, dict) or row.get("error"):
-        raise ValueError(f"Infrastructure error in {path}: {row}")
-    fields = ("correct",) if phase == "eqa" else ("find_object_success", "find_recep_success")
-    if any(type(row.get(field)) is not bool for field in fields):
-        raise ValueError(f"Missing boolean outcome {fields}: {path}")
+    validate_record(phase, rows[0], path)
 
 
 if __name__ == "__main__":

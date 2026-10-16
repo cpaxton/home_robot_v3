@@ -66,6 +66,15 @@ def test_room_metric_object_accepts_pretty_and_jsonl_encoding(tmp_path, pretty):
     validate("room", path)
 
 
+@pytest.mark.parametrize("key", ["agentic_find_error", "agentic_find_error_recep"])
+def test_phase_exception_is_not_a_completed_task_miss(tmp_path, key):
+    validate = runpy.run_path(str(ROOT / "scripts/check_acceptance_metrics.py"))["validate_metrics"]
+    path = tmp_path / "room.json"
+    path.write_text(json.dumps({"find_object_success": False, "find_recep_success": False, key: "missing weights"}))
+    with pytest.raises(ValueError, match="Infrastructure error"):
+        validate("room", path)
+
+
 @pytest.mark.parametrize("phase", ["eqa", "room"])
 @pytest.mark.parametrize("kind", ["pass", "miss", "error", "empty", "malformed", "missing", "duplicate"])
 def test_metrics_require_a_scored_episode(tmp_path, phase, kind):
