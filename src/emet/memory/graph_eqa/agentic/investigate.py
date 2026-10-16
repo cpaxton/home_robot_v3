@@ -472,13 +472,28 @@ def _tool_investigate(
                 {"max_cosine": record.retrieval_score, "yoloe_hit": True},
                 self.agent.voxel_map,
             )
-            cap = {"ok": True, "obs_id": grounding["obs_id"], "status": "GROUNDED_ARRIVAL"}
+            if captured_view(self, cap.get("obs_id")) is not None:
+                # Geometry and view IDs have different jobs. Keep verification
+                # on the captured pixels, not a newer live frame fetched through
+                # the admitted object's handle. This query is already grounded.
+                if not hasattr(self, "_view_grounding_attempts"):
+                    self._view_grounding_attempts = set()
+                self._view_grounding_attempts.add((int(cap["obs_id"]), record.query))
+            else:
+                cap = {"ok": True, "obs_id": grounding["obs_id"], "status": "GROUNDED_ARRIVAL"}
             self._last_capture_status = "OK"
     cap_adv = isinstance(cap, dict) and cap.get("ok") and cap.get("obs_id") is not None
     station_oid = None
     # Only a successful capture advance counts as a new station view.
     if cap_adv:
         station_oid = int(cap["obs_id"])
+        # A captured view's XYZ is a camera position, not the investigated
+        # object's location. Preserve the actual hypothesis for view selection.
+        if not hasattr(self, "_inspection_target_by_obs"):
+            self._inspection_target_by_obs = {}
+        self._inspection_target_by_obs[station_oid] = self._hypothesis_nav_anchor_xyz(oid)
+        while len(self._inspection_target_by_obs) > 32:
+            del self._inspection_target_by_obs[next(iter(self._inspection_target_by_obs))]
         if not hasattr(self, "_inspection_context_by_obs"):
             self._inspection_context_by_obs = {}
         if context_view is not None:

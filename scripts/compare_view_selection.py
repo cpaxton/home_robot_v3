@@ -10,6 +10,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
+from emet.memory.view_coverage import CoverageObjective
 from emet.memory.view_selection import SelectionConfig, ViewFrame, select_views
 
 
@@ -22,16 +23,25 @@ def compare_manifest(path: Path, *, max_images: int = 4) -> dict:
         with Image.open(image_path) as image:
             values["rgb"] = np.asarray(image.convert("RGB"))
             frames.append(ViewFrame(**values))
+    objective = CoverageObjective(**manifest["coverage_objective"]) if "coverage_objective" in manifest else None
+    policies = ["recency", "pose", "embedding", "coverage", "hybrid"]
+    if objective is not None:
+        policies.append("weighted_coverage")
+        if all(f.cell_quality is not None for f in frames):
+            policies.append("quality_coverage")
     return {
         policy: select_views(
             frames,
             current_id=manifest["current_id"],
             pre_turn_id=manifest.get("pre_turn_id"),
-            config=SelectionConfig(policy=policy, max_images=max_images),
+            config=SelectionConfig(
+                **{**manifest.get("selection_config", {}), "policy": policy, "max_images": max_images}
+            ),
             query_embedding=manifest.get("query_embedding"),
             embedding_space=manifest.get("embedding_space"),
+            coverage_objective=objective,
         ).to_dict()
-        for policy in ("recency", "pose", "embedding", "coverage", "hybrid")
+        for policy in policies
     }
 
 

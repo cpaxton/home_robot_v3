@@ -138,6 +138,10 @@ def init_executor(
     cfg_decision = _eqa_cfg(agent).get("agentic_decision_policy", "legacy")
     self.decision_policy = resolve_agentic_decision_policy(env_decision if env_decision is not None else cfg_decision)
     eqa_cfg = _eqa_cfg(agent)
+    from emet.memory.approach_views import ApproachViewHistory
+
+    retain_approach = os.environ.get("EMET_EQA_RETAIN_APPROACH_VIEWS", "0") == "1"
+    agent.robot.navigation_view_history = ApproachViewHistory() if retain_approach else None
     if eqa_cfg.get("view_selection") or os.environ.get("EMET_EQA_VIEW_SELECTION_POLICY"):
         # Optional adapter capability: capture pixels at its actual path/yaw boundary.
         # Adapters without a capture implementation provide no pre-turn pin.

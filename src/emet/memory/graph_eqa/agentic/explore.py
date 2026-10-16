@@ -463,7 +463,12 @@ def _tool_explore_frontier(self, toward: str = "", *, frontier_id: str = "") -> 
         )
     # Do not invent toward= from MCQ options / room enums — pass the Question
     # to the frontier VLM and let it pick among graph-contexted views.
-    bias = toward or self.query_text
+    # A router hint refines the task; it must not replace it. Generic hints
+    # such as "unexplored frontier" otherwise erase the target from the
+    # downstream VLM's Question and all semantic frontier ranking.
+    bias = self.query_text
+    if toward and toward != bias:
+        bias = f"{bias}\nExploration direction hint: {toward}"
     agent = self.agent
     gm = self.graph_memory
     frontier_xyz = None

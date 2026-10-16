@@ -64,6 +64,27 @@ def test_assessment_keeps_current_and_context_roles_and_image_budget():
     assert isinstance(client.mm_calls[-1][1]["image"], np.ndarray)
 
 
+def test_selected_history_does_not_authorize_current_localization():
+    from emet.memory.view_selection import ViewFrame, select_views
+
+    frames = [ViewFrame(str(i), "episode", float(i), np.full((8, 8, 3), i, dtype=np.uint8)) for i in range(2)]
+    selected = select_views(frames, current_id="1")
+    client = _MultiClient({"present": False, "answerable": False})
+    for is_mcq in (False, True):
+        assess_view_with_vlm(
+            client,
+            question="Where is the cup?",
+            rgb=frames[-1].rgb,
+            selected_views=selected,
+            is_mcq=is_mcq,
+        )
+        prompt, kwargs = client.mm_calls[-1]
+        assert len(kwargs["image"]) == 2
+        assert "Judge present from Image 1 only" in prompt
+        assert ("Answerability may use the labeled historical context" in prompt) == is_mcq
+        assert ("answerable requires the target to be visible in Image 1" in prompt) != is_mcq
+
+
 def test_assessment_uses_exact_selected_packet_and_historical_labels():
     from emet.memory.view_selection import ViewFrame, select_views
 
@@ -165,6 +186,19 @@ def test_assess_view_does_not_turn_choice_text_into_first_letter():
     prompt = client.mm_calls[0][0]
     assert "exact semantic option text" in prompt
     assert "MCQ letter A-D" not in prompt
+
+
+def test_visual_inventory_omits_progress_but_retains_graph_labels():
+    brief = build_inventory_brief(
+        n_observations=9,
+        n_rounds=3,
+        n_nav=2,
+        tried_obs_ids=[17],
+        graph_labels=["sink", "towel"],
+        include_progress=False,
+    )
+    assert brief == "graph_labels=sink, towel"
+    assert build_inventory_brief(include_progress=False) == ""
 
 
 def test_build_inventory_brief_excludes_detector_proposal():

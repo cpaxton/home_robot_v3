@@ -13,14 +13,18 @@ from __future__ import annotations
 
 import hashlib
 import math
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field
 from itertools import combinations
 from time import perf_counter
+from types import MappingProxyType
 from typing import Literal
 
 import numpy as np
 
-Policy = Literal["recency", "pose", "embedding", "coverage", "hybrid"]
+from emet.memory.view_coverage import CoverageObjective
+
+Policy = Literal["recency", "pose", "embedding", "coverage", "weighted_coverage", "quality_coverage", "hybrid"]
 FEATURES = ("recency", "pose", "embedding", "coverage", "relevance", "saliency")
 
 
@@ -37,6 +41,7 @@ class ViewFrame:
     embedding_space: str | None = None
     visible_cells: frozenset[str] | None = None
     saliency: float | None = None
+    cell_quality: Mapping[str, float] | None = field(default=None, repr=False, compare=False)
 
     def __post_init__(self):
         if (
@@ -85,11 +90,19 @@ class ViewFrame:
             if any(not isinstance(cell, str) for cell in self.visible_cells):
                 raise ValueError("visible_cells must contain stable string map-cell IDs")
             object.__setattr__(self, "visible_cells", frozenset(self.visible_cells))
+        if self.cell_quality is not None:
+            quality = dict(self.cell_quality)
+            if self.visible_cells is None or set(quality) != set(self.visible_cells):
+                raise ValueError("cell_quality must describe exactly the visible cells")
+            if any(not math.isfinite(q) or not 0 <= q <= 1 for q in quality.values()):
+                raise ValueError("cell quality must be finite and in [0, 1]")
+            object.__setattr__(self, "cell_quality", MappingProxyType(quality))
 
 
 @dataclass(frozen=True)
 class SelectionConfig:
     policy: Policy = "pose"
+    spatial_labels: bool = False
     max_images: int = 4
     max_candidates: int = 32
     max_age_s: float = 60.0
@@ -100,7 +113,15 @@ class SelectionConfig:
     weights: tuple[float, ...] = (0.1, 0.3, 0.2, 0.2, 0.15, 0.05)
 
     def __post_init__(self):
-        if self.policy not in ("recency", "pose", "embedding", "coverage", "hybrid"):
+        if self.policy not in (
+            "recency",
+            "pose",
+            "embedding",
+            "coverage",
+            "weighted_coverage",
+            "quality_coverage",
+            "hybrid",
+        ):
             raise ValueError("unknown view selection policy")
         if not isinstance(self.max_images, int) or not isinstance(self.max_candidates, int):
             raise ValueError("image and candidate budgets must be integers")
@@ -141,12 +162,20 @@ class ViewSelection:
     config: SelectionConfig
 
     def prompt_labels(self) -> str:
-        return "\n".join(view.label(i) for i, view in enumerate(self.views, 1))
+        if not self.config.spatial_labels:
+            return "\n".join(view.label(i) for i, view in enumerate(self.views, 1))
+        return spatial_packet_labels(
+            [
+                {"label": view.label(i), "timestamp_s": view.frame.timestamp_s, "camera_pose": view.frame.camera_pose}
+                for i, view in enumerate(self.views, 1)
+            ]
+        )
 
     def to_dict(self) -> dict:
         """JSON-safe audit record; pixels/embeddings stay outside the manifest."""
         return {
             "config": asdict(self.config),
+            "prompt_labels": self.prompt_labels(),
             "views": [
                 {
                     "view_id": v.frame.view_id,
@@ -163,6 +192,37 @@ class ViewSelection:
             "excluded": self.excluded,
             "metrics": self.metrics,
         }
+
+
+def spatial_packet_labels(rows) -> str:
+    """Describe same-world captures without confusing display order with time.
+
+    Input timestamps must share a clock and poses a world frame (the selector
+    enforces both). Sequence ranks are packet-local, not global sensor IDs;
+    simultaneous captures share a rank. Missing poses remain explicitly unknown.
+    """
+    times = sorted({float(row["timestamp_s"]) for row in rows})
+    if not all(math.isfinite(t) for t in times):
+        raise ValueError("Capture timestamps must be finite")
+    lines = [
+        "Capture sequence is chronological within this packet (1 = earliest); "
+        "image display order is different. Positions are camera XYZ in meters in "
+        "one shared world frame; directions are camera optical-forward unit vectors "
+        "in that frame. These are camera poses, not object locations."
+    ]
+    for row in rows:
+        sequence = times.index(float(row["timestamp_s"])) + 1
+        pose = row.get("camera_pose")
+        geometry = "camera position/direction unknown"
+        if pose is not None:
+            pose = np.asarray(pose, dtype=float)
+            if pose.shape != (4, 4) or not np.all(np.isfinite(pose)):
+                raise ValueError("Camera pose must be a finite 4x4 transform")
+            xyz = ", ".join(f"{x:.2f}" for x in pose[:3, 3])
+            forward = ", ".join(f"{x:.2f}" for x in pose[:3, 2])
+            geometry = f"camera XYZ=({xyz}) m; viewing direction=({forward})"
+        lines.append(f"{row['label']} Capture sequence={sequence}; {geometry}.")
+    return "\n".join(lines)
 
 
 def _cosine(a: np.ndarray, b: np.ndarray) -> float:
@@ -186,6 +246,7 @@ def select_views(
     config: SelectionConfig = SelectionConfig(),
     query_embedding: np.ndarray | None = None,
     embedding_space: str | None = None,
+    coverage_objective: CoverageObjective | None = None,
 ) -> ViewSelection:
     """Pin current/pre-turn evidence, then greedy diversity within a recent pool.
 
@@ -202,6 +263,11 @@ def select_views(
     if pre_turn_id is not None and pre_turn_id not in by_id:
         raise ValueError("pre-turn view must be retained when specified")
     current = by_id[current_id]
+    weighted_policy = config.policy in ("weighted_coverage", "quality_coverage")
+    if weighted_policy and coverage_objective is None:
+        raise ValueError("weighted_coverage requires an explicit coverage objective")
+    if coverage_objective is not None and coverage_objective.scope_id != current.scope_id:
+        raise ValueError("coverage objective and current view must share scope")
     excluded = {}
     eligible = []
     for frame in frames:
@@ -261,7 +327,18 @@ def select_views(
             hashes.add(digest)
             unique.append(frame)
     coverage_universe = set().union(*(f.visible_cells or () for f in unique))
+    available_quality: dict[str, float] = {}
+    quality_available = all(f.cell_quality is not None for f in unique)
+    if quality_available:
+        for f in unique:
+            for cell, quality in (f.cell_quality or {}).items():
+                available_quality[cell] = max(quality, available_quality.get(cell, 0))
+    if weighted_policy and any(f.visible_cells is None for f in unique):
+        raise ValueError("weighted_coverage requires visible_cells for every candidate (empty is allowed)")
     covered: set[str] = set()
+    best_quality: dict[str, float] = {}
+    if config.policy == "quality_coverage" and any(f.cell_quality is None for f in unique):
+        raise ValueError("quality_coverage requires cell_quality for every candidate")
     selected: list[SelectedView] = []
 
     def features(frame):
@@ -285,6 +362,12 @@ def select_views(
             if frame.embedding is not None and query_embedding is not None
             else None,
             "saliency": frame.saliency,
+            "weighted_coverage": coverage_objective.marginal(frame.visible_cells, covered)
+            if coverage_objective is not None and frame.visible_cells is not None
+            else None,
+            "quality_coverage": coverage_objective.quality_marginal(frame.cell_quality, best_quality)
+            if coverage_objective is not None and frame.cell_quality is not None
+            else None,
         }
 
     while unique and len(selected) < config.max_images:
@@ -308,11 +391,18 @@ def select_views(
             frame = max(sorted(unique, key=lambda f: f.view_id), key=rank)
             score, _ = rank(frame)
             values = features(frame)
+            if weighted_policy and score <= 0:
+                break  # Up to N images: do not pad with zero-information frames.
         role = "current" if frame.view_id == current_id else "pre_turn" if frame.view_id == pre_turn_id else "context"
         selected.append(SelectedView(frame, role, current.timestamp_s - frame.timestamp_s, score, values))
         covered.update(frame.visible_cells or ())
+        for cell, quality in (frame.cell_quality or {}).items():
+            best_quality[cell] = max(quality, best_quality.get(cell, 0))
         unique.remove(frame)
-    excluded.update({f.view_id: "image_budget" for f in unique})
+    remaining_reason = (
+        "no_marginal_coverage" if weighted_policy and len(selected) < config.max_images else "image_budget"
+    )
+    excluded.update({f.view_id: remaining_reason for f in unique})
     pairs = [p for a, b in combinations(selected, 2) if (p := _pose_distance(a.frame, b.frame)) is not None]
     embedding_pairs = [
         (1 - _cosine(a.frame.embedding, b.frame.embedding)) / 2
@@ -335,4 +425,25 @@ def select_views(
         "feature_support": {name: sum(v.features[name] is not None for v in selected) for name in FEATURES},
         "selection_ms": (perf_counter() - started) * 1000,
     }
+    if coverage_objective is not None:
+        candidate_weight = coverage_objective.weight(coverage_universe)
+        selected_weight = coverage_objective.weight(covered)
+        candidate_quality_weight = (
+            coverage_objective.quality_marginal(available_quality, {}) if quality_available else None
+        )
+        selected_quality_weight = coverage_objective.quality_marginal(best_quality, {}) if quality_available else None
+        metrics["weighted_coverage"] = {
+            "scope_id": coverage_objective.scope_id,
+            "visibility_source": coverage_objective.visibility_source,
+            "objective_weight": coverage_objective.weight(coverage_objective.cell_weights),
+            "candidate_weight": candidate_weight,
+            "selected_weight": selected_weight,
+            "candidate_fraction": selected_weight / candidate_weight if candidate_weight else None,
+            "selected_cells": sorted(covered & coverage_objective.cell_weights.keys()),
+            "selected_quality_weight": selected_quality_weight,
+            "candidate_quality_weight": candidate_quality_weight,
+            "quality_candidate_fraction": selected_quality_weight / candidate_quality_weight
+            if candidate_quality_weight and selected_quality_weight is not None
+            else None,
+        }
     return ViewSelection(selected, excluded, metrics, config)

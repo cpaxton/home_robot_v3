@@ -62,7 +62,10 @@ def visible_unknown_cells(obstacles, explored, *, camera_xy, heading, fov, max_r
     for angle in np.linspace(heading - fov / 2, heading + fov / 2, ray_count):
         direction = np.array([math.cos(angle), math.sin(angle)])
         for distance in distances:
-            i, j = to_cell(np.asarray(camera_xy) + distance * direction)
+            cell = to_cell(np.asarray(camera_xy) + distance * direction)
+            if cell is None:
+                break
+            i, j = cell
             if not (0 <= i < obstacles.shape[0] and 0 <= j < obstacles.shape[1]) or obstacles[i, j]:
                 break
             if not explored[i, j]:
@@ -157,7 +160,9 @@ def make_frontier_evaluator(agent, start, goals, diagnostics):
             fov=fov,
             max_range=max_range,
             resolution=resolution,
-            to_cell=agent.planner.to_pt,
+            # Legacy planner coordinates clamp outside poses onto the border.
+            # Coverage must use the actual grid boundary in every map mode.
+            to_cell=agent.voxel_map.grid.xy_to_grid_cell,
         )
         distance = sum(
             float(np.linalg.norm(np.asarray(b)[:2] - np.asarray(a)[:2]))

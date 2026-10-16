@@ -94,6 +94,11 @@ class HabitatRobotClient(AbstractRobotClient, RobotModel):
         """Run one Habitat discrete action and notify post-step hooks."""
         frame = self._sim.step(action)
         self._sync_pose_from_sim()
+        history = getattr(self, "navigation_view_history", None)
+        if history is not None and (getattr(self, "_pending_nav", None) or {}).get("phase") in {"path", "yaw"}:
+            # The action already rendered this frame. Retain evidence only:
+            # no mapping, object creation, perception, or extra robot motion.
+            history.add(self.get_observation())
         for hook in self._post_step_hooks:
             try:
                 hook(self, frame)

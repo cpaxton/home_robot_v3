@@ -139,12 +139,17 @@ class HelloStretchKinematics:
         "joint_wrist_roll",
     ]
 
-    def get_footprint(self) -> Footprint:
-        """Return footprint for the robot. This is expected to be a mask."""
-        # Note: close to the actual measurements
-        return Footprint(width=0.34, length=0.33, width_offset=0.0, length_offset=-0.1)
-        # return Footprint(width=0.4, length=0.5, width_offset=0.0, length_offset=0.1)
-        # return Footprint(width=0.2, length=0.2, width_offset=0.0, length_offset=0.1)
+    @staticmethod
+    def get_footprint() -> Footprint:
+        """Conservative Stretch 3 envelope in the stowed navigation posture.
+
+        Collision-geometry projection spans approximately x=[-0.297, 0.095],
+        y=[-0.222, 0.243] m with the arm fully retracted. Rounded bounds also
+        cover the 1 cm navigation arm extension. The old chassis-only rectangle
+        missed wrist-camera/gripper collisions during counter approaches.
+        This does not certify driving with an extended manipulation arm.
+        """
+        return Footprint(width=0.50, length=0.40, width_offset=0.0, length_offset=-0.1)
 
     def _create_ik_solvers(self, ik_type: str = "pinocchio", visualize: bool = False):
         """Create ik solvers using physics backends such as pinocchio."""

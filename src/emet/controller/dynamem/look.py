@@ -530,16 +530,19 @@ def rotate_in_place(self, *, n_steps: int | None = None):
             f"rotate_in_place: table scan {n_steps} views, extra yaw deg={[round(float(np.rad2deg(y))) for y in yaws]}"
         )
     else:
-        yaws = [np.pi / 4.0] * extra
-        logger.info(f"rotate_in_place: {n_steps} views, {extra}× relative +45° yaw (no XY translation)")
+        spacing = 2.0 * np.pi / n_steps
+        yaws = [spacing] * extra
+        logger.info(f"rotate_in_place: {n_steps} views around 360°, {extra}× relative {np.rad2deg(spacing):.1f}° yaw")
     for step_i, yaw in enumerate(yaws):
         self.announce_motion_progress(f"Looking around: scan step {step_i + 2}/{n_steps}")
-        self.robot.move_base_to(
+        moved = self.robot.move_base_to(
             [0.0, 0.0, float(yaw)],
             relative=True,
             blocking=True,
             timeout=nav_timeout,
         )
+        if moved is False:
+            raise RuntimeError("Mapping scan turn failed; refusing to count the unchanged view as a new heading")
         wait_post_motion_obs(self.robot, nav_timeout)
         _capture()
         if step_i in (2, 6):
