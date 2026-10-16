@@ -69,6 +69,16 @@ def test_answer_attaches_exact_camera_evidence_without_creating_objects():
     np.testing.assert_array_equal(images[1], context)
     assert mem.last_eqa_obs_ids == []
     assert mem.last_eqa_nav_fallback_count == 0
+    *_, images = mem.query_answer(
+        "What color?",
+        evidence_images=[current, context],
+        evidence_labels=["Image 1 current", "Image 2 historical, 1 second ago"],
+        evidence_roles=["current", "context"],
+    )
+    assert "Image 2 historical, 1 second ago" in mem.last_eqa_prompt_text
+    assert "pre-approach context" not in mem.last_eqa_prompt_text
+    # Restore the legacy packet for its unchanged label contract below.
+    mem.query_answer("What color?", evidence_images=[current, context])
     assert not mem.get_nodes() and not mem.get_observations()
     assert "earlier pre-approach context" in mem.last_eqa_prompt_text
     oid = mem.add_observation(current, np.array([0.0, 0.0, 0.5]), ["cup"])

@@ -312,7 +312,15 @@ def update(self, *, full_perception: bool | None = None):
         if org is not None:
             self._cached_navigation_origin_xyt = np.asarray(org, dtype=np.float64).reshape(-1)[:3].copy()
 
-    self.voxel_map.process_rgbd_images(rgb, depth, K, camera_pose, base_xyt=base_xyt, full_perception=run_full)
+    self.voxel_map.process_rgbd_images(
+        rgb,
+        depth,
+        K,
+        camera_pose,
+        base_xyt=base_xyt,
+        full_perception=run_full,
+        image_timing=getattr(obs, "image_timing", None),
+    )
     if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
         print(f"[update] process_rgbd={time.monotonic():.3f}", flush=True)
     robot_xy = None

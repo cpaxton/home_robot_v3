@@ -458,6 +458,12 @@ def _run_vlm_view_assess(
     from emet.eval.agentic_vlm_assess import unique_image_arrays
 
     context_rgb = getattr(self, "_inspection_context_by_obs", {}).get(oid)
+    from emet.memory.graph_eqa.agentic.view_history import select_assessment_history
+    from emet.memory.graph_eqa.agentic.views import captured_view
+
+    selection = select_assessment_history(self, rgb, current_observation=captured_view(self, oid))
+    if selection is not None:
+        context_rgb = None
     assessment = assess_view_with_vlm(
         client,
         question=self.question,
@@ -466,16 +472,31 @@ def _run_vlm_view_assess(
         target_phrase=self._target_phrase or phrase,
         is_mcq=self._question_is_mcq(),
         context_rgb=context_rgb,
+        **({"selected_views": selection} if selection is not None else {}),
     )
     if rgb is not None:
         if not hasattr(self, "_assessed_images"):
             self._assessed_images = {}
-        self._assessed_images[oid] = [
-            im.copy()
-            for im in unique_image_arrays([rgb] + ([context_rgb] if context_rgb is not None else []), max_images=2)
-        ]
+        packet = (
+            [v.frame.rgb for v in selection.views]
+            if selection is not None
+            else unique_image_arrays([rgb] + ([context_rgb] if context_rgb is not None else []), max_images=2)
+        )
+        self._assessed_images[oid] = [im.copy() for im in packet]
+        if not hasattr(self, "_assessed_image_metadata"):
+            self._assessed_image_metadata = {}
+        self._assessed_image_metadata[oid] = (
+            {
+                "evidence_labels": selection.image_labels(),
+                "evidence_roles": [v.role for v in selection.views],
+            }
+            if selection is not None
+            else {}
+        )
         while len(self._assessed_images) > 32:
-            del self._assessed_images[next(iter(self._assessed_images))]
+            oldest = next(iter(self._assessed_images))
+            del self._assessed_images[oldest]
+            self._assessed_image_metadata.pop(oldest, None)
     query_image_paths = dump_query_rgb(self, oid, rgb, kind="vlm_assess")
     vlm_event_id = self._persist_agentic_evidence(
         stage="vlm_assessment",

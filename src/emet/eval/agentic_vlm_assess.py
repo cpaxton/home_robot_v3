@@ -243,6 +243,7 @@ def assess_view_with_vlm(
     close_look_crop: np.ndarray | None = None,
     multi_close_look_crops: list[np.ndarray] | None = None,
     context_rgb: np.ndarray | None = None,
+    selected_views=None,
 ) -> ViewAssessment:
     """Multimodal VLM: is this image enough to answer the question?
 
@@ -358,6 +359,18 @@ def assess_view_with_vlm(
             "Image 1 is the current assessment view. Judge present from Image 1 only. "
             "Use the earlier view for room/relationship context, not as proof the target is "
             "currently visible or localizable. For an MCQ, answerability may use both views; "
+            "do not assume unseen landmarks or count the same object twice.\n"
+        )
+    if selected_views is not None:
+        if context_rgb is not None or close_look_crop is not None or multi_close_look_crops:
+            raise ValueError("Selected evidence cannot be combined with separately labeled context/crops")
+        images = [view.frame.rgb for view in selected_views.views]
+        if not images or len(images) > 4 or not np.array_equal(images[0], rgb):
+            raise ValueError("Selected evidence must start with current RGB and fit the four-image budget")
+        user += (
+            "\n"
+            + selected_views.prompt_labels()
+            + "\nJudge present from Image 1 only. Answerability may use the labeled historical context; "
             "do not assume unseen landmarks or count the same object twice.\n"
         )
     vl = getattr(client, "_vl", None)

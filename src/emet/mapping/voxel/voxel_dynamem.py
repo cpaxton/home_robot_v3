@@ -598,6 +598,7 @@ class SparseVoxelMap(DynamemVoxelEQAMixin, DynamemVoxelLocalizeMixin, SparseVoxe
         *,
         base_xyt: np.ndarray | None = None,
         full_perception: bool = True,
+        image_timing: dict | None = None,
     ):
         """
         Process rgbd images for Dynamem
@@ -682,6 +683,7 @@ class SparseVoxelMap(DynamemVoxelEQAMixin, DynamemVoxelLocalizeMixin, SparseVoxe
             instance_image=instance_image,
             instance_classes=instance_classes,
             instance_scores=instance_scores,
+            image_timing=image_timing,
         )
         if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
             print(f"[update] add()={time.time() - _t_pr0:.3f}s", flush=True)
@@ -885,6 +887,7 @@ class SparseVoxelMap(DynamemVoxelEQAMixin, DynamemVoxelLocalizeMixin, SparseVoxe
                 inv_intrinsics=torch.linalg.inv(camera_K[:3, :3]).unsqueeze(0),
             )
         # add observations before we start changing things
+        info = {**info, "observation_scope_id": self.observation_scope_id}
         self.observations.append(
             Frame(
                 camera_pose,

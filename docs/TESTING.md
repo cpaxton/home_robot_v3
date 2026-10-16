@@ -35,6 +35,7 @@ Use **`uv run emet …`** (or `source .venv/bin/activate` then bare `emet`) from
 | Skip sim (faster CI-style) | `uv run emet test --no-sim` |
 | Verbose | `uv run emet test -v` |
 | Memory backend smokes | `uv run emet test src/test/memory/test_memory_backends_smoke.py -v` |
+| View-selection policies (offline) | `uv run emet test src/test/memory/test_view_selection.py -v` — [metrics, frozen-manifest comparisons, and evaluation plan](plans/view_selection.md) |
 | Multi-robot Dynagraph floor E2E | `uv run python src/test/app/run_dynagraph_multi_robot_e2e.py` |
 | Dynagraph unit (explore loop, graph memory) | `uv run emet test src/test/app/test_dynagraph_explore.py src/test/memory/test_graph_eqa_memory.py -v` |
 | GraphObjectFusion + GT export (fast) | `uv run emet test src/test/memory/test_graph_object_fusion.py src/test/simulation/test_mujoco_gt_objects.py -v` |
