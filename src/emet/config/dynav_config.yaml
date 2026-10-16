@@ -3,6 +3,9 @@
 # Encoder setup
 # Encoder is used to compute per-object embeddings.
 encoder: "siglip"
+# Legacy flat mapping config; canonical YAML uses mapping.scan_profile.
+# Opt-in coverage uses eight headings and two elevations with measured arrival.
+scan_profile: local
 open_vocab_category_map_file: example_cat_map.json
 
 # Sparse Voxel Map parameters

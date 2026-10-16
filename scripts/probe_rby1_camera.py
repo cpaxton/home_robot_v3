@@ -54,9 +54,14 @@ def main() -> int:
     parser.add_argument("--robot", help="Override robot in the scene config (simulation only).")
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--stationary", action="store_true", help="Idle-only probe for fixed-base arms.")
+    parser.add_argument(
+        "--coverage-scan", action="store_true", help="Opt-in measured eight-heading, two-elevation scan."
+    )
     parser.add_argument("--route-config", type=Path, help="Known episode-frame waypoints and policy (simulation only).")
     parser.add_argument("--route-repeats", type=int, help="Override configured repetitions for an initial diagnostic.")
     args = parser.parse_args()
+    if args.coverage_scan and (args.stationary or args.route_config):
+        parser.error("--coverage-scan cannot be combined with stationary/route modes")
     route = None
     policy = None
     if args.route_config:
@@ -99,7 +104,7 @@ def main() -> int:
     fh = server_log.open("w", encoding="utf-8")
     server = popen_session(server_cmd, env=env, stdout=subprocess.DEVNULL, stderr=fh)
     robot = None
-    reports = []
+    reports: list[dict[str, Any]] = []
     failures = []
     if route is not None:
         (args.output_dir / "resolved_route.json").write_text(
@@ -137,7 +142,38 @@ def main() -> int:
         spec = get_robot_spec(robot_kind)
         if not args.stationary:
             robot.move_to_nav_posture()
-            robot.look_front(blocking=True)
+            head_result = robot.look_front(blocking=True)
+            if head_result is False:
+                raise RuntimeError("look_front failed measured head arrival")
+        if args.coverage_scan:
+            from emet.controller.dynamem.look import measured_coverage_scan
+
+            def capture(obs):
+                index = len(reports)
+                Image.fromarray(np.asarray(obs.rgb, dtype=np.uint8)).save(args.output_dir / f"view_{index:02d}.png")
+                np.savez_compressed(
+                    args.output_dir / f"view_{index:02d}.npz",
+                    depth=obs.depth,
+                    camera_pose=obs.camera_pose,
+                    camera_K=obs.camera_K,
+                )
+                state = getattr(robot, "_state", None) or {}
+                reports.append(
+                    {
+                        "index": index,
+                        "head_pan_tilt": list(robot.get_pan_tilt()),
+                        "actuator_targets": state.get("actuator_targets"),
+                        "actuator_names": state.get("actuator_names"),
+                        "navigation_receipt": getattr(robot, "_command_receipt", None),
+                    }
+                )
+                return index
+
+            scan = measured_coverage_scan(robot, capture)
+            (args.output_dir / "observations.jsonl").write_text("".join(json.dumps(row) + "\n" for row in reports))
+            (args.output_dir / "summary.json").write_text(json.dumps(scan, indent=2) + "\n")
+            print(json.dumps(scan), flush=True)
+            return 0 if scan["ok"] else 1
         time.sleep(2.0)
         for i in range((len(route) if route is not None else max(1, int(args.poses))) + 1):
             try:
