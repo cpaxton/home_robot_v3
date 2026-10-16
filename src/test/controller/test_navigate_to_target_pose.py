@@ -175,6 +175,28 @@ def test_target_rejection_preserves_footprint_for_recovery(nav_agent):
     nav_agent.robot.execute_trajectory.assert_not_called()
 
 
+@pytest.mark.parametrize("distance", [0.0, 0.56])
+def test_timed_out_execution_keeps_measured_displacement_without_claiming_success(nav_agent, monkeypatch, distance):
+    from emet.visualization.null_visualizer import NullVisualizer
+
+    nav_agent.rerun_visualizer = NullVisualizer()
+    nav_agent.planner = _LongChunkPlanner()
+    nav_agent._filter_unsafe_nav_traj = MagicMock(side_effect=lambda traj, **kwargs: (traj, None, 1.0))
+    nav_agent._mark_nav_goal_blocked = MagicMock()
+    nav_agent.robot.execute_trajectory.return_value = False
+    nav_agent.robot.get_base_pose.return_value = np.array([distance, 0.0, 0.0])
+    monkeypatch.setattr("emet.controller.nav_confirm.confirm_navigation_plan", lambda *a, **k: True)
+
+    outcome = nav_agent.navigate_to_target_pose([2, 0, 1], [0, 0, 0])
+
+    assert outcome == NavOutcome.ABORTED_TIMEOUT
+    assert not outcome.ok
+    assert nav_agent._last_nav_attempt.success is False
+    assert nav_agent._last_nav_attempt.finished is False
+    assert nav_agent._last_nav_attempt.dist_m == pytest.approx(distance)
+    assert nav_agent._last_nav_plan["dist_m"] == pytest.approx(distance)
+
+
 def test_navigate_to_target_pose_hops_until_chunk_arrives(nav_agent, monkeypatch):
     from emet.visualization.null_visualizer import NullVisualizer
 
