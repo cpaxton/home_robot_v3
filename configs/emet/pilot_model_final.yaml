@@ -1,0 +1,10 @@
+# Small integration pilot: final-model authority plus bounded labeled context.
+# No default promotion and no experimental approach-history dependency.
+extends: configs/emet/model_final.yaml
+mapping:
+  eqa:
+    collect_agentic_trace: true
+    view_selection:
+      policy: pose
+      spatial_labels: true
+      max_images: 4
