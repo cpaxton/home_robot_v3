@@ -521,7 +521,7 @@ def _merge_chat_agent_manip_parameters(
         agent_section = load_config(agent_config, robot=robot).agent_section()
     current = parameters.get("agent")
     agent = dict(current) if isinstance(current, dict) else {}
-    for key in ("manip_mode", "manip_collision", "manip_planner"):
+    for key in ("manip_mode", "manip_collision", "manip_planner", "tamp_inputs"):
         value = str(getattr(agent_section, key, "")).strip()
         if value:
             agent[key] = value

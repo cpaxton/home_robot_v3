@@ -277,7 +277,7 @@ def run(args):
 
         executor = PhysicalPickPlaceExecutor(
             robot,
-            model=model,
+            input_mode="privileged", model=model,
             data=data,
             ee_body=scorer["ee_body"],
             joint_names=joints,

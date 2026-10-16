@@ -136,8 +136,27 @@ def run_scripted_tool_calls(
                     if name == 'scene_tasks':
                         handles.pop('task_ref', None)
                         tasks = outcome['data'].get('tasks') or []
-                        if tasks:
-                            handles['task_ref'] = tasks[0]['task_ref']
+                        # Only auto-select a task whose advertised actions support
+                        # the remaining script. Explicit task_ref calls are unchanged.
+                        requested_states = {
+                            c.get("arguments", {}).get("state") for c in tool_calls[i + 1:]
+                            if c.get("name") == "set_receptacle_state"
+                            and c.get("arguments", {}).get("task_ref") == "$task_ref"
+                        }
+                        candidates = [t for t in tasks if requested_states.issubset(
+                            set((t.get("access") or {}).get("available_actions", [])))]
+                        if candidates:
+                            selected = candidates[0]
+                            handles['task_ref'] = selected['task_ref']
+                            print("TASK_ADMISSION " + json.dumps({"selection": "advertised_actions",
+                                "requested_states": sorted(requested_states),
+                                "total_tasks": len(tasks), "eligible_tasks": len(candidates),
+                                "selected_task_ref": selected['task_ref']}))
+                        elif requested_states:
+                            print("TASK_ADMISSION " + json.dumps({"code": "articulation_unsupported",
+                                "requested_states": sorted(requested_states), "total_tasks": len(tasks),
+                                "eligible_tasks": 0}))
+                            return False
                     elif name == 'plan_pick_place':
                         handles['plan_ref'] = outcome['data']['plan_ref']
                 except (TypeError, ValueError, KeyError):
@@ -197,6 +216,8 @@ def main() -> int:
         default=None,
         help='JSON list of tool calls, e.g. \'[{"name":"pick_place","arguments":{...}}]\'.',
     )
+    parser.add_argument("--articulation-cycle", action="store_true",
+                        help="Separate assisted open/close smoke on the first discovered task; no placement score.")
     parser.add_argument("--cpu-only", action="store_true", help="Hide GPUs in sim subprocess env.")
     parser.add_argument("--verbose-sim", action="store_true", help="Print sim server stderr.")
     parser.add_argument(
@@ -260,6 +281,16 @@ def main() -> int:
                     "receptacle_name": args.receptacle,
                 },
             }
+        ]
+
+    if args.articulation_cycle:
+        if has_explicit_tool_calls:
+            parser.error("--articulation-cycle cannot be combined with --tool-calls-json")
+        has_explicit_tool_calls = True
+        tool_calls = [
+            {"name": "scene_tasks", "arguments": {"object_filter": args.object}},
+            {"name": "set_receptacle_state", "arguments": {"task_ref": "$task_ref", "state": "open"}},
+            {"name": "set_receptacle_state", "arguments": {"task_ref": "$task_ref", "state": "closed"}},
         ]
 
     sim_handle = None
@@ -399,7 +430,7 @@ def main() -> int:
                     out,
                     fps=float(args.video_fps),
                     overlay_style=args.video_overlay, flags=args.video_flags,
-                    title=f"{manip_mode} CHAT pick-place",
+                    title="ASSISTED joint teleport (no door-sweep check)" if args.articulation_cycle else f"{manip_mode} CHAT pick-place",
                 )
                 video.set_status("pick_place", goal=f"{args.object} → {args.receptacle}")
                 video.start()
@@ -421,6 +452,10 @@ def main() -> int:
                 video = None
                 if mp4 is not None:
                     print(f"mp4 -> {mp4}", flush=True)
+        if args.articulation_cycle:
+            print(json.dumps({"schema_version": 1, "track": "assisted_articulation_cycle",
+                              "success": bool(ok), "placement_tested": False}))
+            return 0 if ok else 1
         # Re-resolve after manip (session placements patched in place)
         after = _placement_pos(robot, obj_body) if obj_body else None
         print(f"pos_after={None if after is None else after.tolist()}")

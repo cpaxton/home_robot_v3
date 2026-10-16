@@ -39,6 +39,8 @@ def query_answer(
     planner: Any = None,
     *,
     force_obs_ids: list[int] | None = None,
+    evidence_images: list[np.ndarray] | None = None,
+    evidence_obs_id: int | None = None,
 ) -> tuple[str, str, bool, str, np.ndarray | None, list[Image.Image]]:
     """
     Answer the question using the scene graph and task-relevant images.
@@ -50,12 +52,18 @@ def query_answer(
             fill from FIND pins and ``_select_relevant_obs_ids``. Count MCQs attach
             FIND / pending Action views first so a single verified frame cannot
             occupy the whole budget (``max_images=1`` used to drop lamp/stool RGB).
+        evidence_images: Exact assessed camera packet (current image first,
+            optional earlier context second). Overrides graph image selection,
+            capped by eqa_max_images, without inserting graph objects.
+        evidence_obs_id: Identity of Image 1, if known. Existing graph identity is
+            retained only when its stored pixels match; voxel IDs need no node.
 
     Returns:
         reasoning, answer, confidence, confidence_reasoning, target_point, relevant_images
     """
     import time as _time
 
+    from emet.eval.agentic_vlm_assess import unique_image_arrays
     from emet.habitat.metrics import (
         answer_is_visibility_abstain,
         choices_are_attribute_state,
@@ -87,17 +95,14 @@ def query_answer(
         _logger.info("query_answer: refresh_siglip_confirmed_memory…")
         self.refresh_siglip_confirmed_memory()
     max_images = get_eqa_vl_int(self.parameters, "eqa_max_images", 4)
+    evidence = unique_image_arrays(evidence_images or [], max_images=max_images) if max_images > 0 else []
     include_image_descriptions = resolve_eqa_include_image_descriptions(self.parameters)
     parsed_choices = parse_mcq_choices_from_question(question)
     attribute_q = question_is_attribute_state(question) or choices_are_attribute_state(parsed_choices)
     count_q = bool(parsed_choices and choices_are_count_mcq(parsed_choices) and not attribute_q)
     time_q = bool(parsed_choices and choices_are_time_of_day(parsed_choices) and not attribute_q)
     location_q = bool(
-        parsed_choices
-        and choices_are_location_mcq(parsed_choices)
-        and not count_q
-        and not attribute_q
-        and not time_q
+        parsed_choices and choices_are_location_mcq(parsed_choices) and not count_q and not attribute_q and not time_q
     )
     # Honor Action:N from the previous call / post-nav look even when this submit
     # forces a different verified obs as Image 1. Do not drop the pin until
@@ -115,11 +120,7 @@ def query_answer(
         self._merge_highlight_phrases(["clock", "wall clock"])
         phrases = self._eqa_find_phrases()
         visual_pins = self._visual_find_obs_ids(phrases, max_n=max_images)
-    if (
-        (count_q or time_q or clockish)
-        and not location_q
-        and self._phrases_need_rgb_highlight(visual_pins, phrases)
-    ):
+    if (count_q or time_q or clockish) and not location_q and self._phrases_need_rgb_highlight(visual_pins, phrases):
         extra_hl = self._highlight_relevant_from_latest_rgb(question)
         if extra_hl:
             self._merge_highlight_phrases(extra_hl)
@@ -198,6 +199,15 @@ def query_answer(
                 crop_rgb = self._eqa_crop_for_obs(crop_oid) if crop_oid is not None else None
                 if crop_rgb is None:
                     crop_oid = None
+    if evidence:
+        # Captured camera evidence need not be a graph object. Preserve the exact
+        # assessed packet instead of silently substituting navigation fallback RGB.
+        obs_ids = []
+        if evidence_obs_id is not None and self._obs_usable_for_eqa_image(evidence_obs_id):
+            if np.array_equal(self._eqa_rgb_for_obs(evidence_obs_id), evidence[0]):
+                obs_ids = [evidence_obs_id]
+        crop_oid = None
+        crop_rgb = None
     self.last_eqa_obs_ids = list(obs_ids)
     action_obs_ids = list(obs_ids)
     if crop_oid is not None:
@@ -227,7 +237,14 @@ def query_answer(
     # fall back to navigation viewpoint samples — never attach black 8×8 frontiers.
     nav_fallback_tail: list[GraphNavigationSample] = []
     graph_obs_ids = {int(n.obs_id) for n in self._nodes if not n.is_frontier and not n.is_viewpoint}
-    if obs_ids:
+    if evidence:
+        img_desc_str = (
+            "Image 1 is the assessed camera view. Any subsequent image is earlier "
+            "pre-approach context, not proof of current visibility or object geometry. "
+            "Use both for room/relationship context without double-counting objects. "
+            "Context views need not correspond to graph objects."
+        )
+    elif obs_ids:
         if include_image_descriptions:
             img_desc_str = self._get_image_descriptions_str(
                 obs_ids,
@@ -246,9 +263,7 @@ def query_answer(
                 "IMAGE_DESCRIPTIONS (navigation-only views; no object graph nodes yet):",
             ]
             for i, nv in enumerate(nav_fallback_tail, start=1):
-                tail = (
-                    f" robot base (~{nv.base_xyz[0]:.2f}, {nv.base_xyz[1]:.2f})." if nv.base_xyz is not None else ""
-                )
+                tail = f" robot base (~{nv.base_xyz[0]:.2f}, {nv.base_xyz[1]:.2f})." if nv.base_xyz is not None else ""
                 lines.append(
                     f"Image {i}. viewpoint anchor at ({nv.xyz[0]:.2f}, {nv.xyz[1]:.2f}, {nv.xyz[2]:.2f});{tail}"
                 )
@@ -321,7 +336,11 @@ def query_answer(
     commands: list[Any] = list(text_blocks)
 
     relevant_images: list[Image.Image] = []
-    for oid in obs_ids:
+    for rgb in evidence:
+        im = Image.fromarray(rgb, mode="RGB")
+        relevant_images.append(im)
+        commands.append(im)
+    for oid in [] if evidence else obs_ids:
         rgb = self._eqa_rgb_for_obs(int(oid))
         if rgb is None:
             continue
@@ -371,9 +390,7 @@ def query_answer(
         except TypeError:
             # Older / test doubles that only accept the command list.
             raw = self.eqa_client(commands)
-        _logger.info(
-            f"query_answer: eqa_client done wall_s={_time.monotonic() - t_vl:.1f} out_chars={len(raw or '')}"
-        )
+        _logger.info(f"query_answer: eqa_client done wall_s={_time.monotonic() - t_vl:.1f} out_chars={len(raw or '')}")
     except Exception as exc:
         raw = f"Error: {exc}"
         self.last_eqa_raw = raw
@@ -388,6 +405,7 @@ def query_answer(
             crop_obs_id=crop_oid,
             nav_fallback_count=len(nav_fallback_tail),
             relevant_images=relevant_images,
+            image_roles=(["assessed_view"] + ["pre_approach_context"] * (len(evidence) - 1)) if evidence else None,
             view_status=view_status,
             close_look_status="",
             vlm_raw=f"Error: {exc}",
@@ -520,9 +538,7 @@ def query_answer(
             pass
         elif preferred and (abstain or parsed_letter != preferred):
             preferred_idx = ord(preferred) - ord("A")
-            preferred_text = (
-                parsed_choices[preferred_idx] if 0 <= preferred_idx < len(parsed_choices) else preferred
-            )
+            preferred_text = parsed_choices[preferred_idx] if 0 <= preferred_idx < len(parsed_choices) else preferred
             answer = preferred_text
             raw = (raw or "") + f"\n[memory-location]\nanswer:\n{preferred_text}\n"
             self.last_eqa_raw = raw
@@ -659,9 +675,7 @@ def query_answer(
             if _loc_gate and location_q:
                 extra = " FIND views were not attached; look at those RGB frames before confirming a location."
             else:
-                extra = (
-                    " FIND views were not attached; look at those RGB frames before confirming a count."
-                )
+                extra = " FIND views were not attached; look at those RGB frames before confirming a count."
                 if count_answer_is_none_or_zero(str(answer or ""), parsed_choices):
                     extra = " FIND views were not attached; look at those RGB frames before answering None."
             confidence_reasoning = (confidence_reasoning + extra).strip()
@@ -794,6 +808,7 @@ def query_answer(
         crop_obs_id=crop_oid,
         nav_fallback_count=len(nav_fallback_tail),
         relevant_images=relevant_images,
+        image_roles=(["assessed_view"] + ["pre_approach_context"] * (len(evidence) - 1)) if evidence else None,
         view_status=view_status,
         close_look_status="",
         vlm_raw=str(raw or ""),
@@ -824,6 +839,7 @@ def query_answer(
         target_point,
         relevant_images,
     )
+
 
 def fill_descriptions_from_vlm(
     self,
@@ -864,14 +880,18 @@ def fill_descriptions_from_vlm(
             _logger.warning(f"fill_descriptions_from_vlm failed for obs {obs.obs_id}: {e}")
             continue
 
+
 def get_observations(self) -> list[GraphObservation]:
     return list(self._observations)
+
 
 def get_nodes(self) -> list[GraphNode]:
     return list(self._nodes)
 
+
 def get_edges(self) -> list[tuple[int, int, str]]:
     return list(self._edges)
+
 
 def print_memory(self) -> str:
     """
