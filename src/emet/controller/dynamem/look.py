@@ -145,6 +145,18 @@ def observe_blocked_floor(agent, *, max_observations: int = 2) -> dict:
 def observe_floor(
     agent, pan_rad: float | None = None, tilt_rad: float = -1.0, target_blocker: bool = False, max_observations: int = 2
 ) -> dict:
+    """Fail closed on bridge/sensor failures; never turn disconnects into arrival."""
+    try:
+        return _observe_floor(
+            agent, pan_rad=pan_rad, tilt_rad=tilt_rad, target_blocker=target_blocker, max_observations=max_observations
+        )
+    except (ConnectionError, TimeoutError, RuntimeError) as exc:
+        return {"ok": False, "status": "head_observation_failed", "reason": str(exc)}
+
+
+def _observe_floor(
+    agent, pan_rad: float | None = None, tilt_rad: float = -1.0, target_blocker: bool = False, max_observations: int = 2
+) -> dict:
     """Stationary head-only observation; never interpret unknown floor as free.
 
     Reject adapters without measured head pose and a fresh-frame sequence. A

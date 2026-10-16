@@ -178,6 +178,16 @@ def test_floor_observation_rejects_invalid_pan_before_motion(pan_rad):
     assert look.observe_floor(SimpleNamespace(), pan_rad=pan_rad) == {"ok": False, "status": "invalid_head_pan"}
 
 
+@pytest.mark.parametrize("error", [ConnectionError("disconnected"), TimeoutError("stale"), RuntimeError("bridge failed")])
+def test_floor_observation_reports_bridge_failure_without_mapping(error):
+    robot = SimpleNamespace(_seq_id=1, head_to=Mock(), get_pan_tilt=Mock(side_effect=error))
+    agent = SimpleNamespace(robot=robot, update=Mock())
+    result = look.observe_floor(agent)
+    assert result == {"ok": False, "status": "head_observation_failed", "reason": str(error)}
+    robot.head_to.assert_not_called()
+    agent.update.assert_not_called()
+
+
 @pytest.mark.parametrize("tilt_rad", [float("nan"), float("inf"), -1.41, -0.69, True, "down"])
 def test_floor_observation_rejects_invalid_tilt_before_motion(tilt_rad):
     assert look.observe_floor(SimpleNamespace(), tilt_rad=tilt_rad) == {"ok": False, "status": "invalid_head_tilt"}
