@@ -5,6 +5,7 @@ import importlib.util
 import json
 from pathlib import Path
 
+import pytest
 from PIL import Image
 
 
@@ -42,9 +43,10 @@ def test_progress_ablation_only_changes_assessment_text():
     assert progress["EMET_EQA_VIEW_SPATIAL_LABELS"] == "1"
 
 
-def test_gallery_preserves_pixels_escapes_question_and_marks_roles(tmp_path):
+@pytest.mark.parametrize("arm", ["pose_approach", "evidence_profile", "labels_spatial"])
+def test_gallery_preserves_pixels_escapes_question_and_marks_roles(tmp_path, arm):
     script = load_script("assess_saved_view_packets")
-    episode = tmp_path / "input/s0-q12-pose_approach-attempt0/q0012_lazy_graph"
+    episode = tmp_path / f"input/s0-q12-{arm}-attempt0/q0012_lazy_graph"
     packet = episode / "selected_views/0001"
     packet.mkdir(parents=True)
     meta = episode / "eqa_decisions/iter_001"

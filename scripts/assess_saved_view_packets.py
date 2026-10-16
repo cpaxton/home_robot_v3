@@ -21,7 +21,7 @@ from types import SimpleNamespace
 def prepare(root, output):
     output.mkdir(parents=True, exist_ok=False)
     cases, sections = [], []
-    for manifest_path in sorted(root.glob("s*-pose_approach-attempt0/q*/selected_views/*/manifest.json")):
+    for manifest_path in sorted(root.glob("s*-attempt*/q*/selected_views/*/manifest.json")):
         episode = manifest_path.parents[2]
         metadata = episode / "eqa_decisions/iter_001/meta.json"
         if not metadata.exists():
@@ -38,7 +38,7 @@ def prepare(root, output):
             shutil.copy2(source, destination / filename)
             rel = f"{name}/{filename}"
             views.append({**row, "path": rel, "file_sha256": hashlib.sha256(source.read_bytes()).hexdigest()})
-            caption = html.escape(f"Image {index} · {row['role']} · view {row['view_id']}")
+            caption = html.escape(row.get("label") or f"Image {index} · {row['role']} · view {row['view_id']}")
             age = row.get("age_s")
             timing = "" if age is None else f" · {age:.1f}s before current"
             cards.append(
@@ -55,7 +55,7 @@ def prepare(root, output):
             f'<div class="grid">{"".join(cards)}</div></section>'
         )
     if not cases:
-        raise ValueError("No saved pose_approach packets with question metadata found")
+        raise ValueError("No saved assessment packets with question metadata found")
     (output / "cases.json").write_text(json.dumps(cases, indent=2) + "\n")
     (output / "index.html").write_text(
         '<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width">'
