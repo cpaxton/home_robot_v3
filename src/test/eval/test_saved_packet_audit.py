@@ -55,7 +55,10 @@ def test_gallery_preserves_pixels_escapes_question_and_marks_roles(tmp_path, arm
     Image.new("RGB", (10, 10), "red").save(packet / "image_1.png")
     (packet / "manifest.json").write_text(
         json.dumps(
-            {"views": [{"image": "image_1.png", "role": "current", "view_id": "1", "label": "Image 1: current"}]}
+            {
+                "prompt_labels": "Capture sequence=1; camera XYZ=<fixture>",
+                "views": [{"image": "image_1.png", "role": "current", "view_id": "1", "label": "Image 1: current"}],
+            }
         )
     )
     output = tmp_path / "output"
@@ -66,3 +69,5 @@ def test_gallery_preserves_pixels_escapes_question_and_marks_roles(tmp_path, arm
     assert "Is &lt;red&gt; visible?" in page
     assert "current" in page
     assert "not necessarily final submissions" in page
+    assert "Capture sequence=1; camera XYZ=&lt;fixture&gt;" in page
+    assert cases[0]["prompt_labels"] == "Capture sequence=1; camera XYZ=<fixture>"

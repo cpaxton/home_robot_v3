@@ -45,13 +45,21 @@ def prepare(root, output):
                 f'<figure><a href="{rel}"><img src="{rel}" loading="lazy"></a>'
                 f"<figcaption>{caption}{timing}</figcaption></figure>"
             )
-        case = {"name": name, "source": str(manifest_path), "question": meta["question"], "views": views}
+        prompt_labels = packet.get("prompt_labels", "")
+        case = {
+            "name": name,
+            "source": str(manifest_path),
+            "question": meta["question"],
+            "prompt_labels": prompt_labels,
+            "views": views,
+        }
         cases.append(case)
         # The final answer is episode-level, not necessarily this assessment.
         answer = html.escape(str(meta.get("parsed", {})))
         sections.append(
             f'<section><h2>{html.escape(name)}</h2><p class="question">{html.escape(meta["question"])}</p>'
             f"<details><summary>Episode final parsed response (not necessarily this packet)</summary><pre>{answer}</pre></details>"
+            f"<details><summary>Exact packet labels sent to the model</summary><pre>{html.escape(prompt_labels)}</pre></details>"
             f'<div class="grid">{"".join(cards)}</div></section>'
         )
     if not cases:
