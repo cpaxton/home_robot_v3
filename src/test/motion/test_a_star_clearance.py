@@ -56,6 +56,39 @@ def test_default_min_clearance_stretch_footprint():
     assert default_min_clearance_m(0.34) == pytest.approx(0.22)
 
 
+def test_clearance_fallback_is_not_reported_as_measured_free_space():
+    obs = np.zeros((10, 10), dtype=bool)
+    planner = AStar(_FakeSpace(_FakeVoxelMap(obs, ~obs)), min_clearance_m=0)
+    assert planner.clearance_at_xy((0.5, 0.5)) == 10.0
+    assert planner.measured_clearance_at_xy((0.5, 0.5)) is None
+    assert planner.measured_clearance_at_xy((-1, 0)) is None
+
+
+@pytest.mark.parametrize("multi", [False, True])
+def test_search_does_not_connect_free_cells_through_blocked_diagonal(multi):
+    obs = np.array([[False, True], [True, False]])
+    space = _FakeSpace(_FakeVoxelMap(obs, np.ones_like(obs)))
+    planner = AStar(space, min_clearance_m=0, clearance_cost_weight=0)
+    start, goal = (0.05, 0.05, 0), (0.15, 0.15, 0)
+    result = planner.plan(start, goal, goals=[goal] if multi else None, verbose=False)
+    assert not result.success
+    assert planner.get_reachable_points((0, 0)) == {(0, 0)}
+
+
+@pytest.mark.parametrize("multi", [False, True])
+def test_search_routes_around_corner_with_executable_adjacent_edges(multi):
+    obs = np.zeros((5, 5), dtype=bool)
+    obs[2, 2] = True
+    space = _FakeSpace(_FakeVoxelMap(obs, np.ones_like(obs)))
+    planner = AStar(space, min_clearance_m=0, clearance_cost_weight=0)
+    start, goal = (0.15, 0.25, 0), (0.25, 0.35, 0)
+    result = planner.plan(start, goal, goals=[goal] if multi else None, verbose=False)
+    assert result.success
+    cells = [planner.to_pt(node.state) for node in result.trajectory]
+    assert len(cells) > 2
+    assert all(planner.is_in_line_of_sight(a, b) for a, b in zip(cells, cells[1:], strict=False))
+
+
 def test_unwrap_yaw_shortest_turn():
     assert abs(unwrap_yaw(0.0, math.pi / 2) - math.pi / 2) < 1e-6
     # 5.50 wraps near -0.78; from -1.89 the short delta is not a +2π jump.
@@ -65,6 +98,57 @@ def test_unwrap_yaw_shortest_turn():
     delta = unwrapped - prev
     assert abs(delta) <= math.pi + 1e-6
     assert abs(math.atan2(math.sin(raw - prev), math.cos(raw - prev)) - delta) < 1e-6
+
+
+@pytest.mark.parametrize("multi", [False, True])
+def test_same_cell_short_move_preserves_continuous_endpoint(multi):
+    obs = np.zeros((10, 10), dtype=bool)
+    planner = AStar(_FakeSpace(_FakeVoxelMap(obs, ~obs)), min_clearance_m=0)
+    start, goal = (0.21, 0.21, 0), (0.29, 0.29, 1.2)
+    assert planner.to_pt(start) == planner.to_pt(goal)
+    result = planner.plan(start, goal, goals=[goal] if multi else None, verbose=False)
+    assert result.success
+    states = [n.state for n in result.trajectory]
+    cleaned = planner.clean_path_for_xy(states, start_yaw=start[2])
+    np.testing.assert_allclose(cleaned[0][:2], start[:2])
+    np.testing.assert_allclose(cleaned[-1], goal)
+    assert len(cleaned) >= 2
+    np.testing.assert_allclose(result.requested_goal, goal)
+    np.testing.assert_allclose(result.resolved_goal, goal)
+    assert result.goal_resolution == "requested"
+
+
+@pytest.mark.parametrize("multi", [False, True])
+def test_search_does_not_snap_off_map_goal_inside(multi):
+    obs = np.zeros((10, 10), dtype=bool)
+    planner = AStar(_FakeSpace(_FakeVoxelMap(obs, ~obs)), min_clearance_m=0)
+    goal = (-0.2, 0.2, 0)
+    result = planner.plan((0.2, 0.2, 0), goal, goals=[goal] if multi else None, verbose=False)
+    assert not result.success
+
+
+def test_shared_search_can_reject_cheapest_route_and_choose_alternative(monkeypatch):
+    from unittest.mock import Mock
+
+    from emet.motion import base_goal_rank
+
+    search = Mock(wraps=base_goal_rank.plan_grid_multi_goal)
+    monkeypatch.setattr(base_goal_rank, "plan_grid_multi_goal", search)
+    obs = np.zeros((20, 20), dtype=bool)
+    planner = AStar(_FakeSpace(_FakeVoxelMap(obs, ~obs)), min_clearance_m=0)
+    goals = [(0.2, 0.2, 0), (0.8, 0.2, 1.0), (1.2, 0.2, 0)]
+    visited = []
+
+    def evaluate(path, index):
+        visited.append(index)
+        return None if index == 0 else 10 - index
+
+    result = planner.plan((0.2, 0.2, 0), goals[0], goals=goals, candidate_evaluator=evaluate)
+    assert result.success and result.goal_index == 1
+    assert visited == [0, 1, 2]
+    search.assert_called_once()
+    np.testing.assert_allclose(result.resolved_goal, goals[1])
+    assert not planner.plan((0.2, 0.2, 0), goals[0], goals=goals, candidate_evaluator=lambda *_: None).success
 
 
 def test_clean_path_for_xy_yaw_consecutive_delta_le_pi():
@@ -135,6 +219,9 @@ def test_multi_goal_uses_clearance_safe_snapped_endpoint():
     assert result.goal_index == 0
     endpoint = np.asarray(result.trajectory[-1].state, dtype=np.float64).reshape(-1)
     assert not np.allclose(endpoint[:2], requested_goal[:2])
+    assert result.goal_resolution == "grid_snap"
+    np.testing.assert_allclose(result.requested_goal[:2], requested_goal[:2])
+    np.testing.assert_allclose(result.resolved_goal, endpoint)
     for node in result.trajectory[1:]:
         xy = np.asarray(node.state, dtype=np.float64).reshape(-1)[:2]
         assert planner.clearance_at_xy(xy) + 1e-6 >= planner.min_clearance_m

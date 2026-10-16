@@ -49,45 +49,45 @@ def test_conservative_footprint_contains_rotated_offset_corners():
 
 
 def test_fractional_base_pose_does_not_shift_footprint_rearward():
-    fp = Footprint(length=.33, width=.34, length_offset=-.1)
-    pose = np.array([-1.0023702383, -.2798024416, .0185558926])
-    cells = fp.grid_cells(.1, pose, [512,512])
-    assert cells[:,0].min() == 499
-    assert not any(tuple(cell) in {(498,507),(498,508),(498,510),(498,511)} for cell in cells)
+    fp = Footprint(length=0.33, width=0.34, length_offset=-0.1)
+    pose = np.array([-1.0023702383, -0.2798024416, 0.0185558926])
+    cells = fp.grid_cells(0.1, pose, [512, 512])
+    assert cells[:, 0].min() == 499
+    assert not any(tuple(cell) in {(498, 507), (498, 508), (498, 510), (498, 511)} for cell in cells)
     # A sub-cell shift changes occupied cells even when int(grid coordinate) does not.
-    moved = fp.grid_cells(.1, pose + [.06,0,0], [512,512])
+    moved = fp.grid_cells(0.1, pose + [0.06, 0, 0], [512, 512])
     assert {tuple(c) for c in moved} != {tuple(c) for c in cells}
 
 
 def test_fractional_raster_is_translation_equivariant_and_conservative():
-    fp = Footprint(length=.67, width=.31, length_offset=-.19, width_offset=.04)
-    origin = np.array([20,30])
+    fp = Footprint(length=0.67, width=0.31, length_offset=-0.19, width_offset=0.04)
+    origin = np.array([20, 30])
     for yaw in np.linspace(-np.pi, np.pi, 17):
-        pose = np.array([-.023,.076,yaw])
-        cells = {tuple(c) for c in fp.grid_cells(.1,pose,origin)}
-        shifted = {tuple(c - [3,-2]) for c in fp.grid_cells(.1,pose+[.3,-.2,0],origin)}
+        pose = np.array([-0.023, 0.076, yaw])
+        cells = {tuple(c) for c in fp.grid_cells(0.1, pose, origin)}
+        shifted = {tuple(c - [3, -2]) for c in fp.grid_cells(0.1, pose + [0.3, -0.2, 0], origin)}
         assert cells == shifted
-        for x in np.linspace(-fp.length/2,fp.length/2,11):
-            for y in np.linspace(-fp.width/2,fp.width/2,11):
-                bx,by = x+fp.length_offset,y+fp.width_offset
-                point = pose[:2] + [np.cos(yaw)*bx-np.sin(yaw)*by,np.sin(yaw)*bx+np.cos(yaw)*by]
-                index = tuple(np.floor(point/.1+origin+.5).astype(int))
+        for x in np.linspace(-fp.length / 2, fp.length / 2, 11):
+            for y in np.linspace(-fp.width / 2, fp.width / 2, 11):
+                bx, by = x + fp.length_offset, y + fp.width_offset
+                point = pose[:2] + [np.cos(yaw) * bx - np.sin(yaw) * by, np.sin(yaw) * bx + np.cos(yaw) * by]
+                index = tuple(np.floor(point / 0.1 + origin + 0.5).astype(int))
                 assert index in cells
 
 
 def test_differential_route_checks_travel_heading_outside_endpoint_yaws():
     from emet.motion.navigation_sweep import differential_drive_waypoints
 
-    start, goal = np.array([0., 0., 0.]), np.array([0., .5, 0.])
+    start, goal = np.array([0.0, 0.0, 0.0]), np.array([0.0, 0.5, 0.0])
     route = differential_drive_waypoints(start, goal)
     np.testing.assert_allclose(route[0], [0, 0, np.pi / 2])
     np.testing.assert_allclose(route[-1], goal)
     steps = np.diff(np.array([start, *route])[:, :2], axis=0)
-    assert np.linalg.norm(steps, axis=1).max() <= .2
+    assert np.linalg.norm(steps, axis=1).max() <= 0.2
 
     class Space:
         def is_valid(self, pose):
-            return abs(pose[2]) < .5
+            return abs(pose[2]) < 0.5
 
     # Endpoint interpolation missed the turn needed to drive sideways.
     assert validate_navigation_sweep(Space(), start, [goal])[0]
@@ -97,31 +97,31 @@ def test_differential_route_checks_travel_heading_outside_endpoint_yaws():
 def test_differential_route_turn_in_place_has_single_goal():
     from emet.motion.navigation_sweep import differential_drive_waypoints
 
-    assert differential_drive_waypoints([1, 2, 0], [1, 2, 1]) == [[1., 2., 1.]]
+    assert differential_drive_waypoints([1, 2, 0], [1, 2, 1]) == [[1.0, 2.0, 1.0]]
 
 
 def test_reverse_drive_avoids_unnecessary_half_turn_with_short_segments():
     from emet.motion.navigation_sweep import differential_drive_waypoints
 
-    route = np.array(differential_drive_waypoints([0,0,0], [-.6,0,0], allow_reverse=True))
-    assert np.all(np.abs(route[:,2]) < 1e-8)
-    assert np.linalg.norm(np.diff(np.vstack(([0,0,0], route))[:,:2],axis=0),axis=1).max() <= .2 + 1e-8
-    np.testing.assert_allclose(route[-1], [-.6,0,0], atol=1e-12)
+    route = np.array(differential_drive_waypoints([0, 0, 0], [-0.6, 0, 0], allow_reverse=True))
+    assert np.all(np.abs(route[:, 2]) < 1e-8)
+    assert np.linalg.norm(np.diff(np.vstack(([0, 0, 0], route))[:, :2], axis=0), axis=1).max() <= 0.2 + 1e-8
+    np.testing.assert_allclose(route[-1], [-0.6, 0, 0], atol=1e-12)
 
 
 def test_drive_compression_keeps_corner_and_bounds_translation():
     from emet.motion.navigation_sweep import compress_drive_waypoints
 
-    route = [[x,0,0] for x in np.linspace(.025,.4,16)]
-    route += [[.4,0,yaw] for yaw in np.linspace(.05,np.pi/2,32)]
-    route += [[.4,y,np.pi/2] for y in np.linspace(.025,.4,16)]
-    compressed = np.array(compress_drive_waypoints([0,0,0], route))
+    route = [[x, 0, 0] for x in np.linspace(0.025, 0.4, 16)]
+    route += [[0.4, 0, yaw] for yaw in np.linspace(0.05, np.pi / 2, 32)]
+    route += [[0.4, y, np.pi / 2] for y in np.linspace(0.025, 0.4, 16)]
+    compressed = np.array(compress_drive_waypoints([0, 0, 0], route))
     assert len(compressed) == 5
-    np.testing.assert_allclose(compressed[2], [.4,0,np.pi/2])
-    assert np.linalg.norm(np.diff(np.vstack(([0,0,0],compressed))[:,:2], axis=0),axis=1).max() <= .2 + 1e-8
+    np.testing.assert_allclose(compressed[2], [0.4, 0, np.pi / 2])
+    assert np.linalg.norm(np.diff(np.vstack(([0, 0, 0], compressed))[:, :2], axis=0), axis=1).max() <= 0.2 + 1e-8
 
 
-@pytest.mark.parametrize('proposal', [[[.2, 0, 0]], [[.2, .2, 0], [.2, 0, 0]], [[.1, 0, 0]]])
+@pytest.mark.parametrize("proposal", [[[0.2, 0, 0]], [[0.2, 0.2, 0], [0.2, 0, 0]], [[0.1, 0, 0]]])
 def test_route_proposal_requires_fresh_sweep_and_correct_endpoint(proposal):
     from types import SimpleNamespace
 
@@ -129,7 +129,7 @@ def test_route_proposal_requires_fresh_sweep_and_correct_endpoint(proposal):
 
     state = np.zeros(3)
     plans, events, commands = [], [], []
-    space = SimpleNamespace(is_valid=lambda p: p[1] < .1, last_validity={'reason': 'new_obstacle'})
+    space = SimpleNamespace(is_valid=lambda p: p[1] < 0.1, last_validity={"reason": "new_obstacle"})
 
     def move(p, **kwargs):
         commands.append(list(p))
@@ -142,14 +142,19 @@ def test_route_proposal_requires_fresh_sweep_and_correct_endpoint(proposal):
         return [goal.tolist()]
 
     result = execute_measured_route(
-        SimpleNamespace(move_base_to=move), goal=[.2, 0, 0], measure=lambda: state.copy(),
-        plan_route=plan, space=space, initial_route=proposal, event=lambda **row: events.append(row),
+        SimpleNamespace(move_base_to=move),
+        goal=[0.2, 0, 0],
+        measure=lambda: state.copy(),
+        plan_route=plan,
+        space=space,
+        initial_route=proposal,
+        event=lambda **row: events.append(row),
     )
-    assert result.success and commands == [[.2, 0, 0]]
-    valid_proposal = proposal == [[.2, 0, 0]]
+    assert result.success and commands == [[0.2, 0, 0]]
+    valid_proposal = proposal == [[0.2, 0, 0]]
     assert plans == ([] if valid_proposal else [True])
-    assert events[0]['phase'] == 'navigation_route_reuse'
-    assert events[0]['accepted'] == valid_proposal
+    assert events[0]["phase"] == "navigation_route_reuse"
+    assert events[0]["accepted"] == valid_proposal
 
 
 def test_route_proposal_is_not_reused_after_measured_divergence():
@@ -162,7 +167,7 @@ def test_route_proposal_is_not_reused_after_measured_divergence():
 
     def move(p, **kwargs):
         calls.append(list(p))
-        state[:] = [.1, 0, 0] if len(calls) == 1 else p
+        state[:] = [0.1, 0, 0] if len(calls) == 1 else p
         return len(calls) > 1
 
     def plan(start, goal):
@@ -171,8 +176,11 @@ def test_route_proposal_is_not_reused_after_measured_divergence():
 
     result = execute_measured_route(
         SimpleNamespace(move_base_to=move, cancel_navigation=lambda: cancels.append(True) or True),
-        goal=[.2, 0, 0], measure=lambda: state.copy(), plan_route=plan,
-        space=SimpleNamespace(is_valid=lambda p: True), initial_route=[[.2, 0, 0]],
+        goal=[0.2, 0, 0],
+        measure=lambda: state.copy(),
+        plan_route=plan,
+        space=SimpleNamespace(is_valid=lambda p: True),
+        initial_route=[[0.2, 0, 0]],
     )
     assert result.success and result.replans == 1
-    assert plans == [[.1, 0, 0]] and cancels == [True]
+    assert plans == [[0.1, 0, 0]] and cancels == [True]
