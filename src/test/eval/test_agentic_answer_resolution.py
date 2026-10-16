@@ -143,6 +143,18 @@ def test_model_final_budget_exhaustion_does_not_vote_or_force_a_choice(answer, c
     assert ex._finalize_unknown_location_letter(out) is out
 
 
+@pytest.mark.parametrize("policy,expected", [("model_final", "model_final"), ("legacy", "no_salvage")])
+def test_trace_summary_names_the_actual_scoring_policy(policy, expected, tmp_path):
+    from emet.memory.graph_eqa.agentic.types import AgenticEQAResult
+
+    ex, _ = _executor(Q12)
+    ex.decision_policy = policy
+    ex._trace_path = tmp_path / "trace.jsonl"
+    ex._trace_rows = [{"event": "test"}]
+    ex._flush_trace_to_agent(AgenticEQAResult(discord_text="", answer="Two", confidence=True))
+    assert ex.agent._agentic_eqa_summary["scored_policy"] == expected
+
+
 def test_unverified_submission_retains_best_assessed_pixels_and_full_labels():
     import numpy as np
 
