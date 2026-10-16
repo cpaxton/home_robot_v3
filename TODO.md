@@ -933,3 +933,41 @@ Offline units + scripted table smokes exist; these are the remaining **real / in
 - [ ] **Real-robot manip** (Stretch / Mars): no GT `sim_set_body_pose` — keep visual-servo / AnyGrasp; add a no-LLM tool-sequence test that asserts we **do not** enter teleport when `is_simulation` is false.
 - [x] **`aim_arm_at` → `take_ee_picture` chain**: EE capture gated on successful aim grant (consumed once). Real-robot dogfood after pick failures still open (wrist stream / Mars).
 - [ ] **Paper figures**: keep regenerating `manip_figures` / chase-cam MP4s from scripted TAMP on the scene used in the paper; check in paths under `~/runs/emet/` only (not repo blobs).
+## Extracted shared-agent review stack (2026-10-09)
+
+- [ ] Complete exact-head readiness gates in `docs/plans/shared_stack_readiness.md`.
+      Oct 12 EQA replay remains main 4/4 vs integration 1/4; do not promote upper slices.
+- [x] Separate optional coverage into #198; move measured-head repair to #184 and
+      isolated evidence / job-ordering repairs to #185.
+- [ ] Rerun Molmo after preserving the configured venv interpreter; old wrapper
+      discovery errors are infrastructure failures, not scored misses.
+- [ ] Rerun #198 coverage ablation after flat-parameter dispatch repair; the old
+      nominal coverage run actually used `local` and is not effect evidence.
+- [x] Remove MuJoCo/EGL import from A* grid helpers; before/after one-frame probe
+      reproduces exit 134 then successful Habitat rendering. Repair included in #182.
+- [x] Publish Stretch body-up/XYZ and named actuator controls from the physics
+      process through IPC/ZMQ; merged via #190 (`7f65dbef`). Four focused tests
+      pass; controls use raw simulator units, not normalized joint targets.
+- [x] Reconcile main through #181 → #182 → #184 → #185 after #190; telemetry is
+      owned by main, not duplicated in #185's parent diff. 165 focused tests pass.
+- [ ] Complete repaired-head route acceptance and EQA pairing before promotion;
+      a startup fix is not an accuracy result. See `docs/TESTING.md` for job IDs.
+- [x] Land #176 conversation preservation and #180 current-view grounding.
+- [ ] Accept #181 → #182 → #184 → #185 on their actual extracted revisions;
+      see `docs/TESTING.md` and `docs/plans/shared_stack_inventory.json`.
+      Offline checks are not live acceptance. Keep providers opt-in.
+- [ ] Complete serial paired main/candidate EQA and small OVMM; restore at least
+      10 GB disk headroom with authorized cleanup before new simulations.
+- [ ] Track existing main failure `test_voxel_sim_upgrades_full_frame_absent_to_present`
+      separately; do not relax grounding just to turn it green.
+- [ ] Review archived partial CHAT dispatch / arrival hooks separately, coordinating
+      #176; no claim that this extraction delivers full CHAT pick/place.
+- [x] Audit #169 residuals: wheel contact fix extracted to #182 (`c6809aa6`);
+      full-runner Habitat preflight retained in #185. See `docs/plans/pr169_closeout.md`.
+- [ ] #179: adapt staged-clearance/failed-lift and near/far workspace regression
+      requirements from `31d1002b`/`6a1579e4` to the current manipulation planner;
+      do not restore the obsolete experimental grasp executor wholesale.
+- [ ] Revalidate physical navigation/OVMM after the wheel-material extraction;
+      the pre-extraction 16-frame scan is not evidence for the new contact model.
+- [ ] Habitat OVMM, Sourccey/Galaxea and real robots remain follow-ups; no full sweep
+      required for the current EQA/small-room review gates.
