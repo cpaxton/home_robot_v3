@@ -141,11 +141,13 @@ def init_executor(
     from emet.memory.approach_views import ApproachViewHistory
 
     retain_approach = os.environ.get("EMET_EQA_RETAIN_APPROACH_VIEWS", "0") == "1"
-    agent.robot.navigation_view_history = ApproachViewHistory() if retain_approach else None
-    if eqa_cfg.get("view_selection") or os.environ.get("EMET_EQA_VIEW_SELECTION_POLICY"):
+    robot = getattr(agent, "robot", None)
+    if robot is not None:
+        robot.navigation_view_history = ApproachViewHistory() if retain_approach else None
+    if robot is not None and (eqa_cfg.get("view_selection") or os.environ.get("EMET_EQA_VIEW_SELECTION_POLICY")):
         # Optional adapter capability: capture pixels at its actual path/yaw boundary.
         # Adapters without a capture implementation provide no pre-turn pin.
-        agent.robot.retain_navigation_views = True
+        robot.retain_navigation_views = True
         agent.robot.pre_turn_observation = None
     graph_mode = os.environ.get("EMET_EQA_GRAPH_EVIDENCE_MODE", "") or eqa_cfg.get("graph_evidence_mode", "off")
     history_mode = os.environ.get("EMET_EQA_ROOM_HISTORY_MODE", "") or eqa_cfg.get("room_history_mode", "off")
