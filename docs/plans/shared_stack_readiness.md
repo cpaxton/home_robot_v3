@@ -24,6 +24,11 @@ permission to merge. Keep defaults unchanged; no full sweep or hardware gate.
   download remains as evidence. Treat this run as dependency-contaminated,
   not a provider-quality comparison. The room driver now requires local
   checkpoint weights before starting and records their resolved path/hash.
+  Cancelled that run and explicitly reaped its surviving pilot-owned children;
+  original artifacts and `diagnostic_disposition.json` remain. Local-asset retry
+  `20261015_213514_ca66a7` is queued behind EQA at
+  `/tmp/emet-reviewed-s0-vlm-local-assets-20261015`. 62 focused acceptance,
+  discovery, prerequisite-order and registry tests pass.
 - Combined reviewed evidence branch `7c1bba8e` preserves repaired map epochs,
   actual-capture timing, bounded approach views and spatial labels. Its normal
   opt-in `configs/emet/evidence_context.yaml` is queued against main on the same
