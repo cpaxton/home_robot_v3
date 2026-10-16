@@ -7,6 +7,15 @@
 import math
 from dataclasses import dataclass
 
+UNOBSERVED_FOOTPRINT_STATUS = "rejected_swept_footprint:unobserved_footprint"
+
+
+def sweep_rejection_status(reason: str) -> str:
+    """Wire status shared by navigation rejection and floor recovery."""
+    if reason == "unobserved_footprint":
+        return UNOBSERVED_FOOTPRINT_STATUS
+    return f"rejected_swept_footprint:{reason}"
+
 
 @dataclass(frozen=True)
 class NavigationPolicy:

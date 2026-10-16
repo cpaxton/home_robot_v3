@@ -46,7 +46,12 @@ STRETCH_LEGACY_HEAD = HeadCapability((-math.pi, math.pi / 4), (-math.pi / 2, 0.0
 
 
 def mujoco_head_capability(model, joint_names):
-    """Intersect direct position-actuator and joint bounds; unsupported mappings abstain."""
+    """Intersect direct position-actuator and joint bounds.
+
+    Motor/torque actuators, gearing and indirect transmissions intentionally
+    abstain: their control ranges are not angular limits. Those adapters must
+    supply a calibrated capability rather than reinterpret torque as radians.
+    """
     if model is None or joint_names is None:
         return None
     bounds = []

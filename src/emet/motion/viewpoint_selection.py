@@ -19,7 +19,11 @@ def _view_key(pose):
 
 def _view_map_revision(agent, pose, obstacles, explored):
     """Fingerprint local evidence; unrelated map growth must not unlock retries."""
-    i, j = agent.planner.to_pt(pose[:2])
+    # Match view raycasting's nearest-cell convention without border clamping.
+    cell = agent.voxel_map.grid.xy_to_grid_cell(pose[:2])
+    if cell is None:
+        return "outside_map"
+    i, j = cell
     radius = int(math.ceil(agent.voxel_map.max_depth / agent.voxel_map.grid_resolution)) + 1
     window = (
         slice(max(0, i - radius), min(obstacles.shape[0], i + radius + 1)),

@@ -5,7 +5,18 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from emet.motion.viewpoint_selection import make_frontier_evaluator, remember_unhelpful_view, visible_unknown_cells
+from emet.motion.viewpoint_selection import (
+    _view_map_revision,
+    make_frontier_evaluator,
+    remember_unhelpful_view,
+    visible_unknown_cells,
+)
+
+
+def test_off_map_revision_is_not_a_clamped_corner_fingerprint():
+    agent = SimpleNamespace(voxel_map=SimpleNamespace(grid=SimpleNamespace(xy_to_grid_cell=lambda xy: None)))
+    obstacles = np.zeros((5, 5), dtype=bool)
+    assert _view_map_revision(agent, [-1, -1, 0], obstacles, obstacles) == "outside_map"
 
 
 def test_sector_gain_respects_heading_and_wall_occlusion():

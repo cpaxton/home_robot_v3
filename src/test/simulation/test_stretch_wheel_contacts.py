@@ -37,3 +37,23 @@ def test_wheel_material_survives_room_contact_mixing(side, floor_friction):
         assert contact.dim == 6
         np.testing.assert_allclose(contact.friction, [1, 1, 0.005, 0.0001, 0.0001])
         np.testing.assert_allclose(contact.solref, [0.005, 1])
+
+
+def test_full_bundled_scene_keeps_wheel_material_against_high_friction_floor():
+    """Compile the shipped room and robot, including their real default classes."""
+    scene = Path(__file__).resolve().parents[2] / "emet/assets/robot/scene.xml"
+    model = mujoco.MjModel.from_xml_path(str(scene))
+    model.geom("floor").friction[:] = [100, 10, 1]
+    data = mujoco.MjData(model)
+    base_joint = int(model.body("base_link").jntadr[0])
+    base_qpos = int(model.jnt_qposadr[base_joint])
+    data.qpos[base_qpos + 2] -= 0.002
+    mujoco.mj_forward(model, data)
+    wheel_bodies = {model.body(f"link_{side}_wheel").id for side in ("left", "right")}
+    wheel_contacts = [
+        contact for contact in data.contact if any(int(model.geom_bodyid[g]) in wheel_bodies for g in contact.geom)
+    ]
+    assert wheel_contacts, "Expected real wheel-floor contacts in the bundled scene"
+    for contact in wheel_contacts:
+        np.testing.assert_allclose(contact.friction, [1, 1, 0.005, 0.0001, 0.0001])
+        assert contact.dim == 6
