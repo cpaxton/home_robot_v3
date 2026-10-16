@@ -6,13 +6,14 @@ import time
 
 from emet.controller.dynamem.look import supports_floor_observation
 from emet.controller.nav_attempt import nav_status_code
+from emet.core.navigation_result import UNOBSERVED_FOOTPRINT_STATUS
 
 
 def navigate_with_floor_recovery(executor, navigate):
     """Retry the same goal from measured pose after clearing its checked footprint.
 
     ``navigate`` must invoke the ordinary planner on every call. Two recovery
-    observations (each already bounded by the floor tool) belong to this one
+    observations (one capture per recovery invocation) belong to this one
     high-level decision. Occupancy, unchanged/invalid footprints and unsupported
     sensors stop immediately. We never infer route clearance from map growth.
     """
@@ -32,12 +33,12 @@ def navigate_with_floor_recovery(executor, navigate):
             attempt == 2
             or current is None
             or current is previous
-            or nav_status_code(current) != "rejected_swept_footprint:unobserved_footprint"
+            or nav_status_code(current) != UNOBSERVED_FOOTPRINT_STATUS
             or not supports_floor_observation(executor.agent)
         ):
             return outcome
         started = time.monotonic()
-        recovery = executor.handle_tool("observe_floor", {"target_blocker": True})
+        recovery = executor.handle_tool("observe_floor", {"target_blocker": True, "max_observations": 1})
         observation = recovery.get("observation") or {}
         resume = bool(recovery.get("ok") and (observation.get("footprint_after") or {}).get("pose_valid"))
         executor._append_trace(

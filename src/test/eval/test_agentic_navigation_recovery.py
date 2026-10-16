@@ -6,9 +6,10 @@ from unittest.mock import Mock
 
 import pytest
 
+from emet.core.navigation_result import UNOBSERVED_FOOTPRINT_STATUS
 from emet.memory.graph_eqa.agentic import navigation_recovery as recovery
 
-UNKNOWN = "rejected_swept_footprint:unobserved_footprint"
+UNKNOWN = UNOBSERVED_FOOTPRINT_STATUS
 
 
 def setup(monkeypatch, codes, *, cleared=True, supported=True):
@@ -43,11 +44,28 @@ def test_two_blockers_replan_within_one_decision(monkeypatch):
     assert recovery.navigate_with_floor_recovery(ex, nav) is outcomes[-1]
     assert nav.call_count == 3
     assert ex.handle_tool.call_count == 2
-    ex.handle_tool.assert_called_with("observe_floor", {"target_blocker": True})
+    ex.handle_tool.assert_called_with("observe_floor", {"target_blocker": True, "max_observations": 1})
     rows = [call.args[0] for call in ex._append_trace.call_args_list]
     assert all(row["resume_same_goal"] for row in rows if row["event"] == "navigation_floor_recovery")
     assert len([row for row in rows if row["event"] == "navigation_attempt_timing"]) == 3
     assert all(row["wall_s"] >= 0 for row in rows)
+
+
+def test_real_sweep_rejection_triggers_floor_recovery(monkeypatch):
+    from emet.controller.dynamem.navigation import _filter_unsafe_nav_traj
+
+    producer = SimpleNamespace(
+        space=SimpleNamespace(
+            obstacle_map_mode="physical",
+            is_valid=lambda pose: False,
+            last_validity={"reason": "unobserved_footprint", "checked_pose": [0, 0, 0]},
+        )
+    )
+    _, status, _ = _filter_unsafe_nav_traj(producer, [[1, 0, 0]], start_xyt=[0, 0, 0])
+    ex, nav, outcomes = setup(monkeypatch, [status, "ok"])
+    assert recovery.navigate_with_floor_recovery(ex, nav) is outcomes[-1]
+    assert ex.handle_tool.call_count == 1
+    assert producer._last_nav_sweep_failure["checked_pose"] == [0, 0, 0]
 
 
 @pytest.mark.parametrize(
