@@ -1,4 +1,106 @@
-# Shared-agent stack readiness — 2026-10-12
+# Shared-agent stack readiness
+
+## Closeout audit — 2026-10-16 (current; dated sections below are history)
+
+Main is `801dce82`. Do not merge the old monolithic experiment into main.
+Land the owned slices bottom-up, with defaults unchanged. No full sweep or
+hardware deployment was run for this closeout. There are no GitHub inline
+review threads to resolve; review dispositions are recorded in PR comments.
+
+### Evidence and limits
+
+The completed serial same-context answer-authority pilot
+`20261015_230408_fca6ac`, frozen source `9093b0c9`, scored **9/12 legacy and
+9/12 model_final** (24/24 completed). New-policy final answers survived scoring
+unchanged in all 12 cases. q14 improves; q65 loses a legacy voting win. Main was
+not rerun in that comparison. This is development-set parity, not superiority
+or a statistical non-inferiority result. Some correct answers still contain
+unsound absence reasoning (q15).
+
+The subsequent exact packet/label repair was NOT included in that live pilot.
+Its integrated regression suite passes 97 tests. The clean owner extraction
+passes 80 evidence/selector tests; the narrow authority extraction passes 174
+answer/config/graph/selector tests. Extraction changes source and must receive
+a small exact-tip live handoff check before inheriting any acceptance claim.
+
+OVMM is **not cleared**: the configured-budget S0 diagnostic localizes the
+destination with grounded object geometry but misses the pickup object.
+The corrected-resource RoboCasa/Molmo find pair did not localize the targets.
+These are find diagnostics, not completed pick-and-place trials. The 30 s S0
+timeout repair changes its effective budget and is not an equal-budget gain.
+
+### Review disposition and landing order
+
+| Slice | Resolved findings / evidence | Remaining gate or disposition |
+| --- | --- | --- |
+| #181 | `da1a1a39`: validate tracking mask/region configuration before model setup; remove unused `select_surface`. 25 focused tests pass. No provider/default flip. | Small live provider gate; earlier exact-head EQA attribution was 4/4, not proof of provider success. |
+| #182 | `e9cdcaee`: missing-score diagnostics and off-map view fingerprints fixed; 10 focused tests. Earlier mode propagation, real-room wheel-contact fixture and measured timeout distance repairs retained. | Short measured Molmo drive gate. Whole-route rejection and no diagonal corner cutting are intentional safety contracts, not partial-motion promises. |
+| #184 | `f0e66a4f`: bridge/sensor errors return failed head observations; motor-actuator abstention and sim tilt limits documented; latest #182 inherited. 250 focused tests passed before parent propagation. Earlier two-capture limit/shared status repair retained. | Exact-tip live recovery check. Motor control ranges are not angular limits; unsupported adapters must supply calibrated capabilities. |
+| #185 | Provenance, missing/invalid artifacts, JSON/JSONL, shell exit handling, config timeout precedence and phase errors repaired. Already ready for tooling review. | Tooling readiness does not clear task performance. Do not count infrastructure failures as task failures or passes. |
+| #199 | `f4d4c94f`: best unverified packet retained without claiming verification; partial/invalid depth trace explicit; missing scan receipt rejected; reviewed parents inherited. 73 focused tests. | Exact-tip assessed-to-final image check. Semantic answer authority is a separate narrow repair, not hidden in this PR. |
+| #202 | `8a590cb7`: prior map-epoch/current-capture/pin-budget repairs retained; optional sequence/pose labels now survive final handoff. 80 focused tests. | Keep opt-in; run the same exact-tip handoff check. No claim that one selection policy is universally best. |
+| #216 | Narrow final-model authority extraction on #202, `8e350eb6`; 174 focused tests plus one saved-response audit test. Profile changes only answer authority relative to default. | Draft pending exact-tip live check. Does not import experimental approach-history or sweep code; do not assign the frozen integration's score to this head. |
+| #198 | Measured coverage scan remains independent and opt-in. | Defer from this landing sequence; corrected local/coverage ablation and heading fixtures still pending. No default promotion. |
+| #183 | Historical monolithic experiment, superseded by the owned slices. | Archive rather than merge. Experimental residue is not implicitly approved or required for this harness. |
+
+Low-priority review nits are explicitly deferred rather than expanded into new
+behavior: unused translation-only controller scaffolding, physical-map `to_xy`
+sentinel validation, the graph selector's wasted work before explicit evidence
+replacement, and unrelated formatting noise. None is evidence of a task pass.
+The physical off-map planning path already rejects invalid cells; do not call
+its inverse conversion with the rejection sentinel. Future cleanup must keep
+that fail-closed contract and receive focused tests.
+
+### Current shared flow (shipping default versus candidate)
+
+The shared loop is `AgenticEQAExecutor`; OVMM FindObj/FindRec are questions into
+that loop, not a second exploration agent. RGB-D, calibration and measured pose
+feed voxel memory. Detector/voxel matches are search hypotheses, not verified
+objects. Query-driven/lazy grounding promotes an object only after current-view
+mask/depth/identity admission. Legacy memory modes remain separate baselines.
+
+1. Qwen receives the task and available memory/navigation tools. It chooses a
+   candidate investigation or exploration action within explicit budgets.
+2. Navigation validates known-floor/swept-footprint clearance and measures the
+   outcome. A command acknowledgement is not arrival. Unknown floor can trigger
+   at most two automatic stationary observations and replanning, never an
+   assumption that the area is free. Head aiming respects capabilities and
+   requires fresh imagery; failures are exposed to the agent.
+3. The reached camera view is captured and assessed. Optional history selection
+   pins current/pre-turn evidence when valid, rejects cross-map/stale frames,
+   deduplicates pixels, and bounds context. Labels distinguish historical camera
+   poses from object geometry. The exact assessed packet is retained for final
+   reasoning; it is not silently replaced by a nearby graph image.
+4. **EQA:** a final Qwen call reasons over the packet and task context. Under
+   opt-in `model_final`, its semantic answer/confidence/abstention survives
+   submission and Habitat scoring. Earlier assessments guide evidence gathering,
+   not answer replacement. **Default/legacy still retains old overrides** until
+   an explicit promotion decision; do not describe model_final as merged main.
+5. **OVMM:** visual recognition is not manipulation authorization. In
+   query-driven mode the same loop requires grounded object evidence; VLM/depth/
+   SAM or the configured detector provider supplies object-specific geometry.
+   Grounded object IDs take precedence over camera/viewpoint anchors. Fresh
+   target geometry is required at manipulation boundaries; navigation, pick,
+   place and merged TAMP tools retain their own physical validity checks.
+
+YOLOE may still cheaply propose candidates or serve the configured legacy mask
+backend. It is not a requirement of the opt-in VLM/SAM final grounding provider.
+Provider, memory policy and selector are explicit configuration axes; do not
+change several at once and call the result an isolated ablation.
+
+### Before scaling
+
+First run one exact-tip packet/authority diagnostic and the small serial S0,
+RoboCasa Stretch and Molmo rby1 find/navigation checks. Require actual pose
+progress, current RGB evidence and admitted geometry, not merely clean exits.
+Then run small complete pick/place and the minimal merged TAMP regression gate.
+Only after those results are inspected should we freeze a broader paired
+EQA + small-OVMM assessment. Habitat OVMM, hardware, coverage-scan promotion and
+large sweeps are not prerequisites for closing the correctly scoped repairs.
+
+The candidate is a more auditable tool contract, not a demonstrated stronger
+policy or a claim that the harness is optimal. Preserve common models, budgets,
+seeds, physics, failure artifacts and raw final answers in the next assessment.
 
 Clear slices independently. Non-draft means evidence is ready for review, not
 permission to merge. Keep defaults unchanged; no full sweep or hardware gate.

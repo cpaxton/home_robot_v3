@@ -10,6 +10,14 @@ separate PR #198; integrated pilot results do not clear the public slice heads.
 
 ### Extracted shared-agent stack (October 2026)
 
+#### Current closeout status (2026-10-16)
+
+The [readiness ledger](plans/shared_stack_readiness.md#closeout-audit--2026-10-16-current-dated-sections-below-are-history)
+supersedes the dated status notes below. It records each review disposition,
+remaining live gates, and the actual shared EQA/OVMM flow. The completed
+answer-authority comparison is 9/12 versus 9/12, not superiority; small OVMM
+acceptance remains open. #185 is ready for tooling review, not a task-pass claim.
+
 #### Current review status (2026-10-11)
 
 #176, #180 and [#190](https://github.com/cpaxton/home_robot_v3/pull/190) are
