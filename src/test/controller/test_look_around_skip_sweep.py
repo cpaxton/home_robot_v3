@@ -184,11 +184,12 @@ def test_rotate_in_place_distributes_capture_budget_around_full_circle(monkeypat
     robot.look_front.assert_called_once()
 
 
-def test_failed_mapping_turn_does_not_count_another_capture(monkeypatch):
+@pytest.mark.parametrize("receipt", [False, None])
+def test_failed_mapping_turn_does_not_count_another_capture(monkeypatch, receipt):
     monkeypatch.setattr("emet.controller.dynamem.look.wait_post_motion_obs", lambda *a, **kw: None)
     monkeypatch.setattr("emet.eval.ovmm_find_phase._prepare_default_table_rby1_mapping_view", lambda _: False)
     robot = MagicMock(spec=GenericZmqClient)
-    robot.move_base_to.return_value = False
+    robot.move_base_to.return_value = receipt
     agent = _rotate_agent(robot)
     with pytest.raises(RuntimeError, match="Mapping scan turn failed"):
         agent.rotate_in_place(n_steps=4)

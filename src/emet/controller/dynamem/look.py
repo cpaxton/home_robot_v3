@@ -553,7 +553,7 @@ def rotate_in_place(self, *, n_steps: int | None = None):
             blocking=True,
             timeout=nav_timeout,
         )
-        if moved is False:
+        if moved is False or moved is None:
             raise RuntimeError("Mapping scan turn failed; refusing to count the unchanged view as a new heading")
         wait_post_motion_obs(self.robot, nav_timeout)
         _capture()
