@@ -60,6 +60,10 @@ def send_command(client, payload, *, timeout=5.0, reliable=True):
         raise ValueError("acknowledgement timeout must be positive and finite")
     with client._act_lock:
         boot = _check_peer(client, getattr(client, "_command_boot", None))
+        if any(k in payload for k in ("reactive_goal", "update_reactive_goal", "cancel_reactive_goal")):
+            protocols = [m["command_protocol"] for m in _messages(client) if "command_protocol" in m]
+            if not all(p.get("reactive_control", False) for p in protocols):
+                raise RuntimeError("Bridge does not advertise reactive control; motion not sent")
         if "nav_policy" in payload:
             protocols = [m["command_protocol"] for m in _messages(client) if "command_protocol" in m]
             if not all(payload["nav_policy"] in p.get("navigation_policies", []) for p in protocols):
@@ -82,6 +86,9 @@ def send_command(client, payload, *, timeout=5.0, reliable=True):
             },
         )
         previous_navigation = getattr(client, "_last_navigation_command", None)
+        previous_reactive = getattr(client, "_last_reactive_command", None)
+        if "reactive_goal" in action:
+            client._last_reactive_command = action
         if "xyt" in action:
             client._last_navigation_command = action
         deadline = time.monotonic() + timeout
@@ -89,6 +96,8 @@ def send_command(client, payload, *, timeout=5.0, reliable=True):
         while reliable:
             receipt = command_receipt(client, action)
             if receipt is not None:
+                if "reactive_goal" in action and receipt["status"] == "rejected":
+                    client._last_reactive_command = previous_reactive
                 if "xyt" in action and receipt["status"] == "rejected":
                     client._last_navigation_command = previous_navigation
                 if receipt["status"] in {"failed", "rejected", "cancelled"}:
@@ -136,6 +145,12 @@ def close_command_session(client):
     import logging
 
     try:
+        reactive = getattr(client, "_last_reactive_command", None)
+        if reactive is not None:
+            receipt = command_receipt(client, reactive)
+            if receipt is None or receipt["status"] not in TERMINAL:
+                if not cancel_reactive_goal(client, reactive):
+                    raise RuntimeError("reactive stop was not confirmed")
         action = getattr(client, "_last_navigation_command", None)
         if action is not None:
             receipt = command_receipt(client, action)
@@ -145,3 +160,66 @@ def close_command_session(client):
         send_command(client, {"release_control": True}, timeout=2.0)
     except (RuntimeError, TimeoutError) as exc:
         logging.getLogger(__name__).warning("Control handoff not confirmed: %s", exc)
+
+
+def check_base_poses(client, poses, *, timeout: float = 10.0) -> dict:
+    """Query advertised simulator endpoints through correlated command receipts."""
+    import numpy as np
+
+    if not isinstance(client._state, dict) or client._state.get("sim_base_pose_query") is not True:
+        raise RuntimeError("simulator does not advertise base pose validation")
+    points = np.asarray(poses, dtype=float)
+    if points.ndim != 2 or points.shape[1] != 3 or not 1 <= len(points) <= 32 or not np.isfinite(points).all():
+        raise ValueError("expected 1..32 finite world XYT poses")
+    if not np.isfinite(timeout) or timeout <= 0:
+        raise ValueError("query timeout must be positive and finite")
+    deadline = time.monotonic() + timeout
+    action = client.send_action({"sim_check_base_poses": points.tolist()}, timeout=timeout)
+    while time.monotonic() < deadline:
+        receipt = command_receipt(client, action)
+        if receipt and receipt["status"] == "succeeded":
+            result = receipt.get("result", {})
+            if (
+                result.get("poses") != points.tolist()
+                or len(result.get("clear", [])) != len(points)
+                or any(type(v) is not bool for v in result["clear"])
+            ):
+                raise RuntimeError("invalid base pose validation response")
+            return result
+        if receipt and receipt["status"] in {"failed", "rejected", "cancelled"}:
+            raise RuntimeError(f"base pose query failed: {receipt.get('reason')}")
+        time.sleep(0.02)
+    raise TimeoutError("base pose query did not complete")
+
+
+def send_reactive_goal(client, *, base=None, arm=None, timeout=10.0):
+    goal = {"frame": "world"}
+    if base is not None:
+        goal["base"] = base
+    if arm is not None:
+        goal["arm"] = arm
+    return send_command(client, {"reactive_goal": goal, "reactive_timeout_s": timeout})
+
+
+def update_reactive_goal(client, action, goal):
+    target = {k: action["command"][k] for k in ("client_session_id", "sequence")}
+    return send_command(client, {"update_reactive_goal": {"target": target, "goal": goal}})
+
+
+def cancel_reactive_goal(client, action):
+    target = {k: action["command"][k] for k in ("client_session_id", "sequence")}
+    send_command(client, {"cancel_reactive_goal": target})
+    receipt = command_receipt(client, action)
+    return bool(receipt and receipt.get("result", {}).get("stop_confirmed"))
+
+
+def wait_reactive_goal(client, action, timeout=10.0):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        receipt = command_receipt(client, action)
+        if receipt and receipt["status"] in TERMINAL:
+            return receipt["status"] == "succeeded"
+        time.sleep(0.01)
+    if not cancel_reactive_goal(client, action):
+        raise TimeoutError("Reactive motion expired; stop unconfirmed")
+    return False
