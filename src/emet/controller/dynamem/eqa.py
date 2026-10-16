@@ -546,13 +546,15 @@ def navigate_to_target_pose(
             blocking=True,
             world_frame=True,
         )
+        after_xy = self._current_planning_xyt().reshape(-1)[:2]
+        dist_m = float(np.hypot(after_xy[0] - before_xy[0], after_xy[1] - before_xy[1]))
         if exec_ok is False:
-            self._record_nav_plan_fields(outcome="aborted_waypoint_timeout")
+            self._record_nav_plan_fields(outcome="aborted_waypoint_timeout", dist_m=dist_m)
             self._mark_nav_goal_blocked(reason="aborted_waypoint_timeout")
             nav_res = NavAttemptResult(
                 success=False,
                 finished=False,
-                dist_m=0.0,
+                dist_m=dist_m,
                 method="voxel_astar",
                 note="aborted_waypoint_timeout",
                 target_obs_id=target_obs_id,
@@ -560,8 +562,6 @@ def navigate_to_target_pose(
             self._last_nav_attempt = nav_res
             self._log_nav_attempt(nav_res, target_obs_id=target_obs_id, goal_xy=goal_xy)
             return NavOutcome.ABORTED_TIMEOUT
-        after_xy = self._current_planning_xyt().reshape(-1)[:2]
-        dist_m = float(np.hypot(after_xy[0] - before_xy[0], after_xy[1] - before_xy[1]))
         note = "ok" if finished else f"moved_{dist_m:.2f}m"
         nav_res = NavAttemptResult(
             success=dist_m >= 0.12 or finished,

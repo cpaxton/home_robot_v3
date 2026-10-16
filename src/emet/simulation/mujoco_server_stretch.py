@@ -785,7 +785,10 @@ class MujocoZmqServer(BaseZmqServer):
 
         head = mujoco_head_capability(gt_model, ("joint_head_pan", "joint_head_tilt"))
         if head is not None:
-            # Preserve the established pan envelope; tilt comes from the active model.
+            # Preserve the adapter's established pan safety envelope. Tilt uses
+            # intersected joint/position-actuator limits: unlike the legacy
+            # downward-only tilt fallback, this describes the active sim head.
+            # Real-robot adapters keep their own calibrated safety capability.
             head = HeadCapability(
                 (max(head.pan[0], STRETCH_LEGACY_HEAD.pan[0]), min(head.pan[1], STRETCH_LEGACY_HEAD.pan[1])),
                 head.tilt,

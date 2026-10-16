@@ -109,6 +109,20 @@ def test_next_segment_is_revalidated_after_measured_arrival(monkeypatch):
     agent.robot.execute_trajectory.assert_called_once()
     agent.update.assert_called_once_with(full_perception=False)
     assert agent.planner.reset.call_count == 2
+    assert all(not call.kwargs["explore_goal"] for call in agent._filter_unsafe_nav_traj.call_args_list)
+
+
+@pytest.mark.parametrize("explore_goal", [False, True])
+def test_waypoint_revalidation_preserves_navigation_mode(explore_goal):
+    agent = SimpleNamespace(
+        space=SimpleNamespace(obstacle_map_mode="physical"),
+        planner=SimpleNamespace(reset=Mock()),
+        _current_planning_xyt=Mock(return_value=np.zeros(3)),
+        _filter_unsafe_nav_traj=Mock(return_value=([], "blocked", None)),
+        _record_nav_plan_fields=Mock(),
+    )
+    assert _execute_validated_waypoints(agent, [[0, 0, 0]], 10, explore_goal=explore_goal) == (False, "blocked")
+    assert agent._filter_unsafe_nav_traj.call_args.kwargs["explore_goal"] is explore_goal
 
 
 @pytest.mark.parametrize(

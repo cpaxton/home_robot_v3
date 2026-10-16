@@ -5,7 +5,18 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from emet.motion.viewpoint_selection import make_frontier_evaluator, remember_unhelpful_view, visible_unknown_cells
+from emet.motion.viewpoint_selection import (
+    _view_map_revision,
+    make_frontier_evaluator,
+    remember_unhelpful_view,
+    visible_unknown_cells,
+)
+
+
+def test_off_map_revision_is_not_a_clamped_corner_fingerprint():
+    agent = SimpleNamespace(voxel_map=SimpleNamespace(grid=SimpleNamespace(xy_to_grid_cell=lambda xy: None)))
+    obstacles = np.zeros((5, 5), dtype=bool)
+    assert _view_map_revision(agent, [-1, -1, 0], obstacles, obstacles) == "outside_map"
 
 
 def test_sector_gain_respects_heading_and_wall_occlusion():
@@ -36,7 +47,11 @@ def test_route_rejection_precedes_view_scoring_and_noop_is_not_a_view():
     )
     agent = SimpleNamespace(
         robot=SimpleNamespace(get_observation=lambda: obs),
-        voxel_map=SimpleNamespace(grid_resolution=0.1, max_depth=2),
+        voxel_map=SimpleNamespace(
+            grid_resolution=0.1,
+            max_depth=2,
+            grid=SimpleNamespace(xy_to_grid_cell=lambda xy: tuple(np.floor(np.asarray(xy) / 0.1 + 0.5).astype(int))),
+        ),
         space=SimpleNamespace(
             get_navigation_map=lambda: (obstacles, explored),
             _footprint=SimpleNamespace(width=0.3, length=0.4, width_offset=0, length_offset=0),
@@ -73,3 +88,17 @@ def test_route_rejection_precedes_view_scoring_and_noop_is_not_a_view():
     explored[14, 10] = True  # Local evidence changed: this view may be useful now.
     retry = make_frontier_evaluator(agent, start, goals, diagnostics)
     assert retry([[1, 1], [1.4, 1]], 1) > 0
+
+
+def test_outside_camera_and_rays_do_not_get_clamped_border_coverage():
+    obstacles = np.zeros((5, 5), dtype=bool)
+    explored = np.zeros_like(obstacles)
+
+    def cell(xy):
+        index = np.floor(np.asarray(xy)).astype(int)
+        return tuple(index) if np.all(index >= 0) and np.all(index < 5) else None
+
+    args = {"heading": 0, "fov": 0.5, "max_range": 3, "resolution": 1, "to_cell": cell}
+    assert visible_unknown_cells(obstacles, explored, camera_xy=(-1, 2), **args) == set()
+    cells = visible_unknown_cells(obstacles, explored, camera_xy=(4.5, 2.5), **args)
+    assert cells == {(4, 2)}

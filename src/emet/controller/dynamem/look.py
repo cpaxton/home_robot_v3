@@ -56,7 +56,7 @@ def _rejected_footprint_status(agent, pose):
     }
 
 
-def observe_blocked_floor(agent) -> dict:
+def observe_blocked_floor(agent, *, max_observations: int = 2) -> dict:
     """At most two bounded head captures aimed at one currently unknown cell.
 
     The navigation grid uses a Z=0 floor reference. Projection is an aiming
@@ -94,7 +94,9 @@ def observe_blocked_floor(agent) -> dict:
         return {"ok": False, "status": "invalid_floor_target"}
     attempts = []
     result = {"ok": False, "status": "floor_target_unobservable"}
-    for _ in range(2):
+    if isinstance(max_observations, bool) or not isinstance(max_observations, int) or not 1 <= max_observations <= 2:
+        return {"ok": False, "status": "invalid_floor_observation_budget"}
+    for _ in range(max_observations):
         obs = agent.robot.get_observation()
         if obs is None or obs.rgb is None:
             break
@@ -140,14 +142,28 @@ def observe_blocked_floor(agent) -> dict:
     return result
 
 
-def observe_floor(agent, pan_rad: float | None = None, tilt_rad: float = -1.0, target_blocker: bool = False) -> dict:
+def observe_floor(
+    agent, pan_rad: float | None = None, tilt_rad: float = -1.0, target_blocker: bool = False, max_observations: int = 2
+) -> dict:
+    """Fail closed on bridge/sensor failures; never turn disconnects into arrival."""
+    try:
+        return _observe_floor(
+            agent, pan_rad=pan_rad, tilt_rad=tilt_rad, target_blocker=target_blocker, max_observations=max_observations
+        )
+    except (ConnectionError, TimeoutError, RuntimeError) as exc:
+        return {"ok": False, "status": "head_observation_failed", "reason": str(exc)}
+
+
+def _observe_floor(
+    agent, pan_rad: float | None = None, tilt_rad: float = -1.0, target_blocker: bool = False, max_observations: int = 2
+) -> dict:
     """Stationary head-only observation; never interpret unknown floor as free.
 
     Reject adapters without measured head pose and a fresh-frame sequence. A
     successful capture updates the map, but does not guarantee a safe approach.
     """
     if target_blocker:
-        return observe_blocked_floor(agent)
+        return observe_blocked_floor(agent, max_observations=max_observations)
     if pan_rad is not None and (
         isinstance(pan_rad, bool)
         or not isinstance(pan_rad, (int, float))
@@ -526,16 +542,19 @@ def rotate_in_place(self, *, n_steps: int | None = None):
             f"rotate_in_place: table scan {n_steps} views, extra yaw deg={[round(float(np.rad2deg(y))) for y in yaws]}"
         )
     else:
-        yaws = [np.pi / 4.0] * extra
-        logger.info(f"rotate_in_place: {n_steps} views, {extra}× relative +45° yaw (no XY translation)")
+        spacing = 2.0 * np.pi / n_steps
+        yaws = [spacing] * extra
+        logger.info(f"rotate_in_place: {n_steps} views around 360°, {extra}× relative {np.rad2deg(spacing):.1f}° yaw")
     for step_i, yaw in enumerate(yaws):
         self.announce_motion_progress(f"Looking around: scan step {step_i + 2}/{n_steps}")
-        self.robot.move_base_to(
+        moved = self.robot.move_base_to(
             [0.0, 0.0, float(yaw)],
             relative=True,
             blocking=True,
             timeout=nav_timeout,
         )
+        if moved is False or moved is None:
+            raise RuntimeError("Mapping scan turn failed; refusing to count the unchanged view as a new heading")
         wait_post_motion_obs(self.robot, nav_timeout)
         _capture()
         if step_i in (2, 6):

@@ -850,15 +850,16 @@ def _do_submit_answer(self, prefer_answer: str = "") -> dict[str, Any]:
         # Prefer verified observation as Image 1 (query_answer must honor force_obs_ids;
         # setting last_eqa_obs_ids alone was overwritten by diversified selection).
         confirmed_evidence = self._confirmed_vlm_answer_evidence()
-        confirmed_obs_id = confirmed_evidence.obs_id if confirmed_evidence is not None else self._verified_obs_id
-        if confirmed_obs_id is not None and hasattr(gm, "select_obs_ids_for_verified_answer"):
-            force_obs_ids = gm.select_obs_ids_for_verified_answer(confirmed_obs_id, max_images=1)
+        answer_obs_id = confirmed_evidence.obs_id if confirmed_evidence is not None else self._verified_obs_id
+        if answer_obs_id is not None and hasattr(gm, "select_obs_ids_for_verified_answer"):
+            force_obs_ids = gm.select_obs_ids_for_verified_answer(answer_obs_id, max_images=1)
             gm.last_eqa_obs_ids = list(force_obs_ids)
         elif self._evidence_image and hasattr(gm, "select_obs_ids_for_verified_answer"):
             # Unverified: pin the best VLM-assessed view instead of a pure
             # diversified pick — the assess already said where the evidence is.
             evidence_obs_id = self._best_evidence_obs_id()
             if evidence_obs_id is not None:
+                answer_obs_id = evidence_obs_id
                 force_obs_ids = gm.select_obs_ids_for_verified_answer(evidence_obs_id, max_images=1)
                 gm.last_eqa_obs_ids = list(force_obs_ids)
         find_ids = self._count_find_obs_ids()
@@ -873,9 +874,9 @@ def _do_submit_answer(self, prefer_answer: str = "") -> dict[str, Any]:
         xyt = self._robot_xyt_world()
         planner = getattr(agent, "planner", None)
         try:
-            assessed_images = getattr(self, "_assessed_images", {}).get(confirmed_obs_id)
+            assessed_images = getattr(self, "_assessed_images", {}).get(answer_obs_id)
             evidence_kw = (
-                {"evidence_images": assessed_images, "evidence_obs_id": confirmed_obs_id} if assessed_images else {}
+                {"evidence_images": assessed_images, "evidence_obs_id": answer_obs_id} if assessed_images else {}
             )
             if assessed_images:
                 evidence_kw.update(getattr(self, "_assessed_image_metadata", {}).get(confirmed_obs_id, {}))

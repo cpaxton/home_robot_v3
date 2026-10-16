@@ -114,6 +114,25 @@ def test_submit_preserves_assessed_voxel_images_without_graph_observation():
     assert gm.query_answer.call_args.kwargs["force_obs_ids"] == []
 
 
+def test_unverified_submission_keeps_the_best_assessed_camera_packet():
+    import numpy as np
+
+    ex, gm = _executor(Q12, query_answer="Unknown")
+    oid = (1 << 40) + 14
+    ex._verified = False
+    ex._evidence_image = True
+    ex._assess_history = {oid: {"present": True, "answerable": False, "need_more_views": True}}
+    ex._count_find_obs_ids = lambda: []
+    gm.select_obs_ids_for_verified_answer.return_value = []
+    images = [np.zeros((8, 8, 3), dtype=np.uint8)]
+    ex._assessed_images = {oid: images}
+    ex._do_submit_answer()
+    kwargs = gm.query_answer.call_args.kwargs
+    assert kwargs["evidence_images"] is images
+    assert kwargs["evidence_obs_id"] == oid
+    assert not ex._verified
+
+
 def test_confirmed_q12_vlm_letter_beats_conflicting_four_image_eqa():
     """The answer that opened ANSWER must survive a conflicting final EQA call."""
     ex, _gm = _executor(
