@@ -5,6 +5,46 @@ permission to merge. Keep defaults unchanged; no full sweep or hardware gate.
 
 ## Acceptance review repairs — 2026-10-15
 
+### Answer-authority audit continuation (23:08 ET)
+
+The apparent scored regression mixes context quality with answer substitutions.
+Fixed-response audit of the same EQA-12 artifacts: main's recorded final model
+answers score 5/12 while evidence profile scores 8/12, despite reported totals
+9/12 versus 8/12. Targeted seeds 1/2: evidence profile's final responses score
+5/6, but its substituted answers score 1/6. This is a counterfactual on saved
+responses, not a live accuracy claim; targeted examples are not representative.
+
+`fix/final-model-answer-authority` at `9093b0c9` adds an isolated `model_final`
+policy using the existing selector. Assessment guides acquisition, while the
+final model owns semantic answer/confidence. No assessment/router substitution,
+MCQ voting, uniform guess, geometric answer override or salvage inference.
+Physical geometry admission and safety checks are unchanged. 177 focused tests
+pass, plus the saved-response audit regression. Reproducible script and report:
+`scripts/audit_final_answer_authority.py` and
+`docs/plans/final_answer_authority_audit.md` on that branch.
+
+Live paired 12-question control/new-policy pilot: `20261015_230408_fca6ac`,
+`/tmp/emet-final-model-authority-eqa12-20261015`, 24 serial episodes at the same
+model, seed, image selection and navigation settings. q14 reproduces a legacy
+loss and a model-final success; trace confirms final model answer survives.
+q15 model-final also scores correctly, but still reasons incorrectly from
+absence in limited views. Keep model reasoning/coverage limitations visible.
+Legacy summaries currently label the new policy's metrics `scored_policy:
+no_salvage`; actual `decision_policy` and `answer_provenance` are `model_final`.
+This is a metadata-label debt, not an observed semantic override.
+
+Separately tested context repair: `fix/final-evidence-packet` at `be14f2ed`,
+84 focused tests passed. Forward the best assessed packet even when unverified;
+retain its full sequence/world-pose labels, not just generic context roles.
+This is NOT in the running authority A/B. After it finishes, cherry-pick
+`be14f2ed` onto the authority branch and test packet handoff separately. Do not
+modify `/tmp/emet-reviewed-evidence-context` while job `230408_fca6ac` is active.
+
+Configured-budget S0 completed on `2bf77670`: object find failed, destination
+find succeeded with `grounded_object` geometry near the blue cube. Effective
+timeout is recorded as 30 s and no phase exception occurred. This is a partial
+proof of life, not full OVMM acceptance or a manipulation success.
+
 ### Current continuation checkpoint (22:08 ET)
 
 - #185 is **ready for tooling review**, not merged; runtime/task gates remain
