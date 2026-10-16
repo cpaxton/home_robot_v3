@@ -5,6 +5,36 @@ permission to merge. Keep defaults unchanged; no full sweep or hardware gate.
 
 ## Acceptance review repairs — 2026-10-15
 
+### Latest gate outcomes (evening)
+
+- Repaired default integration `63016107` versus main `801dce82`, paired
+  EQA-12 seed 0: **7/12 versus 9/12**, all 24 episodes completed. This does
+  **not** clear the EQA gate. Artifacts:
+  `/tmp/emet-reviewed-default-eqa12-s0-20261015`.
+- Corrected-resource RoboCasa Stretch and MolmoSpaces rby1 retry completed
+  all four episodes, but neither arm localized either requested target:
+  `/tmp/emet-reviewed-room-resource-retry-20261015`. No room acceptance.
+- Eight-view S0 control also failed both arms. Candidate Qwen recognized the
+  red cylinder in its arrival RGB, but YOLOE grounding returned zero detections.
+  This is a localization bottleneck, not evidence that Qwen missed that object:
+  `/tmp/emet-reviewed-s0-scan8-20261015`.
+- Existing VLM/depth-candidate/SAM2 diagnostic
+  `20261015_211654_2470ed` encountered a missing checkout-local SAM2 checkpoint;
+  construction attempted a network download during grounding. A partial
+  download remains as evidence. Treat this run as dependency-contaminated,
+  not a provider-quality comparison. The room driver now requires local
+  checkpoint weights before starting and records their resolved path/hash.
+- Combined reviewed evidence branch `7c1bba8e` preserves repaired map epochs,
+  actual-capture timing, bounded approach views and spatial labels. Its normal
+  opt-in `configs/emet/evidence_context.yaml` is queued against main on the same
+  EQA-12 seed: job `20261015_212434_f4fcff`, output
+  `/tmp/emet-reviewed-evidence-profile-eqa12-s0-20261015`. Defaults unchanged.
+
+Do not substitute the earlier development result (26/36 versus 25/36) for
+these exact-head gates. Navigation, recovery and evidence contracts have unit
+coverage, but the shared-agent task acceptance remains open. Native TAMP tools
+from main are retained; this work does not replace their interfaces.
+
 The driver now hashes itself and `check_habitat_runtime.py` alongside its other
 inputs. EQA captures the child exit status, reports `failed.txt`, validates each
 requested artifact, then exits with failure; `set -e` no longer skips the checks.

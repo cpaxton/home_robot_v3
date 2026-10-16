@@ -15,8 +15,29 @@ def git(root, *args):
     return subprocess.check_output(["git", "-C", str(root), *args], text=True).strip()
 
 
+def grounding_assets(roots, arms, backend):
+    """Require local weights: acceptance must not download on the grounding path."""
+    if backend != "vlm":
+        return {}
+    assets = {}
+    for arm in arms:
+        checkpoint = roots[arm] / "sam2.1_hiera_small.pt"
+        if not checkpoint.is_file():
+            raise RuntimeError(
+                f"Missing SAM2 checkpoint: {checkpoint}. Link verified local weights "
+                "before running VLM/SAM2 acceptance; no in-episode downloads."
+            )
+        with checkpoint.open("rb") as stream:
+            digest = hashlib.sha256()
+            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                digest.update(chunk)
+        assets[arm] = {"path": str(checkpoint.resolve()), "sha256": digest.hexdigest()}
+    return assets
+
+
 def run(args):
     roots = {"main": args.main.resolve(), "candidate": args.candidate.resolve()}
+    assets = grounding_assets(roots, args.arms, args.grounding_backend)
     revisions = {name: git(root, "rev-parse", "HEAD") for name, root in roots.items()}
     args.output.mkdir(parents=True, exist_ok=False)
     manifest = {
@@ -27,6 +48,7 @@ def run(args):
         "scan_steps": args.scan_steps,
         "arms": args.arms,
         "grounding_backend": args.grounding_backend,
+        "grounding_assets": assets,
         "driver_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
         "scope": "find only, physical navigation, local Qwen3-VL int4; not manipulation acceptance",
     }
