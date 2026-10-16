@@ -13,6 +13,13 @@ Frames predating the new scoped map history are excluded, including before the
 first assessment in that epoch. No navigation reversion or task-specific answer
 rules are added. Image selection and labels remain opt-in; defaults are unchanged.
 
+`configs/emet/evidence_context.yaml` exposes the tested pose selector, four-image
+budget, bounded approach history, and spatial labels in one optional profile.
+It inherits the existing model, grounding, stopping, and navigation settings.
+The environment overrides remain for controlled ablations; routine use no longer
+requires environment-only setup. This is one evidence mode for the shared agent,
+not another reasoning or planning stage.
+
 Room controls with YOLOE completed without infrastructure errors after resource
 paths were corrected, but neither main nor candidate passed S0/RoboCasa/Molmo.
 Eight S0 views did expose the red cylinder to Qwen; grounding still failed with

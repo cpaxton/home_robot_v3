@@ -28,6 +28,23 @@ def executor():
     )
 
 
+def test_evidence_context_profile_survives_robot_runtime_settings(monkeypatch):
+    from pathlib import Path
+
+    from emet.core.parameters import get_parameters
+    from emet.memory.view_selection import SelectionConfig
+
+    profile = Path(__file__).resolve().parents[3] / "configs/emet/evidence_context.yaml"
+    monkeypatch.setenv("EMET_CONFIG", str(profile))
+    parameters = get_parameters("dynav_config.yaml", robot="stretch")
+    eqa = parameters.get("eqa")
+    assert eqa["retain_approach_views"] is True
+    selection = SelectionConfig(**eqa["view_selection"])
+    assert selection.policy == "pose" and selection.spatial_labels
+    assert selection.max_images == 4
+    assert eqa.get("agentic_single_view_confirm", True) is True
+
+
 def test_history_uses_acquisition_metadata_and_labels_old_views_without_preturn_claim():
     ex = executor()
     result = select_assessment_history(ex, ex.agent.voxel_map.observations[-1].rgb)

@@ -124,6 +124,8 @@ def run(args):
                     env["EMET_EQA_RETAIN_APPROACH_VIEWS"] = "1"
                 env.update(stopping_overrides(arm))
                 env.update(provenance_overrides(arm))
+                if arm == "evidence_profile":
+                    env["EMET_CONFIG"] = str(root / "configs/emet/evidence_context.yaml")
                 for attempt in range(2):
                     case = out / f"s{seed}-q{qid}-{arm}-attempt{attempt}"
                     case.mkdir()
@@ -168,6 +170,7 @@ def run(args):
                                 "retain_approach": env.get("EMET_EQA_RETAIN_APPROACH_VIEWS", "0"),
                                 "stopping_overrides": stopping_overrides(arm),
                                 "provenance_overrides": provenance_overrides(arm),
+                                "config_profile": env.get("EMET_CONFIG"),
                             },
                             indent=2,
                         )
@@ -241,6 +244,7 @@ if __name__ == "__main__":
             "labels_spatial",
             "spatial_progress",
             "spatial_visual",
+            "evidence_profile",
         ],
         default=["historical", "unchanged", "pose", "quality_coverage"],
     )

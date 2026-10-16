@@ -140,7 +140,10 @@ def init_executor(
     eqa_cfg = _eqa_cfg(agent)
     from emet.memory.approach_views import ApproachViewHistory
 
-    retain_approach = os.environ.get("EMET_EQA_RETAIN_APPROACH_VIEWS", "0") == "1"
+    retain_override = os.environ.get("EMET_EQA_RETAIN_APPROACH_VIEWS")
+    retain_approach = (
+        eqa_cfg.get("retain_approach_views", False) is True if retain_override is None else retain_override == "1"
+    )
     agent.robot.navigation_view_history = ApproachViewHistory() if retain_approach else None
     if eqa_cfg.get("view_selection") or os.environ.get("EMET_EQA_VIEW_SELECTION_POLICY"):
         # Optional adapter capability: capture pixels at its actual path/yaw boundary.

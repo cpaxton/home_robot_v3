@@ -1,0 +1,10 @@
+# Opt-in shared evidence context, independently of grounding/model/navigation choices.
+# Keep the default profile unchanged until paired EQA and room gates pass.
+extends: configs/emet/default.yaml
+mapping:
+  eqa:
+    retain_approach_views: true
+    view_selection:
+      policy: pose
+      spatial_labels: true
+      max_images: 4
