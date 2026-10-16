@@ -31,9 +31,18 @@ permission to merge. Keep defaults unchanged; no full sweep or hardware gate.
   discovery, prerequisite-order and registry tests pass.
 - Combined reviewed evidence branch `7c1bba8e` preserves repaired map epochs,
   actual-capture timing, bounded approach views and spatial labels. Its normal
-  opt-in `configs/emet/evidence_context.yaml` is queued against main on the same
-  EQA-12 seed: job `20261015_212434_f4fcff`, output
+  opt-in `configs/emet/evidence_context.yaml` completed EQA-12 seed 0:
+  **8/12 versus main 9/12**, all 24 episodes completed without infrastructure
+  errors. Job `20261015_212434_f4fcff`, output
   `/tmp/emet-reviewed-evidence-profile-eqa12-s0-20261015`. Defaults unchanged.
+  Candidate loses q14/q15 and wins q65; q12/q56 recover the repaired-default
+  misses. Summed episode wall time is 714 s versus 528 s (includes candidate's
+  first cold asset download; not a pure steady-state latency comparison).
+  Only the three disagreements are repeated at seeds 1/2, job
+  `20261015_215827_91edf0`, output
+  `/tmp/emet-reviewed-evidence-disagreements-s12-20261015`, queued behind S0.
+  Complete portable gallery (29 packets, original PNGs, exact prompt labels):
+  `/tmp/emet-reviewed-profile-gallery-20261015/index.html`.
 
 Early checks on that live pilot confirm actual spatial prompt labels and four
 retained images (current, pre-turn, two context). q12 now passes with both beds
@@ -46,6 +55,11 @@ Do not patch the rule for this question: an offline audit of the previous
 preferring the final model would lose five net correct answers. This is an
 answer-policy/model-consistency limitation, not an established general repair.
 Both final and assessed responses remain available for diagnosis.
+
+Room metric validation now rejects `agentic_find_error` and
+`agentic_find_error_recep` even when the CLI exits zero and emits boolean false
+outcomes. The paired driver shares that validator and records its hash;
+35 driver/metric tests pass. Ordinary scored misses remain completed episodes.
 
 The linked SAM2 checkpoint constructs successfully on CPU both in a fresh
 process and after loading the real default config. This validates dependency
@@ -78,13 +92,14 @@ Both roots now link the existing shared Robocasa package and Molmo environment;
 asset completeness and wrapper discovery checks pass. Corrected-resource retry
 `20261015_084043_140730` retains original failures and reruns those four cases.
 S0's fast four-view preset samples 0/45/90/135 degrees while the targets are at
-negative Y. Upright telemetry and measured head tilt exclude a fall as the cause
-of its dark assessment images. Standard eight-view S0 diagnostic
-`20261015_083813_207ff7` is running on both arms. Do not infer perception failure
-from an unobserved target direction. All jobs use the serial GPU lock.
-Final-owner default EQA gate `20261015_084243_b8f836` is queued: main `801dce82`
-versus integration `63016107`, the same 12 questions, seed 0, no experimental
-selection overrides. Final task acceptance remains open.
+negative Y. Candidate upright telemetry and measured head tilt do not indicate
+a fall; absence of an object from dark RGB alone cannot establish the cause.
+Standard eight-view S0 diagnostic `20261015_083813_207ff7` completed on both
+arms without a task pass. Do not infer perception failure from an unobserved
+target direction. All jobs use the serial GPU lock.
+Final-owner default EQA gate `20261015_084243_b8f836` completed: main `801dce82`
+9/12 versus integration `63016107` 7/12, same 12 questions, seed 0, no
+experimental selection overrides. Final task acceptance remains open.
 The earlier candidate's EQA 26/36 versus main 25/36 is a modest development
 result on different frozen revisions; prioritize reliable shared tooling and
 do not present this as a meaningful accuracy gain or this PR's exact-head gate.
@@ -93,10 +108,12 @@ do not present this as a meaningful accuracy gain or this PR's exact-head gate.
 
 | PR | Ownership | Current gate |
 | --- | --- | --- |
-| #181 `dc106273` | Opt-in grounding providers, shared assessment dispatch | Exact-head default-path EQA attribution and saved-view provider audit pending. |
-| #182 `1319ea6d` | Measured navigation, clearance, wheel contacts | Exact-head route/EQA and short Molmo rby1 route pending. Integrated route result cannot clear this head. |
-| #184 `48b56aeb` | Bounded head/floor recovery, measured head-arrival fix, executor delegation | 284 focused ownership-repair tests passed at the acceptance descendant; exact-head simulated recovery and paired EQA pending. |
-| #185 | Frozen drivers, evidence isolation, queue ordering, environment discovery | 29 focused driver/metric/discovery tests passed. Live shared-driver pair and remaining failure-path checks pending. |
+| #181 `dc106273` | Opt-in grounding providers, shared assessment dispatch | Exact-head q12/14/56/6 attribution completed 4/4 at `slice181-eqa4-retry-20261012`; 118 grounding/conversation plus 11 assessment tests previously passed. Live/cached provider audit remains open. |
+| #182 `9a0ac978` | Measured navigation, clearance, wheel contacts | Reviewed exploration-mode propagation fixed; 42 route/sweep/arrival tests and 5 real-scene wheel-contact tests passed. Short Molmo rby1 drive and final task gate remain open. |
+| #184 `d2e922a0` | Bounded head/floor recovery, measured head-arrival fix, executor delegation | Shared status contract and two-total-capture bound repaired; integration suite passes. Intended live recovery demonstration remains open. |
+| #185 | Frozen drivers, evidence isolation, queue ordering, environment discovery | 62 acceptance/discovery/queue/registry tests and 24 OVMM result/exception tests passed. Completed room failures are correctly reported, not task passes. Local-asset VLM retry pending. |
+| #199 `9df2a382` | Preserve assessed camera pixels through final submission | Exact pixel identity is protected; no accuracy-gain claim. Joint repaired-head EQA gate is running. |
+| #202 `914aa1c5` | Optional bounded view selection | Map-epoch, actual-current-capture and pin-budget repairs pushed; 87 owner tests passed. Four-image labeled packets validated live at integration descendant `7c1bba8e`, not a standalone owner-head accuracy gate. |
 | #198 `59f70026` | Separate opt-in coverage scan, probe, exact-frame ingestion | 281 extracted coverage/recovery tests; 31 coverage/config-dispatch tests after repair. Corrected live ablation and multi-heading visibility gate pending. |
 
 The measured-head fix moved from integration to #184; evidence isolation and
