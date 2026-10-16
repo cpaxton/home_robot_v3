@@ -126,6 +126,8 @@ def run(args):
                 env.update(provenance_overrides(arm))
                 if arm == "evidence_profile":
                     env["EMET_CONFIG"] = str(root / "configs/emet/evidence_context.yaml")
+                if arm == "model_final":
+                    env["EMET_CONFIG"] = str(root / "configs/emet/model_final.yaml")
                 for attempt in range(2):
                     case = out / f"s{seed}-q{qid}-{arm}-attempt{attempt}"
                     case.mkdir()
@@ -245,6 +247,7 @@ if __name__ == "__main__":
             "spatial_progress",
             "spatial_visual",
             "evidence_profile",
+            "model_final",
         ],
         default=["historical", "unchanged", "pose", "quality_coverage"],
     )

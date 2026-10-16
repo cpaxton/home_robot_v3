@@ -114,6 +114,35 @@ def test_submit_preserves_assessed_voxel_images_without_graph_observation():
     assert gm.query_answer.call_args.kwargs["force_obs_ids"] == []
 
 
+def test_model_final_preserves_explicit_answer_over_assessment_and_tool_suggestion():
+    ex, gm = _executor(Q12, query_answer="Two")
+    ex.decision_policy = "model_final"
+    _set_confirmed_vlm_answer(ex, "B", answer_text="One")
+    gm.query_answer.return_value = ("two in RGB", "Two", True, "visible", None, [])
+    ex._verified = True
+    out = ex._do_submit_answer(prefer_answer="One")
+    assert out["answer"] == "Two"
+    assert out["answer_source"] == "model_final"
+    assert out["confidence"] is True
+    assert gm.query_answer.call_args.kwargs["model_final"] is True
+    assert ex._final_answer_decision.choice_index == 3
+
+
+@pytest.mark.parametrize("answer,confidence", [("Two", True), ("Unknown", False), ("", False)])
+def test_model_final_budget_exhaustion_does_not_vote_or_force_a_choice(answer, confidence):
+    ex, gm = _executor(Q12)
+    ex.decision_policy = "model_final"
+    gm.query_answer.return_value = ("r", answer, confidence, "", None, [])
+    gm.vote_mcq_letter.return_value = "B"
+    ex._uniform_prior_letter = MagicMock(side_effect=AssertionError("must not guess"))
+    out = ex._forced_answer_fallback(prefer_answer="One")
+    assert out["answer"] == (answer or "Unknown")
+    assert out["confidence"] is confidence
+    assert out["answer_source"] == "model_final"
+    gm.vote_mcq_letter.assert_not_called()
+    assert ex._finalize_unknown_location_letter(out) is out
+
+
 def test_confirmed_q12_vlm_letter_beats_conflicting_four_image_eqa():
     """The answer that opened ANSWER must survive a conflicting final EQA call."""
     ex, _gm = _executor(

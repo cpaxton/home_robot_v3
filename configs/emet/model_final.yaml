@@ -1,0 +1,5 @@
+# Controlled answer-authority ablation: same evidence profile, no answer overrides.
+extends: configs/emet/evidence_context.yaml
+mapping:
+  eqa:
+    agentic_decision_policy: model_final

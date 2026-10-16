@@ -45,6 +45,24 @@ def test_evidence_context_profile_survives_robot_runtime_settings(monkeypatch):
     assert eqa.get("agentic_single_view_confirm", True) is True
 
 
+def test_model_final_profile_changes_only_answer_authority(monkeypatch):
+    from pathlib import Path
+
+    from emet.core.parameters import get_parameters
+    from emet.memory.graph_eqa.agentic.config import resolve_agentic_decision_policy
+
+    root = Path(__file__).resolve().parents[3]
+    configurations = []
+    for name in ("evidence_context", "model_final"):
+        monkeypatch.setenv("EMET_CONFIG", str(root / f"configs/emet/{name}.yaml"))
+        configurations.append(dict(get_parameters("dynav_config.yaml", robot="stretch").get("eqa")))
+    before, after = configurations
+    assert after.pop("agentic_decision_policy") == "model_final"
+    before.pop("agentic_decision_policy", None)
+    assert before == after
+    assert resolve_agentic_decision_policy("model_final") == "model_final"
+
+
 def test_history_uses_acquisition_metadata_and_labels_old_views_without_preturn_claim():
     ex = executor()
     result = select_assessment_history(ex, ex.agent.voxel_map.observations[-1].rgb)
