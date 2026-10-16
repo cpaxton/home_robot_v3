@@ -10,6 +10,7 @@ write structured attempts into the graph-memory action-outcome ledger.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -48,6 +49,14 @@ class ToolOutcome:
         msg = self.payload.get("message") or self.payload.get("error")
         if msg and str(msg) not in (self.note, self.status):
             bits.append(str(msg)[:200])
+        # Actionable details must reach the model, not just the trace ledger.
+        details = {
+            key: self.payload[key]
+            for key in ("manipulation", "navigation", "observation", "recovery_tools", "suggested_action")
+            if key in self.payload
+        }
+        if details:
+            bits.append(json.dumps(details, default=str))
         return " ".join(bits)
 
     @classmethod

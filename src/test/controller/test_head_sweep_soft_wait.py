@@ -25,14 +25,13 @@ def test_head_to_sweep_stops_when_motion_stops_even_if_far_from_goal():
     jp = np.zeros(20)
     jp[HelloStretchIdx.HEAD_PAN] = 0.2  # far from 1.5
     jp[HelloStretchIdx.HEAD_TILT] = -0.5
-    jv = np.zeros(20)  # not moving
 
     def head_to(pan, tilt, **kwargs):
         calls.append({"pan": pan, "tilt": tilt, **kwargs})
 
     agent.robot = SimpleNamespace(
         head_to=head_to,
-        get_joint_state=lambda: (jp, jv, None),
+        get_pan_tilt=lambda: jp[[HelloStretchIdx.HEAD_PAN, HelloStretchIdx.HEAD_TILT]],
     )
     t0 = time.time()
     agent._head_to_sweep(1.5, -0.5)
@@ -61,7 +60,7 @@ def test_head_to_sweep_exits_early_when_near_goal_even_if_creeping():
 
     agent.robot = SimpleNamespace(
         head_to=lambda *a, **k: None,
-        get_joint_state=get_js,
+        get_pan_tilt=lambda: get_js()[0][[HelloStretchIdx.HEAD_PAN, HelloStretchIdx.HEAD_TILT]],
     )
     t0 = time.time()
     agent._head_to_sweep(0.6, -0.5)
@@ -89,7 +88,7 @@ def test_head_to_sweep_waits_while_moving_then_exits_on_stop():
 
     agent.robot = SimpleNamespace(
         head_to=lambda *a, **k: None,
-        get_joint_state=get_js,
+        get_pan_tilt=lambda: get_js()[0][[HelloStretchIdx.HEAD_PAN, HelloStretchIdx.HEAD_TILT]],
     )
     t0 = time.time()
     agent._head_to_sweep(1.5, -0.5)
@@ -111,7 +110,7 @@ def test_head_to_sweep_caps_wait_if_never_stops():
 
     agent.robot = SimpleNamespace(
         head_to=lambda *a, **k: None,
-        get_joint_state=get_js,
+        get_pan_tilt=lambda: get_js()[0][[HelloStretchIdx.HEAD_PAN, HelloStretchIdx.HEAD_TILT]],
     )
     t0 = time.time()
     agent._head_to_sweep(1.5, -0.5)
