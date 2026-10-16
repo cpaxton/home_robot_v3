@@ -133,6 +133,33 @@ def test_unverified_submission_keeps_the_best_assessed_camera_packet():
     assert not ex._verified
 
 
+def test_model_final_preserves_explicit_answer_over_assessment_and_tool_suggestion():
+    ex, gm = _executor(Q12, query_answer="Two")
+    ex.decision_policy = "model_final"
+    _set_confirmed_vlm_answer(ex, "B", answer_text="One")
+    gm.query_answer.return_value = ("two in RGB", "Two", True, "visible", None, [])
+    ex._verified = True
+    out = ex._do_submit_answer(prefer_answer="One")
+    assert out["answer"] == "Two"
+    assert out["answer_source"] == "model_final"
+    assert gm.query_answer.call_args.kwargs["model_final"] is True
+
+
+@pytest.mark.parametrize("answer,confidence", [("Unknown", False), ("None", True), ("", False)])
+def test_model_final_budget_path_never_votes_or_manufactures_a_prior(answer, confidence):
+    ex, gm = _executor(Q12, query_answer=answer)
+    ex.decision_policy = "model_final"
+    gm.query_answer.return_value = ("r", answer, confidence, "", None, [])
+    gm.vote_mcq_letter.return_value = "B"
+    ex._uniform_prior_letter = MagicMock(side_effect=AssertionError("must not guess"))
+    out = ex._forced_answer_fallback(prefer_answer="One")
+    assert out["answer"] == (answer or "Unknown")
+    assert out["confidence"] is confidence
+    assert out["answer_source"] == "model_final"
+    gm.vote_mcq_letter.assert_not_called()
+    assert ex._finalize_unknown_location_letter(out) is out
+
+
 def test_confirmed_q12_vlm_letter_beats_conflicting_four_image_eqa():
     """The answer that opened ANSWER must survive a conflicting final EQA call."""
     ex, _gm = _executor(

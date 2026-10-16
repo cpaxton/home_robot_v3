@@ -15,6 +15,7 @@ import tempfile
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from emet.memory.adapters import GraphEQABackend
 from emet.memory.graph_eqa import GraphEQAMemory, labels_are_semantic_graph_hypothesis
@@ -90,6 +91,32 @@ def test_answer_attaches_exact_camera_evidence_without_creating_objects():
     *_, images = mem.query_answer("What color?", evidence_images=[current, context])
     assert len(images) == 1
     np.testing.assert_array_equal(images[0], current)
+
+
+@pytest.mark.parametrize("answer,expected_confidence", [("Two", True), ("None", True), ("Unknown", False), ("", False)])
+def test_model_final_query_has_one_answer_authority_and_keeps_abstentions(answer, expected_confidence):
+    import json
+    from unittest.mock import Mock
+
+    raw = json.dumps({"reasoning": "pixels", "answer": answer, "confidence": True, "action": ""})
+    client = Mock(return_value=raw)
+    mem = GraphEQAMemory(eqa_client=client, image_description_client=lambda x: "")
+    mem.parameters = {"eqa": {"answer_format": "json"}}
+    mem.extract_relevant_objects = lambda question: None
+    mem.memory_summary_enabled = False
+    mem._salvage_answer_letter = Mock(side_effect=AssertionError("no extra model calls"))
+    mem._equipment_letter_from_target_distances = Mock(side_effect=AssertionError("no geometric answer guesses"))
+    result = mem.query_answer(
+        "How many tables? A) One B) Two C) None D) Three",
+        evidence_images=[np.zeros((8, 8, 3), dtype=np.uint8)],
+        model_final=True,
+    )
+    assert result[1] == (answer or "Unknown")
+    assert result[2] is expected_confidence
+    assert mem.last_eqa_parsed[1] == result[1]
+    assert mem.last_eqa_raw == raw
+    assert not mem.last_eqa_salvage_used
+    client.assert_called_once()
 
 
 def test_graph_memory_to_string():

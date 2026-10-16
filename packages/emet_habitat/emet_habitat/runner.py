@@ -582,7 +582,7 @@ def run_hmeqa_episode(
         eqa_confidence_reasoning = ""
         summary = getattr(agent, "_agentic_eqa_summary", None)
         grounded_decision: dict[str, Any] | None = None
-        if isinstance(summary, dict) and summary.get("decision_policy") == "grounded_v2":
+        if isinstance(summary, dict) and summary.get("decision_policy") in {"grounded_v2", "model_final"}:
             candidate = summary.get("final_decision")
             if isinstance(candidate, dict):
                 grounded_decision = candidate
@@ -684,7 +684,7 @@ def run_hmeqa_episode(
         if isinstance(summary, dict) and summary.get("scored_policy"):
             scored_policy = str(summary.get("scored_policy") or "")
         elif grounded_decision is not None:
-            scored_policy = "grounded_v2"
+            scored_policy = str(summary["decision_policy"])
         elif salvage_pred or (isinstance(summary, dict) and "salvage_counterfactual_letter" in summary):
             scored_policy = "no_salvage"
 
