@@ -6,6 +6,23 @@ state and returns alternatives without commanding the robot. The arm retains the
 measured EE orientation, so an offset held object has an explicit, consistent
 attachment transform throughout each path.
 
+## Simulator object poses
+
+Privileged `sim_object_placements[*].pos` is the world AABB center when geometry
+is available. It is **not** the named-body origin accepted by
+`sim_set_body_pose`. Entries resolving to real MuJoCo bodies also publish
+measured world `body_pos` and `body_quat` (wxyz). Aggregate semantic groups have
+no invented body pose. These fields are simulator debugging/oracle inputs, not
+real-robot observations.
+
+`robot_zmq_set_object_center` translates through the measured center-to-origin
+offset and retains the measured orientation. Arbitrary rotated replay uses an
+explicit saved body pose instead. Clutter fixture schema 2 stores both measured
+center and body pose after settling, replays the body pose, and independently
+checks the measured geometry. Schema-1 certificates require fresh admission;
+historical outcomes remain unchanged. Fixture construction selects independent
+scene instances, never multiple welded parts as separate objects.
+
 ## Geometry contract
 
 All scene geometry, support bounds and base poses are in the same world frame, in

@@ -56,16 +56,18 @@ isolates TAMP (what to move, where, in what order) from grasp robustness. Manip 
 stretch / Innate Mars / Nori on floor clutter --- Nori IK bottoms out at
 $z\approx 0.29$\,m), \texttt{attempt} (real visual servo; strict reference). Live
 \texttt{kinematic\_manip} is opt-in per \texttt{RobotSpec.advertise\_kinematic\_manip}
-(rby1, Innate Mars, Nori); Stretch stays on the teleport oracle until it moves onto the
-shared robosuite server.
+(rby1, Innate Mars, Nori); Stretch uses the teleport oracle in this historical floor-clutter protocol.
+The separate stationary native-contact experiment in Appendix~\ref{app:native_tamp}
+uses the Stretch server and does not change this protocol or rescore its results.
 
 \subsection{Multi-object TAMP chain}
 \texttt{emet.controller.task.tamp.clutter\_chain.plan\_clear\_clutter} relocates each
 object to the bin by repeatedly grounding and executing a pick-and-place plan
 (MCTS task assignment via \texttt{plan\_pick\_place\_mcts}, then
 \texttt{execute\_task\_plan}), \textbf{re-reading} \texttt{sim\_object\_placements}
-after each move (stale-plan guard). Failures are per-object so one flaky grasp does not
-abort the episode. For \texttt{nav\_goal}, the teleport chord to the landmark is
+after each move (stale-plan guard). The current chain stops when relocation cannot be verified, reports recovery
+required and unattempted objects, and does not continue from an assumed successful
+state. For \texttt{nav\_goal}, the teleport chord to the landmark is
 sampled and footprint-checked against live GT placements; a collision refuses
 the snap. Only then is \texttt{goal\_reached} scored within a success radius. An
 LLM-agent variant parses the same commands and drives the CHAT tool loop

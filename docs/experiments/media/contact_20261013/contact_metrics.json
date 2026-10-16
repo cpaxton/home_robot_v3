@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "scope": "six scripted native-actuator controls; identical initial conditions per object, no perturbation sweep",
+  "trials": [
+    {
+      "trial": "object1_repeat0",
+      "status": "success",
+      "min_held_lift_m": 0.12609274771479728,
+      "max_held_translation_m": 0.009605730341802326,
+      "bilateral_held_samples": 24,
+      "held_samples": 24,
+      "placement_xy_error_m": 0.01667505171318676,
+      "max_release_speed_m_s": 1.645862995507836e-14
+    },
+    {
+      "trial": "object1_repeat1",
+      "status": "success",
+      "min_held_lift_m": 0.12609274771479728,
+      "max_held_translation_m": 0.009605730341802326,
+      "bilateral_held_samples": 24,
+      "held_samples": 24,
+      "placement_xy_error_m": 0.01667505171318676,
+      "max_release_speed_m_s": 1.645862995507836e-14
+    },
+    {
+      "trial": "object1_repeat2",
+      "status": "success",
+      "min_held_lift_m": 0.12609274771479728,
+      "max_held_translation_m": 0.009605730341802326,
+      "bilateral_held_samples": 24,
+      "held_samples": 24,
+      "placement_xy_error_m": 0.01667505171318676,
+      "max_release_speed_m_s": 1.645862995507836e-14
+    },
+    {
+      "trial": "object2_repeat0",
+      "status": "success",
+      "min_held_lift_m": 0.1382346953843382,
+      "max_held_translation_m": 0.0014886603727676205,
+      "bilateral_held_samples": 24,
+      "held_samples": 24,
+      "placement_xy_error_m": 0.013477945973877326,
+      "max_release_speed_m_s": 0.00029368218538033275
+    },
+    {
+      "trial": "object2_repeat1",
+      "status": "success",
+      "min_held_lift_m": 0.1382346953843382,
+      "max_held_translation_m": 0.0014886603727676205,
+      "bilateral_held_samples": 24,
+      "held_samples": 24,
+      "placement_xy_error_m": 0.013477945973877326,
+      "max_release_speed_m_s": 0.00029368218538033275
+    },
+    {
+      "trial": "object2_repeat2",
+      "status": "success",
+      "min_held_lift_m": 0.1382346953843382,
+      "max_held_translation_m": 0.0014886603727676205,
+      "bilateral_held_samples": 24,
+      "held_samples": 24,
+      "placement_xy_error_m": 0.013477945973877326,
+      "max_release_speed_m_s": 0.00029368218538033275
+    }
+  ]
+}

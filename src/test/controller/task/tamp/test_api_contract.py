@@ -165,12 +165,19 @@ def test_kinematic_bridge_tries_collision_and_ik_alternatives(monkeypatch):
     robot = Robot()
     robot.check_base_poses = lambda poses: {"poses": np.asarray(poses).tolist(), "clear": [False] + [True] * 15}
     seen = []
-    executor = SimpleNamespace(_ensure_model=lambda: True, _model=None, _data=None, ee_body="tool", joint_names=["arm"])
+    executor = SimpleNamespace(_ensure_model=lambda: True, _model=None, _data=None, ee_body="tool",
+                               joint_names=["arm"], pregrasp_standoff_m=.18, lift_m=.22,
+                               ik_tol_m=.024, ik_max_iters=123)
     monkeypatch.setattr(kinematic_pick_place, "KinematicPickPlaceExecutor", lambda *a, **k: executor)
     monkeypatch.setattr(task_search, "_sync_executor_base_to_xyt", lambda ex, pose: seen.append(pose.copy()))
-    monkeypatch.setattr(
-        task_search, "rank_grasps_by_ik", lambda *a, **k: [(0, 0.001 if len(seen) > 1 else 1.0, len(seen) > 1)]
-    )
+    def rank(*args, **kwargs):
+        assert kwargs["pregrasp_standoff_m"] == .18
+        assert kwargs["lift_m"] == .22
+        assert kwargs["ik_tol_m"] == .006
+        assert kwargs["ik_max_iters"] == 123
+        return [(0, 0.001 if len(seen) > 1 else 1.0, len(seen) > 1)]
+
+    monkeypatch.setattr(task_search, "rank_grasps_by_ik", rank)
     result = bridge.build_agent_pick_place_plan(robot, "bowl", "table", seed=0)
     assert result.mode == "kinematic"
     assert result.plan.success, result.reason
@@ -423,3 +430,20 @@ def test_unavailable_base_validation_rejects_build_and_consumes_plan(monkeypatch
         assert result["recovery"] == "rediscover"
     assert not ground.called and not execute.called and not query.called
     assert bridge.execute_stored_agent_plan_result(robot, context, ref)["code"] == "unknown_plan"
+
+
+@pytest.mark.parametrize("reason, expected", [
+    ("no_plan_within_budget:last_grounding=no_reachable_grasp", "no_reachable_grasp"),
+    ("no_plan_within_budget:last_grounding=private_body_id", "no_plan_within_budget"),
+    ("no_plan_within_budget:candidates=3", "no_plan_within_budget"),
+])
+def test_mcts_grounding_failure_preserves_only_known_public_code(reason, expected):
+    from emet.controller.task.tamp.api import failure_code
+    assert failure_code(reason) == expected
+
+
+def test_unsupported_adapter_does_not_ignore_placement_region():
+    tools = {t.name: t for t in get_tools({})}
+    result = decoded(tools['plan_pick_place'].func(object_name='bowl', receptacle_name='table',
+                                                placement_region=[[0, 0], [1, 1]]))
+    assert result['code'] == 'placement_region_unsupported'

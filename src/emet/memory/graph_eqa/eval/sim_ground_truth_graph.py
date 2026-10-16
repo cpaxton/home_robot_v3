@@ -57,6 +57,12 @@ def read_sim_object_placements(session: dict[str, Any] | None) -> dict[str, dict
             "pos": np.asarray(pos, dtype=np.float64).reshape(3),
             "quat": np.asarray(info.get("quat") or [1.0, 0.0, 0.0, 0.0], dtype=np.float64).reshape(4),
         }
+        for field, size in (("body_pos", 3), ("body_quat", 4)):
+            if field in info:
+                value = np.array(info[field], dtype=float, copy=True).reshape(size)
+                if not np.isfinite(value).all():
+                    raise ValueError(f"Invalid simulator {field}")
+                entry[field] = value
         bounds = info.get("bounds")
         if bounds is not None:
             b = np.asarray(bounds, dtype=np.float64).reshape(2, 3)

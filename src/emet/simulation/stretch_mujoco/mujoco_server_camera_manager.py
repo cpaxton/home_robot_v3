@@ -136,8 +136,8 @@ class MujocoServerCameraManagerSync:
         new_imagery.fps = self.camera_fps_counter.fps
 
         for camera, renderer in self.camera_renderers.items():
-            (_, data) = self._render_camera(renderer, camera)
-            new_imagery.set_camera_data(camera, data)
+            (_, data, timestamp_ns) = self._render_camera(renderer, camera)
+            new_imagery.set_camera_data(camera, data, timestamp_ns=timestamp_ns)
 
         new_imagery.cam_d405_K = self.get_camera_params(StretchCameras.cam_d405_rgb)
         new_imagery.cam_d435i_K = self.get_camera_params(StretchCameras.cam_d435i_rgb)
@@ -194,6 +194,7 @@ class MujocoServerCameraManagerSync:
         """
 
         with self.camera_lock:
+            timestamp_ns = time.monotonic_ns()
             renderer.update_scene(data=self.mujoco_server.mjdata, camera=camera.camera_name_in_mjcf)
 
             render = renderer.render()
@@ -202,7 +203,7 @@ class MujocoServerCameraManagerSync:
         if post_render:
             render = post_render(render)
 
-        return (camera, render)
+        return (camera, render, timestamp_ns)
 
     def _remove_camera_renderer(self, camera: StretchCameras):
         """
@@ -384,8 +385,8 @@ class MujocoServerCameraManagerThreaded(MujocoServerCameraManagerSync):
 
         for future in futures:
             # Put the rendered image data into the new_imagery dictionary
-            (camera, render) = future.result()
-            new_imagery.set_camera_data(camera, render)
+            (camera, render, timestamp_ns) = future.result()
+            new_imagery.set_camera_data(camera, render, timestamp_ns=timestamp_ns)
 
         new_imagery.cam_d405_K = self.get_camera_params(StretchCameras.cam_d405_rgb)
         new_imagery.cam_d435i_K = self.get_camera_params(StretchCameras.cam_d435i_rgb)

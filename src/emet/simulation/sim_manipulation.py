@@ -338,6 +338,35 @@ def resolve_sim_object_body(
     )
 
 
+def body_position_for_center(placement, center):
+    """Translate a measured named body to an AABB center, retaining orientation.
+
+    Both positions are world XYZ. This conversion is valid for translation only;
+    replay with a different rotation must use the recorded body pose instead.
+    Missing measured origins fail closed rather than assuming centered meshes.
+    """
+    origin = np.asarray(placement.get("body_pos"), dtype=float)
+    previous = np.asarray(placement.get("pos"), dtype=float)
+    center = np.asarray(center, dtype=float)
+    if any(v.shape != (3,) or not np.isfinite(v).all() for v in (origin, previous, center)):
+        raise ValueError("measured_body_origin_unavailable")
+    return origin + center - previous
+
+
+def robot_zmq_set_object_center(robot, body, center):
+    """Oracle translation targeting the semantic center, not the body origin."""
+    placements = _read_robot_placements(robot) or {}
+    if body not in placements:
+        raise ValueError("measured_body_origin_unavailable")
+    entry = placements[body]
+    position = body_position_for_center(entry, center)
+    # Pin the measured orientation so the translated AABB offset stays valid.
+    quat = np.asarray(entry.get("body_quat"), dtype=float)
+    if quat.shape != (4,) or not np.isfinite(quat).all() or np.linalg.norm(quat) < 1e-12:
+        raise ValueError("measured_body_orientation_unavailable")
+    robot_zmq_set_body_pose(robot, body, position, quat=quat)
+
+
 def _verify_body_near(
     robot: Any,
     body: str,
@@ -369,7 +398,7 @@ def sim_teleport_pickup(
         return None
     pos = np.asarray(placements[body]["pos"], dtype=np.float64).reshape(3).copy()
     pos[2] += float(lift_m)
-    robot_zmq_set_body_pose(robot, body, pos)
+    robot_zmq_set_object_center(robot, body, pos)
     if verify and not _verify_body_near(robot, body, pos):
         return None
     return body
@@ -408,7 +437,7 @@ def sim_teleport_place(
         return False
     anchor = np.asarray(placements[recep_bodies[0]]["pos"], dtype=np.float64).reshape(3).copy()
     anchor[2] += float(place_z_offset_m)
-    robot_zmq_set_body_pose(robot, body, anchor)
+    robot_zmq_set_object_center(robot, body, anchor)
     if verify and not _verify_body_near(robot, body, anchor):
         return False
     return True
@@ -492,12 +521,12 @@ def sim_teleport_to_grasp_pose(
     if not robot_sim_body_pose_teleport_supported(robot):
         return False
     target = np.asarray(grasp_xyz_world, dtype=np.float64).reshape(3).copy()
-    robot_zmq_set_body_pose(robot, body, target)
+    robot_zmq_set_object_center(robot, body, target)
     if verify and not _verify_body_near(robot, body, target, tol_m=0.08):
         return False
     lifted = target.copy()
     lifted[2] += float(lift_m)
-    robot_zmq_set_body_pose(robot, body, lifted)
+    robot_zmq_set_object_center(robot, body, lifted)
     if verify and not _verify_body_near(robot, body, lifted, tol_m=0.08):
         return False
     return True

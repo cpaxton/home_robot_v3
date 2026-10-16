@@ -239,7 +239,7 @@ def _placement_category_map(placements: dict[str, dict[str, Any]], metadata: dic
         cat = str(info.get("category") or "").strip()
         for body in (info.get("name_map") or {}).get("bodies") or {}:
             if body in placements:
-                out[str(body)] = {"cat": cat, "static": static}
+                out[str(body)] = {"cat": cat, "static": static, "instance": str(_root)}
     return out
 
 
@@ -265,7 +265,15 @@ def _pickable_bodies(
             return False
         return True
 
-    cands = sorted(b for b in placements if is_clutter(b))
+    # Metadata body names can identify welded parts of the same object. Moving
+    # one part moves the assembly: they cannot be scattered independently.
+    seen = {cat_map[b].get("instance", b) for b in exclude_bodies if b in cat_map}
+    cands = []
+    for body in sorted(b for b in placements if is_clutter(b)):
+        instance = cat_map[body].get("instance", body)
+        if instance not in seen:
+            cands.append(body)
+            seen.add(instance)
     return cands[:n]
 
 
@@ -443,7 +451,7 @@ def _validated_case(ep, args, robot, placements, robot_xy):
         task_contract,
     )
     from emet.eval.scene_task_extractor import load_scene_metadata, resolve_scene_metadata_for_session
-    from emet.simulation.sim_manipulation import robot_zmq_set_body_pose
+    from emet.simulation.sim_manipulation import robot_zmq_set_body_pose, robot_zmq_set_object_center
 
     base = {"episode_id": ep.id, "mode": ep.mode, "robot": ep.robot, "n_objects": ep.n_objects,
             "task_success": False, "skipped_invalid": True}
@@ -514,7 +522,10 @@ def _validated_case(ep, args, robot, placements, robot_xy):
     if fixture['landmark_body'] is not None and fixture['landmark_body'] not in placements:
         return reject('fixture_destination_missing')
     for row in fixture['clutter']:
-        robot_zmq_set_body_pose(robot, row['body'], row['pos'], quat=row.get('quat'))
+        if building:
+            robot_zmq_set_object_center(robot, row['body'], row['pos'])
+        else:
+            robot_zmq_set_body_pose(robot, row['body'], row['body_pos'], quat=row['body_quat'])
     time.sleep(.5)
     actual = _read_placements(robot)
     if any(b not in actual or np.linalg.norm(np.asarray(actual[b]['pos'])[:2] - np.asarray(row['pos'])[:2]) > .03
@@ -525,7 +536,9 @@ def _validated_case(ep, args, robot, placements, robot_xy):
         # and orientation, rather than merely the requested scatter position.
         for row in fixture['clutter']:
             row.update(pos=json_value(actual[row['body']]['pos']),
-                       quat=json_value(actual[row['body']].get('quat')))
+                       quat=json_value(actual[row['body']].get('quat')),
+                       body_pos=json_value(actual[row['body']]['body_pos']),
+                       body_quat=json_value(actual[row['body']]['body_quat']))
     elif any(not pose_reproduced(actual.get(row['body']), row) for row in fixture['clutter']):
         return reject('fixture_pose_mismatch')
     geometry = fixture_geometry(actual, start=robot_xy, goal=fixture['goal_xy'], bodies=bodies,
@@ -573,7 +586,7 @@ def run_one(ep: Any, args: argparse.Namespace, port_offset: int) -> dict[str, An
     from emet.controller.manipulation.kinematic_pick_place import KinematicPickPlaceExecutor
     from emet.controller.task.tamp.clutter_chain import plan_clear_clutter
     from emet.eval.tamp_clutter import clutter_blocks_path, scatter_ring_targets
-    from emet.simulation.sim_manipulation import robot_zmq_set_body_pose
+    from emet.simulation.sim_manipulation import robot_zmq_set_object_center
     from emet.utils.process_tree import terminate_process_tree
 
     server = None
@@ -664,7 +677,7 @@ def run_one(ep: Any, args: argparse.Namespace, port_offset: int) -> dict[str, An
             )
             for body, xy in zip(bodies, targets, strict=True):
                 pos = [float(xy[0]), float(xy[1]), float(ep.floor_z_m)]
-                robot_zmq_set_body_pose(robot, body, pos)
+                robot_zmq_set_object_center(robot, body, pos)
 
         # GT validity probe: is the route to the goal blocked by the clutter?
         # Re-read placements AFTER scatter so the probe sees the moved floor positions.
