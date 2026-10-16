@@ -71,5 +71,9 @@ These works motivate \emph{incremental} and \emph{bounded} memory but do not add
 \subsection{Benchmarks}
 
 We target \textbf{HM-EQA} and \textbf{OpenEQA}-style evaluation via a Habitat harness (GraphEQA parity) and complementary \textbf{Robocasa} / \textbf{MolmoSpaces} episodes in MuJoCo with multi-robot support in \texttt{emet}.
-MolmoSpaces also hosts an open manipulation leaderboard; the leading non-ID system, \textbf{TiPToP}~\citep{shen2026tiptop}, composes a GPU-parallel Task-and-Motion-Planning core (cuTAMP~\citep{shen2024cutamp}) with off-the-shelf perception and VLM grounding to search pick-and-place sequences directly from pixels.
-We target the EQA/find-phase legs of these episodes, leaving the pick/place planner to future work.
+MolmoSpaces also hosts an open manipulation leaderboard; \textbf{TiPToP}~\citep{shen2026tiptop} composes a GPU-parallel Task-and-Motion-Planning core (cuTAMP~\citep{shen2024cutamp}) with off-the-shelf perception and VLM grounding to search pick-and-place sequences directly from pixels.
+TiPToP constructs object geometry and symbolic goals from images, then searches action sequences including obstacle relocation.
+Its documented execution uses open-loop trajectories with joint impedance control, and its perception assumes task-relevant objects are at least partially visible from a fixed capture viewpoint.
+This motivates explicit geometric feasibility checks beneath language-level task selection.
+Our current manipulation evidence is narrower: a stationary Stretch simulator executes public JSON tools using privileged geometry and measured execution checks (Appendix~\ref{app:native_tamp}).
+Connecting those tools to dynamic observed memory, exploration, and verified multi-step execution remains an integration objective; we do not claim comparable end-to-end manipulation performance.

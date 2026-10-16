@@ -43,6 +43,7 @@ def query_answer(
     evidence_obs_id: int | None = None,
     evidence_labels: list[str] | None = None,
     evidence_roles: list[str] | None = None,
+    model_final: bool = False,
 ) -> tuple[str, str, bool, str, np.ndarray | None, list[Image.Image]]:
     """
     Answer the question using the scene graph and task-relevant images.
@@ -59,6 +60,8 @@ def query_answer(
             capped by eqa_max_images, without inserting graph objects.
         evidence_obs_id: Identity of Image 1, if known. Existing graph identity is
             retained only when its stored pixels match; voxel IDs need no node.
+        model_final: Return the model's parsed semantic answer without legacy
+            answer substitutions, extra inference, or graph-confidence gates.
 
     Returns:
         reasoning, answer, confidence, confidence_reasoning, target_point, relevant_images
@@ -473,6 +476,48 @@ def query_answer(
         action,
         confidence_reasoning,
     )
+    if model_final:
+        # Final answer authority belongs to this model call. No semantic
+        # replacement, re-voting, graph-based confidence gate or salvage call.
+        answer = str(answer or "").strip() or "Unknown"
+        confidence = bool(confidence) and not answer_is_unknownish(answer, parsed_choices)
+        self.last_eqa_parsed = (reasoning, answer, confidence, action, confidence_reasoning)
+        self.last_eqa_model_confident = confidence
+        self.last_eqa_salvage_used = False
+        self.last_eqa_answer_field_emitted = bool(re.search(r'["\']?answer["\']?\s*:', str(raw or ""), re.I))
+        self._record_eqa_decision_trace(
+            iteration=len(self._history_outputs) + 1,
+            question=question,
+            text_blocks=text_blocks,
+            obs_ids=list(obs_ids),
+            crop_obs_id=crop_oid,
+            nav_fallback_count=len(nav_fallback_tail),
+            relevant_images=relevant_images,
+            image_roles=(evidence_roles or ["assessed_view"] + ["pre_approach_context"] * (len(evidence) - 1))
+            if evidence
+            else None,
+            view_status=view_status,
+            close_look_status="",
+            vlm_raw=str(raw or ""),
+            parsed={
+                "reasoning": reasoning,
+                "answer": answer,
+                "confidence": confidence,
+                "action": action,
+                "confidence_reasoning": confidence_reasoning,
+            },
+        )
+        self._append_eqa_history(
+            self.format_eqa_history_outcome(
+                answer=answer,
+                confidence=confidence,
+                action=action,
+                reasoning=reasoning,
+                salvage=False,
+                obs_ids=list(obs_ids),
+            )
+        )
+        return reasoning, answer, confidence, confidence_reasoning, None, relevant_images
     answer_outputs = (raw or "").replace("*", "").replace("#", "").lower()
     # Salvage: small VLMs sometimes run away captioning and never emit ``answer:``.
     # Re-ask tersely for semantic option text.
