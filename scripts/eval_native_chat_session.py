@@ -14,11 +14,11 @@ import sys
 from pathlib import Path
 
 import mujoco
-from eval_native_table_agent import goal_predicates
 
 from emet.config.sim_launch_config import load_sim_launch_config_from_path
 from emet.eval.native_chat_scoring import failure_boundaries, integration_evidence
 from emet.eval.native_table_live import live_table_robot
+from emet.eval.native_table_scoring import goal_predicates, load_placement_regions
 from emet.simulation.mujoco_server_stretch import default_scene_xml_path
 from emet.utils.process_tree import popen_session, terminate_process_tree
 
@@ -38,7 +38,11 @@ def main():
     config = load_sim_launch_config_from_path(str(args.live_sim))
     if not config.no_cameras:
         parser.error('This diagnostic requires no_cameras: true')
-    goals = dict(zip(('object2', 'object1'), json.loads(args.placement_regions.read_text()), strict=True))
+    try:
+        regions = load_placement_regions(args.placement_regions)
+    except (OSError, ValueError, TypeError) as exc:
+        parser.error(str(exc))
+    goals = dict(zip(('object2', 'object1'), regions, strict=True))
     os.environ['EMET_PHYSICAL_EXECUTION'] = '1'
     os.environ['EMET_PHYSICAL_AUDIT'] = str(out / 'actuation.jsonl')
     instruction = (

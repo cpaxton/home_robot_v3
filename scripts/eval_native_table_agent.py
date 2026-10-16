@@ -17,7 +17,6 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import mujoco
-import numpy as np
 from eval_native_table_contact import ContactRobot
 from transformers import set_seed
 
@@ -26,44 +25,10 @@ from emet.agent.prompt import AgentPromptBuilder, parse_tool_calls_response
 from emet.agent.tools import get_tools
 from emet.controller.manipulation import physical_pick_place
 from emet.controller.task.tamp import native_adapter
+from emet.eval.native_table_scoring import goal_predicates, load_placement_regions
 from emet.llms.openai_client import OpenaiClient
 from emet.llms.qwen_client import Qwen25Client
 from emet.simulation.mujoco_server_stretch import default_scene_xml_path
-from emet.simulation.sim_object_placements import placements_from_mujoco_model
-
-
-def goal_predicates(robot, goals):
-    """Independent privileged scoring: whole XY footprint, support, and stillness."""
-    scratch = mujoco.MjData(robot.model)
-    mujoco.mj_copyData(scratch, robot.model, robot.data)
-    mujoco.mj_kinematics(robot.model, scratch)
-    mujoco.mj_collision(robot.model, scratch)
-    placements = placements_from_mujoco_model(robot.model, scratch)
-    table = robot.model.body('table').id
-    fingertips = {robot.model.body(name).id for name in ('rubber_tip_left', 'rubber_tip_right')}
-    rows = {}
-    for name, region in goals.items():
-        body = robot.model.body(name)
-        bounds = np.asarray(placements[name]['bounds'])[:, :2]
-        region = np.asarray(region)
-        inside = bool(np.all(bounds[0] >= region[0] - .005) and np.all(bounds[1] <= region[1] + .005))
-        touched = {int(other) for c in scratch.contact if body.id in robot.model.geom_bodyid[c.geom]
-                   for other in robot.model.geom_bodyid[c.geom] if other != body.id}
-        supported = table in touched and not fingertips.intersection(touched)
-        dof = robot.model.jnt_dofadr[body.jntadr[0]]
-        settled = bool(np.linalg.norm(scratch.qvel[dof:dof+3]) <= .01
-                       and np.linalg.norm(scratch.qvel[dof+3:dof+6]) <= .1)
-        rows[name] = {'in_region': inside, 'supported': supported, 'settled': settled,
-                      'satisfied': inside and supported and settled, 'bounds_xy': bounds.tolist()}
-    return rows
-
-
-def load_placement_regions(path):
-    regions = np.asarray(json.loads(path.read_text()), dtype=float)
-    if (regions.shape != (2, 2, 2) or not np.isfinite(regions).all()
-            or not np.all(regions[:, 0] < regions[:, 1])):
-        raise ValueError('Expected cylinder and box XY regions, each with finite increasing min/max bounds')
-    return regions.tolist()
 
 
 def main():

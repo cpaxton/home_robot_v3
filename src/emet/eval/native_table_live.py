@@ -40,10 +40,16 @@ class LiveTableRobot:
         mujoco.mj_kinematics(self.model, self.data)
 
     def step(self, seconds):
-        """Wait for physics progress; never advance or pause the remote simulator."""
+        """Wait for progress with >=30 s slack and a 10x allowance for long waits.
+
+        A timeout propagates immediately; callers must not swallow it and keep
+        settling. The 40-step evaluator loop therefore aborts on the first stall.
+        """
+        if not np.isfinite(seconds) or seconds < 0:
+            raise ValueError('invalid live wait duration')
         self.refresh()
         start = float(self.data.time)
-        deadline = time.monotonic() + 30
+        deadline = time.monotonic() + max(30., 10. * seconds)
         while self.data.time - start < seconds:
             if time.monotonic() >= deadline:
                 raise TimeoutError('live physics stopped advancing')

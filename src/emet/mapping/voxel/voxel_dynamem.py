@@ -23,6 +23,7 @@ import torch.nn.functional as F
 from scipy.ndimage import maximum_filter, median_filter
 from torch import Tensor
 
+from emet.controller.manipulation.native_inputs import RGBD_POINTCLOUD_SOURCE
 from emet.core.parameters import Parameters
 from emet.llms import OpenaiClient
 from emet.llms.eqa_vl_settings import resolve_vl_endpoint
@@ -592,7 +593,7 @@ class SparseVoxelMap(DynamemVoxelEQAMixin, DynamemVoxelLocalizeMixin, SparseVoxe
         base_xyt: np.ndarray | None = None,
         full_perception: bool = True,
         received_monotonic: float | None = None,
-        depth_evidence_source: str = 'rgbd_pointcloud',
+        depth_evidence_source: str = RGBD_POINTCLOUD_SOURCE,
     ):
         """
         Process rgbd images for Dynamem

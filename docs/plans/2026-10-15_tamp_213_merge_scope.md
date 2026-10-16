@@ -76,3 +76,32 @@ Keep its draft status until orchestration review is complete; observed detector
 success is not the criterion for removing draft status. Continue future observed
 perception work with the owners of the relevant incoming providers, then validate
 camera-grounded discovery before observed motion.
+
+
+## Follow-up review confirmation
+
+The follow-up review against `12bd88fc` confirms the batch boundary, scoring
+semantics, explicit user rows, region validation and geometry regression, with
+no blockers. Remaining maintainability nits are addressed as follows:
+
+- Position provenance values now come from shared constants in `native_inputs`.
+  The estimated-depth flag describes source provenance; `depth_reused` separately
+  determines whether that frame can provide fresh evidence.
+- Tool construction remains lazy. A regression forbids perception/model-loader
+  imports and runtime capability access while constructing the actual CHAT pack.
+  Executor CPU/manipulation-only flags disable perception initialization before
+  this pack is filtered for camera-free sessions.
+- The live wait watchdog retains 30 seconds for short waits and allows ten times
+  the requested duration for longer waits. A timeout aborts on the first stalled
+  settle step; the evaluator does not wait through 40 separate timeouts.
+- Both evaluators import `goal_predicates` and region validation from
+  `emet.eval.native_table_scoring`, eliminating the CHAT evaluator's sibling-script
+  dependency. A real MuJoCo regression preserves footprint/support/stillness
+  scoring and proves live buffers remain unchanged.
+- API docs explicitly state that observed task handles are per-discovery and
+  change on re-discovery even when the observation is unchanged.
+
+Validation: 68 targeted CPU tests passed with no failures or skips. Both
+experiment CLI help commands were smoke-checked; Ruff and diff checks passed.
+No physical results were rerun or rescored. The PR remains a draft as requested;
+these nits do not add a new perception or hardware merge gate.

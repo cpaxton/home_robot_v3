@@ -18,6 +18,7 @@ import torch.nn.functional as F
 from torch import Tensor
 
 from emet.config.agents import load_agent_config
+from emet.controller.manipulation.native_inputs import RGBD_POINTCLOUD_SOURCE
 from emet.mapping.scene_graph.open_vocab_scene_graph import (
     ObjectObservation,
     OpenVocabSceneGraph,
@@ -170,7 +171,7 @@ class SceneGraphProcessor:
         world_xyz: Tensor | None = None,
         vocabulary: list[str] | None = None,
         received_monotonic: float | None = None,
-        depth_evidence_source: str = 'rgbd_pointcloud',
+        depth_evidence_source: str = RGBD_POINTCLOUD_SOURCE,
     ) -> list[int]:
         """Process a single RGBD frame and update the scene graph.
 

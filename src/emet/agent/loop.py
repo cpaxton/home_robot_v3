@@ -882,6 +882,9 @@ def run_agent_with_robot(
     # Build tools from context
     tools = get_tools(context)
     if state_only_sim:
+        # get_tools registers schemas/lazy closures; it does not load perception
+        # weights. CPU-only + manipulation_only executor setup above disables
+        # the model-loading paths; this filter limits what the LLM can invoke.
         tools = [tool for tool in tools if tool.name in TAMP_TOOLS or tool.name == "quit"]
     tools_by_name = {t.name: t for t in tools}
     print(colored("Agent tools: " + ", ".join(t.name for t in tools), "yellow"))

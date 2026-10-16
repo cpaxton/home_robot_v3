@@ -78,3 +78,23 @@ def test_shared_skill_aliases_document_mode_names():
     assert SHARED_SKILL_ALIASES["in_place_scan"][AgentMode.EQA_EPISODE] == "look_around"
     assert SHARED_SKILL_ALIASES["explore_motion"][AgentMode.CHAT] == "explore"
     assert SHARED_SKILL_ALIASES["explore_motion"][AgentMode.EQA_EPISODE] == "explore_frontier"
+
+
+def test_building_chat_tools_does_not_initialize_perception_models(monkeypatch):
+    import builtins
+
+    import pytest
+
+    class UnavailableRuntime:
+        def __getattr__(self, name):
+            pytest.fail(f'tool construction accessed runtime capability {name}')
+    original_import = builtins.__import__
+    def no_perception_import(name, *args, **kwargs):
+        if name.startswith(('emet.perception', 'transformers', 'timm')):
+            pytest.fail(f'tool construction imported model-loading code: {name}')
+        return original_import(name, *args, **kwargs)
+    monkeypatch.setattr(builtins, '__import__', no_perception_import)
+    runtime = UnavailableRuntime()
+    tools = get_tools({'robot': runtime, 'executor': runtime, 'memory_backend': runtime,
+                       'graph_memory_backend': runtime, 'scene_graph_processor': runtime})
+    assert {'scene_tasks', 'plan_pick_place', 'execute_pick_place_plan'} <= {t.name for t in tools}

@@ -391,7 +391,10 @@ freshness alone is not a claim of synchronized sensor capture or calibrated pose
 `scene_tasks` returns the existing versioned JSON envelope, with
 `data.inputs = "observed"`, `discovery_only = true`, `planning_available = false`,
 and `execution_available = false`. Task entries contain opaque per-discovery
-handles, semantic names, world positions, sources and observation ages. These are
+handles, semantic names, world positions, sources and observation ages. Observed
+`task_ref` handles are scoped to one discovery result: re-discovery creates new
+handles even for unchanged observations. They are not stable object identities;
+copy handles from the result being used. These are
 proposals, not executable plan handles or certified affordances. The CHAT loop
 summarizes this result and stops the turn instead of continuing into manipulation.
 Native planning/execution gates remain unchanged and still reject observed mode.

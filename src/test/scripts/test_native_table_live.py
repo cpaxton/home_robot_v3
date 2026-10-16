@@ -75,3 +75,24 @@ def test_read_only_observer_never_claims_command_ownership(monkeypatch, tmp_path
         client.set_velocity.assert_not_called()
     client.stop.assert_called_once()
     cleanup.assert_called_once_with(server)
+
+
+def test_long_live_wait_scales_deadline_without_stepping_physics(monkeypatch):
+    robot = object.__new__(live.LiveTableRobot)
+    robot.data = SimpleNamespace(time=0.)
+    robot.refresh = lambda: None
+    ticks = iter([0., 31., 39.])  # Four simulated seconds allow 40 wall seconds.
+    monkeypatch.setattr(live.time, 'monotonic', lambda: next(ticks))
+    def progress(_):
+        robot.data.time += 2.
+    monkeypatch.setattr(live.time, 'sleep', progress)
+    robot.step(4.)
+    assert robot.data.time == 4.
+
+
+@pytest.mark.parametrize('seconds', [-1., float('nan'), float('inf')])
+def test_invalid_live_wait_duration_rejects_before_refresh(seconds):
+    robot = object.__new__(live.LiveTableRobot)
+    robot.refresh = lambda: pytest.fail('invalid duration must not touch the client')
+    with pytest.raises(ValueError, match='invalid live wait'):
+        robot.step(seconds)

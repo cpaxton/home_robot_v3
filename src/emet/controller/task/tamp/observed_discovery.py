@@ -15,7 +15,12 @@ from typing import Protocol
 
 import numpy as np
 
-from emet.controller.manipulation.native_inputs import ObjectPoseEvidence, ObservationUnavailable
+from emet.controller.manipulation.native_inputs import (
+    OBSERVED_POSITION_SOURCES,
+    RGBD_POINTCLOUD_SOURCE,
+    ObjectPoseEvidence,
+    ObservationUnavailable,
+)
 from emet.controller.task.tamp.api import response
 
 
@@ -31,7 +36,7 @@ class ObservedPositionEvidence:
         point = np.asarray(self.position, dtype=float)
         if (point.shape != (3,) or not np.isfinite(point).all()
                 or not np.isfinite(self.received_monotonic) or not self.observation_id
-                or self.source not in {'rgbd_pointcloud', 'estimated_depth_pointcloud'}):
+                or self.source not in OBSERVED_POSITION_SOURCES):
             raise ValueError('invalid_observed_position')
         object.__setattr__(self, 'position', np.frombuffer(point.tobytes(), dtype=float))
 
@@ -132,7 +137,7 @@ class RgbdTaskProvider:
         with self._lock:
             return self._candidates
 
-    def update(self, observations, *, received_monotonic=None, source='rgbd_pointcloud'):
+    def update(self, observations, *, received_monotonic=None, source=RGBD_POINTCLOUD_SOURCE):
         candidates = []
         if received_monotonic is not None and np.isfinite(received_monotonic):
             objects, supports = [], []

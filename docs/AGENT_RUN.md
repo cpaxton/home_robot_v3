@@ -331,7 +331,9 @@ turn. A request only to plan does not authorize execution.
 
 `--state-only-sim --memory-backend dynamem` is an explicit camera-free Stretch
 simulation diagnostic. It requires LLM CHAT, no EQA/camera input or checkpoint,
-and server metadata advertising zero cameras. It loads no perception models and
+and server metadata advertising zero cameras. Its CPU/manipulation-only executor
+setup disables perception model loading. Tool construction registers lazy
+callbacks before the allowed-tool filter; it does not load model weights. It
 exposes only TAMP tools and `quit`. Use explicit `--robot-ip 127.0.0.1` and matching
 ports for a local simulator, because an active connection profile can otherwise
 supply the host. Native tests also select `agent.manip_mode=physical` and
