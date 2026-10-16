@@ -98,6 +98,7 @@ class SelectionConfig:
     angle_scale_deg: float = 60.0
     # Experimental weights, not tuned defaults or claimed optimal settings.
     weights: tuple[float, ...] = (0.1, 0.3, 0.2, 0.2, 0.15, 0.05)
+    spatial_labels: bool = False
 
     def __post_init__(self):
         if self.policy not in ("recency", "pose", "embedding", "coverage", "hybrid"):
@@ -141,7 +142,30 @@ class ViewSelection:
     config: SelectionConfig
 
     def prompt_labels(self) -> str:
-        return "\n".join(view.label(i) for i, view in enumerate(self.views, 1))
+        return "\n".join(self.image_labels())
+
+    def image_labels(self) -> list[str]:
+        """One label per image; preserve the same provenance at final submission."""
+        labels = [view.label(i) for i, view in enumerate(self.views, 1)]
+        if not self.config.spatial_labels or not labels:
+            return labels
+        times = sorted({view.frame.timestamp_s for view in self.views})
+        for i, view in enumerate(self.views):
+            pose = view.frame.camera_pose
+            geometry = "camera position/direction unavailable"
+            if pose is not None:
+                xyz = ", ".join(f"{x:.2f}" for x in pose[:3, 3])
+                forward = ", ".join(f"{x:.2f}" for x in pose[:3, 2])
+                geometry = f"camera XYZ=({xyz}) m; viewing direction=({forward})"
+            sequence = times.index(view.frame.timestamp_s) + 1
+            labels[i] += f" Capture sequence={sequence}; {geometry}."
+        labels[0] = (
+            "Capture sequence is chronological within this packet (1 = earliest); "
+            "image display order is different. Positions are camera XYZ in meters in "
+            "one shared world frame; directions are camera optical-forward unit vectors "
+            "in that frame. These are camera poses, not object locations.\n" + labels[0]
+        )
+        return labels
 
     def to_dict(self) -> dict:
         """JSON-safe audit record; pixels/embeddings stay outside the manifest."""

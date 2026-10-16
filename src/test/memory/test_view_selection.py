@@ -33,6 +33,19 @@ def ids(result):
     return [v.frame.view_id for v in result.views]
 
 
+def test_spatial_labels_preserve_images_and_exact_packet_context_at_handoff():
+    frames = [frame(1, x=2), frame(2, x=1)]
+    plain = select_views(frames, current_id="2")
+    spatial = select_views(frames, current_id="2", config=SelectionConfig(spatial_labels=True))
+    assert ids(plain) == ids(spatial)
+    assert spatial.views[0].frame is plain.views[0].frame
+    assert "\n".join(spatial.image_labels()) == spatial.prompt_labels()
+    assert len(spatial.image_labels()) == len(spatial.views)
+    assert "Capture sequence=2; camera XYZ=(1.00, 0.00, 0.00)" in spatial.image_labels()[0]
+    assert "camera poses, not object locations" in spatial.image_labels()[0]
+    assert "Capture sequence=" not in plain.prompt_labels()
+
+
 def test_budget_cut_opposite_basis_does_not_break_retained_packet():
     current = frame(3)
     other = frame(1)
