@@ -35,6 +35,23 @@ permission to merge. Keep defaults unchanged; no full sweep or hardware gate.
   EQA-12 seed: job `20261015_212434_f4fcff`, output
   `/tmp/emet-reviewed-evidence-profile-eqa12-s0-20261015`. Defaults unchanged.
 
+Early checks on that live pilot confirm actual spatial prompt labels and four
+retained images (current, pre-turn, two context). q12 now passes with both beds
+and bedside tables visible in approach context; q14 still fails. Its final
+model answer is correctly "In the living room", but the confirmed assessment's
+"Next to the TV" wins the existing precedence rule. The context images do show
+a TV elsewhere in the room; co-occurrence is not proof of the stated relation.
+Do not patch the rule for this question: an offline audit of the previous
+36-episode candidate finds nine confident final/scored disagreements; blindly
+preferring the final model would lose five net correct answers. This is an
+answer-policy/model-consistency limitation, not an established general repair.
+Both final and assessed responses remain available for diagnosis.
+
+The linked SAM2 checkpoint constructs successfully on CPU both in a fresh
+process and after loading the real default config. This validates dependency
+availability, not mask quality. The integrated TAMP API/bridge suite passes
+57 tests; the evidence/selection/history/capture suite passes 81 tests.
+
 Do not substitute the earlier development result (26/36 versus 25/36) for
 these exact-head gates. Navigation, recovery and evidence contracts have unit
 coverage, but the shared-agent task acceptance remains open. Native TAMP tools
