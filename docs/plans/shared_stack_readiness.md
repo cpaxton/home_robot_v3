@@ -5,6 +5,37 @@ permission to merge. Keep defaults unchanged; no full sweep or hardware gate.
 
 ## Acceptance review repairs — 2026-10-15
 
+### Current continuation checkpoint (22:08 ET)
+
+- #185 is **ready for tooling review**, not merged; runtime/task gates remain
+  open. Main and the shared dirty workspace have not been modified.
+- Active clean-weight S0 control: `20261015_213514_ca66a7`, frozen `63016107`.
+- Queued EQA discordance repeats: `20261015_215827_91edf0`, frozen `7c1bba8e`.
+- Queued repaired S0: `20261015_220801_2bc43b`, frozen `2bf77670`, output
+  `/tmp/emet-reviewed-s0-configured-budget-20261015`. Only two repairs differ
+  from `63016107`: configured-timeout precedence and measured timeout travel.
+  Roots stay frozen until their jobs finish; all use one exclusive GPU lock.
+
+The clean-weight S0 control exposed an actual harness bug: YAML requests 30 s,
+but the find runner overwrites it with its S0 default of 15 s. A command receipt
+reports `motion deadline exceeded`; measured base motion is about 0.56 m while
+the timeout attempt publishes `dist_m=0`. #185 `872e319a` resolves timeout after
+loading parameters (explicit run override > YAML > existing defaults), and
+records the effective budget in metrics. #182 `9a5aec0b` retains measured
+displacement on timeout without changing failure/success/arrival semantics or
+any tolerance. 28 timeout/config/metrics tests and 19 navigation tests pass;
+the isolated integration passes all 47. Real-loader check confirms 30 s is used.
+This repair changes effective budget, so its S0 diagnostic is **not** an
+equal-budget accuracy ablation. Earlier S0 controls used 15 s on both arms;
+RoboCasa/Molmo defaults were already 30 s.
+
+Read-only published native TAMP snapshots confirm S0's objects remain on the
+table (~0.52 m Z) and the robot is upright (~0.99999 body-up dot world-Z).
+Published intrinsics imply a 43.1-degree horizontal FOV. No simulator truth was
+sent to the agent or used for navigation. The first failed motion did not
+establish a completed arrival, so do not attribute its subsequent empty view
+to a VLM/SAM grounding failure. Diagnostic script: `/tmp/inspect-s0-framing.py`.
+
 ### Latest gate outcomes (evening)
 
 - Repaired default integration `63016107` versus main `801dce82`, paired
@@ -109,7 +140,7 @@ do not present this as a meaningful accuracy gain or this PR's exact-head gate.
 | PR | Ownership | Current gate |
 | --- | --- | --- |
 | #181 `dc106273` | Opt-in grounding providers, shared assessment dispatch | Exact-head q12/14/56/6 attribution completed 4/4 at `slice181-eqa4-retry-20261012`; 118 grounding/conversation plus 11 assessment tests previously passed. Live/cached provider audit remains open. |
-| #182 `9a0ac978` | Measured navigation, clearance, wheel contacts | Reviewed exploration-mode propagation fixed; 42 route/sweep/arrival tests and 5 real-scene wheel-contact tests passed. Short Molmo rby1 drive and final task gate remain open. |
+| #182 `9a5aec0b` | Measured navigation, clearance, wheel contacts | Reviewed exploration-mode propagation fixed; 42 route/sweep/arrival tests and 5 real-scene wheel-contact tests passed. New timeout travel repair passes 19 navigation tests. Short Molmo rby1 drive and final task gate remain open. |
 | #184 `d2e922a0` | Bounded head/floor recovery, measured head-arrival fix, executor delegation | Shared status contract and two-total-capture bound repaired; integration suite passes. Intended live recovery demonstration remains open. |
 | #185 | Frozen drivers, evidence isolation, queue ordering, environment discovery | 62 acceptance/discovery/queue/registry tests and 24 OVMM result/exception tests passed. Completed room failures are correctly reported, not task passes. Local-asset VLM retry pending. |
 | #199 `9df2a382` | Preserve assessed camera pixels through final submission | Exact pixel identity is protected; no accuracy-gain claim. Joint repaired-head EQA gate is running. |
