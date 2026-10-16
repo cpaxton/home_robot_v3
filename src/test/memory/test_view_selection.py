@@ -41,6 +41,9 @@ def test_spatial_label_ablation_preserves_selected_images():
     assert "Capture sequence=" not in role.prompt_labels()
     assert "Capture sequence=" in spatial.prompt_labels()
     assert spatial.to_dict()["prompt_labels"] == spatial.prompt_labels()
+    assert "\n".join(spatial.image_labels()) == spatial.prompt_labels()
+    assert len(spatial.image_labels()) == len(spatial.views)
+    assert "\n".join(role.image_labels()) == role.prompt_labels()
 
 
 def test_spatial_labels_use_capture_order_and_optical_forward():

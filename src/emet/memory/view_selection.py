@@ -161,6 +161,20 @@ class ViewSelection:
     metrics: dict
     config: SelectionConfig
 
+    def image_labels(self) -> list[str]:
+        """One label per image, preserving the full packet provenance header."""
+        labels = [view.label(i) for i, view in enumerate(self.views, 1)]
+        if not self.config.spatial_labels or not labels:
+            return labels
+        labels = _spatial_image_labels(
+            [
+                {"label": label, "timestamp_s": view.frame.timestamp_s, "camera_pose": view.frame.camera_pose}
+                for label, view in zip(labels, self.views, strict=True)
+            ]
+        )
+        labels[0] = _SPATIAL_PACKET_CONTEXT + "\n" + labels[0]
+        return labels
+
     def prompt_labels(self) -> str:
         if not self.config.spatial_labels:
             return "\n".join(view.label(i) for i, view in enumerate(self.views, 1))
@@ -194,6 +208,14 @@ class ViewSelection:
         }
 
 
+_SPATIAL_PACKET_CONTEXT = (
+    "Capture sequence is chronological within this packet (1 = earliest); "
+    "image display order is different. Positions are camera XYZ in meters in "
+    "one shared world frame; directions are camera optical-forward unit vectors "
+    "in that frame. These are camera poses, not object locations."
+)
+
+
 def spatial_packet_labels(rows) -> str:
     """Describe same-world captures without confusing display order with time.
 
@@ -201,15 +223,14 @@ def spatial_packet_labels(rows) -> str:
     enforces both). Sequence ranks are packet-local, not global sensor IDs;
     simultaneous captures share a rank. Missing poses remain explicitly unknown.
     """
+    return "\n".join([_SPATIAL_PACKET_CONTEXT, *_spatial_image_labels(rows)])
+
+
+def _spatial_image_labels(rows) -> list[str]:
     times = sorted({float(row["timestamp_s"]) for row in rows})
     if not all(math.isfinite(t) for t in times):
         raise ValueError("Capture timestamps must be finite")
-    lines = [
-        "Capture sequence is chronological within this packet (1 = earliest); "
-        "image display order is different. Positions are camera XYZ in meters in "
-        "one shared world frame; directions are camera optical-forward unit vectors "
-        "in that frame. These are camera poses, not object locations."
-    ]
+    lines = []
     for row in rows:
         sequence = times.index(float(row["timestamp_s"])) + 1
         pose = row.get("camera_pose")
@@ -222,7 +243,7 @@ def spatial_packet_labels(rows) -> str:
             forward = ", ".join(f"{x:.2f}" for x in pose[:3, 2])
             geometry = f"camera XYZ=({xyz}) m; viewing direction=({forward})"
         lines.append(f"{row['label']} Capture sequence={sequence}; {geometry}.")
-    return "\n".join(lines)
+    return lines
 
 
 def _cosine(a: np.ndarray, b: np.ndarray) -> float:
