@@ -2,6 +2,27 @@
 
 ## Closeout audit — 2026-10-16 (current; dated sections below are history)
 
+### Requested main-integrated pilot
+
+Job `20261016_132245_d318eb`, source `0873430d` on
+`test/final-model-pilots-20261016`: 12 EQA questions (seed 0), then serial S0
+Stretch, RoboCasa Stretch and MolmoSpaces rby1 find checks. Fetched main remains
+`801dce82`; merged into #216 at `52464a8e`, preserving main's shared TAMP
+base-pose query helper. Integrated authority/selector/driver/TAMP suite: 262 pass.
+
+EQA uses `configs/emet/pilot_model_final.yaml`: model_final, pose selection,
+spatial labels, maximum four images, no experimental approach-history module.
+Room driver explicitly writes model_final in config and manifest (4 driver
+tests pass); VLM/depth-candidate/SAM grounding, physical navigation, 30 s step
+timeout, four mapping headings. Local Qwen3-VL-8B int4 throughout. This is one
+candidate, not a paired accuracy result, complete manipulation or a full sweep.
+
+Artifacts: `/tmp/emet-final-model-pilot-results-20261016`; job log:
+`/home/cpaxton/runs/emet/jobs_runs/final-model-eqa12-room3/job.log`.
+At scheduling, exclusive GPU lock acquired and admission stability check pending.
+No new score yet. Keep source frozen and inspect actual images, measured motion,
+answer provenance and admitted geometry before interpreting aggregate metrics.
+
 Main is `801dce82`. Do not merge the old monolithic experiment into main.
 Land the owned slices bottom-up, with defaults unchanged. No full sweep or
 hardware deployment was run for this closeout. There are no GitHub inline
