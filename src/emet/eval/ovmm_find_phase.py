@@ -220,10 +220,13 @@ def resolve_find_phase_nav_step_timeout(
     cpu_only: bool,
     sim_kind: str,
     override: float | None = None,
+    configured: float | None = None,
 ) -> float:
     """ZMQ nav/obs wait budget for find-phase mapping (rotate + explore)."""
     if override is not None:
         return float(override)
+    if configured is not None:
+        return float(configured)
     if cpu_only:
         return 45.0
     if sim_kind in ("robocasa", "molmospaces"):
@@ -1593,12 +1596,6 @@ def run_episode_find_phase(
         env["CUDA_VISIBLE_DEVICES"] = ""
 
     sim_kind = str(getattr(sim_cfg, "kind", ""))
-    nav_timeout = resolve_find_phase_nav_step_timeout(
-        cpu_only=run_cfg.cpu_only,
-        sim_kind=sim_kind,
-        override=run_cfg.nav_step_timeout_s,
-    )
-
     sim_cfg = replace(sim_cfg, port_offset=port_offset, headless=True)
     server_argv = prepare_mujoco_server_argv(sim_cfg)
     server_cmd = [sys.executable, "-m", "emet.simulation.mujoco_server", *server_argv]
@@ -1635,6 +1632,12 @@ def run_episode_find_phase(
             staleness_horizon=run_cfg.staleness_horizon,
             s0_parity=s0_parity,
             use_agentic=use_agentic,
+        )
+        nav_timeout = resolve_find_phase_nav_step_timeout(
+            cpu_only=run_cfg.cpu_only,
+            sim_kind=sim_kind,
+            override=run_cfg.nav_step_timeout_s,
+            configured=parameters.get("find_phase_nav_step_timeout_s"),
         )
         if run_cfg.query_driven_memory:
             from emet.eval.benchmark_dynagraph import enable_query_driven_memory
@@ -1903,6 +1906,7 @@ def run_episode_find_phase(
             **ovmm_find_query_row(query),
             "manip_mode": str(run_cfg.manip_mode),
             "init_wall_s": float(init_wall_s),
+            "nav_step_timeout_s": float(nav_timeout),
             "mapping_wall_s": float(mapping_wall_s),
             "query_wall_s": float(query_wall_s),
             "vl_endpoint": vl_endpoint_used,
