@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Callable
 from typing import Any
 
@@ -87,8 +88,6 @@ def navigation_feedback(agent: Any | None) -> dict:
     result = {key: meta[key] for key in keys if key in meta}
     candidates = meta.get("view_candidates")
     if candidates:
-        from collections import Counter
-
         eligible = [candidate for candidate in candidates if candidate.get("reason") == "eligible"]
         compact_keys = ("index", "resolved_goal", "estimated_gain_m2", "path_m", "turn_rad", "score")
         result["view_selection"] = {
@@ -96,7 +95,7 @@ def navigation_feedback(agent: Any | None) -> dict:
             "reason_counts": dict(Counter(candidate.get("reason", "unknown") for candidate in candidates)),
             "top_estimated_views": [
                 {key: candidate[key] for key in compact_keys if key in candidate}
-                for candidate in sorted(eligible, key=lambda c: -c["score"])[:3]
+                for candidate in sorted(eligible, key=lambda c: -c.get("score", 0))[:3]
             ],
         }
     return result
