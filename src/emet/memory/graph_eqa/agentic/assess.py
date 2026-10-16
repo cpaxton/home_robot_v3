@@ -488,7 +488,7 @@ def _run_vlm_view_assess(
             self._assessed_image_metadata = {}
         self._assessed_image_metadata[oid] = (
             {
-                "evidence_labels": [v.label(i) for i, v in enumerate(selection.views, 1)],
+                "evidence_labels": selection.image_labels(),
                 "evidence_roles": [v.role for v in selection.views],
             }
             if selection is not None
