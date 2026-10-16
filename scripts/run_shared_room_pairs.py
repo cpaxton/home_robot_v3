@@ -25,13 +25,15 @@ def run(args):
         "episodes": args.episodes,
         "seed": args.seed,
         "scan_steps": args.scan_steps,
+        "arms": args.arms,
+        "grounding_backend": args.grounding_backend,
         "driver_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
         "scope": "find only, physical navigation, local Qwen3-VL int4; not manipulation acceptance",
     }
     (args.output / "manifest.json").write_text(json.dumps(manifest, indent=2))
     all_complete, all_success = True, True
     for index, episode in enumerate(args.episodes):
-        for arm in ["main", "candidate"] if index % 2 == 0 else ["candidate", "main"]:
+        for arm in args.arms if index % 2 == 0 else list(reversed(args.arms)):
             root = roots[arm]
             if git(root, "rev-parse", "HEAD") != revisions[arm] or git(root, "diff", "HEAD", "--stat"):
                 raise RuntimeError(f"Frozen source changed: {root}")
@@ -42,8 +44,14 @@ def run(args):
                 f"extends: {root}/configs/emet/default.yaml\n"
                 + "mapping:\n  query_driven_memory: true\n  debug_perfect_sensor_depth: true\n"
                 "  find_phase_nav_step_timeout_s: 30.0\n  motion_planner:\n    obstacle_map_mode: physical\n"
-                "  query_memory:\n    grounding_backend: yoloe\n"
-                "  eqa:\n    agentic_verify: true\n    collect_agentic_trace: true\n"
+                f"  query_memory:\n    grounding_backend: {args.grounding_backend}\n"
+                + (
+                    "    region_strategy: depth_candidates\n    mask_backend: yoloe_sam2\n"
+                    "    surface_presentation: context\n    recover_proposals_with_vlm: true\n"
+                    if args.grounding_backend == "vlm"
+                    else ""
+                )
+                + "  eqa:\n    agentic_verify: true\n    collect_agentic_trace: true\n"
                 "    vl_family: qwen3_vl\n    vl_hf_model_id: Qwen/Qwen3-VL-8B-Instruct\n    vl_quantization: int4\n"
             )
             env = os.environ.copy()
@@ -160,6 +168,8 @@ if __name__ == "__main__":
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--scan-steps", type=int, choices=(4, 8), default=4)
+    parser.add_argument("--arms", nargs="+", choices=("main", "candidate"), default=["main", "candidate"])
+    parser.add_argument("--grounding-backend", choices=("yoloe", "vlm"), default="yoloe")
     parser.add_argument(
         "--episodes",
         nargs="+",
