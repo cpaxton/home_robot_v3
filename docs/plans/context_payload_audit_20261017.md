@@ -237,7 +237,19 @@ argument rejection held enabled in all arms.
 Output: `/tmp/emet-history-paired12-20261017/{candidate,main}`.
 External frozen driver: `/tmp/emet-run-history-paired12-20261017.sh`; driver and
 config hashes plus per-arm source SHAs/exit codes are retained with the outputs.
-Results pending; changed answers/trajectories must be inspected before promotion.
+Completed cleanly: candidate 8/12, main 9/12, 24/24 readable episodes, no reported
+episode errors. Previous candidate was 6/12: q6 and q65 improve, no scored losses.
+Against main, candidate loses q12 and q14 and gains q65; all other scored outcomes
+agree. Single seed; no superiority or non-regression acceptance claim.
+
+Raw-output audit matters: main q12's final model says None, but `mcq_debias`
+substitutes the correct Two. Main q65's model says off, but `mcq_debias` substitutes
+the incorrect on. Candidate q65 preserves off but explicitly reasons from absence
+of a visible AC unit: this is a scored win, not grounded state evidence. Main q14
+final model and earlier assessment agree on living room; candidate final model
+says next to TV, so q14 remains a meaningful image/context discrepancy to inspect.
+Candidate q12 stops after one round at One versus main's eight rounds; inspect
+coverage/stopping and actual image packets before changing prompts or policies.
 
 Inspect completed replay and captured router requests before changing behavior.
 Likely narrowly scoped follow-ups are complete, bounded tool-result history
