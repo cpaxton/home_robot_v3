@@ -221,6 +221,24 @@ not claimed as naturally exercised online. A fresh focused rerun passed 43 tests
 Inspect context/memory cost before deciding whether instruction changes are still
 needed; full history is intentionally not silently truncated.
 
+### Full development pilot queued
+
+Job `20261017_081733_952378` (`history-paired12`) runs candidate `aeda57c4`
+then fetched main `801dce82` under one exclusive GPU lock, CPU-safe, seed 0,
+questions 2/6/12/14/15/16/25/28/31/56/65/68, local Qwen3-VL-8B int4,
+20 planning / 10 movement budget, lazy/query-driven, no GT semantic enrichment.
+Candidate retains `pilot_model_final.yaml`; main uses its native default config
+because it does not implement the candidate's final-answer/view-selector policies.
+This is a complete-system comparison, not a history-only ablation. The previous
+candidate's 6/12 is the closer repair reference; single-seed deltas remain noisy.
+Requested later history ablations are now tracked in candidate TODO.md with
+argument rejection held enabled in all arms.
+
+Output: `/tmp/emet-history-paired12-20261017/{candidate,main}`.
+External frozen driver: `/tmp/emet-run-history-paired12-20261017.sh`; driver and
+config hashes plus per-arm source SHAs/exit codes are retained with the outputs.
+Results pending; changed answers/trajectories must be inspected before promotion.
+
 Inspect completed replay and captured router requests before changing behavior.
 Likely narrowly scoped follow-ups are complete, bounded tool-result history
 (including no-op reads), explicit current-versus-historical image provenance,
