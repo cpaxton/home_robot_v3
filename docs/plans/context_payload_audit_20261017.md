@@ -176,6 +176,33 @@ but silently accepting unsupported arguments is misleading tool behavior.
 
 ## Next decision
 
+### User-prioritized repair — before instruction changes
+
+Branch `fix/agent-conversation-contract`, frozen live-check head `e68d8f8c`:
+06cf1eba repairs explicit multimodal conversation transport; 4e4dd204 connects
+episode dialogue, tool results, final answers, strict argument names and traces.
+No routing-rule or system-prompt rewrite. Conversation lives on the agent under
+episode/session + map-epoch scope, including both OVMM find phases. Perception
+inference remains isolated; new worlds/episodes cannot inherit old messages.
+
+Remote client and VL server now preserve assistant turns and prior user images,
+rather than flattening the request. Both sides of an old emet remote deployment
+must be updated. Undeclared arguments produce explicit recorded errors before
+execution; inspect_graph(query=...) is rejected, not silently applied/ignored.
+Automatic recovery's private budgets are not exposed as model-controllable args.
+
+470 focused tests pass, plus 47 room/navigation tests with one pre-existing
+SigLIP-upgrade fixture failure explicitly excluded and reproduced on unchanged
+parent 8216252f. New tests cover native image encoding, remote round trip,
+perception isolation, assistant/tool history, final-answer transfer, episode/world
+isolation, cross-OVMM-phase continuity, rollback and no-execution argument errors.
+
+Live contract check `20261017_075712_91ad9d`: EQA q2/6/14/56 then one Molmo rby1
+find, serial exclusive GPU. Artifacts:
+`/tmp/emet-conversation-contract-check-20261017`. Pending at checkpoint; no new
+accuracy or task-readiness claim. Inspect full dialogue exports and context/memory
+cost before deciding whether instruction changes are still needed.
+
 Inspect completed replay and captured router requests before changing behavior.
 Likely narrowly scoped follow-ups are complete, bounded tool-result history
 (including no-op reads), explicit current-versus-historical image provenance,
