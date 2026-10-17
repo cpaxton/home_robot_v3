@@ -207,7 +207,14 @@ Live EQA completed cleanly: 2/4 (q6 and q56 correct; q2 and q14 wrong), all
 tool-result messages and 7/2/1/1 historical images. This verifies continuity,
 not an accuracy gain. The Molmo receptacle phase's first request retains ten
 messages from the preceding object-search phase, including assistant turns and
-failed-navigation feedback. Molmo task outcome is still pending at this update.
+failed-navigation feedback. Molmo completed without infrastructure errors:
+bowl localization succeeds with `grounded_object`; microwave localization fails,
+so the complete two-phase find gate fails (1/2 phases). Qwen repeatedly recognizes
+the microwave above the stove, but the trace defers completion with
+`object_localization_required`; no grounded receptacle XYZ is admitted. This is
+not a demonstrated semantic-recognition failure, nor a successful manipulation
+test (`manip_mode=skip`). Query time is 81.9 s, episode time 132.2 s. The driver
+returns 1 for the failed task gate even though the episode subprocess exits 0.
 No unsupported-argument call occurred in these inspected live EQA packets;
 explicit rejection/no execution/error feedback is covered by regression tests,
 not claimed as naturally exercised online. A fresh focused rerun passed 43 tests.
