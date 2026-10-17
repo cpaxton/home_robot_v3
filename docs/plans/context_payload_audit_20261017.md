@@ -199,9 +199,20 @@ isolation, cross-OVMM-phase continuity, rollback and no-execution argument error
 
 Live contract check `20261017_075712_91ad9d`: EQA q2/6/14/56 then one Molmo rby1
 find, serial exclusive GPU. Artifacts:
-`/tmp/emet-conversation-contract-check-20261017`. Pending at checkpoint; no new
-accuracy or task-readiness claim. Inspect full dialogue exports and context/memory
-cost before deciding whether instruction changes are still needed.
+`/tmp/emet-conversation-contract-check-20261017`.
+
+Live EQA completed cleanly: 2/4 (q6 and q56 correct; q2 and q14 wrong), all
+`model_final` provenance. Final-answer request exports retain respectively
+22/7/4/4 history messages, including 7/2/1/1 assistant turns, 8/3/2/2 actual
+tool-result messages and 7/2/1/1 historical images. This verifies continuity,
+not an accuracy gain. The Molmo receptacle phase's first request retains ten
+messages from the preceding object-search phase, including assistant turns and
+failed-navigation feedback. Molmo task outcome is still pending at this update.
+No unsupported-argument call occurred in these inspected live EQA packets;
+explicit rejection/no execution/error feedback is covered by regression tests,
+not claimed as naturally exercised online. A fresh focused rerun passed 43 tests.
+Inspect context/memory cost before deciding whether instruction changes are still
+needed; full history is intentionally not silently truncated.
 
 Inspect completed replay and captured router requests before changing behavior.
 Likely narrowly scoped follow-ups are complete, bounded tool-result history
