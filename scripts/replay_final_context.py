@@ -98,9 +98,22 @@ def infer(cases, output, repeats):
 
     from emet.core.parameters import get_parameters
     from emet.habitat.metrics import extract_mcq_letter
+    from emet.llms.eqa_vl_settings import resolve_eqa_answer_max_new_tokens, resolve_eqa_answer_prefill
     from emet.llms.graph_eqa_vlm import _eqa_system_prompt, build_graph_eqa_vlm_clients
+    from emet.utils.json_parse import first_json_dict_lenient
 
     parameters = get_parameters("dynav_config.yaml", robot="stretch")
+    # Mirror Habitat runner._configure_eqa_parameters, which runs AFTER config
+    # loading. The pilot log confirms hmeqa/json, a 384-token cap and JSON prefill.
+    eqa = dict(parameters.get("eqa") or {})
+    eqa.setdefault("prompt_variant", "hmeqa")
+    parameters.set("eqa", eqa)
+    cap = resolve_eqa_answer_max_new_tokens(parameters)
+    prefill = resolve_eqa_answer_prefill(parameters)
+    call_settings = {"assistant_prefill": prefill}
+    if cap > 0:
+        call_settings["max_new_tokens"] = cap
+    (output / "call_settings.json").write_text(json.dumps(call_settings, indent=2))
     system = _eqa_system_prompt(parameters)
     (output / "original_system.txt").write_text(system)
     (output / "neutral_system.txt").write_text(NEUTRAL_SYSTEM)
@@ -116,11 +129,12 @@ def infer(cases, output, repeats):
                     np.random.seed(repeat)
                     torch.manual_seed(repeat)
                     prompt = (output / f"q{case['qid']}" / f"{arm}.txt").read_text()
-                    raw = client([prompt, *images], system_prompt=NEUTRAL_SYSTEM if arm == "neutral_system" else system)
-                    try:
-                        parsed, _ = json.JSONDecoder().raw_decode(str(raw).lstrip())
-                    except (ValueError, TypeError):
-                        parsed = {}
+                    raw = client(
+                        [prompt, *images],
+                        system_prompt=NEUTRAL_SYSTEM if arm == "neutral_system" else system,
+                        **call_settings,
+                    )
+                    parsed = first_json_dict_lenient(str(raw), prefill=prefill) or {}
                     answer = str(parsed.get("answer", ""))
                     letter = extract_mcq_letter(answer, case["choices"])
                     result = {
