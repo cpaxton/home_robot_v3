@@ -283,6 +283,16 @@ measured tool facts, without dropping failures, altering physical admission, or
 silently overriding the final model. A proposed formatting change needs replay
 and live validation; none has been enabled by this diagnostic.
 
+Provenance-only follow-up job `20261017_095915_addd8d`: q12/q14 plus successful
+q6/q56 controls, unchanged full history vs identical history with explicit
+prior-VLM provenance labels, three repeats each (24 calls). All original messages,
+images, tool failures, semantic assessment fields and answer suggestions remain;
+no production change or semantic override. Transform sanity check confirms input
+immutability and preservation of message roles/count and failure/assessment values.
+Driver `/tmp/emet-replay-captured-history-20261017.py --label-assessments`, output
+`/tmp/emet-assessment-provenance-20261017`; output contains driver/input hashes.
+Results pending.
+
 Inspect completed replay and captured router requests before changing behavior.
 Likely narrowly scoped follow-ups are complete, bounded tool-result history
 (including no-op reads), explicit current-versus-historical image provenance,
