@@ -416,9 +416,35 @@ def _route_tool_calls(self) -> tuple[list[tuple[str, dict[str, Any]]], str, dict
     meta["visible_event_ids"] = visible_event_ids
     meta["action_allowlist"] = {key: list(value) for key, value in action_allowlist.items()}
     meta["action_gate_decisions"] = gate_decisions
+    user_text = f"{img_prefix}{state}" if img_prefix else state
+    request_path = None
+    if self._collect_trace and self._trace_path is not None:
+        from emet.eval.eqa_decision_trace import record_vlm_request
+
+        try:
+            request_path = str(
+                record_vlm_request(
+                    self._trace_path.parent
+                    / "router_context"
+                    / self._trace_path.stem
+                    / f"call_{self._router_call_seq:04d}",
+                    system_prompt=self._system_prompt,
+                    user_text=user_text,
+                    images=img_parts,
+                    metadata={
+                        "router_call_id": router_call_id,
+                        "max_new_tokens": ROUTER_MAX_NEW_TOKENS,
+                        "reset_context": True,
+                        "round": self._round,
+                    },
+                )
+            )
+        except (OSError, ValueError) as exc:
+            self._append_trace({"event": "router_context_capture_failed", "error": str(exc)})
     self._append_trace(
         {
             "event": "router_call",
+            "request_path": request_path,
             "router_call_id": router_call_id,
             "state_text": state,
             "state_text_digest": meta["state_text_digest"],
@@ -430,7 +456,6 @@ def _route_tool_calls(self) -> tuple[list[tuple[str, dict[str, Any]]], str, dict
             "robot_world_path_m": round(float(self._router_path_m), 4),
         }
     )
-    user_text = f"{img_prefix}{state}" if img_prefix else state
     if gm is not None:
         gm.last_router_state_text = state
     payload: list[Any] = [user_text, *img_parts] if img_parts else [user_text]
