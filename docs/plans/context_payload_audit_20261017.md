@@ -300,6 +300,22 @@ Next prioritize general evidence acquisition/coverage and independently evaluate
 whether semantic assessments belong in tool feedback versus factual outcomes;
 preserve raw dialogue and final model authority, and avoid case-specific rules.
 
+### Acquisition standoff probe
+
+Job `20261017_100635_636b73` tests existing `image_nav_min_approach_m=0.85`
+against the preceding 0.35 m candidate pilot on q12/q14 and q6/q56 controls,
+seed 0. No new production code, default changes, routing changes, semantic
+overrides or relaxed navigation gates. Hypothesis: less aggressive close approach
+may retain room/relational context; risk: reduced detail or reachable viewpoints.
+This setting is minimum planned approach radius, not a promise of measured camera
+distance. Inspect actual arrival poses, images and navigation outcomes as well
+as scores. It cannot by itself establish full room coverage or a correct count.
+Config resolution checked: 0.85 m, model_final, pose selector/max4 retained.
+Driver `/tmp/emet-run-context-standoff-20261017.sh`, overlay
+`/tmp/emet-context-standoff-20261017.yaml`, outputs
+`/tmp/emet-context-standoff-20261017`; source/config/driver hashes recorded.
+Results pending.
+
 Inspect completed replay and captured router requests before changing behavior.
 Likely narrowly scoped follow-ups are complete, bounded tool-result history
 (including no-op reads), explicit current-versus-historical image provenance,
