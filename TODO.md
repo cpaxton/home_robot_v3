@@ -5,6 +5,12 @@ Strike through or move to a PR when done.
 
 ## Shared evidence/navigation stack (#199 / #202)
 
+- [ ] Ablate episode history after the dialogue-contract repair: full multimodal
+      dialogue vs tool-results-only vs stateless inference, with identical model,
+      seeds, prompts, acquisition/answer budgets and view selection. Compare paired
+      EQA and small OVMM outcomes, repeated/no-op tool calls, context tokens,
+      latency and memory; inspect changed answers and preserve raw request evidence.
+      Keep unsupported-argument rejection enabled in every arm.
 - [x] Validate main integration: frozen `0fb37763` EQA diagnostic 1/4, unchanged
       from parent; no infrastructure errors. Not restored EQA acceptance.
 - [x] Fix reviewed SAM2 PIL input, lost sweep diagnostics, and invalid-depth
