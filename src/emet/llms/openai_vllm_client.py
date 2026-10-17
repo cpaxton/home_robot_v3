@@ -133,10 +133,11 @@ class OpenaiVLLMClient(AbstractVLLMClient):
         if reset_context:
             self.reset()
         sys_text = system_prompt if system_prompt is not None else (self.system_prompt or None)
-        messages: list[dict[str, Any]] = []
-        if sys_text:
+        messages: list[dict[str, Any]] = self.get_history()
+        if sys_text and not any(message.get("role") == "system" for message in messages):
             messages.append({"role": "system", "content": sys_text})
         messages.append({"role": "user", "content": self._content_blocks(user_content, image)})
+        history = list(messages)
         prefill = (assistant_prefill or "").strip()
         if prefill:
             # Remote OpenAI servers continue from a trailing assistant message when they
@@ -153,6 +154,11 @@ class OpenaiVLLMClient(AbstractVLLMClient):
             max_tokens=mt,
         )
         text = completion.choices[0].message.content or ""
+        self.conversation_history = history + [{"role": "assistant", "content": text}]
+        self._iterations += 1
         if verbose:
             print(f"OpenaiVLLMClient output={text[:200]!r}")
         return text
+
+    def _conversation_user_content(self, content):
+        return self._content_blocks(content, None)
