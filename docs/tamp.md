@@ -73,6 +73,14 @@ Observed grounding, navigation, and
 exploration are later acceptance gates.
 Keep assisted, scripted, in-process LLM, and live LLM results separate.
 
+The [October 17 actual-CLI baseline](experiments/tamp_agent_baseline_20261017.md)
+repeated three fixed placements twice each with Caliban VLM inference. Familiar
+controls passed **2/2 tasks (4/4 transfers)**; shifted placements passed **0/4**,
+with two lift-retention failures and two planning rejections. Overall completion
+was **2/6 tasks**, with **6/6 correct failure boundaries**, 1,196 audited commands,
+zero forbidden commands and no infrastructure failures. This is a small
+privileged stationary baseline, not observed exploration or a general TAMP rate.
+
 ## Implementation and detailed references
 
 | Topic | Reference |
