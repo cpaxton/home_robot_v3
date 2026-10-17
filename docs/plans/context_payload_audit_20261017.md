@@ -314,7 +314,16 @@ Config resolution checked: 0.85 m, model_final, pose selector/max4 retained.
 Driver `/tmp/emet-run-context-standoff-20261017.sh`, overlay
 `/tmp/emet-context-standoff-20261017.yaml`, outputs
 `/tmp/emet-context-standoff-20261017`; source/config/driver hashes recorded.
-Results pending.
+Completed cleanly: 2/4, same outcomes as the 0.35 m reference (q12/q14 wrong,
+q6/q56 correct). Rounds q12/q14/q6/q56: 1/3/2/3 vs 1/1/2/1 previously.
+Visual inspection confirms q12 bedside table is better framed, but the image
+still does not cover both sides of the bed; a room-wide count is unsupported.
+Q14 final current image shows the stair/hall area, not the fan; arrival-targeting
+traces did place the target anchor in-frame at intermediate inspections. Need
+trace the later evidence/pose handoff before attributing this to model reasoning.
+Do not promote the wider radius as a fix: no recovered cases and extra rounds
+in two cases. A usable next experiment needs complementary coverage rather than
+merely more standoff, with assessed-view retention audited across later motion.
 
 Inspect completed replay and captured router requests before changing behavior.
 Likely narrowly scoped follow-ups are complete, bounded tool-result history
