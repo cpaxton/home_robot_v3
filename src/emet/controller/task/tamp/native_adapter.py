@@ -87,7 +87,7 @@ class NativeTableAdapter:
     def _failure(self, tool, reason, *, completed=(), phase=None, started=False, identity=None):
         logging.getLogger(__name__).warning("Native TAMP %s failed at %s: %s", tool, phase, reason)
         return response(tool, code=failure_code(reason), status='partial' if completed or started else 'error',
-                        data=self._data(**(identity or {}), completed_ops=list(completed), failed_stage=phase, execution_started=started,
+                        data=self._data(**(identity or {}), completed_ops=list(completed), failed_stage=phase, execution_started=bool(started or completed),
                             **({'planning_rejections': dict(self.planning_rejections),
                                 'planning_ik_calls': self.planning_ik_calls, 'max_ik_calls': self.max_planning_ik_calls}
                                if tool == 'plan_pick_place' else {})),

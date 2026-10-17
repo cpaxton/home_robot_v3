@@ -34,6 +34,7 @@ from emet.core.robot import AbstractRobotClient
 from emet.core.zmq_obs_codec import decode_zmq_obs_images_inplace, read_image_timing
 from emet.core.zmq_protocol import (
     EMET_ZMQ_ROBOT_ID_KEY,
+    EMET_ZMQ_SESSION_KEY,
     emet_session_cache_update,
     emet_session_manipulation_supported,
     is_stretch_family,
@@ -149,6 +150,7 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         resend_all_actions: bool = False,
         publish_observations: bool = False,
         allow_missing_depth: bool = False,
+        state_only: bool = False,
     ):
         """
         Create a client to communicate with the robot over ZMQ.
@@ -165,6 +167,7 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
             ee_link_name: The name of the end effector link
             manip_mode_controlled_joints: The joints to control in manipulation mode
             port_offset: Added to all default port numbers (e.g. 100 → 4501-4504)
+            state_only: Opt into state-only startup for explicitly camera-free simulations.
             allow_missing_depth: If True, accept observations without a depth JP2 (RGB-only); pair with ``depth_source: auto|da3`` in DynaMem YAML.
         """
         if port_offset:
@@ -185,6 +188,8 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         if parameters is None:
             parameters = get_parameters("default_planner.yaml")
         self._parameters = parameters
+        # Opt-in only; start() additionally requires a camera-free simulation advertisement.
+        self._state_only = bool(state_only)
         self._allow_missing_depth = allow_missing_depth
 
         env = os.environ.get("EMET_ZMQ_STARTUP_TIMEOUT", "").strip()
@@ -1227,6 +1232,8 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
 
     def _update_obs(self, obs):
         """Update observation internally with lock"""
+        obs = dict(obs)
+        obs['_received_monotonic'] = time.monotonic()
         with self._obs_lock:
             self._obs = obs
             self._last_step = max(self._last_step, int(obs["step"]))
@@ -1380,6 +1387,7 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
                 xyz=self._obs["xyz"],
                 lidar_points=self._obs["lidar_points"],
                 lidar_timestamp=self._obs["lidar_timestamp"],
+                received_monotonic=self._obs.get('_received_monotonic'),
                 emet_session=read_emet_session(self._obs),
                 image_timing=read_image_timing(self._obs),
             )
@@ -1932,6 +1940,17 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         )
         return False
 
+    def _state_only_startup_ready(self) -> bool:
+        """Explicit camera-free simulation mode; never waive real-robot streams."""
+        if not getattr(self, '_state_only', False) or not isinstance(self._state, dict):
+            return False
+        session = self._state.get(EMET_ZMQ_SESSION_KEY)
+        if not isinstance(session, dict) or session.get('is_simulation') is not True:
+            return False
+        capabilities = session.get('capabilities')
+        return (isinstance(capabilities, dict) and type(capabilities.get('num_cameras')) is int
+                and capabilities['num_cameras'] == 0)
+
     def start(self) -> bool:
         """Start running blocking thread in a separate thread. This will wait for observations to come in and update internal state.
 
@@ -1962,7 +1981,8 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         t0 = timeit.default_timer()
         startup_timeout = getattr(self, "_zmq_startup_timeout", 60.0)
         next_progress_log = t0 + 5.0
-        while self._obs is None or self._state is None or self._servo is None:
+        while self._state is None or ((self._obs is None or self._servo is None)
+                                     and not self._state_only_startup_ready()):
             time.sleep(0.1)
             t1 = timeit.default_timer()
             if t1 >= next_progress_log:

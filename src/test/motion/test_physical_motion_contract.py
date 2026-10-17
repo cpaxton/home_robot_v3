@@ -778,3 +778,22 @@ def test_pose_ik_rejects_duplicate_or_empty_joint_coordinates(joints):
     with pytest.raises(ValueError, match='distinct controlled joints'):
         solve_pose_ik(m, mujoco.MjData(m), ee_body='robot', joint_names=joints,
                       target_pos=[0, 0, 0], target_rotation=np.eye(3))
+
+
+
+def test_pose_ik_never_constructs_native_named_views(monkeypatch):
+    m = model()
+    d = mujoco.MjData(m)
+    bid = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, 'ee')
+    d.qpos[0] = .2
+    mujoco.mj_kinematics(m, d)
+    target, rotation = d.xpos[bid].copy(), d.xmat[bid].reshape(3, 3).copy()
+    d.qpos[0] = 0.
+    def forbidden(*args):
+        raise AssertionError('pose IK must not construct grouped native views')
+    monkeypatch.setattr(mujoco.MjModel, 'joint', forbidden)
+    monkeypatch.setattr(mujoco.MjModel, 'body', forbidden)
+    monkeypatch.setattr(mujoco.MjData, 'body', forbidden)
+    result = solve_pose_ik(m, d, ee_body='ee', joint_names=['yaw'], target_pos=target, target_rotation=rotation)
+    assert result.success
+    assert result.iterations > 0

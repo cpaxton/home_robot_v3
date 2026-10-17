@@ -319,3 +319,15 @@ def test_matching_selectors_keep_identity_through_execution(native, monkeypatch)
         assert envelope['data']['object_name'] == 'blue cube'
         assert envelope['data']['receptacle_name'] == 'table'
         assert 'object1' not in json.dumps(envelope)
+
+
+def test_partial_progress_reports_execution_started_even_before_next_stage():
+    from emet.controller.task.tamp.native_adapter import NativeTableAdapter
+
+    adapter = object.__new__(NativeTableAdapter)
+    result = adapter._failure('execute_pick_place_plan', 'payload_not_retained',
+                              completed=('grasp',), phase='place')
+    assert result['status'] == 'partial'
+    assert result['data']['execution_started'] is True
+    assert result['data']['completed_ops'] == ['grasp']
+    assert result['recovery'] == 'inspect'
