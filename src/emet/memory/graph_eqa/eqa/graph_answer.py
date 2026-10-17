@@ -44,6 +44,7 @@ def query_answer(
     evidence_labels: list[str] | None = None,
     evidence_roles: list[str] | None = None,
     model_final: bool = False,
+    conversation=None,
 ) -> tuple[str, str, bool, str, np.ndarray | None, list[Image.Image]]:
     """
     Answer the question using the scene graph and task-relevant images.
@@ -391,6 +392,8 @@ def query_answer(
         t_vl = _time.monotonic()
         ans_cap = resolve_eqa_answer_max_new_tokens(self.parameters)
         eqa_kw: dict[str, Any] = {}
+        if conversation is not None:
+            eqa_kw["conversation"] = conversation
         if ans_cap > 0:
             eqa_kw["max_new_tokens"] = ans_cap
         # Force the first output field so Qwen cannot open with Caption: — prompt edits
@@ -403,9 +406,34 @@ def query_answer(
             f"assistant_prefill={assistant_prefill!r} prompt_variant={_variant!r} "
             f"answer_format={answer_format!r}"
         )
+        trace_root = getattr(self, "_eqa_decision_trace_dir", None)
+        if conversation is not None and trace_root:
+            from pathlib import Path
+
+            from emet.eval.eqa_decision_trace import record_vlm_request
+
+            try:
+                record_vlm_request(
+                    Path(trace_root) / "conversation_requests" / f"call_{len(self._history_outputs) + 1:03d}",
+                    system_prompt=getattr(self.eqa_client, "_system_prompt", ""),
+                    user_text="\n\n".join(str(block) for block in text_blocks),
+                    images=relevant_images,
+                    history=conversation.messages,
+                    metadata={
+                        "text_blocks": text_blocks,
+                        "assistant_prefill": assistant_prefill,
+                        "max_new_tokens": eqa_kw.get("max_new_tokens"),
+                    },
+                )
+            except (OSError, ValueError, TypeError) as exc:
+                _logger.warning(f"Final conversation trace capture failed: {exc}")
         try:
             raw = self.eqa_client(commands, **eqa_kw)
         except TypeError:
+            from emet.llms.graph_eqa_vlm import GraphEQAVLMClient
+
+            if conversation is not None and isinstance(self.eqa_client, GraphEQAVLMClient):
+                raise
             # Older / test doubles that only accept the command list.
             raw = self.eqa_client(commands)
         _logger.info(f"query_answer: eqa_client done wall_s={_time.monotonic() - t_vl:.1f} out_chars={len(raw or '')}")

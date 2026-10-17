@@ -213,6 +213,16 @@ def init_executor(
     if raw_session_id is None:
         raw_session_id = getattr(agent, "_episode_debug_dir", None)
     self._session_id = str(raw_session_id or f"session:{self._question_id}")
+    from emet.llms.conversation import VLMConversation
+
+    epoch = getattr(getattr(agent, "voxel_map", None), "observation_scope_id", None)
+    scope = (self._session_id, epoch if isinstance(epoch, str) else None)
+    conversation = getattr(agent, "_vlm_episode_conversation", None)
+    if not isinstance(conversation, VLMConversation) or getattr(agent, "_vlm_conversation_scope", None) != scope:
+        conversation = VLMConversation()
+        agent._vlm_episode_conversation = conversation
+        agent._vlm_conversation_scope = scope
+    self._conversation = conversation
     self._trace_meta.setdefault("question_id", self._question_id)
     self._trace_meta.setdefault("session_id", self._session_id)
     gm_context = self.graph_memory
@@ -389,7 +399,36 @@ TOOL_HANDLERS: dict[str, Any] = {
 }
 
 
-def handle_tool(self, name: str, args: dict[str, Any] | None = None) -> dict[str, Any]:
+def handle_tool(
+    self, name: str, args: dict[str, Any] | None = None, *, validate_arguments: bool = True
+) -> dict[str, Any]:
+    name = (name or "").strip().lower()
+    args = dict(args or {})
+    top_level = self._tool_dispatch_depth == 0
+    if top_level and validate_arguments:
+        self._ensure_router_prompt()
+        tool = next((tool for tool in self._tools if tool.name == name), None)
+        allowed = set(tool.parameters.get("properties", {})) if tool else set()
+        unknown = sorted(set(args) - allowed)
+        if unknown:
+            out = {
+                "ok": False,
+                "status": "invalid_tool_arguments",
+                "tool": name,
+                "unknown_arguments": unknown,
+                "allowed_arguments": sorted(allowed),
+                "error": "Unsupported arguments; no tool executed.",
+            }
+            self._conversation.record_tool_result(name, args, out)
+            self._append_trace({"event": "tool_argument_rejected", **out})
+            return out
+    out = _dispatch_tool(self, name, args)
+    if top_level:
+        self._conversation.record_tool_result(name, args, out)
+    return out
+
+
+def _dispatch_tool(self, name: str, args: dict[str, Any] | None = None) -> dict[str, Any]:
     args = dict(args or {})
     name = (name or "").strip().lower()
     top_level = self._tool_dispatch_depth == 0
