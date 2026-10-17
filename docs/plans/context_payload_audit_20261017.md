@@ -267,7 +267,21 @@ system/current images/token cap/prefill. Offline diagnostic only, not task succe
 or a proposed default history deletion. No routing instructions changed.
 Driver `/tmp/emet-replay-captured-history-20261017.py`; output
 `/tmp/emet-captured-history-ablation-20261017`. Input request and driver hashes
-are retained. Results pending.
+are retained. Completed 18/18 parsed responses, no infrastructure error:
+
+| Case | Full history | Tool-results-only | No history |
+| --- | --- | --- | --- |
+| q12 count | 0/3 (One) | 0/3 (One) | 0/3 (One) |
+| q14 fan | 0/3 (Next to TV) | 0/3 (Next to TV) | 2/3 (living room) |
+
+History removal does not fix q12 on this packet. Q14 is consistent with anchoring
+on the earlier VLM assessment carried in the tool result, not merely too many
+images/tokens: tool-results-only retains the wrong answer across all repeats.
+This is two selected cases, not a task-success or universal causal claim. Preserve
+dialogue; next isolate the presentation of earlier model interpretations from
+measured tool facts, without dropping failures, altering physical admission, or
+silently overriding the final model. A proposed formatting change needs replay
+and live validation; none has been enabled by this diagnostic.
 
 Inspect completed replay and captured router requests before changing behavior.
 Likely narrowly scoped follow-ups are complete, bounded tool-result history
