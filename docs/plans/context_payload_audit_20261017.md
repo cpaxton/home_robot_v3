@@ -291,7 +291,14 @@ no production change or semantic override. Transform sanity check confirms input
 immutability and preservation of message roles/count and failure/assessment values.
 Driver `/tmp/emet-replay-captured-history-20261017.py --label-assessments`, output
 `/tmp/emet-assessment-provenance-20261017`; output contains driver/input hashes.
-Results pending.
+Completed: 24/24 parsed, no infrastructure errors. Full and labeled histories
+produce identical scored outcomes: q12 0/3, q14 0/3, q6 3/3, q56 3/3 in each
+arm. Labels neither recover the failures nor break these two controls. Do not
+promote this verbosity-only change as a fix. Earlier no-history q14 result still
+suggests interpretation anchoring, but provenance labels alone are insufficient.
+Next prioritize general evidence acquisition/coverage and independently evaluate
+whether semantic assessments belong in tool feedback versus factual outcomes;
+preserve raw dialogue and final model authority, and avoid case-specific rules.
 
 Inspect completed replay and captured router requests before changing behavior.
 Likely narrowly scoped follow-ups are complete, bounded tool-result history
