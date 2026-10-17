@@ -14,6 +14,27 @@ from PIL import Image
 from emet.eval.eqa_decision_trace import finalize_eqa_decision_trace, record_eqa_decision_iteration
 
 
+def test_router_request_preserves_system_user_image_order_and_pixels(tmp_path):
+    import hashlib
+
+    from emet.eval.eqa_decision_trace import record_vlm_request
+
+    images = [Image.fromarray(np.full((4, 5, 3), value, dtype=np.uint8)) for value in (20, 40)]
+    request = record_vlm_request(
+        tmp_path / "call_1",
+        system_prompt="system",
+        user_text="exact\nstate",
+        images=images,
+        metadata={"reset_context": True},
+    )
+    saved = json.loads(request.read_text())
+    assert saved["system_prompt"] == "system"
+    assert saved["user_text"] == "exact\nstate"
+    for entry, original in zip(saved["images"], images, strict=True):
+        assert entry["pixel_sha256"] == hashlib.sha256(original.tobytes()).hexdigest()
+        np.testing.assert_array_equal(np.asarray(Image.open(request.parent / entry["path"])), np.asarray(original))
+
+
 def test_explicit_camera_roles_are_not_mislabeled_as_navigation_fallback(tmp_path):
     images = [Image.new("RGB", (4, 4), color) for color in ("red", "blue")]
     kwargs = {
