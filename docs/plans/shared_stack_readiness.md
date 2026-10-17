@@ -2,6 +2,11 @@
 
 ## Closeout audit — 2026-10-16 (current; dated sections below are history)
 
+The [October 17 context-payload audit](context_payload_audit_20261017.md) records
+the completed pilot, inspected image examples, history/freshness gaps and the
+controlled offline + trace-only live diagnostics. It supersedes any suggestion
+that final-model authority alone cleared task performance.
+
 ### Requested main-integrated pilot
 
 Job `20261016_132245_d318eb`, source `0873430d` on
