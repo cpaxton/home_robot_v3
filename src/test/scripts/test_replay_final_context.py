@@ -53,3 +53,32 @@ def test_prepare_copies_exact_images_and_keeps_gold_out_of_prompts(tmp_path):
     assert (output / "q14/image_1.png").read_bytes() == data
     for arm in MODULE["ARMS"]:
         assert "SECRET_GOLD" not in (output / f"q14/{arm}.txt").read_text()
+
+
+def test_inference_reconstructs_habitat_variant_and_call_settings(tmp_path, monkeypatch):
+    from PIL import Image
+
+    import emet.core.parameters as parameters_module
+    import emet.llms.graph_eqa_vlm as vlm_module
+
+    parameters = parameters_module.Parameters(eqa={"vl_family": "qwen3_vl"})
+    monkeypatch.setattr(parameters_module, "get_parameters", lambda *args, **kwargs: parameters)
+    calls = []
+
+    def client(payload, **kwargs):
+        calls.append(kwargs)
+        return '{"reasoning":"fixture","answer":"One","confidence":true}'
+
+    monkeypatch.setattr(vlm_module, "build_graph_eqa_vlm_clients", lambda **kwargs: (None, client))
+    directory = tmp_path / "q1"
+    directory.mkdir()
+    image = directory / "image.png"
+    Image.new("RGB", (4, 4)).save(image)
+    for arm in MODULE["ARMS"]:
+        (directory / f"{arm}.txt").write_text("Question: how many? A) One B) Two")
+    cases = [{"qid": 1, "images": [{"path": str(image)}], "choices": ["One", "Two"], "gold": "A"}]
+    MODULE["infer"](cases, tmp_path, 1)
+    assert parameters.get("eqa")["prompt_variant"] == "hmeqa"
+    assert len(calls) == 4
+    assert all(call["max_new_tokens"] == 384 and call["assistant_prefill"] == '{"reasoning":' for call in calls)
+    assert "HM-EQA questions" in calls[0]["system_prompt"]
