@@ -251,6 +251,24 @@ says next to TV, so q14 remains a meaningful image/context discrepancy to inspec
 Candidate q12 stops after one round at One versus main's eight rounds; inspect
 coverage/stopping and actual image packets before changing prompts or policies.
 
+### Fixed-packet history diagnostic
+
+Manual inspection: candidate q14 current fan view is tightly framed against a
+wall; pre-turn view shows sofa/window, and earlier context images show a TV and
+the wider living room. Main's current image directly includes fan + sofa/window.
+Candidate's retained investigate result also asserts Next to the TV. Cannot
+attribute the error to image selection or history independently from this pair.
+Candidate q12 current image shows only part of the bed/bedside area, insufficient
+to certify the room-wide count. Neither observation justifies semantic overrides.
+
+Job `20261017_091335_a234d7` tests candidate's captured q12/q14 final packets,
+full vs tool-results-only vs no history, three repeats (18 calls), fixed saved
+system/current images/token cap/prefill. Offline diagnostic only, not task success
+or a proposed default history deletion. No routing instructions changed.
+Driver `/tmp/emet-replay-captured-history-20261017.py`; output
+`/tmp/emet-captured-history-ablation-20261017`. Input request and driver hashes
+are retained. Results pending.
+
 Inspect completed replay and captured router requests before changing behavior.
 Likely narrowly scoped follow-ups are complete, bounded tool-result history
 (including no-op reads), explicit current-versus-historical image provenance,
