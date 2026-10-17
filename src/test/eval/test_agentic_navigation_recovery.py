@@ -44,7 +44,9 @@ def test_two_blockers_replan_within_one_decision(monkeypatch):
     assert recovery.navigate_with_floor_recovery(ex, nav) is outcomes[-1]
     assert nav.call_count == 3
     assert ex.handle_tool.call_count == 2
-    ex.handle_tool.assert_called_with("observe_floor", {"target_blocker": True, "max_observations": 1})
+    ex.handle_tool.assert_called_with(
+        "observe_floor", {"target_blocker": True, "max_observations": 1}, validate_arguments=False
+    )
     rows = [call.args[0] for call in ex._append_trace.call_args_list]
     assert all(row["resume_same_goal"] for row in rows if row["event"] == "navigation_floor_recovery")
     assert len([row for row in rows if row["event"] == "navigation_attempt_timing"]) == 3

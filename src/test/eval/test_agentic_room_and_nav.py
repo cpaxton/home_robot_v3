@@ -38,10 +38,11 @@ def test_agentic_submit_does_not_clamp_answer_max_tokens(monkeypatch):
     agent.planner = None
     agent.robot = None
 
-    def _qa(question, xyt, planner, *, force_obs_ids=None):
+    def _qa(question, xyt, planner, *, force_obs_ids=None, conversation=None):
         # Env must remain unset so graph_memory default (256) applies.
         assert "EMET_EQA_ANSWER_MAX_NEW_TOKENS" not in os.environ
         assert force_obs_ids == [1]
+        assert conversation is not None
         return ("", "B", True, "", None, [])
 
     gm.query_answer.side_effect = _qa

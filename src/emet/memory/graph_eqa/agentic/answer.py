@@ -894,6 +894,7 @@ def _do_submit_answer(self, prefer_answer: str = "") -> dict[str, Any]:
                 evidence_kw.update(getattr(self, "_assessed_image_metadata", {}).get(answer_obs_id, {}))
             if self.decision_policy == "model_final":
                 evidence_kw["model_final"] = True
+            evidence_kw["conversation"] = self._conversation
             (
                 _reasoning,
                 ans,

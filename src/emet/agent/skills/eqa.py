@@ -24,11 +24,11 @@ def _dispatch(executor: AgenticEQAExecutor, name: str):
 
 
 def bind_eqa_skill(executor: AgenticEQAExecutor, spec: SkillSpec) -> Tool:
-    """Materialize one EQA skill as a :class:`Tool` (dispatch via ``handle_tool``)."""
+    """Bind the canonical schema, advertising EQA's strict argument-name boundary."""
     return Tool(
         name=spec.name,
         description=spec.description,
-        parameters=spec.parameters,
+        parameters={**spec.parameters, "additionalProperties": False},
         func=_dispatch(executor, spec.name),
         returns_info=spec.returns_info,
     )

@@ -431,10 +431,13 @@ def _route_tool_calls(self) -> tuple[list[tuple[str, dict[str, Any]]], str, dict
                     system_prompt=self._system_prompt,
                     user_text=user_text,
                     images=img_parts,
+                    history=self._conversation.messages,
                     metadata={
                         "router_call_id": router_call_id,
                         "max_new_tokens": ROUTER_MAX_NEW_TOKENS,
-                        "reset_context": True,
+                        "episode_conversation": True,
+                        "session_id": self._session_id,
+                        "prior_message_count": len(self._conversation.messages),
                         "round": self._round,
                     },
                 )
@@ -465,8 +468,13 @@ def _route_tool_calls(self) -> tuple[list[tuple[str, dict[str, Any]]], str, dict
             payload,
             system_prompt=self._system_prompt,
             max_new_tokens=ROUTER_MAX_NEW_TOKENS,
+            conversation=self._conversation,
         )
     except TypeError:
+        from emet.llms.graph_eqa_vlm import GraphEQAVLMClient
+
+        if isinstance(client, GraphEQAVLMClient):
+            raise  # Never silently retry an episode call without its dialogue.
         try:
             reply = client(
                 [f"{self._system_prompt}\n\n{user_text}", *img_parts]

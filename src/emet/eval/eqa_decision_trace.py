@@ -14,7 +14,7 @@ from typing import Any
 from PIL import Image
 
 
-def record_vlm_request(root, *, system_prompt, user_text, images, metadata):
+def record_vlm_request(root, *, system_prompt, user_text, images, metadata, history=None):
     """Save the exact client-level payload before model resizing/tokenization.
 
     Captions/roles are preserved verbatim in user_text, not inferred here.
@@ -35,11 +35,30 @@ def record_vlm_request(root, *, system_prompt, user_text, images, metadata):
                 "pixel_sha256": hashlib.sha256(image.tobytes()).hexdigest(),
             }
         )
+    history_entries = []
+    for turn, message in enumerate(history or []):
+        content = message["content"]
+        if isinstance(content, str):
+            history_entries.append({"role": message["role"], "content": content})
+            continue
+        blocks = []
+        for slot, part in enumerate(content):
+            if isinstance(part, str):
+                blocks.append({"type": "text", "text": part})
+            else:
+                image = part if isinstance(part, Image.Image) else Image.fromarray(part)
+                name = f"history_{turn:03d}_{slot:02d}.png"
+                image.save(root / name)
+                blocks.append(
+                    {"type": "image", "path": name, "pixel_sha256": hashlib.sha256(image.tobytes()).hexdigest()}
+                )
+        history_entries.append({"role": message["role"], "content": blocks})
     request = {
         "system_prompt": system_prompt,
         "user_text": user_text,
         "images": entries,
         "metadata": metadata,
+        "conversation_history": history_entries,
         "capture_boundary": "client payload before model preprocessing; not a wire/token trace",
     }
     (root / "request.json").write_text(json.dumps(request, indent=2), encoding="utf-8")

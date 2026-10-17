@@ -38,7 +38,9 @@ def navigate_with_floor_recovery(executor, navigate):
         ):
             return outcome
         started = time.monotonic()
-        recovery = executor.handle_tool("observe_floor", {"target_blocker": True, "max_observations": 1})
+        recovery = executor.handle_tool(
+            "observe_floor", {"target_blocker": True, "max_observations": 1}, validate_arguments=False
+        )
         observation = recovery.get("observation") or {}
         resume = bool(recovery.get("ok") and (observation.get("footprint_after") or {}).get("pose_valid"))
         executor._append_trace(

@@ -26,10 +26,17 @@ def test_router_request_preserves_system_user_image_order_and_pixels(tmp_path):
         user_text="exact\nstate",
         images=images,
         metadata={"reset_context": True},
+        history=[
+            {"role": "user", "content": ["old view", images[0]]},
+            {"role": "assistant", "content": "inspect_graph"},
+            {"role": "user", "content": "TOOL_RESULT no new detections"},
+        ],
     )
     saved = json.loads(request.read_text())
     assert saved["system_prompt"] == "system"
     assert saved["user_text"] == "exact\nstate"
+    assert saved["conversation_history"][1]["content"] == "inspect_graph"
+    assert (request.parent / saved["conversation_history"][0]["content"][1]["path"]).is_file()
     for entry, original in zip(saved["images"], images, strict=True):
         assert entry["pixel_sha256"] == hashlib.sha256(original.tobytes()).hexdigest()
         np.testing.assert_array_equal(np.asarray(Image.open(request.parent / entry["path"])), np.asarray(original))
