@@ -325,6 +325,26 @@ Do not promote the wider radius as a fix: no recovered cases and extra rounds
 in two cases. A usable next experiment needs complementary coverage rather than
 merely more standoff, with assessed-view retention audited across later motion.
 
+### Handoff audit and clean review slice (2026-10-18)
+
+Audit resolved the apparent missing-fan view: final q14 slots 1/2 show current
+hallway and pre-turn arrival; slots 3/4 retain fan-visible voxel frames 22/13.
+Labels explicitly identify those as historical. Earlier assessment explicitly
+cites fan in Image 3. Later look_around + explore_frontier changed the physical
+pose; no evidence-loss bug was found, so no new pinning or semantic rule added.
+
+Extracted #217 (`fix/episode-dialogue-review`) directly onto #216, head 4b8ceee1:
+only tracing, conversation transport, executor/argument contract, docs/TODO;
+not the experimental acceptance merges/replays. Fresh extraction suite: 469
+focused tests pass; selected lint clean. Integrated-source evidence is not
+misrepresented as extracted-source acceptance.
+
+Exact-source job `20261018_081808_fbd9dd`: EQA q12/14/6/56, then S0 distinct
+receptacle and Molmo rby1 find, serial exclusive GPU/CPU-safe. Outputs
+`/tmp/emet-dialogue-review-check-20261018`, frozen external driver
+`/tmp/emet-run-dialogue-review-20261018.sh`. Keep #217 draft pending outcomes;
+no main merge. Parent #216 links the successor so review ownership is explicit.
+
 Inspect completed replay and captured router requests before changing behavior.
 Likely narrowly scoped follow-ups are complete, bounded tool-result history
 (including no-op reads), explicit current-versus-historical image provenance,
