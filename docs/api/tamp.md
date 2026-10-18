@@ -245,10 +245,10 @@ simulation time for settling, bounded by a 30-second wall watchdog per wait;
 ordinary hardware executors keep wall-clock timing. Simulator snapshots and final
 contact checks remain explicitly privileged debug evidence.
 
-The native candidate search tries a 15-degree pitched robot frame before the
-level and measured frames, for all objects. Every accepted candidate still needs
+The native candidate search prefers a 45-degree pitched robot frame, retaining
+15/60-degree and level/measured alternatives for all objects. Every accepted candidate still needs
 arm/payload collision validation and measured hold/release verification. The
-current controlled acceptance is 4/4 live ZMQ and 6/6 separate CPU transfers;
+earlier controlled acceptance was 4/4 live ZMQ and 6/6 separate CPU transfers;
 this is not validation of clutter rearrangement, native base navigation, or
 observed-input exploration.
 
@@ -297,9 +297,16 @@ Other adapters return `placement_region_unsupported` rather than ignoring the go
 Malformed/nonfinite/empty bounds return `invalid_placement_region`; a region not
 overlapping the support returns `placement_region_unavailable`.
 
-Native grasp search tries the existing 15-degree approach, bounded 45/60-degree
-approaches with object-height-derived pinch offsets, then level/measured frames.
-Every candidate uses the same collision, tracking, and retention checks. A grasp
+Native grasp search prefers the 45-degree approach with object-height-derived
+pinch offsets, retaining 15/60-degree approaches and level/measured frames.
+Every candidate uses the same collision, tracking, and retention checks.
+Native coupled-arm pregrasp paths move the lift, then wrist joints, then arm
+extension, with collision checks on every segment. The same order is rebuilt
+from measured state before execution. A blocked ordered route rejects that
+candidate rather than falling back to a simultaneous sweep; other grasp
+candidates remain available. This reduces sensitivity to unequal controller lag
+near support surfaces. Revalidation diagnostics retain joint-bound/collision
+detail and private contact pairs; public failures expose sanitized codes. A grasp
 with no downstream placement now resumes grasp search. A shared limit of 256
 pose-IK calls bounds grasp and placement exploration. `no_plan_within_budget`
 means this search did not find a complete plan, not proof of infeasibility.

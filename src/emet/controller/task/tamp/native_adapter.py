@@ -206,12 +206,12 @@ class NativeTableAdapter:
         return [(release + [0, 0, .12], rotation), (release, rotation),
                 (release + [0, .10, .12], rotation)]
 
-    def _plan_candidate_pose(self, executor, target, rotation):
+    def _plan_candidate_pose(self, executor, target, rotation, *, ordered_groups=False):
         # One shared budget spans grasp alternatives and downstream placement.
         if self.planning_ik_calls >= self.max_planning_ik_calls:
             raise ValueError('no_plan_within_budget')
         self.planning_ik_calls += 1
-        return executor.plan_pose(target, rotation)
+        return executor.plan_pose(target, rotation, ordered_groups=ordered_groups)
 
     def _grasp_candidates(self, executor, before, point, frames, pinch_offset, obj):
         for frame, grasp_height in frames:
@@ -232,7 +232,7 @@ class NativeTableAdapter:
                 for phase, (target, rot) in zip(('pregrasp', 'grasp', 'lift'), executor.grasp_targets, strict=True):
                     if phase == 'lift':
                         executor.collision.set_payload(self.model, self.data, obj, executor.ee_body)
-                    path, error = self._plan_candidate_pose(executor, target, rot)
+                    path, error = self._plan_candidate_pose(executor, target, rot, ordered_groups=phase == "pregrasp")
                     if error:
                         self._record_rejection(phase, error, executor)
                         break
@@ -299,12 +299,13 @@ class NativeTableAdapter:
                     mujoco.mj_kinematics(self.model, home)
                     pinch_offset = self._pinch_center_offset()
                     home_rotation = home.body(executor.ee_body).xmat.reshape(3, 3).copy()
-                    # A slight pitched approach avoids rolling rounded payloads
-                    # out of the angled pads. Search the same robot-centric
-                    # frames for every object, then certify and measure the grasp.
+                    # Prefer a steeper pinch before shallow approaches: angled,
+                    # compliant pads can roll a payload during a shallow lift.
+                    # Keep the same alternatives for every object; feasibility
+                    # and measured contact execution still decide acceptance.
                     frames = []
                     height = float(np.diff(np.asarray(placements[obj]['bounds'])[:, 2])[0])
-                    for pitch in (np.pi / 12, np.pi / 4, np.pi / 3):
+                    for pitch in (np.pi / 4, np.pi / 12, np.pi / 3):
                         c, sn = np.cos(pitch), np.sin(pitch)
                         frame = home_rotation @ np.array([[c, sn, 0], [-sn, c, 0], [0, 0, 1]])
                         for fraction in ((0.,) if pitch == np.pi / 12 else (0., .25, .4)):
