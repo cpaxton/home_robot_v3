@@ -98,3 +98,16 @@ cost (observed peak 21,081 input tokens in EQA12); the TODO history ablation is
 required before larger long-horizon rollout. Other VLM providers currently fail
 explicitly if they lack the native conversation encoder; local/remote Qwen is
 the validated path, not a claim of universal provider support.
+
+Exact-source job `20261018_081808_fbd9dd` completed: EQA4 2/4 with no runtime
+errors; Molmo bowl grounded / microwave unlocalized. Simple S0 is invalid as a
+task comparison: internal floor recovery raised `handle_tool() got an unexpected
+keyword argument 'validate_arguments'`. The public executor facade had not been
+updated with the internal dispatcher's new keyword. Mocked recovery tests missed
+the interface mismatch. A new test through the real facade reproduces that exact
+TypeError before the fix, verifies recovery/replanning afterward and ensures
+model JSON cannot request the private bypass/budget. Facade now forwards the
+keyword explicitly; 79 targeted recovery/dialogue/answer/OVMM tests pass and lint
+is clean. S0 live rerun remains required; no blanket bug-free or paper-readiness
+claim. Peak S0 runtime was also substantial and remains a separate performance
+concern, not resolved by this signature repair.

@@ -53,6 +53,40 @@ def test_two_blockers_replan_within_one_decision(monkeypatch):
     assert all(row["wall_s"] >= 0 for row in rows)
 
 
+def test_floor_recovery_through_public_executor_keeps_internal_budget_private(monkeypatch):
+    from emet.memory.graph_eqa.agentic import executor_init
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+
+    agent = Mock()
+    agent.robot = None
+    ex = AgenticEQAExecutor(agent, "Where is the bowl?", router=False)
+    monkeypatch.setattr(recovery, "supports_floor_observation", lambda agent: True)
+    dispatch = Mock(
+        return_value={"ok": True, "observation": {"footprint_after": {"pose_valid": True}}}
+    )
+    monkeypatch.setattr(executor_init, "_dispatch_tool", dispatch)
+    attempts = []
+
+    def navigate():
+        code = UNKNOWN if not attempts else "ok"
+        agent._last_nav_attempt = SimpleNamespace(
+            status_code=code, note=code, success=code == "ok", finished=code == "ok"
+        )
+        attempts.append(object())
+        return attempts[-1]
+
+    assert recovery.navigate_with_floor_recovery(ex, navigate) is attempts[-1]
+    assert len(attempts) == 2
+    dispatch.assert_called_once_with(ex, "observe_floor", {"target_blocker": True, "max_observations": 1})
+    assert "observe_floor" in ex._conversation.messages[-1]["content"]
+
+    # A model cannot request the same internal bypass/budget in its JSON args.
+    dispatch.reset_mock()
+    rejected = ex.handle_tool("observe_floor", {"max_observations": 2, "validate_arguments": False})
+    assert rejected["status"] == "invalid_tool_arguments"
+    dispatch.assert_not_called()
+
+
 def test_real_sweep_rejection_triggers_floor_recovery(monkeypatch):
     from emet.controller.dynamem.navigation import _filter_unsafe_nav_traj
 
