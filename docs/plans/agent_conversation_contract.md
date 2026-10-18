@@ -56,3 +56,45 @@ find episode with model_final. Inspect transcript continuity, explicit argument
 errors/recovery, final model authority and memory/latency. This is not a full
 sweep, matched accuracy result or complete manipulation acceptance. Increasing
 history can increase context/GPU cost; measure it before larger pilots.
+
+## Review extraction and completed evidence (2026-10-18)
+
+This slice is extracted onto `fix/eqa-final-answer-contract` (#216), not the
+experimental acceptance branch. It contains transport, executor/argument contracts
+and request tracing, but no replay drivers, routing rewrites, provenance-warning
+experiment or standoff default change. Fresh extracted-source suite: 469 focused
+tests pass; selected transport/executor files pass ruff. Live checks below were
+on the integrated experimental source, not yet the extracted source.
+
+- Integrated candidate seed-0 EQA12: 8/12 versus previous candidate 6/12 and native
+  main 9/12. Main's correct q12 used an answer override despite its final model
+  being wrong; candidate's q65 success reasons from missing visual evidence. No
+  claim of superiority, grounded state recognition or accepted non-regression.
+- Fixed q12/q14 packet replay: full and tool-results-only history both 0/3 for
+  each; no-history q14 2/3, q12 0/3. Provenance labels do not recover either;
+  q6/q56 controls remain 3/3. Keep the contract fix, not ineffective warnings.
+- Wider 0.85 m approach probe: same 2/4 as 0.35 m, extra rounds in two cases.
+  Not promoted. q12 still lacks room-wide count coverage.
+- q14 handoff audit: later `look_around` and `explore_frontier` really change the
+  camera pose. Final slots 1/2 show the current hallway/pre-turn arrival, while
+  slots 3/4 retain historical fan views (voxel frames 22/13). Final labels mark
+  these as historical; the preceding assessment explicitly cites Image 3. The
+  fan evidence was not lost, and a new semantic pin/override is not justified.
+- Prior Molmo smoke: bowl grounded, microwave recognized but not localized;
+  not a full find pass and not manipulation acceptance. Cross-phase dialogue
+  continuity was verified in request exports.
+
+Evidence roots: `/tmp/emet-history-paired12-20261017`,
+`/tmp/emet-captured-history-ablation-20261017`,
+`/tmp/emet-assessment-provenance-20261017`,
+`/tmp/emet-context-standoff-20261017`. q14 handoff bundle:
+`/home/cpaxton/.cache/habitat_eqa/episodes/dev.eqa-evidence.cT4LBfnpOK_s0_q14/q0014_lazy_graph`.
+The acceptance branch's `docs/plans/context_payload_audit_20261017.md` retains
+exact experiment jobs/revisions and limitations. Raw artifacts remain local.
+
+Remaining gate: rerun EQA4 and simple/Molmo OVMM on this extracted source before
+making it non-draft. No main merge authorized. Full untruncated history has real
+cost (observed peak 21,081 input tokens in EQA12); the TODO history ablation is
+required before larger long-horizon rollout. Other VLM providers currently fail
+explicitly if they lack the native conversation encoder; local/remote Qwen is
+the validated path, not a claim of universal provider support.
