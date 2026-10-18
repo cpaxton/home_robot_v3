@@ -80,6 +80,21 @@ with two lift-retention failures and two planning rejections. Overall completion
 was **2/6 tasks**, with **6/6 correct failure boundaries**, 1,196 audited commands,
 zero forbidden commands and no infrastructure failures. This is a small
 privileged stationary baseline, not observed exploration or a general TAMP rate.
+The [grasp-order rerun](experiments/tamp_agent_baseline_grasp_v2_20261017.md)
+keeps full tasks at 2/6 and raises satisfied goals to 5/12; pregrasp revalidation
+and planning failures remain.
+The subsequent [contact/reference diagnosis](experiments/tamp_grasp_reference_20261017.md)
+compares shallow and steeper grasp trajectories without changing physics or
+acceptance thresholds; it does not rescore the agent baseline.
+
+The [pregrasp follow-up](experiments/tamp_pregrasp_20261017.md) reproduces a
+fingertip/table collision and changes native pregrasp to lift/orient/extend.
+Five scripted live pregrasps pass, including two complete transfers. These checks
+do not update the full agent baseline.
+
+The subsequent [actual-agent pregrasp rerun](experiments/tamp_agent_baseline_pregrasp_v3_20261017.md)
+completes all six attempted transfers. Full tasks remain 2/6; satisfied goals rise
+to 6/12. Remaining failures are bounded planning and one malformed region argument.
 
 ## Implementation and detailed references
 
@@ -100,3 +115,8 @@ The [PR #213 merge scope](plans/2026-10-15_tamp_213_merge_scope.md) fixes the
 orchestration milestone and records review dispositions, geometry-input changes,
 and follow-up integration points in the incoming perception/navigation/control
 stack. Observed detector improvements remain a separate acceptance gate.
+
+The [household experiment plan](plans/2026-10-18_household_agent_tamp.md) selects
+RoboCasa365 composites and MolmoSpaces episode specifications for the next gate.
+Its JSON protocol is design-only; kitchen native-contact integration and the
+expanded household sweep are not yet completed.

@@ -105,3 +105,22 @@ Validation: 68 targeted CPU tests passed with no failures or skips. Both
 experiment CLI help commands were smoke-checked; Ruff and diff checks passed.
 No physical results were rerun or rescored. The PR remains a draft as requested;
 these nits do not add a new perception or hardware merge gate.
+
+## October 18 preparation addendum
+
+The user requested continued execution fixes after the initial orchestration
+review. The pending review delta now includes native grasp candidate ordering,
+ordered lift/orient/extend pregrasp in planning and measured replanning, and
+preserved private collision/bounds detail. Physics and acceptance thresholds are
+unchanged. This motion delta needs review even though the prior orchestration
+review had no blockers. Latest actual-agent evidence is 2/6 full tasks, 6/12 goals,
+and 6/6 attempted transfers, with remaining planning and argument-shape failures.
+The household follow-up design is in
+`2026-10-18_household_agent_tamp.md`; it is not a completed benchmark or a new
+merge dependency for this milestone. The PR remains a draft.
+
+Preparation validation on October 18: 175 targeted CPU tests pass without failures
+or skips (native/physical/contact, TAMP continuation, skill packs, scoring and CLI
+helpers). Ruff and whitespace checks pass. The paper PDF builds; unrelated
+existing citation/float warnings remain. The JSON design counts and copied paper
+result data match the recorded protocol and baseline.
