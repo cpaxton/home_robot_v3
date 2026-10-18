@@ -345,6 +345,29 @@ receptacle and Molmo rby1 find, serial exclusive GPU/CPU-safe. Outputs
 `/tmp/emet-run-dialogue-review-20261018.sh`. Keep #217 draft pending outcomes;
 no main merge. Parent #216 links the successor so review ownership is explicit.
 
+### Repair accepted on S0; runtime diagnosis checkpoint
+
+Initial S0 gate exposed a public executor facade missing the new private
+validate_arguments keyword. Fixed in #217 a0a168a9, with a real-facade regression
+(not a dispatcher mock) that reproduces the exact TypeError before repair and
+passes afterward, while rejecting model-supplied private options. 79 targeted
+tests pass. S0 rerun `20261018_171125_5f9d90` passes both grounding phases,
+complete=true/success=true, no runtime error. Molmo microwave remains unlocalized.
+
+Checkpoint pushed at 52c9d419, including
+`docs/plans/dialogue_runtime_audit_20261018.md`. Episode 989.13 s: inclusive
+navigation calls 798.12 s, initial mapping 112.35 s, floor recovery 8.40 s,
+logged worker VLM generation about 28 s. Thus not primarily history inference.
+
+External timing-only replay `20261018_190332_19c2f4` is running, unchanged
+accepted S0 settings, script `/tmp/emet-profile-s0-runtime-20261018.py`, output
+`/tmp/emet-s0-runtime-profile-20261018`. It records nested planning/update/motion
+timers, receipts and sim/wall ratio (nested durations must not be summed).
+Early measurement: sim/wall ratio ~0.17; successful 90-degree scan turn 39.53 s,
+mapping updates 0.60–0.68 s. Simulator throughput is a demonstrated contributor;
+root cause of low physics throughput and remaining navigation costs still need
+attribution. No faster/looser controller or camera settings enabled.
+
 Inspect completed replay and captured router requests before changing behavior.
 Likely narrowly scoped follow-ups are complete, bounded tool-result history
 (including no-op reads), explicit current-versus-historical image provenance,
