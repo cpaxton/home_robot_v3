@@ -1,6 +1,91 @@
 # Shared-agent stack readiness
 
-## Exact-head closeout — 2026-10-21 (current; older sections are history)
+## Restacked review closeout — 2026-10-22 (current)
+
+All eleven initially open PRs received an exact-head focused test attempt, and
+all received review/inline-comment inspection. Failures were retained, repaired
+on owners where appropriate, and rerun. The new independent #218 is also tested.
+No main merge, default-model/policy promotion or heavy parallel experiment ran.
+User's dirty main checkout is untouched. Only one extra ~700 MB audit checkout
+is reused, with a 12 GiB free-space floor; no eleven-worktree disk expansion.
+
+### Landing/review status
+
+| PR | Current head | Evidence | Status |
+| --- | --- | --- | --- |
+| #218 | 754c0a81 | 39 parity/command/tracker/arrival tests | New ready main-based repair; land first after review. |
+| #181 | 604227a3 | 91 provider/parity tests; provider source comparison against successful S0 component path | Ready; base #218, opt-in providers, no task-superiority claim. |
+| #182 | 3da30084 | 120 full owner-suite tests; 77 navigation/TAMP conflict-resolution checks, 24 sweep/mode checks | Ready; base #181. |
+| #184 | efed2fc5 | 308 owner-suite tests; 44 scan/recovery/base-pose checks | Ready; base #182. |
+| #185 | c29891b8 before this report-only update | 100 tooling/parity tests on refreshed parent; runtime fixes inherited | Already ready; tooling not task-performance acceptance. |
+| #199 | b2b51d2c | 646 broad regression tests | Ready; base #184. |
+| #202 | f7b73bae | 188 selector/history/parity tests | Ready; base #199, ranking defaults remain opt-in. |
+| #216 | 665215b4 | 422 authority/inherited/TAMP/parity tests | Ready; base #202, preserve final model authority. |
+| #217 | 1a3d65c5 | 124 dialogue/transport/recovery/parity tests; successful S0 repeat evidence | Ready; base #216, not robust long-horizon acceptance. |
+| #198 | 0b0ed8e6 | 32 scan/parity tests before ownership propagation; owner scan fixes separately verified | Keep draft/optional, not a blocker for the critical stack. |
+| #213 | 57bc97b0 | 244 TAMP/observed/timing/command/parity tests after refresh | Keep draft for new motion/pregrasp review; base #218. |
+| #214 | 0795f470 | 97 pass; contact_retreat recovery fails, repeated in isolation | Independent merge blocker; not a dependency of this stack. |
+
+Counts are overlapping suites, not unique tests or independent task trials.
+For #199/#202/#216/#217, the last ownership-only merges preserve both src/emet
+and src/emet_core tree hashes exactly relative to final tested heads
+85431dfd/a216222c/210b3bb4/e0d915b5 respectively. This is code-equivalence
+evidence, not a fictional rerun on every documentation/merge SHA.
+
+### What was repaired/reorganized
+
+- Current main itself had four stale emet_core runtime copies. #218 uses the
+  existing sync script to copy canonical command_client/runtime/tracker and
+  navigation_result without changing canonical policy. #181/#213 are now
+  children of #218; the rest of the chain is refreshed on current main.
+- SAM2 PIL normalization and its regression moved from #199 to owner #181.
+  The new PIL case fails before the two-line repair and passes after.
+- Sweep failure reset/removal of duplicate validation moved to owner #182.
+- Full-circle scan spacing and rejecting False/None turn receipts moved to #184.
+  Four captures now cover four headings rather than a hard-coded 45-degree arc;
+  table-specific scan behavior and safety checks are preserved.
+- Fixed an outdated telemetry fixture (actual actuator_names contract) and a
+  voxel test that incorrectly borrowed evidence from a same-numbered graph ID.
+  The latter now requires an explicit captured-frame binding and tests rejection
+  without it. No evidence threshold was weakened; no excluded failure hidden.
+- Resolved real refresh conflicts preserving main's articulation-access metadata,
+  shared check_base_poses helper, articulation model, measured navigation progress
+  and bounded head capabilities. #213 also inherits main #215 acquisition timing.
+
+#214's earlier review concerns about core parity and stop/release handling are
+already addressed in its current code. Its original collection errors came from
+missing stable_baselines3 in the shared venv, not code failure. Installed only
+SB3 2.9.0 --no-deps into /tmp/emet-rl-audit-deps-20261021; shared environment
+unchanged. With that dependency the actual seeded contact-retreat teacher
+recovery fails at seed 71000 / 15 simulated seconds (~0.409 m approach error).
+It repeats in isolation; no threshold, horizon or physical condition was changed
+to make it pass. Owner PR has the exact failure comment. Keep it independent.
+
+### Evidence and next gate
+
+Manifest/log/JUnit roots: /tmp/emet-stack-audit-20261021; original,
+repair-, propagated-, final-, and owner-final- runs retained separately.
+Jobs: 20261021_235143_06ae20, 20261021_235849_d10b29,
+20261022_000329_c1e317, 20261022_001148_ec7cf8,
+20261022_002003_518a6a. Exact frozen inputs are named in invocation JSONs.
+Readiness is for scoped review, not automatic main merge or a performance claim.
+
+Next freeze a combined #217 + #213 sandbox, excluding #214 and default-off #198.
+First test shared dispatch/state/grounding/freshness contracts. Then serially run
+paired EQA and small observed OVMM plus a privileged native two-goal TAMP control
+and a failure-stop probe. Keep privileged feasibility separate from observed
+agent performance; find-only S0 success is not pick/place success. Native TAMP's
+new motion delta still needs review even with green unit tests. Do not describe
+its design-only household registry as an executable completed benchmark.
+
+TODO.md on #217 now tracks real sim-clock/wall-clock phase reporting and a later
+mjlab/mjenv-style parallel-backend parity study. Neither is implemented by this
+test closeout; keep heavy workloads serial and avoid simulator migration detours.
+Paper-scale promotion still requires inspected end-to-end outcomes, exact
+configs/SHAs, wall + actual simulator time, image/command provenance, task-level
+failure breakdowns and figure-ready evidence. No full sweep requested.
+
+## Exact-head closeout — 2026-10-21 (historical)
 
 User priority: test every open PR, resolve comments, and converge on independently
 mergeable slices before end-to-end complex-task assessment. Main remains 801dce82.
