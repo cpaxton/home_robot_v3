@@ -106,3 +106,32 @@ common grounded-operator interface; LLM sequence planning, affordance ranking
 and PDDLStream integration remain qualification work. These interfaces and
 runtime smoke tests are not evidence of household agent success. No six-suite
 or matched-planner performance numbers are claimed here.
+
+\paragraph{Native multi-step tool integration.}
+An additional stationary, privileged diagnostic exercises the production agent's
+region discovery, task-skeleton search and per-step native motion refinement.
+A two-goal causal case completes two measured transfers; an occupied-destination
+swap completes its first transfer to a buffer, then stops when the next cube
+motion cannot be refined. A narrower-buffer variant is rejected during first-move
+search. These are distinct integration cases, not a frozen population or a
+household success-rate estimate. The checked-in
+\texttt{paper/data/native\_tamp/agent\_task\_provider\_20261022.json}
+records source revisions, raw-summary hashes, measured footprints and command
+audits; no forbidden commands occur in these runs. A private recorded-state control finds no accepted plan in the original
+destination, but accepts a transfer in 14 IK calls when only the permitted
+destination region is enlarged and shifted. Additional IK seeds and nearby yaw
+samples do not resolve the original case under the same budget. The original
+failed task remains failed; the altered region is a separate diagnostic, not a
+rescore or physical success claim. Figure~\ref{fig:native-task-integration} visualizes
+measured endpoints without reconstructing unobserved intermediate paths.
+
+\begin{figure}[ht]
+  \centering
+  \includegraphics[width=\linewidth]{figures/native_task_integration_20261022.pdf}
+  \caption{Privileged stationary Stretch integration diagnostics. Dashed outlines
+  are measured initial footprints; filled boxes are final footprints. The
+  two-goal case completes both placements; the swap stops after one transfer.
+  Dotted rectangles mark configured regions. This is an endpoint view, not
+  trajectory or observed-perception evidence.}
+  \label{fig:native-task-integration}
+\end{figure}

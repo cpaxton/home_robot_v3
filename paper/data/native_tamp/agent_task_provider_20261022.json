@@ -1,0 +1,663 @@
+{
+  "schema_version": 1,
+  "scope": "diagnostic integration cases; not a frozen benchmark population",
+  "inputs": "privileged",
+  "execution_mode": "live_async",
+  "robot": "stationary Stretch",
+  "remote_model": "Qwen/Qwen3-VL-8B-Instruct",
+  "checkpoint_and_sampling_independently_pinned": false,
+  "local_gpu_used": false,
+  "cases": [
+    {
+      "condition": "narrow_buffers",
+      "job_id": "20261022_164003_c2b5b9",
+      "source_sha": "579dc9ebeddca6394c9dea1464e89474cd6e2024",
+      "task_instruction": "swap blue cube and red cylinder",
+      "task_config": {
+        "schema_version": 1,
+        "input_mode": "privileged",
+        "robot": "stretch",
+        "reset_id": "recovered-forward-buffer-swap",
+        "support_body": "table",
+        "objects": {
+          "red cylinder": "object2",
+          "blue cube": "object1"
+        },
+        "regions": [
+          {
+            "name": "cube home",
+            "bounds": [
+              [
+                -0.08,
+                -0.605
+              ],
+              [
+                0.08,
+                -0.5
+              ]
+            ]
+          },
+          {
+            "name": "cylinder home",
+            "bounds": [
+              [
+                -0.08,
+                -0.76
+              ],
+              [
+                0.08,
+                -0.64
+              ]
+            ]
+          },
+          {
+            "name": "buffer forward",
+            "bounds": [
+              [
+                -0.08,
+                -0.91
+              ],
+              [
+                0.08,
+                -0.79
+              ]
+            ]
+          },
+          {
+            "name": "buffer right",
+            "bounds": [
+              [
+                0.14,
+                -0.75
+              ],
+              [
+                0.28,
+                -0.59
+              ]
+            ]
+          }
+        ]
+      },
+      "task_passed": false,
+      "initial": {
+        "object2": {
+          "in_region": false,
+          "supported": true,
+          "settled": true,
+          "satisfied": false,
+          "bounds_xy": [
+            [
+              -0.04000000066870499,
+              -0.7199999470305068
+            ],
+            [
+              2.298340172200708e-06,
+              -0.6799984933904181
+            ]
+          ]
+        },
+        "object1": {
+          "in_region": false,
+          "supported": true,
+          "settled": true,
+          "satisfied": false,
+          "bounds_xy": [
+            [
+              -0.04,
+              -0.5900000000000001
+            ],
+            [
+              0.0,
+              -0.51
+            ]
+          ]
+        }
+      },
+      "final": {
+        "object2": {
+          "in_region": false,
+          "supported": true,
+          "settled": true,
+          "satisfied": false,
+          "bounds_xy": [
+            [
+              -0.03999999503880093,
+              -0.7199999368163369
+            ],
+            [
+              3.0476668557224973e-06,
+              -0.6799982151697114
+            ]
+          ]
+        },
+        "object1": {
+          "in_region": false,
+          "supported": true,
+          "settled": true,
+          "satisfied": false,
+          "bounds_xy": [
+            [
+              -0.04,
+              -0.5900000000000001
+            ],
+            [
+              0.0,
+              -0.51
+            ]
+          ]
+        }
+      },
+      "task_outcomes": [
+        {
+          "schema_version": 1,
+          "tool": "plan_task",
+          "status": "error",
+          "code": "search_exhausted",
+          "message": "search exhausted",
+          "data": {},
+          "recovery": "inspect"
+        }
+      ],
+      "failure_stop_compliant": true,
+      "audit_commands": 7,
+      "forbidden_commands": 0,
+      "artifact_directory": "/home/cpaxton/src/home_robot_v2/.worktrees/tamp-benchmark-runtime/.tamp-runs/live-recovery",
+      "summary_sha256": "476d2eb3cdd6abef3b6e5193d90fe41e10c70453186694a3efab0e8093a4b8bc",
+      "protocol_sha256": "ba81bc00117b49bbaea189c4c349b61a1228846e394e1774ac0343d32b66450c"
+    },
+    {
+      "condition": "expanded_forward_buffer",
+      "job_id": "20261022_164318_21c555",
+      "source_sha": "f00bdb0b548ea7b92e30522880c5c564cc7f13d5",
+      "task_instruction": "swap blue cube and red cylinder",
+      "task_config": {
+        "schema_version": 1,
+        "input_mode": "privileged",
+        "robot": "stretch",
+        "reset_id": "recovered-large-buffer-20261022",
+        "support_body": "table",
+        "objects": {
+          "red cylinder": "object2",
+          "blue cube": "object1"
+        },
+        "regions": [
+          {
+            "name": "cube home",
+            "bounds": [
+              [
+                -0.08,
+                -0.605
+              ],
+              [
+                0.08,
+                -0.5
+              ]
+            ]
+          },
+          {
+            "name": "cylinder home",
+            "bounds": [
+              [
+                -0.08,
+                -0.76
+              ],
+              [
+                0.08,
+                -0.64
+              ]
+            ]
+          },
+          {
+            "name": "buffer forward",
+            "bounds": [
+              [
+                -0.09,
+                -1.05
+              ],
+              [
+                0.09,
+                -0.77
+              ]
+            ]
+          },
+          {
+            "name": "buffer right",
+            "bounds": [
+              [
+                0.14,
+                -0.75
+              ],
+              [
+                0.28,
+                -0.59
+              ]
+            ]
+          }
+        ]
+      },
+      "task_passed": false,
+      "initial": {
+        "object2": {
+          "in_region": false,
+          "supported": true,
+          "settled": true,
+          "satisfied": false,
+          "bounds_xy": [
+            [
+              -0.040000001071167864,
+              -0.7199999466605931
+            ],
+            [
+              2.8564370330164124e-06,
+              -0.6799985161812663
+            ]
+          ]
+        },
+        "object1": {
+          "in_region": false,
+          "supported": true,
+          "settled": true,
+          "satisfied": false,
+          "bounds_xy": [
+            [
+              -0.04,
+              -0.5900000000000001
+            ],
+            [
+              0.0,
+              -0.51
+            ]
+          ]
+        }
+      },
+      "final": {
+        "object2": {
+          "in_region": false,
+          "supported": true,
+          "settled": true,
+          "satisfied": false,
+          "bounds_xy": [
+            [
+              -0.04443075348795704,
+              -0.8277034792934015
+            ],
+            [
+              -0.003962265119460344,
+              -0.787236064804604
+            ]
+          ]
+        },
+        "object1": {
+          "in_region": false,
+          "supported": true,
+          "settled": true,
+          "satisfied": false,
+          "bounds_xy": [
+            [
+              -0.04,
+              -0.5900000000000001
+            ],
+            [
+              0.0,
+              -0.51
+            ]
+          ]
+        }
+      },
+      "task_outcomes": [
+        {
+          "schema_version": 1,
+          "tool": "plan_task",
+          "status": "ok",
+          "code": "ok",
+          "message": "ok",
+          "data": {
+            "plan_ref": "task_plan_7ba712f380444feabe20b8499afe435f",
+            "steps": 3,
+            "strategy": "beam",
+            "execution_started": false,
+            "planning_scope": "task_skeleton",
+            "motion_refinement": "per_step"
+          },
+          "recovery": "none"
+        },
+        {
+          "schema_version": 1,
+          "tool": "execute_task_plan",
+          "status": "partial",
+          "code": "task_feasibility_failed",
+          "message": "task feasibility failed",
+          "data": {
+            "execution_started": true,
+            "completed_steps": 1
+          },
+          "recovery": "inspect"
+        }
+      ],
+      "failure_stop_compliant": true,
+      "audit_commands": 232,
+      "forbidden_commands": 0,
+      "artifact_directory": "/home/cpaxton/src/home_robot_v2/.worktrees/tamp-benchmark-runtime/.tamp-runs/large-buffer",
+      "summary_sha256": "5876cf152e72f612259469bb090ba177f5f5f77b6053e74ab1481e585d91fc1e",
+      "protocol_sha256": "dbcd80dc8f894047bf0a24b400e0cf59516bcefa8e261b42c2a28d77ba8408a8"
+    },
+    {
+      "condition": "two_goal_causal",
+      "job_id": "20261022_164318_faf73c",
+      "source_sha": "f00bdb0b548ea7b92e30522880c5c564cc7f13d5",
+      "task_instruction": "move red cylinder to cylinder goal; move blue cube to cube goal",
+      "task_config": {
+        "schema_version": 1,
+        "input_mode": "privileged",
+        "robot": "stretch",
+        "reset_id": "recovered-two-goal-20261022",
+        "support_body": "table",
+        "objects": {
+          "red cylinder": "object2",
+          "blue cube": "object1"
+        },
+        "regions": [
+          {
+            "name": "cylinder goal",
+            "bounds": [
+              [
+                -0.08,
+                -0.86
+              ],
+              [
+                0.08,
+                -0.76
+              ]
+            ]
+          },
+          {
+            "name": "cube goal",
+            "bounds": [
+              [
+                -0.08,
+                -0.75
+              ],
+              [
+                0.08,
+                -0.62
+              ]
+            ]
+          }
+        ]
+      },
+      "task_passed": true,
+      "initial": {
+        "object2": {
+          "in_region": false,
+          "supported": true,
+          "settled": true,
+          "satisfied": false,
+          "bounds_xy": [
+            [
+              -0.040000000799077964,
+              -0.7199999465756329
+            ],
+            [
+              2.6409523102982613e-06,
+              -0.6799985623857855
+            ]
+          ]
+        },
+        "object1": {
+          "in_region": false,
+          "supported": true,
+          "settled": true,
+          "satisfied": false,
+          "bounds_xy": [
+            [
+              -0.04,
+              -0.5900000000000001
+            ],
+            [
+              0.0,
+              -0.51
+            ]
+          ]
+        }
+      },
+      "final": {
+        "object2": {
+          "in_region": true,
+          "supported": true,
+          "settled": true,
+          "satisfied": true,
+          "bounds_xy": [
+            [
+              -0.039792717299197346,
+              -0.8202886566831965
+            ],
+            [
+              0.00028195878156998117,
+              -0.780214883162721
+            ]
+          ]
+        },
+        "object1": {
+          "in_region": true,
+          "supported": true,
+          "settled": true,
+          "satisfied": true,
+          "bounds_xy": [
+            [
+              -0.04011043794701091,
+              -0.7179658682984162
+            ],
+            [
+              0.0007574774875496806,
+              -0.6375354609582413
+            ]
+          ]
+        }
+      },
+      "task_outcomes": [
+        {
+          "schema_version": 1,
+          "tool": "plan_task",
+          "status": "ok",
+          "code": "ok",
+          "message": "ok",
+          "data": {
+            "plan_ref": "task_plan_ff36064573da45fbb3fc15634e3fe665",
+            "steps": 2,
+            "strategy": "beam",
+            "execution_started": false,
+            "planning_scope": "task_skeleton",
+            "motion_refinement": "per_step"
+          },
+          "recovery": "none"
+        },
+        {
+          "schema_version": 1,
+          "tool": "execute_task_plan",
+          "status": "ok",
+          "code": "ok",
+          "message": "ok",
+          "data": {
+            "execution_started": true,
+            "completed_steps": 2,
+            "goal_verified": true
+          },
+          "recovery": "none"
+        }
+      ],
+      "failure_stop_compliant": null,
+      "audit_commands": 477,
+      "forbidden_commands": 0,
+      "artifact_directory": "/home/cpaxton/src/home_robot_v2/.worktrees/tamp-benchmark-runtime/.tamp-runs/two-goal",
+      "summary_sha256": "e1a1c234da2923a21b494ee0e1f0dc8ca1fa8296a1de0d63c838307a4ecdace8",
+      "protocol_sha256": "45cc7cc2b79ce66ffac6da0a6feb463be0471e367b61039438feae7b18fb4060"
+    }
+  ],
+  "precrash_results_excluded": "Temporary raw artifacts were lost; only persistent recovered runs are recorded.",
+  "offline_controls": {
+    "recorded_state_fixture": "src/test/fixtures/tamp/recorded_post_buffer_20261022.json",
+    "model_signature": "fb1e55839e4ef357cd214a758c88d3b00de3ab3fd31690f434d5e3196ce37f89",
+    "yaw_job": "20261022_165718_006d65",
+    "yaw_results": [
+      {
+        "extra_yaws": [],
+        "status": "error",
+        "code": "no_plan_within_budget",
+        "ik_calls": 73,
+        "rejections": {
+          "grasp:collision": 4,
+          "pregrasp:ik_failed": 54,
+          "surface:no_collision_free_placement": 3,
+          "pregrasp:collision": 2
+        },
+        "goal": null
+      },
+      {
+        "extra_yaws": [
+          -0.08,
+          0.08,
+          -0.16,
+          0.16
+        ],
+        "status": "error",
+        "code": "no_plan_within_budget",
+        "ik_calls": 256,
+        "rejections": {
+          "grasp:collision": 20,
+          "pregrasp:ik_failed": 186,
+          "surface:no_collision_free_placement": 9,
+          "pregrasp:collision": 3
+        },
+        "goal": null
+      }
+    ],
+    "seed_job": "20261022_165907_31948b",
+    "seed_results": [
+      {
+        "extra_yaws": [],
+        "seed_fallback": false,
+        "status": "error",
+        "code": "no_plan_within_budget",
+        "ik_calls": 73,
+        "rejections": {
+          "grasp:collision": 4,
+          "pregrasp:ik_failed": 54,
+          "surface:no_collision_free_placement": 3,
+          "pregrasp:collision": 2
+        },
+        "goal": null
+      },
+      {
+        "extra_yaws": [],
+        "seed_fallback": true,
+        "status": "error",
+        "code": "no_plan_within_budget",
+        "ik_calls": 181,
+        "rejections": {
+          "grasp:collision": 4,
+          "pregrasp:ik_failed": 54,
+          "surface:no_collision_free_placement": 3,
+          "pregrasp:collision": 2
+        },
+        "goal": null
+      },
+      {
+        "extra_yaws": [
+          -0.08,
+          0.08
+        ],
+        "seed_fallback": true,
+        "status": "error",
+        "code": "no_plan_within_budget",
+        "ik_calls": 256,
+        "rejections": {
+          "grasp:collision": 5,
+          "pregrasp:ik_failed": 76,
+          "surface:no_collision_free_placement": 5,
+          "pregrasp:collision": 3
+        },
+        "goal": null
+      }
+    ],
+    "region_job": "20261022_170123_06c887",
+    "region_results": [
+      {
+        "region": [
+          [
+            -0.08,
+            -0.76
+          ],
+          [
+            0.08,
+            -0.64
+          ]
+        ],
+        "status": "error",
+        "code": "no_plan_within_budget",
+        "ik_calls": 73,
+        "rejections": {
+          "grasp:collision": 4,
+          "pregrasp:ik_failed": 54,
+          "surface:no_collision_free_placement": 3,
+          "pregrasp:collision": 2
+        },
+        "goal": null
+      },
+      {
+        "region": [
+          [
+            -0.08,
+            -0.75
+          ],
+          [
+            0.08,
+            -0.62
+          ]
+        ],
+        "status": "ok",
+        "code": "ok",
+        "ik_calls": 14,
+        "rejections": {
+          "grasp:collision": 1,
+          "pregrasp:ik_failed": 6
+        },
+        "goal": {
+          "frame": "world",
+          "object_center": [
+            -0.019178700804165484,
+            -0.682705929784441,
+            0.5404178762055077
+          ]
+        }
+      },
+      {
+        "region": [
+          [
+            -0.1,
+            -0.76
+          ],
+          [
+            0.1,
+            -0.61
+          ]
+        ],
+        "status": "ok",
+        "code": "ok",
+        "ik_calls": 14,
+        "rejections": {
+          "grasp:collision": 1,
+          "pregrasp:ik_failed": 6
+        },
+        "goal": {
+          "frame": "world",
+          "object_center": [
+            -0.02917870080416548,
+            -0.677705929784441,
+            0.5404178762055077
+          ]
+        }
+      }
+    ],
+    "scope": "private data only; no robot execution or physical success certificate; all tolerances unchanged"
+  }
+}
