@@ -197,7 +197,7 @@ def _log_head_camera_if_no_zmq_rerun_thread(self, obs, mapping_depth=None) -> No
     vis.log_head_camera(obs, mapping_depth=mapping_depth)
 
 
-def update(self, *, full_perception: bool | None = None):
+def update(self, *, full_perception: bool | None = None, observation=None):
     """Step the data collector. Get a single observation of the world. Remove bad points, such as those from too far or too near the camera. Update the 3d world representation.
 
     ``full_perception=True`` runs YoloE / SigLIP / graph ingest even when
@@ -206,7 +206,8 @@ def update(self, *, full_perception: bool | None = None):
     """
 
     _t_update0 = time.time()
-    obs = self.robot.get_observation()
+    # A measured scan supplies the exact post-arrival frame it validated.
+    obs = observation if observation is not None else self.robot.get_observation()
     if obs is None:
         logger.warning("get_observation() returned None; skipping voxel update")
         self.robot.set_mapping_depth_for_rerun(None)

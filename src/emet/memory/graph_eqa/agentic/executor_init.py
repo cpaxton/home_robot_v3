@@ -323,7 +323,10 @@ def _handle_investigate(self, args: dict[str, Any]) -> dict[str, Any]:
 
 
 def _handle_look_around(self, args: dict[str, Any]) -> dict[str, Any]:
-    return self._tool_look_around()
+    profile = args.get("profile", "local")
+    if profile not in {"local", "coverage"}:
+        return {"ok": False, "status": "invalid_scan_profile"}
+    return self._tool_look_around() if profile == "local" else self._tool_look_around(profile=profile)
 
 
 def _handle_capture_and_update(self, args: dict[str, Any]) -> dict[str, Any]:

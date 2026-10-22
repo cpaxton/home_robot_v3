@@ -453,7 +453,7 @@ def _action_signature(
                 **(
                     {"pan_rad": args.get("pan_rad"), "tilt_rad": args.get("tilt_rad", -1.0)}
                     if tool == "observe_floor"
-                    else {}
+                    else {"profile": args.get("profile", "local")}
                 ),
             },
         )
