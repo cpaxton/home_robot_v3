@@ -90,13 +90,15 @@ class TaskSession:
             plan = self._plans.pop(plan_ref, None)
             if plan is None:
                 return response('execute_task_plan', code='unknown_plan', recovery='replan')
-            started, completed = False, 0
+            started, completed, active_step = False, 0, None
+            phase = "initial_validation"
             try:
                 current = self.provider.snapshot()
                 plan.initial.binding.require_current(current.binding)
                 if current.predicates != plan.initial.predicates:
                     raise ValueError('stale_task_plan')
-                for operator in plan.operators:
+                for index, operator in enumerate(plan.operators):
+                    active_step, phase = index+1, "preflight"
                     if not operator.requires <= current.predicates:
                         raise ValueError('task_precondition_failed')
                     if not self.provider.feasible(current, operator):
@@ -105,6 +107,7 @@ class TaskSession:
                     if not plan.goal.protected <= predicted.predicates:
                         raise ValueError('protected_goal_regression')
                     current.binding.require_current(self.provider.snapshot().binding)
+                    phase = "execution"
                     previous_started, started = started, True
                     receipt = self.provider.execute(operator)
                     if isinstance(receipt, TaskExecutionResult):
@@ -115,6 +118,7 @@ class TaskSession:
                     if not success:
                         raise ValueError(receipt.failure_code if isinstance(receipt, TaskExecutionResult)
                                          else 'task_execution_failed')
+                    phase = "effect_verification"
                     measured = self.provider.snapshot()
                     before, after = current.binding, measured.binding
                     if (before.model_sha256, before.robot_profile_sha256, before.boot_id, before.reset_id) != (
@@ -127,6 +131,7 @@ class TaskSession:
                         raise ValueError('protected_goal_regression')
                     completed += 1
                     current = measured
+                active_step, phase = None, "goal_verification"
                 if not plan.goal.satisfied(current):
                     raise ValueError('task_goal_verification_failed')
             except Exception as error:
@@ -135,6 +140,8 @@ class TaskSession:
                            'task_effect_verification_failed', 'task_goal_verification_failed'}
                 code = str(error) if str(error) in allowed else 'task_provider_failed'
                 return response('execute_task_plan', code=code, status='partial' if started else 'error',
-                                data={'execution_started': started, 'completed_steps': completed})
+                                data={'execution_started': started, 'completed_steps': completed,
+                                      'planned_steps': len(plan.operators), 'failed_step_1based': active_step,
+                                      'failed_phase': phase})
             return response('execute_task_plan', data={'execution_started': started,
                                                        'completed_steps': completed, 'goal_verified': True})

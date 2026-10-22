@@ -3,6 +3,7 @@
 """Privileged stationary Stretch grounding and bounded native motion refinement."""
 from __future__ import annotations
 
+import json
 import logging
 
 import mujoco
@@ -47,7 +48,7 @@ def validate_native_task_config(config):
 
 
 class NativeTableTransferProvider(RegionTransferProvider):
-    def __init__(self, robot, config, *, adapter=None, planning_ik_budget=2048):
+    def __init__(self, robot, config, *, adapter=None, planning_ik_budget=2048, diagnostic_state=False):
         validate_native_task_config(config)
         if type(planning_ik_budget) is not int or planning_ik_budget <= 0:
             raise ValueError('invalid_planning_ik_budget')
@@ -56,6 +57,7 @@ class NativeTableTransferProvider(RegionTransferProvider):
             raise ValueError('native_transfer_requires_privileged_inputs')
         self.roles, self.support, self.reset_id = dict(config['objects']), config['support_body'], config['reset_id']
         self._revision, self._reference = 0, None
+        self.diagnostic_state = bool(diagnostic_state)
         self._profile = fingerprint({'robot': 'stretch', 'interface': 'native_arm_to', 'config': config})
         self._ik_remaining, self.motion_evidence, self._motion_cache = planning_ik_budget, [], {}
         model = self.adapter.model
@@ -141,6 +143,7 @@ class NativeTableTransferProvider(RegionTransferProvider):
             self.adapter.tasks[ref] = (self.roles[role], self.support, role, region.name)
             previous_limit = self.adapter.max_planning_ik_calls
             self.adapter.max_planning_ik_calls = min(previous_limit, self._ik_remaining)
+            event_start = len(getattr(self.adapter, "events", []))
             self.adapter.planning_ik_calls = 0
             try:
                 planned = self.adapter.plan(task_ref=ref, placement_region=region.bounds)
@@ -153,10 +156,22 @@ class NativeTableTransferProvider(RegionTransferProvider):
             data = planned.get('data', {})
             evidence = {'object_name': role, 'region': region.name, 'code': planned['code'],
                         'ik_calls': count, 'remaining_planning_ik_calls': self._ik_remaining,
+                        'stage': 'execution_refinement' if retain else 'task_search_probe',
                         'rejections': data.get('planning_rejections', {})}
             self.motion_evidence.append(evidence)
+            payload = dict(evidence)
+            if getattr(self, 'diagnostic_state', False) and planned['status'] != 'ok':
+                payload['debug_state'] = {
+                    'source': 'simulator_ground_truth', 'model_signature': self.adapter.signature,
+                    'qpos': self.adapter.data.qpos.tolist(), 'qvel': self.adapter.data.qvel.tolist(),
+                    'sim_time': float(self.adapter.data.time),
+                    'ik_rejections': [{'stage': e.get('stage'), 'detail': e.get('detail')}
+                                      for e in self.adapter.events[event_start:]
+                                      if e.get('phase') == 'planning_rejection'],
+                }
             logger = logging.getLogger(__name__)
-            (logger.info if planned['status'] == 'ok' else logger.warning)('Native task refinement: %s', evidence)
+            (logger.info if planned['status'] == 'ok' else logger.warning)(
+                'Native task refinement: %s', json.dumps(payload, allow_nan=False))
             if planned['status'] != 'ok':
                 return None
             plan_ref = data['plan_ref']

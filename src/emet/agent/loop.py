@@ -831,7 +831,7 @@ def run_agent_with_robot(
         try:
             if executor._manip_mode != "physical" or executor._tamp_inputs != "privileged":
                 raise ValueError("native_task_config requires physical mode with privileged inputs")
-            tamp_task_session = TaskSession(NativeTableTransferProvider(robot_client, native_task_config))
+            tamp_task_session = TaskSession(NativeTableTransferProvider(robot_client, native_task_config, diagnostic_state=tool_debug))
         except Exception:
             robot_client.stop()
             raise
@@ -1390,6 +1390,7 @@ def run_agent_with_robot(
                     followup = (
                         f"[Tool results]\n{result_text}\n\n"
                         "Summarize these results for the user in your message. "
+                        "Use completed_steps and failed_step_1based when present: a later failure does not undo completed work. "
                         "Do not call any more tools."
                     )
                     if last_round:

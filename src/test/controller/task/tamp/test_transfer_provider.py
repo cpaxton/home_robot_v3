@@ -152,3 +152,30 @@ def test_failed_native_probe_consumes_calls_and_restores_primitive_cap():
         domain._refine('alpha', domain.regions['buffer'])
     assert domain._ik_remaining == 98
     assert domain.adapter.max_planning_ik_calls == 20
+
+
+def test_second_preflight_failure_preserves_step_number():
+    domain, _, calls = make_domain()
+    original = domain.feasible
+    domain.feasible = lambda state, op: not calls and original(state, op)
+    session = TaskSession(domain)
+    ref = session.plan('swap alpha and beta')['data']['plan_ref']
+    result = session.execute(ref)
+    assert result['status'] == 'partial'
+    assert result['data']['completed_steps'] == 1
+    assert result['data']['failed_step_1based'] == 2
+    assert result['data']['failed_phase'] == 'preflight'
+
+
+def test_debug_state_is_json_in_logs_but_not_public_motion_evidence(caplog):
+    import numpy as np
+    domain, _ = native_probe_domain()
+    domain.diagnostic_state = True
+    domain.adapter.signature = 'a'*64
+    domain.adapter.events = []
+    domain.adapter.data = SimpleNamespace(qpos=np.array([.1]), qvel=np.array([0.]), time=1.)
+    domain._refine('alpha', domain.regions['buffer'])
+    payload = json.loads(caplog.records[-1].getMessage().split('Native task refinement: ', 1)[1])
+    assert payload['debug_state']['qpos'] == [.1]
+    assert payload['stage'] == 'task_search_probe'
+    assert 'debug_state' not in domain.motion_evidence[-1]
