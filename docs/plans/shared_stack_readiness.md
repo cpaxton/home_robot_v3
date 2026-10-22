@@ -1,5 +1,46 @@
 # Shared-agent stack readiness
 
+## Landing execution — 2026-10-22 (supersedes statuses below)
+
+- **#218 merged** at `c6160d06`, using repository-required squash merge.
+  #181 and #213 are retargeted to main. User's dirty checkout is untouched.
+- #181 refreshed onto actual main (`99eb1c37`): 90 provider tests passed.
+  Fresh Qwen3-VL-8B int4/SAM2 saved-view gate
+  `20261022_171602_176fe2` initially failed an incorrect positive expectation:
+  the bottle image is a wall-only view, with zero simulator target-mask pixels.
+  Visual inspection confirmed the model's correct abstention. Original failed
+  output is retained. Truth-qualified audit: 2 positive mode/view cases (bowl,
+  point and SAM/depth candidates, each 100% selected-pixel precision), 6 absent
+  cases correctly abstained. Eight cases total, not eight independent scenes.
+  No provider reliability or task-success claim. Default-path main/candidate
+  S0 pair `20261022_171909_91a615` is pending.
+- #182 refreshed (`cec6062f`): 79 navigation/map/arrival/contact tests passed.
+  Fixed stale frontier test fixture to use `get_navigation_map`; production
+  unchanged. Initial wheel smoke `20261022_171811_70a0da` set tolerances before
+  `update_goal`, which resets them, so it did not exercise requested precision.
+  Failed evidence retained; corrected same-threshold smoke
+  `20261022_172110_f3bd66` is pending. Do not count initial smoke as a pass.
+- #184 refreshed (`4d615402`): 285 sweep/head/floor-recovery tests passed.
+  Real Stretch simulation bridge/head/RGB handoff smoke
+  `20261022_172012_f44051` is pending; semantic verifier is a test callback.
+- #199/#202/#216/#217 inherit refreshed parents. Final context tip `8a929910`:
+  77 captured-view, quality, selector, answer-authority, and dialogue tests pass.
+  EQA4 paired job `20261022_172320_110918` is pending: q12/14/6/56, seed 0,
+  same local Qwen8B. Main uses native legacy authority, candidate uses explicit
+  model_final; this compares harnesses, not an isolated image-selection ablation.
+
+All heavy jobs share the exclusive GPU lock and run serially; unit tests are
+one-core. Frozen selected source roots are not modified during trials.
+Default-pair and EQA outputs live under `/home/cpaxton/runs/emet/`, not /tmp.
+Temporary historical worktrees/traces vanished between sessions; pushed source
+and durable job logs survived. Missing historical artifacts are not recreated
+or represented as newly verified. New saved-view and wheel smoke outputs are
+under /tmp and should be archived if used beyond this diagnostic closeout.
+
+No other PR has merged as of this checkpoint. Provider/default, measured-motion,
+and context task gates remain distinct; TAMP #213/#219 and optional RL #214
+remain outside this landing batch.
+
 ## Final review repairs — 2026-10-22
 
 Two reproduced P2 findings were repaired on their owning PRs:
