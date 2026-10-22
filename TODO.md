@@ -5,6 +5,17 @@ Strike through or move to a PR when done.
 
 ## Shared evidence/navigation stack (#199 / #202)
 
+- [ ] Report wall-clock and simulator-clock elapsed time separately for episodes,
+      mapping, navigation and manipulation; publish actual sim time with boot/clock
+      identity, handle resets/missing clocks explicitly, and retain real-time factor.
+      Never estimate task sim duration by multiplying wall time by a sampled ratio.
+      Separate successful motion, settling, planning, recovery and VLM compute costs.
+- [ ] After correctness/clock reporting, evaluate mjlab/mjenv-style parallel MuJoCo
+      execution as a separate infrastructure study (confirm exact projects/APIs).
+      Compare physics/contact and robot-model parity, RGB-D rendering, per-env
+      state/clock isolation, deterministic seeds, memory/throughput and failure
+      reproducibility. Keep the same agent API; no simulator migration or changed
+      task dynamics before matched acceptance. Current heavy experiments stay serial.
 - [ ] Ablate episode history after the dialogue-contract repair: full multimodal
       dialogue vs tool-results-only vs stateless inference, with identical model,
       seeds, prompts, acquisition/answer budgets and view selection. Compare paired
