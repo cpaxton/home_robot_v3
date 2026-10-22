@@ -6,6 +6,47 @@ JSON tools. Native contact and observed perception are separate acceptance gates
 The earlier 6/6 scripted Stretch contact result does not establish either public
 tool execution or exploration. Keep its denominator separate.
 
+## October 14: agent integration ownership and next gates
+
+The live `run agent` CLI now completes the familiar two-object task with Caliban
+inference. Both frozen held-out placements still fail physically; see the
+[live CHAT report](../experiments/tamp_native_heldout_chat_20261014.md).
+Grasp retention and fingertip control are assigned to the separate RL/control
+workstream. Preserve those cases and tolerances as regression tests; integration
+work must not relax them or count a safe stop as task completion.
+
+Proceed on the agent interface without waiting for grasp tuning:
+
+1. **Separate integration evidence from physical outcomes.** The CHAT evaluator
+   now reports `agent_integration`: dispatched TAMP outcome counts, JSON contract
+   validity, and whether a failed/partial result stopped subsequent dispatch until
+   a new user turn. Unexercised checks are `null`, not passes. Physical predicates
+   and the overall acceptance gate remain unchanged. These checks do not certify
+   goal interpretation, physical recovery, or observed grounding.
+2. **Wire observed task discovery first, read-only.** Bridge memory objects and
+   support estimates to timestamped task evidence and opaque handles. Test missing,
+   stale, ambiguous and occluded observations; forbid simulator metadata access in
+   observed mode. Keep native execution unavailable until both observed collision
+   geometry and execution verification have providers. A model path or a semantic
+   object label alone is not an observed geometry provider.
+3. **Compose discovery with navigation in ordinary CHAT.** Validate exploration,
+   grounding and measured arrival independently, then refresh object/support
+   evidence before manipulation planning. The current `--state-only-sim` fixture
+   is camera-free and cannot validate this gate. Use Caliban for inference and
+   schedule camera/perception resources separately from the occupied local GPU.
+4. **Validate multi-step intent and failure handling.** Freeze tasks with explicit
+   goals, prerequisite discovery/navigation, plan-only requests, stale handles,
+   partial execution and unknown command outcomes. Assess actual dispatched calls,
+   not promises in assistant prose. No automatic held-object recovery until a
+   verified recovery capability exists. Report goal coverage separately from the
+   result-contract and stop checks.
+
+Keep the existing familiar fixture as an end-to-end integration control, and
+report the frozen held-out failures alongside it. When RL/control changes arrive,
+rerun the same fixtures through the same tools to measure physical improvement.
+Do not block read-only observed discovery on those controller changes or bypass
+the observed-input gate to manufacture an exploration success.
+
 ## Gate 1: stationary native public-tool execution
 
 Controlled positives now pass at `d1d451c5`: 4/4 live ZMQ transfers and 6/6
@@ -175,3 +216,55 @@ payload/obstacle geometry into the same contracts. Its acceptance starts from
 exploration without privileged task handles. Hardware validation must replace
 simulator contact/pose checks with supported, calibrated sensor evidence;
 privileged contacts remain available only for explicit debugging and evaluation.
+
+### Observed discovery hook implementation (October 14)
+
+The read-only provider contract is now connected to `scene_tasks` and the Python
+`run_agent_with_robot(observed_tamp_provider=...)` entrypoint. It validates tracked
+object/support evidence and publishes discovery-only proposals. CHAT stops after
+these proposals rather than attempting unavailable manipulation. Tests cover the
+real tool registry and real CHAT loop with an injected provider, including no
+simulator metadata reads, stale/future/privileged rejection, and no execution
+from discovery-only results. Two-cycle orchestration and plan-only requests also
+have controlled-backend CHAT-loop tests.
+
+The existing open-vocabulary RGBD processor now supplies a provider automatically
+when that backend is enabled. The provider uses segmented points from a single
+frame and geometric horizontal-patch proposals, with the original local RGBD
+receive time propagated through mapping. No accumulated geometry or cached
+localization is promoted to fresh evidence. Depth-estimator outputs have a
+distinct provenance label and position estimates do not invent an orientation.
+
+CPU tests exercise the real processor/depth projection, tool registry and CHAT
+wiring with controlled segmentation. Gate 3 still needs a live camera/segmentation
+trial and observed planning geometry/verification. Next validate discovery from
+camera observations before enabling observed planning. See the
+[API contract](../api/tamp.md#observed-discovery-integration-hook).
+
+
+Validation for the RGBD provider connection: 103 selected CPU tests passed across
+observed discovery, CHAT continuation/dispatch, scoring, scene graph, navigation,
+voxel mapping and DynaMem module/controller checks. After the cached-depth guard,
+19 focused discovery/DynaMem checks passed, including two regressions that exercise
+the real mapping update path. Ruff and diff checks passed. An earlier frame-contract
+batch skipped seven RoboCasa-dependent tests because that checkout lacks the
+RoboCasa dependency; those skips are not acceptance evidence. No new live detector
+trial or GPU experiment was run in this implementation step.
+
+
+The subsequent [real detector/camera diagnostic](../experiments/tamp_observed_discovery_20261014.md)
+found CPU inference too slow for the two-second receive-age gate and incorrectly
+labeled tabletop regions as blue cubes. Public discovery rejected the stale
+frame; observed task success has not been established. Detector/device/label
+adapter fixes are covered by 35 focused regressions, and 43 broader agent/config
+checks pass. The next gate requires semantic verification, object-part identity
+handling and faster perception, plus separate camera/physics throughput work.
+
+
+### October 15: finish the orchestration milestone
+
+Use the [PR #213 merge scope](2026-10-15_tamp_213_merge_scope.md) for this branch's
+review and merge criteria. Its orchestration acceptance is independent of the
+remaining perception/controller gates above. Coordinate the next observed-input
+adapter with incoming grounding, camera-evidence and view-selection providers;
+keep this PR focused on the existing CHAT tool contracts and their validation.

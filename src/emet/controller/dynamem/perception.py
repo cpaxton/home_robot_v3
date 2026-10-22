@@ -13,6 +13,7 @@ import numpy as np
 from emet.controller.dynamem.constants import (
     _env_truthy,
 )
+from emet.controller.manipulation.native_inputs import ESTIMATED_DEPTH_POINTCLOUD_SOURCE, RGBD_POINTCLOUD_SOURCE
 from emet.mapping.scene_graph import SceneGraph
 from emet.perception.depth import create_da3_estimator_from_parameters, resolve_depth_map
 from emet.perception.depth.da3_estimator import apply_da3_sky_row_mask, apply_depth_speckle_filter, sensor_depth_usable
@@ -223,6 +224,7 @@ def update(self, *, full_perception: bool | None = None):
         # expensive semantic ingestion at every navigation segment.
         run_infer_full = True
     depth: np.ndarray | None
+    depth_reused = False
     if (
         not run_infer_full
         and self._depth_source in ("da3", "auto")
@@ -231,9 +233,11 @@ def update(self, *, full_perception: bool | None = None):
         and self._da3_last_depth.shape[:2] == rgb.shape[:2]
     ):
         depth = np.asarray(self._da3_last_depth, dtype=np.float32).copy()
+        depth_reused = True
         self._depth_map_from_da3_infer = True
         if self._depth_source == "auto" and sensor_depth is not None and np.asarray(sensor_depth).size > 0:
             depth = np.asarray(sensor_depth, dtype=np.float32)
+            depth_reused = False
             self._depth_map_from_da3_infer = False
     elif (
         not run_infer_full
@@ -242,6 +246,7 @@ def update(self, *, full_perception: bool | None = None):
         and self._lingbot_last_depth.shape[:2] == rgb.shape[:2]
     ):
         depth = np.asarray(self._lingbot_last_depth, dtype=np.float32).copy()
+        depth_reused = True
         self._depth_map_from_da3_infer = True
     else:
         depth = self._resolve_depth_map(
@@ -320,6 +325,12 @@ def update(self, *, full_perception: bool | None = None):
         base_xyt=base_xyt,
         full_perception=run_full,
         image_timing=getattr(obs, "image_timing", None),
+        # Reused inferred depth does not describe this newly received frame.
+        received_monotonic=None if depth_reused else getattr(obs, 'received_monotonic', None),
+        # This flag describes sensor vs estimated provenance, not freshness.
+        # depth_reused independently controls whether this frame has fresh evidence.
+        depth_evidence_source=(ESTIMATED_DEPTH_POINTCLOUD_SOURCE if self._depth_source == 'lingbot'
+                               or getattr(self, '_depth_map_from_da3_infer', False) else RGBD_POINTCLOUD_SOURCE),
     )
     if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
         print(f"[update] process_rgbd={time.monotonic():.3f}", flush=True)

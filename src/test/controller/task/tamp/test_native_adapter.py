@@ -17,6 +17,7 @@ from emet.controller.manipulation.native_scene import model_signature
 from emet.controller.task.tamp.native_adapter import NativeTableAdapter
 from emet.simulation.mujoco_server_stretch import default_scene_xml_path
 from emet.simulation.robosuite_load_utils import snap_joint_qpos_to_ctrl_for_position_actuators
+from emet.simulation.sim_object_placements import placements_from_mujoco_model
 
 
 @pytest.fixture(scope="module")
@@ -159,7 +160,12 @@ def test_pinch_calibration_uses_pad_centers_and_preserves_measured_state(native)
     ref = make_plan(call)
     plan = adapter.plans[ref]
     point, rotation = plan.executor.grasp_targets[1]
-    np.testing.assert_allclose(point + rotation @ offset, data.body(plan.object_body).xpos, atol=.001)
+    pinch = point + rotation @ offset
+    # Height alternatives may deliberately pinch above the center. Calibration
+    # must center the opposing pads horizontally and keep them on the payload.
+    np.testing.assert_allclose(pinch[:2], data.body(plan.object_body).xpos[:2], atol=.001)
+    bounds = np.asarray(placements_from_mujoco_model(adapter.model, data)[plan.object_body]['bounds'])
+    assert bounds[0, 2] <= pinch[2] <= bounds[1, 2]
 
 
 @pytest.mark.parametrize('phase', ['grasp', 'place'])
@@ -319,3 +325,15 @@ def test_matching_selectors_keep_identity_through_execution(native, monkeypatch)
         assert envelope['data']['object_name'] == 'blue cube'
         assert envelope['data']['receptacle_name'] == 'table'
         assert 'object1' not in json.dumps(envelope)
+
+
+def test_partial_progress_reports_execution_started_even_before_next_stage():
+    from emet.controller.task.tamp.native_adapter import NativeTableAdapter
+
+    adapter = object.__new__(NativeTableAdapter)
+    result = adapter._failure('execute_pick_place_plan', 'payload_not_retained',
+                              completed=('grasp',), phase='place')
+    assert result['status'] == 'partial'
+    assert result['data']['execution_started'] is True
+    assert result['data']['completed_ops'] == ['grasp']
+    assert result['recovery'] == 'inspect'

@@ -1,16 +1,14 @@
 # Agent-facing TAMP simulator API
 
-**Branch scope (2026-10-12, refreshed after #201):** main includes structured
-tools (#178), collision-aware placement and assisted articulation (#179), and
-measured Stretch articulation/task admission (#201). See the
-[placement API](placement.md) and [articulation API](tamp_articulation.md).
-Observed/privileged input contracts merged in
-[#195](https://github.com/cpaxton/home_robot_v3/pull/195) as `b7a1c22d`;
-This branch adds a stationary Stretch native-debug adapter for the packaged table
-scene. Controlled native transfers pass for both test shapes; observed geometry
-providers remain unwired. See the [integration report](../experiments/tamp_native_agent_20261013.md).
-See [project status](../project_status.md#latest-evidence-supersedes-older-pr-prose)
-for tested revisions, the broader 3/7 assisted run, and remaining gates.
+Start with the [TAMP overview](../tamp.md) for the workflow and architecture, or
+the [agent tool index](../agent_tools.md) for the complete tool inventory.
+Main through #212 includes structured tools, collision-aware placement,
+simulator-assisted articulation, observed/privileged input contracts, and the
+stationary Stretch native-debug adapter for the packaged table scene. Observed
+geometry providers remain unwired. See the [placement API](placement.md),
+[articulation API](tamp_articulation.md), and
+[latest live agent report](../experiments/tamp_native_live_agent_20261014.md) for
+tested revisions and remaining gates; assisted and native results are separate.
 
 All four CHAT tools (`scene_tasks`, `plan_pick_place`, `execute_pick_place_plan`,
 `pick_place`) return one JSON object encoded as tool-result text. This replaces
@@ -144,8 +142,9 @@ fixtures or pool assisted historical scores with new results.
 
 `agent.manip_mode=physical` selects actuator/contact execution. It never falls
 back to object teleportation or attachment. Inputs default to
-`agent.tamp_inputs=observed`; observed discovery currently returns
-`observed_scene_unavailable` before reading simulator metadata.
+`agent.tamp_inputs=observed`. Observed discovery uses the enabled open-vocabulary
+RGBD processor; without a provider it returns `observed_scene_unavailable`.
+Observed planning and execution remain unavailable.
 
 Explicit `privileged` inputs enable the packaged **Stretch default table scene**
 adapter. The existing four tools discover stationary pick/place tasks, validate
@@ -246,10 +245,10 @@ simulation time for settling, bounded by a 30-second wall watchdog per wait;
 ordinary hardware executors keep wall-clock timing. Simulator snapshots and final
 contact checks remain explicitly privileged debug evidence.
 
-The native candidate search tries a 15-degree pitched robot frame before the
-level and measured frames, for all objects. Every accepted candidate still needs
+The native candidate search prefers a 45-degree pitched robot frame, retaining
+15/60-degree and level/measured alternatives for all objects. Every accepted candidate still needs
 arm/payload collision validation and measured hold/release verification. The
-current controlled acceptance is 4/4 live ZMQ and 6/6 separate CPU transfers;
+earlier controlled acceptance was 4/4 live ZMQ and 6/6 separate CPU transfers;
 this is not validation of clutter rearrangement, native base navigation, or
 observed-input exploration.
 
@@ -298,9 +297,16 @@ Other adapters return `placement_region_unsupported` rather than ignoring the go
 Malformed/nonfinite/empty bounds return `invalid_placement_region`; a region not
 overlapping the support returns `placement_region_unavailable`.
 
-Native grasp search tries the existing 15-degree approach, bounded 45/60-degree
-approaches with object-height-derived pinch offsets, then level/measured frames.
-Every candidate uses the same collision, tracking, and retention checks. A grasp
+Native grasp search prefers the 45-degree approach with object-height-derived
+pinch offsets, retaining 15/60-degree approaches and level/measured frames.
+Every candidate uses the same collision, tracking, and retention checks.
+Native coupled-arm pregrasp paths move the lift, then wrist joints, then arm
+extension, with collision checks on every segment. The same order is rebuilt
+from measured state before execution. A blocked ordered route rejects that
+candidate rather than falling back to a simultaneous sweep; other grasp
+candidates remain available. This reduces sensitivity to unequal controller lag
+near support surfaces. Revalidation diagnostics retain joint-bound/collision
+detail and private contact pairs; public failures expose sanitized codes. A grasp
 with no downstream placement now resumes grasp search. A shared limit of 256
 pose-IK calls bounds grasp and placement exploration. `no_plan_within_budget`
 means this search did not find a complete plan, not proof of infeasibility.
@@ -327,7 +333,8 @@ Use the contact harness with `--sequence object2 object1 --separation .15
 --separation-axis y --placement-regions PATH`. The separate
 `scripts/eval_native_table_agent.py` evaluates LLM selection with the CHAT
 prompt/parser/dispatcher and independent region/support scoring; it is not the
-interactive `run agent` CLI or a live ZMQ run. Its `--device` defaults to `cpu`;
+interactive `run agent` CLI. By default it uses in-process physics; `--live-sim`
+selects live ZMQ execution as described below. Its `--device` defaults to `cpu`;
 `--device cuda` requires a managed GPU reservation. Both harnesses require managed jobs.
 
 For an existing remote OpenAI-compatible server, supply both
@@ -338,3 +345,97 @@ also bound total episode time. Remote decoding uses the server defaults, and
 `--seed` only controls the local process. Archive the served model revision and
 sampling configuration alongside results. Physics still pauses during inference
 in this in-process harness; remote hosting does not establish live execution.
+
+To evaluate the same regional agent goals against a live server, add
+`--live-sim PATH_TO_SIM_YAML` to `scripts/eval_native_table_agent.py` and launch
+through a managed job. Reserve the GPU when rendering GPU camera images. Use
+a matching packaged Stretch scene with fixture
+initial transforms set before startup. The harness enables the physical actuation
+audit, reads fresh measured snapshots, and records simulator time on both sides
+of every inference request. Passing requires physics progress during inference,
+a clean nonempty actuation audit, and the same independent stable final-goal
+checks. Remote inference avoids local model weights; GPU camera rendering still
+needs a GPU reservation. The scope remains privileged and stationary; this
+is not exploration or observed-input acceptance.
+
+For this privileged text-only evaluator, `no_cameras: true` in the simulator YAML
+avoids rendering and local GPU use entirely. The harness opts into
+`StretchZmqClient(state_only=True)`: missing image streams are permitted only
+when state explicitly advertises `is_simulation=true` and integer
+`capabilities.num_cameras=0`. Default clients and hardware still require their
+normal startup streams. No image observations are fabricated. This mode does
+not validate visual exploration or perception.
+
+The [live agent experiment](../experiments/tamp_native_live_agent_20261014.md)
+records two successful two-goal episodes with physics advancing during every
+model call, plus the IK binding mitigation and its remaining runtime uncertainty.
+
+The subsequent [held-out and actual CHAT gate](../experiments/tamp_native_heldout_chat_20261014.md)
+records placement failures and bounded session recovery. See
+[run-agent TAMP sessions](../AGENT_RUN.md#bounded-multi-step-tamp-sessions) for the
+round budget and explicit camera-free diagnostic mode.
+
+## Observed discovery integration hook
+
+Python embedders of `run_agent_with_robot` can pass `observed_tamp_provider`, an
+`ObservedTaskProvider` from
+`emet.controller.task.tamp.observed_discovery`. The tool context uses the same key.
+The provider declares `input_mode = "observed"` and implements `observe_tasks()`
+to return one coherent tuple of `ObservedTaskCandidate` values. Each candidate
+contains semantic object/receptacle names and object/support evidence. Tracked
+poses can use `ObjectPoseEvidence` (`rgbd_tracking` or `stereo_tracking`); segmented
+depth positions use `ObservedPositionEvidence` (`rgbd_pointcloud` or
+`estimated_depth_pointcloud`). Position evidence carries no inferred rotation.
+Labels alone are insufficient to establish a support.
+
+Both estimates preserve their original observation receive times and must be at
+most two seconds old. Discovery does not renew
+those times. Unknown/occluded entities must be omitted; empty observations return
+an empty task list. Stale, future-dated, or privileged evidence rejects the entire
+snapshot, including evidence excluded by the caller's category filter. Receive
+freshness alone is not a claim of synchronized sensor capture or calibrated poses.
+
+`scene_tasks` returns the existing versioned JSON envelope, with
+`data.inputs = "observed"`, `discovery_only = true`, `planning_available = false`,
+and `execution_available = false`. Task entries contain opaque per-discovery
+handles, semantic names, world positions, sources and observation ages. Observed
+`task_ref` handles are scoped to one discovery result: re-discovery creates new
+handles even for unchanged observations. They are not stable object identities;
+copy handles from the result being used. These are
+proposals, not executable plan handles or certified affordances. The CHAT loop
+summarizes this result and stops the turn instead of continuing into manipulation.
+Native planning/execution gates remain unchanged and still reject observed mode.
+
+With `--memory-backend open_vocab`, `run agent` automatically uses the
+`RgbdTaskProvider` attached to its existing scene-graph processor. Explicit Python
+injection takes precedence. No new detector or tracking model is introduced. The
+provider uses only the current segmented RGBD frame; accumulated scene-graph
+bounds, cached semantic localizations and simulator metadata are not inputs.
+
+The provider proposes small segmented objects (robust extent 1–30 cm) and broad
+horizontal upper depth patches (at least 15 cm in each horizontal direction and
+0.03 square metres, with 30 depth points in a 2 cm height band). These geometric
+heuristics produce task candidates, not support/load-bearing or graspability
+certificates. Each object is paired with other observed support candidates in
+that frame. Estimated depth is labeled separately from sensor RGBD. Unknown,
+empty or untimestamped frames clear the proposals; a processing failure also
+clears the previous frame before processing starts.
+
+Stretch stamps its RGBD receive time locally when a full observation arrives.
+The timestamp travels with that observation through depth resolution, mapping
+and scene-graph segmentation; reading or reprocessing the same frame does not
+renew it. Reused inferred depth is not stamped with a newer image's receive time
+and cannot produce fresh proposals. Slow processing can make the result stale,
+which is rejected. This is
+local receive freshness, not a hardware capture-time or clock-synchronization
+claim. Other robot clients must supply the same local observation provenance
+before they can produce fresh proposals.
+
+The camera-free diagnostic and plain `dynamem`/GraphEQA presets do not activate
+this processor and still need an explicit provider for discovery. Observed
+obstacle/payload geometry and execution verification remain prerequisites for
+motion. The first real camera/detector diagnostic rejected stale evidence after 16.5 s
+of CPU processing and exposed incorrect support labels. Live discovery acceptance
+is still pending; see the [diagnostic report](../experiments/tamp_observed_discovery_20261014.md).
+Controlled segmentation tests cover real depth projection and the processor/tool
+paths, but do not establish detector accuracy.

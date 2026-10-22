@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "status": "design_only",
+  "executable_registry": false,
+  "plan": "docs/plans/2026-10-18_household_agent_tamp.md",
+  "primary_upstream": "RoboCasa365 composites",
+  "secondary_upstream": "MolmoSpaces fixed episodes",
+  "adapted_suite_label": "Emet household composition suite",
+  "families": [
+    {
+      "id": "clear_and_serve",
+      "tier": "native_pick_place"
+    },
+    {
+      "id": "swap_occupied_destinations",
+      "tier": "native_pick_place"
+    },
+    {
+      "id": "retrieve_and_close",
+      "tier": "articulation_gated"
+    },
+    {
+      "id": "collect_and_stow",
+      "tier": "navigation_observed_gated"
+    }
+  ],
+  "simulators": [
+    "robocasa",
+    "molmospaces"
+  ],
+  "pilot_cases": 8,
+  "held_out_layouts_per_simulator": 3,
+  "placement_seeds_per_layout": 2,
+  "distinct_configurations": 48,
+  "agent_repeats_per_configuration": 3,
+  "episodes_per_condition": 144,
+  "development_layouts_per_simulator": 2,
+  "conditions": [
+    "scripted_reference_same_motion_tools",
+    "agent_privileged_native",
+    "agent_observed_native_later"
+  ],
+  "initial_robot": "stretch",
+  "followup_robot": "sourccey",
+  "episodes": [],
+  "admission": {
+    "full_actuator_reference_required": true,
+    "freeze_before_agent_runs": true,
+    "report_fixed_population_and_certified_subset": true,
+    "posthoc_agent_failure_exclusion": false,
+    "native_allows_attach_or_teleport": false
+  },
+  "unresolved": [
+    "upstream_release_pins",
+    "official_task_ids",
+    "layout_and_object_ids",
+    "full_scene_native_binding",
+    "containment_and_articulation_predicates",
+    "navigation_and_observed_execution_admission"
+  ]
+}

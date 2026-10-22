@@ -671,7 +671,8 @@ CHAT_SKILL_SPECS: tuple[SkillSpec, ...] = (
         description=(
             "Returns schema_version=1 JSON with status, code, data, and recovery; inspect these fields, "
             "not message text. For partial execution, inspect the scene before planning another action. "
-            "Enumerate candidate pick-and-place tasks supported by the current simulator adapter. "
+            "Enumerate candidate pick-and-place tasks from the configured input provider. "
+            "If discovery_only is true, report proposals and unavailable capabilities; do not plan or execute. "
             "Candidates are not promises of reachable grasps or feasible placement. Inspect the "
             "returned mode, inputs, and assistance before use; native contact does not imply "
             "observed perception or native articulation. Returns opaque semantic task_ref handles "

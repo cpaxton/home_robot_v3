@@ -196,6 +196,8 @@ class Observations:
     # Latest ``emet_session`` from ZMQ (navigation_origin_xyt, capabilities, …) when present.
     emet_session: dict[str, Any] | None = None
 
+    received_monotonic: float | None = None  # Local RGBD receive time; never a sensor capture timestamp.
+
     def compute_xyz(self, scaling: float = 1e-3) -> np.ndarray | None:
         """Compute xyz from depth and camera intrinsics."""
         if self.depth is not None and self.camera_K is not None:

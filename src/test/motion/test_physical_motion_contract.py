@@ -778,3 +778,70 @@ def test_pose_ik_rejects_duplicate_or_empty_joint_coordinates(joints):
     with pytest.raises(ValueError, match='distinct controlled joints'):
         solve_pose_ik(m, mujoco.MjData(m), ee_body='robot', joint_names=joints,
                       target_pos=[0, 0, 0], target_rotation=np.eye(3))
+
+
+
+def test_pose_ik_never_constructs_native_named_views(monkeypatch):
+    m = model()
+    d = mujoco.MjData(m)
+    bid = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, 'ee')
+    d.qpos[0] = .2
+    mujoco.mj_kinematics(m, d)
+    target, rotation = d.xpos[bid].copy(), d.xmat[bid].reshape(3, 3).copy()
+    d.qpos[0] = 0.
+    def forbidden(*args):
+        raise AssertionError('pose IK must not construct grouped native views')
+    monkeypatch.setattr(mujoco.MjModel, 'joint', forbidden)
+    monkeypatch.setattr(mujoco.MjModel, 'body', forbidden)
+    monkeypatch.setattr(mujoco.MjData, 'body', forbidden)
+    result = solve_pose_ik(m, d, ee_body='ee', joint_names=['yaw'], target_pos=target, target_rotation=rotation)
+    assert result.success
+    assert result.iterations > 0
+
+
+@pytest.mark.parametrize('block_raise', [False, True])
+def test_ordered_pregrasp_raises_before_extension_and_does_not_fall_back(block_raise):
+    from emet.controller.manipulation.physical_pick_place import PhysicalPickPlaceExecutor
+
+    obstacle = '<geom pos="0 0 .4" size=".05"/>' if block_raise else ''
+    m = mujoco.MjModel.from_xml_string(f'''<mujoco><worldbody>{obstacle}
+      <body name="ee"><joint name="z" type="slide" axis="0 0 1" range="0 1"/>
+      <joint name="x1" type="slide" axis="1 0 0" range="0 .5"/>
+      <joint name="x2" type="slide" axis="1 0 0" range="0 .5"/>
+      <geom size=".02"/></body></worldbody></mujoco>''')
+    d = mujoco.MjData(m)
+    checker = MujocoSceneCollisionChecker(m, robot_body='ee')
+    executor = PhysicalPickPlaceExecutor(
+        SimpleNamespace(), input_mode='privileged', model=m, data=d,
+        ee_body='ee', joint_names=['z', 'x1', 'x2'], collision=checker,
+        synchronize=lambda state: None, command_joints=lambda q: pytest.fail('planning actuated'),
+        coupled_groups=(('x1', 'x2'),),
+    )
+    # The diagonal is nominally clear even when the vertical route is blocked.
+    goal = np.array([.8, .4, .4])
+    direct = plan_arm_joint_path(m, d, joint_names=executor.joint_names,
+                                 q_start=np.zeros(3), q_goal=goal, collision=checker, planner='linear')
+    assert direct.success
+    d.qpos[:] = 0
+    path, error = executor.plan_joint_target(goal, ordered_groups=True)
+    if block_raise:
+        assert path is None and 'ordered_path_failed' in error and error.endswith(':collision')
+    else:
+        assert error is None
+        assert all(q[0] == pytest.approx(.8) for q in path if q[1] + q[2] > .001)
+        assert all(q[1] == pytest.approx(q[2]) for q in path)
+        np.testing.assert_allclose(path[-1], goal)
+
+
+def test_linear_edge_failure_keeps_collision_detail_and_contact_pair():
+    m = mujoco.MjModel.from_xml_string('''<mujoco><worldbody>
+      <body name="obstacle" pos=".5 0 0"><geom size=".05"/></body>
+      <body name="ee"><joint name="x" type="slide" axis="1 0 0" range="0 1"/>
+      <geom size=".02"/></body></worldbody></mujoco>''')
+    d = mujoco.MjData(m)
+    checker = MujocoSceneCollisionChecker(m, robot_body='ee')
+    result = plan_arm_joint_path(m, d, joint_names=['x'], q_start=[0], q_goal=[1],
+                                 collision=checker, planner='linear')
+    assert not result.success and result.reason.startswith('linear_collision_at_')
+    assert result.detail == 'collision'
+    assert any(set(c['bodies']) == {'ee', 'obstacle'} for c in checker.last_contacts)
