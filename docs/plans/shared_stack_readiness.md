@@ -1,6 +1,108 @@
 # Shared-agent stack readiness
 
-## Closeout audit — 2026-10-16 (current; dated sections below are history)
+## Exact-head closeout — 2026-10-21 (current; older sections are history)
+
+User priority: test every open PR, resolve comments, and converge on independently
+mergeable slices before end-to-end complex-task assessment. Main remains 801dce82.
+Do not merge an experimental umbrella branch or silently promote a new policy.
+
+Serial exact-head regression job `20261021_235143_06ae20` covers all eleven open
+PRs: #181, #182, #184, #185, #198, #199, #202, #213, #214, #216, #217.
+Manifest `/tmp/emet-stack-audit-manifest-20261021.json`; results/logs/JUnit under
+`/tmp/emet-stack-audit-20261021`. Changed test files plus explicit parity/transport
+regressions run one core at a time. One reused audit checkout, not eleven copies;
+stop below 12 GiB free. Test-file success is not full-suite or live-task acceptance.
+Recheck remote SHA drift before marking any PR ready. Documentation-only follow-ups
+may move heads; record those explicitly rather than attributing new runtime tests.
+
+### Review/stack disposition
+
+All scoped stack PRs' top-level comments/reviews and inline-comment APIs inspected;
+no inline comments exist on #181/#182/#184/#185/#199/#202/#216/#217. Older review
+findings have owner commits, but readiness still requires the following checks.
+
+| Slice | Remaining closeout / action |
+| --- | --- |
+| #181 providers | Focused exact-head run: 89 pass. Verify opt-in provider admission/live evidence, then clear independently; no default promotion or accuracy claim. |
+| #182 navigation | Audit found real robot/runtime parity drift: navigation policies/progress and base-pose query differ across distributions. Sync on owner branch and rerun parity + command/arrival/navigation tests before propagation. |
+| #184 recovery | Focused exact-head run passed. Inherit tested #182 parity repair; preserve two-observation bound and structured head failures. Live successful recovery evidence exists in descendant S0; do not call it an exact-parent task comparison. |
+| #185 acceptance | Focused exact-head run passed; already non-draft. Land tooling independently of task-score improvements after repaired parent. Missing/error artifacts remain hard infrastructure failures. |
+| #199 evidence | Audit broad changed-file regressions; merged-main noise means some tests are inherited. q14 final packet retains fan as historical slots 3/4: no new pinning rule justified. Clear capture/handoff contracts, not semantic accuracy superiority. |
+| #202 selector | Verify scope/current-capture/pin-budget regressions and opt-in defaults. Separate ranking policies/experiments from mandatory timestamp/evidence correctness if policy performance blocks review. |
+| #216 authority | Keep narrow final-model semantic authority contract independent of accuracy gains; preserve abstentions and physical admission gates. Paired 9/12 vs 9/12 historical pilot is not current-main non-inferiority proof. |
+| #217 dialogue | Public-facade recovery mismatch fixed a0a168a9; S0 and timing-only repeat both ground both targets. EQA4 2/4 clean; Molmo bowl only. Context budgeting remains TODO, not silent eviction. Documentation-only later heads retain tested runtime. |
+| #198 optional scan | Keep optional, not on critical landing chain. Test measured scan/receipt contract independently; do not require a default scan promotion for other repairs. |
+| #213 TAMP orchestration | Read review + merge-scope document; discovery-only/failure batch boundaries remain mandatory. Latest household protocol is explicitly design_only with no registered episodes: not executable benchmark evidence. Test current head and distinguish privileged control from observed discovery. |
+| #214 reactive RL | Independent main child, not a dependency for shared-harness merge. Review explicitly requests runtime parity and gripper-stop semantics; test these, plus deployment/loopback safety. No learned-controller promotion needed for this stack. |
+
+### Completed first-pass audit and owner repairs
+
+| PR | Frozen first-pass result | Follow-up |
+| --- | --- | --- |
+| #181 | 89 pass | Scoped provider live gate still distinct. |
+| #182 | 118 pass, 1 parity failure | cd062c49 syncs runtime copies; full 119-test retest passes. |
+| #184 | 302 pass | Inherited tested parity fix at 80838224; rerun new head. |
+| #185 | 99 pass | Parent propagation and ledger refresh pending. |
+| #199 | 571 pass, 1 outdated telemetry fixture failure | ff470223 adds actual actuator-name fixture field/assertion; all 572 pass. |
+| #202 | 187 pass | Parent repairs propagated at a9298eee; rerun new head. |
+| #216 | 421 pass | Parent repairs propagated at 30b79000; rerun new head. |
+| #217 | 122 pass, 1 obsolete graph/voxel-ID test assumption | 3f03175e binds a real captured frame and asserts unbound graph IDs cannot borrow voxel evidence; all 123 pass. Inherited parent repairs at ca3e6d38; rerun new head. |
+| #198 | 31 pass | Optional scan remains off the critical landing path. |
+| #213 | 199 pass | Current scope adds motion/pregrasp changes beyond original orchestration review; those need review, not just old approval. |
+| #214 | Collection blocked: missing declared stable_baselines3 | Installed SB3 2.9.0 --no-deps into isolated /tmp test target, not shared venv. Retest running; current code already synchronizes core copies and revokes/freezes release on stop. |
+
+Repair job `20261021_235849_d10b29`; original and repair logs/JUnit are retained
+separately. No threshold/semantic safety change was made to make tests pass.
+The formerly excluded voxel fixture now exercises the captured-view namespace
+contract instead of incorrectly treating a graph ID as a voxel frame. It has
+been moved to the evidence owner #199 as 75187c76 and propagated upward, not
+left as dialogue-only test churn. Original failures remain visible in artifacts.
+
+### Reorganize only where it removes a real blocker
+
+Keep parent chain #181 -> #182 -> #184. #185 and #199 are separate children;
+#199 -> #202 -> #216 -> #217. Propagate tested runtime fixes bottom-up, without
+rebasing active frozen experiments or merging #185's report/replay history into
+runtime PRs. If selector policy evidence remains contested, split mandatory
+scope/timestamp/pixel-handoff repairs from optional ranking policies, then rebase
+authority/dialogue onto the correctness slice. Do not discard tested fixes merely
+because a policy experiment has no accuracy gain. #198/#213/#214 stay independent
+workstreams with explicit gates. No unnecessary new mega-PR.
+
+### Runtime reporting and next end-to-end gate
+
+S0 profiling succeeded again (509 s wall in that repeat): all nine base commands
+succeeded, base-call total 440 s including initial scan, endpoint sampling 0.26 s,
+A* 0.06 s; simulation runs ~0.15–0.18x realtime. Nested timings overlap and must
+not be added. Do not equate wall duration with algorithm compute or estimate
+elapsed sim time from a sampled realtime factor. Add actual per-phase sim-clock
+start/end plus boot/domain identity, reset/missing-clock handling and wall time
+to artifacts. TODO tracks this and a later mjlab/mjenv-style parallel-backend
+parity/throughput study; no migration and no parallel heavy runs now.
+
+After regression and review gates, freeze one combined runtime/config candidate
+and use the same model/tool interfaces, budgets, physics and paired seeds:
+
+1. EQA12 development check versus frozen main, preserving final raw answer and
+   provenance. Inspect changed cases; small sample cannot certify superiority.
+2. Small OVMM progression: visible S0 find -> physical pick/place -> one-room
+   Molmo/RoboCasa search/pick/place. Score current-view grounding, measured motion,
+   grasp retention and destination placement separately. Find-only passes are
+   not manipulation passes; microwave recognition alone is not geometry.
+3. Minimal native TAMP sequence with at least two dependent manipulation actions,
+   plus one partial/failure-stop case. Privileged world-state control verifies
+   feasibility/tooling; observed-agent mode is a distinct gate, not a GT-free row.
+4. Use an actually registered compound household case once available; the #213
+   design-only registry must be implemented/admitted before quoting those rows.
+   Do not launch the proposed full 144-episode condition sweep for this pilot.
+
+Retain exact configs/SHAs/seeds, task-level outcomes, wall/sim time, per-tool errors,
+trajectory/command receipts, model requests, image provenance and figure-ready
+key views/top-down maps. Paper must report partial capabilities and failure modes;
+no claim yet of robust long-horizon manipulation or cross-task superiority.
+Habitat OVMM and hardware remain explicit follow-ups, not stealth prerequisites.
+
+## Closeout audit — 2026-10-16 (historical)
 
 The [October 17 context-payload audit](context_payload_audit_20261017.md) records
 the completed pilot, inspected image examples, history/freshness gaps and the
