@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from .api import response
+from .task_budget import BudgetExhausted
 from .task_contracts import BudgetSpec, GoalSpec, TaskState
 from .task_planning import Operator, TaskDomain, search_task
 
@@ -67,7 +68,10 @@ class TaskSession:
         with self._lock:
             initial = self.provider.snapshot()
             goal = self.provider.compile_goal(instruction)
-            result = search_task(self.provider, initial, goal, strategy=strategy, budget=self.budget)
+            try:
+                result = search_task(self.provider, initial, goal, strategy=strategy, budget=self.budget)
+            except BudgetExhausted:
+                return response("plan_task", code="task_motion_budget_exhausted")
             if result.reason != 'ok':
                 return response('plan_task', code=result.reason)
             initial.binding.require_current(self.provider.snapshot().binding)
@@ -93,8 +97,10 @@ class TaskSession:
                 if current.predicates != plan.initial.predicates:
                     raise ValueError('stale_task_plan')
                 for operator in plan.operators:
-                    if not operator.requires <= current.predicates or not self.provider.feasible(current, operator):
+                    if not operator.requires <= current.predicates:
                         raise ValueError('task_precondition_failed')
+                    if not self.provider.feasible(current, operator):
+                        raise ValueError('task_feasibility_failed')
                     predicted = operator.apply(current)
                     if not plan.goal.protected <= predicted.predicates:
                         raise ValueError('protected_goal_regression')
@@ -124,7 +130,7 @@ class TaskSession:
                 if not plan.goal.satisfied(current):
                     raise ValueError('task_goal_verification_failed')
             except Exception as error:
-                allowed = {'task_motion_planning_failed', 'task_motion_budget_exhausted', 'stale_task_plan', 'task_precondition_failed', 'task_execution_failed',
+                allowed = {'task_motion_planning_failed', 'task_motion_budget_exhausted', 'task_feasibility_failed', 'stale_task_plan', 'task_precondition_failed', 'task_execution_failed',
                            'protected_goal_regression', 'scene_identity_changed',
                            'task_effect_verification_failed', 'task_goal_verification_failed'}
                 code = str(error) if str(error) in allowed else 'task_provider_failed'

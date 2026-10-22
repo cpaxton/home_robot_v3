@@ -12,6 +12,7 @@ from emet.motion.mujoco_collision import body_subtree
 from emet.simulation.sim_object_placements import placements_from_mujoco_model
 
 from .native_adapter import NativeTableAdapter
+from .task_budget import BudgetExhausted
 from .task_contracts import SceneBinding, fingerprint
 from .task_session import TaskExecutionResult
 from .transfer_provider import RegionTransferProvider, TransferObservation, TransferRegion
@@ -135,7 +136,7 @@ class NativeTableTransferProvider(RegionTransferProvider):
     def _refine(self, role, region, *, retain=False):
         with self.adapter.lock:
             if self._ik_remaining <= 0:
-                return None
+                raise BudgetExhausted("task_motion_budget_exhausted")
             ref = 'task:transfer:' + fingerprint((role, region.name))
             self.adapter.tasks[ref] = (self.roles[role], self.support, role, region.name)
             previous_limit = self.adapter.max_planning_ik_calls

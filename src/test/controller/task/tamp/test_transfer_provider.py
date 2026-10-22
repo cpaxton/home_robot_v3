@@ -138,7 +138,7 @@ def test_native_probes_share_remaining_ik_cap():
     domain._ik_remaining = 3
     session = TaskSession(domain)
     result = session.plan('swap alpha and beta')
-    assert result['status'] == 'error' and len(probes) == 1
+    assert result['code'] == 'task_motion_budget_exhausted' and len(probes) == 1
     assert domain._ik_remaining == 0 and domain.adapter.max_planning_ik_calls == 20
 
 
