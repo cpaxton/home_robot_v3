@@ -12,7 +12,17 @@ from emet.agent.tools import (
     format_last_nav_plan_summary,
     format_nav_outcome_head,
     get_tools,
+    navigation_feedback,
 )
+
+
+def test_navigation_feedback_accepts_unscored_candidate_diagnostics():
+    from types import SimpleNamespace
+
+    feedback = navigation_feedback(
+        SimpleNamespace(_last_nav_plan={"view_candidates": [{"reason": "eligible", "index": 2}]})
+    )
+    assert feedback["view_selection"]["top_estimated_views"] == [{"index": 2}]
 
 
 def test_format_nav_outcome_heads():

@@ -55,8 +55,11 @@ def compress_drive_waypoints(start, waypoints, *, max_translation_m=0.2):
             same_xy = max(np.linalg.norm(ab), np.linalg.norm(bc)) < 1e-8
             yaw = np.array([b[2] - a[2], c[2] - b[2]])
             same_yaw = np.max(np.abs(np.arctan2(np.sin(yaw), np.cos(yaw)))) < 1e-8
-            straight = (abs(ab[0] * bc[1] - ab[1] * bc[0]) < 1e-10 and np.dot(ab, bc) >= 0
-                        and np.linalg.norm(c[:2] - a[:2]) <= max_translation_m + 1e-8)
+            straight = (
+                abs(ab[0] * bc[1] - ab[1] * bc[0]) < 1e-10
+                and np.dot(ab, bc) >= 0
+                and np.linalg.norm(c[:2] - a[:2]) <= max_translation_m + 1e-8
+            )
             if same_xy or (same_yaw and straight):
                 result.pop(-2)
             else:
@@ -203,7 +206,9 @@ def execute_measured_route(
                 diverged = True
                 break
             options = {"navigation_policy": navigation_policy} if navigation_policy is not None else {}
-            ok = succeeded(robot.move_base_to(waypoint, blocking=True, world_frame=True, timeout=waypoint_timeout_s, **options))
+            ok = succeeded(
+                robot.move_base_to(waypoint, blocking=True, world_frame=True, timeout=waypoint_timeout_s, **options)
+            )
             current = read_measurement()
             if not valid_measurement(current):
                 return invalid_measurement(attempt, cancel_motion=True)
