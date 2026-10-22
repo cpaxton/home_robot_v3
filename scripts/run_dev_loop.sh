@@ -21,7 +21,7 @@
 #   DEV_OVMM_EP    OVMM episode id (default robocasa_rby1_pp_s1)
 #   HABITAT_BIN    emet-habitat executable (default $ROOT/.venv-habitat/bin/emet-habitat)
 set -euo pipefail
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ROOT="${DEV_SOURCE_DIR:-$(cd "$(dirname "$0")/.." && pwd)}"
 cd "$ROOT"
 
 SEED="${DEV_SEED:-0}"
@@ -50,12 +50,20 @@ echo "seed=$SEED phase=$PHASE root=$ROOT sha=$(git rev-parse HEAD)" > "$OUT/mani
 FAILED=()
 
 if [[ "$PHASE" == all || "$PHASE" == eqa ]]; then
-    for q in $EQA_IDS; do
+    # Each invocation owns its evidence, even when arms share qids or OUT_DIR.
+    # Keep the marker in OUT so the bundle prefix is discoverable after a crash.
+    EVIDENCE_RESERVATION="$(mktemp -d "$OUT/.eqa-evidence.XXXXXXXXXX")"
+    trap 'rmdir "$EVIDENCE_RESERVATION"' EXIT
+    DEBUG_TAG="dev$(basename "$EVIDENCE_RESERVATION")"
+    printf '%s\n' "$DEBUG_TAG" >> "$OUT/diagnostic_tags.txt"
+    read -r -a question_ids <<< "$EQA_IDS"
+    for q in "${question_ids[@]}"; do
         echo "=== [eqa] q$q seed=$SEED ($(date -Is)) ==="
         rc=0
         LD_LIBRARY_PATH="$HABITAT_ENV/lib:${LD_LIBRARY_PATH:-}" \
             timeout --signal=TERM --kill-after=20s 600 \
             "$HABITAT_BIN" run-episode --question-id "$q" --method lazy_graph --query-driven-memory \
+            --debug-run-tag "${DEBUG_TAG}_s${SEED}_q${q}" \
             --seed "$SEED" --max-planning-steps 20 --max-movement-step 10 \
             --no-hm3d-semantics --no-enrich-labels --output "$OUT/eqa/q$q.jsonl" || rc=$?
         if [[ $rc -ne 0 ]]; then

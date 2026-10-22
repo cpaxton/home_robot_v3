@@ -466,6 +466,8 @@ def test_resolve_find_phase_nav_step_timeout():
     assert resolve_find_phase_nav_step_timeout(cpu_only=False, sim_kind="robocasa") == 30.0
     assert resolve_find_phase_nav_step_timeout(cpu_only=False, sim_kind="molmospaces") == 30.0
     assert resolve_find_phase_nav_step_timeout(cpu_only=False, sim_kind="", override=99.0) == 99.0
+    assert resolve_find_phase_nav_step_timeout(cpu_only=False, sim_kind="", configured=30.0) == 30.0
+    assert resolve_find_phase_nav_step_timeout(cpu_only=False, sim_kind="", configured=30.0, override=60.0) == 60.0
 
 
 @patch("emet.controller.controller_dynagraph.DynagraphController")
