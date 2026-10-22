@@ -149,9 +149,7 @@ def exploration_view_quality(depth):
         "blocked_fraction": blocked_fraction,
         "valid_fraction": float(valid.mean()),
         "invalid_fraction": float((~valid).mean()),
-        "reason": (
-            "central_depth" if valid.all() else "partial_central_depth" if valid.any() else "depth_unavailable"
-        ),
+        "reason": ("central_depth" if valid.all() else "partial_central_depth" if valid.any() else "depth_unavailable"),
     }
 
 
