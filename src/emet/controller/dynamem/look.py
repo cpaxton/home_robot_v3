@@ -424,7 +424,8 @@ def look_around(self, *, on_observation=None):
 
     Optional ``on_observation`` checks each captured view after a blocking head
     move and post-motion frame wait. A true result stops scanning and preserves
-    that gaze; callers must still validate observation freshness.
+    that gaze; callers must still validate observation freshness. A blocking
+    move that reports failure aborts before capture/verification.
     """
     skip_sweep = not look_around_should_sweep(self.robot, getattr(self, "parameters", None))
     if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
@@ -458,7 +459,9 @@ def look_around(self, *, on_observation=None):
         if on_observation is not None:
             # A mapping sweep may sample mid-pan. Verification cannot hand that
             # transient view to manipulation while the head keeps moving.
-            self.robot.head_to(pan, tilt, blocking=True)
+            moved = self.robot.head_to(pan, tilt, blocking=True)
+            if moved is False:
+                raise RuntimeError("Verified sweep head motion failed")
             wait_post_motion_obs(self.robot, timeout=DYNAMEM_POST_MOTION_OBS_WAIT_S)
         else:
             self._head_to_sweep(pan, tilt)
