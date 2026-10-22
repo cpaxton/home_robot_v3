@@ -106,7 +106,7 @@ def test_fast_state_does_not_refresh_scene_geometry():
     server = RobosuiteZmqServer.__new__(RobosuiteZmqServer)
     server._mjdata = SimpleNamespace(body=lambda _: SimpleNamespace(xpos=np.zeros(3), xmat=np.eye(3)))
     server._mj_lock = threading.RLock()
-    server._spec = SimpleNamespace(base_link_name='base', name='test_robot')
+    server._spec = SimpleNamespace(base_link_name='base', name='test_robot', actuator_names=('test_actuator',))
     server._joint_ctrl_hold = None
     server._physics_fps_counter = SimpleNamespace(sim_to_real_ratio=1.)
     server._at_goal = False
@@ -118,5 +118,6 @@ def test_fast_state_does_not_refresh_scene_geometry():
     message = server.get_state_message()
     np.testing.assert_array_equal(message['joint_positions'], [.2])
     assert message['step'] == 7
+    assert message['actuator_names'] == ['test_actuator']
     assert 'emet_session' not in message  # Do not falsely refresh cached geometry's step.
     server._attach_emet_session.assert_not_called()
