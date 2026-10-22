@@ -8,7 +8,56 @@ import math
 from typing import Any
 
 SCHEMA_VERSION = 1
-TAMP_TOOLS = frozenset({"scene_tasks", "plan_pick_place", "execute_pick_place_plan", "pick_place"})
+TAMP_TOOLS = frozenset({"scene_tasks", "plan_pick_place", "execute_pick_place_plan", "pick_place", "set_receptacle_state"})
+PLACEMENT_CODES = frozenset({
+    "receptacle_requires_open", "articulation_unsupported", "articulation_state_unavailable",
+    "no_collision_free_placement", "placement_invalidated", "placement_attachment_changed",
+    "placement_geometry_unavailable", "placement_support_geometry_missing",
+    "place_approach_failed", "release_execution_error", "retract_execution_error",
+})
+PLACEMENT_REJECTIONS = frozenset({
+    "base_endpoint_rejected", "unsupported_base", "robot_self_collision",
+    "robot_scene_collision", "payload_scene_collision", "payload_robot_collision",
+    "target_payload_collision", "pose_ik_failed", "invalid_start", "invalid_goal",
+    "arm_path_failed", "arm_edge_collision", "invalid_short_path", "rrt_failed",
+    "rrt_budget_exhausted", "ik_budget_exhausted", "base_ik_budget_reached",
+    "surface_search_budget_exhausted", "no_accepted_surface_candidate",
+    "base_candidate_budget_exhausted",
+})
+
+
+def placement_evidence(executor) -> dict[str, Any]:
+    """Copy semantic diagnostics, never arbitrary planner strings or body identities."""
+    evidence = {}
+    search = getattr(executor, "last_placement_search", None)
+    if search is not None:
+        counts = {}
+        for reason, count in getattr(search, "rejections", {}).items():
+            code = reason if reason in PLACEMENT_REJECTIONS else (
+                "rrt_budget_exhausted" if str(reason).startswith("max_iter reached") else "other"
+            )
+            if isinstance(count, int) and not isinstance(count, bool) and count >= 0:
+                counts[code] = counts.get(code, 0) + count
+        source = getattr(search, "geometry_source", None)
+        scope = getattr(search, "collision_scope", None)
+        evidence["placement_search"] = {
+            "geometry_source": source if source in {"ground_truth", "observed_voxels"} else None,
+            "collision_scope": scope if scope == "sampled_arm_and_payload;base_endpoint_only" else None,
+            "solutions": len(getattr(search, "paths", [])),
+            "rejections": counts,
+        }
+    release = getattr(executor, "last_release_evidence", None)
+    if isinstance(release, dict):
+        detach = release.get("detach_command")
+        verified = release.get("placement_verified")
+        evidence["release"] = {
+            "detach_command": detach if detach in {"not_attempted", "unknown", "returned"} else "unknown",
+            "placement_verified": verified if type(verified) is bool else None,
+            # A command receipt and XY placement check are not attachment perception.
+            "held_state": "unknown",
+        }
+    return evidence
+
 
 
 def response(
@@ -26,7 +75,7 @@ def response(
             else "rediscover"
             if code
             in {
-                "unknown_task_ref",
+                "unknown_task_ref", "task_selector_mismatch",
                 "ambiguous_object",
                 "ambiguous_receptacle",
                 "metadata_unavailable",
@@ -103,8 +152,16 @@ def failure_code(message: str) -> str:
         "ambiguous_object_use_scene_tasks": "ambiguous_object",
         "ambiguous_receptacle_use_scene_tasks": "ambiguous_receptacle",
     }.get(message, message)
-    parts = message.split(":")
+    # MCTS wraps a bounded grounding failure; preserve only its known code,
+    # never arbitrary body identifiers or planner details from that wrapper.
+    parts = [part.removeprefix("last_grounding=") for part in message.split(":")]
     for part in reversed(parts):
+        if part in PLACEMENT_CODES:
+            return part
+        for code in ("placement_stale_observation", "placement_missing_joint_state",
+                     "placement_nonfinite_joint_state", "placement_path_invalidated"):
+            if part == code or part.endswith("_" + code):
+                return code
         if part in {"joint_bounds", "collision", "stale_observation"}:
             return part
         for suffix, code in (
@@ -120,7 +177,13 @@ def failure_code(message: str) -> str:
             if part.endswith(suffix):
                 return code
     allowed = {
+        "invalid_tamp_inputs", "observed_scene_unavailable",
+        "invalid_placement_region", "placement_region_unavailable", "placement_region_unsupported",
+        "privileged_inputs_require_simulation", "native_execution_unavailable",
+        "native_model_mismatch", "native_robot_unsupported", "invalid_measured_state",
+        "task_not_found", "payload_not_retained", "object_not_lifted", "base_drift_during_arm",
         "unknown_plan",
+        "command_outcome_unknown",
         "scene_changed_replan",
         "invalid_plan",
         "not_simulation",
@@ -137,15 +200,16 @@ def failure_code(message: str) -> str:
         "object_not_in_live_scene",
         "receptacle_not_in_live_scene",
         "no_reachable_grasp",
+        "no_plan_within_budget",
         "no_grasp_candidates",
         "object_not_in_gt",
         "execution_error",
         "manipulation_unavailable",
-        "unknown_task_ref",
+        "unknown_task_ref", "task_selector_mismatch",
         "ambiguous_object",
         "ambiguous_receptacle",
         "provide_task_ref_or_object_and_receptacle",
         "planner_error",
         "approach_failed",
     }
-    return parts[0] if parts[0] in allowed else "operation_failed"
+    return next((part for part in reversed(parts) if part in allowed), "operation_failed")

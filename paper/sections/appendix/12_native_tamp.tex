@@ -1,0 +1,73 @@
+% Copyright (c) Chris Paxton 2026
+% Licensed under the Apache License, Version 2.0.
+\section{Native manipulation tools: integration evidence and remaining scope}
+\label{app:native_tamp}
+
+\paragraph{Agent interface.}
+The public interface separates task discovery (\texttt{scene\_tasks}), pure planning
+(\texttt{plan\_pick\_place}), and execution of a stored plan
+(\texttt{execute\_pick\_place\_plan}); \texttt{pick\_place} provides a convenience
+wrapper. Versioned JSON responses expose opaque handles, outcome codes, and
+recovery information. Plans bind to a scene snapshot and server identity;
+execution consumes a handle once and rejects changed state. An acknowledgement
+timeout after execution begins produces a partial outcome requiring inspection,
+rather than permission to replay the plan. These contracts support composition,
+but availability of tools alone does not establish multi-step task competence.
+
+\paragraph{Controlled native-contact acceptance.}
+At implementation revision \texttt{d1d451c5}, four fresh live ZMQ transfers
+(two each for a box and cylinder) passed on a stationary Stretch in the packaged
+table scene, with the distractor initially separated from the grasp workspace.
+A separate in-process CPU suite passed six transfers (three per shape).
+Both exercised scripted calls to the public tool registry and ordinary arm and
+gripper actuation with MuJoCo contact dynamics. The live audit recorded 740
+commands and zero forbidden attachments, body-pose writes, joint teleports, or
+base teleports. Acceptance required one second of bilateral hold and two seconds
+of settled released support, measured in simulator time. Geometry, object state,
+and contact evidence were privileged simulator inputs, not hardware sensors.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lll}
+\toprule
+Protocol & Result & Interpretation \\
+\midrule
+Live public tools, fresh simulator & 4/4 & Single-transfer integration \\
+CPU public tools, fresh dynamics & 6/6 & Separate contact regression \\
+Original clutter, stationary planner & Rejected & No actuation; task unsolved \\
+\bottomrule
+\end{tabular}
+\caption{Controlled native Stretch checks. These small, development-selected
+cases are not an estimate of general manipulation reliability. Denominators
+remain separate from historical latch/oracle controls and scripted baselines.}
+\label{tab:native_tamp_acceptance}
+\end{table}
+
+\paragraph{Failure controls and provenance.}
+Acknowledged but unexecuted arm and gripper commands produced measured tracking
+and retention failures, respectively, with partial outcomes. Subsequent unit
+fault injections verified that command-acknowledgement timeouts preserve partial
+progress and consume the plan; these were not live network-outage experiments.
+The execution report records 224 distinct passing regression cases across the
+relevant batches, with final native/API reruns superseding earlier subsets.
+Successful live motion results retain their original source revision; the later
+timeout fix is revision \texttt{ed42dc4a}.
+Checked-in JSON summaries under \texttt{paper/data/native\_tamp/} preserve the
+live and CPU denominators, revisions, and managed job identifiers; the detailed
+failure history is in the repository's native TAMP execution report.
+
+\paragraph{Towards compositional tasks.}
+Our next acceptance gate is consecutive native transfers through the same tools,
+followed by language-agent selection, rediscovery after a move, and bounded
+recovery from partial execution. A rearrangement test must require relocating a
+blocker to a verified temporary support before placing the target. A failed local
+path search alone does not establish that rearrangement is necessary: grasp,
+approach, and placement alternatives must also be considered. We will compare
+a fixed tool sequence, task search, and an LLM orchestrator on identical frozen
+fixtures, reporting full-goal completion as well as per-step progress.
+Observed-input manipulation and exploration remain unvalidated; the native
+observed route currently rejects unavailable providers instead of reading
+simulator truth. Native navigation, articulation, Sourccey acceptance, and
+hardware transfer are outside these results. Simulator-assisted open/close
+controls are not evidence of native articulation.

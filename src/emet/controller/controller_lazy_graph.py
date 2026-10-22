@@ -337,14 +337,21 @@ class LazyGraphController(DynagraphController):
         from emet.memory.graph_eqa.ingest.instance_observations import frame_rgb_hwc_uint8
         from emet.memory.vlm_region_grounding import ground_vlm_region
 
-        client = getattr(self.graph_memory, "eqa_client", None) or getattr(self.voxel_map, "eqa_client", None)
-        if client is None:
-            self.graph_memory._ensure_llm_clients()
-            client = self.graph_memory.eqa_client
         config = self.parameters.get("query_memory", {}) or {}
         backend = config.get("mask_backend", "rgbd")
         if backend not in ("rgbd", "sam2", "yoloe_sam2"):
             raise ValueError(f"Unknown query mask backend: {backend}")
+        strategy = config.get("region_strategy", "point")
+        if tracking_target is not None and config.get("track_grounded_box", False):
+            if backend not in ("sam2", "yoloe_sam2") or strategy != "depth_candidates":
+                raise ValueError(
+                    "Projected target tracking requires query_memory.mask_backend=sam2 or yoloe_sam2 "
+                    "and query_memory.region_strategy=depth_candidates"
+                )
+        client = getattr(self.graph_memory, "eqa_client", None) or getattr(self.voxel_map, "eqa_client", None)
+        if client is None:
+            self.graph_memory._ensure_llm_clients()
+            client = self.graph_memory.eqa_client
         options = {}
         tracking_proposal = None
         if backend in ("sam2", "yoloe_sam2"):
@@ -354,8 +361,6 @@ class LazyGraphController(DynagraphController):
                 self._query_segmenter = SAM2Perception(configuration="s")
             options["segmenter"] = self._query_segmenter
         if tracking_target is not None and config.get("track_grounded_box", False):
-            if backend not in ("sam2", "yoloe_sam2"):
-                raise ValueError("Projected target tracking requires a box segmenter")
             rgb = frame_rgb_hwc_uint8(frame)
             box = tracking_target.project_box(frame.camera_K, frame.camera_pose, rgb.shape[:2])
             options["proposal_masks"] = options.pop("segmenter").segment(rgb, box[None])
@@ -398,7 +403,7 @@ class LazyGraphController(DynagraphController):
             client=client,
             min_depth=self.voxel_map.min_depth if min_depth is None else min_depth,
             max_depth=self.voxel_map.max_depth,
-            strategy=config.get("region_strategy", "point"),
+            strategy=strategy,
         )
         result = ground_vlm_region(frame, query, description, **options)
         if (

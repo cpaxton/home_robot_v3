@@ -36,6 +36,20 @@ class StatusStretchCameras:
 
     cam_nav_rgb: np.ndarray | None = None
 
+    # Host monotonic time at renderer scene capture, not IPC/ZMQ publish time.
+    capture_timestamps_ns: dict[str, int] | None = None
+
+    def image_timing_for(self, camera: StretchCameras) -> dict | None:
+        stamp = (self.capture_timestamps_ns or {}).get(camera.name)
+        if not isinstance(stamp, int) or isinstance(stamp, bool) or stamp <= 0:
+            return None
+        return {
+            "timestamp_ns": stamp,
+            "clock_domain": "mujoco_render_monotonic",
+            "source": "renderer_scene_capture",
+            "available": True,
+        }
+
     def get_all(
         self, *, auto_rotate: bool = True, auto_correct_rgb=True, use_depth_color_map=False
     ) -> dict[StretchCameras, np.ndarray]:
@@ -102,12 +116,18 @@ class StatusStretchCameras:
 
         return data
 
-    def set_camera_data(self, camera: StretchCameras, data: np.ndarray):
+    def set_camera_data(self, camera: StretchCameras, data: np.ndarray, *, timestamp_ns: int | None = None):
         """
         Use this to match a StretchCameras enum instance with its property in StatusStretchCameras dataclass, to set the camera data property within this dataclass.
 
         Note: This sets the values inside this dataclass; it does not send data to the simulator.
         """
+        if self.capture_timestamps_ns is None:
+            self.capture_timestamps_ns = {}
+        # Replacing pixels without timing must not preserve an older frame's stamp.
+        self.capture_timestamps_ns.pop(camera.name, None)
+        if timestamp_ns is not None:
+            self.capture_timestamps_ns[camera.name] = timestamp_ns
         if camera == StretchCameras.cam_d405_rgb:
             self.cam_d405_rgb = data
             return

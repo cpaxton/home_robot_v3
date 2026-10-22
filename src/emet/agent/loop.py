@@ -50,6 +50,8 @@ from emet.config.embodied_agent_config import (
     normalize_memory_backend,
 )
 from emet.controller.task.dynamem import DynamemTaskExecutor
+from emet.controller.task.tamp.api import TAMP_TOOLS
+from emet.controller.task.tamp.api import response as tamp_response
 from emet.controller.zmq_client import StretchZmqClient
 from emet.controller.zmq_stream_control import paused_robot_streams
 from emet.core import get_parameters
@@ -249,7 +251,7 @@ def _dispatch_tool_calls(
         for i, tc in enumerate(tool_calls):
             print(colored(f"  [{i}]", "yellow"), json.dumps(tc, default=str), flush=True)
 
-    for tc in tool_calls:
+    for call_index, tc in enumerate(tool_calls):
         name = tc.get("name", "")
         args = tc.get("arguments") or {}
         if on_tool_start is not None and name:
@@ -363,6 +365,18 @@ def _dispatch_tool_calls(
                 has_info = True
             gm = getattr(getattr(executor, "agent", None), "graph_memory", None)
             maybe_record_tool_attempt(gm, outcome, source="chat")
+
+        if name in TAMP_TOOLS and not outcome.ok:
+            # Later calls were chosen before the model saw this failure. Return
+            # control for inspection/replanning; do not execute that stale batch.
+            remaining = [c.get("name", "") for c in tool_calls[call_index + 1:]]
+            if remaining:
+                stopped = tamp_response("dispatch", code="batch_stopped",
+                    data={"failed_tool": name, "unattempted_tools": remaining},
+                    recovery=outcome.payload.get("recovery") or "inspect")
+                results.append("[dispatch] " + json.dumps(stopped))
+            has_info = True
+            break
 
     if chat_log:
         for r in results:
@@ -521,7 +535,7 @@ def _merge_chat_agent_manip_parameters(
         agent_section = load_config(agent_config, robot=robot).agent_section()
     current = parameters.get("agent")
     agent = dict(current) if isinstance(current, dict) else {}
-    for key in ("manip_mode", "manip_collision", "manip_planner"):
+    for key in ("manip_mode", "manip_collision", "manip_planner", "tamp_inputs"):
         value = str(getattr(agent_section, key, "")).strip()
         if value:
             agent[key] = value
