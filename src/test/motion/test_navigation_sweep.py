@@ -9,6 +9,22 @@ from emet.motion.navigation_sweep import validate_navigation_sweep
 from emet.robots.footprint import Footprint
 
 
+def test_nav_filter_retains_first_sweep_failure_and_clears_stale_evidence():
+    from emet.controller.dynamem.navigation import _filter_unsafe_nav_traj
+
+    detail = {"reason": "unexplored", "checked_pose": [0.4, 0.0, 0.0]}
+    space = SimpleNamespace(obstacle_map_mode="physical", last_validity=detail, is_valid=lambda p: False)
+    controller = SimpleNamespace(space=space, planner=None)
+    route, reason, _ = _filter_unsafe_nav_traj(controller, [[1, 0, 0]], start_xyt=[0, 0, 0])
+    assert not route and reason.startswith("rejected_swept_footprint:")
+    assert controller._last_nav_sweep_failure == detail
+    assert controller._last_nav_sweep_failure is not detail
+    space.is_valid = lambda p: True
+    route, reason, _ = _filter_unsafe_nav_traj(controller, [[1, 0, 0]], start_xyt=[0, 0, 0])
+    assert route and reason is None
+    assert controller._last_nav_sweep_failure == {}
+
+
 def test_sweep_rejects_obstacle_between_safe_endpoints():
     space = SimpleNamespace(is_valid=lambda p: not 0.45 < p[0] < 0.55, last_validity={"reason": "obstacle"})
     assert validate_navigation_sweep(space, [0, 0, 0], [[1, 0, 0]]) == (False, "obstacle")
