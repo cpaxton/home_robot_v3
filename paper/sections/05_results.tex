@@ -1,7 +1,7 @@
 \section{Results}
 \label{sec:results}
 
-Our primary result compares the classic and agentic controllers on a fixed Dynagraph memory profile (Section~\ref{sec:agentic_results}); Section~\ref{sec:hmeqa_results} situates both arms against GraphEQA prior art. Other tracks remain placeholders until sweeps complete (operator index: \texttt{docs/experiments/habitat\_eqa\_results.md}).
+Our primary result compares the classic and agentic controllers on a fixed Dynagraph memory profile (Section~\ref{sec:agentic_results}); Section~\ref{sec:hmeqa_results} situates both arms against GraphEQA prior art. Other tracks contain partial simulator controls and placeholders pending scored sweeps (operator index: \texttt{docs/experiments/habitat\_eqa\_results.md}).
 
 \subsection{Classic vs.\ agentic verify}
 \label{sec:agentic_results}
@@ -77,12 +77,12 @@ We report early Dynagraph numbers on HM-EQA in Habitat-Sim (\texttt{.venv-habita
 Cross-environment harness tuning (\texttt{configs/benchmarks/dynagraph.yaml}) sets HM-EQA \texttt{dynagraph} to \texttt{unified\_eqa} (0.45\,m merge), MCQ debias off, and \texttt{explore\_when\_uncovered=conservative}; HM-EQA \texttt{static\_graph} uses profile \texttt{static\_graph} (merge/staleness off).
 Tuned full-113 numbers at 8B with the July nav stack were collected 2026-08-13 (Table~\ref{tab:hmeqa_vs_prior}).
 Table~\ref{tab:hmeqa_vs_prior} reproduces GraphEQA paper baselines alongside our own full-benchmark reproduction; Table~\ref{tab:hmeqa_slices} lists our held-out slices and ablations.
-All \texttt{emet} rows use \textbf{local} VLMs and partial HM3D semantics unless noted.
+All \texttt{emet} rows use \textbf{local} VLMs. Historical semantics exposure requires per-run provenance; current runner defaults do not establish archived settings.
 
 \begin{table}[t]
   \centering
-  \caption{HM-EQA accuracy on the full 113-question benchmark: prior art vs.\ \texttt{emet} harness.
-  Published rows use full HM3D semantics and API VLMs; \texttt{emet} rows use local VLMs and partial semantics.}
+  \caption{Published HM-EQA accuracy and the historical \texttt{emet} q0--112 slice (113 questions); episode selections differ. A dash denotes an unreported published count.
+  Published rows use full HM3D semantics and API VLMs; \texttt{emet} rows use local VLMs; historical semantics provenance remains under audit.}
   \label{tab:hmeqa_vs_prior}
   \small
   \begin{tabular}{@{}llcc@{}}
@@ -90,11 +90,11 @@ All \texttt{emet} rows use \textbf{local} VLMs and partial HM3D semantics unless
     Method / run & VLM & $n$ & Accuracy \\
     \midrule
     \multicolumn{4}{@{}l@{}}{\textit{Published (GraphEQA paper, full HM3D semantics, API VLMs)}} \\
-    Explore-EQA & ref.\ stack & 113 & 51.7\% \\
-    GraphEQA & GPT-4o & 113 & 63.5\% \\
-    GraphEQA & Gemini-2.5 Pro & 113 & \textbf{67.0\%} \\
+    Explore-EQA & ref.\ stack & -- & 51.7\% \\
+    GraphEQA & GPT-4o & -- & 63.5\% \\
+    GraphEQA & Gemini-2.5 Pro & -- & \textbf{67.0\%} \\
     \midrule
-    \multicolumn{4}{@{}l@{}}{\textit{\texttt{emet} harness (local VLMs; partial semantics)}} \\
+    \multicolumn{4}{@{}l@{}}{\textit{\texttt{emet} historical slice (local VLMs)}} \\
     static\_graph & gemma-3-4b-it & 113 & 41.6\% \\
     dynagraph & Qwen3-VL-8B & 113 & \textbf{49.6\%} \\
     static\_graph & Qwen3-VL-8B & 113 & 47.8\% \\
@@ -133,12 +133,14 @@ All \texttt{emet} rows use \textbf{local} VLMs and partial HM3D semantics unless
   \end{tabular}
 \end{table}
 
-\noindent\textbf{Gap to prior art.}
-Our full-113 Qwen3-VL-8B run (2026-08-14; dynagraph 49.6\%, static\_graph 47.8\% on the pooled set; 48.7\% / 44.7\% on the 76 scenes without GT semantics) trails GraphEQA-GPT-4o by $\sim$14--18 percentage points---consistent with weaker local VLMs and a different scene-graph stack (Appendix~\ref{app:habitat_eqa_parity}).
-The earlier gemma-3-4b full-benchmark (41.6\% static\_graph) showed a $\sim$22\,pp gap.
-Two notes: (1) the recorded numbers include a post-sweep scoring fix (the \texttt{[memory-location]} override no longer clobbers confident VLM letters, gates default on); (2) the runner disables GT HM3D semantics (\texttt{--no-hm3d-semantics}) so the agent uses only its own perception---the GraphEQA prior art instead uses full GT semantics. On the GT-free subset the Dynagraph-vs-static\_graph memory delta is $+4$\,pp (48.7\% vs.\ 44.7\%).
-
-These slices are \textbf{not} directly comparable to Table~\ref{tab:grapheqa_official_hmeqa} until semantics coverage and/or VLM tier align with the reference.
+% UPDATE[P2]: Reconcile archived semantics flags and qid strata from run manifests.
+% Do not infer historical GT exposure from today's no-hm3d-semantics default.
+\noindent\textbf{Historical scores and comparability.}
+The August Qwen3-VL-8B q0--112 evaluation records rescored Dynagraph accuracy of 49.6\% (56/113) and static\_graph accuracy of 47.8\% (54/113), a 1.8 percentage-point difference.
+Before the documented scoring fix, these were 44.2\% and 37.2\%; the two scoring policies must not be mixed.
+Archived notes also report 48.7\% / 44.7\% on a 76-question semantics stratum, but its GT exposure must be reconciled with per-run manifests before interpreting it as a GT-free memory comparison.
+The current full-113 runner selects \texttt{--no-hm3d-semantics}; that setting alone does not prove how historical runs were configured.
+Published GraphEQA numbers use a different episode selection, VLM tier, and graph stack (Appendix~\ref{app:habitat_eqa_parity}); they do not establish a matched causal comparison or acceptance of current shared-agent revisions.
 
 \textbf{Engineering fixes (June--July 2026).}
 Before hold-out evaluation we repaired Habitat navigation (compass/yaw, navmesh pathing, frontier deprioritization), graph-memory query failures (\texttt{KeyError} in observation indexing), and HM-EQA prompt grounding: phrase-level relevant objects, SigLIP retention through \texttt{prepare\_dynagraph\_vram\_for\_eqa}, and location-MCQ directives for ``did you see \ldots\ anywhere?'' questions where the VLM previously answered \texttt{No} instead of a place letter.
@@ -183,9 +185,10 @@ Holdout dynagraph regression traced to harness extras (MCQ debias flipping corre
 Tuned defaults: \texttt{mcq\_debias=false}, \texttt{explore\_when\_uncovered=conservative} (\texttt{scripts/run\_dynagraph\_tuning\_matrix.sh}).
 
 \noindent\textbf{Next experiments.}
-Priority sweeps: (1)~full 113-question dynagraph with Qwen3-VL-8B and the current fix stack; (2)~matched static\_graph baseline on the same VLM; (3)~classic vs.\ agentic verify on holdout-8 / larger slices (Section~\ref{sec:agentic_results}); (4)~semantics download + ablation; (5)~frontier-policy ablation (fluid vs.\ graph nodes); (6)~optional API-VLM upper bound on a fixed slice to isolate stack vs.\ model tier.
+The August historical sweep is complete. Remaining work: (1)~resolve shared-agent regression gates, then evaluate current Dynagraph on frozen episodes; (2)~run the matched static\_graph baseline with identical source, VLM, semantics policy, seeds, and budgets; (3)~classic vs.\ agentic verify on holdout-8 / larger slices (Section~\ref{sec:agentic_results}); (4)~semantics download + ablation; (5)~frontier-policy ablation (fluid vs.\ graph nodes); (6)~optional API-VLM upper bound on a fixed slice to isolate stack vs.\ model tier.
 Operator checklist: \texttt{docs/experiments/habitat\_eqa\_results.md}.
 
+% UPDATE[P3]: Fill learned backend/tier cells only from frozen scored runs; retain GT labels.
 \subsection{OVMM find-phase memory ablation (Emet sim)}
 \label{sec:ovmm_find_results}
 
@@ -226,6 +229,7 @@ Operator checklist: \texttt{docs/experiments/habitat\_eqa\_results.md}.
   \label{fig:ovmm_scaling_nodes}
 \end{figure}
 
+% UPDATE[P4]: Populate replay-mode results with infrastructure failures and run provenance.
 \subsection{SQA3D situated open QA (ScanNet replay)}
 \label{sec:sqa3d_results}
 
@@ -248,6 +252,7 @@ Operator checklist: \texttt{docs/experiments/habitat\_eqa\_results.md}.
   \end{tabular}
 \end{table}
 
+% UPDATE[P5]: Fill all three phase tables from scored aggregates; preserve failed episodes.
 \subsection{Dynamic exploration (Emet sim)}
 \label{sec:dynamic_explore_results}
 
@@ -308,10 +313,11 @@ Operator checklist: \texttt{docs/experiments/habitat\_eqa\_results.md}.
   \end{tabular}
 \end{table}
 
+% UPDATE[P6]: Separate admitted GT-assisted controls, native contact, and learned agent results.
 \subsection{TAMP clutter clearance}
 \label{sec:tamp_clutter_results}
 
-\textit{Results pending.} The robot starts surrounded by small floor objects and must
+\textit{Historical assisted S1 controls are recorded below; remaining registry and physical/learned acceptance are pending.} The robot starts surrounded by small floor objects and must
 move them (relocate to a bin) as part of a plan --- \texttt{cleanup} ("clean up the
 room") or \texttt{nav\_goal} ("get to the sofa", clear a path then reach a scene
 landmark). See Section~\ref{sec:tamp_clutter} and Appendix~\ref{app:tamp_clutter}.
@@ -347,7 +353,7 @@ Fill from \texttt{aggregate\_tamp\_clutter.csv}.
 \textit{Results pending. Placeholder for:}
 
 \begin{itemize}
-  \item Table: full Habitat HM-EQA / OpenEQA 113-question sweep (GraphEQA vs.\ Dynagraph vs.\ ablations).
+  \item Table: current-stack HM-EQA paired evaluation and released-selection parity; OpenEQA requires a separate harness milestone and dataset selection.
   \item Figure: SQA3D outcome breakdown (TP/FP/FN/infra) from \texttt{emet sqa3d plot-results}.
   \item Table: Emet sim (Robocasa, MolmoSpaces) across robots.
   \item Figure: exploration trajectory + graph snapshots (Rerun export).

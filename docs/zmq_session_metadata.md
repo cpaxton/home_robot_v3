@@ -1,6 +1,15 @@
 # ZMQ `emet_session` metadata
 
-Every full-observation, state, and (where applicable) servo message from Emet’s MuJoCo ZMQ servers includes a static dict under the key `emet_session`. Clients should treat unknown keys as forward-compatible and must not assume the block is present (older servers).
+MuJoCo servers publish session/scene metadata under `emet_session`. Clients cache
+the newest available block and must tolerate messages without it. Robosuite-backed
+simulators publish it on the full-observation stream; fast joint-state and servo
+messages omit it so scene mesh refreshes cannot block measured feedback or mark
+old geometry as freshly observed. Stretch and other backends may also attach it
+to state/servo messages. Treat unknown keys as forward-compatible.
+
+Fresh joint feedback does not establish fresh scene geometry. Privileged TAMP
+consumers require the full-observation metadata stream; a backend without a
+working full-observation publisher cannot provide this geometry contract.
 
 ## Required shape (schema version 1)
 

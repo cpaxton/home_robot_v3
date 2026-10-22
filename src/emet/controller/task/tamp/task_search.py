@@ -116,31 +116,41 @@ def rank_grasps_by_ik(
     joint_names: Sequence[str],
     grasp_poses: Sequence[Any],
     pregrasp_standoff_m: float = 0.12,
-    ik_tol_m: float = 0.05,
-    ik_max_iters: int = 80,
+    lift_m: float = 0.12,
+    ik_tol_m: float = 0.00875,
+    ik_max_iters: int = 150,
     top_k: int = 8,
 ) -> list[tuple[int, float, bool]]:
-    """Return ``(index, pos_error_m, reachable)`` sorted best-first for each grasp candidate."""
+    """Rank complete pregrasp/grasp/lift endpoint sequences on private data.
+
+    Endpoint reachability is necessary, not a collision-free path certificate.
+    Use execution's solve tolerance: a loose grasp-only test can accept a base
+    pose whose first pregrasp target cannot actually be reached.
+    """
+    import mujoco
+
     from emet.controller.manipulation.kinematic_pick_place import _targets_from_grasp_T
     from emet.motion.mujoco_arm_ik import solve_position_ik_multiseed
 
+    scratch = mujoco.MjData(model)
     scored: list[tuple[int, float, bool]] = []
     for i, g in enumerate(grasp_poses[: max(1, int(top_k) * 2)]):
+        mujoco.mj_copyData(scratch, model, data)
         T = getattr(g, "T_world", g)
-        pregrasp, grasp, _lift = _targets_from_grasp_T(T, pregrasp_standoff_m=pregrasp_standoff_m, lift_m=0.12)
-        # Probe grasp XYZ (harder than pregrasp).
-        res = solve_position_ik_multiseed(
-            model,
-            data,
-            ee_body=ee_body,
-            joint_names=list(joint_names),
-            target_pos=grasp,
-            seeds=None,
-            try_midrange=True,
-            tol_m=float(ik_tol_m),
-            max_iters=int(ik_max_iters),
-        )
-        scored.append((i, float(res.pos_error_m), bool(res.success)))
+        targets = _targets_from_grasp_T(T, pregrasp_standoff_m=pregrasp_standoff_m, lift_m=lift_m)
+        worst_error = 0.0
+        reachable = True
+        for target in targets:
+            res = solve_position_ik_multiseed(
+                model, scratch, ee_body=ee_body, joint_names=list(joint_names),
+                target_pos=target, seeds=None, try_midrange=True,
+                tol_m=float(ik_tol_m), max_iters=int(ik_max_iters),
+            )
+            worst_error = max(worst_error, float(res.pos_error_m))
+            if not res.success:
+                reachable = False
+                break
+        scored.append((i, worst_error, reachable))
     scored.sort(key=lambda t: (not t[2], t[1]))
     return scored[: int(top_k)]
 
@@ -272,6 +282,10 @@ def plan_pick_place(
             scores = rank_grasps_by_ik(
                 executor._model, executor._data, ee_body=executor.ee_body,
                 joint_names=executor.joint_names, grasp_poses=grasp_poses, top_k=top_k_grasps,
+                pregrasp_standoff_m=getattr(executor, "pregrasp_standoff_m", .12),
+                lift_m=getattr(executor, "lift_m", .12),
+                ik_tol_m=min(.01, getattr(executor, "ik_tol_m", .035) * .25),
+                ik_max_iters=getattr(executor, "ik_max_iters", 150),
             )
             chosen = next((idx for idx, _err, ok in scores if ok), None)
         elif grasp_poses:
@@ -393,6 +407,10 @@ def execute_task_plan(
             value = getattr(executor, name, None)
             if isinstance(value, dict):
                 evidence[name] = {k: value.get(k) for k in fields}
+        if op == "place":
+            from emet.controller.task.tamp.api import placement_evidence
+
+            evidence.update(placement_evidence(executor))
         if len(evidence) > 1:
             plan.measurements.append(copy.deepcopy(evidence))
 

@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from typing import Any
 
@@ -554,8 +555,37 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         return getattr(executor, "robot", None) if executor is not None else None
 
     def _tamp_manip_mode() -> str:
+        from emet.simulation.env_flags import env_manip_mode
+
         executor = context.get("executor")
-        return str(getattr(executor, "_manip_mode", None) or context.get("manip_mode") or "auto")
+        return env_manip_mode() or str(getattr(executor, "_manip_mode", None) or context.get("manip_mode") or "auto")
+
+    def _native_input_gate() -> str | None:
+        if _tamp_manip_mode().strip().lower() != "physical":
+            return None
+        executor = context.get("executor")
+        inputs = str(getattr(executor, "_tamp_inputs", None) or context.get("tamp_inputs") or "observed")
+        if inputs not in {"observed", "privileged"}:
+            return "invalid_tamp_inputs"
+        if inputs == "observed":
+            # Do not read simulator task metadata before an observed-scene
+            # adapter is installed. Input isolation includes task discovery.
+            return "observed_scene_unavailable"
+        robot = _tamp_robot()
+        session_getter = getattr(robot, "get_emet_session", None)
+        session = session_getter() if callable(session_getter) else None
+        if not isinstance(session, dict) or session.get("is_simulation") is not True:
+            return "privileged_inputs_require_simulation"
+        from emet.controller.manipulation.native_inputs import ObservationUnavailable
+        from emet.controller.task.tamp.native_adapter import adapter_for
+        try:
+            return None if adapter_for(context, robot) is not None else "native_execution_unavailable"
+        except (ObservationUnavailable, ValueError) as exc:
+            return failure_code(str(exc))
+
+    def _native_adapter():
+        from emet.controller.task.tamp.native_adapter import adapter_for
+        return adapter_for(context, _tamp_robot())
 
     def _fallback_pick_place(executor: Any, object_name: str, receptacle_name: str) -> dict:
         keep_going = executor([("pickup", object_name), ("place", receptacle_name)])
@@ -579,6 +609,10 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         )
 
         requested_ref = str(task_ref).strip()
+        native_error = _native_input_gate()
+        if native_error:
+            from emet.controller.task.tamp.agent_bridge import AgentPlanBuild
+            return AgentPlanBuild(None, None, "physical", True, native_error)
         selected = (context.get("_tamp_task_refs") or {}).get(requested_ref)
         if selected is not None and not isinstance(selected, AgentTaskRef):
             selected = None
@@ -628,9 +662,15 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         task_ref: str = "",
         object_name: str = "",
         receptacle_name: str = "",
+        placement_region: list[list[float]] | None = None,
     ) -> dict:
         from emet.controller.task.tamp.agent_bridge import store_agent_plan
 
+        if _tamp_manip_mode().strip().lower() == "physical":
+            error = _native_input_gate()
+            return response("plan_pick_place", code=error) if error else _native_adapter().plan(task_ref, object_name, receptacle_name, placement_region)
+        if placement_region is not None:
+            return response("plan_pick_place", code="placement_region_unsupported")
         build = _build_tamp_plan(
             task_ref=task_ref,
             object_name=object_name,
@@ -643,6 +683,11 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
 
     @json_tool
     def execute_pick_place_plan(plan_ref: str) -> dict:
+        native_error = _native_input_gate()
+        if native_error:
+            return response("execute_pick_place_plan", code=native_error)
+        if _tamp_manip_mode().strip().lower() == "physical":
+            return _native_adapter().execute(str(plan_ref))
         from emet.controller.task.tamp.agent_bridge import execute_stored_agent_plan_result
 
         robot = _tamp_robot()
@@ -652,10 +697,18 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
 
     @json_tool
     def pick_place(object_name: str, receptacle_name: str) -> dict:
+        if _tamp_manip_mode().strip().lower() == "physical":
+            error = _native_input_gate()
+            if error:
+                return response("pick_place", code=error)
+            adapter = _native_adapter()
+            planned = adapter.plan(object_name=object_name, receptacle_name=receptacle_name)
+            result = adapter.execute(planned["data"]["plan_ref"]) if planned["status"] == "ok" else planned
+            return {**result, "tool": "pick_place"}
         executor = context.get("executor")
         if executor is None and _tamp_robot() is None:
             return response("pick_place", code="robot_not_connected")
-        if executor is not None and (
+        if executor is not None and _tamp_manip_mode().strip().lower() != "physical" and (
             bool(getattr(executor, "visual_servo", False))
             or _tamp_manip_mode().strip().lower() not in {"auto", "teleport", "kinematic"}
         ):
@@ -667,7 +720,7 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
             result = execute_stored_agent_plan_result(_tamp_robot(), context, plan_ref)
             result["tool"] = "pick_place"
             return result
-        if build.live_sim:
+        if build.live_sim or _tamp_manip_mode().strip().lower() == "physical":
             return response("pick_place", code=failure_code(build.reason or "planner_error"))
         if executor is None:
             return response("pick_place", code="controller_unavailable")
@@ -736,10 +789,37 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         )
     )
 
+    @json_tool
+    def set_receptacle_state(task_ref: str, state: str) -> dict:
+        native_error = _native_input_gate()
+        if native_error:
+            return response("set_receptacle_state", code=native_error)
+        if _tamp_manip_mode().strip().lower() == "physical":
+            return response("set_receptacle_state", code="native_articulation_unavailable")
+        from emet.controller.task.tamp.articulation import set_receptacle_state as apply_state
+        return apply_state(_tamp_robot(), context, task_ref, state)
+
+    tools.append(Tool(
+        name="set_receptacle_state",
+        description="Simulator-assisted open/close of the receptacle selected by task_ref. "
+                    "Teleports one supported joint; verifies state and refreshes geometry. "
+                    "No physical manipulation or door-sweep collision guarantee. Replan afterward.",
+        parameters={"type": "object", "properties": {
+            "task_ref": {"type": "string", "description": "Current scene_tasks handle."},
+            "state": {"type": "string", "enum": ["open", "closed"]},
+        }, "required": ["task_ref", "state"]},
+        func=set_receptacle_state, returns_info=True,
+    ))
+
     # -- scene_tasks ----------------------------------------------------------
     @json_tool
     def scene_tasks(object_filter: str = "", robot: str = "") -> dict:
         """Enumerate pick-and-place options from the current scene as a compact digest."""
+        native_error = _native_input_gate()
+        if native_error:
+            return response("scene_tasks", code=native_error)
+        if _tamp_manip_mode().strip().lower() == "physical":
+            return _native_adapter().discover(object_filter, robot)
         from emet.controller.task.tamp.agent_bridge import stable_scene_task_refs
         from emet.eval.scene_task_extractor import (
             default_molmospaces_scenes_dir,
@@ -811,9 +891,13 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
                 reachability_status = "evaluated"
             except Exception:
                 reachability_status = "unavailable"
+        from emet.simulation.articulation import articulation_access
+        def access(ref):
+            return articulation_access(session if live_sim else {}, ref.receptacle_body)
         return response("scene_tasks", data={
             "tasks": [{"task_ref": ref.ref, "object_name": ref.object_query,
-                       "receptacle_name": ref.receptacle_query, "start_receptacle": ref.start_receptacle}
+                       "receptacle_name": ref.receptacle_query, "start_receptacle": ref.start_receptacle,
+                       "access": access(ref)}
                       for ref in task_refs],
             "pickable_categories": sorted({p.category for p in picks}),
             "receptacle_categories": sorted({r.category for r in recepts}),
@@ -1592,6 +1676,9 @@ def get_tool_descriptions_for_prompt(tools: list[Tool]) -> str:
         if props:
             arg_names = ", ".join(props.keys())
             lines.append(f"- {t.name}({arg_names}): {t.description}")
+            # Local text-only clients do not receive the separate API tools
+            # parameter. Preserve types, optionality, nested bounds and meanings.
+            lines.append("  Arguments (JSON Schema): " + json.dumps(t.parameters, separators=(",", ":")))
         else:
             lines.append(f"- {t.name}(): {t.description}")
     return "\n".join(lines)

@@ -195,7 +195,7 @@ def test_navigation_posture_requires_collision_path_and_measured_tracking():
     calls = []
     executor = PhysicalPickPlaceExecutor(
         SimpleNamespace(),
-        model=m,
+        input_mode="privileged", model=m,
         data=d,
         ee_body="ee",
         joint_names=["yaw"],
@@ -204,7 +204,7 @@ def test_navigation_posture_requires_collision_path_and_measured_tracking():
         command_joints=lambda q: calls.append(q) or True,
     )
     path, error = executor.plan_joint_target(np.array([1.0]))
-    assert path is None and error == "arm_path_failed:invalid_start" and not calls
+    assert path is None and error == "arm_path_failed:invalid_start:collision" and not calls
     # With a clear scene, a successful controller return still needs state progress.
     m.geom_pos[m.geom("wall").id] = [2, 0, 0]
     path, error = executor.plan_joint_target(np.array([0.2]))
@@ -316,7 +316,7 @@ def test_grasp_rechecks_pose_ik_after_measured_arrival_before_actuation():
     d = mujoco.MjData(m)
     executor = PhysicalPickPlaceExecutor(
         SimpleNamespace(open_gripper=lambda **kwargs: pytest.fail("grasp despite infeasible measured pose")),
-        model=m,
+        input_mode="privileged", model=m,
         data=d,
         ee_body="ee",
         joint_names=["yaw"],
@@ -346,7 +346,7 @@ def test_missing_payload_stops_arm_before_next_command(slip):
     events = []
     executor = PhysicalPickPlaceExecutor(
         SimpleNamespace(),
-        model=m,
+        input_mode="privileged", model=m,
         data=d,
         ee_body="ee",
         joint_names=["x"],
@@ -382,7 +382,7 @@ def test_coupled_arm_can_raise_then_extend_around_blocked_diagonal():
     checker = MujocoSceneCollisionChecker(m, robot_body="ee")
     executor = PhysicalPickPlaceExecutor(
         SimpleNamespace(),
-        model=m,
+        input_mode="privileged", model=m,
         data=d,
         ee_body="ee",
         joint_names=["z", "x1", "x2"],
@@ -427,7 +427,7 @@ def test_planned_lift_leaves_offline_payload_at_lifted_pose():
     checker.set_payload(m, d, "payload", "ee")
     executor = PhysicalPickPlaceExecutor(
         SimpleNamespace(),
-        model=m,
+        input_mode="privileged", model=m,
         data=d,
         ee_body="ee",
         joint_names=["z"],
@@ -459,7 +459,7 @@ def test_contact_closure_needs_settled_motor_and_advancing_feedback(monkeypatch,
 
     executor = module.PhysicalPickPlaceExecutor(
         robot,
-        model=m,
+        input_mode="privileged", model=m,
         data=d,
         ee_body="ee",
         joint_names=["yaw"],
@@ -489,7 +489,7 @@ def test_arm_acknowledgment_waits_for_measured_joint_convergence(monkeypatch):
 
     monkeypatch.setattr('emet.controller.manipulation.physical_pick_place.time.sleep', settle)
     executor = PhysicalPickPlaceExecutor(
-        SimpleNamespace(), model=m, data=d, ee_body='ee', joint_names=['yaw'],
+        SimpleNamespace(), input_mode="privileged", model=m, data=d, ee_body='ee', joint_names=['yaw'],
         collision=MujocoSceneCollisionChecker(m, robot_body='robot'),
         synchronize=lambda state: state.qpos.__setitem__(slice(None), measured),
         command_joints=lambda q: commanded.append(q.copy()) or True,
@@ -521,7 +521,7 @@ def test_arm_stops_after_unplanned_base_motion():
         return True
 
     executor = PhysicalPickPlaceExecutor(
-        SimpleNamespace(), model=m, data=d, ee_body="ee", joint_names=["arm"],
+        SimpleNamespace(), input_mode="privileged", model=m, data=d, ee_body="ee", joint_names=["arm"],
         collision=MujocoSceneCollisionChecker(m, robot_body="base"),
         synchronize=sync, command_joints=command, base_body="base",
     )
@@ -592,7 +592,7 @@ def test_grasp_alternatives_replan_all_phases_before_any_gripper_command():
     checker = SimpleNamespace(payload_body=None, payload_parent=None, payload_transform=None,
                               set_payload=lambda *args: None)
     robot = SimpleNamespace(open_gripper=lambda **kw: calls.append('open') or False)
-    executor = PhysicalPickPlaceExecutor(robot, model=m, data=d, ee_body='ee', joint_names=['yaw'],
+    executor = PhysicalPickPlaceExecutor(robot, input_mode="privileged", model=m, data=d, ee_body='ee', joint_names=['yaw'],
                                          collision=checker, synchronize=lambda data: None, command_joints=lambda q: True)
     nominal = [([-1,0,0], np.eye(3))] * 3
     alternative = [([1,0,0], np.eye(3))] * 3
@@ -628,7 +628,7 @@ def test_open_gripper_geometry_is_checked_before_actuation(obstacle_x):
     checker = MujocoSceneCollisionChecker(m, robot_body='robot', allowed_pairs=[('robot', 'target')])
     executor = PhysicalPickPlaceExecutor(
         SimpleNamespace(open_gripper=lambda **kw: pytest.fail('opened before a valid grasp certificate')),
-        model=m, data=d, ee_body='ee', joint_names=['x'], collision=checker,
+        input_mode="privileged", model=m, data=d, ee_body='ee', joint_names=['x'], collision=checker,
         synchronize=lambda state: mujoco.mj_kinematics(m, state), command_joints=lambda q: True,
         gripper_open_configuration=(('opening', .2),),
     )
@@ -663,7 +663,7 @@ def test_release_and_retreat_check_open_fingers_and_preserve_payload(obstacle_x)
     checker = MujocoSceneCollisionChecker(m, robot_body='robot', allowed_pairs=[('robot', 'target')])
     executor = PhysicalPickPlaceExecutor(
         SimpleNamespace(open_gripper=lambda **kw: pytest.fail('unsafe release commanded')),
-        model=m, data=d, ee_body='ee', joint_names=['x'], collision=checker,
+        input_mode="privileged", model=m, data=d, ee_body='ee', joint_names=['x'], collision=checker,
         synchronize=lambda state: mujoco.mj_kinematics(m, state), command_joints=lambda q: True,
         gripper_open_configuration=(('opening', .2),),
     )
@@ -690,3 +690,91 @@ def test_release_and_retreat_check_open_fingers_and_preserve_payload(obstacle_x)
     np.testing.assert_array_equal(d.qpos, before)
     np.testing.assert_array_equal(checker.payload_transform, transform)
     assert checker.payload_body == 'target' and executor.payload_body == 'target'
+
+
+def test_gripper_slow_drift_is_not_motor_settling(monkeypatch):
+    import emet.controller.manipulation.physical_pick_place as module
+    clock = [0.0]
+    monkeypatch.setattr(module.time, 'monotonic', lambda: clock[0])
+    monkeypatch.setattr(module.time, 'sleep', lambda dt: clock.__setitem__(0, clock[0] + dt))
+    m = model()
+    d = mujoco.MjData(m)
+    executor = module.PhysicalPickPlaceExecutor(
+        SimpleNamespace(close_gripper=lambda **kwargs: True, get_gripper_position=lambda: .1*clock[0]),
+        input_mode='privileged', model=m, data=d, ee_body='ee', joint_names=['yaw'],
+        collision=MujocoSceneCollisionChecker(m, robot_body='robot'),
+        synchronize=lambda state: setattr(state, 'time', clock[0]), command_joints=lambda q: True)
+    assert not executor._close_gripper_until_still(timeout_s=1.).success
+
+
+def test_endpoint_settling_rejects_motion_even_within_arrival_tolerance(monkeypatch):
+    import emet.controller.manipulation.physical_pick_place as module
+    clock = [0.0]
+    monkeypatch.setattr(module.time, 'monotonic', lambda: clock[0])
+    monkeypatch.setattr(module.time, 'sleep', lambda dt: clock.__setitem__(0, clock[0] + dt))
+    m = model()
+    m.geom_pos[m.geom('wall').id] = [2, 0, 0]
+    d = mujoco.MjData(m)
+    def sync(state):
+        state.qpos[0] = .004 * np.sin(30*clock[0])
+        mujoco.mj_forward(m, state)
+    executor = module.PhysicalPickPlaceExecutor(
+        SimpleNamespace(), input_mode='privileged', model=m, data=d, ee_body='ee', joint_names=['yaw'],
+        collision=MujocoSceneCollisionChecker(m, robot_body='robot'), synchronize=sync,
+        command_joints=lambda q: True, endpoint_settle_s=.3, joint_settle_timeout_s=1.)
+    result = executor._execute_path('grasp', [np.array([0.]), np.array([0.])])
+    assert not result.success and result.message == 'arm_tracking_failed'
+
+
+@pytest.mark.parametrize('rate', [0., .1, 1.])
+def test_settling_uses_physics_clock_with_wall_watchdog(monkeypatch, rate):
+    import emet.controller.manipulation.physical_pick_place as module
+    clock = [0.]
+    monkeypatch.setattr(module.time, 'monotonic', lambda: clock[0])
+    m = model()
+    d = mujoco.MjData(m)
+    ex = module.PhysicalPickPlaceExecutor(SimpleNamespace(), model=m, data=d,
+        ee_body='ee', joint_names=['yaw'], collision=MujocoSceneCollisionChecker(m, robot_body='robot'),
+        synchronize=lambda state: None, command_joints=lambda q: True, input_mode='privileged',
+        use_sim_time=True, settling_wall_timeout_s=20.)
+    active = ex._settling_window(1.)
+    while active():
+        clock[0] += .05
+        d.time += rate*.05
+    assert clock[0] <= 20.1
+    if rate:
+        assert 1. <= d.time <= 1.05
+    else:
+        assert clock[0] >= 20.
+
+
+@pytest.mark.parametrize('parameter', ['tol_m', 'tol_rad', 'damping', 'step'])
+@pytest.mark.parametrize('value', [float('nan'), float('inf')])
+def test_pose_ik_rejects_nonfinite_solver_parameters(parameter, value):
+    m = model()
+    d = mujoco.MjData(m)
+    before = d.qpos.copy()
+    with pytest.raises(ValueError, match='finite rigid target'):
+        solve_pose_ik(m, d, ee_body='robot', joint_names=['yaw'],
+                      target_pos=[0, 0, 0], target_rotation=np.eye(3), **{parameter: value})
+    np.testing.assert_array_equal(d.qpos, before)
+
+
+def test_pose_ik_rejects_nonfinite_seed_before_kinematics(monkeypatch):
+    m = model()
+    d = mujoco.MjData(m)
+    d.qpos[0] = np.nan
+    def forbidden(*args):
+        raise AssertionError('invalid seed reached native kinematics')
+    monkeypatch.setattr(mujoco, 'mj_kinematics', forbidden)
+    with pytest.raises(ValueError, match='finite initial joint state'):
+        solve_pose_ik(m, d, ee_body='robot', joint_names=['yaw'],
+                      target_pos=[0, 0, 0], target_rotation=np.eye(3))
+
+
+@pytest.mark.parametrize('joints', [[], ['yaw', 'yaw']])
+def test_pose_ik_rejects_duplicate_or_empty_joint_coordinates(joints):
+    m = model()
+    with pytest.raises(ValueError, match='distinct controlled joints'):
+        solve_pose_ik(m, mujoco.MjData(m), ee_body='robot', joint_names=joints,
+                      target_pos=[0, 0, 0], target_rotation=np.eye(3))

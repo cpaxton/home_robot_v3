@@ -59,6 +59,7 @@ def test_all_tools_return_json_on_missing_state_and_bad_arguments():
     tools = {t.name: t for t in get_tools({})}
     args = {
         "scene_tasks": {},
+        "set_receptacle_state": {"task_ref": "missing", "state": "open"},
         "plan_pick_place": {},
         "execute_pick_place_plan": {"plan_ref": "missing"},
         "pick_place": {"object_name": "bowl", "receptacle_name": "table"},
@@ -164,12 +165,19 @@ def test_kinematic_bridge_tries_collision_and_ik_alternatives(monkeypatch):
     robot = Robot()
     robot.check_base_poses = lambda poses: {"poses": np.asarray(poses).tolist(), "clear": [False] + [True] * 15}
     seen = []
-    executor = SimpleNamespace(_ensure_model=lambda: True, _model=None, _data=None, ee_body="tool", joint_names=["arm"])
+    executor = SimpleNamespace(_ensure_model=lambda: True, _model=None, _data=None, ee_body="tool",
+                               joint_names=["arm"], pregrasp_standoff_m=.18, lift_m=.22,
+                               ik_tol_m=.024, ik_max_iters=123)
     monkeypatch.setattr(kinematic_pick_place, "KinematicPickPlaceExecutor", lambda *a, **k: executor)
     monkeypatch.setattr(task_search, "_sync_executor_base_to_xyt", lambda ex, pose: seen.append(pose.copy()))
-    monkeypatch.setattr(
-        task_search, "rank_grasps_by_ik", lambda *a, **k: [(0, 0.001 if len(seen) > 1 else 1.0, len(seen) > 1)]
-    )
+    def rank(*args, **kwargs):
+        assert kwargs["pregrasp_standoff_m"] == .18
+        assert kwargs["lift_m"] == .22
+        assert kwargs["ik_tol_m"] == .006
+        assert kwargs["ik_max_iters"] == 123
+        return [(0, 0.001 if len(seen) > 1 else 1.0, len(seen) > 1)]
+
+    monkeypatch.setattr(task_search, "rank_grasps_by_ik", rank)
     result = bridge.build_agent_pick_place_plan(robot, "bowl", "table", seed=0)
     assert result.mode == "kinematic"
     assert result.plan.success, result.reason
@@ -194,7 +202,9 @@ def test_stale_joint_observation_cannot_pass_arrival():
     assert ex._last_motion_failure == "stale_observation"
 
 
-@pytest.mark.parametrize("failure", ["approach", "retract", "release", "missing_receptacle"])
+@pytest.mark.parametrize("failure", ["approach", "retract", "release", "missing_receptacle",
+                                     "no_path", "invalidated", "preplace", "place", "runtime", "timeout",
+                                     "move_exception", "attachment_changed", "state_search", "state_refresh", "success", "missing_body_pose"])
 def test_place_does_not_hide_failed_submotions(monkeypatch, failure):
     from emet.controller.manipulation import kinematic_pick_place as module
 
@@ -204,25 +214,64 @@ def test_place_does_not_hide_failed_submotions(monkeypatch, failure):
     ex.place_z_offset_m = 0.0
     ex._ensure_model = lambda: True
     ex._placements = lambda: ex.robot.placements
-    ex._approach_xy = lambda *a: failure != "approach"
+    from types import SimpleNamespace
+
+    from emet.motion.placement_geometry import HeldObject
+
+    selected = SimpleNamespace(base_xyt=np.zeros(3), object_center=np.ones(3),
+        ee_targets=(np.ones(3), np.ones(3)), ee_rotation=np.eye(3), segments=([np.zeros(3)], [np.zeros(3)]))
+    checker = SimpleNamespace(payload=HeldObject(np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]]),
+        body_pose_ee=None if failure == "missing_body_pose" else np.eye(4)),
+                              margin=0., released_bounds=None)
+    calls = []
+
+    def search(*args, **kwargs):
+        calls.append(kwargs)
+        if failure == "state_search":
+            raise ValueError("placement_stale_observation")
+        if failure in {"runtime", "timeout"}:
+            raise (RuntimeError if failure == "runtime" else TimeoutError)("query failed")
+        if failure == "attachment_changed" and len(calls) > 1:
+            checker.payload = HeldObject(checker.payload.vertices_ee + .1)
+        return SimpleNamespace(paths=[] if failure == "no_path" or (failure == "invalidated" and len(calls) > 1)
+                               else [selected]), checker
+
+    ex._search_placement = search
+    ex._refresh_placement_checker = Mock(return_value=checker, side_effect=ValueError("placement_missing_joint_state")
+                                        if failure == "state_refresh" else None)
+    ex.robot.move_base_to = Mock(return_value=failure != "approach",
+                                 side_effect=RuntimeError("transport failed") if failure == "move_exception" else None)
+    ex._collision = None
     ex._sleep = lambda *a: None
     ex._verify_place_xy = lambda *a: (True, 0.001)
-    motions = iter([(True, 0.001), (True, 0.001), (failure != "retract", 0.08)])
-    ex._plan_and_execute_ee = lambda *a: next(motions)
+    motions = iter([(failure != "preplace", 0.001), (failure != "place", 0.001)])
+    ex._execute_placement_segment = lambda *a: next(motions)
+    ex._plan_and_execute_ee = lambda *a: (failure != "retract", 0.08)
     ex._last_motion_failure = "tracking_failed"
     ex._set_gripper = Mock(side_effect=RuntimeError() if failure == "release" else None)
-    attach = Mock()
-    monkeypatch.setattr(module, "robot_zmq_attach_body", attach)
-    monkeypatch.setattr(module, "robot_zmq_detach_body", Mock())
+    detach = Mock()
+    monkeypatch.setattr(module, "robot_zmq_detach_body", detach)
     monkeypatch.setattr(module, "robot_zmq_set_body_pose", Mock())
     result = ex.place_only(
         "table",
         object_gt_body="object_private",
         receptacle_gt_body="missing" if failure == "missing_receptacle" else "receptacle_private",
     )
-    assert not result.success
-    if failure in {"approach", "missing_receptacle"}:
-        assert not attach.called
+    assert result.success == (failure == "success")
+    if failure == "success":
+        assert calls == [{"approach_base": True}, {"approach_base": False}]
+        assert ex._refresh_placement_checker.call_count == 2
+        detach.assert_called_once()
+    if failure == "missing_body_pose":
+        detach.assert_not_called()
+        assert result.message == "placement_geometry_unavailable"
+    if failure in {"state_search", "state_refresh"}:
+        assert result.message == ("placement_stale_observation" if failure == "state_search" else "placement_missing_joint_state")
+    if failure in {"approach", "missing_receptacle", "no_path", "invalidated", "preplace", "place", "runtime",
+                   "timeout", "move_exception", "attachment_changed", "state_search", "state_refresh"}:
+        assert not detach.called
+    if failure in {"no_path", "missing_receptacle", "runtime", "timeout"}:
+        ex.robot.move_base_to.assert_not_called()
 
 
 @pytest.mark.parametrize("change", ["position", "rotation", "boot", "capability", "nan"])
@@ -311,7 +360,9 @@ def test_place_exception_cannot_inherit_grasp_evidence(monkeypatch):
     assert result.failed_op == "place"
     assert any("base approach rejected" in message for message in messages)
     assert "base approach rejected" not in result.message
-    assert [m["stage"] for m in result.measurements] == ["grasp"]
+    assert [m["stage"] for m in result.measurements] == ["grasp", "place"]
+    assert result.measurements[-1] == {"stage": "place", "release": {
+        "detach_command": "not_attempted", "placement_verified": None, "held_state": "unknown"}}
     saved = result.measurements[0]["last_ee_verification"]["error_m"]
     ex.begin_operation("next-task")
     assert saved == 0.02 and result.measurements[0]["last_ee_verification"]["error_m"] == 0.02
@@ -379,3 +430,20 @@ def test_unavailable_base_validation_rejects_build_and_consumes_plan(monkeypatch
         assert result["recovery"] == "rediscover"
     assert not ground.called and not execute.called and not query.called
     assert bridge.execute_stored_agent_plan_result(robot, context, ref)["code"] == "unknown_plan"
+
+
+@pytest.mark.parametrize("reason, expected", [
+    ("no_plan_within_budget:last_grounding=no_reachable_grasp", "no_reachable_grasp"),
+    ("no_plan_within_budget:last_grounding=private_body_id", "no_plan_within_budget"),
+    ("no_plan_within_budget:candidates=3", "no_plan_within_budget"),
+])
+def test_mcts_grounding_failure_preserves_only_known_public_code(reason, expected):
+    from emet.controller.task.tamp.api import failure_code
+    assert failure_code(reason) == expected
+
+
+def test_unsupported_adapter_does_not_ignore_placement_region():
+    tools = {t.name: t for t in get_tools({})}
+    result = decoded(tools['plan_pick_place'].func(object_name='bowl', receptacle_name='table',
+                                                placement_region=[[0, 0], [1, 1]]))
+    assert result['code'] == 'placement_region_unsupported'

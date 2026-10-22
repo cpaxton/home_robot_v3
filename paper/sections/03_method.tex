@@ -4,6 +4,9 @@
 Dynagraph is implemented as \texttt{DynagraphController}, a thin extension of \texttt{GraphEQAController}, which itself subclasses the DynaMem navigation agent.
 The design principle is \textbf{one perception step, two memory writes, one maintenance pass}: first the voxel map (unchanged DynaMem rules), then graph unification (GraphEQA), then Dynagraph-specific graph maintenance.
 
+% UPDATE[P1]: Map this historical controller description to lazy/query-driven
+% admission only after paired evidence; see docs/experiments/shared_agent_paper_update.md.
+\noindent\textbf{Scope.} The pipeline below describes the per-observation Dynagraph controller used by the historical evaluations. Opt-in arrival-only and query-driven admission paths are separate implementation variants; their shared-agent acceptance remains incomplete.
 \subsection{System overview}
 
 At each control step the robot receives RGB-D observations and pose from a MuJoCo ZMQ server (or Habitat bridge, when available).
