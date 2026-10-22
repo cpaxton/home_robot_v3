@@ -815,6 +815,9 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
     @json_tool
     def scene_tasks(object_filter: str = "", robot: str = "") -> dict:
         """Enumerate pick-and-place options from the current scene as a compact digest."""
+        session = context.get("tamp_task_session")
+        if session is not None:
+            return session.discover(object_filter, robot)
         if _tamp_manip_mode().strip().lower() == "physical":
             executor = context.get("executor")
             inputs = str(getattr(executor, "_tamp_inputs", None) or context.get("tamp_inputs") or "observed")

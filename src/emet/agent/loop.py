@@ -590,6 +590,7 @@ def run_agent_with_robot(
     max_tool_rounds: int = _MAX_TOOL_ROUNDS,
     observed_tamp_provider: ObservedTaskProvider | None = None,
     tamp_task_session: Any | None = None,
+    native_task_config: dict | None = None,
     **kwargs: Any,
 ) -> None:
     """Start robot, optional memory load, optional Discord; run command loop with tools.
@@ -627,6 +628,8 @@ def run_agent_with_robot(
     section), is merged into ``parameters["agent"]`` so the executor honors YAML /
     ``--set agent.manip_mode`` (etc.) without requiring ``EMET_MANIP_*`` env vars.
     """
+    if native_task_config is not None and (tamp_task_session is not None or not state_only_sim):
+        raise ValueError("native_task_config requires state-only simulation and no prebound session")
     if not 1 <= max_tool_rounds <= 32:
         raise ValueError("max_tool_rounds must be between 1 and 32")
     if state_only_sim and (robot != "stretch" or memory_backend != "dynamem"
@@ -822,6 +825,16 @@ def run_agent_with_robot(
             voxel_map=executor.agent.get_voxel_map(),
         )
     voxel_memory_backend = get_memory_backend("dynamem", voxel_map=executor.agent.get_voxel_map())
+    if native_task_config is not None:
+        from emet.controller.task.tamp.native_transfer import NativeTableTransferProvider
+        from emet.controller.task.tamp.task_session import TaskSession
+        try:
+            if executor._manip_mode != "physical" or executor._tamp_inputs != "privileged":
+                raise ValueError("native_task_config requires physical mode with privileged inputs")
+            tamp_task_session = TaskSession(NativeTableTransferProvider(robot_client, native_task_config))
+        except Exception:
+            robot_client.stop()
+            raise
     context: dict[str, Any] = {
         "executor": executor,
         "robot": robot_client,

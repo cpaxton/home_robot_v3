@@ -1,0 +1,142 @@
+# Copyright (c) Chris Paxton 2026
+# Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
+"""Measured occupancy, native first-move probes and honest failure receipts."""
+import json
+import threading
+from dataclasses import replace
+from types import SimpleNamespace
+
+import pytest
+
+from emet.agent.tools import get_tools
+from emet.controller.task.tamp.task_contracts import SceneBinding
+from emet.controller.task.tamp.task_session import TaskExecutionResult, TaskSession
+from emet.controller.task.tamp.transfer_provider import RegionTransferProvider, TransferObservation, TransferRegion
+
+
+def make_domain(*, lie=False):
+    regions = tuple(TransferRegion(name, ((i*2., 0.), (i*2.+1., 1.)))
+                    for i, name in enumerate(('left', 'right', 'buffer')))
+    current = [TransferObservation(SceneBinding('a'*64, 'b'*64, 'boot', 'reset', 0),
+                  (('alpha', 'left'), ('beta', 'right')), (('alpha', (.2, .2)), ('beta', (.2, .2))))]
+    calls = []
+    def transfer(obj, region):
+        calls.append((obj, region.name))
+        if not lie:
+            old = current[0]
+            locations = dict(old.locations)
+            locations[obj] = region.name
+            current[0] = replace(old, locations=tuple(locations.items()),
+                                  binding=replace(old.binding, snapshot_revision=old.binding.snapshot_revision+1))
+        return True
+    domain = RegionTransferProvider(regions, observe=lambda: current[0], transfer=transfer, input_mode='privileged')
+    return domain, current, calls
+
+
+@pytest.mark.parametrize('strategy', ['beam', 'mcts'])
+def test_grounded_swap_through_production_tools(strategy):
+    domain, _, calls = make_domain()
+    tools = {t.name: t for t in get_tools({'tamp_task_session': TaskSession(domain)})}
+    discovery = json.loads(tools['scene_tasks'].func())
+    assert discovery['data']['free_regions'] == ['buffer']
+    plan = json.loads(tools['plan_task'].func(instruction='swap alpha and beta', strategy=strategy))
+    assert plan['data']['steps'] == 3 and plan['data']['planning_scope'] == 'task_skeleton'
+    assert not calls
+    result = json.loads(tools['execute_task_plan'].func(plan_ref=plan['data']['plan_ref']))
+    assert result['status'] == 'ok' and result['data']['completed_steps'] == 3
+    assert dict(domain.observe().locations) == {'alpha': 'right', 'beta': 'left'}
+
+
+def test_claimed_success_without_measured_effect_stops():
+    domain, _, calls = make_domain(lie=True)
+    session = TaskSession(domain)
+    ref = session.plan('swap alpha and beta')['data']['plan_ref']
+    assert session.execute(ref)['code'] == 'task_effect_verification_failed'
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize('text', ['move alpha to missing', 'swap alpha and missing', 'do whatever',
+    'move alpha to right; move alpha to buffer', 'move alpha to buffer; move beta to buffer'])
+def test_bad_goals_do_not_execute(text):
+    domain, _, calls = make_domain()
+    domain.snapshot()
+    with pytest.raises(ValueError):
+        domain.compile_goal(text)
+    assert not calls
+
+
+def test_no_buffer_is_an_explicit_search_failure():
+    domain, current, calls = make_domain()
+    current[0] = replace(current[0], blocked_regions=frozenset({'buffer'}))
+    assert TaskSession(domain).plan('swap alpha and beta')['code'] == 'search_exhausted'
+    assert not calls
+
+
+def test_privileged_observation_cannot_enter_observed_provider():
+    domain, _, _ = make_domain()
+    domain.input_mode = 'observed'
+    with pytest.raises(ValueError, match='source_mismatch'):
+        domain.snapshot()
+
+
+@pytest.mark.parametrize('prior_progress', [False, True])
+def test_refinement_failure_preserves_actual_progress(prior_progress):
+    domain, _, calls = make_domain()
+    original = domain.transfer
+    def transfer(obj, region):
+        if prior_progress and not calls:
+            return original(obj, region)
+        return TaskExecutionResult(False, False, 'task_motion_planning_failed')
+    domain.transfer = transfer
+    session = TaskSession(domain)
+    ref = session.plan('swap alpha and beta')['data']['plan_ref']
+    done = session.execute(ref)
+    assert done['code'] == 'task_motion_planning_failed'
+    assert done['status'] == ('partial' if prior_progress else 'error')
+    assert done['data']['execution_started'] is prior_progress
+    assert done['data']['completed_steps'] == int(prior_progress)
+
+
+def native_probe_domain():
+    from emet.controller.task.tamp.native_transfer import NativeTableTransferProvider
+    domain, current, _ = make_domain()
+    native = NativeTableTransferProvider.__new__(NativeTableTransferProvider)
+    RegionTransferProvider.__init__(native, tuple(domain.regions.values()),
+        observe=lambda: current[0], transfer=domain.transfer, input_mode='privileged')
+    native.roles, native.support = {'alpha': 'private_a', 'beta': 'private_b'}, 'private_table'
+    native._ik_remaining, native._motion_cache, native.motion_evidence = 100, {}, []
+    calls = []
+    adapter = SimpleNamespace(lock=threading.RLock(), max_planning_ik_calls=20,
+                              planning_ik_calls=0, tasks={}, plans={})
+    def plan(task_ref, placement_region):
+        obj = adapter.tasks[task_ref][2]
+        calls.append(obj)
+        adapter.planning_ik_calls = min(5, adapter.max_planning_ik_calls)
+        ok = obj == 'beta'
+        if ok:
+            adapter.plans['probe'] = object()
+        return {'status': 'ok' if ok else 'error', 'code': 'ok' if ok else 'no_plan_within_budget',
+                'data': {'plan_ref': 'probe', 'planning_rejections': {'pregrasp:pose_ik_failed': 5}}}
+    adapter.plan = plan
+    native.adapter = adapter
+    return native, calls
+
+
+def test_native_first_move_failure_selects_another_causal_sequence_without_commands():
+    domain, probes = native_probe_domain()
+    session = TaskSession(domain)
+    ref = session.plan('swap alpha and beta')['data']['plan_ref']
+    assert session._plans[ref].operators[0].ref.startswith('transfer:beta:')
+    assert sorted(probes) == ['alpha', 'beta']
+    assert not domain.adapter.plans  # Probe handles never leak into execution.
+    assert domain._ik_remaining == 90
+    assert domain.adapter.max_planning_ik_calls == 20
+
+
+def test_native_probes_share_remaining_ik_cap():
+    domain, probes = native_probe_domain()
+    domain._ik_remaining = 3
+    session = TaskSession(domain)
+    result = session.plan('swap alpha and beta')
+    assert result['status'] == 'error' and len(probes) == 1
+    assert domain._ik_remaining == 0 and domain.adapter.max_planning_ik_calls == 20

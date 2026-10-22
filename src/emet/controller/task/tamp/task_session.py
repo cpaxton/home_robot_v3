@@ -13,10 +13,23 @@ from .task_contracts import BudgetSpec, GoalSpec, TaskState
 from .task_planning import Operator, TaskDomain, search_task
 
 
+@dataclass(frozen=True)
+class TaskExecutionResult:
+    success: bool
+    execution_started: bool
+    failure_code: str = 'task_execution_failed'
+
+    def __post_init__(self):
+        if type(self.success) is not bool or type(self.execution_started) is not bool:
+            raise ValueError('invalid_task_execution_receipt')
+        if self.failure_code not in {'task_execution_failed', 'task_motion_planning_failed', 'task_motion_budget_exhausted'}:
+            raise ValueError('invalid_task_execution_code')
+
+
 class TaskProvider(TaskDomain, Protocol):
     def snapshot(self) -> TaskState: ...
     def compile_goal(self, instruction: str) -> GoalSpec: ...
-    def execute(self, operator: Operator) -> bool: ...
+    def execute(self, operator: Operator) -> bool | TaskExecutionResult: ...
 
 
 @dataclass(frozen=True)
@@ -39,6 +52,15 @@ class TaskSession:
         self._plans: dict[str, StoredTaskPlan] = {}
         self._lock = threading.RLock()
 
+    def discover(self, object_filter: str = "", robot: str = "") -> dict:
+        with self._lock:
+            if object_filter or robot:
+                return response("scene_tasks", code="task_filter_unsupported")
+            describe = getattr(self.provider, "describe", None)
+            if describe is None:
+                return response("scene_tasks", code="task_discovery_unavailable")
+            return response("scene_tasks", data=describe())
+
     def plan(self, instruction: str, strategy: str = 'beam') -> dict:
         if not isinstance(instruction, str) or not instruction.strip():
             return response("plan_task", code="invalid_input")
@@ -55,7 +77,9 @@ class TaskSession:
                 self._plans.pop(next(iter(self._plans)))
             self._plans[ref] = StoredTaskPlan(initial, goal, result.operators)
             return response('plan_task', data={'plan_ref': ref, 'steps': len(result.operators),
-                                              'strategy': strategy, 'execution_started': False})
+                                              'strategy': strategy, 'execution_started': False,
+                                              'planning_scope': getattr(self.provider, 'planning_scope', 'provider_defined'),
+                                              'motion_refinement': getattr(self.provider, 'motion_refinement', 'provider_defined')})
 
     def execute(self, plan_ref: str) -> dict:
         with self._lock:
@@ -75,9 +99,16 @@ class TaskSession:
                     if not plan.goal.protected <= predicted.predicates:
                         raise ValueError('protected_goal_regression')
                     current.binding.require_current(self.provider.snapshot().binding)
-                    started = True
-                    if self.provider.execute(operator) is not True:
-                        raise ValueError('task_execution_failed')
+                    previous_started, started = started, True
+                    receipt = self.provider.execute(operator)
+                    if isinstance(receipt, TaskExecutionResult):
+                        started = previous_started or receipt.execution_started
+                        success = receipt.success
+                    else:
+                        success = receipt is True
+                    if not success:
+                        raise ValueError(receipt.failure_code if isinstance(receipt, TaskExecutionResult)
+                                         else 'task_execution_failed')
                     measured = self.provider.snapshot()
                     before, after = current.binding, measured.binding
                     if (before.model_sha256, before.robot_profile_sha256, before.boot_id, before.reset_id) != (
@@ -93,7 +124,7 @@ class TaskSession:
                 if not plan.goal.satisfied(current):
                     raise ValueError('task_goal_verification_failed')
             except Exception as error:
-                allowed = {'stale_task_plan', 'task_precondition_failed', 'task_execution_failed',
+                allowed = {'task_motion_planning_failed', 'task_motion_budget_exhausted', 'stale_task_plan', 'task_precondition_failed', 'task_execution_failed',
                            'protected_goal_regression', 'scene_identity_changed',
                            'task_effect_verification_failed', 'task_goal_verification_failed'}
                 code = str(error) if str(error) in allowed else 'task_provider_failed'
