@@ -140,11 +140,14 @@ class NativeTableTransferProvider(RegionTransferProvider):
             self.adapter.tasks[ref] = (self.roles[role], self.support, role, region.name)
             previous_limit = self.adapter.max_planning_ik_calls
             self.adapter.max_planning_ik_calls = min(previous_limit, self._ik_remaining)
+            self.adapter.planning_ik_calls = 0
             try:
                 planned = self.adapter.plan(task_ref=ref, placement_region=region.bounds)
-                count = self.adapter.planning_ik_calls
-                self._ik_remaining -= count
             finally:
+                # Failed/timed-out probes still consume work; never reset the
+                # episode allowance merely because no plan was returned.
+                count = int(self.adapter.planning_ik_calls)
+                self._ik_remaining = max(0, self._ik_remaining - count)
                 self.adapter.max_planning_ik_calls = previous_limit
             data = planned.get('data', {})
             evidence = {'object_name': role, 'region': region.name, 'code': planned['code'],

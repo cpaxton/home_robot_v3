@@ -140,3 +140,15 @@ def test_native_probes_share_remaining_ik_cap():
     result = session.plan('swap alpha and beta')
     assert result['status'] == 'error' and len(probes) == 1
     assert domain._ik_remaining == 0 and domain.adapter.max_planning_ik_calls == 20
+
+
+def test_failed_native_probe_consumes_calls_and_restores_primitive_cap():
+    domain, _ = native_probe_domain()
+    def timeout(**_):
+        domain.adapter.planning_ik_calls = 2
+        raise TimeoutError('private transport information')
+    domain.adapter.plan = timeout
+    with pytest.raises(TimeoutError):
+        domain._refine('alpha', domain.regions['buffer'])
+    assert domain._ik_remaining == 98
+    assert domain.adapter.max_planning_ik_calls == 20
