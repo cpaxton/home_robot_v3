@@ -41,6 +41,7 @@ def evaluate(policy=None, *, config=None, episodes=20, seed=200000, scenarios=No
                 initial = {
                     "task_contract": {
                         "base_xy_tolerance": config.base_xy_tolerance,
+                        "base_heading_tolerance": config.base_heading_tolerance,
                         "hand_position_tolerance": config.hand_position_tolerance,
                         "hand_orientation_tolerance": config.hand_orientation_tolerance,
                         "support_half_width": config.support_half_width,
@@ -162,7 +163,7 @@ def summarize(rows):
                 (
                     "base_heading_outside",
                     [r for r in base_rows if "base_heading_error_rad" in r],
-                    lambda r: r["base_heading_error_rad"] >= 0.04,
+                    lambda r: r["base_heading_error_rad"] >= r["config"].get("base_heading_tolerance", 0.04),
                 ),
                 (
                     "arm_moving",
@@ -207,6 +208,7 @@ def summarize(rows):
             "base_contract_violation",
             "base_heading_error_rad",
             "max_joint_velocity",
+            "goal_age_seconds",
             "max_payload_rotation",
             "max_payload_translation",
         ):

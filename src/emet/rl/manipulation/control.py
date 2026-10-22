@@ -96,6 +96,7 @@ class ManipulationControl:
         self._base_yaw_integral = 0.0
         self.hand_goal = self.ee_pose()
         self.hand_mask = True
+        self.goal_changed_time = float(self.data.time)
         self._history_time = None
         self.tracking_integral[:] = 0
         self._trim_time = float(self.data.time)
@@ -111,8 +112,21 @@ class ManipulationControl:
     def set_pose_targets(self, base, base_mask, hand_pose, hand_mask=True):
         base = require_finite(base, (3,))
         mask = np.asarray(base_mask, dtype=bool)
+        hand = require_finite(hand_pose, (9,))
+        if mask.shape != (3,):
+            raise ValueError("base target mask must have three components")
+        delta = base - self.base_goal
+        delta[2] = np.arctan2(np.sin(delta[2]), np.cos(delta[2]))
+        meaningful_change = (
+            not np.array_equal(mask, self.base_mask)
+            or bool(hand_mask) != self.hand_mask
+            or np.any(np.abs(delta[mask]) > 1e-6)
+            or (bool(hand_mask) and not np.allclose(hand, self.hand_goal, rtol=0, atol=1e-6))
+        )
+        if meaningful_change:
+            self.goal_changed_time = float(self.data.time)
         changed = not np.allclose(base, self.base_goal, rtol=0, atol=1e-6) or not np.array_equal(mask, self.base_mask)
-        self.base_goal = base
+        self.base_goal = base.copy()
         self.base_mask = mask
         if changed:
             delta = self._base_tracking_delta()
@@ -124,7 +138,7 @@ class ManipulationControl:
             self._base_yaw_integral = 0.0
         if self.base_mask.shape != (3,):
             raise ValueError("base target mask must have three components")
-        self.hand_goal = require_finite(hand_pose, (9,))
+        self.hand_goal = hand.copy()
         self.hand_mask = bool(hand_mask)
 
     def set_task_trajectory(self, trajectory):

@@ -73,6 +73,7 @@ class ManipulationConfig:
     dynamic_references: bool = False
     action_mode: str = "residual"
     base_xy_tolerance: float = 0.02
+    base_heading_tolerance: float = 0.04
     grasp_lift_height: float = 0.06
     support_half_width: float = 0.012
     grasp_depth: float = 0.03
@@ -84,6 +85,8 @@ class ManipulationConfig:
     endpoint_motion_weight: float = 0.0
 
     def __post_init__(self):
+        if not np.isfinite(self.base_heading_tolerance) or not 0 < self.base_heading_tolerance <= np.pi:
+            raise ValueError("base heading tolerance must be in (0, pi]")
         if not np.isfinite(self.endpoint_motion_weight) or not 0 <= self.endpoint_motion_weight <= 2:
             raise ValueError("endpoint motion weight must be in [0, 2]")
         if type(self.tracking_precision) is not int or not 0 <= self.tracking_precision < 5:
@@ -203,7 +206,9 @@ class ManipulationEnv(gym.Env):
         c = self.control
         if c.task_trajectory is not None:
             return float(self.data.time - c.task_trajectory_start - c.task_trajectory.end)
-        return float(self.data.time - self.start_time - (self.arm_trajectory.end if self.arm_trajectory else 0))
+        if self.arm_trajectory is not None:
+            return float(self.data.time - self.start_time - self.arm_trajectory.end)
+        return float(self.data.time - max(self.start_time, c.goal_changed_time))
 
     def teacher_action(self):
         return (
@@ -847,10 +852,12 @@ class ManipulationEnv(gym.Env):
             else 0.0,
             "max_joint_velocity": float(np.max(np.abs(self.control.velocities()))),
             "settled_seconds": self.settle_time,
+            "goal_age_seconds": max(0.0, float(self.data.time - self.control.goal_changed_time)),
             "time_to_first_settle": self.first_settle_time,
             "peak_hold_base_drift_m": self.peak_hold_drift,
             "tracking_precision": self.tracking_precision,
             "base_xy_tolerance": self.config.base_xy_tolerance,
+            "base_heading_tolerance": self.config.base_heading_tolerance,
             "base_contract_violation": max(
                 0.0,
                 float(
@@ -959,7 +966,7 @@ class ManipulationEnv(gym.Env):
                     position_error < self.config.hand_position_tolerance
                     and angle_error < self.config.hand_orientation_tolerance
                     and np.linalg.norm(base_error[:2] * self.control.base_mask[:2]) < self.config.base_xy_tolerance
-                    and (not self.control.base_mask[2] or abs(base_yaw_error) < 0.04)
+                    and (not self.control.base_mask[2] or abs(base_yaw_error) < self.config.base_heading_tolerance)
                     and abs(self.last_base_velocity[0]) < 0.005
                     and abs(self.last_base_velocity[1]) < 0.02
                 )
@@ -1001,7 +1008,7 @@ class ManipulationEnv(gym.Env):
         base_delta[2] = np.arctan2(np.sin(base_delta[2]), np.cos(base_delta[2]))
         base_within_pose = not self.control.base_mask.any() or (
             np.linalg.norm(base_delta[:2] * self.control.base_mask[:2]) < self.config.base_xy_tolerance
-            and (not self.control.base_mask[2] or abs(base_delta[2]) < 0.04)
+            and (not self.control.base_mask[2] or abs(base_delta[2]) < self.config.base_heading_tolerance)
         )
         base_motion_allowed = self.control.base_mask.any() or (
             self.config.trajectory_preview and self.control.hand_mask

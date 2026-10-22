@@ -7,9 +7,22 @@ import torch
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 
-from emet.rl.manipulation.__main__ import FixedResetSeed, resume_training, training_options
+from emet.rl.manipulation.__main__ import FixedResetSeed, PhaseLearningRate, resume_training, training_options
 from emet.rl.manipulation.env import ManipulationConfig, ManipulationEnv
 from emet.rl.manipulation.policy import ManipulationMLPFeatures, ManipulationPolicy, export
+
+
+def test_learning_rate_decay_covers_additional_steps_instead_of_lifetime_steps():
+    schedule = PhaseLearningRate(2e-5, 2e-6, 262144, 65536)
+    assert schedule(0.2) == pytest.approx(2e-5)
+    assert schedule(0.1) == pytest.approx(1.1e-5)
+    assert schedule(0) == pytest.approx(2e-6)
+    assert schedule(-0.1) == pytest.approx(2e-6)
+    assert schedule(1) == pytest.approx(2e-5)
+    assert PhaseLearningRate(1e-4, 1e-4, 0, 10)(0.5) == 1e-4
+    for start, end in [(0, 0), (1e-4, 0), (1e-4, float("nan")), (1e-5, 1e-4)]:
+        with pytest.raises(ValueError):
+            PhaseLearningRate(start, end, 0, 10)
 
 
 @pytest.mark.sim
@@ -136,8 +149,10 @@ def test_mlp_ppo_update_and_bundle_roundtrip_without_demonstrations(tmp_path, pr
             expected,
             atol=1e-7,
         )
+        resumed.learning_rate = resumed.lr_schedule = PhaseLearningRate(1e-4, 1e-5, before_steps, 8)
         resumed.learn(8, reset_num_timesteps=False)
         assert resumed.num_timesteps > before_steps
+        assert resumed.policy.optimizer.param_groups[0]["lr"] == pytest.approx(1e-5)
         with pytest.raises(ValueError, match="semantics"):
             resume_training(
                 tmp_path,

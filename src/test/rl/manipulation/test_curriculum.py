@@ -47,6 +47,13 @@ def test_endpoint_diagnostics_do_not_count_accurate_moving_hand_as_success():
     assert failed["endpoint_hand_within_10mm_0.1rad_rate"] == 0
     assert failed["endpoint_hand_within_20mm_0.1rad_rate"] == 1
     assert failed["terminal_tracking_timeout_count"] == 1
+    heading = {**row, "base_target_active": True, "base_heading_error_rad": 0.2}
+    assert summarize([heading])["reach"]["endpoint_base_heading_outside_count"] == 1
+    heading["config"] = {**row["config"], "base_heading_tolerance": 0.25}
+    assert summarize([heading])["reach"]["endpoint_base_heading_outside_count"] == 0
+    assert ManipulationConfig().base_heading_tolerance == 0.04
+    with pytest.raises(ValueError):
+        ManipulationConfig(base_heading_tolerance=float("nan"))
     assert metrics["endpoint_hand_within_rate"] == 1
     assert metrics["endpoint_base_still_rate"] == 0
     assert metrics["endpoint_hand_within_but_base_moving_rate"] == 1

@@ -1628,3 +1628,49 @@ stopped after the socket-enabled rerun passed. Ruff over all changed Python file
 and `git diff --check` passed. Unrelated lockfile regeneration is excluded from
 the control/training commit. These are software/simulation interface checks,
 not learned-policy acceptance or hardware qualification.
+
+### Stability-focused refinement and goal age (2026-10-22)
+
+Base heading is task-dependent: .2 rad is about 11.5 degrees and may be acceptable
+when the hand task and clearance constraints are satisfied. The default heading
+contract remains .04 rad. New `base_heading_tolerance` / CLI
+`--base-heading-tolerance` makes alternatives explicit in configuration, episode
+metadata, and initial task contracts. Frozen fixtures keep the default; no old
+acceptance result is reclassified. The same final ramp policy evaluated under
+.04 versus .25 rad tolerances had exactly identical endpoint motion/pose errors.
+The relaxed case accumulated only .2 seconds of settling, still short of one
+second. Thus heading flexibility alone does not resolve the continuous hold.
+
+Training now accepts `--learning-rate` and `--final-learning-rate`. The linear
+schedule covers the additional training phase, not the model's entire lifetime:
+a resume at 262144 steps starts at the requested initial LR and reaches the final
+LR after the additional budget. Regression tests verify phase endpoints and actual
+PPO optimizer LR after resumed updates. `logs/manipulation/stability-lr-paired/`
+compares constant 2e-5 with 2e-5 decaying to 2e-6, both initialized from the final
+ramp policy, same .25 rad declared heading tolerance and .1 exploration std, same
+65536 additional samples, and unchanged strict hand/velocity/hold requirements.
+Runs remain sequential, two workers on cores 12–15. Final evaluation reports both
+the old strict heading contract and the explicitly relaxed diagnostic contract.
+This remains fixed-case training, not generalized task acceptance.
+
+For untimed static goals the endpoint motion ramp now uses elapsed time since
+an active base/hand target or mask actually changed. Numerically duplicate target
+packets and changes confined to inactive targets do not reset this clock. A new
+active target restarts it. For timed references the scheduled trajectory end
+remains authoritative, so valid motion along a long path is not penalized merely
+because the original command arrived long ago. A replacement trajectory uses its
+own clock. Episode metadata records goal age; this is not packet/network age.
+The penalty remains bounded to permit correction and disturbance recovery; pose
+tracking is still rewarded. No extra actor inputs or action semantics were added.
+
+The static-goal age regression also exposed caller-array aliasing: mutating a
+previously submitted target array could change the controller's stored goal
+without an update call. Base and hand setters now take owned copies. Duplicate
+packets therefore remain distinguishable from actual target updates. Thirty-two
+focused control/tracking/training tests passed, including this ownership case,
+phase-LR optimizer behavior, and unchanged default heading constraints.
+
+The complete RL regression suite passed after the goal-age and LR changes:
+184 tests, no failures. Ruff and `git diff --check` also passed. The stability LR
+comparison is still running; no successful stable controller is assumed from
+these software checks.

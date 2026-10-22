@@ -31,6 +31,30 @@ def test_endpoint_motion_ramp_is_bounded_and_resets_with_new_reference_time():
         ManipulationConfig(endpoint_motion_weight=float("nan"))
 
 
+@pytest.mark.sim
+def test_static_goal_age_ignores_duplicate_packets_and_inactive_targets():
+    e = ManipulationEnv(ManipulationConfig(robot="innate_mars", scenario="reach", trajectory_preview=True))
+    try:
+        e.reset(seed=250000)
+        c = e.control
+        base, hand = c.base_goal.copy(), c.hand_goal.copy()
+        c.set_pose_targets(base, [0, 0, 0], hand)
+        changed = c.goal_changed_time
+        for _ in range(5):
+            e.step(np.zeros(e.action_space.shape))
+        c.set_pose_targets(base + [0.1, 0, 0], [0, 0, 0], hand)
+        assert c.goal_changed_time == changed
+        assert e._reference_end_elapsed() > 0
+        hand[0] += 0.001
+        c.set_pose_targets(base, [0, 0, 0], hand)
+        assert c.goal_changed_time > changed
+        assert e._reference_end_elapsed() == pytest.approx(0)
+        c.set_pose_targets(base, [0, 0, 0], hand)
+        assert e._reference_end_elapsed() == pytest.approx(0)
+    finally:
+        e.close()
+
+
 def test_stationary_reward_prefers_accurate_quiet_hold_without_a_threshold_jump():
     def score(pos=0, angle=0, arm=(0,), base=(0, 0), hand=True):
         return stationary_tracking_score(pos, angle, arm, base, hand_active=hand)

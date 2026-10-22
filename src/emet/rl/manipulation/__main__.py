@@ -37,6 +37,20 @@ class FixedResetSeed(gym.Wrapper):
         return self.env.reset(seed=self.fixed_seed, options=options)
 
 
+class PhaseLearningRate:
+    """Linear decay over additional training steps, including resumed phases."""
+
+    def __init__(self, start, end, previous_steps, additional_steps):
+        if not np.isfinite([start, end]).all() or not 0 < end <= start or additional_steps <= 0 or previous_steps < 0:
+            raise ValueError("invalid learning-rate decay phase")
+        self.start, self.end = float(start), float(end)
+        self.initial_progress = additional_steps / (previous_steps + additional_steps)
+
+    def __call__(self, progress_remaining):
+        remaining = float(np.clip(progress_remaining / self.initial_progress, 0, 1))
+        return self.end + (self.start - self.end) * remaining
+
+
 def resume_training(directory, env, config, fingerprint, architecture):
     """Restore PPO optimizer and observation statistics after bundle validation."""
     bundle = ManipulationPolicy(directory, robot=config.robot, fingerprint=fingerprint)
@@ -232,6 +246,13 @@ def training_options(args):
 def train(args):
     torch.set_num_threads(1)
     options = training_options(args)
+    PhaseLearningRate(
+        args.learning_rate,
+        args.learning_rate if args.final_learning_rate is None else args.final_learning_rate,
+        0,
+        args.steps,
+    )
+    options.update(learning_rate=args.learning_rate, final_learning_rate=args.final_learning_rate)
     if args.resume_from is not None:
         if args.dagger or args.initialization_steps:
             raise ValueError("resume requires zero initialization steps and no DAgger")
@@ -253,6 +274,7 @@ def train(args):
         dynamic_references=args.dynamic_references,
         action_mode=args.action_mode,
         base_xy_tolerance=args.base_xy_tolerance,
+        base_heading_tolerance=args.base_heading_tolerance,
         hand_position_tolerance=args.hand_position_tolerance,
         hand_orientation_tolerance=args.hand_orientation_tolerance,
         trajectory_preview=args.trajectory_preview,
@@ -380,6 +402,13 @@ def train(args):
                 parameter.requires_grad_(True)
             with torch.no_grad():
                 model.policy.log_std.fill_(float(np.log(options["exploration_std"])))
+            schedule = PhaseLearningRate(
+                args.learning_rate,
+                args.learning_rate if args.final_learning_rate is None else args.final_learning_rate,
+                model.num_timesteps,
+                args.steps,
+            )
+            model.learning_rate = model.lr_schedule = schedule
             monitor = Monitor(
                 directory,
                 config,
@@ -431,6 +460,7 @@ def main():
     p.add_argument("--dynamic-references", action=argparse.BooleanOptionalAction, default=True)
     p.add_argument("--action-mode", choices=["residual", "direct_velocity"], default="direct_velocity")
     p.add_argument("--base-xy-tolerance", type=float, default=0.05)
+    p.add_argument("--base-heading-tolerance", type=float, default=0.04)
     p.add_argument("--hand-position-tolerance", type=float, default=0.005)
     p.add_argument("--hand-orientation-tolerance", type=float, default=0.05)
     p.add_argument("--trajectory-preview", action=argparse.BooleanOptionalAction, default=True)
@@ -442,6 +472,8 @@ def main():
         "--exploration-std", type=float, help="normalized PPO action noise; default 0.3 scratch / 0.03 initialized"
     )
     p.add_argument("--steps", type=int, default=262144)
+    p.add_argument("--learning-rate", type=float, default=1e-4)
+    p.add_argument("--final-learning-rate", type=float, help="linearly decay to this LR over the additional steps")
     p.add_argument("--resume-from", type=Path, help="continue a validated manipulation bundle with its PPO optimizer")
     p.add_argument("--initialization-steps", type=int, default=32768)
     p.add_argument("--envs", type=int, default=4)
@@ -451,6 +483,7 @@ def main():
     p.add_argument("--wandb-mode", choices=["disabled", "online", "offline"], default="disabled")
     p.add_argument("--output", required=True)
     p = sub.add_parser("evaluate")
+    p.add_argument("--base-heading-tolerance", type=float, default=0.04)
     p.add_argument("--trajectory-preview", action=argparse.BooleanOptionalAction, default=True)
     p.add_argument("--tracking-reward", action=argparse.BooleanOptionalAction, default=True)
     p.add_argument("--tracking-precision", type=int, choices=range(5), default=4)
@@ -496,6 +529,7 @@ def main():
                 tracking_precision=args.tracking_precision,
                 action_mode=args.action_mode,
                 base_xy_tolerance=args.base_xy_tolerance,
+                base_heading_tolerance=args.base_heading_tolerance,
                 hand_position_tolerance=args.hand_position_tolerance,
                 hand_orientation_tolerance=args.hand_orientation_tolerance,
                 initial_heading_range=float(np.pi),
