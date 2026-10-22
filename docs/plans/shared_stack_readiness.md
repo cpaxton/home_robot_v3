@@ -85,6 +85,25 @@ Paper-scale promotion still requires inspected end-to-end outcomes, exact
 configs/SHAs, wall + actual simulator time, image/command provenance, task-level
 failure breakdowns and figure-ready evidence. No full sweep requested.
 
+### Combined next-stage sandbox
+
+Pushed `test/shared-agent-e2e-20261022` at b094bcfd: #217 1a3d65c5 plus #213
+57bc97b0, excluding optional scan #198 and RL #214. Reuses the audit-owned
+checkout; per-PR source SHAs are preserved in invocation JSON, not its current
+working-tree HEAD. No extra PR and no main merge.
+
+The merge exposed real integration conflicts. Sandbox resolution retains both
+camera acquisition image_timing/map-scope metadata and TAMP received_monotonic/
+depth provenance arguments, rather than dropping one interface. SAM2 retains
+explicit device selection, PIL normalization and one shared model. These are
+testing-only merge resolutions, not silently pushed back into owner PRs.
+
+Serial one-core shared-contract check `20261022_002629_479092` is running;
+JUnit `/tmp/emet-combined-agent-contracts-20261022.xml`. Gate covers discovery,
+TAMP dispatch/session/physical contracts, EQA dialogue/transport/recovery,
+captured views/history, grounding, namespace and acquisition timing. No live
+end-to-end task result is implied by starting this unit gate.
+
 ## Exact-head closeout — 2026-10-21 (historical)
 
 User priority: test every open PR, resolve comments, and converge on independently
