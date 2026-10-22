@@ -16,7 +16,8 @@ from emet.controller.dynamem import look
 
 
 @pytest.mark.parametrize("in_frame", [False, True])
-def test_targeted_floor_aim_is_bounded_and_projection_does_not_clear_map(monkeypatch, in_frame):
+@pytest.mark.parametrize("max_observations", [1, 2])
+def test_targeted_floor_aim_is_bounded_and_projection_does_not_clear_map(monkeypatch, in_frame, max_observations):
     pose = np.eye(4)
     pose[2, 3] = -1
     obs = SimpleNamespace(
@@ -59,8 +60,8 @@ def test_targeted_floor_aim_is_bounded_and_projection_does_not_clear_map(monkeyp
 
     capture_mock = Mock(side_effect=capture)
     monkeypatch.setattr(look, "observe_floor", capture_mock)
-    result = look.observe_blocked_floor(agent)
-    assert capture_mock.call_count == (1 if in_frame else 2)
+    result = look.observe_blocked_floor(agent, max_observations=max_observations)
+    assert capture_mock.call_count == (1 if in_frame else max_observations)
     assert result["observation"]["footprint_after"]["pose_valid"] is False
     attempt = result["observation"]["targeted_floor"]["attempts"][-1]
     assert attempt["after"]["target_in_frame"] is in_frame
@@ -175,6 +176,16 @@ def test_floor_observation_requires_fresh_measured_capture(
 @pytest.mark.parametrize("pan_rad", [float("nan"), float("inf"), -1.01, 1.01, True, "left"])
 def test_floor_observation_rejects_invalid_pan_before_motion(pan_rad):
     assert look.observe_floor(SimpleNamespace(), pan_rad=pan_rad) == {"ok": False, "status": "invalid_head_pan"}
+
+
+@pytest.mark.parametrize("error", [ConnectionError("disconnected"), TimeoutError("stale"), RuntimeError("bridge failed")])
+def test_floor_observation_reports_bridge_failure_without_mapping(error):
+    robot = SimpleNamespace(_seq_id=1, head_to=Mock(), get_pan_tilt=Mock(side_effect=error))
+    agent = SimpleNamespace(robot=robot, update=Mock())
+    result = look.observe_floor(agent)
+    assert result == {"ok": False, "status": "head_observation_failed", "reason": str(error)}
+    robot.head_to.assert_not_called()
+    agent.update.assert_not_called()
 
 
 @pytest.mark.parametrize("tilt_rad", [float("nan"), float("inf"), -1.41, -0.69, True, "down"])
