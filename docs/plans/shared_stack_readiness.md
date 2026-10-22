@@ -98,11 +98,28 @@ depth provenance arguments, rather than dropping one interface. SAM2 retains
 explicit device selection, PIL normalization and one shared model. These are
 testing-only merge resolutions, not silently pushed back into owner PRs.
 
-Serial one-core shared-contract check `20261022_002629_479092` is running;
+Serial one-core shared-contract check `20261022_002629_479092` completed:
+**414 passed, zero failures/errors/skips** on exact b094bcfd.
 JUnit `/tmp/emet-combined-agent-contracts-20261022.xml`. Gate covers discovery,
 TAMP dispatch/session/physical contracts, EQA dialogue/transport/recovery,
 captured views/history, grounding, namespace and acquisition timing. No live
-end-to-end task result is implied by starting this unit gate.
+end-to-end task result is implied by this unit gate.
+
+Small candidate-only live pilot `20261022_003044_522604` is now scheduled under
+one exclusive GPU/CPU-safe job: EQA q12/14/6/56, S0 distinct-receptacle and
+Molmo rby1 find, then actual CHAT/native two-goal stationary TAMP plus an
+invalid-plan failure-stop probe. Local Qwen3-VL-8B int4 throughout; no Caliban
+model change. TAMP control explicitly uses privileged world state and no cameras;
+it is not observed long-horizon manipulation acceptance. Room phases are find
+only; do not label them physical pick/place successes. The unused required main
+runner slot points to the same frozen sandbox; only candidate executes, not A/B.
+
+Driver `/tmp/emet-run-combined-live-20261022.py`; inputs include explicit EQA and
+camera-free TAMP YAML overlays. Source/config/driver hashes and per-phase exit
+codes/logs retained under `/tmp/emet-combined-agent-live-20261022`. Start gate
+checks frozen source plus the 414-test JUnit before model work. Results pending.
+Actual per-phase sim-clock reporting remains a TODO; no sampled ratio is being
+substituted for missing clock durations in this pilot.
 
 ## Exact-head closeout — 2026-10-21 (historical)
 
