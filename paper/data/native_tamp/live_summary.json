@@ -1,0 +1,52 @@
+{
+  "scope": "Live ZMQ public tools; native contacts; privileged input; stationary Stretch",
+  "cases": [
+    {
+      "shape": "box",
+      "trial": 0,
+      "artifact": "/home/cpaxton/runs/emet/tamp-native-acceptance-20261013/box-0",
+      "source_sha": "d1d451c57cec73cffad050a032df1401461051f6",
+      "exit_code": 0,
+      "wall_s": 129.80723705198034,
+      "audit_commands": 185,
+      "forbidden_commands": 0,
+      "passed": true
+    },
+    {
+      "shape": "box",
+      "trial": 1,
+      "artifact": "/home/cpaxton/runs/emet/tamp-native-acceptance-20261013/box-1",
+      "source_sha": "d1d451c57cec73cffad050a032df1401461051f6",
+      "exit_code": 0,
+      "wall_s": 131.4654312999919,
+      "audit_commands": 185,
+      "forbidden_commands": 0,
+      "passed": true
+    },
+    {
+      "shape": "cylinder",
+      "trial": 0,
+      "artifact": "/home/cpaxton/runs/emet/tamp-native-acceptance-20261013/cylinder-0",
+      "source_sha": "d1d451c57cec73cffad050a032df1401461051f6",
+      "exit_code": 0,
+      "wall_s": 135.9639257780218,
+      "audit_commands": 185,
+      "forbidden_commands": 0,
+      "passed": true
+    },
+    {
+      "shape": "cylinder",
+      "trial": 1,
+      "artifact": "/home/cpaxton/runs/emet/tamp-native-acceptance-20261013/cylinder-1",
+      "source_sha": "d1d451c57cec73cffad050a032df1401461051f6",
+      "exit_code": 0,
+      "wall_s": 131.34927050798433,
+      "audit_commands": 185,
+      "forbidden_commands": 0,
+      "passed": true
+    }
+  ],
+  "passed": 4,
+  "total": 4,
+  "managed_job_id": "20261013_133302_3a681f"
+}

@@ -1,5 +1,10 @@
 # Paper experiments — master index
 
+**Status (2026-10-12):** [Main, open PRs, and paper evidence](../project_status.md)
+is the current inventory. The matrix below lists available harnesses and smokes;
+it does not mean every paper result is complete. Historical HM-EQA results exist,
+while learned OVMM, SQA3D, and dynamic-exploration tables remain incomplete.
+
 **Start here** to run and reproduce Dynagraph paper benchmarks.
 Detailed commands / LaTeX mapping: [paper_benchmarks.md](../paper_benchmarks.md).
 GPU preflight + overnight: [evaluation.md](../evaluation.md). Repo doc map: [README § Documentation map](../../README.md#documentation-map).

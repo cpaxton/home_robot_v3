@@ -16,6 +16,7 @@ from dataclasses import dataclass, replace
 import mujoco
 import numpy as np
 
+from emet.controller.manipulation.native_inputs import ObservationUnavailable, read_object_pose
 from emet.motion.arm_rrt import plan_arm_joint_path
 from emet.motion.mujoco_arm_ik import joint_qpos_addrs, solve_pose_ik
 
@@ -29,6 +30,9 @@ class PhysicalMotionResult:
 
 
 class PhysicalPickPlaceExecutor:
+    # Maximum joint motion during the stricter endpoint stillness window.
+    ENDPOINT_STILLNESS_TOLERANCE = 0.002
+
     execution_mode = "physical"
 
     def __init__(
@@ -46,12 +50,27 @@ class PhysicalPickPlaceExecutor:
         event: Callable = lambda **kwargs: None,
         joint_tolerance: float = 0.03,
         joint_settle_timeout_s: float = 5.0,
+        endpoint_settle_s: float = 0.0,
+        use_sim_time: bool = False,
+        settling_wall_timeout_s: float = 30.0,
         position_tolerance_m: float = 0.01,
         orientation_tolerance_rad: float = 0.1,
         base_body: str | None = None,
         joint_limit_margins=None,
         gripper_open_configuration=(),
+        input_mode: str = "observed",
+        object_pose_provider=None,
     ):
+        if input_mode not in {"observed", "privileged"}:
+            raise ValueError("invalid_tamp_inputs")
+        if input_mode == "observed":
+            if object_pose_provider is None or object_pose_provider.input_mode != "observed":
+                raise ValueError("observed_object_provider_required")
+            if getattr(collision, "geometry_source", None) != "observed_voxels":
+                raise ValueError("observed_collision_provider_required")
+        elif object_pose_provider is not None and object_pose_provider.input_mode != "privileged":
+            raise ValueError("input_provider_mismatch")
+        self.input_mode, self.object_pose_provider = input_mode, object_pose_provider
         self.robot, self.model, self.data = robot, model, data
         self.ee_body, self.joint_names = ee_body, tuple(joint_names)
         self.collision = collision
@@ -61,6 +80,13 @@ class PhysicalPickPlaceExecutor:
         if not np.isfinite(joint_settle_timeout_s) or joint_settle_timeout_s <= 0:
             raise ValueError("Positive finite joint settling timeout required")
         self.joint_settle_timeout_s = float(joint_settle_timeout_s)
+        if not np.isfinite(endpoint_settle_s) or not 0 <= endpoint_settle_s < joint_settle_timeout_s:
+            raise ValueError("Endpoint settling must fit within the joint settling timeout")
+        self.endpoint_settle_s = float(endpoint_settle_s)
+        if not np.isfinite(settling_wall_timeout_s) or settling_wall_timeout_s <= 0:
+            raise ValueError("Positive finite settling wall timeout required")
+        self.use_sim_time = bool(use_sim_time)
+        self.settling_wall_timeout_s = float(settling_wall_timeout_s)
         self.position_tolerance_m, self.orientation_tolerance_rad = position_tolerance_m, orientation_tolerance_rad
         self.qadr = joint_qpos_addrs(model, self.joint_names)
         self.base_body = base_body
@@ -73,6 +99,18 @@ class PhysicalPickPlaceExecutor:
         self.place_targets: list = []
         self.transport: Callable | None = None
         self.payload_body: str | None = None
+
+    def _motion_time(self):
+        return float(self.data.time) if self.use_sim_time else time.monotonic()
+
+    def _settling_window(self, duration):
+        """Physics duration in simulation, with an independent stalled-clock bound."""
+        started, wall = self._motion_time(), time.monotonic()
+        def active():
+            elapsed = self._motion_time() - started
+            return (np.isfinite(elapsed) and 0 <= elapsed < duration
+                    and (not self.use_sim_time or time.monotonic() - wall < self.settling_wall_timeout_s))
+        return active
 
     def plan_pose(self, position, rotation):
         """Plan from the offline current state; caller preserves candidate state."""
@@ -153,7 +191,7 @@ class PhysicalPickPlaceExecutor:
             if self.collision.payload_body is not None and self.collision.configuration_collides(self.model, self.data):
                 return None, "arm_goal_revalidation_failed"
             return path.waypoints, None
-        return None, f"arm_path_failed:{path.reason}"
+        return None, (f"arm_path_failed:{path.reason}:{path.detail}" if path.detail else f"arm_path_failed:{path.reason}")
 
     def prepare_for_navigation(self, path):
         return self._execute_path("navigation_posture", path)
@@ -180,6 +218,18 @@ class PhysicalPickPlaceExecutor:
         mujoco.mj_kinematics(self.model, self.data)
         return result.waypoints, None
 
+    def _object_pose(self, object_ref):
+        if self.object_pose_provider is not None:
+            return read_object_pose(self.object_pose_provider, object_ref, inputs=self.input_mode)
+        # Explicit oracle evaluation/debug path only. Observed construction
+        # rejects a missing provider and cannot read simulator body poses here.
+        if self.input_mode != "privileged":
+            raise ObservationUnavailable("observed_object_provider_required")
+        body = self.data.body(object_ref)
+        pose = np.eye(4)
+        pose[:3, :3], pose[:3, 3] = body.xmat.reshape(3, 3), body.xpos
+        return pose
+
     def payload_retained(self):
         """Check the freshly synchronized payload pose, before hypothetical attachment."""
         if self.payload_body is None:
@@ -188,10 +238,15 @@ class PhysicalPickPlaceExecutor:
         if expected is None:
             self.event(phase="payload_retention", accepted=False, reason="missing_payload_reference")
             return False
-        ee, obj = self.data.body(self.ee_body), self.data.body(self.payload_body)
+        try:
+            object_pose = self._object_pose(self.payload_body)
+        except ObservationUnavailable as exc:
+            self.event(phase="payload_retention", accepted=False, reason=str(exc))
+            return False
+        ee = self.data.body(self.ee_body)
         rotation = ee.xmat.reshape(3, 3).T
-        position = rotation @ (obj.xpos - ee.xpos)
-        relative_rotation = rotation @ obj.xmat.reshape(3, 3)
+        position = rotation @ (object_pose[:3, 3] - ee.xpos)
+        relative_rotation = rotation @ object_pose[:3, :3]
         angle = np.arccos(np.clip((np.sum(relative_rotation * expected[:3, :3]) - 1) / 2, -1, 1))
         displacement = float(np.linalg.norm(position - expected[:3, 3]))
         retained = bool(displacement <= 0.02 and angle <= 0.1)
@@ -218,19 +273,21 @@ class PhysicalPickPlaceExecutor:
         self.synchronize(self.data)
         start_sim_time = float(self.data.time)
         previous = float(position())
-        started = stable_since = time.monotonic()
-        while time.monotonic() - started < timeout_s:
+        active = self._settling_window(timeout_s)
+        stable_since = self._motion_time()
+        while active():
             time.sleep(0.05)
             self.synchronize(self.data)
             current = float(position())
             if not np.isfinite([current, previous]).all():
                 return PhysicalMotionResult(False, "invalid_gripper_feedback", "grasp")
+            # Accumulate small drift relative to the stable-interval anchor.
             if abs(current - previous) > 0.01:
-                stable_since = time.monotonic()
-            if time.monotonic() - stable_since >= 0.3 and self.data.time - start_sim_time >= 0.25:
+                stable_since = self._motion_time()
+                previous = current
+            if self._motion_time() - stable_since >= 0.3 and self.data.time - start_sim_time >= 0.25:
                 self.event(phase="gripper_settled", measured=current, controller_success=True)
                 return PhysicalMotionResult(True, "gripper_settled", "grasp")
-            previous = current
         return PhysicalMotionResult(False, "gripper_settling_timeout", "grasp")
 
     def _replan_at_measured_pose(self, phases, targets, *, object_body, grasp, open_gripper_geometry=True):
@@ -334,8 +391,8 @@ class PhysicalPickPlaceExecutor:
             # A client may acknowledge within a looser tolerance before the
             # simulator has applied/settled the command. Wait for measured
             # convergence, retaining the same certificate tolerance.
-            settle_deadline = time.monotonic() + self.joint_settle_timeout_s
-            while ok and np.isfinite(residual) and residual > self.joint_tolerance and time.monotonic() < settle_deadline:
+            active = self._settling_window(self.joint_settle_timeout_s)
+            while ok and np.isfinite(residual) and residual > self.joint_tolerance and active():
                 time.sleep(0.05)
                 self.synchronize(self.data)
                 if base_drifted():
@@ -353,6 +410,29 @@ class PhysicalPickPlaceExecutor:
                 controller_success=bool(ok),
             )
             if not ok or residual > self.joint_tolerance:
+                return PhysicalMotionResult(False, "arm_tracking_failed", phase, residual)
+        if self.endpoint_settle_s:
+            # A waypoint tolerance can be reached while the arm is still moving.
+            # Contact transitions need a settled endpoint, not merely an ACK.
+            active = self._settling_window(self.joint_settle_timeout_s)
+            stable_since = self._motion_time()
+            anchor = self.data.qpos[self.qadr].copy()
+            while active():
+                time.sleep(.05)
+                self.synchronize(self.data)
+                if base_drifted():
+                    return PhysicalMotionResult(False, "base_drift_during_arm", phase)
+                if not self.payload_retained():
+                    return PhysicalMotionResult(False, "payload_not_retained", phase)
+                residual = joint_residual(path[-1])
+                if not np.isfinite(residual):
+                    return PhysicalMotionResult(False, "invalid_measured_joint_state", phase)
+                if residual > self.joint_tolerance or joint_residual(anchor) > self.ENDPOINT_STILLNESS_TOLERANCE:
+                    anchor = self.data.qpos[self.qadr].copy()
+                    stable_since = self._motion_time()
+                elif self._motion_time() - stable_since >= self.endpoint_settle_s:
+                    break
+            else:
                 return PhysicalMotionResult(False, "arm_tracking_failed", phase, residual)
         self.event(phase=f"{phase}_complete", controller_success=True, residual=residual)
         return PhysicalMotionResult(True, "ok", phase, residual)
@@ -404,12 +484,20 @@ class PhysicalPickPlaceExecutor:
         if not closing.success:
             return closing
         self.synchronize(self.data)
-        initial_object_height = float(self.data.body(object_gt_body).xpos[2])
+        try:
+            initial_object_height = float(self._object_pose(object_gt_body)[2, 3])
+        except ObservationUnavailable as exc:
+            return PhysicalMotionResult(False, str(exc), "grasp")
         self.collision.set_payload(self.model, self.data, object_gt_body, self.ee_body)
         self.payload_body = object_gt_body
         result = self._execute_path("lift", self.grasp_paths[2])
-        if result.success and self.data.body(object_gt_body).xpos[2] - initial_object_height < 0.05:
-            return PhysicalMotionResult(False, "object_not_lifted", "lift")
+        if result.success:
+            try:
+                height = self._object_pose(object_gt_body)[2, 3]
+            except ObservationUnavailable as exc:
+                return PhysicalMotionResult(False, str(exc), "lift")
+            if height - initial_object_height < 0.05:
+                return PhysicalMotionResult(False, "object_not_lifted", "lift")
         return result
 
     def place_only(self, receptacle_query, *, object_gt_body=None, receptacle_gt_body=None):

@@ -17,7 +17,7 @@ Strike through or move to a PR when done.
       returned handles and operation-scoped partial evidence behaved correctly.
 - [ ] Capture the placement command failure reason with private diagnostic logging.
       Resolve general motion failures before repeating the nine-trial readiness matrix.
-      See `docs/experiments/tamp_api_readiness_20261005.md` and `docs/apis/tamp.md`.
+      See `docs/experiments/tamp_api_readiness_20261005.md` and `docs/api/tamp.md`.
 
 ## TAMP agent execution follow-up (2026-09-29)
 
