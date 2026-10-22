@@ -1,5 +1,40 @@
 # Shared-agent stack readiness
 
+## Final review repairs — 2026-10-22
+
+Two reproduced P2 findings were repaired on their owning PRs:
+
+- #184: `319aacff` aborts a verified sweep when blocking `head_to` returns
+  False, before frame waiting, map update, or verification. The existing
+  exception path and legacy None-returning adapters remain unchanged.
+  Head/sweep/arrival suites: 35 passed on the owner and again on #217.
+- #185: `4b3f6e74` rejects untracked files, tracked/staged edits, and changed
+  revisions before writing a frozen manifest and again before each arm launches.
+  Real temporary Git repositories cover untracked `src/sitecustomize.py`,
+  unstaged edits, and staged edits. A driver-level regression also proves that
+  untracked selected-arm source prevents both manifest creation and launch.
+  Focused paired-driver suite: 8 passed after that additional regression.
+
+The #184 fix is propagated without history rewriting to #185, #199
+(`1d7e2f0c`), #202 (`7943db70`), #216 (`05323964`), #217 (`d03cd854`),
+and optional #198 (`cb481970`). Main is untouched.
+
+The previously frozen combined pilot at `b094bcfd` was not changed during
+execution. Job `20261022_003044_522604` finished with failed acceptance:
+EQA phase exited zero (not itself an accuracy claim); both S0 and Molmo
+find-only cases localized the object but failed receptacle localization;
+the privileged stationary two-goal TAMP control returned
+`no_plan_within_budget` (60 pregrasp IK failures, two grasp collisions,
+five preplace IK failures). Failure-stop contracts passed, but neither goal
+predicate was satisfied. Artifacts: `/tmp/emet-combined-agent-live-20261022`.
+
+That pilot used the older paired driver and therefore predates the untracked
+source guard. Its provenance must not be described as enforced solely by the
+recorded commit: virtualenv symlinks were untracked, and the guard gap remains
+a limitation of the historical run. Do not retrofit these repairs into the
+recorded run or count these task failures as successful acceptance. Next live
+tests must use the repaired driver with clean selected source arms.
+
 ## Restacked review closeout — 2026-10-22 (current)
 
 All eleven initially open PRs received an exact-head focused test attempt, and

@@ -94,3 +94,30 @@ def test_explicit_model_authority_is_written_to_room_config_and_manifest(tmp_pat
         run(args)
     assert "agentic_decision_policy: model_final" in (output / "fixture-candidate/config.yaml").read_text()
     assert json.loads((output / "manifest.json").read_text())["decision_policy"] == "model_final"
+
+
+def test_untracked_selected_source_aborts_before_manifest_or_launch(tmp_path, monkeypatch):
+    root = Path(__file__).resolve().parents[3]
+    with patch.object(sys, "path", [str(root / "scripts"), *sys.path]):
+        run = runpy.run_path(str(root / "scripts/run_shared_room_pairs.py"))["run"]
+
+    def git(checkout, *args):
+        if args[0] == "rev-parse":
+            return "frozen"
+        if args[0] == "ls-files" and checkout == tmp_path / "candidate":
+            return "src/sitecustomize.py"
+        return ""
+
+    monkeypatch.setitem(run.__globals__, "git", git)
+    with patch.object(run.__globals__["subprocess"], "run") as launch:
+        args = SimpleNamespace(
+            main=tmp_path / "main",
+            candidate=tmp_path / "candidate",
+            output=tmp_path / "out",
+            arms=["candidate"],
+            grounding_backend="yoloe",
+        )
+        with pytest.raises(RuntimeError, match="untracked files"):
+            run(args)
+        launch.assert_not_called()
+    assert not args.output.exists()
