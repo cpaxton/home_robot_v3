@@ -21,7 +21,10 @@ rejected rather than relabeled as another search method.
 This is the runtime foundation, **not six qualified benchmark integrations**.
 The new `plan_task` / `execute_task_plan` tools require an explicitly injected
 `TaskSession`; the normal agent does not automatically acquire a household task
-provider. Grounded operators, instruction compilation, native controllers and
+provider. An opt-in stationary Stretch diagnostic provider now binds measured
+region occupancy through `--native-task-config`, probes native first moves and
+refines motion per step. This is not upstream suite qualification.
+Grounded operators, instruction compilation, native controllers and
 observed providers still need qualification per suite. The shared budget ledger
 exists, but whole-agent/inner-ranking/IK reservations are not all wired yet;
 there are no matched-budget benchmark claims.
