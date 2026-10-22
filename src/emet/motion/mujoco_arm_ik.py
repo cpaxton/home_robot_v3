@@ -63,12 +63,23 @@ def solve_pose_ik(
         or not np.isfinite(rotation).all()
         or not np.allclose(rotation.T @ rotation, np.eye(3), atol=1e-6)
         or not np.isclose(np.linalg.det(rotation), 1, atol=1e-6)
+        or not np.isfinite([tol_m, tol_rad, damping, step]).all()
         or min(tol_m, tol_rad, damping, step) <= 0
         or max_iters < 1
     ):
         raise ValueError("Pose IK requires a finite rigid target and positive solver parameters")
     body_id = model.body(ee_body).id
     names = list(joint_names)
+    if not names or len(set(names)) != len(names):
+        raise ValueError("Pose IK requires distinct controlled joints")
+    if not np.isfinite(data.qpos).all():
+        raise ValueError("Pose IK requires finite initial joint state")
+    # Resolve native named views once, before the iterative solver. This avoids
+    # repeated pybind named-view lookups in the hot loop (the old crash site).
+    joint_ids = np.array([model.joint(name).id for name in names])
+    if not np.isin(model.jnt_type[joint_ids], [mujoco.mjtJoint.mjJNT_HINGE, mujoco.mjtJoint.mjJNT_SLIDE]).all():
+        raise ValueError("Pose IK only supports hinge and slide joints")
+    indices = {name: i for i, name in enumerate(names)}
     margins = dict(joint_limit_margins or {})
     if not set(margins).issubset(names) or any(not np.isfinite(v) or v < 0 for v in margins.values()):
         raise ValueError("Joint limit margins must be finite nonnegative values for controlled joints")
@@ -91,6 +102,8 @@ def solve_pose_ik(
     for column, group in enumerate(groups):
         for name in group:
             coupling[names.index(name), column] = 1.0 / len(group)
+    lower_limits = np.array([bounds.get(name, (-np.inf, np.inf))[0] for name in names])
+    upper_limits = np.array([bounds.get(name, (-np.inf, np.inf))[1] for name in names])
     jacp, jacr = np.zeros((3, model.nv)), np.zeros((3, model.nv))
     # Meters and radians have different acceptance scales. Otherwise a small
     # orientation improvement can outweigh a position error several times its
@@ -101,10 +114,11 @@ def solve_pose_ik(
         # Collision certification remains a separate mandatory path check.
         mujoco.mj_kinematics(model, data)
         mujoco.mj_comPos(model, data)
-        delta = target - data.body(body_id).xpos
-        angular = Rotation.from_matrix(rotation @ data.body(body_id).xmat.reshape(3, 3).T).as_rotvec()
+        delta = target - data.xpos[body_id]
+        angular = Rotation.from_matrix(rotation @ data.xmat[body_id].reshape(3, 3).T).as_rotvec()
         pos_error, rot_error = float(np.linalg.norm(delta)), float(np.linalg.norm(angular))
-        inside = all(lo - 1e-9 <= data.qpos[model.joint(name).qposadr[0]] <= hi + 1e-9 for name, (lo, hi) in bounds.items())
+        current = data.qpos[qadr]
+        inside = bool(np.all(current >= lower_limits - 1e-9) and np.all(current <= upper_limits + 1e-9))
         success = pos_error <= tol_m and rot_error <= tol_rad and inside
         if success or iteration == max_iters:
             mujoco.mj_kinematics(model, data)
@@ -118,9 +132,8 @@ def solve_pose_ik(
         for column, group in enumerate(groups):
             lower[column], upper[column] = -0.15 * len(group), 0.15 * len(group)
             for name in group:
-                index = names.index(name)
-                joint = model.joint(name)
-                if model.jnt_limited[joint.id]:
+                index = indices[name]
+                if name in bounds:
                     lo, hi = bounds[name]
                     lower[column] = max(lower[column], (lo - data.qpos[qadr[index]]) * len(group))
                     upper[column] = min(upper[column], (hi - data.qpos[qadr[index]]) * len(group))

@@ -26,7 +26,9 @@ class Shortcut(Planner):
         self,
         planner: Planner,
         shortcut_iter: int = 100,
+        rng=None,
     ):
+        self.rng = rng
         self.planner = planner
         super().__init__(self.planner.space, self.planner.validate)
         self.shortcut_iter = shortcut_iter
@@ -51,8 +53,9 @@ class Shortcut(Planner):
         #     print(i, pt.state)
         for _i in range(self.shortcut_iter):
             # Sample two indices
-            idx0 = np.random.randint(len(res.trajectory) - 3)
-            idx1 = np.random.randint(idx0 + 1, len(res.trajectory))
+            randint = self.rng.integers if self.rng is not None else np.random.randint
+            idx0 = randint(len(res.trajectory) - 3)
+            idx1 = randint(idx0 + 1, len(res.trajectory))
             node_a = res.trajectory[idx0]
             node_b = res.trajectory[idx1]
             # Extend between them — every mid-config must validate (prefer no

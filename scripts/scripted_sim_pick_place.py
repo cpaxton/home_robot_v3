@@ -71,6 +71,7 @@ def run_scripted_tool_calls(
     tool_calls: list[dict[str, Any]],
     *,
     manip_mode: str,
+    tamp_inputs: str = "observed",
     context_out: dict[str, Any] | None = None,
     video_recorder: Any = None,
 ) -> bool:
@@ -81,7 +82,7 @@ def run_scripted_tool_calls(
     # live session, select the requested manipulation capability, and validate
     # the one-shot plan. A direct KinematicPickPlaceExecutor call skips all of
     # those agent-facing contracts.
-    context: dict[str, Any] = {"robot": robot, "manip_mode": manip_mode}
+    context: dict[str, Any] = {"robot": robot, "manip_mode": manip_mode, "tamp_inputs": tamp_inputs}
     tools_by_name = {t.name: t for t in get_tools(context)}
 
     print("Scripted tool_calls:")
@@ -136,8 +137,27 @@ def run_scripted_tool_calls(
                     if name == 'scene_tasks':
                         handles.pop('task_ref', None)
                         tasks = outcome['data'].get('tasks') or []
-                        if tasks:
-                            handles['task_ref'] = tasks[0]['task_ref']
+                        # Only auto-select a task whose advertised actions support
+                        # the remaining script. Explicit task_ref calls are unchanged.
+                        requested_states = {
+                            c.get("arguments", {}).get("state") for c in tool_calls[i + 1:]
+                            if c.get("name") == "set_receptacle_state"
+                            and c.get("arguments", {}).get("task_ref") == "$task_ref"
+                        }
+                        candidates = [t for t in tasks if requested_states.issubset(
+                            set((t.get("access") or {}).get("available_actions", [])))]
+                        if candidates:
+                            selected = candidates[0]
+                            handles['task_ref'] = selected['task_ref']
+                            print("TASK_ADMISSION " + json.dumps({"selection": "advertised_actions",
+                                "requested_states": sorted(requested_states),
+                                "total_tasks": len(tasks), "eligible_tasks": len(candidates),
+                                "selected_task_ref": selected['task_ref']}))
+                        elif requested_states:
+                            print("TASK_ADMISSION " + json.dumps({"code": "articulation_unsupported",
+                                "requested_states": sorted(requested_states), "total_tasks": len(tasks),
+                                "eligible_tasks": 0}))
+                            return False
                     elif name == 'plan_pick_place':
                         handles['plan_ref'] = outcome['data']['plan_ref']
                 except (TypeError, ValueError, KeyError):
@@ -180,6 +200,9 @@ def main() -> int:
         default=None,
         help="Sim YAML when using --start-sim. Default: default_table_rby1 (kinematic) or default_table_stretch (teleport).",
     )
+    parser.add_argument("--native-debug-output", help="Optional privileged snapshot/events JSON for native diagnostics.")
+    parser.add_argument("--physical-audit", help="Required JSONL actuation audit path for physical mode.")
+    parser.add_argument("--tamp-inputs", choices=("observed", "privileged"), default="observed")
     parser.add_argument("--start-sim", action="store_true", help="Spawn headless mujoco_server from --sim.")
     parser.add_argument("--robot", default=None, help="Override robot id (default: from --sim or stretch).")
     parser.add_argument("--robot-ip", default="127.0.0.1")
@@ -188,15 +211,17 @@ def main() -> int:
     parser.add_argument("--receptacle", default="blue cube", help="Receptacle query for pick_place.")
     parser.add_argument(
         "--manip-mode",
-        choices=("teleport", "kinematic"),
+        choices=("teleport", "kinematic", "physical"),
         default=None,
-        help="teleport (GT snap) or kinematic (IK+RRT+attach). Default: EMET_MANIP_MODE or teleport.",
+        help="teleport (GT snap), kinematic (IK+RRT+attach), or physical (native contact). Default: EMET_MANIP_MODE or teleport.",
     )
     parser.add_argument(
         "--tool-calls-json",
         default=None,
         help='JSON list of tool calls, e.g. \'[{"name":"pick_place","arguments":{...}}]\'.',
     )
+    parser.add_argument("--articulation-cycle", action="store_true",
+                        help="Separate assisted open/close smoke on the first discovered task; no placement score.")
     parser.add_argument("--cpu-only", action="store_true", help="Hide GPUs in sim subprocess env.")
     parser.add_argument("--verbose-sim", action="store_true", help="Print sim server stderr.")
     parser.add_argument(
@@ -224,6 +249,15 @@ def main() -> int:
     from emet.simulation.sim_manipulation import resolve_agent_manip_mode
 
     manip_mode_early = resolve_agent_manip_mode(config_mode=args.manip_mode or env_manip_mode() or "teleport")
+    if manip_mode_early == "physical":
+        if not args.physical_audit:
+            parser.error("physical mode requires --physical-audit")
+        audit_path = Path(args.physical_audit).resolve()
+        audit_path.parent.mkdir(parents=True, exist_ok=True)
+        os.environ["EMET_PHYSICAL_AUDIT"] = str(audit_path)
+        os.environ["EMET_PHYSICAL_EXECUTION"] = "1"
+        os.environ["EMET_SIM_NAV_TELEPORT"] = "0"
+        os.environ["EMET_MOLMOSPACES_NAV_TELEPORT"] = "0"
     if args.sim is None:
         args.sim = (
             "configs/sim/default_table_rby1.yaml"
@@ -260,6 +294,16 @@ def main() -> int:
                     "receptacle_name": args.receptacle,
                 },
             }
+        ]
+
+    if args.articulation_cycle:
+        if has_explicit_tool_calls:
+            parser.error("--articulation-cycle cannot be combined with --tool-calls-json")
+        has_explicit_tool_calls = True
+        tool_calls = [
+            {"name": "scene_tasks", "arguments": {"object_filter": args.object}},
+            {"name": "set_receptacle_state", "arguments": {"task_ref": "$task_ref", "state": "open"}},
+            {"name": "set_receptacle_state", "arguments": {"task_ref": "$task_ref", "state": "closed"}},
         ]
 
     sim_handle = None
@@ -399,7 +443,7 @@ def main() -> int:
                     out,
                     fps=float(args.video_fps),
                     overlay_style=args.video_overlay, flags=args.video_flags,
-                    title=f"{manip_mode} CHAT pick-place",
+                    title="ASSISTED joint teleport (no door-sweep check)" if args.articulation_cycle else f"{manip_mode} CHAT pick-place",
                 )
                 video.set_status("pick_place", goal=f"{args.object} → {args.receptacle}")
                 video.start()
@@ -411,6 +455,7 @@ def main() -> int:
                 robot,
                 tool_calls,
                 manip_mode=manip_mode,
+                tamp_inputs=args.tamp_inputs,
                 context_out=tool_context,
                 video_recorder=video,
             )
@@ -421,6 +466,24 @@ def main() -> int:
                 video = None
                 if mp4 is not None:
                     print(f"mp4 -> {mp4}", flush=True)
+        if args.articulation_cycle:
+            print(json.dumps({"schema_version": 1, "track": "assisted_articulation_cycle",
+                              "success": bool(ok), "placement_tested": False}))
+            return 0 if ok else 1
+        if manip_mode == "physical":
+            if args.native_debug_output:
+                from emet.controller.manipulation.native_scene import read_snapshot
+                adapter = tool_context.get("_native_tamp_adapter")
+                _, snapshot = read_snapshot(robot)
+                debug_path = Path(args.native_debug_output)
+                debug_path.parent.mkdir(parents=True, exist_ok=True)
+                debug_path.write_text(json.dumps({"snapshot": snapshot,
+                    "events": adapter.events if adapter else []}, indent=2) + "\n")
+            # The native tool verifies sustained measured support at its sampled target.
+            # Distance to the center of an entire table is not a placement criterion.
+            print(json.dumps({"schema_version": 1, "track": "native_tamp_debug",
+                              "success": bool(ok), "inputs": args.tamp_inputs}))
+            return 0 if ok else 1
         # Re-resolve after manip (session placements patched in place)
         after = _placement_pos(robot, obj_body) if obj_body else None
         print(f"pos_after={None if after is None else after.tolist()}")

@@ -31,7 +31,7 @@ from emet.controller.zmq_stream_control import ZmqStreamPauseMixin
 from emet.core.interfaces import ContinuousNavigationAction, Observations
 from emet.core.parameters import Parameters, get_parameters
 from emet.core.robot import AbstractRobotClient
-from emet.core.zmq_obs_codec import decode_zmq_obs_images_inplace
+from emet.core.zmq_obs_codec import decode_zmq_obs_images_inplace, read_image_timing
 from emet.core.zmq_protocol import (
     EMET_ZMQ_ROBOT_ID_KEY,
     emet_session_cache_update,
@@ -297,6 +297,17 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
             rgb = self._servo["head_rgb"]
             depth = self._servo["head_depth"]
         return rgb, depth
+
+    def get_joint_state_evidence(self):
+        """Return feedback and receive time atomically for guarded manipulation."""
+        from emet.controller.manipulation.native_inputs import JointStateEvidence, ObservationUnavailable
+
+        with self._state_lock:
+            state = self._state
+            received = getattr(self, "_state_received_monotonic", None)
+            if not isinstance(state, dict) or state.get("joint_positions") is None or received is None:
+                raise ObservationUnavailable("joint_state_unknown")
+            return JointStateEvidence(state["joint_positions"], received)
 
     def get_joint_state(self, timeout: float = 5.0) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Get the current joint positions, velocities, and efforts"""
@@ -1271,7 +1282,9 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         Args:
             state (dict): state message from the robot
         """
+        received = time.monotonic()
         with self._state_lock:
+            self._state_received_monotonic = received
             if "step" in state:
                 self._last_step = max(self._last_step, state["step"])
                 if state["step"] < self._last_step:
@@ -1357,6 +1370,7 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
                 lidar_points=self._obs["lidar_points"],
                 lidar_timestamp=self._obs["lidar_timestamp"],
                 emet_session=read_emet_session(self._obs),
+                image_timing=read_image_timing(self._obs),
             )
             observation.joint = self._obs.get("joint", None)
             observation.joint_velocities = self._obs.get("joint_velocities", None)
@@ -1513,6 +1527,12 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         """
         next_action = {"base_velocity": {"v": forward, "w": rotational}}
         self.send_action(next_action)
+
+    def check_base_poses(self, poses, *, timeout: float = 10.0) -> dict:
+        """Read-only GT endpoint validation on advertising simulators."""
+        from emet.core.command_client import check_base_poses
+
+        return check_base_poses(self, poses, timeout=timeout)
 
     def send_action(
         self,
@@ -1725,6 +1745,7 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
                 ee_xyz=None,
                 joint=joint,
                 emet_session=read_emet_session(message) or read_emet_session(self._state),
+                image_timing=read_image_timing(message),
             )
 
             # We may not have the camera information yet

@@ -22,6 +22,7 @@ import pytest
 
 from emet.core.zmq_protocol import EMET_ZMQ_ROBOT_ID_KEY, EMET_ZMQ_SESSION_KEY
 from emet.simulation.mujoco_server_stretch import MujocoZmqServer
+from emet.simulation.stretch_mujoco.datamodels.status_stretch_camera import StatusStretchCameras
 from emet.simulation.zmq_frame_contract import (
     assert_camera_pose_is_mujoco_world,
     assert_zmq_observation_frames_consistent,
@@ -35,14 +36,23 @@ _WORLD_CAM[:3, 3] = [4.1, -1.9, 1.2]
 
 
 def _minimal_stretch_server() -> MujocoZmqServer:
+    import threading
+
     server = MujocoZmqServer.__new__(MujocoZmqServer)
+    server._articulation_lock = threading.RLock()
+    server._articulation_model = None
+    server._status = None
     server._initial_xyt = _ORIGIN.copy()
     server._last_step = 0
     server.recv_address = "tcp://127.0.0.1:1"
     server.head_K = np.eye(3)
     server._emet_session = {EMET_ZMQ_SESSION_KEY: {"navigation_origin_xyt": _ORIGIN.tolist()}}
-    server._camera_data = MagicMock(
-        cam_d435i_rgb=np.zeros((64, 64, 3), dtype=np.uint8), cam_d435i_depth=np.ones((64, 64))
+    server._camera_data = StatusStretchCameras(
+        time=0,
+        fps=0,
+        cam_d435i_rgb=np.zeros((64, 64, 3), dtype=np.uint8),
+        cam_d435i_depth=np.ones((64, 64)),
+        capture_timestamps_ns={"cam_d435i_rgb": 123456},
     )
     server.robot_sim = MagicMock()
     server.robot_sim.get_ee_pose.return_value = np.eye(4)
@@ -62,7 +72,10 @@ def test_stretch_full_obs_camera_pose_is_world_not_episode_relative():
         patch("emet.simulation.mujoco_server_stretch.compression.to_jp2", side_effect=lambda x: x),
     ):
         msg = server.get_full_observation_message()
+        repeated = server.get_full_observation_message()
     assert msg is not None
+    assert msg["head_cam_left/image_timing"]["timestamp_ns"] == 123456
+    assert repeated["head_cam_left/image_timing"] == msg["head_cam_left/image_timing"]
     np.testing.assert_allclose(msg["camera_pose"][:3, 3], _WORLD_CAM[:3, 3], atol=1e-6)
     ep = pose_global_to_base(_WORLD_CAM, _ORIGIN)
     assert float(np.linalg.norm(msg["camera_pose"][:3, 3] - ep[:3, 3])) > 0.5
@@ -77,7 +90,15 @@ def test_stretch_servo_head_cam_pose_is_world():
     server.depth_scaling = 1.0
     img = np.zeros((64, 64, 3), dtype=np.uint8)
     dep = np.ones((64, 64), dtype=np.float32)
-    server._camera_data = MagicMock(cam_d435i_rgb=img, cam_d435i_depth=dep, cam_d405_rgb=img, cam_d405_depth=dep)
+    server._camera_data = StatusStretchCameras(
+        time=0,
+        fps=0,
+        cam_d435i_rgb=img,
+        cam_d435i_depth=dep,
+        cam_d405_rgb=img,
+        cam_d405_depth=dep,
+        capture_timestamps_ns={"cam_d435i_rgb": 123456, "cam_d405_rgb": 123400},
+    )
     ee_cam = np.eye(4)
     ee_cam[:3, 3] = [4.2, -1.8, 1.0]
     with (
@@ -92,6 +113,8 @@ def test_stretch_servo_head_cam_pose_is_world():
     ):
         msg = server.get_servo_message()
     assert msg is not None
+    assert msg["head_cam_left/image_timing"]["timestamp_ns"] == 123456
+    assert msg["ee_cam/image_timing"]["timestamp_ns"] == 123400
     np.testing.assert_allclose(msg["head_cam/pose"][:3, 3], _WORLD_CAM[:3, 3], atol=1e-6)
     np.testing.assert_allclose(msg["ee_cam/pose"][:3, 3], ee_cam[:3, 3], atol=1e-6)
 
