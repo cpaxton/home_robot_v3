@@ -36,15 +36,20 @@ Strike through or move to a PR when done.
 
 ## Shared-agent acceptance follow-up (2026-10-22)
 
-- [ ] Diagnose black/sky-only Stretch RGB in the default S0 scene before
-      treating failed searches as a perception/model comparison. Reproduced on
-      frozen main and provider slice, and in a stationary measured-head smoke.
+- [ ] Diagnose S0 optical heading and retained target-view coverage before
+      treating black/sky-only RGB as broken perception. Reproduced on frozen
+      main/provider; the stationary diagnostic pan faces away from the table
+      and CPU camera rays hit the dark floor, not the robot shell.
 - [ ] Clear context-stack acceptance without restoring answer overrides:
       EQA4 native scores 4/4 main versus 1/4 candidate; three main scores differ
       from its raw final model answer. Inspect q14 hallucinated TV and q56
       missing curtain context, then test existing opt-in pose history and
       retained-dialogue ablations. Preserve model authority and exact packets.
       See `docs/plans/shared_stack_readiness.md` for evidence and gate IDs.
+- [ ] Separate fresh pre-turn preservation from optional extra-history ranking.
+      q56 gains with selector on because image 2 finally shows bookshelf plus
+      blue curtains; added pose-novelty images 3/4 are blank walls. Preserve
+      scope/age/dedup guards and model authority, then rerun the four-ID gate.
 
 ## TAMP simulator API readiness (2026-10-05)
 
