@@ -17,7 +17,10 @@ and explicit task admission). Historical evidence below remains unchanged.
 | #193 Capability media and model utilities | main | Merged; recordings remain scoped controls |
 | #200 Planar startup fix | main | Merged; live Sourccey startup/open-close passed |
 | #201 Articulation and admission | main | Merged; Stretch and kitchen-2 open-close passed |
-| #195 Native input contracts | main | Integrated main without rewriting history; native adapters still unavailable |
+| #195 Native input contracts | main | Merged as `b7a1c22d`; native adapters still unavailable |
+| #204 Grasp sequence admission | main | Merged as `631cfdfd`; assisted RBY1 passed, Sourccey remains unresolved |
+| #203 Dynamic placement metadata and oracle coordinates | main | 2/2 fresh Stretch oracle admissions and replays pass; includes body-origin and independent-instance fixes |
+| #205 Stretch base endpoint | main | Merged as `9097d41f`; full public Stretch teleport-oracle replay passed |
 
 #195's post-integration motion/TAMP/configuration suite ran 372 tests: 369 passed,
 zero skipped, and three A* start-escape tests failed identically on the main-based
@@ -31,6 +34,9 @@ retain every attempted case. Do not rescore the historical 3/7 placement run.
 Open/close success does not establish arm placement, sustained support or native
 execution. #195 still returns explicit native-unavailable errors in run-agent
 until scene/execution adapters and observed providers are implemented.
+
+See [matched regression results](../experiments/tamp_matched_regressions_20261012.md)
+for parallel control results and unresolved fixture/model failures.
 
 The sections below retain historical investigations and their original results.
 

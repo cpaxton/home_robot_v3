@@ -84,7 +84,7 @@ def test_moving_bounds_does_not_mutate_scene():
 def test_replay_rejects_changed_scene_backend_start_and_unsigned_witness():
     from emet.eval.clutter_fixture import certificate_error
 
-    fixture = {'schema': 1, 'scene_fingerprint': 'scene', 'execution_mode': 'latch',
+    fixture = {'schema': 2, 'scene_fingerprint': 'scene', 'execution_mode': 'latch',
                'clearance_m': .22, 'robot_start_xy': [0,0], 'reference_success': True}
     fixture['sha256'] = fingerprint(fixture)
     args = {'scene_fingerprint': 'scene', 'execution_mode': 'latch', 'clearance_m': .22, 'start': [0,0]}
@@ -195,3 +195,22 @@ def test_size_fallback_recovers_geometry_without_relaxing_clearance():
                for r in diagnostic['rejections'])
     replay, _ = resolve_fixture(ep, scene, cats, np.zeros(2), bin_body='bin', candidates=['table'])
     assert fixture == replay
+
+
+def test_old_center_only_certificate_is_not_silently_reinterpreted():
+    from emet.eval.clutter_fixture import certificate_error, fingerprint
+    fixture = {'schema': 1, 'reference_success': True}
+    fixture['sha256'] = fingerprint(fixture)
+    assert certificate_error(fixture, scene_fingerprint='scene', execution_mode='sim',
+                             clearance_m=.22, start=[0, 0]) == 'invalid_fixture_certificate'
+
+
+def test_certificate_requires_replayable_measured_body_pose():
+    from emet.eval.clutter_fixture import certificate_error, fingerprint
+    fixture = {'schema': 2, 'reference_success': True,
+               'clutter': [{'pos': [0, 0, 0], 'body_pos': [0, 0, float('inf')]}]}
+    # Missing body pose must fail even in an otherwise correctly hashed certificate.
+    fixture['clutter'][0]['body_pos'] = [0, 0, 0]
+    fixture['sha256'] = fingerprint(fixture)
+    assert certificate_error(fixture, scene_fingerprint='scene', execution_mode='sim',
+                             clearance_m=.22, start=[0, 0]) == 'invalid_fixture_body_pose'

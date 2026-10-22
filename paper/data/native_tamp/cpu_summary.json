@@ -1,0 +1,46 @@
+{
+  "scope": "privileged CPU public tools; in-process actuator facade; no ZMQ or exploration",
+  "source_sha": "d1d451c57cec73cffad050a032df1401461051f6",
+  "cluttered": false,
+  "cases": [
+    {
+      "object": "object1",
+      "trial": 0,
+      "passed": true,
+      "artifact": "/home/cpaxton/runs/emet/tamp-native-contact-final-20261013/object1-0.json"
+    },
+    {
+      "object": "object1",
+      "trial": 1,
+      "passed": true,
+      "artifact": "/home/cpaxton/runs/emet/tamp-native-contact-final-20261013/object1-1.json"
+    },
+    {
+      "object": "object1",
+      "trial": 2,
+      "passed": true,
+      "artifact": "/home/cpaxton/runs/emet/tamp-native-contact-final-20261013/object1-2.json"
+    },
+    {
+      "object": "object2",
+      "trial": 0,
+      "passed": true,
+      "artifact": "/home/cpaxton/runs/emet/tamp-native-contact-final-20261013/object2-0.json"
+    },
+    {
+      "object": "object2",
+      "trial": 1,
+      "passed": true,
+      "artifact": "/home/cpaxton/runs/emet/tamp-native-contact-final-20261013/object2-1.json"
+    },
+    {
+      "object": "object2",
+      "trial": 2,
+      "passed": true,
+      "artifact": "/home/cpaxton/runs/emet/tamp-native-contact-final-20261013/object2-2.json"
+    }
+  ],
+  "passed": 6,
+  "total": 6,
+  "managed_job_id": "20261013_133304_33f050"
+}
