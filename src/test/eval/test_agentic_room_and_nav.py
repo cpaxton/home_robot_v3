@@ -177,12 +177,13 @@ def test_presence_without_answerability_does_not_auto_submit(monkeypatch):
     assert forced[0]["reason"] == "target evidence did not establish answer sufficiency"
 
 
-def test_voxel_sim_upgrades_full_frame_absent_to_present():
-    """Policy (2): dense voxel cosine >= 0.21 upgrades PRESENT (DynaMem space)."""
+def test_voxel_sim_upgrades_only_matching_captured_frame():
+    """Dense voxel scores apply to bound camera frames, never same-numbered graph IDs."""
     _require_agentic()
     import torch
 
     from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
+    from emet.memory.graph_eqa.agentic.views import VIEW_ID_BASE, CapturedView
 
     agent = MagicMock()
     agent.parameters = {"eqa": {}}
@@ -211,7 +212,13 @@ def test_voxel_sim_upgrades_full_frame_absent_to_present():
 
     ex = AgenticEQAExecutor(agent, "Where is the large bookshelf?", router=False, collect_trace=True)
     ex._dense_max_sim_for_rgb = lambda *_a, **_k: None  # type: ignore[method-assign]
-    out = ex._tool_verify_siglip("large bookshelf", 7)
+    assert ex._voxel_max_sim_for_obs("large bookshelf", 7) is None
+    view_id = VIEW_ID_BASE + 7
+    ex._captured_views = {
+        view_id: CapturedView(view_id, 7, np.zeros((8, 8, 3), dtype=np.uint8), np.eye(4))
+    }
+    ex._run_vlm_view_assess = MagicMock(return_value={"answerable": False})
+    out = ex._tool_verify_siglip("large bookshelf", view_id)
     assert out["status"] == "PRESENT"
     # Voxel PRESENT is a cheap proposal; submit unlock requires VLM assess.
     assert out["verified"] is False
