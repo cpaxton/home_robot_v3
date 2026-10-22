@@ -3,6 +3,7 @@
 
 import hashlib
 import runpy
+import subprocess
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -19,6 +20,34 @@ def assets():
 
 def test_detector_control_does_not_require_sam(tmp_path):
     assert assets()({"main": tmp_path}, ["main"], "yoloe") == {}
+
+
+@pytest.mark.parametrize("change", ["untracked", "tracked", "staged"])
+def test_frozen_source_rejects_executable_source_changes(tmp_path, change):
+    root = Path(__file__).resolve().parents[3]
+    with patch.object(sys, "path", [str(root / "scripts"), *sys.path]):
+        module = runpy.run_path(str(root / "scripts/run_shared_room_pairs.py"))
+
+    def git(*args):
+        return subprocess.check_output(["git", "-C", str(tmp_path), *args], text=True).strip()
+
+    git("init", "-q")
+    source = tmp_path / "src"
+    source.mkdir()
+    tracked = source / "tracked.py"
+    tracked.write_text("# committed source\n")
+    git("add", ".")
+    git("-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-qm", "fixture")
+    revision = git("rev-parse", "HEAD")
+    module["assert_frozen_source"](tmp_path, revision)
+    if change == "untracked":
+        (source / "sitecustomize.py").write_text("raise RuntimeError('must not execute')\n")
+    else:
+        tracked.write_text("# changed executable source\n")
+        if change == "staged":
+            git("add", ".")
+    with pytest.raises(RuntimeError, match="Frozen source changed"):
+        module["assert_frozen_source"](tmp_path, revision)
 
 
 def test_vlm_requires_complete_named_checkpoint_not_partial_download(tmp_path):

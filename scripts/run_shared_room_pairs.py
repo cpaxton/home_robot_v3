@@ -17,6 +17,16 @@ def git(root, *args):
     return subprocess.check_output(["git", "-C", str(root), *args], text=True).strip()
 
 
+def assert_frozen_source(root, revision):
+    """Reject tracked edits and untracked files before executing checkout source."""
+    if (
+        git(root, "rev-parse", "HEAD") != revision
+        or git(root, "diff", "HEAD", "--stat")
+        or git(root, "ls-files", "--others", "--exclude-standard")
+    ):
+        raise RuntimeError(f"Frozen source changed or contains untracked files: {root}")
+
+
 def grounding_assets(roots, arms, backend):
     """Require local weights: acceptance must not download on the grounding path."""
     if backend != "vlm":
@@ -41,6 +51,8 @@ def run(args):
     roots = {"main": args.main.resolve(), "candidate": args.candidate.resolve()}
     assets = grounding_assets(roots, args.arms, args.grounding_backend)
     revisions = {name: git(root, "rev-parse", "HEAD") for name, root in roots.items()}
+    for arm in args.arms:
+        assert_frozen_source(roots[arm], revisions[arm])
     args.output.mkdir(parents=True, exist_ok=False)
     manifest = {
         "roots": {k: str(v) for k, v in roots.items()},
@@ -63,8 +75,7 @@ def run(args):
     for index, episode in enumerate(args.episodes):
         for arm in args.arms if index % 2 == 0 else list(reversed(args.arms)):
             root = roots[arm]
-            if git(root, "rev-parse", "HEAD") != revisions[arm] or git(root, "diff", "HEAD", "--stat"):
-                raise RuntimeError(f"Frozen source changed: {root}")
+            assert_frozen_source(root, revisions[arm])
             case = args.output / f"{episode}-{arm}"
             case.mkdir()
             config = case / "config.yaml"
