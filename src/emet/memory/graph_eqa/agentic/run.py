@@ -19,6 +19,26 @@ from emet.utils.logger import Logger
 _logger = Logger(__name__)
 
 
+def redirect_rejected_candidates(agent, calls):
+    """Rejected query handles cannot consume another router round as a no-op.
+
+    Explore through the normal tool/budget gates instead. A new source frame
+    can produce a new candidate; this never revives the rejected reference.
+    """
+    if getattr(agent, "query_driven_memory", False) is not True:
+        return calls
+    for tool, args in calls:
+        if tool not in {"investigate", "navigate_to_obs"}:
+            continue
+        try:
+            record = agent.query_candidates.records.get(int(args.get("obs_id")))
+        except (TypeError, ValueError):
+            continue  # Normal dispatch reports malformed arguments.
+        if record is not None and record.rejected_revision is not None:
+            return [("explore_frontier", {})]
+    return calls
+
+
 def run(self) -> AgenticEQAResult:
     t0 = time.monotonic()
     final: dict[str, Any] | None = None
@@ -39,6 +59,7 @@ def run(self) -> AgenticEQAResult:
     self._router_path_world = []
     self._router_path_m = 0.0
     self._recent_actions = []
+    self._last_inspection_failure = None
     self._action_history = []
     self._tool_dispatch_depth = 0
     self._action_selected_by = "internal"
@@ -55,6 +76,8 @@ def run(self) -> AgenticEQAResult:
     self._pending_answerable = None
     self._verified = False
     self._verified_obs_id = None
+    self._grounded_obs_id = None
+    self._view_grounding_attempts = set()
     self._voxel_score_xyz = None
     self._voxel_score_phrase = None
     self._voxel_score_from_pin = None
@@ -68,8 +91,6 @@ def run(self) -> AgenticEQAResult:
     self._close_map_attempts = {}
     self._consecutive_nav_fail = 0
     self._unreachable_obs_ids = set()
-    self._grounded_obs_id = None
-    self._view_grounding_attempts = set()
     self._prefer_explore = False
     self._prefer_explore_reason = ""
     self._n_consecutive_explore = 0
@@ -296,6 +317,11 @@ def run(self) -> AgenticEQAResult:
                     "selected": selected_calls,
                     "executed": calls,
                 }
+        eligible_calls = redirect_rejected_candidates(self.agent, calls)
+        if eligible_calls != calls:
+            calls = eligible_calls
+            picked_by = f"{picked_by}+rejected_candidate"
+            action_rewrite = {"reason": "rejected_candidate", "selected": selected_calls, "executed": calls}
         self._append_trace(
             {
                 "event": "tool_pick",
