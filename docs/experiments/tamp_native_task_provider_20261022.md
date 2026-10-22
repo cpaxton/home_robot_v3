@@ -34,10 +34,13 @@ paths; the physical fixture is the familiar table variant.
 | --- | --- | --- | --- | --- |
 | Narrow buffers | Search rejected all native first moves; no execution call | 0 | 7 startup commands | 0 |
 | Expanded forward buffer | Partial: cylinder moved to buffer; next cube refinement rejected | 1 of planned 3 | 232 | 0 |
+| Wider-destination swap | Both exchanged goals independently supported/settled/contained | 3 of planned 3 | 700 | 0 |
 | Two-goal causal transfer | Both final goals independently supported/settled/contained | 2 of planned 2 | 477 | 0 |
 
 These are different task configurations, not a common statistical denominator.
 The two-goal case moves the cylinder out of the cube's destination first.
+The wider-destination swap completes all three transfers. It changes the allowed
+destination geometry and remains separate from the failed narrow case.
 The swap needs temporary storage. Expanding the forward buffer made a native
 cylinder-first move feasible; it did not establish a complete physical reference
 for the swap. The code must not label the latter certified solvable from this
@@ -48,6 +51,7 @@ Raw artifact directories under the active checkout:
 - `.tamp-runs/live-recovery`: job `20261022_164003_c2b5b9`, source `579dc9eb`.
 - `.tamp-runs/large-buffer`: job `20261022_164318_21c555`, source `f00bdb0b`.
 - `.tamp-runs/two-goal`: job `20261022_164318_faf73c`, source `f00bdb0b`.
+- `.tamp-runs/wide-destination-swap`: job `20261022_170253_1d62e3`, source `0adaec26`.
 
 Each contains configuration, source hashes, full CHAT logs, independent summary,
 command audit, server/agent logs and managed-job metadata. Failure-stop checks
@@ -64,9 +68,9 @@ rejections, not a proof that the task is impossible.
 In the expanded-buffer run, the first transfer physically succeeded. The next
 cube move was rejected before its motion, using 73 planning IK calls with 54
 pregrasp IK, 4 grasp-collision, 3 surface-space and 2 pregrasp-collision
-rejections. No retention loss caused this stop. Whether IK initialization,
-post-transfer robot configuration or geometric access dominates still needs a
-captured-state replay; do not claim a root cause from rejection counts alone.
+rejections. No retention loss caused this stop. Rejection counts alone initially left IK initialization versus geometric access
+ambiguous. The recorded-state controls below isolate destination geometry;
+additional IK seeds do not resolve the original case.
 
 The agent's prose incorrectly described the first step as failed even though
 `completed_steps` was 1. Structured outcomes now include `failed_step_1based`
@@ -92,9 +96,10 @@ failed calls, consumed/stale plans, explicit partial progress and CLI refusal.
 
 ## Remaining gate
 
-Capture/replay the post-buffer IK rejection before changing solver initialization
-or motion profiles. Preserve dense collision checks, measured convergence and
-contact verification. Qualify complete references before a frozen task registry;
+Preserve dense collision checks, measured convergence and contact verification.
+Do not promote extra yaw/IK restarts from unsuccessful offline controls. The
+wider swap now has one successful physical episode; require repeated complete
+reference replays and held-out resets before freezing benchmark instances. Qualify complete references before a frozen task registry;
 then expand suite providers and observed-input execution. The new graph/skeleton
 integration does not complete the six-suite or seven-planner program.
 
@@ -132,3 +137,21 @@ accepted path, unchanged private state and blocked actuation (2 tests passed,
 job `20261022_170415_5d64e8`). Complete JSON control results accompany the
 paper data. A new wider-destination physical swap is separately labeled in
 `.tamp-runs/wide-destination-swap`, job `20261022_170253_1d62e3`.
+
+
+## Wider-region physical outcome and final validation
+
+The separately labeled wider-destination trial completes all three transfers:
+cylinder to buffer, cube to the cylinder's original region, cylinder to the
+cube's original region. The actual production agent discovers, requests a beam
+plan and executes its opaque handle; it does not supply an expert ordering.
+Independent final checks find both footprints contained, supported and settled.
+The audit contains 700 ordinary commands and zero forbidden commands. The
+original narrower task remains partial in the dataset. This single successful
+variant does not certify general swap solvability or either benchmark population.
+
+Final unified validation job `20261022_170543_7b0f3a`: **284 passed, 0 failed,
+0 errors, 0 skipped**, 84.04 s. This includes the new recorded-state regressions,
+failed-step contract, debug JSON/private-state boundary and CLI tests. Ruff is
+clean. The paper figure and data are reproducible using
+`scripts/plot_native_task_integration.py`; the paper build succeeds.

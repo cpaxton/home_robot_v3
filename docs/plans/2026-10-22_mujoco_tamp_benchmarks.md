@@ -109,3 +109,13 @@ Second follow-up: suite-qualified providers, matched planning bindings and runne
 Do not remove draft status or claim readiness for the second gate from interface
 unit tests alone. Existing 2/6 table task success and 6/6 attempted transfers stay
 historical diagnostics, not household results.
+
+
+October 22 native integration update: production `run agent` with Caliban-hosted
+inference completes a two-transfer causal case and a separately labeled,
+three-transfer swap with sufficiently wide destination geometry. Narrower
+variants remain failed, with measured partial progress retained. Recorded-state
+controls and 284 passing tests are documented in
+[the integration report](../experiments/tamp_native_task_provider_20261022.md).
+These are privileged live-async Stretch diagnostics, not six-suite qualification
+or observed-input acceptance. No experimental IK restart/yaw changes were landed.

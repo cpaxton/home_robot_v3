@@ -491,6 +491,183 @@
       "artifact_directory": "/home/cpaxton/src/home_robot_v2/.worktrees/tamp-benchmark-runtime/.tamp-runs/two-goal",
       "summary_sha256": "e1a1c234da2923a21b494ee0e1f0dc8ca1fa8296a1de0d63c838307a4ecdace8",
       "protocol_sha256": "45cc7cc2b79ce66ffac6da0a6feb463be0471e367b61039438feae7b18fb4060"
+    },
+    {
+      "condition": "wide_destination_swap",
+      "job_id": "20261022_170253_1d62e3",
+      "source_sha": "0adaec2637f72666c5bd6ee8ccb4316a44fedd9b",
+      "task_instruction": "swap blue cube and red cylinder",
+      "task_config": {
+        "schema_version": 1,
+        "input_mode": "privileged",
+        "robot": "stretch",
+        "reset_id": "wide-destination-swap-20261022",
+        "support_body": "table",
+        "objects": {
+          "red cylinder": "object2",
+          "blue cube": "object1"
+        },
+        "regions": [
+          {
+            "name": "cube home",
+            "bounds": [
+              [
+                -0.08,
+                -0.605
+              ],
+              [
+                0.08,
+                -0.5
+              ]
+            ]
+          },
+          {
+            "name": "cylinder home",
+            "bounds": [
+              [
+                -0.08,
+                -0.75
+              ],
+              [
+                0.08,
+                -0.62
+              ]
+            ]
+          },
+          {
+            "name": "buffer forward",
+            "bounds": [
+              [
+                -0.09,
+                -1.05
+              ],
+              [
+                0.09,
+                -0.77
+              ]
+            ]
+          },
+          {
+            "name": "buffer right",
+            "bounds": [
+              [
+                0.14,
+                -0.75
+              ],
+              [
+                0.28,
+                -0.59
+              ]
+            ]
+          }
+        ]
+      },
+      "task_passed": true,
+      "initial": {
+        "object2": {
+          "in_region": false,
+          "supported": true,
+          "settled": true,
+          "satisfied": false,
+          "bounds_xy": [
+            [
+              -0.04000000069936192,
+              -0.7199999464122161
+            ],
+            [
+              2.640648957524805e-06,
+              -0.6799985626254291
+            ]
+          ]
+        },
+        "object1": {
+          "in_region": false,
+          "supported": true,
+          "settled": true,
+          "satisfied": false,
+          "bounds_xy": [
+            [
+              -0.04,
+              -0.5900000000000001
+            ],
+            [
+              0.0,
+              -0.51
+            ]
+          ]
+        }
+      },
+      "final": {
+        "object2": {
+          "in_region": true,
+          "supported": true,
+          "settled": true,
+          "satisfied": true,
+          "bounds_xy": [
+            [
+              -0.03981619175967569,
+              -0.5734194002709555
+            ],
+            [
+              0.0003011842081502916,
+              -0.5333037438590164
+            ]
+          ]
+        },
+        "object1": {
+          "in_region": true,
+          "supported": true,
+          "settled": true,
+          "satisfied": true,
+          "bounds_xy": [
+            [
+              -0.04005099300067972,
+              -0.7183028721852006
+            ],
+            [
+              0.0008797058972007318,
+              -0.6378416069820964
+            ]
+          ]
+        }
+      },
+      "task_outcomes": [
+        {
+          "schema_version": 1,
+          "tool": "plan_task",
+          "status": "ok",
+          "code": "ok",
+          "message": "ok",
+          "data": {
+            "plan_ref": "task_plan_e0036066eae440fc9bf6bc63691d92ab",
+            "steps": 3,
+            "strategy": "beam",
+            "execution_started": false,
+            "planning_scope": "task_skeleton",
+            "motion_refinement": "per_step"
+          },
+          "recovery": "none"
+        },
+        {
+          "schema_version": 1,
+          "tool": "execute_task_plan",
+          "status": "ok",
+          "code": "ok",
+          "message": "ok",
+          "data": {
+            "execution_started": true,
+            "completed_steps": 3,
+            "goal_verified": true
+          },
+          "recovery": "none"
+        }
+      ],
+      "failure_stop_compliant": null,
+      "audit_commands": 700,
+      "forbidden_commands": 0,
+      "artifact_directory": "/home/cpaxton/src/home_robot_v2/.worktrees/tamp-benchmark-runtime/.tamp-runs/wide-destination-swap",
+      "summary_sha256": "fe10f6f768e59f0d40c9c2c83bb01a9c2636395b86c6a8bbf728db4a7e9d435b",
+      "protocol_sha256": "adc338b51b8e7cd9ec37a4a963ac06b3ac9ce08821099b57bb076af7658eef79"
     }
   ],
   "precrash_results_excluded": "Temporary raw artifacts were lost; only persistent recovered runs are recorded.",

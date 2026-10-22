@@ -21,8 +21,13 @@ def main():
     raw = json.loads(args.data.read_text())
     cases = {case['condition']: case for case in raw['cases']}
     fig, axes = plt.subplots(1, 2, figsize=(9, 4), constrained_layout=True)
-    for ax, key, title in zip(axes, ('two_goal_causal', 'expanded_forward_buffer'),
-                             ('Two-goal transfer: complete', 'Swap: partial (1 of 3 transfers)'), strict=True):
+    if 'wide_destination_swap' in cases:
+        keys = ('expanded_forward_buffer', 'wide_destination_swap')
+        titles = ('Narrow destination\nPartial (1/3 transfers)', 'Wider destination\nComplete (3/3 transfers)')
+    else:
+        keys = ('two_goal_causal', 'expanded_forward_buffer')
+        titles = ('Two-goal transfer: complete', 'Swap: partial (1 of 3 transfers)')
+    for ax, key, title in zip(axes, keys, titles, strict=True):
         case = cases[key]
         for region in case['task_config']['regions']:
             low, high = region['bounds']
@@ -43,8 +48,8 @@ def main():
         ax.grid(alpha=.12)
     fig.suptitle('Measured footprints: dashed = initial, filled = final', fontsize=10)
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(args.output, dpi=200)
-    fig.savefig(args.output.with_suffix('.pdf'))
+    fig.savefig(args.output, dpi=200, bbox_inches="tight", pad_inches=.1)
+    fig.savefig(args.output.with_suffix('.pdf'), bbox_inches='tight', pad_inches=.1)
     plt.close(fig)
 
 

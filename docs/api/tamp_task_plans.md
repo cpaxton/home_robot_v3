@@ -70,3 +70,11 @@ known precommand failure from possible physical progress. A failed command or a
 failed later step preserves partial progress and stops execution. Legacy boolean
 receipts cannot establish no actuation. Measured effects, support, containment,
 stillness and final goals remain mandatory regardless of command receipts.
+
+
+Failures also identify `planned_steps`, `failed_step_1based` (or null before a
+step/at final verification), and `failed_phase`. For example, one completed step
+followed by step-2 preflight rejection is partial progress, not a failed first
+transfer. Debug mode can include private simulator state in JSON logs for offline
+replay; public tool responses and public motion evidence never include it.
+See [measured integration cases and captured-state controls](../experiments/tamp_native_task_provider_20261022.md).
