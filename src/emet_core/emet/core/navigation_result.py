@@ -22,6 +22,7 @@ class NavigationPolicy:
 NAVIGATION_POLICIES = {
     "exploration": NavigationPolicy(0.07, 0.15),
     "precision": NavigationPolicy(0.02, 0.03),
+    "manipulation": NavigationPolicy(0.01, 0.015),
 }
 
 
@@ -104,15 +105,18 @@ class ArrivalMonitor:
             return "correct", {**result, "corrections": self.corrections}
         self.outside_since = None
         if self.progress is None:
-            self.progress = (now, xy, yaw)
-        elif now - self.progress[0] >= policy.progress_seconds:
-            _, old_xy, old_yaw = self.progress
+            self.progress = (now, sample_time, xy, yaw)
+        elif now - self.progress[0] >= policy.progress_seconds and sample_time - self.progress[1] >= policy.progress_seconds:
+            # Fresh telemetry may advance more slowly than wall time in a
+            # simulator. Judge motion over elapsed measured time too, just as
+            # settling does. Stale-data and command wall deadlines still apply.
+            _, _, old_xy, old_yaw = self.progress
             improved = (old_xy > policy.xy_tolerance and old_xy - xy >= 0.01) or (
                 old_yaw > policy.yaw_tolerance and old_yaw - yaw >= 0.02
             )
             if not improved and not inside:
                 return "failed", {**result, "reason": "navigation stalled"}
-            self.progress = (now, xy, yaw)
+            self.progress = (now, sample_time, xy, yaw)
         return None
 
 
