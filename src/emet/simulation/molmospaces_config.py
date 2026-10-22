@@ -299,7 +299,9 @@ def build_molmospaces_wrapper_command(args: list[str]) -> list[str] | None:
     # 2) Explicit override — only if molmo_spaces actually imports there
     env_py = os.environ.get("MOLMOSPACES_PYTHON")
     if env_py:
-        p = Path(env_py).resolve()
+        # Venv python is often a symlink to a shared interpreter. Resolving it
+        # discards pyvenv.cfg and tests imports in the wrong environment.
+        p = Path(env_py).expanduser().absolute()
         if p.exists() and _python_can_import_molmo_spaces(p):
             exe = p.parent / "emet-molmospaces"
             if exe.exists():
