@@ -64,6 +64,21 @@ def test_verified_sweep_does_not_check_view_after_head_motion_error(monkeypatch)
     verifier.assert_not_called()
 
 
+def test_verified_sweep_rejects_failed_blocking_head_receipt(monkeypatch):
+    monkeypatch.setenv("EMET_FORCE_HEAD_SWEEP", "1")
+    wait = MagicMock()
+    monkeypatch.setattr("emet.controller.dynamem.look.wait_post_motion_obs", wait)
+    agent = _look_around_on(MagicMock(spec=StretchZmqClient))
+    agent.robot.head_to.return_value = False
+    verifier = MagicMock(return_value=True)
+    with pytest.raises(RuntimeError, match="Verified sweep head motion failed"):
+        agent.look_around(on_observation=verifier)
+    wait.assert_not_called()
+    agent.update.assert_not_called()
+    verifier.assert_not_called()
+    agent._head_to_sweep.assert_not_called()
+
+
 def _rotate_agent(robot) -> DynamemController:
     agent = _look_around_on(robot)
     agent.save_rerun = False
