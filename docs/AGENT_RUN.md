@@ -295,3 +295,26 @@ TAMP tools return a consistent versioned JSON result on every path. See the
 For placement geometry and replay, see [the placement API](api/placement.md).
 For controlled improvements and provenance-linked figures, see
 [paired TAMP metrics](experiments/tamp_paired_metrics.md).
+
+### TAMP batches and recovery
+
+CHAT interprets versioned TAMP JSON outcomes directly. A failed, partial, or
+malformed TAMP result stops the remaining calls in the current model-generated
+batch and reports their names as `unattempted_tools` in a `batch_stopped` result.
+The session continues so the model can inspect the result and choose recovery;
+this does not certify later model choices as safe. Read each execution outcome,
+rediscover measured state, and obtain a fresh plan before continuing a multi-step
+manipulation. Never replay a consumed plan after an unknown command outcome.
+See [the TAMP API](api/tamp.md) for input/execution modes and their limitations.
+
+For native privileged Stretch, `plan_pick_place` also accepts an optional grounded
+world-XY `placement_region`; it constrains the whole released object, not merely
+its center. Inspect the returned mode and `planning_rejections`. A bounded search
+failure does not prove rearrangement is necessary or the task is impossible.
+See [native placement regions](api/tamp.md#native-placement-regions-and-bounded-grasp-search).
+
+Local text-model prompts include the same argument JSON Schemas as structured
+tool-calling clients. Nested arrays, required fields, and parameter descriptions
+must remain visible; stripping them to argument names caused native TAMP calls
+to confuse robot identity with input mode and to invent task handles. Unknown
+native task handles request rediscovery rather than inspection.

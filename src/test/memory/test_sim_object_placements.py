@@ -421,3 +421,96 @@ def test_degenerate_box_face_does_not_abort_placement_entry():
     entry = _placement_entry_from_geom_ids(model, data, [0], cat='degenerate')
     assert entry is not None and len(entry['support_surfaces']) == 0
     assert len(entry['collision_bounds']) == 1
+
+
+def test_publication_tracks_free_physics_without_explicit_commands():
+    import threading
+
+    import mujoco
+
+    from emet.simulation.robosuite_server import RobosuiteZmqServer
+    from emet.simulation.sim_object_placements import placements_from_mujoco_model
+
+    model = mujoco.MjModel.from_xml_string('<mujoco><worldbody>\n      <body name="object_root" pos="0 0 1"><freejoint/><geom type="box" size=".2 .1 .05"/>\n        <body name="object_child" pos=".5 0 0"><geom type="box" size=".1 .1 .05"/></body>\n      </body></worldbody></mujoco>')
+    data = mujoco.MjData(model)
+    server = object.__new__(RobosuiteZmqServer)
+    server._mjmodel, server._mjdata, server._mj_lock = model, data, threading.RLock()
+    placements = placements_from_mujoco_model(model, data)
+    server._emet_session = {"sim_object_placements": placements}
+    server._attach_emet_session({})
+    data.qvel[0] = .5
+    data.qvel[5] = .2
+    for _ in range(100):
+        mujoco.mj_step(model, data)
+    acceleration, contacts = data.qacc.copy(), data.contact.dist.copy()
+    server._attach_emet_session({})
+    np.testing.assert_array_equal(data.qacc, acceleration)
+    np.testing.assert_array_equal(data.contact.dist, contacts)
+    expected = placements_from_mujoco_model(model, data)
+    for body in ("object_root", "object_child"):
+        for field in ("pos", "quat", "bounds", "collision_bounds", "support_surfaces"):
+            np.testing.assert_allclose(placements[body][field], expected[body][field])
+
+
+def test_dynamic_tracker_skips_stationary_geometry_but_accumulates_motion(monkeypatch):
+    import mujoco
+
+    import emet.simulation.sim_object_placements as module
+
+    model = mujoco.MjModel.from_xml_string('''<mujoco><worldbody>
+        <body name="object"><freejoint/><geom size=".1"/></body>
+        </worldbody></mujoco>''')
+    data = mujoco.MjData(model)
+    placements = module.placements_from_mujoco_model(model, data)
+    tracker = module.DynamicPlacementTracker()
+    calls = []
+    refresh = module.refresh_moved_body_placements
+
+    def record(*args):
+        calls.append(args[-1])
+        refresh(*args)
+
+    monkeypatch.setattr(module, "refresh_moved_body_placements", record)
+    tracker.refresh(placements, model, data)
+    tracker.refresh(placements, model, data)
+    assert len(calls) == 1
+    data.qpos[0] += .6e-6
+    tracker.refresh(placements, model, data)
+    assert len(calls) == 1
+    data.qpos[0] += .6e-6
+    tracker.refresh(placements, model, data)
+    assert len(calls) == 2
+    tracker.refresh(placements, model, data, forced_bodies=["object"])
+    assert len(calls) == 3
+    tracker.refresh(dict(placements), model, data)
+    assert len(calls) == 4  # rebuilt session invalidates the pose cache
+
+
+def test_stretch_publication_tracks_measured_free_object_snapshot():
+    import threading
+    from types import SimpleNamespace
+
+    import mujoco
+
+    from emet.simulation.mujoco_server_stretch import MujocoZmqServer
+    from emet.simulation.sim_object_placements import placements_from_mujoco_model
+
+    model = mujoco.MjModel.from_xml_string('''<mujoco><worldbody>
+        <body name="object" pos="0 0 1"><freejoint/><geom size=".1"/></body>
+        </worldbody></mujoco>''')
+    data = mujoco.MjData(model)
+    server = object.__new__(MujocoZmqServer)
+    server._articulation_model = model
+    server._articulation_lock = threading.RLock()
+    server.objects_info = None
+    placements = placements_from_mujoco_model(model, data)
+    server._emet_session = {"sim_object_placements": placements}
+    server._status = SimpleNamespace(scene_qpos=data.qpos.tolist())
+    server._attach_emet_session({})
+    for _ in range(100):
+        mujoco.mj_step(model, data)
+    server._status.scene_qpos = data.qpos.tolist()
+    server._attach_emet_session({})
+    expected = placements_from_mujoco_model(model, data)
+    np.testing.assert_allclose(placements["object"]["bounds"], expected["object"]["bounds"])
+    assert placements["object"]["pos"][2] < .9

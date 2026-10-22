@@ -31,7 +31,7 @@ from emet.controller.zmq_stream_control import ZmqStreamPauseMixin
 from emet.core.interfaces import ContinuousNavigationAction, Observations
 from emet.core.parameters import Parameters, get_parameters
 from emet.core.robot import AbstractRobotClient
-from emet.core.zmq_obs_codec import decode_zmq_obs_images_inplace
+from emet.core.zmq_obs_codec import decode_zmq_obs_images_inplace, read_image_timing
 from emet.core.zmq_protocol import (
     EMET_ZMQ_ROBOT_ID_KEY,
     emet_session_cache_update,
@@ -1370,6 +1370,7 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
                 lidar_points=self._obs["lidar_points"],
                 lidar_timestamp=self._obs["lidar_timestamp"],
                 emet_session=read_emet_session(self._obs),
+                image_timing=read_image_timing(self._obs),
             )
             observation.joint = self._obs.get("joint", None)
             observation.joint_velocities = self._obs.get("joint_velocities", None)
@@ -1526,6 +1527,12 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         """
         next_action = {"base_velocity": {"v": forward, "w": rotational}}
         self.send_action(next_action)
+
+    def check_base_poses(self, poses, *, timeout: float = 10.0) -> dict:
+        """Read-only GT endpoint validation on advertising simulators."""
+        from emet.core.command_client import check_base_poses
+
+        return check_base_poses(self, poses, timeout=timeout)
 
     def send_action(
         self,
@@ -1738,6 +1745,7 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
                 ee_xyz=None,
                 joint=joint,
                 emet_session=read_emet_session(message) or read_emet_session(self._state),
+                image_timing=read_image_timing(message),
             )
 
             # We may not have the camera information yet

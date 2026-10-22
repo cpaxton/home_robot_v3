@@ -13,6 +13,11 @@
 # Run with:  pytest src/test/agent/test_agent_prompt_and_tools.py -v
 
 
+import json
+
+from emet.agent.tools import get_tool_descriptions_for_prompt, get_tools
+
+
 def test_parse_strips_think_block():
     """Parser must strip <think>...</think> reasoning blocks before extracting JSON."""
     from emet.agent.prompt import parse_tool_calls_response
@@ -322,3 +327,15 @@ def test_describe_scene_delegates_to_agent():
     assert PENDING_DISCORD_IMAGE_KEY in context
     assert context[PENDING_DISCORD_IMAGE_KEY].shape == (4, 4, 3)
     assert discord.pushed == []  # image is attached by the agent loop with the reply
+
+
+def test_local_prompt_preserves_nested_tamp_argument_schema():
+    tools = [tool for tool in get_tools({}) if tool.name == 'plan_pick_place']
+    text = get_tool_descriptions_for_prompt(tools)
+    schema = json.loads(text.split('Arguments (JSON Schema): ', 1)[1])
+    assert schema == tools[0].parameters
+    region = schema['properties']['placement_region']
+    assert region['type'] == 'array' and region['minItems'] == region['maxItems'] == 2
+    assert region['items']['items']['type'] == 'number'
+    assert 'never invent' in schema['properties']['task_ref']['description']
+    assert 'placement_region' not in schema['required']

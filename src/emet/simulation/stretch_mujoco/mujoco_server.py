@@ -349,6 +349,8 @@ class MujocoServer:
                     model.dof_damping[int(model.jnt_dofadr[_jid])] = 0.05
 
         self.mjmodel = model
+        from emet.controller.manipulation.native_scene import model_signature
+        self._native_model_signature = model_signature(model)
 
         self.mjdata = MjData(self.mjmodel)
 
@@ -553,6 +555,8 @@ class MujocoServer:
         """
         self.mjdata = data
         self.mjmodel = model
+        from emet.controller.manipulation.native_scene import model_signature
+        self._native_model_signature = model_signature(model)
 
         if not self.mjdata or not self.mjdata.time:
             print("WARNING: no mujoco data to report")
@@ -626,6 +630,10 @@ class MujocoServer:
         new_status.base_xyz = base.xpos.tolist()
         new_status.base_up_dot_world_z = float(base.xmat.reshape(3, 3)[2, 2])
         new_status.scene_qpos = self.mjdata.qpos.tolist()
+        new_status.scene_model_signature = self._native_model_signature
+        new_status.scene_qvel = self.mjdata.qvel.tolist()
+        new_status.scene_time = float(self.mjdata.time)
+        new_status.scene_captured_at = time.time()
         new_status.actuator_targets = self.mjdata.ctrl.tolist()
         new_status.actuator_names = [self.mjmodel.actuator(i).name for i in range(self.mjmodel.nu)]
         self.data_proxies.set_status(new_status)
