@@ -133,3 +133,67 @@ def test_free_body_pose_zeros_only_its_velocity_dofs():
     expected = before.copy()
     expected[dof:dof + 6] = 0.
     np.testing.assert_array_equal(data.qvel, expected)
+
+
+def test_attachment_transform_update_does_not_rerun_dynamics(monkeypatch):
+    model = mujoco.MjModel.from_xml_string('''<mujoco><worldbody>
+      <body name="root"><freejoint/><geom size=".1"/>
+        <body name="child" pos=".2 0 0"><geom size=".05"/></body>
+      </body></worldbody></mujoco>''')
+    data = mujoco.MjData(model)
+    data.qacc[:] = 42.
+    def forbidden(*_):
+        raise AssertionError('attachment update reran the dynamics solver')
+    monkeypatch.setattr(mujoco, 'mj_forward', forbidden)
+    assert set_free_body_pose(model, data, 'child', [1, 2, 3], update_dynamics=False)
+    np.testing.assert_allclose(data.body('child').xpos, [1, 2, 3])
+    np.testing.assert_array_equal(data.qacc, 42.)
+
+
+def test_oracle_center_translation_and_pose_replay_for_offset_welded_child(monkeypatch):
+    """An asymmetric, rotated child must not acquire its origin/center offset twice."""
+    from emet.memory.graph_eqa.sim_ground_truth_graph import read_sim_object_placements
+    from emet.simulation import sim_manipulation as manipulation
+    from emet.simulation.sim_object_placements import (
+        DynamicPlacementTracker,
+        placements_from_mujoco_model,
+        placements_to_session_dict,
+    )
+
+    model = mujoco.MjModel.from_xml_string('''<mujoco><worldbody>
+      <body name="object_root" pos="0 0 1"><freejoint/>
+        <body name="object_child" pos=".1 .2 0" euler="0 0 .7">
+          <geom type="box" size=".04 .08 .1" pos=".12 -.05 .09"/>
+        </body>
+      </body></worldbody></mujoco>''')
+    data = mujoco.MjData(model)
+    mujoco.mj_forward(model, data)
+    placements = placements_to_session_dict(placements_from_mujoco_model(model, data))
+    tracker = DynamicPlacementTracker()
+    class Robot:
+        def get_emet_session(self):
+            tracker.refresh(placements, model, data)
+            return {'is_simulation': True, 'capabilities': {'sim_set_body_pose': True},
+                    'sim_object_placements': placements}
+    robot = Robot()
+    def command(robot, body, pos, *, quat=None):
+        assert set_free_body_pose(model, data, body, pos, quat)
+    monkeypatch.setattr(manipulation, 'robot_zmq_set_body_pose', command)
+    target = np.array([2., 3., .5])
+    assert manipulation.sim_teleport_to_grasp_pose(robot, 'object_child', target)
+    actual = read_sim_object_placements(robot.get_emet_session())['object_child']
+    np.testing.assert_allclose(actual['pos'], target + [0, 0, .12], atol=1e-9)
+    assert np.linalg.norm(actual['body_pos'] - actual['pos']) > .1
+    # A saved body pose replays the same geometry even after an intervening rotation.
+    saved = {key: value.copy() for key, value in actual.items() if key in ('pos', 'body_pos', 'body_quat')}
+    assert set_free_body_pose(model, data, 'object_child', [0, 0, 2], [1, 0, 0, 0])
+    assert set_free_body_pose(model, data, 'object_child', saved['body_pos'], saved['body_quat'])
+    replay = read_sim_object_placements(robot.get_emet_session())['object_child']
+    np.testing.assert_allclose(replay['pos'], saved['pos'], atol=1e-9)
+
+
+def test_center_conversion_requires_measured_body_origin():
+    from emet.simulation.sim_manipulation import body_position_for_center
+    for entry in ({'pos': [0, 0, 0]}, {'pos': [0, 0, 0], 'body_pos': [0, 0, float('nan')]}):
+        with pytest.raises(ValueError, match='measured_body_origin_unavailable'):
+            body_position_for_center(entry, [1, 2, 3])

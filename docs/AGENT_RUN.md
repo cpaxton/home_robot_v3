@@ -1,5 +1,14 @@
 # Running the embodied agent (`emet run agent`)
 
+**Implementation status (2026-10-12):** main includes conversation isolation
+(#176), shared current-view grounding (#180), and structured simulator TAMP tools
+(#178). Additional grounding providers, measured navigation, and bounded
+inspection remain in draft #181 → #182 → #184 → #185, with follow-ups #198/#199/#202.
+Placement #179 and measured articulation #201 are now on main. Native
+input contracts #195 remain unmerged and do not yet wire native
+scene/execution adapters into `run agent`. See [project status](project_status.md)
+and the [main TAMP API contract](api/tamp.md) before selecting a workflow.
+
 Canonical entry: **`uv run emet run agent`** (or bare `emet run agent` after `uv sync`). Full flag list: `uv run emet run agent --help`.
 
 ## Quick start
@@ -281,4 +290,31 @@ uv run python scripts/scripted_sim_pick_place.py --start-sim \
 - Manual: with sim up, `timeout 15 uv run emet run agent --no-llm -c Q --robot stretch`
 
 TAMP tools return a consistent versioned JSON result on every path. See the
-[canonical TAMP API](apis/tamp.md) for schemas, recovery actions, and simulator limits.
+[canonical TAMP API](api/tamp.md) for schemas, recovery actions, and simulator limits.
+
+For placement geometry and replay, see [the placement API](api/placement.md).
+For controlled improvements and provenance-linked figures, see
+[paired TAMP metrics](experiments/tamp_paired_metrics.md).
+
+### TAMP batches and recovery
+
+CHAT interprets versioned TAMP JSON outcomes directly. A failed, partial, or
+malformed TAMP result stops the remaining calls in the current model-generated
+batch and reports their names as `unattempted_tools` in a `batch_stopped` result.
+The session continues so the model can inspect the result and choose recovery;
+this does not certify later model choices as safe. Read each execution outcome,
+rediscover measured state, and obtain a fresh plan before continuing a multi-step
+manipulation. Never replay a consumed plan after an unknown command outcome.
+See [the TAMP API](api/tamp.md) for input/execution modes and their limitations.
+
+For native privileged Stretch, `plan_pick_place` also accepts an optional grounded
+world-XY `placement_region`; it constrains the whole released object, not merely
+its center. Inspect the returned mode and `planning_rejections`. A bounded search
+failure does not prove rearrangement is necessary or the task is impossible.
+See [native placement regions](api/tamp.md#native-placement-regions-and-bounded-grasp-search).
+
+Local text-model prompts include the same argument JSON Schemas as structured
+tool-calling clients. Nested arrays, required fields, and parameter descriptions
+must remain visible; stripping them to argument names caused native TAMP calls
+to confuse robot identity with input mode and to invent task handles. Unknown
+native task handles request rediscovery rather than inspection.

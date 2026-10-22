@@ -38,12 +38,16 @@ def set_free_body_pose(
     body_name: str,
     pos: np.ndarray | list[float],
     quat: np.ndarray | list[float] | None = None,
+    *,
+    update_dynamics: bool = True,
 ) -> bool:
     """Set world pose of a freejoint body, or a welded child via its freejoint ancestor.
 
     MolmoSpaces iTHOR objects use a freejoint root (``…_1_0_0``) with mesh children
     (``…_1_1_0``). GT placements often name the child; teleport the ancestor so the
-    requested body ends near ``pos``.
+    requested body reaches ``pos`` and, when supplied, ``quat``. Attachment updates immediately after a
+    physics step may use ``update_dynamics=False``: refresh transforms only and
+    let the next integrator step rebuild dynamics/contacts.
     """
     try:
         body_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, str(body_name))
@@ -51,33 +55,38 @@ def set_free_body_pose(
         return False
     if body_id < 0:
         return False
-    mujoco.mj_forward(model, data)
+    mujoco.mj_kinematics(model, data)
     free_id = freejoint_ancestor_body_id(model, body_id)
     if free_id is None:
         return False
     jnt_adr = int(model.body_jntadr[free_id])
     qpos_adr = int(model.jnt_qposadr[jnt_adr])
     target = np.asarray(pos, dtype=np.float64).reshape(3)
-    if free_id == body_id:
-        p = target
-    else:
-        # Preserve child offset from freejoint root in world frame (no rotation change).
-        offset = np.asarray(data.body(body_id).xpos, dtype=np.float64).reshape(3) - np.asarray(
-            data.body(free_id).xpos, dtype=np.float64
-        ).reshape(3)
-        p = target - offset
-    data.qpos[qpos_adr : qpos_adr + 3] = p
-    if quat is not None and free_id == body_id:
+    root = data.body(free_id)
+    child = data.body(body_id)
+    root_rotation = root.xmat.reshape(3, 3).copy()
+    offset_local = root_rotation.T @ (child.xpos - root.xpos)
+    if quat is not None:
         q = np.asarray(quat, dtype=np.float64).reshape(4)
-    else:
-        q = np.array(data.qpos[qpos_adr + 3 : qpos_adr + 7], dtype=np.float64)
-        if not np.isfinite(q).all() or abs(float(np.linalg.norm(q)) - 1.0) > 1e-3:
-            q = np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float64)
+        if not np.isfinite(q).all() or np.linalg.norm(q) < 1e-12:
+            return False
+        target_rotation = np.empty(9)
+        mujoco.mju_quat2Mat(target_rotation, q / np.linalg.norm(q))
+        # The requested orientation belongs to the named child, not its root.
+        child_in_root = root_rotation.T @ child.xmat.reshape(3, 3)
+        root_rotation = target_rotation.reshape(3, 3) @ child_in_root.T
+    q = np.empty(4)
+    mujoco.mju_mat2Quat(q, root_rotation.ravel())
+    data.qpos[qpos_adr : qpos_adr + 3] = target - root_rotation @ offset_local
     data.qpos[qpos_adr + 3 : qpos_adr + 7] = q
     # Free joints occupy seven qpos entries but only six velocity DOFs.
     dof_adr = int(model.jnt_dofadr[jnt_adr])
     data.qvel[dof_adr : dof_adr + 6] = 0.0
-    mujoco.mj_forward(model, data)
+    if update_dynamics:
+        mujoco.mj_forward(model, data)
+    else:
+        mujoco.mj_kinematics(model, data)
+
     return True
 
 
@@ -222,14 +231,13 @@ def resolve_agent_manip_mode(
     visual_servo: bool = False,
 ) -> str:
     """Resolve ``teleport`` | ``kinematic`` from env then config (default teleport)."""
-    if visual_servo:
-        return "stretch_visual_servo"
     from emet.simulation.env_flags import env_manip_mode
 
-    env_m = env_manip_mode()
-    if env_m:
-        return env_m
-    mode = str(config_mode or "teleport").strip().lower()
+    mode = str(env_manip_mode() or config_mode or "teleport").strip().lower()
+    if mode == "physical":
+        return mode
+    if visual_servo:
+        return "stretch_visual_servo"
     if mode in ("teleport", "kinematic"):
         return mode
     return "teleport"
@@ -294,6 +302,8 @@ def can_use_sim_gt_manip(
     If ``manip_mode=kinematic`` but the server lacks ``kinematic_manip``, still True when
     teleport (``sim_set_body_pose``) is available so the agent can fall back.
     """
+    if str(manip_mode).strip().lower() == "physical":
+        return False
     if prefer_kinematic_manip(robot, manip_mode=manip_mode, visual_servo=visual_servo):
         return True
     return prefer_sim_teleport_manip(robot, visual_servo=visual_servo)
@@ -328,6 +338,35 @@ def resolve_sim_object_body(
     )
 
 
+def body_position_for_center(placement, center):
+    """Translate a measured named body to an AABB center, retaining orientation.
+
+    Both positions are world XYZ. This conversion is valid for translation only;
+    replay with a different rotation must use the recorded body pose instead.
+    Missing measured origins fail closed rather than assuming centered meshes.
+    """
+    origin = np.asarray(placement.get("body_pos"), dtype=float)
+    previous = np.asarray(placement.get("pos"), dtype=float)
+    center = np.asarray(center, dtype=float)
+    if any(v.shape != (3,) or not np.isfinite(v).all() for v in (origin, previous, center)):
+        raise ValueError("measured_body_origin_unavailable")
+    return origin + center - previous
+
+
+def robot_zmq_set_object_center(robot, body, center):
+    """Oracle translation targeting the semantic center, not the body origin."""
+    placements = _read_robot_placements(robot) or {}
+    if body not in placements:
+        raise ValueError("measured_body_origin_unavailable")
+    entry = placements[body]
+    position = body_position_for_center(entry, center)
+    # Pin the measured orientation so the translated AABB offset stays valid.
+    quat = np.asarray(entry.get("body_quat"), dtype=float)
+    if quat.shape != (4,) or not np.isfinite(quat).all() or np.linalg.norm(quat) < 1e-12:
+        raise ValueError("measured_body_orientation_unavailable")
+    robot_zmq_set_body_pose(robot, body, position, quat=quat)
+
+
 def _verify_body_near(
     robot: Any,
     body: str,
@@ -359,7 +398,7 @@ def sim_teleport_pickup(
         return None
     pos = np.asarray(placements[body]["pos"], dtype=np.float64).reshape(3).copy()
     pos[2] += float(lift_m)
-    robot_zmq_set_body_pose(robot, body, pos)
+    robot_zmq_set_object_center(robot, body, pos)
     if verify and not _verify_body_near(robot, body, pos):
         return None
     return body
@@ -398,7 +437,7 @@ def sim_teleport_place(
         return False
     anchor = np.asarray(placements[recep_bodies[0]]["pos"], dtype=np.float64).reshape(3).copy()
     anchor[2] += float(place_z_offset_m)
-    robot_zmq_set_body_pose(robot, body, anchor)
+    robot_zmq_set_object_center(robot, body, anchor)
     if verify and not _verify_body_near(robot, body, anchor):
         return False
     return True
@@ -482,12 +521,12 @@ def sim_teleport_to_grasp_pose(
     if not robot_sim_body_pose_teleport_supported(robot):
         return False
     target = np.asarray(grasp_xyz_world, dtype=np.float64).reshape(3).copy()
-    robot_zmq_set_body_pose(robot, body, target)
+    robot_zmq_set_object_center(robot, body, target)
     if verify and not _verify_body_near(robot, body, target, tol_m=0.08):
         return False
     lifted = target.copy()
     lifted[2] += float(lift_m)
-    robot_zmq_set_body_pose(robot, body, lifted)
+    robot_zmq_set_object_center(robot, body, lifted)
     if verify and not _verify_body_near(robot, body, lifted, tol_m=0.08):
         return False
     return True

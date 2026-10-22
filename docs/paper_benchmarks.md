@@ -11,6 +11,16 @@ repo root. The build uses local `latexmk` or falls back to Docker
 `texlive/texlive:latest`.
 **Results go in:** `paper/sections/05_results.tex` (tables/figures) — not committed automatically from sweeps.
 
+## Evidence status (2026-10-12)
+
+See [project status](project_status.md#paper-evidence-and-remaining-inconsistencies)
+for completed historical results, open PR dependencies, and paper inconsistencies.
+The August q0–112 HM-EQA evaluation is recorded; a current-stack rerun and the
+released GraphEQA semantic-filtered parity set are separate work. OpenEQA remains
+a planned harness milestone. Commands below are operator recipes, not a record
+that every sweep has passed. Keep GT-assisted controls, learned-agent results,
+and native-contact checks in separate rows with tested source/configuration.
+
 ## Benchmark map
 
 | Track | Task | Primary metric | Config | Batch command | Aggregate → paper |
@@ -26,7 +36,7 @@ repo root. The build uses local `latexmk` or falls back to Docker
 | **Dynamic exploration** | Frontier explore + world-change + lifelong cycles | coverage, EQA, staleness, churn | `configs/benchmarks/dynamic_exploration.yaml` | `scripts/eval_dynamic_exploration.py` | `aggregate_dynamic_exploration.csv` |
 | **TAMP clutter** | Move scattered floor objects out of the way as part of a plan (cleanup / nav-to-landmark) | `task_success`, `n_cleared`, `manip_success_rate` | `configs/ovmm/clutter_episodes.yaml` | `scripts/eval_tamp_clutter.py` | `aggregate_tamp_clutter.csv` under `EMET_TAMP_CLUTTER_OUTPUT` |
 | **Backend localization figure** | Single-scene GT vs prediction | XY error, @0.5 m hit | Robocasa seed 0 | `scripts/smoke_backend_localization_figure.py` | PNG + `smoke_results.json` |
-| **Habitat EQA** | HM-EQA / OpenEQA | MC accuracy, steps | Habitat install | `.venv-habitat/bin/emet-habitat` | [habitat_eqa_results.md](experiments/habitat_eqa_results.md) |
+| **Habitat EQA** | HM-EQA (OpenEQA planned, not wired) | MC accuracy, steps | Habitat install | `.venv-habitat/bin/emet-habitat` | [habitat_eqa_results.md](experiments/habitat_eqa_results.md) |
 | **RoboVista** | Offline robot-centric MCQ-VQA (static images) | MC accuracy (overall + domain) | HF `sy-xie/robovista` | `emet robovista run-batch` | not comparable to HM-EQA |
 
 Deep dives: [experiments/README.md](experiments/README.md) (index), [ovmm_find_phase_benchmark.md](ovmm_find_phase_benchmark.md), [ovmm_full_benchmark.md](ovmm_full_benchmark.md), [dynamic_exploration_benchmark.md](dynamic_exploration_benchmark.md), [experiments/backend_localization.md](experiments/backend_localization.md), [sqa3d.md](sqa3d.md), [sqa3d_compute.md](sqa3d_compute.md), [dynagraph_benchmarks.md](dynagraph_benchmarks.md), [habitat/README.md](habitat/README.md).

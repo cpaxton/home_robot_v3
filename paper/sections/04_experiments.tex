@@ -1,13 +1,13 @@
 \section{Experiments}
 \label{sec:experiments}
 
-\textit{Experimental results are partial: Habitat HM-EQA has preliminary slices (Section~\ref{sec:hmeqa_results}); other tracks remain placeholders until sweeps complete.}
+\textit{Experimental results are partial: Habitat HM-EQA has historical slice evaluations (Section~\ref{sec:hmeqa_results}); other tracks contain partial simulator controls and placeholders pending scored sweeps.}
 Maintainer index: \texttt{docs/experiments/README.md} (experiment matrix, smokes, figures); detailed runbook: \texttt{docs/paper\_benchmarks.md}.
 
 \subsection{Goals}
 
 \begin{enumerate}
-  \item \textbf{Habitat EQA (primary):} Reproduce GraphEQA-style metrics on HM-EQA (113 questions) and an OpenEQA val subset (\textbf{harness milestone; OpenEQA not yet wired}): success rate, mean planning steps, GraphEQA vs.\ Dynagraph vs.\ ablations (parity checklist and official baselines: Appendix~\ref{app:habitat_eqa_parity}); classic vs.\ agentic-verify controllers on matched Dynagraph profiles (Section~\ref{sec:agentic_h2h}).
+  \item \textbf{Habitat EQA (primary):} Reproduce GraphEQA-style metrics on our historical HM-EQA slice (indices 0--112; distinct from the released GraphEQA selection) and an OpenEQA val subset (\textbf{harness milestone; OpenEQA not yet wired}): success rate, mean planning steps, GraphEQA vs.\ Dynagraph vs.\ ablations (parity checklist and official baselines: Appendix~\ref{app:habitat_eqa_parity}); classic vs.\ agentic-verify controllers on matched Dynagraph profiles (Section~\ref{sec:agentic_h2h}).
   \item \textbf{SQA3D situated open QA:} Embodied ScanNet replay with EM@1 scoring (Section~\ref{sec:sqa3d_benchmark}); compare \texttt{dynamem} vs.\ \texttt{dynagraph} with \texttt{prompt\_variant: sqa3d}.
   \item \textbf{OVMM-inspired find-phase:} FindObj / FindRec localization on Emet sim tiers S0--S2 and Habitat HM3D proxy episodes (Section~\ref{sec:ovmm_find_phase}); memory backends \texttt{dynamem}, \texttt{static\_graph}, \texttt{dynagraph}, and sim oracle \texttt{ground\_truth}.
   \item \textbf{Emet sim (complementary):} Robocasa kitchens and MolmoSpaces iTHOR with Stretch, Galaxea R1 (rby1), and Innate Mars (Appendix~\ref{app:innate_mars}); depth-source policy in Appendix~\ref{app:da3}; GT-supervised object finding (Section~\ref{sec:gt_experiments}).
@@ -311,11 +311,11 @@ Molmo GT fixture scans may cap on large scenes; Robocasa layout $\neq$ HSSD; sta
 
 \textit{Recorded numbers:} \texttt{docs/experiments/habitat\_eqa\_results.md}; paper tables in Section~\ref{sec:hmeqa_results} and Appendix~\ref{app:habitat_eqa_parity}.
 
-\textbf{Current status (July 2026).}
+\textbf{Recorded status (audited October 2026).}
 The \texttt{emet-habitat} harness runs end-to-end on HM-EQA with local VLMs.
-Our best \textbf{full-benchmark} result is \textbf{41.6\%} (113 questions, static\_graph, gemma-3-4b-it) vs.\ \textbf{63.5--67.0\%} for GraphEQA with API VLMs (Table~\ref{tab:grapheqa_official_hmeqa}).
+The historical August q0--112 evaluation records rescored \textbf{49.6\%} Dynagraph and \textbf{47.8\%} static\_graph accuracy with Qwen3-VL-8B. Published GraphEQA API-VLM results use a different selection and stack (Table~\ref{tab:grapheqa_official_hmeqa}); these are contextual comparisons, not matched parity results.
 Dynagraph beats our static\_graph baseline on matched slices (+3\,pp on letter-balanced 32 with Qwen2.5-VL-3B; +12.5\,pp on canonical-8 with MCQ debias).
-Post-fix runs with Qwen3-VL-8B score 50\% on an eight-question held-out draw (seed 20260627, excluding tuning ids)---above chance but not yet a full-benchmark headline.
+Post-fix runs with Qwen3-VL-8B score 50\% on an eight-question held-out draw (seed 20260627, excluding tuning ids)---a historical small-slice result preceding the August evaluation.
 A \textbf{July 2026 navigation stack} (Image-$N$ viewpoint/standoff waypoints, navmesh trajectory execution, frontier distance sorting) landed after that held-out run; headline sweeps should use the post-nav-fix stack (tag \texttt{\_postfix\_nav202607} in JSONL).
 
 \subsection{Classic vs.\ agentic verify (HM-EQA)}

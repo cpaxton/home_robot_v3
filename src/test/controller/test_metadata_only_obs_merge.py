@@ -61,3 +61,47 @@ def test_get_observation_snapshot_matches_live_obs_after_merge() -> None:
     assert obs is not None
     assert obs.rgb.shape == (4, 4, 3)
     assert client._obs.get("rgb") is not None
+
+
+def test_slow_servo_decode_does_not_block_state_or_replace_new_observation(monkeypatch):
+    import emet.controller.generic_zmq_client as module
+
+    client = GenericZmqClient.__new__(GenericZmqClient)
+    client._obs_lock = threading.Lock()
+    client._obs = {'rgb': _jpeg_rgb(), 'step': 1}
+    client._state = {'step': 1}
+    client._emet_session_cache = None
+    client._emet_session_cache_step = -1
+    entered, release = threading.Event(), threading.Event()
+    errors = []
+
+    def decode(*args):
+        entered.set()
+        assert release.wait(3)
+        return None
+
+    monkeypatch.setattr(module, '_decode_servo_message_to_observations', decode)
+
+    def run():
+        try:
+            client._publish_servo_message({'step': 1})
+        except BaseException as exc:
+            errors.append(exc)
+
+    thread = threading.Thread(target=run, daemon=True)
+    thread.start()
+    try:
+        assert entered.wait(3)
+        assert client._obs_lock.acquire(timeout=.2), 'image decode blocks measured-state delivery'
+        try:
+            newer = {'rgb': _jpeg_rgb(), 'step': 2}
+            client._obs, client._state = newer, {'step': 2}
+        finally:
+            client._obs_lock.release()
+    finally:
+        release.set()
+        thread.join(3)
+    assert not errors
+    assert not thread.is_alive()
+    assert client._obs is newer
+    assert client._state['step'] == 2

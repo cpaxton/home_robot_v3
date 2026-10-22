@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-22
 **Status:** Historical gates below predate the current execution guards. Current
-contracts and readiness requirements: [TAMP API](../apis/tamp.md).
+contracts and readiness requirements: [TAMP API](../api/tamp.md).
 
 ## Scope
 

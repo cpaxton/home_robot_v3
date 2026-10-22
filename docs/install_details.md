@@ -25,18 +25,58 @@ On both your PC and your robot, clone and install the package:
 
 ```bash
 # Set up SSH keys if you want to develop and push
-git clone git@github.com:hello-robot/stretch_ai.git --recursive
+git clone git@github.com:cpaxton/home_robot_v3.git --recursive
 
 # Use HTTPS if you do not have SSH keys set up
-git clone https://github.com/hello-robot/stretch_ai.git
+git clone https://github.com/cpaxton/home_robot_v3.git
 ```
+
+### Standalone installation
+
+The standalone script clones a new checkout and delegates to its `install.sh`.
+It requires Bash, Git, and repository access; the checkout installer provisions
+uv and system/Python dependencies. Its full profile includes simulation by
+default; this example explicitly selects a lighter install:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/cpaxton/home_robot_v3/main/scripts/bootstrap_install.sh | bash -s -- -y --no-sim
+```
+
+Choose a destination and branch/tag with environment variables on the Bash side:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/cpaxton/home_robot_v3/main/scripts/bootstrap_install.sh | \
+  EMET_INSTALL_DIR="$HOME/src/emet" EMET_INSTALL_REF=main bash -s -- -y --no-sim
+```
+
+`EMET_INSTALL_REPO` overrides the default HTTPS Git URL. `EMET_INSTALL_REF`
+accepts a branch or tag, not an arbitrary commit SHA. Existing destinations,
+including symlinks, are refused; run `./install.sh` inside an existing checkout.
+All installer arguments are forwarded unchanged. Without `-y`/`--yes`, prompts
+use the controlling terminal; without a terminal the bootstrap exits before
+cloning. `bash scripts/bootstrap_install.sh --help` displays bootstrap options.
+A failed install retains its checkout so you can inspect and retry it.
+
+For a private checkout, both the script download and Git clone need access.
+An authenticated GitHub CLI can download the script, with Git using your
+configured SSH credentials:
+
+```bash
+gh api 'repos/cpaxton/home_robot_v3/contents/scripts/bootstrap_install.sh?ref=main' \
+  -H 'Accept: application/vnd.github.raw+json' > /tmp/emet-bootstrap.sh
+EMET_INSTALL_REPO=git@github.com:cpaxton/home_robot_v3.git bash /tmp/emet-bootstrap.sh -y --no-sim
+```
+
+The `main` download URLs above become available after the bootstrap change is
+merged. To try a PR first, select its branch in both the download URL (or API
+`ref`) and `EMET_INSTALL_REF`.
 
 #### Install On PC
 
 The installation script uses [uv](https://docs.astral.sh/uv/) to create a virtual environment and install dependencies (no conda required):
 
 ```bash
-cd stretch_ai
+cd home_robot_v3
 ./install.sh
 ```
 
