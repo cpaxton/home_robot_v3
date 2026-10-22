@@ -1,5 +1,74 @@
 # Shared-agent stack readiness
 
+## Landing results — 2026-10-22 (current)
+
+Merged in dependency order: #218 `c6160d06`, #181 `53e41532`,
+#182 `36d11e5d`, #184 `f22eb739`. #185's final tooling gate is clear;
+land it after this report commit. Source/history refreshes did not change the
+tested production trees. The only #185 squash-refresh conflict was a test
+fixture: retain explicit OmegaConf loading so tests do not own global Hydra.
+49 tooling/controller plus 54 job-order/discovery/OVMM-metric tests pass.
+
+Navigation evidence: job `20261022_173013_bf497d` exercised the **actual**
+Stretch simulation bridge, production wheel controller and precision policy,
+not the standalone Goto approximation. Three commands (10 cm drive, +15 degree
+turn, return heading) succeeded. Each has five post-stop samples inside the
+unchanged 20 mm / 0.03 rad limits: worst XY 9.902 mm, worst yaw 0.014591 rad.
+No teleport or speed boost. Owner tests: 79 map/contact/arrival tests plus
+96 routing/tool/control/command tests passed. #184: 285 head/floor/sweep tests
+plus real measured head-arrival smoke. Head smoke did not independently audit
+acquisition freshness (saved observation object sequence is null).
+
+Provider disposition: opt-in modes remain opt-in. Fresh inference on saved
+RGB-D gave two correct bowl positive cases and six correct absent cases after
+GT/visual diagnosis of an invalid bottle-positive expectation (original failed
+run retained). Main/provider default-YOLOE S0 runs both completed and failed both
+localizations. Their first RGB views are visually black with a sky strip;
+the same scene-quality problem appears in the stationary head smoke. This is
+limited default-path comparison, **not** OVMM task acceptance or a statistical
+non-regression claim. Durable pair: `/home/cpaxton/runs/emet/provider181-default-pair-20261022`.
+
+### Hold the context stack: fresh EQA4 did not clear acceptance
+
+Job `20261022_172320_110918`, seed 0, q12/14/6/56; frozen main `c6160d06`
+versus context tip `8a929910`, same local Qwen3-VL-8B int4 and budgets.
+Both arms produced complete metrics with zero infrastructure failures.
+
+| Question | Main scored | Main raw final model answer | Candidate model_final |
+| --- | --- | --- | --- |
+| 6 | Correct, earlier VLM suggestion | Unknown (not the scored answer) | Correct |
+| 12 | Correct, mcq_debias | None (wrong; replaced by Two) | One (wrong) |
+| 14 | Correct | In the living room (correct) | Next to the TV (wrong) |
+| 56 | Correct, earlier VLM suggestion | Unknown (not the scored answer) | White curtains (wrong) |
+
+Native scores: **4/4 vs 1/4**. Main's raw final model answers are correct on
+q14 only; candidate's final answers are correct on q6 only. This is not a
+counterfactual paired model-quality estimate: images, dialogue and control flow
+also differ. Do not dismiss the scored loss, mislabel all main successes as
+ungrounded, or restore answer substitution to improve the number.
+
+Manual candidate image audit: q14 has the fan close-up plus a contextual image
+with sofa/window; no TV is visible, yet Qwen invents one. q56 has a close shelf
+and doorway/hallway context; neither image establishes curtain color. Thus
+q14 includes a semantic model error, while q56 needs better contextual evidence.
+The opt-in #202 ranking policy was **not enabled** in this trial; q12/14/56
+traces have zero view_selection events. Do not attribute this result to its
+ranking algorithm. No defaults were flipped by the pilot.
+
+Hold #199/#202/#216/#217 pending attribution/repair; keep model final authority.
+Targeted existing-selector ablation `20261022_174224_e401ca` is queued/running
+on q14/q56, enabling only pose-history selection with unchanged model_final,
+budgets, and source. This is diagnostic, not a new default or full acceptance.
+If it helps, inspect the exact packets and rerun EQA4 before promotion. If it
+does not, compare fixed captured packets/history rather than adding semantic
+answer rules or repeatedly simulating unchanged cases. S0/Molmo object and
+receptacle evidence and observed pick/place remain separate gates.
+
+Fresh EQA artifacts: `/home/cpaxton/runs/emet/stack-eqa4-20261022`; metrics link
+the exact debug bundles under `~/.cache/habitat_eqa/episodes/`. TAMP #213/#219
+and optional #198/#214 remain outside this landing batch. Dirty user checkout
+is unchanged; no heavy experiments ran concurrently.
+
 ## Landing execution — 2026-10-22 (supersedes statuses below)
 
 - **#218 merged** at `c6160d06`, using repository-required squash merge.
