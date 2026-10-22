@@ -780,7 +780,6 @@ class MujocoZmqServer(BaseZmqServer):
             session["spawn_floor_map"] = self._environment_descriptor["spawn_floor_map"]
         env_kind = env.get("kind") if isinstance(env, dict) else None
         gt_model, gt_data = self._gt_model_data_for_session()
-        self._articulation_model = gt_model
         from emet.robots.head_capability import STRETCH_LEGACY_HEAD, HeadCapability, mujoco_head_capability
 
         head = mujoco_head_capability(gt_model, ("joint_head_pan", "joint_head_tilt"))
@@ -795,6 +794,7 @@ class MujocoZmqServer(BaseZmqServer):
                 head.source,
             )
             caps["head_motion"] = head.as_dict()
+        self._articulation_model = gt_model
         attach_sim_object_placements_to_session(
             session,
             objects_info=self.objects_info,

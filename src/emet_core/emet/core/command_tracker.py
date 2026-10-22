@@ -135,4 +135,9 @@ class CommandTracker:
 
     def snapshot(self) -> list[dict]:
         with self._lock:
-            return deepcopy(list(self._receipts.values()))
+            # Capture each revision atomically. Nested results are owned by the
+            # tracker and replaced, never edited, by transition(). Retaining
+            # these references lets the expensive copy run without blocking
+            # acceptance or completion of another command.
+            receipts = [receipt.copy() for receipt in self._receipts.values()]
+        return deepcopy(receipts)
