@@ -76,3 +76,58 @@ def test_arm_waypoints_require_final_measured_arrival():
         assert row["last_waypoint"] == row["waypoints"] - 1
         assert row["joint_error"] < 0.05
         assert row["collision"] is False
+
+
+def test_coordinated_pose_trajectory_uses_reachable_base_and_hand_waypoints():
+    from emet.rl.trajectories import evaluate_trajectories
+
+    report = evaluate_trajectories(coordinated=True, episodes=1, seed=120000)
+    assert report["coordinated"] is True
+    assert report["success_rate"] == 1
+    row = report["episodes"][0]
+    assert row["waypoints"] == 5
+    assert row["last_waypoint"] == 4
+    assert row["collision"] is False
+    assert row["xy_error"] <= 0.05
+    assert row["yaw_error"] <= np.deg2rad(5)
+    assert row["ee_position_error"] <= 0.03
+    assert row["ee_orientation_error"] <= 0.12
+
+
+def test_training_environment_advances_measured_coordinated_waypoints():
+    env = MarsReachEnv(
+        EnvConfig(task="coordinated", pose_targets=True, trajectory_waypoints=5, horizon_seconds=15)
+    )
+    try:
+        env.reset(seed=120000)
+        advanced = 0
+        for _ in range(300):
+            _, _, terminated, truncated, info = env.step(env.expert_action())
+            advanced += info["waypoint_advanced"]
+            if terminated or truncated:
+                break
+        assert advanced == 4
+        assert info["is_success"] is True
+        assert info["trajectory_waypoint"] == 4
+        assert info["trajectory_waypoints"] == 5
+    finally:
+        env.close()
+
+
+def test_coordinated_waypoint_distribution_uses_turn_drive_align_instead_of_strafing():
+    from emet.rl.control import Goal
+    from emet.rl.waypoints import coordinated_waypoints
+
+    start = np.zeros(3)
+    final = Goal(np.array([0, 0.06, 0]), np.full(5, 0.1), np.ones(6))
+    goals = coordinated_waypoints(start, np.zeros(5), final, 5)
+    assert len(goals) == 5
+    previous = start
+    for goal in goals:
+        delta = goal.base[:2] - previous[:2]
+        if np.linalg.norm(delta) > 1e-6:
+            heading = np.array([np.cos(previous[2]), np.sin(previous[2])])
+            assert abs(delta @ heading) / np.linalg.norm(delta) > 0.999
+        previous = goal.base
+    np.testing.assert_allclose(goals[-1].base, final.base)
+    np.testing.assert_allclose(goals[-1].arm, final.arm)

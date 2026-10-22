@@ -77,6 +77,14 @@ class RobotSpec:
     footprint: Footprint
     mjcf_path: str | None = None
     actuator_names: list[str] = field(default_factory=list)
+    control_limits: dict[str, float] = field(default_factory=dict)
+    """Verified or simulator-only absolute caps, with units in the key names.
+
+    Values are descriptive metadata; command adapters must still enforce their
+    own caps. Unknown hardware limits must be omitted rather than guessed.
+    """
+    control_limit_sources: dict[str, str] = field(default_factory=dict)
+    """Evidence/provenance for each entry in :attr:`control_limits`."""
     base_link_name: str = "base_link"
     # Curated arm kinematics (MJCF joint/body names) for kinematic pick/place. When set,
     # :meth:`ArmManipProfile.for_robot` uses it before MJCF auto-discovery. Optional: the

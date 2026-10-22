@@ -4,6 +4,7 @@ import mujoco
 import numpy as np
 import pytest
 
+from emet.rl.contact import solved_contact_force
 from emet.rl.manipulation.control import ManipulationControl
 from emet.rl.manipulation.env import (
     DISTURBANCE_FORCE_N,
@@ -19,7 +20,6 @@ from emet.rl.manipulation.profiles import (
     STRETCH_CLOSED_SLIDE_M,
     TRACKING_TRIM_GAIN,
     TRACKING_TRIM_LIMIT,
-    ModelAdmissionError,
     stretch_finger_to_slide,
 )
 from emet.rl.manipulation.safety import ContactMonitor, retention_error
@@ -31,6 +31,18 @@ def test_stretch_closed_gripper_reference_is_derived_from_archived_coupling():
     assert STRETCH.gripper_closed == pytest.approx(STRETCH_CLOSED_SLIDE_M)
     assert stretch_finger_to_slide(-0.376) == pytest.approx(-0.020)
     assert stretch_finger_to_slide(0.560) == pytest.approx(0.040)
+
+
+def test_stretch_carry_reset_handles_inactive_proximity_contacts():
+    """Repeated randomized carry resets should stay in the Python safety path."""
+    env = ManipulationEnv(ManipulationConfig(robot="stretch", scenario="carry"))
+    try:
+        for seed in (200000, 200001, 200002):
+            obs, info = env.reset(seed=seed)
+            assert np.isfinite(obs["history"]).all()
+            assert np.isfinite(info["peak_contact_force"])
+    finally:
+        env.close()
 
 
 def test_disturbance_randomizes_world_frame_end_effector_wrench():
@@ -52,6 +64,27 @@ def test_payload_friction_randomization_does_not_change_support_traction():
         expected = env.friction.copy()
         expected[payload_geom, 0] *= info["randomization"]["friction_factor"]
         np.testing.assert_allclose(env.model.geom_friction, expected)
+    finally:
+        env.close()
+
+
+def test_stretch_combined_base_and_hand_target_uses_fk_at_commanded_base():
+    env = ManipulationEnv(ManipulationConfig(robot="stretch", scenario="reach"))
+    try:
+        for seed in range(20):
+            _, _ = env.reset(seed=seed)
+            if env.target_mode == 3 and np.linalg.norm(
+                env.control.base_goal[:2] - env.control.base_pose()[:2]
+            ) > 0.02:
+                break
+        else:
+            pytest.fail("could not sample a coordinated Stretch base/hand target")
+
+        control = env.control
+        at_goal_base = env._fk_hand_pose(control.base_goal, control.reference)
+        at_current_base = env._fk_hand_pose(control.base_pose(), control.reference)
+        assert np.linalg.norm(at_goal_base[:3] - at_current_base[:3]) > 0.01
+        np.testing.assert_allclose(control.hand_goal, at_goal_base, atol=1e-7)
     finally:
         env.close()
 
@@ -86,9 +119,18 @@ def test_frozen_goals_and_failures_unchanged():
     assert not left["complete_physics_snapshot"]
 
 
-def test_mars_missing_support_geometry_blocks_training():
-    with pytest.raises(ModelAdmissionError, match="wheel/caster"):
-        build_manipulation_model("innate_mars")
+def test_mars_physical_model_has_free_base_and_three_supports():
+    from emet.rl.manipulation.profiles import MARS
+
+    model, _ = build_manipulation_model("innate_mars")
+    joint = model.joint("manipulation_base").id
+    assert model.jnt_type[joint] == mujoco.mjtJoint.mjJNT_FREE
+    assert len(MARS.wheel_bodies) == 3
+    assert MARS.action_size == 8
+    for name in MARS.wheel_bodies:
+        assert model.body(name).id > 0
+    assert model.joint("mars_caster_swivel").id > 0
+    assert mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, "base_x") == -1
 
 
 def test_mars_gripper_uses_rectangular_urdf_contact_jaws():
@@ -109,7 +151,7 @@ def test_grip_corrections_are_bounded_and_release_requires_authorization():
     control.initialize([0.55, 0.15, 0, -0.26, 0], 0)
     control.set_reference(control.positions(), phase="carry", grip=0)
     for _ in range(100):
-        control.accept(np.array([0, 0, 0, 0, 0, 1]))
+        control.accept(np.r_[np.zeros(STRETCH.action_size - 1), 1])
     assert control.grip_target <= 0.05 * 0.06 + 1e-12
     with pytest.raises(ValueError, match="authorization"):
         control.set_reference(control.positions(), phase="release")
@@ -117,10 +159,26 @@ def test_grip_corrections_are_bounded_and_release_requires_authorization():
     control.stop()
     assert control.grip_target == control.grip_reference
     assert not control.release_authorized
-    control.accept(np.ones(6))
+    control.accept(np.ones(STRETCH.action_size))
     assert control.grip_target == control.grip_reference
     control.set_reference(control.positions())
     assert control.stopped  # A new goal cannot clear a safety latch.
+
+
+def test_stretch_base_velocity_is_slewed_and_base_lock_is_enforced():
+    model, _ = build_manipulation_model("stretch")
+    data = mujoco.MjData(model)
+    control = ManipulationControl(model, data, STRETCH)
+    control.initialize([0.55, 0.15, 0, -0.26, 0], 0)
+    control.set_pose_targets(control.base_pose() + [0.2, 0, 0], [True, True, True], control.ee_pose(), True)
+    control.accept(np.r_[1.0, 1.0, np.zeros(STRETCH.action_size - 2)])
+    np.testing.assert_allclose(control.base_command, [STRETCH.base_acceleration * STRETCH.dt,
+                                                      STRETCH.base_yaw_acceleration * STRETCH.dt])
+    control.apply()
+    assert np.max(np.abs(data.ctrl[control.wheel_act])) < 1
+    control.set_pose_targets(control.base_pose(), [False, False, False], control.ee_pose(), True)
+    control.accept(np.r_[np.ones(2), np.zeros(STRETCH.action_size - 2)])
+    np.testing.assert_allclose(control.base_command, 0, atol=1e-9)
 
 
 def test_fault_during_authorized_release_freezes_measured_gripper_position():
@@ -199,6 +257,8 @@ def test_arm_floor_loading_physically_lifts_wheels_and_is_detected():
     monitor = ContactMonitor(model, profile)
     for _ in range(500):
         mujoco.mj_step(model, data)
+    loads = [solved_contact_force(model, data, index) for index in range(data.ncon)]
+    assert any(normal > 0 and magnitude >= normal for normal, magnitude in loads)
     monitor.update(data)
     assert not monitor.wheel_lift
     monitor.reset()

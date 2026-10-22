@@ -12,6 +12,8 @@ from emet.rl.policy import PPOPolicy, export_policy
 def evaluation_metrics(report):
     rows = report["episodes"]
     result = {k: report[k] for k in ("success_rate", "collision_rate", "observation_and_inference_p95_ms")}
+    if "teacher_action_mae" in report:
+        result["teacher_action_mae"] = float(report["teacher_action_mae"])
     for key in ("unsafe_contact", "invalid_physics"):
         result[f"{key}_rate"] = float(np.mean([r.get(key, False) for r in rows]))
     result["event_episode_rate"] = float(np.mean([r.get("event_count", 0) > 0 for r in rows]))

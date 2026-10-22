@@ -140,6 +140,40 @@ Readiness additionally requires three reference-admitted cleanup fixtures
 passing. Preserve admission failures and failed repeats; do not substitute easier
 fixtures or pool assisted historical scores with new results.
 
+## Mars-first RL trajectory and TAMP support
+
+Mars is the first real-robot target for the reactive controller. Its coordinated
+policy uses world-frame base SE(2) and hand SE(3) targets, generated from reachable
+MuJoCo configurations, with goal masks and history preserved through waypoint
+changes. `emet.rl.manipulation.tamp_cases` can now build Mars arm-path cases with
+the GT planner (`PhysicalPickPlaceExecutor.plan_joint_target`):
+
+```bash
+python -m emet.rl.manipulation.tamp_cases --robot innate_mars --episodes 10 \
+  --output /tmp/mars-tamp-cases.json
+```
+
+The Mars manipulation simulator now separates two driven wheels and a passive
+swiveling caster from the pinned upstream `base.STL`. A free chassis permits
+vertical motion, roll and pitch, and contact measurements cover all three
+supports. Add `--execute` for actuator-based component replay. Failed grasp resets
+and tracking failures remain failures in the report; arm-path replay does not
+establish full pick/place success. The native public-tool adapter below still
+executes only Stretch, and `InnateMarsRosRobotClient` still lacks arm trajectory
+commands.
+
+Support dimensions come from the source CAD; the 0.89 kg base assembly mass
+comes from its URDF. Mass distribution uses a uniform-density CAD estimate,
+including a stated caster fork/wheel partition. Friction and motor torque are
+simulator estimates. See `emet/assets/robot/innate_mars/reference/chassis_support.json`
+for provenance. Hardware validation remains necessary.
+
+Mars's vendored URDF states 2 rad/s for arm revolute joints. This is recorded in
+`RobotSpec` with its provenance, but is not a calibrated hardware command cap.
+The external Mars bridge/Nav2 configuration does not provide a checked-in,
+verified base speed/acceleration limit; those fields remain unset. Current RL
+limits are conservative simulator settings and cannot authorize hardware use.
+
 ## Native execution integration (experimental debug adapter)
 
 `agent.manip_mode=physical` selects actuator/contact execution. It never falls
@@ -338,3 +372,47 @@ also bound total episode time. Remote decoding uses the server defaults, and
 `--seed` only controls the local process. Archive the served model revision and
 sampling configuration alongside results. Physics still pauses during inference
 in this in-process harness; remote hosting does not establish live execution.
+
+### Experimental task-pose tracking adapter (simulation only)
+
+The RL controller can consume a `TaskPoseTrajectory` from
+`emet.rl.manipulation.tracking`: strictly increasing relative timestamps starting
+at zero, one SE(2) base pose, one hand pose, and one coupled-gripper target per
+sample. Hand poses contain XYZ and the first two rotation-matrix columns flattened
+in row-major order (nine values). Coordinates are in a fixed task/world frame;
+base yaw uses shortest-path interpolation and hand rotations use SLERP.
+Mars and Stretch are the currently supported single-hand embodiments.
+
+Install a validated schedule with `ManipulationEnv.set_task_trajectory(path)` or
+`ManipulationControl.set_task_trajectory(path)` on a direct-velocity, preview-enabled controller.
+Installation changes targets, never robot/object state, actuator history, or a
+latched stop. It rejects a stopped controller and out-of-range gripper targets.
+A masked base target leaves the base available to satisfy an active hand target;
+it does not lock the wheels. Supplying base constraints requires the controller
+to satisfy both base and hand contracts. The gripper schedule informs preview;
+physical closure/release remains under the executor's phase/authorization API.
+
+The new pose-only actor sees proprioception, command history, masked pose targets,
+and preview; it does not receive a joint solution from IK or inactive target values.
+Future commands may be provided by the executor, but future unannounced replans
+must not be exposed. No IK solve is required during policy execution.
+
+`task_pose_trajectory(env, case)` in `emet.rl.manipulation.tamp_cases` converts a
+GT TAMP joint path to a retimed task-frame schedule using private FK. This is a
+prototype command adapter, not an extension of the public joint executor's
+collision/dynamics certificate and not full Mars public-tool integration. Existing
+joint certificates, frozen fixtures, retention limits, and base-drift checks
+remain unchanged. Generate/debug these command trajectories with:
+
+```bash
+MPLCONFIGDIR=/tmp/mpl MUJOCO_GL=egl OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
+  taskset -c 0-7,12-31 .venv/bin/python -m emet.rl.manipulation.tamp_cases \
+  --robot innate_mars --episodes 2 --emit-pose-trajectories --execute \
+  --output /tmp/mars-tamp-references.json
+MPLCONFIGDIR=/tmp/mpl .venv/bin/python -m emet.rl.manipulation.tracking \
+  --report /tmp/mars-tamp-references.json --output /tmp/mars-tamp-references.png
+```
+
+The `--execute` results above concern the existing physical joint executor adapter.
+Passing a learned checkpoint via `--policy` tests that controller; emitting pose
+references alone does not establish learned-policy or integrated task success.

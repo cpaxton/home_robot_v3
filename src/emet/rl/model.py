@@ -61,6 +61,10 @@ def model_fingerprint():
     root.find("compiler").set("meshdir", "meshes")
     digest = hashlib.sha256(ET.tostring(root) + json.dumps(MARS.metadata(), sort_keys=True).encode())
     digest.update(REFERENCE.read_bytes())
+    digest.update(
+        b"obstacle_features:oriented_world_aabbs_v1;"
+        b"contact_load:efc_linear_l1_bound_v2;arena:256_contacts_512_constraints"
+    )
     for path in sorted((ASSETS / "innate_mars" / "meshes").glob("*.STL")):
         digest.update(path.name.encode())
         digest.update(path.read_bytes())
@@ -69,6 +73,14 @@ def model_fingerprint():
 
 def build_model(scene="procedural", obstacle_count=0):
     root = robot_xml()
+    # The source model's 5000 contact/constraint slots reserve a huge arena in
+    # every MjData. The proxy robot and small RL scenes stay below 40 contacts
+    # and 200 scalar constraints, so retain more than 2x solver headroom.
+    size = root.find("size")
+    if size is None:
+        size = ET.SubElement(root, "size")
+    size.set("nconmax", "256")
+    size.set("njmax", "512")
     world = root.find("worldbody")
     if scene == "table":
         scene_root = ET.parse(ASSETS / "scene_environment.xml").getroot()

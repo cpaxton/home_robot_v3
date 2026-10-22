@@ -2,6 +2,7 @@
 
 import torch
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
+from torch import nn
 
 
 class BaseHistoryFeatures(BaseFeaturesExtractor):
@@ -46,3 +47,39 @@ class PrecisionBaseFeatures(FixedScaleBaseHistoryFeatures):
         features = super().forward(observations)
         arrived = (observations["history"][:, -1, -3] <= self.goal_threshold).float()[:, None]
         return torch.cat([features, arrived], dim=1)
+
+
+class CoordinatedPoseFeatures(BaseFeaturesExtractor):
+    """History transformer fused with masked, permutation-invariant pose targets."""
+
+    def __init__(self, observation_space, features_dim=96):
+        super().__init__(observation_space, features_dim)
+        steps, width = observation_space["history"].shape
+        self.history_dim = 64
+        self.project = nn.Linear(width, self.history_dim)
+        self.position = nn.Parameter(torch.zeros(1, steps, self.history_dim))
+        nn.init.normal_(self.position, std=0.02)
+        layer = nn.TransformerEncoderLayer(
+            self.history_dim,
+            nhead=4,
+            dim_feedforward=128,
+            dropout=0.0,
+            activation="gelu",
+            batch_first=True,
+        )
+        self.history_encoder = nn.TransformerEncoder(layer, num_layers=2, enable_nested_tensor=False)
+        self.register_buffer("causal_mask", torch.triu(torch.ones(steps, steps, dtype=torch.bool), diagonal=1))
+        self.target_encoder = nn.Sequential(nn.Linear(10, 64), nn.Tanh(), nn.Linear(64, 64), nn.Tanh())
+        self.fusion = nn.Sequential(nn.Linear(self.history_dim + 64, features_dim), nn.Tanh())
+
+    def forward(self, observations):
+        history = observations["history"]
+        history = self.history_encoder(
+            self.project(history) + self.position,
+            mask=self.causal_mask,
+        )[:, -1]
+        mask = observations["target_mask"].bool()
+        encoded = self.target_encoder(observations["target_tokens"])
+        encoded = encoded * mask.unsqueeze(-1)
+        pooled = encoded.sum(dim=1) / mask.sum(dim=1, keepdim=True).clamp_min(1)
+        return self.fusion(torch.cat([history, pooled], dim=1))

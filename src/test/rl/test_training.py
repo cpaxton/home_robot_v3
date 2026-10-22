@@ -101,6 +101,19 @@ def test_no_success_has_no_fabricated_settling_time():
     assert np.isfinite(metrics["xy_error"])
 
 
+def test_coordinated_distillation_only_scores_active_command_dimensions():
+    import torch
+
+    from emet.rl.bootstrap import _action_loss_mask
+
+    goal = torch.zeros((2, 15))
+    goal[0, 9] = 1  # base-only target
+    goal[1, 10:15] = 1  # hand-only target
+    mask = _action_loss_mask({"goal": goal}, "coordinated", torch.zeros((2, 7)))
+    torch.testing.assert_close(mask[0], torch.tensor([1, 1, 0, 0, 0, 0, 0.]))
+    torch.testing.assert_close(mask[1], torch.tensor([0, 0, 1, 1, 1, 1, 1.]))
+
+
 def test_bootstrap_exports_normalized_policy_and_bounded_labels(tmp_path):
     import torch
 
@@ -115,6 +128,9 @@ def test_bootstrap_exports_normalized_policy_and_bounded_labels(tmp_path):
         bootstrap_rounds=2,
         bootstrap_steps=16,
         bootstrap_epochs=1,
+        bootstrap_min_success_rate=0.0,
+        bootstrap_max_collision_rate=1.0,
+        bootstrap_max_teacher_action_mae=2.0,
         eval_episodes=1,
     )
     try:
@@ -124,6 +140,8 @@ def test_bootstrap_exports_normalized_policy_and_bounded_labels(tmp_path):
         data = np.load(tmp_path / "demonstrations.npz")
         assert np.all(np.abs(data["actions"]) <= 1.0)
         assert len(data["actions"]) == 32
+        metrics = [json.loads(row) for row in (tmp_path / "bootstrap-metrics.jsonl").read_text().splitlines()]
+        assert [row["bootstrap/training_samples"] for row in metrics] == [16, 32]
         np.testing.assert_allclose(model.policy.log_std.detach().numpy(), -3)
     finally:
         env.close()

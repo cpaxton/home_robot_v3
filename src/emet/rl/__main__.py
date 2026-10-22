@@ -19,7 +19,7 @@ def evaluate(policy, config, *, episodes=50, seed=10000, replay_path=None, video
         raise ValueError("policy task does not match evaluation task")
     env_class = MarsBaseEnv if config.task == "base" else MarsReachEnv
     env = env_class(config, render_mode="rgb_array" if video_path else None)
-    rows, trace, latencies = [], [], []
+    rows, trace, latencies, teacher_action_errors = [], [], [], []
     video = None
     started = time.perf_counter()
     total_steps = 0
@@ -41,6 +41,8 @@ def evaluate(policy, config, *, episodes=50, seed=10000, replay_path=None, video
             for _ in range(round(config.horizon_seconds / 0.05) + 1):
                 before = time.perf_counter()
                 obs, _ = env.control.observe()
+                if config.pose_targets:
+                    obs = env._with_pose_targets(obs)
                 use_teacher = policy is None or (
                     teacher_approach
                     and getattr(env, "_scenario", None) == "contact_retreat"
@@ -51,6 +53,14 @@ def evaluate(policy, config, *, episodes=50, seed=10000, replay_path=None, video
                     if use_teacher
                     else policy(obs)
                 )
+                if policy is not None:
+                    expert = env.control.baseline_action() if config.task == "base" else baseline_action(env.control)
+                    active = (
+                        np.r_[np.repeat(env.control.goal.mask[:1], 2), env.control.goal.mask[1:]].astype(bool)
+                        if config.task == "coordinated"
+                        else np.ones_like(expert, dtype=bool)
+                    )
+                    teacher_action_errors.extend(np.abs(np.asarray(action)[active] - expert[active]).tolist())
                 latencies.append(time.perf_counter() - before)
                 obs, reward, terminated, truncated, info = env.step(action)
                 total_steps += 1
@@ -129,6 +139,11 @@ def evaluate(policy, config, *, episodes=50, seed=10000, replay_path=None, video
         "episodes": rows,
         "success_rate": float(np.mean([r["is_success"] for r in rows])),
         "collision_rate": float(np.mean([r["collision"] for r in rows])),
+        **(
+            {"teacher_action_mae": float(np.mean(teacher_action_errors))}
+            if teacher_action_errors
+            else {}
+        ),
         "observation_and_inference_p95_ms": float(np.percentile(latencies, 95) * 1000),
         "steps_per_second": total_steps / (time.perf_counter() - started),
     }
@@ -145,17 +160,19 @@ def train(args):
 
     torch.set_num_threads(1)
     from emet.rl.base import MarsBaseEnv
-    from emet.rl.networks import BaseHistoryFeatures
+    from emet.rl.networks import BaseHistoryFeatures, CoordinatedPoseFeatures
     from emet.rl.transformer import HistoryTransformer
 
     config = EnvConfig(
         task=args.task,
+        pose_targets=args.task == "coordinated",
         arm_only=getattr(args, "arm_only", False),
         stage=args.stage,
         contact_training=args.contact_training,
         base_scenario=getattr(args, "base_scenario", "standard"),
         horizon_seconds=getattr(args, "horizon", 10.0),
         terminal_accuracy_weight=getattr(args, "terminal_accuracy_weight", 0.0),
+        trajectory_waypoints=getattr(args, "trajectory_waypoints", 1),
     )
     from emet.rl.training import TrainingMonitor, finish_wandb, start_wandb
 
@@ -181,7 +198,12 @@ def train(args):
                 env_kwargs={"config": config},
                 vec_env_cls=SubprocVecEnv if args.envs > 1 else DummyVecEnv,
             )
-            env = VecNormalize(env, norm_obs=True, norm_reward=False)
+            norm_obs_keys = [
+                key
+                for key, space in env.observation_space.spaces.items()
+                if hasattr(space, "low") and hasattr(space, "high")
+            ]
+            env = VecNormalize(env, norm_obs=True, norm_reward=False, norm_obs_keys=norm_obs_keys)
             model = PPO(
                 "MultiInputPolicy",
                 env,
@@ -195,7 +217,9 @@ def train(args):
                 policy_kwargs={
                     "net_arch": {"pi": [64, 64], "vf": [64, 64]},
                     **(
-                        {"features_extractor_class": HistoryTransformer}
+                        {"features_extractor_class": CoordinatedPoseFeatures}
+                        if args.task == "coordinated"
+                        else {"features_extractor_class": HistoryTransformer}
                         if args.architecture == "transformer"
                         else {"features_extractor_class": BaseHistoryFeatures}
                         if args.task == "base"
@@ -277,7 +301,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
     training = sub.add_parser("train")
-    training.add_argument("--task", choices=["base", "reach"], default="base")
+    training.add_argument("--task", choices=["base", "reach", "coordinated"], default="base")
     training.add_argument("--output", required=True)
     training.add_argument("--steps", type=int, default=200000)
     training.add_argument("--seeds", type=int, nargs="+", default=[0, 1, 2])
@@ -289,6 +313,12 @@ def main():
     training.add_argument("--arm-only", action="store_true")
     training.add_argument("--horizon", type=float, default=10.0)
     training.add_argument("--terminal-accuracy-weight", type=float, default=0.0)
+    training.add_argument(
+        "--trajectory-waypoints",
+        type=int,
+        default=1,
+        help="Train/evaluate coordinated episodes as measured sequential pose trajectories",
+    )
     training.add_argument("--contact-training", action="store_true", help="Permit light contact; stop on unsafe force")
     training.add_argument("--architecture", choices=["transformer", "mlp"], default="mlp")
     training.add_argument("--learning-rate", type=float)
@@ -299,7 +329,10 @@ def main():
         "--bootstrap-steps", type=int, default=0, help="Teacher/student samples per initialization round"
     )
     training.add_argument("--bootstrap-rounds", type=int, default=3)
-    training.add_argument("--bootstrap-epochs", type=int, default=40)
+    training.add_argument("--bootstrap-epochs", type=int, default=80)
+    training.add_argument("--bootstrap-min-success-rate", type=float, default=0.8)
+    training.add_argument("--bootstrap-max-collision-rate", type=float, default=0.05)
+    training.add_argument("--bootstrap-max-teacher-action-mae", type=float, default=0.35)
     training.add_argument("--bootstrap-log-std", type=float, default=-3.0)
     training.add_argument("--eval-every", type=int, default=32768)
     training.add_argument("--eval-episodes", type=int, default=20)
@@ -310,7 +343,7 @@ def main():
     training.add_argument("--resume", help="Continue from an exported bundle, including observation normalization")
     for command in ("evaluate", "replay"):
         p = sub.add_parser(command)
-        p.add_argument("--task", choices=["base", "reach"], default="base")
+        p.add_argument("--task", choices=["base", "reach", "coordinated"], default="base")
         p.add_argument("--policy", help="Policy bundle directory; omit for deterministic baseline")
         p.add_argument("--contact-training", action="store_true")
         p.add_argument("--stage", type=int, choices=range(5), default=0)
@@ -321,6 +354,7 @@ def main():
             "--base-scenario", choices=["standard", "mixed", "retarget", "push", "contact_retreat"], default="standard"
         )
         p.add_argument("--arm-only", action="store_true")
+        p.add_argument("--trajectory-waypoints", type=int, default=1)
         p.add_argument("--horizon", type=float, default=10.0)
         p.add_argument("--output", required=True)
         if command == "replay":
@@ -338,10 +372,17 @@ def main():
             parser.error("invalid optimizer or critic settings")
         if args.bootstrap_steps < 0 or min(args.bootstrap_rounds, args.bootstrap_epochs) <= 0:
             parser.error("invalid bootstrap settings")
+        if not 0 <= args.bootstrap_min_success_rate <= 1 or not 0 <= args.bootstrap_max_collision_rate <= 1:
+            parser.error("bootstrap validation gates must be between zero and one")
+        if not 0 <= args.bootstrap_max_teacher_action_mae <= 2:
+            parser.error("bootstrap maximum teacher action MAE must be between zero and two")
         if not -10 <= args.bootstrap_log_std <= 0:
             parser.error("bootstrap-log-std must be between -10 and 0")
-        if args.bootstrap_steps and (args.task != "base" or args.architecture != "mlp"):
-            parser.error("bootstrap requires the base MLP")
+        if args.bootstrap_steps and (
+            args.task not in {"base", "coordinated"}
+            or (args.task == "base" and args.architecture != "mlp")
+        ):
+            parser.error("bootstrap supports the base MLP and coordinated pose policy")
         train(args)
     else:
         if args.episodes <= 0:
@@ -356,12 +397,14 @@ def main():
             policy,
             EnvConfig(
                 task=args.task,
+                pose_targets=args.task == "coordinated",
                 arm_only=args.arm_only,
                 scene=args.scene,
                 stage=args.stage,
                 contact_training=args.contact_training,
                 base_scenario=args.base_scenario,
                 horizon_seconds=args.horizon,
+                trajectory_waypoints=args.trajectory_waypoints,
             ),
             episodes=args.episodes,
             seed=args.seed,

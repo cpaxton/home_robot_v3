@@ -3,9 +3,11 @@
 import argparse
 import hashlib
 import json
-from dataclasses import asdict
+from dataclasses import asdict, replace
+from functools import partial
 from pathlib import Path
 
+import gymnasium as gym
 import numpy as np
 import torch
 from stable_baselines3 import PPO
@@ -14,18 +16,66 @@ from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecNormalize
 
 from emet.rl.manipulation.env import ManipulationConfig, ManipulationEnv
-from emet.rl.manipulation.evaluation import evaluate, score
-from emet.rl.manipulation.policy import ManipulationHistoryFeatures, ManipulationPolicy, export
+from emet.rl.manipulation.evaluation import (
+    curriculum_ready,
+    evaluate,
+    paired_comparison,
+    target_coverage_ready,
+    tracking_precision_ready,
+)
+from emet.rl.manipulation.policy import ManipulationHistoryFeatures, ManipulationMLPFeatures, ManipulationPolicy, export
+
+
+class FixedResetSeed(gym.Wrapper):
+    """Training-only overfit diagnostic; never wrap held-out evaluation."""
+
+    def __init__(self, env, *, fixed_seed):
+        super().__init__(env)
+        self.fixed_seed = fixed_seed
+
+    def reset(self, *, seed=None, options=None):
+        return self.env.reset(seed=self.fixed_seed, options=options)
+
+
+def resume_training(directory, env, config, fingerprint, architecture):
+    """Restore PPO optimizer and observation statistics after bundle validation."""
+    bundle = ManipulationPolicy(directory, robot=config.robot, fingerprint=fingerprint)
+    expected = ManipulationHistoryFeatures if architecture == "history" else ManipulationMLPFeatures
+    if (
+        bundle.action_mode != config.action_mode
+        or type(bundle.model.policy.features_extractor) is not expected
+        or ("preview" in bundle.normalization) != config.trajectory_preview
+        or bundle.manifest.get("pose_only_targets", False) != (config.trajectory_preview or config.tracking_reward)
+    ):
+        raise ValueError("resume policy architecture or control/observation semantics mismatch")
+    if set(env.obs_rms) != set(bundle.normalization):
+        raise ValueError("resume normalization keys mismatch")
+    for key, (mean, var) in bundle.normalization.items():
+        if env.obs_rms[key].mean.shape != mean.shape:
+            raise ValueError("resume normalization shape mismatch")
+        count = bundle.manifest.get("normalization", {}).get(key, {}).get("count", bundle.manifest["count"])
+        if not np.isfinite(count) or count <= 0:
+            raise ValueError("invalid resume normalization count")
+        env.obs_rms[key].mean = mean.copy()
+        env.obs_rms[key].var = var.copy()
+        env.obs_rms[key].count = float(count)
+    env.epsilon, env.clip_obs = bundle.manifest["epsilon"], bundle.manifest["clip"]
+    # Loading with the new env rebuilds rollout buffers and discards stale
+    # rollout observations while retaining policy/value and optimizer state.
+    return PPO.load(Path(directory) / "policy.zip", env=env, device="cpu")
 
 
 class Monitor(BaseCallback):
-    def __init__(self, directory, config, fingerprint, *, interval, episodes, run=None):
+    def __init__(self, directory, config, fingerprint, *, interval, episodes, run=None, debug_reset_seed=None):
         super().__init__()
         self.directory, self.config, self.fingerprint = directory, config, fingerprint
         self.interval, self.episodes, self.run = interval, episodes, run
+        self.randomization_scale = config.randomization_scale
+        self.target_scale = config.target_scale
         self.last = 0
         self.best = None
         self.completed = []
+        self.debug_reset_seed = debug_reset_seed
 
     def record(self, values):
         values = {"timesteps": self.num_timesteps, **values}
@@ -68,7 +118,35 @@ class Monitor(BaseCallback):
             self.fingerprint,
             steps=self.num_timesteps,
         )
-        report = evaluate(ManipulationPolicy(target), config=self.config, episodes=self.episodes, seed=200000)
+        # Checkpoint selection always uses the same full distribution. An easy
+        # curriculum stage must not masquerade as full-contract improvement.
+        validation_config = replace(
+            self.config,
+            randomization_scale=1.0,
+            target_scale=1.0,
+            tracking_precision=4 if self.config.tracking_reward else self.config.tracking_precision,
+        )
+        actor = ManipulationPolicy(target)
+        if self.debug_reset_seed is not None:
+            debug = evaluate(actor, config=self.config, episodes=1, seed=self.debug_reset_seed)
+            (target / "debug-training-case.json").write_text(json.dumps(debug, indent=2) + "\n")
+            self.record(
+                {
+                    f"debug_training_case/{k}": v
+                    for k, v in debug["summary"][self.config.scenario].items()
+                    if v is not None
+                }
+            )
+        report = evaluate(actor, config=validation_config, episodes=self.episodes, seed=200000)
+        teacher = evaluate(config=validation_config, episodes=self.episodes, seed=200000)
+        curriculum = evaluate(
+            actor,
+            config=replace(self.config, randomization_scale=self.randomization_scale, target_scale=self.target_scale),
+            episodes=self.episodes,
+            seed=250000,
+        )
+        (target / "curriculum-validation.json").write_text(json.dumps(curriculum, indent=2) + "\n")
+        (target / "teacher-validation.json").write_text(json.dumps(teacher, indent=2) + "\n")
         (target / "validation.json").write_text(json.dumps(report, indent=2) + "\n")
         metrics = {
             f"validation/{scenario}/{k}": v
@@ -76,9 +154,49 @@ class Monitor(BaseCallback):
             for k, v in group.items()
             if v is not None
         }
+        metrics["curriculum/randomization_scale"] = self.randomization_scale
+        metrics["curriculum/target_scale"] = self.target_scale
+        metrics["curriculum/tracking_precision"] = self.config.tracking_precision
+        for scenario, group in teacher["summary"].items():
+            metrics[f"teacher/{scenario}/success_rate"] = group["success_rate"]
+            metrics[f"paired/{scenario}/success_rate_delta"] = (
+                report["summary"][scenario]["success_rate"] - group["success_rate"]
+            )
+        comparison = paired_comparison(teacher, report)
+        (target / "paired-comparison.json").write_text(json.dumps(comparison, indent=2) + "\n")
+        metrics["paired/eligible_without_regression"] = comparison["eligible"]
+        metrics["paired/common_success_count"] = comparison["paired_success_count"]
+        for key in ("teacher_paired_time", "policy_paired_time"):
+            if comparison[key] is not None:
+                metrics[f"paired/{key}"] = comparison[key]
         self.record(metrics)
-        value = score(report["summary"])
-        if self.best is None or value > self.best:
+        # Advance only after an actual stratified validation gate, not episode
+        # count or elapsed training time. Keep validation seeds paired.
+        if (
+            self.config.tracking_reward
+            and self.config.tracking_precision < 4
+            and tracking_precision_ready(curriculum["summary"], self.config.tracking_precision, self.episodes)
+        ):
+            level = self.config.tracking_precision + 1
+            self.config = replace(self.config, tracking_precision=level)
+            self.model.get_env().env_method("set_tracking_precision", level)
+        strict_ready = curriculum_ready(curriculum["summary"], self.episodes)
+        coverage_ready = strict_ready or (
+            self.config.tracking_reward and target_coverage_ready(curriculum["summary"], self.episodes)
+        )
+        if coverage_ready:
+            self.target_scale = min(1.0, self.target_scale + 0.1)
+            self.model.get_env().env_method("set_target_scale", self.target_scale)
+        if strict_ready:
+            self.randomization_scale = min(1.0, self.randomization_scale + 0.1)
+            self.model.get_env().env_method("set_randomization_scale", self.randomization_scale)
+        groups = list(report["summary"].values())
+        value = (
+            min(g["success_rate"] for g in groups),
+            float(np.mean([g["success_rate"] for g in groups])),
+            -(comparison["policy_paired_time"] or float("inf")),
+        )
+        if comparison["eligible"] and (self.best is None or value > self.best):
             self.best = value
             export(
                 self.model,
@@ -93,9 +211,55 @@ class Monitor(BaseCallback):
         print("Validation", self.num_timesteps, json.dumps(report["summary"]), flush=True)
 
 
+def training_options(args):
+    """Keep imitation optional and use useful exploration for scratch PPO."""
+    if args.dagger and args.action_mode != "direct_velocity":
+        raise ValueError("DAgger initialization requires direct velocity actions")
+    if args.dagger and args.initialization_steps < 5 * args.envs:
+        raise ValueError("DAgger needs at least five vector steps")
+    std = args.exploration_std
+    if std is None:
+        std = 0.03 if args.dagger or args.action_mode == "residual" else 0.3
+    if not np.isfinite(std) or not 0 < std <= 1:
+        raise ValueError("normalized exploration standard deviation must be in (0, 1]")
+    return {
+        "initialization": "dagger" if args.dagger else "critic_warmup" if args.action_mode == "residual" else "none",
+        "architecture": args.architecture,
+        "exploration_std": float(std),
+    }
+
+
 def train(args):
     torch.set_num_threads(1)
-    config = ManipulationConfig(robot=args.robot, disturbance_curriculum=True)
+    options = training_options(args)
+    if args.resume_from is not None:
+        if args.dagger or args.initialization_steps:
+            raise ValueError("resume requires zero initialization steps and no DAgger")
+        options["resume_from"] = str(args.resume_from.resolve())
+    if args.debug_reset_seed is not None:
+        if args.scenario != "reach":
+            raise ValueError("fixed-case learning audit requires reach")
+        options["debug_reset_seed"] = args.debug_reset_seed
+    config = ManipulationConfig(
+        robot=args.robot,
+        scenario=args.scenario,
+        horizon=args.horizon,
+        randomization_scale=args.randomization_scale,
+        initial_heading_range=args.initial_heading_range,
+        target_scale=args.target_scale,
+        retarget_probability=args.retarget_probability,
+        reach_push_probability=args.reach_push_probability,
+        certify_reach_paths=args.certify_reach_paths,
+        dynamic_references=args.dynamic_references,
+        action_mode=args.action_mode,
+        base_xy_tolerance=args.base_xy_tolerance,
+        hand_position_tolerance=args.hand_position_tolerance,
+        hand_orientation_tolerance=args.hand_orientation_tolerance,
+        trajectory_preview=args.trajectory_preview,
+        tracking_reward=args.tracking_reward,
+        tracking_precision=args.tracking_precision,
+        endpoint_motion_weight=args.endpoint_motion_weight,
+    )
     # Admit the model before starting workers or a tracking run.
     probe = ManipulationEnv(config)
     fingerprint = probe.fingerprint
@@ -112,6 +276,7 @@ def train(args):
                     "seed": seed,
                     "steps": args.steps,
                     "initialization_steps": args.initialization_steps,
+                    "training_options": options,
                     "envs": args.envs,
                     "fingerprint": fingerprint,
                     "source_hashes": {
@@ -140,6 +305,7 @@ def train(args):
                     "seed": seed,
                     "steps": args.steps,
                     "initialization_steps": args.initialization_steps,
+                    "training_options": options,
                     "fingerprint": fingerprint,
                 },
             )
@@ -153,6 +319,9 @@ def train(args):
                     n_envs=args.envs,
                     seed=seed,
                     env_kwargs={"config": config},
+                    wrapper_class=partial(FixedResetSeed, fixed_seed=args.debug_reset_seed)
+                    if args.debug_reset_seed is not None
+                    else None,
                     vec_env_cls=SubprocVecEnv if args.envs > 1 else DummyVecEnv,
                 ),
                 norm_reward=False,
@@ -171,7 +340,9 @@ def train(args):
                 clip_range=0.1,
                 ent_coef=0,
                 policy_kwargs={
-                    "features_extractor_class": ManipulationHistoryFeatures,
+                    "features_extractor_class": ManipulationHistoryFeatures
+                    if args.architecture == "history"
+                    else ManipulationMLPFeatures,
                     "net_arch": {"pi": [128, 128], "vf": [128, 128]},
                     "log_std_init": -20,
                 },
@@ -179,6 +350,8 @@ def train(args):
             with torch.no_grad():
                 model.policy.action_net.weight.zero_()
                 model.policy.action_net.bias.zero_()
+            if args.resume_from is not None:
+                model = resume_training(args.resume_from, env, config, fingerprint, args.architecture)
             actor = [
                 *model.policy.action_net.parameters(),
                 *model.policy.mlp_extractor.policy_net.parameters(),
@@ -186,14 +359,35 @@ def train(args):
             ]
             for parameter in actor:
                 parameter.requires_grad_(False)
-            if args.initialization_steps:
+            if args.dagger:
+                for parameter in actor:
+                    parameter.requires_grad_(True)
+                from emet.rl.manipulation.imitation import initialize_direct_actor
+
+                result = initialize_direct_actor(model, env, args.initialization_steps)
+                (directory / "imitation.json").write_text(json.dumps(result, indent=2) + "\n")
+                print("Imitation", result, flush=True)
+                if run:
+                    run.log(
+                        {
+                            "imitation/samples": result["samples"],
+                            "imitation/final_weighted_mse": result["rounds"][-1]["final_batch_weighted_mse"],
+                        }
+                    )
+            elif config.action_mode == "residual" and args.initialization_steps:
                 model.learn(args.initialization_steps)
             for parameter in actor:
                 parameter.requires_grad_(True)
             with torch.no_grad():
-                model.policy.log_std.fill_(-3.5)
+                model.policy.log_std.fill_(float(np.log(options["exploration_std"])))
             monitor = Monitor(
-                directory, config, fingerprint, interval=args.eval_every, episodes=args.eval_episodes, run=run
+                directory,
+                config,
+                fingerprint,
+                interval=args.eval_every,
+                episodes=args.eval_episodes,
+                run=run,
+                debug_reset_seed=args.debug_reset_seed,
             )
             monitor.init_callback(model)
             monitor.num_timesteps = model.num_timesteps
@@ -202,7 +396,7 @@ def train(args):
             monitor.num_timesteps = model.num_timesteps
             if monitor.last != model.num_timesteps:
                 monitor.checkpoint()
-            export(model, env, directory / "last", config, fingerprint, steps=model.num_timesteps)
+            export(model, env, directory / "last", monitor.config, fingerprint, steps=model.num_timesteps)
             (directory / "complete.json").write_text(
                 json.dumps({"steps": model.num_timesteps, "promoted": False}) + "\n"
             )
@@ -220,7 +414,35 @@ def main():
     sub = parser.add_subparsers(dest="command", required=True)
     p = sub.add_parser("train")
     p.add_argument("--robot", choices=["stretch", "innate_mars"], default="stretch")
+    p.add_argument(
+        "--scenario", choices=["mixed", "reach", "pregrasp", "carry", "place", "disturbance"], default="mixed"
+    )
+    p.add_argument("--horizon", type=float, default=20)
+    p.add_argument("--randomization-scale", type=float, default=0.05)
+    p.add_argument("--initial-heading-range", type=float, default=float(np.pi))
+    p.add_argument("--target-scale", type=float, default=0.25)
+    p.add_argument("--debug-reset-seed", type=int, help="overfit one reach case; training diagnostic only")
+    p.add_argument(
+        "--endpoint-motion-weight", type=float, default=0.0, help="optional bounded endpoint velocity penalty"
+    )
+    p.add_argument("--retarget-probability", type=float, default=0.25)
+    p.add_argument("--reach-push-probability", type=float, default=0.25)
+    p.add_argument("--certify-reach-paths", action=argparse.BooleanOptionalAction, default=True)
+    p.add_argument("--dynamic-references", action=argparse.BooleanOptionalAction, default=True)
+    p.add_argument("--action-mode", choices=["residual", "direct_velocity"], default="direct_velocity")
+    p.add_argument("--base-xy-tolerance", type=float, default=0.05)
+    p.add_argument("--hand-position-tolerance", type=float, default=0.005)
+    p.add_argument("--hand-orientation-tolerance", type=float, default=0.05)
+    p.add_argument("--trajectory-preview", action=argparse.BooleanOptionalAction, default=True)
+    p.add_argument("--tracking-reward", action=argparse.BooleanOptionalAction, default=True)
+    p.add_argument("--tracking-precision", type=int, choices=range(5), default=0)
+    p.add_argument("--dagger", action="store_true", help="optionally initialize the direct actor with DAgger")
+    p.add_argument("--architecture", choices=["mlp", "history"], default="mlp")
+    p.add_argument(
+        "--exploration-std", type=float, help="normalized PPO action noise; default 0.3 scratch / 0.03 initialized"
+    )
     p.add_argument("--steps", type=int, default=262144)
+    p.add_argument("--resume-from", type=Path, help="continue a validated manipulation bundle with its PPO optimizer")
     p.add_argument("--initialization-steps", type=int, default=32768)
     p.add_argument("--envs", type=int, default=4)
     p.add_argument("--seeds", type=int, nargs="+", default=[0, 1, 2])
@@ -229,8 +451,23 @@ def main():
     p.add_argument("--wandb-mode", choices=["disabled", "online", "offline"], default="disabled")
     p.add_argument("--output", required=True)
     p = sub.add_parser("evaluate")
+    p.add_argument("--trajectory-preview", action=argparse.BooleanOptionalAction, default=True)
+    p.add_argument("--tracking-reward", action=argparse.BooleanOptionalAction, default=True)
+    p.add_argument("--tracking-precision", type=int, choices=range(5), default=4)
+    p.add_argument("--action-mode", choices=["residual", "direct_velocity"], default="direct_velocity")
+    p.add_argument("--base-xy-tolerance", type=float, default=0.05)
+    p.add_argument("--hand-position-tolerance", type=float, default=0.005)
+    p.add_argument("--hand-orientation-tolerance", type=float, default=0.05)
     p.add_argument("--robot", choices=["stretch", "innate_mars"], default="stretch")
     p.add_argument("--policy")
+    p.add_argument(
+        "--scenario", choices=["mixed", "reach", "pregrasp", "carry", "place", "disturbance"], default="reach"
+    )
+    p.add_argument("--horizon", type=float, default=20)
+    p.add_argument("--certify-reach-paths", action=argparse.BooleanOptionalAction, default=True)
+    p.add_argument("--dynamic-references", action=argparse.BooleanOptionalAction, default=True)
+    p.add_argument("--retarget-probability", type=float, default=0.25)
+    p.add_argument("--reach-push-probability", type=float, default=0.25)
     p.add_argument("--episodes", type=int, default=100)
     p.add_argument("--seed", type=int, default=300000)
     p.add_argument("--output", required=True)
@@ -241,12 +478,32 @@ def main():
     if args.command == "train":
         if min(args.steps, args.envs, args.eval_every, args.eval_episodes) <= 0 or args.initialization_steps < 0:
             parser.error("positive training settings required")
+        try:
+            training_options(args)
+        except ValueError as error:
+            parser.error(str(error))
         train(args)
     elif args.command == "evaluate":
         torch.set_num_threads(1)
         report = evaluate(
             ManipulationPolicy(args.policy) if args.policy else None,
-            config=ManipulationConfig(robot=args.robot),
+            config=ManipulationConfig(
+                robot=args.robot,
+                scenario=args.scenario,
+                horizon=args.horizon,
+                trajectory_preview=args.trajectory_preview,
+                tracking_reward=args.tracking_reward,
+                tracking_precision=args.tracking_precision,
+                action_mode=args.action_mode,
+                base_xy_tolerance=args.base_xy_tolerance,
+                hand_position_tolerance=args.hand_position_tolerance,
+                hand_orientation_tolerance=args.hand_orientation_tolerance,
+                initial_heading_range=float(np.pi),
+                certify_reach_paths=args.certify_reach_paths,
+                dynamic_references=args.dynamic_references,
+                retarget_probability=args.retarget_probability,
+                reach_push_probability=args.reach_push_probability,
+            ),
             episodes=args.episodes,
             seed=args.seed,
         )

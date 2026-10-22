@@ -40,6 +40,13 @@ def oracle_robot_class(base_class, *, controller="feedback", policy=None):
             self.trace = []
             super().__init__(*args, **kwargs)
             self.servo = ManipulationControl(self.model, self.data, STRETCH)
+            self.servo.action_mode = policy.action_mode if policy is not None else "residual"
+            self.servo.pose_only_targets = policy is not None and policy.manifest.get("pose_only_targets", False)
+            self.servo.preview_enabled = policy is not None and "preview" in policy.normalization
+            if self.servo.preview_enabled or self.servo.pose_only_targets:
+                from emet.rl.manipulation.tracking import TaskFrameFK
+
+                self.reference_fk = TaskFrameFK(self.model, self.data, self.servo)
             # Preserve the teacher's warm-start actuator targets, including head.
             if controller == "direct":
                 self.data.ctrl[:] = self.initial_ctrl
@@ -56,7 +63,7 @@ def oracle_robot_class(base_class, *, controller="feedback", policy=None):
                 if self.data.time + 1e-9 >= self.next_control:
                     if controller != "direct":
                         obs = self.servo.observe()
-                        action = np.zeros(6) if policy is None else policy(obs)
+                        action = np.zeros(self.servo.profile.action_size) if policy is None else policy(obs)
                         self.servo.accept(action)
                     self.next_control += STRETCH.dt
                 if controller != "direct" or self.failure:
@@ -107,6 +114,13 @@ def oracle_robot_class(base_class, *, controller="feedback", policy=None):
                 raise ValueError("TAMP owns measured convergence")
             self.commands.append({"sim_time": float(self.data.time), "arm": list(q), "head": list(head)})
             self.servo.set_reference(target, phase=self.phase)
+            if self.servo.preview_enabled or self.servo.pose_only_targets:
+                self.servo.set_pose_targets(
+                    self.servo.base_pose(),
+                    np.zeros(3, dtype=bool),
+                    self.reference_fk(self.servo.base_pose(), target),
+                    True,
+                )
             for name, value in zip(("head_pan", "head_tilt"), require_finite(head, (2,)), strict=True):
                 self.data.ctrl[self.model.actuator(name).id] = value
             return True

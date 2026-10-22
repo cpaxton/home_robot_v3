@@ -72,6 +72,17 @@ class ReactiveController:
                 if invalid_physics(c.data):
                     raise RuntimeError("invalid physics state")
                 obs, metrics = c.observe()
+                if getattr(self.policy, "task", None) == "coordinated":
+                    from emet.rl.pose_targets import PoseTargets
+
+                    target_set = PoseTargets(
+                        c.goal.base,
+                        np.full(3, bool(c.goal.mask[0]), dtype=bool),
+                        c.goal_pose[None, :9],
+                        np.array([bool(c.goal.mask[1:].any())], dtype=bool),
+                    )
+                    obs["target_tokens"], mask = target_set.actor_tokens()
+                    obs["target_mask"] = mask.astype(np.int8)
                 if metrics["collision"]:
                     raise RuntimeError("forbidden collision")
                 if c.settled(metrics, MARS.control_dt):
@@ -102,12 +113,29 @@ class ReactiveController:
             self.stop()
         if not self.stopping:
             robot = c.robot_geoms
-            if any(
-                contact.dist < -0.001 and (contact.geom1 in robot or contact.geom2 in robot)
-                for contact in c.data.contact
-            ):
-                self.outcome = ("failed", {"failure": "forbidden collision"})
-                self.stop()
+            support = c.model.geom("rl_base_link").id
+            floor_geoms = {
+                geom
+                for geom in range(c.model.ngeom)
+                if c.model.geom_type[geom] == mujoco.mjtGeom.mjGEOM_PLANE
+            }
+            for index in range(min(int(c.data.ncon), len(c.data.contact))):
+                contact = c.data.contact[index]
+                if (contact.geom1 == support and contact.geom2 in floor_geoms) or (
+                    contact.geom2 == support and contact.geom1 in floor_geoms
+                ):
+                    continue
+                if contact.dist < -0.001 and (contact.geom1 in robot or contact.geom2 in robot):
+                    self.outcome = (
+                        "failed",
+                        {
+                            "failure": "forbidden collision",
+                            "geoms": [c.model.geom(contact.geom1).name, c.model.geom(contact.geom2).name],
+                            "penetration_m": float(-contact.dist),
+                        },
+                    )
+                    self.stop()
+                    break
 
 
 class ReactiveSimMixin:

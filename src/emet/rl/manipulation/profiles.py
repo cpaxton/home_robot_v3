@@ -4,6 +4,8 @@ from dataclasses import asdict, dataclass
 
 import numpy as np
 
+from emet.robots.innate_mars.chassis import SUPPORT_BODIES, WHEEL_RADIUS, WHEEL_SEPARATION
+
 TRACKING_TRIM_GAIN = 0.5
 TRACKING_TRIM_LIMIT = 0.04
 
@@ -24,7 +26,7 @@ class ManipulationProfile:
     finger_bodies: tuple[str, str]
     wheel_bodies: tuple[str, ...]
     base_body: str
-    version: int = 2
+    version: int = 5
     dt: float = 0.05
     history_steps: int = 20
     grip_fraction: float = 0.05
@@ -32,19 +34,43 @@ class ManipulationProfile:
     unsafe_force: float = 30.0  # Experimental simulator ceiling, not a damage rating.
     tracking_trim_gain: float = TRACKING_TRIM_GAIN
     tracking_trim_limit: float = TRACKING_TRIM_LIMIT
+    base_speed: float = 0.0
+    base_yaw_speed: float = 0.0
+    base_acceleration: float = 0.0
+    base_yaw_acceleration: float = 0.0
+    wheel_radius: float = 0.0508
+    wheel_separation: float = 0.3153
 
     @property
     def arm_size(self):
         return len(self.joint_groups)
 
-    def contract(self):
-        return {
+    @property
+    def action_size(self):
+        return self.arm_size + 1 + (2 if self.wheel_bodies else 0)
+
+    def contract(self, action_mode="residual"):
+        if action_mode not in {"residual", "direct_velocity"}:
+            raise ValueError("unknown action mode")
+        result = {
             **asdict(self),
-            "action": "arm_velocity_residual_and_grip_offset",
-            "base": "stationary",
-            "actor_inputs": "proprioception_reference_history_only",
+            "action": "base_and_arm_velocity_residual_and_grip_offset"
+            if self.wheel_bodies
+            else "arm_velocity_residual_and_grip_offset",
+            "base_feedback": "se2_axle_travel_then_align_velocity_feedback_v3",
+            "arm_feedback": "joint_reference_with_mars_measured_yaw_feedforward_v2",
+            "base": "bounded_differential_drive" if self.wheel_bodies else "stationary",
+            "actor_inputs": "proprioception_reference_history_and_masked_base_hand_pose_targets",
             "release": "executor_only",
         }
+
+        if action_mode == "direct_velocity":
+            result.update(
+                action="bounded_base_arm_velocity_and_grip_offset",
+                base_feedback="policy_only",
+                arm_feedback="policy_only",
+            )
+        return result
 
 
 # The archived Stretch MJCF couples a finger-joint range [-0.376, 0.560] rad
@@ -76,13 +102,22 @@ MARS = ManipulationProfile(
     (1.2,) * 5,
     "joint6",
     "joint6",
-    -0.3491,
+    # In the pinned URDF, positive joint6 diverges the jaws. Zero is
+    # the parallel-jaw closure target; negative angles cross the fingertips.
     0.3491,
+    0.0,
     0.6,
     "ee_link",
     ("link61", "link62"),
-    (),
+    SUPPORT_BODIES,
     "base_link",
+    version=6,
+    base_speed=0.12,
+    base_yaw_speed=0.5,
+    base_acceleration=0.12,
+    base_yaw_acceleration=0.6,
+    wheel_radius=WHEEL_RADIUS,
+    wheel_separation=WHEEL_SEPARATION,
 )
 STRETCH = ManipulationProfile(
     "stretch",
@@ -105,6 +140,10 @@ STRETCH = ManipulationProfile(
     ("rubber_tip_left", "rubber_tip_right"),
     ("link_left_wheel", "link_right_wheel"),
     "base_link",
+    base_speed=0.12,
+    base_yaw_speed=0.5,
+    base_acceleration=0.12,
+    base_yaw_acceleration=0.6,
 )
 PROFILES = {p.robot: p for p in (MARS, STRETCH)}
 

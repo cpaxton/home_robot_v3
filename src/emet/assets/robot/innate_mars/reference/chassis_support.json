@@ -1,0 +1,36 @@
+{
+  "source": "innate-os/ros2_ws/src/maurice_bot/maurice_sim/meshes/base.STL",
+  "source_revision": "9e10601a124992068762528806f02c56ebc76f55",
+  "source_sha256": "e725a419bbe85a9346a0187aff6b9c1fd3bcf9cf6cc1f1c4164777134b31f5ca",
+  "frame": "unrotated URDF base_link; +X forward, +Y left, +Z up",
+  "geometry_method": "connected CAD solids; drive cylinders from support extents; caster cylinder fitted to lower rolling arc and swivel pivot from concentric mounting ring",
+  "drive_wheel_radius_m": 0.03722,
+  "drive_wheel_width_m": 0.0245,
+  "drive_wheel_center_separation_m": 0.1719,
+  "caster_swivel_pivot_m": [
+    -0.1229,
+    0.0,
+    0.034
+  ],
+  "caster_wheel_center_m": [
+    -0.1313974,
+    -0.0001984,
+    0.0123452
+  ],
+  "caster_wheel_radius_m": 0.0129978,
+  "caster_wheel_width_m": 0.0236,
+  "chassis_contact": "convex hull of CAD components excluding both drive wheels and complete caster assembly; chassis minimum Z exceeds 0.016 m",
+  "dynamics": {
+    "total_base_assembly_mass_kg": 0.89,
+    "mass_source": "vendored URDF base_link mass",
+    "mass_distribution": "uniform density over CAD solids, normalized to total base assembly mass; COM and inertia derived from these solids",
+    "caster_wheel_mass_fraction": 0.25,
+    "caster_partition": "estimated; fork retains residual mass, COM and inertia to conserve aggregate CAD properties",
+    "wheel_motor_torque_limit_nm": 0.05,
+    "traction_and_motor_limits": "simulator estimates; not measured hardware ratings",
+    "wheel_velocity_servo_gain_nm_s_rad": 1.0,
+    "wheel_contact_dimension": 3,
+    "wheel_spin_resistance": "finite-width cylinder contact patches; no additional point-contact torsional friction"
+  },
+  "scope": "free-base manipulation/contact simulator; planar navigation model remains separate; no hardware calibration or full TAMP grasp admission"
+}

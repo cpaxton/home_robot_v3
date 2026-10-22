@@ -23,6 +23,7 @@ def export_policy(model, normalizer, directory, config):
 
     manifest = {
         "task": task,
+        "target_contract": "masked_base_se2_hand_se3_v1" if task == "coordinated" else None,
         "base_contract": BASE_CONTRACT if task == "base" else None,
         "normalization_frozen": bool(getattr(model.policy.features_extractor, "fixed_normalization", False)),
         "version": 1,
@@ -52,7 +53,7 @@ class PPOPolicy:
 
         self.task = m.get("task", "reach")
         profile = BASE if self.task == "base" else MARS
-        if self.task not in {"base", "reach"} or (self.task == "base" and m.get("base_contract") != BASE_CONTRACT):
+        if self.task not in {"base", "reach", "coordinated"} or (self.task == "base" and m.get("base_contract") != BASE_CONTRACT):
             raise ValueError("policy task/control contract mismatch")
         if (
             m.get("version") != 1
@@ -72,11 +73,16 @@ class PPOPolicy:
         }
         if self.task == "base":
             shapes = {"history": (BASE.history_steps, BASE_CONTRACT["history_width"])}
-        if set(m.get("normalization", {})) != set(shapes):
+        elif self.task == "coordinated":
+            if m.get("target_contract") != "masked_base_se2_hand_se3_v1":
+                raise ValueError("coordinated policy target contract mismatch")
+            shapes.update({"target_tokens": (2, 10), "target_mask": (2,)})
+        normalization_shapes = {key: shape for key, shape in shapes.items() if key != "target_mask"}
+        if set(m.get("normalization", {})) != set(normalization_shapes):
             raise ValueError("policy normalization layout mismatch")
         if not np.isfinite(m["epsilon"]) or m["epsilon"] <= 0 or not np.isfinite(m["clip_obs"]) or m["clip_obs"] <= 0:
             raise ValueError("invalid policy normalization parameters")
-        for key, shape in shapes.items():
+        for key, shape in normalization_shapes.items():
             stats = m["normalization"][key]
             mean, var = np.asarray(stats["mean"]), np.asarray(stats["var"])
             if (
@@ -99,9 +105,13 @@ class PPOPolicy:
         if arm_only and observation["goal"][9] != 0:
             raise ValueError("arm-only policy cannot execute a base goal")
         normalized = {}
-        if set(observation) != set(m["normalization"]):
+        model_shapes = {k: v.shape for k, v in self.model.observation_space.spaces.items()}
+        if set(observation) != set(model_shapes):
             raise ValueError("policy observation layout mismatch")
         for key, value in observation.items():
+            if key == "target_mask":
+                normalized[key] = np.asarray(value, dtype=np.float32)
+                continue
             stats = m["normalization"][key]
             mean, var = np.asarray(stats["mean"]), np.asarray(stats["var"])
             if mean.shape != value.shape or var.shape != value.shape or not np.isfinite(value).all():

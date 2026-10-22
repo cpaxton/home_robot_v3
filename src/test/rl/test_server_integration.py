@@ -56,7 +56,7 @@ def test_table_sim_command_to_measured_completion_without_legacy_writes(server, 
         server._step_controlled_physics_once()
         if server._reactive_controller.outcome is not None:
             break
-    assert server._reactive_controller.outcome[0] == "succeeded"
+    assert server._reactive_controller.outcome[0] == "succeeded", server._reactive_controller.outcome
     server.poll_navigation_command()
     client._state = server.command_message({})
     receipt = command_receipt(client, action)
@@ -131,7 +131,7 @@ def test_base_only_server_completes_and_holds_arm(server):
         server._step_controlled_physics_once()
         if server._reactive_controller.outcome is not None:
             break
-    assert server._reactive_controller.outcome[0] == "succeeded"
+    assert server._reactive_controller.outcome[0] == "succeeded", server._reactive_controller.outcome
     server.poll_navigation_command()
     client._state = server.command_message({})
     assert command_receipt(client, action)["status"] == "succeeded"

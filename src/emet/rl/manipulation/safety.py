@@ -3,6 +3,8 @@
 import mujoco
 import numpy as np
 
+from emet.rl.contact import solved_contact_force
+
 
 def relative_pose(data, ee, payload):
     rotation = data.xmat[ee].reshape(3, 3).T
@@ -20,6 +22,11 @@ def retention_error(reference, current):
 class ContactMonitor:
     def __init__(self, model, profile):
         self.model, self.profile = model, profile
+        # Keep hierarchy data in owned NumPy memory. MuJoCo exposes C-backed
+        # views here; repeated indexed reads have segfaulted during long mixed
+        # manipulation rollouts on supported bindings.
+        self.body_parentid = np.asarray(model.body_parentid, dtype=np.int32).copy()
+        self.nbody = int(model.nbody)
         self.base = model.body(profile.base_body).id
         self.robot_bodies = {i for i in range(1, model.nbody) if self._descendant(i, self.base)}
         self.robot_geoms = {i for i, body in enumerate(model.geom_bodyid) if body in self.robot_bodies}
@@ -44,8 +51,15 @@ class ContactMonitor:
         self.reset()
 
     def _descendant(self, body, parent):
-        while body and body != parent:
-            body = self.model.body_parentid[body]
+        body, parent = int(body), int(parent)
+        if not (0 <= body < self.nbody and 0 <= parent < self.nbody):
+            return False
+        for _ in range(self.nbody):
+            if body == parent:
+                return True
+            if body == 0:
+                return False
+            body = int(self.body_parentid[body])
         return body == parent
 
     def reset(self):
@@ -54,26 +68,52 @@ class ContactMonitor:
         self.contact = False
         self.max_wheel_gap = np.zeros(len(self.wheels))
         self.min_wheel_load = np.full(len(self.wheels), np.inf)
+        self.invalid_contact = False
 
     def update(self, data, payload=None):
         model = self.model
+        # Snapshot MuJoCo's C-backed geometry views once. Re-indexing a view
+        # from inside generators has caused native crashes after long rollouts
+        # on supported MuJoCo builds.
+        geom_xpos = np.asarray(data.geom_xpos).copy()
+        geom_xmat = np.asarray(data.geom_xmat).copy()
         loads = np.zeros(len(self.wheels))
         force_sum, force_peak = 0.0, 0.0
         pair_forces = {}
         fingers = set()
         contacts = []
-        wrench = np.empty(6)
-        for index, contact in enumerate(data.contact):
-            a, b = int(contact.geom1), int(contact.geom2)
+        contact_view = data.contact
+        count = min(int(data.ncon), len(contact_view))
+        geom1 = contact_view.geom1[:count].copy()
+        geom2 = contact_view.geom2[:count].copy()
+        geom_bodyid = np.asarray(model.geom_bodyid).copy()
+        distances = contact_view.dist[:count].copy()
+        efc_addresses = contact_view.efc_address[:count].copy()
+        dimensions = contact_view.dim[:count].copy()
+        friction = contact_view.friction[:count].copy()
+        excludes = contact_view.exclude[:count].copy()
+        efc_force = np.asarray(data.efc_force).copy()
+        for index in range(count):
+            a, b = int(geom1[index]), int(geom2[index])
+            if not (0 <= a < model.ngeom and 0 <= b < model.ngeom):
+                self.invalid_contact = True
+                continue
             if (
                 a not in self.robot_geoms
                 and b not in self.robot_geoms
-                and payload not in (model.geom_bodyid[a], model.geom_bodyid[b])
+                and payload not in (geom_bodyid[a], geom_bodyid[b])
             ):
                 continue
-            mujoco.mj_contactForce(model, data, index, wrench)
-            normal = max(0.0, float(wrench[0]))
-            force = float(np.linalg.norm(wrench[:3]))
+            normal, force = solved_contact_force(
+                model,
+                data,
+                index,
+                efc_address=efc_addresses[index],
+                dim=dimensions[index],
+                exclude=excludes[index],
+                efc_force=efc_force,
+                friction=friction[index],
+            )
             for wheel, geoms in enumerate(self.wheel_geoms):
                 if (a in geoms and b in self.floor) or (b in geoms and a in self.floor):
                     loads[wheel] += normal
@@ -82,27 +122,46 @@ class ContactMonitor:
                 continue
             if payload is not None:
                 for finger in self.fingers:
-                    if (self._descendant(model.geom_bodyid[a], finger) and model.geom_bodyid[b] == payload) or (
-                        self._descendant(model.geom_bodyid[b], finger) and model.geom_bodyid[a] == payload
+                    if (self._descendant(geom_bodyid[a], finger) and geom_bodyid[b] == payload) or (
+                        self._descendant(geom_bodyid[b], finger) and geom_bodyid[a] == payload
                     ):
                         if normal > 0.01:
                             fingers.add(finger)
             force_sum += force
-            pair = tuple(sorted((int(model.geom_bodyid[a]), int(model.geom_bodyid[b]))))
+            pair = tuple(sorted((int(geom_bodyid[a]), int(geom_bodyid[b]))))
             pair_forces[pair] = pair_forces.get(pair, 0.0) + force
             force_peak = max(force_peak, pair_forces[pair])
             self.contact |= force > 0.01
-            self.max_penetration = max(self.max_penetration, -float(contact.dist))
-            contacts.append((a, b, float(contact.dist), force))
+            self.max_penetration = max(self.max_penetration, -float(distances[index]))
+            contacts.append((a, b, float(distances[index]), force))
         gaps = []
-        for geoms in self.wheel_geoms:
-            gaps.append(
-                min(
-                    mujoco.mj_geomDistance(model, data, wheel, floor, 1, None)
-                    for wheel in geoms
-                    for floor in self.floor
+        for body, geoms in zip(self.wheels, self.wheel_geoms, strict=True):
+            cylinders = [g for g in geoms if model.geom_type[g] == mujoco.mjtGeom.mjGEOM_CYLINDER]
+            if cylinders:
+                gaps.append(
+                    min(
+                        float(
+                            geom_xpos[geom, 2]
+                            - (
+                                abs(geom_xmat[geom].reshape(3, 3)[2, 2]) * model.geom_size[geom, 1]
+                                + np.sqrt(max(0.0, 1 - geom_xmat[geom].reshape(3, 3)[2, 2] ** 2))
+                                * model.geom_size[geom, 0]
+                            )
+                            - geom_xpos[floor, 2]
+                        )
+                        for geom in cylinders
+                        for floor in self.floor
+                    )
                 )
-            )
+            else:
+                # Robots without cylindrical wheel collision geometry use
+                # their configured wheel radius around the wheel-body origin.
+                gaps.append(
+                    min(
+                        float(data.xpos[body, 2] - self.profile.wheel_radius - data.geom_xpos[floor, 2])
+                        for floor in self.floor
+                    )
+                )
         gaps = np.asarray(gaps)
         self.max_wheel_gap = np.maximum(self.max_wheel_gap, gaps)
         self.min_wheel_load = np.minimum(self.min_wheel_load, loads)
@@ -117,6 +176,7 @@ class ContactMonitor:
             "wheel_load": loads,
             "bilateral_contact": len(fingers) == 2,
             "contacts": contacts,
+            "invalid_contact": self.invalid_contact,
         }
 
     def metrics(self):

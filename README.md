@@ -188,6 +188,9 @@ Discord / Mars agent: point `agent.llm` and `mapping.eqa.vl_endpoint` at the sam
 
 ## Quick Start (Simulation)
 
+For goal-conditioned base-and-arm control learning on Mars, see
+[Mars reactive RL](docs/mars_reactive_rl.md) for training, evaluation, and the opt-in simulator controller.
+
 Run DynaMem in MuJoCo simulation in a few steps:
 
 ```bash

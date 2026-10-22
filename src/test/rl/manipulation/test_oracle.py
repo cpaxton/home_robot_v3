@@ -41,6 +41,26 @@ def test_real_tamp_planner_uses_private_state_and_produces_coupled_path():
         env.close()
 
 
+def test_mars_tamp_component_generates_reachable_plans_with_physical_supports():
+    env = ManipulationEnv(ManipulationConfig(robot="innate_mars", scenario="reach"))
+    try:
+        _, info = env.reset(seed=610001)
+        assert not info["initialization_failed"]
+        before = env.data.qpos.copy()
+        target = env.control.positions() + [0.02, 0.015, 0.02, 0.01, 0.01]
+        target = np.clip(target, env.control.limits[:, 0] + 0.01, env.control.limits[:, 1] - 0.01)
+        result = plan_case(env, target)
+        np.testing.assert_array_equal(env.data.qpos, before)
+        assert result["planning_error"] is None, result
+        assert result["geometry_source"] == "simulator_ground_truth"
+        assert env.monitor.metrics()["wheel_support_evaluated"]
+        execution = execute_case(env, result)
+        assert execution["contact_metrics"]["wheel_support_evaluated"]
+        assert execution["execution_verified"], execution
+    finally:
+        env.close()
+
+
 def test_oracle_command_is_actuator_only_and_stop_cannot_release_payload():
     env = ManipulationEnv(ManipulationConfig(scenario="reach"))
     try:
