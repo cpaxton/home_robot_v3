@@ -26,6 +26,10 @@ class CommandRuntime:
         """Adapters opt in only when timestamped measurements and correction work."""
         return ()
 
+    def check_base_poses(self, poses):
+        """Optional read-only simulator endpoint query; never a movement command."""
+        raise NotImplementedError("base pose query is not supported by this adapter")
+
     def navigation_policy_measurement(self):
         raise NotImplementedError
 
@@ -44,15 +48,21 @@ class CommandRuntime:
         if message is None:
             return None
         with self._command_lock:
-            return {
-                **message,
-                "command_protocol": {
-                    **self.command_tracker.metadata(),
-                    "navigation_policies": list(self.navigation_policy_names()),
-                },
-                "command_receipts": self.command_tracker.snapshot(),
-                "command_error": self._command_error,
+            protocol = {
+                **self.command_tracker.metadata(),
+                "navigation_policies": list(self.navigation_policy_names()),
             }
+            error = self._command_error
+        # A retained base-query result can be large. Publishers must not hold
+        # the dispatch lock while copying receipt history. The tracker captures
+        # coherent revisions independently; clients already merge revisions
+        # across the asynchronous observation/state/servo streams.
+        return {
+            **message,
+            "command_protocol": protocol,
+            "command_receipts": self.command_tracker.snapshot(),
+            "command_error": error,
+        }
 
     def dispatch_command(self, action):
         with self._command_lock:
@@ -127,6 +137,11 @@ class CommandRuntime:
                     if self._navigation_fault:
                         raise RuntimeError("stop could not be confirmed")
                     self.command_tracker.transition(session, sequence, "succeeded")
+                elif "sim_check_base_poses" in payload:
+                    if set(payload) != {"sim_check_base_poses"}:
+                        raise ValueError("base pose query must be a standalone command")
+                    result = self.check_base_poses(payload["sim_check_base_poses"])
+                    self.command_tracker.transition(session, sequence, "succeeded", result=result)
                 elif "xyt" in payload:
                     # Install identity before starting the adapter; dispatch is serialized.
                     self._navigation_command = (session, sequence, None)

@@ -31,7 +31,7 @@ from emet.controller.zmq_stream_control import ZmqStreamPauseMixin
 from emet.core.interfaces import ContinuousNavigationAction, Observations
 from emet.core.parameters import Parameters, get_parameters
 from emet.core.robot import AbstractRobotClient
-from emet.core.zmq_obs_codec import decode_zmq_obs_images_inplace
+from emet.core.zmq_obs_codec import decode_zmq_obs_images_inplace, read_image_timing
 from emet.core.zmq_protocol import (
     EMET_ZMQ_ROBOT_ID_KEY,
     EMET_ZMQ_SESSION_KEY,
@@ -1389,6 +1389,7 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
                 lidar_timestamp=self._obs["lidar_timestamp"],
                 received_monotonic=self._obs.get('_received_monotonic'),
                 emet_session=read_emet_session(self._obs),
+                image_timing=read_image_timing(self._obs),
             )
             observation.joint = self._obs.get("joint", None)
             observation.joint_velocities = self._obs.get("joint_velocities", None)
@@ -1763,6 +1764,7 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
                 ee_xyz=None,
                 joint=joint,
                 emet_session=read_emet_session(message) or read_emet_session(self._state),
+                image_timing=read_image_timing(message),
             )
 
             # We may not have the camera information yet
