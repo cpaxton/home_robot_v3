@@ -946,9 +946,6 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
                 reachability_status = "unavailable"
         from emet.simulation.articulation import articulation_access
 
-        def access(ref):
-            return articulation_access(session if live_sim else {}, ref.receptacle_body)
-
         return response(
             "scene_tasks",
             data={
@@ -958,7 +955,7 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
                         "object_name": ref.object_query,
                         "receptacle_name": ref.receptacle_query,
                         "start_receptacle": ref.start_receptacle,
-                        "access": access(ref),
+                        "access": articulation_access(session if live_sim else {}, ref.receptacle_body),
                     }
                     for ref in task_refs
                 ],
