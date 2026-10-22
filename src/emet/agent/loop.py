@@ -589,6 +589,7 @@ def run_agent_with_robot(
     state_only_sim: bool = False,
     max_tool_rounds: int = _MAX_TOOL_ROUNDS,
     observed_tamp_provider: ObservedTaskProvider | None = None,
+    tamp_task_session: Any | None = None,
     **kwargs: Any,
 ) -> None:
     """Start robot, optional memory load, optional Discord; run command loop with tools.
@@ -601,6 +602,10 @@ def run_agent_with_robot(
     ``scene_tasks``. Otherwise the existing open-vocabulary scene-graph processor
     supplies its RGBD proposal provider when enabled. Discovery does not enable
     native planning or execution.
+
+    *tamp_task_session* optionally binds a qualified multi-step provider to the
+    production CHAT tools. With no provider, multi-step calls explicitly return
+    task_provider_unavailable. This does not enable a simulator or input mode.
 
     *shutdown_sim_subprocess*, when set, is called after ``robot_client.stop()`` so a sim
     started with ``emet run agent --start-sim`` can exit as soon as the ZMQ client disconnects
@@ -820,6 +825,7 @@ def run_agent_with_robot(
     context: dict[str, Any] = {
         "executor": executor,
         "robot": robot_client,
+        "tamp_task_session": tamp_task_session,
         "memory_backend": voxel_memory_backend,
         "observed_tamp_provider": (
             observed_tamp_provider if observed_tamp_provider is not None else
@@ -881,6 +887,9 @@ def run_agent_with_robot(
 
     # Build tools from context
     tools = get_tools(context)
+    if tamp_task_session is None:
+        # Keep existing agent conditions unchanged until a provider is bound.
+        tools = [tool for tool in tools if tool.name not in {"plan_task", "execute_task_plan"}]
     if state_only_sim:
         # get_tools registers schemas/lazy closures; it does not load perception
         # weights. CPU-only + manipulation_only executor setup above disables

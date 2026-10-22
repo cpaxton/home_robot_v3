@@ -937,6 +937,30 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         )
     )
 
+    # Multi-step tools remain unavailable until a qualified provider is bound.
+    # Looking it up at call time keeps tool registration free of runtime/model IO.
+    @json_tool
+    def plan_task(instruction: str, strategy: str = "beam") -> dict:
+        from emet.controller.task.tamp.api import response
+        session = context.get("tamp_task_session")
+        if session is None:
+            return response("plan_task", code="task_provider_unavailable")
+        return session.plan(instruction, strategy)
+
+    @json_tool
+    def execute_task_plan(plan_ref: str) -> dict:
+        from emet.controller.task.tamp.api import response
+        session = context.get("tamp_task_session")
+        if session is None:
+            return response("execute_task_plan", code="task_provider_unavailable")
+        return session.execute(plan_ref)
+
+    from emet.agent.skills.specs import CHAT_SKILL_SPECS
+    for name, func in (("plan_task", plan_task), ("execute_task_plan", execute_task_plan)):
+        spec = next(spec for spec in CHAT_SKILL_SPECS if spec.name == name)
+        tools.append(Tool(name=name, description=spec.description, parameters=spec.parameters,
+                          func=func, returns_info=True))
+
     # -- find_objects --------------------------------------------------------
     def find_objects(text: str) -> str:
         executor = context.get("executor")
@@ -1613,6 +1637,7 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
                 "go_home",
                 "pick_place",
                 "execute_pick_place_plan",
+                "execute_task_plan",
                 "hand_over",
             }
         )

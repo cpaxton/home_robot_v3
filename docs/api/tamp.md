@@ -47,6 +47,9 @@ Never automatically replay a grasp or placement after an uncertain outcome.
 
 ## Tools
 
+Multi-step `plan_task` and `execute_task_plan` use this envelope; see the
+[task-plan contract](tamp_task_plans.md) for provider requirements and current limits.
+
 | Tool | Inputs | Successful `data` |
 | --- | --- | --- |
 | `scene_tasks` | Optional `object_filter`, `robot` | Semantic tasks with `task_ref`, object/receptacle names, category inventories, optional reachability summary and its source/status. |

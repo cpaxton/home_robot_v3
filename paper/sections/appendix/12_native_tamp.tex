@@ -97,3 +97,12 @@ all agent failures in the appropriate denominator. Observed-input manipulation,
 exploration, native articulation, Sourccey acceptance, and hardware transfer are
 not established by the stationary table results. Simulator-assisted articulation
 must remain a separate condition.
+
+The implementation program standardizes on MuJoCo and separates upstream
+robot/task protocols from Stretch and Sourccey adaptations. Shared episode and
+scene-binding contracts, native control-step accounting, and measured multi-step
+plan verification are under development. Greedy, beam and UCT search use a
+common grounded-operator interface; LLM sequence planning, affordance ranking
+and PDDLStream integration remain qualification work. These interfaces and
+runtime smoke tests are not evidence of household agent success. No six-suite
+or matched-planner performance numbers are claimed here.

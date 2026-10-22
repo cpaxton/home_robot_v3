@@ -55,6 +55,8 @@ use those schemas for exact arguments rather than copying prose into calls.
 | `execute_pick_place_plan` | Revalidate and execute a one-shot plan; inspect measured outcome before continuing | [TAMP API](api/tamp.md#preconditions-and-execution-guarantees) |
 | `pick_place` | Combined pick/place through the configured manipulation path | [TAMP overview](tamp.md) |
 | `set_receptacle_state` | Simulator-assisted open/closed state setting; native physical mode refuses assistance | [Articulation API](api/tamp_articulation.md) |
+| `plan_task` | Plan a multi-step goal with a qualified provider; currently greedy, beam or MCTS | [Task plans](api/tamp_task_plans.md) |
+| `execute_task_plan` | Consume a multi-step plan once; verify measured effects and protected goals after each skill | [Task plans](api/tamp_task_plans.md) |
 | `hand_over` | Request the configured executor's person-search/navigation/handover behavior | [CHAT handlers](../src/emet/agent/tools.py) |
 
 TAMP tools return versioned JSON. Read `status`, `code`, `data`, and `recovery`;

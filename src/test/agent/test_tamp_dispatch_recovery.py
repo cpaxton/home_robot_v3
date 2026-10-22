@@ -35,7 +35,7 @@ def test_invalid_tamp_outcome_is_not_success(result):
 
 @pytest.mark.parametrize('status,code', [('partial', 'command_outcome_unknown'),
                                         ('error', 'scene_changed_replan'), ('ok', 'ok')])
-@pytest.mark.parametrize("tool", ["execute_pick_place_plan", "set_receptacle_state"])
+@pytest.mark.parametrize("tool", ["execute_pick_place_plan", "set_receptacle_state", "execute_task_plan", "plan_task"])
 def test_dispatch_stops_precomputed_batch_on_failure(status, code, tool):
     execute = Mock(return_value=json.dumps(response(tool, status=status, code=code)))
     next_action = Mock(return_value='moved')
