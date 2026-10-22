@@ -73,6 +73,7 @@ def _filter_unsafe_nav_traj(
         (filtered_traj, reject_reason, min_clearance_m). reject_reason is set when the
         executable chunk would be empty after filtering (same as planner failure).
     """
+    self._last_nav_sweep_failure = {}
     if not traj:
         return [], "no_plan", None
     if getattr(getattr(self, "space", None), "obstacle_map_mode", None) == "physical":
@@ -105,16 +106,6 @@ def _filter_unsafe_nav_traj(
         if mid.size >= 2 and np.isnan(mid[:2]).all():
             object_tail = body[-2:]
             body = body[:-2]
-
-    if getattr(getattr(self, "space", None), "obstacle_map_mode", None) == "physical":
-        from emet.motion.navigation_sweep import validate_navigation_sweep
-
-        if start_xyt is None:
-            return [], "missing_sweep_start", None
-        valid, reason = validate_navigation_sweep(self.space, start_xyt, body)
-        if not valid:
-            self._last_nav_sweep_failure = dict(getattr(self.space, "last_validity", {}) or {})
-            return [], sweep_rejection_status(reason), None
 
     start_xy = None
     if start_xyt is not None:
