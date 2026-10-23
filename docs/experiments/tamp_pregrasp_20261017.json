@@ -1,0 +1,166 @@
+{
+  "base_sha": "60c41d4efd9d5a46f619da13928d7ac7d0446439",
+  "production_patch_sha256": "8e97202e768aaf2b7640bc97c8f5bed996acd7998a7a4bb84ddf7d03ccf27aea",
+  "scope": "privileged scripted live ZMQ native Stretch; not a full agent baseline",
+  "ordered_pregrasps_passed": 5,
+  "ordered_pregrasps_attempted": 5,
+  "full_transfers_passed": 2,
+  "full_transfers_attempted": 2,
+  "audit_commands": 1025,
+  "forbidden_commands": 0,
+  "cases": [
+    {
+      "id": "familiar-1",
+      "ordered": true,
+      "full_transfer_requested": false,
+      "pregrasp_complete": true,
+      "final_tool_status": "partial",
+      "final_tool_code": "operation_failed",
+      "full_transfer_passed": false,
+      "audit_commands": 101,
+      "forbidden_commands": 0,
+      "failures": [],
+      "artifact": "/home/cpaxton/runs/emet/tamp-pregrasp-20261017/familiar-1/result.json"
+    },
+    {
+      "id": "heldout_left-1",
+      "ordered": false,
+      "full_transfer_requested": false,
+      "pregrasp_complete": false,
+      "final_tool_status": "error",
+      "final_tool_code": "scene_changed_replan",
+      "full_transfer_passed": false,
+      "audit_commands": 2,
+      "forbidden_commands": 0,
+      "failures": [],
+      "artifact": "/home/cpaxton/runs/emet/tamp-pregrasp-20261017/heldout_left-1/result.json"
+    },
+    {
+      "id": "heldout_left-2",
+      "ordered": false,
+      "full_transfer_requested": false,
+      "pregrasp_complete": true,
+      "final_tool_status": "partial",
+      "final_tool_code": "operation_failed",
+      "full_transfer_passed": false,
+      "audit_commands": 33,
+      "forbidden_commands": 0,
+      "failures": [],
+      "artifact": "/home/cpaxton/runs/emet/tamp-pregrasp-20261017/heldout_left-2/result.json"
+    },
+    {
+      "id": "heldout_left-3",
+      "ordered": true,
+      "full_transfer_requested": false,
+      "pregrasp_complete": true,
+      "final_tool_status": "partial",
+      "final_tool_code": "operation_failed",
+      "full_transfer_passed": false,
+      "audit_commands": 127,
+      "forbidden_commands": 0,
+      "failures": [],
+      "artifact": "/home/cpaxton/runs/emet/tamp-pregrasp-20261017/heldout_left-3/result.json"
+    },
+    {
+      "id": "heldout_left-4",
+      "ordered": true,
+      "full_transfer_requested": true,
+      "pregrasp_complete": true,
+      "final_tool_status": "ok",
+      "final_tool_code": "ok",
+      "full_transfer_passed": true,
+      "audit_commands": 279,
+      "forbidden_commands": 0,
+      "failures": [],
+      "artifact": "/home/cpaxton/runs/emet/tamp-pregrasp-20261017/heldout_left-4/result.json"
+    },
+    {
+      "id": "heldout_right-1",
+      "ordered": false,
+      "full_transfer_requested": false,
+      "pregrasp_complete": false,
+      "final_tool_status": "error",
+      "final_tool_code": "no_plan_within_budget",
+      "full_transfer_passed": false,
+      "audit_commands": 2,
+      "forbidden_commands": 0,
+      "failures": [],
+      "artifact": "/home/cpaxton/runs/emet/tamp-pregrasp-20261017/heldout_right-1/result.json"
+    },
+    {
+      "id": "heldout_right-2",
+      "ordered": false,
+      "full_transfer_requested": false,
+      "pregrasp_complete": false,
+      "final_tool_status": "partial",
+      "final_tool_code": "collision",
+      "full_transfer_passed": false,
+      "audit_commands": 23,
+      "forbidden_commands": 0,
+      "failures": [
+        {
+          "sim_time": 6.697999999999484,
+          "phase": "pregrasp",
+          "reason": "linear_collision_at_1",
+          "detail": "collision",
+          "measured": [
+            0.6125052600736416,
+            0.05321472483267465,
+            0.053316528666900814,
+            0.05336254373757194,
+            0.05330376561270482,
+            0.11706769043838998,
+            -1.0640398695748263,
+            -0.054284667836260396
+          ],
+          "command": [
+            0.6309723112104808,
+            0.06568064035511668,
+            0.06568414805913107,
+            0.06568374671809549,
+            0.06568187950376721,
+            0.1616312795792272,
+            -1.0008179460640025,
+            -0.06965557820528183
+          ],
+          "contacts": [
+            {
+              "bodies": [
+                "rubber_tip_right",
+                "table"
+              ],
+              "distance_m": -0.0015294782924596424
+            }
+          ]
+        }
+      ],
+      "artifact": "/home/cpaxton/runs/emet/tamp-pregrasp-20261017/heldout_right-2/result.json"
+    },
+    {
+      "id": "heldout_right-3",
+      "ordered": true,
+      "full_transfer_requested": false,
+      "pregrasp_complete": true,
+      "final_tool_status": "partial",
+      "final_tool_code": "operation_failed",
+      "full_transfer_passed": false,
+      "audit_commands": 153,
+      "forbidden_commands": 0,
+      "failures": [],
+      "artifact": "/home/cpaxton/runs/emet/tamp-pregrasp-20261017/heldout_right-3/result.json"
+    },
+    {
+      "id": "heldout_right-4",
+      "ordered": true,
+      "full_transfer_requested": true,
+      "pregrasp_complete": true,
+      "final_tool_status": "ok",
+      "final_tool_code": "ok",
+      "full_transfer_passed": true,
+      "audit_commands": 305,
+      "forbidden_commands": 0,
+      "failures": [],
+      "artifact": "/home/cpaxton/runs/emet/tamp-pregrasp-20261017/heldout_right-4/result.json"
+    }
+  ]
+}

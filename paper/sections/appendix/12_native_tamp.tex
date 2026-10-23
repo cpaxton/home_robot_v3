@@ -57,17 +57,84 @@ Checked-in JSON summaries under \texttt{paper/data/native\_tamp/} preserve the
 live and CPU denominators, revisions, and managed job identifiers; the detailed
 failure history is in the repository's native TAMP execution report.
 
-\paragraph{Towards compositional tasks.}
-Our next acceptance gate is consecutive native transfers through the same tools,
-followed by language-agent selection, rediscovery after a move, and bounded
-recovery from partial execution. A rearrangement test must require relocating a
-blocker to a verified temporary support before placing the target. A failed local
-path search alone does not establish that rearrangement is necessary: grasp,
-approach, and placement alternatives must also be considered. We will compare
-a fixed tool sequence, task search, and an LLM orchestrator on identical frozen
-fixtures, reporting full-goal completion as well as per-step progress.
-Observed-input manipulation and exploration remain unvalidated; the native
-observed route currently rejects unavailable providers instead of reading
-simulator truth. Native navigation, articulation, Sourccey acceptance, and
-hardware transfer are outside these results. Simulator-assisted open/close
-controls are not evidence of native articulation.
+\paragraph{Preliminary actual-agent composition.}
+After the contact controls, we ran the actual \texttt{run agent} CLI on three
+fixed initial-placement variants, repeated twice each. Caliban served
+Qwen3-VL-8B-Instruct in text/tool mode; grounding was privileged, the base was
+stationary, and cameras were disabled. The agent received two final placement
+goals, discovered tasks, planned and executed opaque handles, and rediscovered
+before its second transfer. An invalid-plan diagnostic occupied a separate user
+turn. Independent scoring required whole-footprint goals and sustained measured
+released support; actuation was audited separately.
+
+The final October 17 batch completed 2/6 two-object tasks and 6/12 final goals.
+All six attempted transfer executions completed, but that conditional result
+excludes goals for which no plan was found. Both familiar episodes passed; both
+left-shift episodes placed the cylinder and then failed cube planning. One
+right-shift episode failed planning; the other sent a flat four-element region
+instead of the required two-by-two array and was correctly rejected. All six
+episodes respected failure-stop boundaries. The audit recorded 1,536 commands
+and zero forbidden actions, with no infrastructure failures. These are repeated
+integration diagnostics, not a general household success estimate. No right-side
+transfer was attempted in this batch. The baseline source is revision
+\texttt{60c41d4e} plus the archived production patch with SHA256 prefix
+\texttt{8e97202e768a}; the checked-in
+\texttt{paper/data/native\_tamp/agent\_pregrasp\_v3\_20261017.json}
+records the full patch hash, job identifier and per-episode denominators.
+
+\paragraph{Proposed household experiment.}
+We next target RoboCasa365 composites and MolmoSpaces fixed episode
+specifications~\citep{robocasa365protocol2026,molmospaceseval2026}.
+The proposed adapted suite includes clearing an occupied destination, swapping
+objects through temporary storage, retrieving and closing a cabinet, and
+collecting objects across work areas. These are \emph{planned} experiments:
+full-scene native model binding, task predicates, articulation and navigation
+admission remain necessary. Changing the robot or composing upstream episodes
+creates an adapted Emet suite, not an official leaderboard result. We will
+freeze task instances and replay complete physical reference sequences before
+agent evaluation, report construction/reference failures explicitly, and retain
+all agent failures in the appropriate denominator. Observed-input manipulation,
+exploration, native articulation, Sourccey acceptance, and hardware transfer are
+not established by the stationary table results. Simulator-assisted articulation
+must remain a separate condition.
+
+The implementation program standardizes on MuJoCo and separates upstream
+robot/task protocols from Stretch and Sourccey adaptations. Shared episode and
+scene-binding contracts, native control-step accounting, and measured multi-step
+plan verification are under development. Greedy, beam and UCT search use a
+common grounded-operator interface; LLM sequence planning, affordance ranking
+and PDDLStream integration remain qualification work. These interfaces and
+runtime smoke tests are not evidence of household agent success. No six-suite
+or matched-planner performance numbers are claimed here.
+
+\paragraph{Native multi-step tool integration.}
+An additional stationary, privileged diagnostic exercises the production agent's
+region discovery, task-skeleton search and per-step native motion refinement.
+A two-goal causal case completes two measured transfers. An occupied-destination
+swap with a narrow allowed destination completes its first transfer to a buffer,
+then stops before the next cube motion. A separately labeled, wider-destination
+variant completes all three transfers and both final goals with the same solver
+and safety checks. A narrower-buffer variant is rejected during first-move
+search. These are distinct integration cases, not a frozen population or a
+household success-rate estimate. The checked-in
+\texttt{paper/data/native\_tamp/agent\_task\_provider\_20261022.json}
+records source revisions, raw-summary hashes, measured footprints and command
+audits; no forbidden commands occur in these runs. A private recorded-state control finds no accepted plan in the original
+destination, but accepts a transfer in 14 IK calls when only the permitted
+destination region is enlarged and shifted. Additional IK seeds and nearby yaw
+samples do not resolve the original case under the same budget. The original
+failed task remains failed; the altered region is a separate diagnostic, not a
+rescore of the failed original task. Figure~\ref{fig:native-task-integration} visualizes
+measured endpoints without reconstructing unobserved intermediate paths.
+
+\begin{figure}[ht]
+  \centering
+  \includegraphics[width=\linewidth]{figures/native_task_integration_20261022.pdf}
+  \caption{Privileged stationary Stretch integration diagnostics. Dashed outlines
+  are measured initial footprints; filled boxes are final footprints. The
+  narrow-destination swap stops after one transfer; a wider-destination variant
+  completes all three. Dotted rectangles mark configured regions. Goals differ
+  between panels; this is not a success-rate comparison. This is an endpoint view, not
+  trajectory or observed-perception evidence.}
+  \label{fig:native-task-integration}
+\end{figure}

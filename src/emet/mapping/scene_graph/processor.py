@@ -18,6 +18,7 @@ import torch.nn.functional as F
 from torch import Tensor
 
 from emet.config.agents import load_agent_config
+from emet.controller.manipulation.native_inputs import RGBD_POINTCLOUD_SOURCE
 from emet.mapping.scene_graph.open_vocab_scene_graph import (
     ObjectObservation,
     OpenVocabSceneGraph,
@@ -71,6 +72,8 @@ class SceneGraphProcessor:
         self._visual_encoder = visual_encoder
         self._segmenter = segmenter
         self._step = 0
+        from emet.controller.task.tamp.observed_discovery import RgbdTaskProvider
+        self.observed_tamp_provider = RgbdTaskProvider()
 
     @property
     def text_encoder(self):
@@ -112,6 +115,10 @@ class SceneGraphProcessor:
         seg_cfg = self.config.get("segmentation", {})
         primary = seg_cfg.get("primary", "sam3")
 
+        if primary in {'owlsam', 'sam2'}:
+            return self._build_fallback_segmenter(primary, seg_cfg)
+        if primary != 'sam3':
+            raise ValueError(f'Unknown primary segmenter: {primary}')
         if primary == "sam3":
             try:
                 from emet.perception.detection.sam3 import SAM3Perception
@@ -150,6 +157,7 @@ class SceneGraphProcessor:
             sam2_cfg = seg_cfg.get("sam2", {})
             return SAM2Perception(
                 configuration=sam2_cfg.get("configuration", "l"),
+                device=self.device,
             )
         else:
             raise ValueError(f"Unknown fallback segmenter: {name}")
@@ -162,6 +170,8 @@ class SceneGraphProcessor:
         camera_pose: np.ndarray,
         world_xyz: Tensor | None = None,
         vocabulary: list[str] | None = None,
+        received_monotonic: float | None = None,
+        depth_evidence_source: str = RGBD_POINTCLOUD_SOURCE,
     ) -> list[int]:
         """Process a single RGBD frame and update the scene graph.
 
@@ -177,6 +187,8 @@ class SceneGraphProcessor:
             List of node IDs that were updated/created
         """
         self._step += 1
+        # A failed new frame must not leave a previous proposal active.
+        self.observed_tamp_provider.update(())
         H, W = rgb.shape[:2]
 
         # Compute world xyz if not provided
@@ -239,6 +251,9 @@ class SceneGraphProcessor:
             )
             observations.append(obs)
 
+        self.observed_tamp_provider.update(
+            observations, received_monotonic=received_monotonic, source=depth_evidence_source)
+
         # Update scene graph
         node_ids = self.scene_graph.add_observations_batch(observations)
 
@@ -274,6 +289,8 @@ class SceneGraphProcessor:
         detections = []
         labels = task_obs.get("labels", [])
         scores = task_obs.get("instance_scores", np.array([]))
+        classes = task_obs.get('instance_classes', [])
+        texts = getattr(seg, 'texts', vocabulary)
 
         unique_ids = np.unique(inst)
         for uid in unique_ids:
@@ -284,6 +301,10 @@ class SceneGraphProcessor:
                 continue
 
             label = labels[int(uid)] if int(uid) < len(labels) else "object"
+            if int(uid) >= len(labels) and int(uid) < len(classes):
+                class_id = int(classes[int(uid)])
+                if 0 <= class_id < len(texts):
+                    label = texts[class_id].removeprefix('a photo of a ')
             score = float(scores[int(uid)]) if int(uid) < len(scores) else 1.0
             ys, xs = np.where(mask)
             bbox = np.array([xs.min(), ys.min(), xs.max(), ys.max()])
