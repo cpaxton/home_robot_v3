@@ -96,6 +96,13 @@ class InnateMarsBackend(RobotBackend):
             urdf_path=_innate_mars_urdf_path(),
             mjcf_path=_innate_mars_mjcf_path(),
             actuator_names=list(INNATE_MARS_ACTUATOR_NAMES),
+            # The vendored URDF joint limits are model evidence, not a live
+            # actuator calibration. Base velocity limits are deliberately
+            # absent: the ROS/Nav2 bridge configuration is external to Emet.
+            control_limits={"arm_joint_velocity_rad_s": 2.0},
+            control_limit_sources={
+                "arm_joint_velocity_rad_s": "vendored maurice.urdf revolute-joint limits; validate against installed bridge before hardware use"
+            },
             base_link_name="base_link",
             arm_chain=INNATE_MARS_ARM_CHAIN,
             advertise_kinematic_manip=True,

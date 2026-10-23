@@ -77,6 +77,14 @@ class RobotSpec:
     footprint: Footprint
     mjcf_path: str | None = None
     actuator_names: list[str] = field(default_factory=list)
+    control_limits: dict[str, float] = field(default_factory=dict)
+    """Verified or simulator-only absolute caps, with units in the key names.
+
+    Values are descriptive metadata; command adapters must still enforce their
+    own caps. Unknown hardware limits must be omitted rather than guessed.
+    """
+    control_limit_sources: dict[str, str] = field(default_factory=dict)
+    """Evidence/provenance for each entry in :attr:`control_limits`."""
     base_link_name: str = "base_link"
     look_joint_names: tuple[str | None, str | None] | None = None
     """Measured joints corresponding to the adapter's ``head_to(pan, tilt)``.

@@ -8,12 +8,24 @@ import math
 from typing import Any
 
 SCHEMA_VERSION = 1
-TAMP_TOOLS = frozenset({"scene_tasks", "plan_pick_place", "execute_pick_place_plan", "pick_place", "set_receptacle_state"})
+TAMP_TOOLS = frozenset({"scene_tasks", "plan_pick_place", "execute_pick_place_plan", "pick_place", "set_receptacle_state", "plan_task", "execute_task_plan"})
 PLACEMENT_CODES = frozenset({
     "receptacle_requires_open", "articulation_unsupported", "articulation_state_unavailable",
     "no_collision_free_placement", "placement_invalidated", "placement_attachment_changed",
     "placement_geometry_unavailable", "placement_support_geometry_missing",
     "place_approach_failed", "release_execution_error", "retract_execution_error",
+})
+# Exact public task/provider reasons, shared by session errors and receipts.
+TASK_FAILURE_CODES = frozenset({
+    "task_motion_planning_failed", "task_motion_budget_exhausted",
+    "task_feasibility_failed", "stale_task_plan", "task_precondition_failed",
+    "task_execution_failed", "task_provider_failed", "protected_goal_regression", "scene_identity_changed",
+    "task_effect_verification_failed", "task_goal_verification_failed",
+    "task_object_not_settled_on_support", "ambiguous_region_occupancy",
+    "task_input_source_mismatch", "incomplete_transfer_observation",
+    "unknown_task_object", "unknown_task_role", "swap_requires_two_grounded_regions",
+    "unsupported_task_instruction", "conflicting_task_goals",
+    "observation_unavailable", "tracking_timeout", "verification_failed",
 })
 PLACEMENT_REJECTIONS = frozenset({
     "base_endpoint_rejected", "unsupported_base", "robot_self_collision",
@@ -84,7 +96,7 @@ def response(
                 "receptacle_not_found",
             }
             else "replan"
-            if code in {"scene_changed_replan", "unknown_plan", "approach_changed_replan"}
+            if code in {"scene_changed_replan", "unknown_plan", "approach_changed_replan", "stale_task_plan"}
             else "inspect"
         )
     return {
@@ -148,6 +160,8 @@ def plan_data(plan, mode: str | None, plan_ref: str | None = None) -> dict[str, 
 
 def failure_code(message: str) -> str:
     """Translate internal machine reasons; never expose their free-form details."""
+    if message in TASK_FAILURE_CODES:
+        return message
     message = {
         "ambiguous_object_use_scene_tasks": "ambiguous_object",
         "ambiguous_receptacle_use_scene_tasks": "ambiguous_receptacle",

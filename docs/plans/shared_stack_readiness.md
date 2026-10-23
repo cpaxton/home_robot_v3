@@ -58,6 +58,79 @@ the diagnostic head-pan direction faces away from the table. Inspect optical
 heading and retained target views before blaming renderer/model or adding
 robot-specific exceptions. Main/provider S0 both failed; useful observed OVMM
 acceptance is still outstanding.
+## Completed small OVMM diagnostic — 2026-10-22
+
+Job `20261022_221812_acbc1d`, frozen integrated `5a177e7d`, completed
+both episodes without infrastructure errors. S0 Stretch passed object and
+destination find/localization (1286.7 s). Molmo rby1 found the bowl but failed
+microwave destination localization (127.6 s). This was candidate-only find,
+not a paired comparison or manipulation acceptance. The job's nonzero exit
+correctly represents the task failure; it is not an infrastructure crash.
+
+Manual inspection of the first microwave grounding RGB confirms the microwave
+above the stove. All six grounding attempts abstained: their offered mask
+candidates cover tiny regions on the far-right appliance, not the microwave.
+Saved depth in an approximate interior microwave ROI (x=270:334, y=8:46)
+has median 3.346 m and 10th/90th percentiles 3.237/3.465 m; no pixels in that
+ROI pass the configured 0.25–2.5 m admission range. This hand-selected ROI is
+a diagnostic, not a GT segmentation or localization metric. Geometry rejection
+is justified; semantic visibility does not establish admissible depth support.
+
+Recovery remains inadequate: repeated assessments identify the microwave,
+but three exploration attempts fail to sample a navigation endpoint and the
+remaining captures offer essentially the same view. Next diagnose the approach
+contract: expose visible-but-out-of-range evidence without admitting an object,
+and determine why a reachable closer observation was not requested/planned.
+Do not widen depth limits, accept unrelated masks, or override model answers
+to manufacture a pass. Keep the remaining context stack on acceptance hold.
+
+Durable artifacts: `/home/cpaxton/runs/emet/preturn-context-small-ovmm-20261022`.
+First microwave audit: `grounding-93f754a4415b432b99365cd2103a43e1.json`
+under the Molmo episode's `grounding/` directory, alongside RGB and depth NPZ.
+
+## Independent pre-turn handoff EQA4 — 2026-10-22
+
+Repair `92f31497` on #202 separates bounded current/pre-turn evidence from
+optional history ranking. Default capture enablement and packet admission both
+previously required ranking configuration (two reproduced red regression tests).
+Now the adapter preserves one actual before-turn capture per query, with existing
+clock/scope/age/budget/dedup gates, pre-approach fallback, and explicit historical
+labels. Extra-history ranking remains opt-in. No answer/stopping rule changed.
+97 focused owner tests and 115 integrated dialogue/authority/capture tests pass.
+
+Frozen integrated `5a177e7d`, managed serial job `20261022_221111_4e2deb`:
+same local Qwen3-VL-8B int4, seed 0, model_final, q12/14/6/56 and budgets.
+Extra-history policy explicitly unset; trace shows `assessment_handoff`, not
+`view_selection`. All four episodes completed without infrastructure failures.
+
+| Question | Previous candidate | Independent pre-turn handoff |
+| --- | --- | --- |
+| 12 | One, wrong | One, wrong |
+| 14 | Next to the TV, wrong | In the living room, correct |
+| 6 | Correct dresser location | Correct dresser location |
+| 56 | White curtains, wrong | Blue curtains, correct |
+
+**3/4 versus 1/4** on this development slice. Native main scored 4/4, but three
+of its scores substitute earlier answers for raw final model output; do not
+represent this as native-main parity, statistical superiority, or a controlled
+comparison of model quality alone. Model authority is retained in every repaired
+candidate outcome. No defaults on main changed; the context PRs are unmerged.
+
+Manual visual audit: q14's before-turn frame retains fan/window/sofa context;
+q56's before-turn frame directly shows the shelf beside blue curtains. The
+new bounded packet removes the unrelated extra wall images from the earlier
+four-frame pose diagnostic. q6 also demonstrates pixel dedup (one later packet
+contains only current). q12 remains an incomplete count from the available views;
+no question-specific answer rule or semantic override was added.
+
+Durable output `/home/cpaxton/runs/emet/stack-eqa-preturn4-20261022`; metrics
+link exact model prompts, raw replies and image packets in the debug bundles.
+Next gate is running: candidate-only S0 Stretch and Molmo rby1 find diagnostic,
+job `20261022_221812_acbc1d`, output
+`/home/cpaxton/runs/emet/preturn-context-small-ovmm-20261022`. Same frozen source,
+Qwen/seed, physical navigation, VLM grounding with local SAM checkpoint hash
+recorded by the repaired driver. This is not A/B or pick/place acceptance.
+Merge hold remains pending its disposition; no full sweep or hardware test.
 
 ## Landing results — 2026-10-22 (current)
 
