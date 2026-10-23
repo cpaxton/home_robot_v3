@@ -28,6 +28,10 @@ def execute_relative_motion(agent, tool, value):
         return response(tool, code="invalid_motion_argument")
     if not lower <= value <= limit:
         return response(tool, code="motion_request_out_of_bounds")
+    if value == 0 or (tool == "rotate_base" and abs(value) < 1e-3):
+        return response(
+            tool, data={"requested": value, "execution_started": False, "no_op": True, "measured_body_delta_xyt": None}
+        )
     if not supports_relative_motion(agent):
         return response(tool, code="validated_motion_unavailable")
     # Recovery tools consume the current navigation attempt, not a private

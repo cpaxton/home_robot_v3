@@ -83,9 +83,7 @@ class ToolOutcome:
             if not result.tool:
                 result.tool = tool
             return result
-        if tool in TAMP_TOOLS or (
-            tool in {"rotate_base", "move_forward"} and isinstance(result, dict) and "schema_version" in result
-        ):
+        if tool in TAMP_TOOLS or tool in {"rotate_base", "move_forward"}:
             try:
                 envelope = json.loads(result) if isinstance(result, str) else result
             except (ValueError, TypeError):
