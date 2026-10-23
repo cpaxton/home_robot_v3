@@ -6,9 +6,27 @@ from emet.rl.manipulation.integrated import run_case
 
 
 @pytest.mark.sim
-@pytest.mark.parametrize("action_mode", ["residual", "direct_velocity"])
-def test_mars_box_physical_pick_transport_place(action_mode):
-    result = run_case(robot="innate_mars", seed=1800006, action_mode=action_mode)
+@pytest.mark.parametrize(
+    "action_mode,mass,cone,balanced",
+    [
+        ("residual", None, "pyramidal", False),
+        ("direct_velocity", None, "pyramidal", False),
+        ("residual", 0.05, "elliptic", False),
+        ("direct_velocity", 0.05, "elliptic", False),
+        ("residual", 0.1, "elliptic", True),
+        ("direct_velocity", 0.1, "elliptic", True),
+    ],
+)
+def test_mars_box_physical_pick_transport_place(action_mode, mass, cone, balanced):
+    result = run_case(
+        robot="innate_mars",
+        seed=1800006,
+        action_mode=action_mode,
+        payload_mass_kg=mass,
+        contact_cone=cone,
+        contact_impratio=3 if cone == "elliptic" else 1,
+        balanced_grasp_setup=balanced,
+    )
     assert result["success"], result
     assert result["payload"] == "object1"
     assert result["placement_xy_error_m"] <= 0.02

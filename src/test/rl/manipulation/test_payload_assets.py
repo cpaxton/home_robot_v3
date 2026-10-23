@@ -117,3 +117,24 @@ def test_nominal_pinch_admission_accepts_existing_small_payload():
     fit = nominal_pinch_admission(model, data, MARS, model.body("object1").id, 0.03)
     assert fit["accepted"]
     assert fit["open_gap_m"] > 0.016
+
+
+@pytest.mark.sim
+def test_elliptic_contact_option_is_fingerprinted_without_raising_forces():
+    nominal, original = build_manipulation_model("innate_mars")
+    same, explicit = build_manipulation_model("innate_mars", contact_cone="pyramidal")
+    elliptic, changed = build_manipulation_model("innate_mars", contact_cone="elliptic")
+    assert original == explicit and changed != original
+    assert int(nominal.opt.cone) == int(same.opt.cone) == 0
+    assert int(elliptic.opt.cone) == 1
+    np.testing.assert_array_equal(nominal.actuator_forcerange, elliptic.actuator_forcerange)
+    np.testing.assert_array_equal(nominal.geom_friction, elliptic.geom_friction)
+    np.testing.assert_array_equal(nominal.body_mass, elliptic.body_mass)
+    np.testing.assert_array_equal(nominal.body_inertia, elliptic.body_inertia)
+    env = ManipulationEnv(ManipulationConfig(robot="innate_mars", contact_cone="elliptic"))
+    try:
+        assert int(env.model.opt.cone) == 1
+        _, info = env.reset(seed=7)
+        assert info["randomization"]["contact_cone"] == "elliptic"
+    finally:
+        env.close()

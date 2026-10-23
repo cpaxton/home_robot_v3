@@ -4,13 +4,22 @@ import hashlib
 import xml.etree.ElementTree as ET
 
 import mujoco
+import numpy as np
 
 from emet.rl.manipulation.fixtures import scene_xml
 from emet.rl.model import robot_xml
 from emet.robots.innate_mars.chassis import add_physical_chassis
 
 
-def build_manipulation_model(robot, *, diagnostics=False, payload_asset_set="training"):
+def build_manipulation_model(
+    robot, *, diagnostics=False, payload_asset_set="training", contact_cone="pyramidal", contact_impratio=1.0
+):
+    if not np.isfinite(contact_impratio) or not 1 <= contact_impratio <= 10:
+        raise ValueError("contact impedance ratio must be in [1, 10]")
+    if contact_impratio != 1 and contact_cone != "elliptic":
+        raise ValueError("nondefault contact impedance ratio requires elliptic cones")
+    if contact_cone not in {"pyramidal", "elliptic"}:
+        raise ValueError("invalid contact cone")
     if robot == "innate_mars":
         root = add_physical_chassis(robot_xml())
         root.find("option").set("noslip_iterations", "5")
@@ -64,6 +73,10 @@ def build_manipulation_model(robot, *, diagnostics=False, payload_asset_set="tra
     if option is None:
         option = ET.SubElement(root, "option")
     option.set("timestep", "0.002")
+    if contact_cone != "pyramidal":
+        option.set("cone", contact_cone)
+    if contact_impratio != 1:
+        option.set("impratio", str(float(contact_impratio)))
     # The archived Stretch MJCF requests 5000 contacts, making each 3.5 MjData
     # reserve a very large contact arena. Our admitted robot/fixture scene peaks
     # below 40 contacts and 162 scalar constraints, so cap both capacities with

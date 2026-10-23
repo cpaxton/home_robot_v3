@@ -1,5 +1,6 @@
 """Stratified physical outcomes, preserving rejected initialization and failures."""
 
+from collections import Counter
 from dataclasses import replace
 
 import numpy as np
@@ -111,6 +112,17 @@ def summarize(rows):
             "initialization_failure_rate": float(np.mean([r["initialization_failed"] for r in group])),
             "initialization_rejections": sum(r["initialization_rejections"] for r in group),
             "success_rate": float(np.mean([r["is_success"] for r in group])),
+            "admission_rate": len(actual) / len(group),
+            "conditional_execution_success_rate": (
+                float(np.mean([r["is_success"] for r in actual])) if actual else None
+            ),
+            "candidate_rejections_by_reason": dict(
+                Counter(
+                    candidate["reason"]
+                    for row in group
+                    for candidate in row.get("initial", {}).get("rejected_candidates", [])
+                )
+            ),
         }
         settled_once = [r for r in actual if r.get("time_to_first_settle") is not None]
         metrics["ever_settled_rate"] = len(settled_once) / len(group)

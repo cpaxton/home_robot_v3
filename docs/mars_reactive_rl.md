@@ -1987,3 +1987,134 @@ stress suite uses seed block 9500000 at
 65536-step bundle when available. It does not reuse the reward-audit cases or
 silently replace the UI controller. No manipulation-policy training or hardware
 promotion is inferred from this base run.
+
+## Mars TAMP carry admission and qualification (2026-10-23)
+
+Carry training now has a dedicated, frozen simulator benchmark rather than
+relying on reaching success or discarding failed grasp resets. The initial
+50 g ten-seed diagnostic admitted only 2/10 paths. Replays showed the loaded
+static support margin already below 5 mm at path time zero in failed cases.
+The reset lifted 6 cm even when the configured fixture requested 4.5 cm.
+
+The reset now obeys `grasp_lift_height`. For TAMP carry, reset-time setup
+selection checks the lift and an intended carry on scratch state, preserving
+the world grasp pose. Its 7 mm setup screen includes a 2 mm settling reserve;
+post-grasp path admission retains the original 5 mm screen. Nominal setup is
+kept only when it passes that full check. Otherwise the valid candidate with
+the greatest sampled support margin is selected. This is initialization, not
+execution of a base approach and not a dynamic balance certificate.
+
+Rejections now distinguish trivial/out-of-distribution targets, planner errors,
+path collisions, insufficient support margin and insufficient horizon. Records
+include candidate IDs, target magnitude, failing time, hand pose and contact or
+support evidence. Episode admission, success conditional on admission, and
+end-to-end success have separate denominators. All exhausted initializations
+remain failures in the report.
+
+Development checks reached 10/10 admitted/executed carry cases and a separate
+15/15 smoke suite spanning 20/50/100 g box payloads, translation, orientation,
+combined targets, mid-motion endpoint changes and small windowed disturbances.
+These small checks do not qualify training or hardware. A stronger wheel bias
+integrator regressed continuous pick/place and was not retained. The selected
+bounded velocity bias compensation is executor-enabled only after verified
+physical grasp/clearance, disabled at placement support contact, and re-enabled
+after release clearance. It is cleared by fault stops. Mars control contract
+version 7 rejects older policy bundles with different control semantics.
+
+A release deadlock also occurred when a contact-loaded jaw was *beyond* the open
+encoder target: symmetric absolute-error checking called it closed and blocked
+withdrawal. Measured aperture at or beyond the open threshold now counts as
+open. This does not authorize opening or replace support/retention checks.
+
+### Reproduce, inspect, and qualify
+
+The checked-in `configs/benchmarks/mars_carry_v1.json` contains 300 cases: 100 per
+mass, 20 per motion category. Combined-motion cases retain the original ten
+carry seeds. `mars_carry_regressions.json` retains all 30 continuous pick/place
+identities, including the two original timeouts. Pose and retention thresholds
+are unchanged. Full qualification results must supersede smoke results before
+claiming reliability.
+
+```bash
+export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1
+export MPLCONFIGDIR=/tmp/mpl MUJOCO_GL=egl
+
+# Fresh output directories are required; results are not overwritten.
+taskset -c 14-15 .venv/bin/python -m emet.rl.manipulation.carry_benchmark evaluate \
+  --suite configs/benchmarks/mars_carry_v1.json --jobs 2 \
+  --output logs/manipulation/carry-qualification-v2
+
+taskset -c 14-15 .venv/bin/python -m emet.rl.manipulation.carry_benchmark pick-place \
+  --output logs/manipulation/carry-pick-place-qualification-v2
+
+# Self-contained interactive 3D HTML; Plotly is needed only for export.
+taskset -c 14-15 .venv/bin/python -m emet.rl.manipulation.carry_benchmark replay \
+  --suite configs/benchmarks/mars_carry_v1.json --case-id 50g:combined:0 \
+  --output logs/manipulation/carry-replay/50g-combined-0.html
+```
+
+The replay shows robot link locations, hand path and orientation axes, support
+polygon, loaded COM projection, rejected endpoints and failing sample locations.
+Adjacent JSON preserves the model fingerprint, initialization and all admission
+evidence. It performs no scored rollout and does not predict dynamic success.
+
+Teacher qualification requires at least 95% admission and 95% conditional
+execution success per mass, zero unsafe-contact/wheel-lift terminations, and
+30/30 continuous pick/place success. Training checks both reports, source
+hashes, model fingerprint and setup compatibility before starting workers or
+W&B. Small smoke reports, stale source revisions, incomplete suites and failed
+pick/place evidence are rejected.
+
+The current one-shot supervisor is recorded at
+`logs/manipulation/carry-ppo-v1/supervisor.json`. It waits for complete simulator
+qualification and passing regression tests. Only then may it start one million
+steps of plain direct-velocity PPO with history, two workers, low randomization,
+learning-rate decay and scalar-only W&B logging. Gate failures stop it without
+retry. `waiting_for_qualification` does **not** mean training is running. No
+checkpoint is promoted to the UI or hardware automatically.
+
+To compare a policy on identical cases, use `evaluate --policy BUNDLE
+--teacher-report TEACHER/report.json --suite ... --output FRESH_DIR`. This
+writes `paired.json`, including accuracy, force and jerk regression reasons.
+
+### Remaining qualification scope
+
+The frozen carry benchmark currently constrains the base and exercises arm
+trajectories; it does not establish coordinated moving-base carry performance.
+Continuous pick/place is a GT TAMP planner component test on one pedestal,
+not a full public-tool transfer between distinct supports. Coordinated base
+paths and a Mars public-tool oracle adapter are subsequent integration gates;
+existing Stretch frozen fixtures remain unchanged. Native 500 g objects still
+fail nominal Mars pinch admission, and small cylinders remain unqualified.
+Force/torque bounds and friction settings are simulator parameters, not a
+hardware compliance calibration. No Herman motion is part of these runs.
+
+The first large qualification attempt is preserved under `carry-qualification-v1`.
+It exposed a disturbance ending only 0.65 s before the deadline, leaving less
+than the required 1 s settled interval. Carry disturbance scheduling now reserves
+2 s after the window. The failing seed is a physical execution regression test;
+the fresh `v2` attempt retains the same case identities and records the corrected
+event schedule and source hashes. No training was started from the first attempt.
+
+For a remote SSH session, the generated replay is also served read-only on
+`127.0.0.1:8766`. Forward it with `ssh -N -L 8766:127.0.0.1:8766 cpaxton@olympia`,
+then open `http://localhost:8766/50g-combined-0.html`. This viewer is separate from
+the live MuJoCo test-drive UI and has no robot command endpoint.
+
+The supervisor is reproducible with the checked-in launcher (its default W&B
+mode is disabled; online scalar logging is explicit):
+
+```bash
+.venv/bin/python scripts/train_mars_carry_when_ready.py \
+  --qualification-pid-file /tmp/mars-carry-qualification.pid \
+  --carry-report logs/manipulation/carry-qualification-v2/report.json \
+  --pick-place-report logs/manipulation/carry-pick-place-qualification-v2/report.json \
+  --regression-xml /tmp/mars-carry-final-regression.xml \
+  --output logs/manipulation/carry-ppo-v1 --wandb-mode online
+```
+
+Run one supervisor per output directory. It takes a file lock, refuses an
+already-attempted training log or another active manipulation training process,
+and stops if qualification exits early or exceeds its waiting deadline. It
+uses CPU cores 14–15 and two workers on this machine; `--cpus` must explicitly
+select suitable cores elsewhere. It never retries training or promotes a model.

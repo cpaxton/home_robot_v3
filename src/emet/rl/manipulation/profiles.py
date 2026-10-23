@@ -57,7 +57,8 @@ class ManipulationProfile:
             "action": "base_and_arm_velocity_residual_and_grip_offset"
             if self.wheel_bodies
             else "arm_velocity_residual_and_grip_offset",
-            "base_feedback": "se2_axle_travel_then_align_velocity_feedback_v3",
+            "base_feedback": "se2_axle_travel_then_align_velocity_pi_v4",
+            "wheel_velocity_feedback": "bounded_pi_v1",
             "arm_feedback": "joint_reference_with_mars_measured_yaw_feedforward_v2",
             "base": "bounded_differential_drive" if self.wheel_bodies else "stationary",
             "actor_inputs": "proprioception_reference_history_and_masked_base_hand_pose_targets",
@@ -111,7 +112,7 @@ MARS = ManipulationProfile(
     ("link61", "link62"),
     SUPPORT_BODIES,
     "base_link",
-    version=6,
+    version=7,
     base_speed=0.12,
     base_yaw_speed=0.5,
     base_acceleration=0.12,

@@ -285,6 +285,15 @@ def train(args):
         randomization_scale=args.randomization_scale,
         payload_mass_kg=args.payload_mass_kg,
         payload_asset_set=args.payload_asset_set,
+        contact_cone=args.contact_cone,
+        contact_impratio=args.contact_impratio,
+        balanced_grasp_setup=args.balanced_grasp_setup,
+        tamp_carry_trajectories=args.tamp_carry_trajectories,
+        carry_target_mode=args.carry_target_mode,
+        carry_push_scale=args.carry_push_scale,
+        grasp_lift_height=args.grasp_lift_height,
+        support_half_width=args.support_half_width,
+        grasp_pitch_rad=args.grasp_pitch_rad,
         payload_object=args.payload_object,
         initial_heading_range=args.initial_heading_range,
         target_scale=args.target_scale,
@@ -311,6 +320,15 @@ def train(args):
     probe = ManipulationEnv(config)
     fingerprint = probe.fingerprint
     probe.close()
+    if config.tamp_carry_trajectories:
+        from emet.rl.manipulation.carry_benchmark import require_training_readiness
+
+        if not args.carry_readiness_report or not args.pick_place_readiness_report:
+            raise ValueError("TAMP carry training requires --carry-readiness-report and --pick-place-readiness-report")
+        require_training_readiness(
+            json.loads(args.carry_readiness_report.read_text()),
+            json.loads(args.pick_place_readiness_report.read_text()), config, fingerprint,
+        )
     for seed in args.seeds:
         directory = Path(args.output) / f"seed-{seed}"
         directory.mkdir(parents=True, exist_ok=True)
@@ -477,6 +495,17 @@ def main():
     p.add_argument("--randomization-scale", type=float, default=0.05)
     p.add_argument("--payload-mass-kg", type=float, help="nominal payload mass before randomization")
     p.add_argument("--payload-asset-set", choices=["training", "native_table"], default="training")
+    p.add_argument("--contact-cone", choices=["pyramidal", "elliptic"], default="pyramidal")
+    p.add_argument("--contact-impratio", type=float, default=1.0)
+    p.add_argument("--balanced-grasp-setup", action="store_true")
+    p.add_argument("--tamp-carry-trajectories", action="store_true")
+    p.add_argument("--carry-target-mode", choices=["translation", "orientation", "combined"], default="combined")
+    p.add_argument("--carry-push-scale", type=float, default=0)
+    p.add_argument("--carry-readiness-report", type=Path)
+    p.add_argument("--pick-place-readiness-report", type=Path)
+    p.add_argument("--grasp-lift-height", type=float, default=0.06)
+    p.add_argument("--support-half-width", type=float, default=0.012)
+    p.add_argument("--grasp-pitch-rad", type=float, default=0.0)
     p.add_argument("--payload-object", choices=["object1", "object2"])
     p.add_argument("--initial-heading-range", type=float, default=float(np.pi))
     p.add_argument("--target-scale", type=float, default=0.25)

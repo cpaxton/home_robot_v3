@@ -193,3 +193,81 @@ def test_explicit_hold_stays_quiet_and_new_goal_resumes_without_clearing_faults(
         assert c.stopped
     finally:
         e.close()
+
+
+@pytest.mark.sim
+def test_normal_hold_allows_only_executor_authorized_grip_release():
+    e = ManipulationEnv(ManipulationConfig(robot="innate_mars", scenario="reach", randomization_scale=0))
+    try:
+        e.reset(seed=250000)
+        c = e.control
+        c.grip_reference = c.grip_target = e.profile.gripper_closed
+        c.hold_position()
+        arm = c.target.copy()
+        c.accept(np.ones(e.action_space.shape))
+        assert c.grip_target == e.profile.gripper_closed
+        c.set_reference(c.positions(), phase="release", release=True)
+        c.accept(np.ones(e.action_space.shape))
+        assert c.grip_target > e.profile.gripper_closed
+        assert c.holding and not c.stopped
+        np.testing.assert_array_equal(c.target, arm)
+        np.testing.assert_array_equal(c.base_command, 0)
+        np.testing.assert_array_equal(c.velocity, 0)
+        c.stop()
+        grip = c.grip_target
+        c.accept(np.ones(e.action_space.shape))
+        assert c.grip_target == grip and c.stopped
+    finally:
+        e.close()
+
+
+@pytest.mark.sim
+def test_release_rebases_obstructed_jaw_once_and_never_through_fault():
+    e = ManipulationEnv(ManipulationConfig(robot="innate_mars", scenario="reach", randomization_scale=0))
+    try:
+        e.reset(seed=250000)
+        c = e.control
+        e.data.qpos[c.grip_q] = 0.28  # Measured obstructed jaw, not the closed command.
+        c.grip_reference = c.grip_target = e.profile.gripper_closed
+        c.set_reference(c.positions(), phase="release", release=True)
+        assert c.grip_target == pytest.approx(0.28)
+        c.accept(np.zeros(e.action_space.shape))
+        opening_target = c.grip_target
+        assert 0.28 < opening_target <= 0.28 + e.profile.gripper_speed * e.profile.grip_rate_fraction * e.profile.dt
+        c.set_reference(c.positions(), phase="release", release=True)
+        assert c.grip_target == opening_target
+        c.stop()
+        fault_target = c.grip_target
+        e.data.qpos[c.grip_q] = 0.30
+        c.set_reference(c.positions(), phase="release", release=True)
+        assert c.grip_target == fault_target
+        assert c.stopped
+    finally:
+        e.close()
+
+
+@pytest.mark.sim
+def test_arm_contact_hold_keeps_base_active_and_resumes_on_new_arm_goal():
+    e = ManipulationEnv(
+        ManipulationConfig(robot="innate_mars", scenario="reach", action_mode="direct_velocity", randomization_scale=0)
+    )
+    try:
+        e.reset(seed=250000)
+        c = e.control
+        c.set_pose_targets(c.base_pose(), np.ones(3, dtype=bool), c.ee_pose(), True)
+        c.hold_arm_position()
+        arm = c.target.copy()
+        c.accept(np.ones(e.action_space.shape))
+        assert c.arm_holding and not c.holding and not c.stopped
+        np.testing.assert_array_equal(c.target, arm)
+        np.testing.assert_array_equal(c.velocity, 0)
+        assert np.any(c.base_command != 0)
+        goal = c.reference.copy()
+        goal[1] += 0.01
+        c.set_reference(goal)
+        assert not c.arm_holding
+        c.stop()
+        with pytest.raises(ValueError):
+            c.hold_arm_position()
+    finally:
+        e.close()

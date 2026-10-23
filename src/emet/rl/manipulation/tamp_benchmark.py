@@ -18,13 +18,23 @@ from emet.rl.manipulation.payload_assets import provenance
 from emet.rl.manipulation.policy import ManipulationPolicy
 
 
-def make_suite(*, robot="innate_mars", seed=1800006, episodes=3):
+def make_suite(
+    *,
+    robot="innate_mars",
+    seed=1800006,
+    episodes=3,
+    contact_cone="pyramidal",
+    contact_impratio=1.0,
+    balanced_grasp_setup=False,
+):
     if episodes < 1:
         raise ValueError("positive episode count required")
     return {
         "version": "native-payload-tamp-v1",
         "robot": robot,
         "assets": provenance("native_table"),
+        "physics": {"contact_cone": contact_cone, "contact_impratio": contact_impratio},
+        "balanced_grasp_setup": balanced_grasp_setup,
         "scope": "continuous object-transfer fixture with GT TAMP transport; not full public-tool oracle task",
         "cases": [{"payload_object": obj, "seed": seed + i} for obj in ("object1", "object2") for i in range(episodes)],
     }
@@ -38,7 +48,8 @@ def summarize(rows):
         for row in group:
             if not row["success"]:
                 stage = row["stages"][-1]["stage"] if row["stages"] else "initialization"
-                failures[f"{stage}:{row['failure']}"] += 1
+                reason = row.get("initialization_failure_reason") or row["failure"]
+                failures[f"{stage}:{reason}"] += 1
         groups[obj] = {
             "cases": len(group),
             "successes": sum(r["success"] for r in group),
@@ -63,6 +74,8 @@ def run_suite(suite, output, *, policy=None):
             action_mode="direct_velocity",
             payload_asset_set="native_table",
             payload_object=case["payload_object"],
+            **suite.get("physics", {}),
+            balanced_grasp_setup=suite.get("balanced_grasp_setup", False),
         )
         row["payload_object"] = case["payload_object"]
         row["case_id"] = f"{suite['robot']}:{case['payload_object']}:{case['seed']}"
@@ -87,10 +100,20 @@ def main():
     parser.add_argument("--seed", type=int, default=1800006)
     parser.add_argument("--episodes", type=int, default=3, help="per object")
     parser.add_argument("--policy", type=Path)
+    parser.add_argument("--contact-cone", choices=["pyramidal", "elliptic"], default="pyramidal")
+    parser.add_argument("--contact-impratio", type=float, default=1.0)
+    parser.add_argument("--balanced-grasp-setup", action="store_true")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     torch.set_num_threads(1)
-    suite = make_suite(robot=args.robot, seed=args.seed, episodes=args.episodes)
+    suite = make_suite(
+        robot=args.robot,
+        seed=args.seed,
+        episodes=args.episodes,
+        contact_cone=args.contact_cone,
+        contact_impratio=args.contact_impratio,
+        balanced_grasp_setup=args.balanced_grasp_setup,
+    )
     args.output.mkdir(parents=True, exist_ok=True)
     fixture = args.output / "suite.json"
     if fixture.exists() and json.loads(fixture.read_text()) != suite:

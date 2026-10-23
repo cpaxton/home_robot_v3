@@ -67,6 +67,12 @@ class ManipulationConfig:
     randomization_scale: float = 1.0
     payload_mass_kg: float | None = None
     payload_asset_set: str = "training"
+    contact_cone: str = "pyramidal"
+    contact_impratio: float = 1.0
+    balanced_grasp_setup: bool = False
+    tamp_carry_trajectories: bool = False
+    carry_target_mode: str = "combined"
+    carry_push_scale: float = 0.0
     payload_object: str | None = None
     initial_heading_range: float = 0.0
     target_scale: float = 1.0
@@ -84,6 +90,7 @@ class ManipulationConfig:
     grasp_lift_height: float = 0.06
     support_half_width: float = 0.012
     grasp_depth: float = 0.03
+    grasp_pitch_rad: float = 0.0
     hand_position_tolerance: float = 0.015
     hand_orientation_tolerance: float = 0.10
     trajectory_preview: bool = False
@@ -93,6 +100,25 @@ class ManipulationConfig:
     goal_gated_settling: bool = False
 
     def __post_init__(self):
+        if self.carry_target_mode not in {"translation", "orientation", "combined"}:
+            raise ValueError("invalid carry target mode")
+        if not np.isfinite(self.carry_push_scale) or not 0 <= self.carry_push_scale <= 1:
+            raise ValueError("carry push scale must be in [0, 1]")
+        if self.tamp_carry_trajectories and (
+            self.robot != "innate_mars"
+            or not self.trajectory_preview
+            or not self.tracking_reward
+            or self.action_mode != "direct_velocity"
+        ):
+            raise ValueError("TAMP carry references require Mars direct-velocity pose tracking with preview")
+        if self.balanced_grasp_setup and self.robot != "innate_mars":
+            raise ValueError("balanced grasp setup currently supports Mars only")
+        if not np.isfinite(self.contact_impratio) or not 1 <= self.contact_impratio <= 10:
+            raise ValueError("contact impedance ratio must be in [1, 10]")
+        if self.contact_impratio != 1 and self.contact_cone != "elliptic":
+            raise ValueError("nondefault impedance ratio requires elliptic contacts")
+        if self.contact_cone not in {"pyramidal", "elliptic"}:
+            raise ValueError("invalid contact cone")
         if self.payload_asset_set not in {"training", "native_table"}:
             raise ValueError("invalid payload asset set")
         if self.payload_object not in {None, "object1", "object2"}:
@@ -124,6 +150,8 @@ class ManipulationConfig:
             and 0 < self.hand_orientation_tolerance <= 0.10
         ):
             raise ValueError("hand tolerances may only tighten the 15 mm / 0.1 rad contract")
+        if not np.isfinite(self.grasp_pitch_rad) or abs(self.grasp_pitch_rad) > np.pi / 3:
+            raise ValueError("grasp pitch must be finite and within +/- pi/3")
         if not np.isfinite(self.grasp_depth) or not 0 <= self.grasp_depth <= 0.05:
             raise ValueError("grasp depth must be between zero and 50 mm")
         if not np.isfinite(self.support_half_width) or not 0.012 <= self.support_half_width <= 0.15:
@@ -155,7 +183,11 @@ class ManipulationEnv(gym.Env):
         self.config = config if isinstance(config, ManipulationConfig) else ManipulationConfig(**(config or {}))
         self.profile = PROFILES[self.config.robot]
         self.model, self.fingerprint = build_manipulation_model(
-            self.config.robot, diagnostics=self.config.diagnostics, payload_asset_set=self.config.payload_asset_set
+            self.config.robot,
+            diagnostics=self.config.diagnostics,
+            payload_asset_set=self.config.payload_asset_set,
+            contact_cone=self.config.contact_cone,
+            contact_impratio=self.config.contact_impratio,
         )
         self.data = mujoco.MjData(self.model)
         mujoco.mj_forward(self.model, self.data)
@@ -329,7 +361,7 @@ class ManipulationEnv(gym.Env):
             q = np.array([0, -0.4, 0.2, 0.2, 0]) + self.np_random.uniform(-0.05, 0.05, 5)
             if self.scenario != "reach":
                 q[0] = q[4] = 0
-                q[3] = -q[1] - q[2]
+                q[3] = -q[1] - q[2] + self.config.grasp_pitch_rad
         self.control.initialize(q, p.gripper_open)
         if self.scenario == "reach" and self.config.initial_heading_range:
             base_joint = int(m.body_jntadr[self.control.base])
@@ -347,6 +379,8 @@ class ManipulationEnv(gym.Env):
 
         self.randomization = {
             **provenance(self.config.payload_asset_set),
+            "contact_cone": self.config.contact_cone,
+            "contact_impratio": self.config.contact_impratio,
             "mass_factor": mass_factor,
             "payload_mass_kg": float(m.body_mass[self.payload]),
             "payload_inertia_kg_m2": m.body_inertia[self.payload].tolist(),
@@ -389,6 +423,18 @@ class ManipulationEnv(gym.Env):
                 address = m.jnt_qposadr[m.body(name).jntadr[0]]
                 d.qpos[address : address + 3] = [3 + index * 0.1, 3, 0.05]
         mujoco.mj_forward(m, d)
+        if self.config.balanced_grasp_setup and self.scenario != "reach":
+            from emet.rl.manipulation.grasp_setup import plan_setup
+
+            plan = plan_setup(self)
+            if plan is None:
+                self.initialization_failure_reason = "no_stable_grasp_setup"
+                return False
+            # Procedural fixture initialization only, before any scored motion.
+            d.qpos[:] = plan.pop("qpos")
+            mujoco.mj_forward(m, d)
+            self.control.reset()
+            self.randomization["grasp_setup"] = plan
         grasp_reference = self.control.positions().copy()
         if self.scenario == "pregrasp":
             approach = (
@@ -406,20 +452,32 @@ class ManipulationEnv(gym.Env):
                 return False
         self.monitor.reset()
         self.initial_object_height = float(d.xpos[self.payload, 2])
-        self._scheduled_push = self.scenario == "disturbance" or (
-            self.scenario == "reach"
-            and self.config.reach_push_probability > 0
-            and self.np_random.random() < self.config.reach_push_probability
+        self._scheduled_push = (
+            (self.scenario == "carry" and self.config.carry_push_scale > 0)
+            or self.scenario == "disturbance"
+            or (
+                self.scenario == "reach"
+                and self.config.reach_push_probability > 0
+                and self.np_random.random() < self.config.reach_push_probability
+            )
         )
         if self._scheduled_push:
             horizon_steps = int(self.config.horizon / p.dt)
             latest_start = (
                 max(10, min(20, horizon_steps - 12)) if self.scenario == "reach" else max(10, horizon_steps - 12)
             )
+            if self.scenario == "carry":
+                # The scored carry contract requires settled time AFTER the
+                # push. A late window otherwise makes success impossible even
+                # with perfect tracking. Retain two seconds for recovery.
+                latest_start = horizon_steps - 12 - int(np.ceil(2.0 / p.dt))
+                if latest_start < 10:
+                    self.initialization_failure_reason = "carry_disturbance_exceeds_horizon"
+                    return False
             self.disturbance_start = int(self.np_random.integers(10, latest_start + 1))
             self.disturbance_steps = int(self.np_random.integers(6, 13))
-            self.disturbance_wrench = (
-                sample_disturbance(self.np_random, self.disturbance_difficulty) * self.randomization_scale
+            self.disturbance_wrench = sample_disturbance(self.np_random, self.disturbance_difficulty) * (
+                self.config.carry_push_scale if self.scenario == "carry" else self.randomization_scale
             )
             if self.scenario == "reach":
                 force = self.disturbance_wrench[:3].copy()
@@ -449,9 +507,12 @@ class ManipulationEnv(gym.Env):
                 break
         if bilateral_steps < 20:
             return False
-        lift_height = float(d.xpos[self.control.ee, 2]) + 0.06
+        lift_height = float(d.xpos[self.control.ee, 2]) + self.config.grasp_lift_height
         lift_rotation = d.xmat[self.control.ee].reshape(3, 3).copy()
-        self.control.set_reference(self._vertical_reference(0.003 if p.robot == "innate_mars" else 0.06), phase="carry")
+        self.control.set_reference(
+            self._vertical_reference(0.003 if p.robot == "innate_mars" else self.config.grasp_lift_height),
+            phase="carry",
+        )
         stable_reference = None
         stable_steps = 0
         for index in range(160 if p.robot == "innate_mars" else 80):
@@ -481,6 +542,7 @@ class ManipulationEnv(gym.Env):
             raise ValueError("frozen fixtures and arbitrary physics injection are not training reset options")
         self._reference_fk = None
         self.arm_trajectory = None
+        self.tamp_reference_case = None
         self.scenario = (
             str(self.np_random.choice(SCENARIOS, p=MIXTURE))
             if self.config.scenario == "mixed"
@@ -600,6 +662,10 @@ class ManipulationEnv(gym.Env):
         self.trajectory_admission = {"accepted": None, "reason": "not_requested"}
         if self.scenario == "reach" and (self.config.certify_reach_paths or self.config.dynamic_references):
             self._prepare_reach_trajectory()
+        if self.scenario == "carry" and self.config.tamp_carry_trajectories and not self.initialization_failed:
+            from emet.rl.manipulation.carry_training import prepare
+
+            prepare(self)
         self._previous_cost = self._tracking_cost()
         obs = self.control.observe()
         from emet.rl.manipulation.risk import trajectory_features
@@ -699,7 +765,7 @@ class ManipulationEnv(gym.Env):
             arm = self.arm_trajectory.segments[0].sample(max(self.arm_trajectory.segments[0].start, elapsed))[0]
         else:
             arm = self.arm_trajectory.sample(elapsed)[0]
-        self.control.set_reference(arm, phase="reach")
+        self.control.set_reference(arm, phase=self.scenario)
         self.control.set_pose_targets(
             self.control.base_goal,
             self.control.base_mask.copy(),
@@ -1118,7 +1184,7 @@ class ManipulationEnv(gym.Env):
                 np.abs(self.data.xpos[self.payload, :2] - self.model.body_pos[table_body, :2]) + extent[:2]
                 <= self.model.geom_size[self.model.body_geomadr[table_body], :2]
             )
-            open_grip = abs(self.data.qpos[self.control.grip_q] - self.profile.gripper_open) < 0.003
+            open_grip = self.control.gripper_is_open()
             settled = (
                 self._released
                 and supported
@@ -1139,7 +1205,9 @@ class ManipulationEnv(gym.Env):
         invalid = invalid_physics(self.data)
         failure = unsafe or self.monitor.wheel_lift or self.retention_lost or invalid or self._motion_infeasible
         success = self.settle_time >= (2 if self.scenario == "place" else 1) and not failure
-        continuing = self.config.tracking_reward and self.scenario == "reach"
+        continuing = self.config.tracking_reward and (
+            self.scenario == "reach" or (self.scenario == "carry" and self.config.tamp_carry_trajectories)
+        )
         success_event = success and self.first_settle_time is None
         if success_event:
             self.first_settle_time = float(self.data.time - self.start_time)
