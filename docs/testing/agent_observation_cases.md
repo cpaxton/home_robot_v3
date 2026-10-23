@@ -17,6 +17,22 @@ PYTHONPATH=src OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \
 Choose an allowed stable CPU on other hosts. No GPU/model download required.
 Use pytest `--collect-only -q` to list cases and `--junitxml=...` to save results.
 
+CPU MuJoCo geometry controls (no renderer or model):
+
+```bash
+PYTHONPATH=src OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \
+  taskset -c 12 .venv/bin/python -m pytest -q \
+  src/test/eval/test_observation_scene_geometry.py
+```
+
+The checked-in MJCF isolates a mounted target at 3.4 m optical range and a
+low route obstruction. Ray tests exercise actual MuJoCo intersections and the
+production depth-support gate, including a 2.2 m closer-view control and
+excluded-target no-return control. Production swept-route checks distinguish
+an obstructed lane from a clear lane using actual MuJoCo contacts. The simple
+probe footprint is not a Stretch/rby1 model; these are geometry controls, not
+wheel-control, rendered-image, mapping-sensor or VLM acceptance.
+
 | ID | Scenario and required outcome | Coverage |
 | --- | --- | --- |
 | OBS-01 | Visible but far: 3.3 m target exceeds 2.5 m gate; no object geometry. Closer observation is allowed, camera position is not object position. | Parameterized far-target case in `test_agent_observation_cases.py`; live microwave recovery still unqualified |
