@@ -74,6 +74,10 @@ class ManipulationConfig:
     action_mode: str = "residual"
     base_xy_tolerance: float = 0.02
     base_heading_tolerance: float = 0.04
+    base_only_min_distance: float = 0.0
+    base_only_max_distance: float = 0.0
+    reach_target_mode: str = "mixed"
+    differential_base_reward: bool = False
     grasp_lift_height: float = 0.06
     support_half_width: float = 0.012
     grasp_depth: float = 0.03
@@ -85,6 +89,18 @@ class ManipulationConfig:
     endpoint_motion_weight: float = 0.0
 
     def __post_init__(self):
+        if not np.isfinite(self.base_only_min_distance) or not 0 <= self.base_only_min_distance <= 0.5:
+            raise ValueError("base-only minimum distance must be in [0, .5]")
+        if not np.isfinite(self.base_only_max_distance) or not 0 <= self.base_only_max_distance <= 0.75:
+            raise ValueError("base-only maximum distance must be in [0, .75]")
+        if self.base_only_max_distance and (
+            not self.base_only_min_distance or self.base_only_max_distance < self.base_only_min_distance
+        ):
+            raise ValueError("base-only maximum requires a positive minimum no larger than maximum")
+        if self.reach_target_mode not in {"mixed", "base", "hand", "combined"}:
+            raise ValueError("invalid reach target mode")
+        if self.base_only_min_distance and self.base_only_min_distance <= self.base_xy_tolerance:
+            raise ValueError("base-only minimum distance must exceed the accepted XY radius")
         if not np.isfinite(self.base_heading_tolerance) or not 0 < self.base_heading_tolerance <= np.pi:
             raise ValueError("base heading tolerance must be in (0, pi]")
         if not np.isfinite(self.endpoint_motion_weight) or not 0 <= self.endpoint_motion_weight <= 2:
@@ -541,6 +557,8 @@ class ManipulationEnv(gym.Env):
             base = self.control.base_pose()
             if self.control.base_mask.any() or (self.control.pose_only_targets and self.control.hand_mask):
                 base += self.np_random.uniform([-0.12, -0.12, -0.25], [0.12, 0.12, 0.25]) * self.target_scale
+                if not self.control.hand_mask:
+                    base = self._base_only_goal(base)
             if not self.control.hand_mask:
                 arm = self.control.positions()
             self.retarget_goal = (base, arm, self._fk_hand_pose(base, arm))
@@ -712,12 +730,30 @@ class ManipulationEnv(gym.Env):
         phase = "reach" if self.scenario == "reach" else self.scenario
         self.control.set_reference(q, phase=phase)
 
+    def _base_only_goal(self, base):
+        base = base.copy()
+        if self.config.base_only_min_distance:
+            angle = self.np_random.uniform(-np.pi, np.pi)
+            minimum = self.config.base_only_min_distance
+            maximum = (
+                minimum + self.target_scale * (self.config.base_only_max_distance - minimum)
+                if self.config.base_only_max_distance
+                else 1.5 * minimum
+            )
+            radius = self.np_random.uniform(minimum, maximum)
+            base[:2] = self.control.base_pose()[:2] + radius * np.array([np.cos(angle), np.sin(angle)])
+        return base
+
     def _set_pose_targets(self):
         control, profile = self.control, self.profile
         base = control.base_pose()
         if profile.wheel_bodies:
             if self.scenario == "reach":
-                self.target_mode = int(self.np_random.choice((1, 2, 3), p=(0.2, 0.4, 0.4)))
+                self.target_mode = (
+                    int(self.np_random.choice((1, 2, 3), p=(0.2, 0.4, 0.4)))
+                    if self.config.reach_target_mode == "mixed"
+                    else {"base": 1, "hand": 2, "combined": 3}[self.config.reach_target_mode]
+                )
             else:
                 self.target_mode = int(self.np_random.choice((2, 3), p=(0.5, 0.5)))
             base_mask = np.full(3, self.target_mode in (1, 3), dtype=bool)
@@ -728,6 +764,8 @@ class ManipulationEnv(gym.Env):
                 # the hand is constrained. The latent base pose is not an
                 # actor command or an IK hint.
                 base = base + self.np_random.uniform([-0.12, -0.12, -0.25], [0.12, 0.12, 0.25]) * self.target_scale
+                if self.target_mode == 1 and self.config.base_only_min_distance:
+                    base = self._base_only_goal(base)
             if self.target_mode == 1:
                 control.set_reference(control.positions(), phase="reach")
         else:
@@ -1102,6 +1140,7 @@ class ManipulationEnv(gym.Env):
         if self.config.tracking_reward:
             from emet.rl.manipulation.tracking import (
                 PRECISION_STAGES,
+                differential_base_score,
                 endpoint_motion_cost,
                 stationary_tracking_score,
                 tracking_score,
@@ -1113,6 +1152,12 @@ class ManipulationEnv(gym.Env):
                 0.0, float(np.linalg.norm(base_delta[:2] * self.control.base_mask[:2])) - self.config.base_xy_tolerance
             )
             base_score = np.exp(-base_error / base_sigma - abs(base_delta[2]) * self.control.base_mask[2] / 0.2)
+            if self.config.differential_base_reward and self.control.base_mask.any():
+                delta = self.control._base_tracking_delta()
+                bearing = np.arctan2(delta[1], delta[0]) - self.control.base_pose()[2]
+                base_score = differential_base_score(
+                    base_error, base_delta[2] * self.control.base_mask[2], bearing, base_sigma
+                )
             density = 4 * pose_score * self.control.hand_mask + base_score * self.control.base_mask.any()
             if at_reference_end:
                 density += base_score * stationary_tracking_score(

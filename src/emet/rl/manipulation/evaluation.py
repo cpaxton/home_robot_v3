@@ -38,6 +38,7 @@ def evaluate(policy=None, *, config=None, episodes=20, seed=200000, scenarios=No
             for index in range(episodes):
                 episode_seed = seed + scenario_index * 10000 + index
                 obs, info = env.reset(seed=episode_seed)
+                initial_base_distance = float(np.linalg.norm(env.control.base_goal[:2] - env.control.base_pose()[:2]))
                 initial = {
                     "task_contract": {
                         "base_xy_tolerance": config.base_xy_tolerance,
@@ -77,6 +78,7 @@ def evaluate(policy=None, *, config=None, episodes=20, seed=200000, scenarios=No
                 rows.append(
                     {
                         "seed": episode_seed,
+                        "initial_base_distance_m": initial_base_distance,
                         **info,
                         "initial": initial,
                         "episode_id": f"{config.robot}:{scenario}:{episode_seed}",
@@ -107,6 +109,9 @@ def summarize(rows):
             "initialization_rejections": sum(r["initialization_rejections"] for r in group),
             "success_rate": float(np.mean([r["is_success"] for r in group])),
         }
+        settled_once = [r for r in actual if r.get("time_to_first_settle") is not None]
+        metrics["ever_settled_rate"] = len(settled_once) / len(group)
+        metrics["settled_then_lost_count"] = sum(not r["is_success"] for r in settled_once)
         # Endpoint diagnostics distinguish tracking failures from a robot that
         # reaches the pose but never stops. These do not alter success gates.
         diagnostic_rows = [r for r in actual if "config" in r and "base_linear_velocity_m_s" in r]
@@ -194,6 +199,9 @@ def summarize(rows):
             values = [r[key] for r in actual if r.get(key) is not None]
             metrics[key + "_rate"] = float(np.mean(values)) if values else None
         for key in (
+            "initial_base_distance_m",
+            "peak_base_linear_jerk_m_s3",
+            "peak_base_yaw_jerk_rad_s3",
             "peak_contact_force",
             "contact_impulse",
             "peak_measured_jerk",

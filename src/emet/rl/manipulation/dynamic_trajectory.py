@@ -173,6 +173,13 @@ def admit(env, trajectory):
                         "compensation_joint1": float(yaw),
                         "contacts": list(checker.last_contacts),
                     }
+    if env.config.base_only_min_distance and not env.control.hand_mask:
+        from emet.rl.manipulation.tracking import TaskFrameFK
+
+        witness = TaskFrameFK(env.model, env.data, env.control)
+        witness(env.control.base_goal, trajectory.sample(trajectory.end)[0])
+        if checker.configuration_collides(env.model, witness.data):
+            return {"accepted": False, "reason": "base_target_collision", "contacts": list(checker.last_contacts)}
     return {
         "accepted": True,
         "reason": "sampled_geometric_path",

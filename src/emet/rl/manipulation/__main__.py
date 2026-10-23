@@ -168,6 +168,19 @@ class Monitor(BaseCallback):
             for k, v in group.items()
             if v is not None
         }
+        metrics.update(
+            {
+                f"curriculum_validation/{scenario}/{k}": v
+                for scenario, group in curriculum["summary"].items()
+                for k, v in group.items()
+                if v is not None
+            }
+        )
+        if self.config.base_only_max_distance:
+            metrics["curriculum/base_min_distance_m"] = self.config.base_only_min_distance
+            metrics["curriculum/base_max_distance_m"] = self.config.base_only_min_distance + self.target_scale * (
+                self.config.base_only_max_distance - self.config.base_only_min_distance
+            )
         metrics["curriculum/randomization_scale"] = self.randomization_scale
         metrics["curriculum/target_scale"] = self.target_scale
         metrics["curriculum/tracking_precision"] = self.config.tracking_precision
@@ -275,6 +288,10 @@ def train(args):
         action_mode=args.action_mode,
         base_xy_tolerance=args.base_xy_tolerance,
         base_heading_tolerance=args.base_heading_tolerance,
+        base_only_min_distance=args.base_only_min_distance,
+        base_only_max_distance=args.base_only_max_distance,
+        reach_target_mode=args.reach_target_mode,
+        differential_base_reward=args.differential_base_reward,
         hand_position_tolerance=args.hand_position_tolerance,
         hand_orientation_tolerance=args.hand_orientation_tolerance,
         trajectory_preview=args.trajectory_preview,
@@ -461,6 +478,10 @@ def main():
     p.add_argument("--action-mode", choices=["residual", "direct_velocity"], default="direct_velocity")
     p.add_argument("--base-xy-tolerance", type=float, default=0.05)
     p.add_argument("--base-heading-tolerance", type=float, default=0.04)
+    p.add_argument("--base-only-min-distance", type=float, default=0.0)
+    p.add_argument("--base-only-max-distance", type=float, default=0.0)
+    p.add_argument("--reach-target-mode", choices=["mixed", "base", "hand", "combined"], default="mixed")
+    p.add_argument("--differential-base-reward", action="store_true")
     p.add_argument("--hand-position-tolerance", type=float, default=0.005)
     p.add_argument("--hand-orientation-tolerance", type=float, default=0.05)
     p.add_argument("--trajectory-preview", action=argparse.BooleanOptionalAction, default=True)

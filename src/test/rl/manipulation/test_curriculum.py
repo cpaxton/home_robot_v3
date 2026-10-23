@@ -36,6 +36,10 @@ def test_endpoint_diagnostics_do_not_count_accurate_moving_hand_as_success():
     assert never_held["peak_hold_base_drift_m_p95"] is None
     held = summarize([{**row, "peak_hold_base_drift_m": 0.003, "time_to_first_settle": 2}])["reach"]
     assert held["peak_hold_base_drift_m_p95"] == 0.003
+    assert held["ever_settled_rate"] == 1
+    assert held["settled_then_lost_count"] == 1
+    assert never_held["ever_settled_rate"] == 0
+    assert never_held["settled_then_lost_count"] == 0
     inactive = summarize([{**row, "hand_target_active": False}])["reach"]
     assert inactive["endpoint_hand_within_rate"] is None
     assert inactive["endpoint_hand_position_outside_count"] is None

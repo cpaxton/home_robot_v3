@@ -10,6 +10,7 @@ from emet.rl.manipulation.tracking import (
     PREVIEW_OFFSETS,
     PREVIEW_WIDTH,
     TaskFrameFK,
+    differential_base_score,
     endpoint_motion_cost,
     stationary_tracking_score,
     tracking_score,
@@ -370,3 +371,79 @@ def test_hand_only_distribution_uses_whole_body_fk_without_leaking_a_base_soluti
         np.testing.assert_array_equal(obs["preview"][:, 1:7], 0)
     finally:
         e.close()
+
+
+def test_differential_base_reward_allows_turning_before_final_alignment():
+    far = differential_base_score(0.10, 0, np.pi / 2, 0.15)
+    aligned_travel = differential_base_score(0.10, np.pi / 2, 0, 0.15)
+    assert aligned_travel > far
+    assert aligned_travel == pytest.approx(differential_base_score(0.10, np.pi / 2, np.pi, 0.15))
+    assert differential_base_score(0.10, np.pi, 0, 0.15) == aligned_travel
+    assert differential_base_score(0, 0, 1, 0.15) == 1
+    assert differential_base_score(0, 1, 0, 0.15) < 0.01
+    assert differential_base_score(0.05, 0, 0, 0.15) > aligned_travel
+
+
+@pytest.mark.sim
+def test_base_training_targets_require_actual_translation_and_are_seeded():
+    cfg = ManipulationConfig(
+        robot="innate_mars",
+        scenario="reach",
+        trajectory_preview=True,
+        reach_target_mode="base",
+        base_only_min_distance=0.12,
+        base_xy_tolerance=0.05,
+        target_scale=0.25,
+        retarget_probability=1,
+        randomization_scale=0,
+    )
+    e = ManipulationEnv(cfg)
+    try:
+        for seed in range(8):
+            e.reset(seed=seed)
+            c = e.control
+            assert c.base_mask.all() and not c.hand_mask
+            distance = np.linalg.norm(c.base_goal[:2] - c.base_pose()[:2])
+            assert 0.12 - 1e-9 <= distance <= 0.18 + 1e-9
+            assert np.linalg.norm(e.retarget_goal[0][:2] - c.base_pose()[:2]) >= 0.12 - 1e-9
+        goal = c.base_goal.copy()
+        e.reset(seed=7)
+        np.testing.assert_array_equal(c.base_goal, goal)
+        with pytest.raises(ValueError):
+            ManipulationConfig(base_only_min_distance=0.01, base_xy_tolerance=0.05)
+    finally:
+        e.close()
+
+
+@pytest.mark.sim
+def test_base_distance_curriculum_expands_without_trivial_goals():
+    cfg = ManipulationConfig(
+        robot="innate_mars",
+        scenario="reach",
+        trajectory_preview=True,
+        reach_target_mode="base",
+        base_only_min_distance=0.08,
+        base_only_max_distance=0.35,
+        base_xy_tolerance=0.05,
+        target_scale=0.15,
+        randomization_scale=0,
+    )
+    env = ManipulationEnv(cfg)
+    try:
+        env.reset(seed=7)
+        base = env.control.base_pose()
+        near, far = [], []
+        for scale, distances in ((0.15, near), (1.0, far)):
+            env.set_target_scale(scale)
+            env.np_random = np.random.default_rng(91)
+            for _ in range(100):
+                distances.append(np.linalg.norm(env._base_only_goal(base)[:2] - base[:2]))
+        assert min(near) > cfg.base_xy_tolerance
+        assert max(near) <= 0.08 + 0.15 * (0.35 - 0.08)
+        assert max(far) <= 0.35
+        assert min(far) >= 0.08
+        assert np.mean(far) > np.mean(near)
+        with pytest.raises(ValueError):
+            ManipulationConfig(base_only_min_distance=0.12, base_only_max_distance=0.1)
+    finally:
+        env.close()

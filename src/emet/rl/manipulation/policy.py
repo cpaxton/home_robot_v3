@@ -76,7 +76,9 @@ def export(model, normalizer, directory, env_config, fingerprint, *, steps):
         "actor_ground_truth_inputs": False,
         "environment": asdict(env_config),
         "training_reward": (
-            "coupled_task_pose_tracking_endpoint_ramp_v6"
+            "differential_base_tracking_v7"
+            if env_config.differential_base_reward
+            else "coupled_task_pose_tracking_endpoint_ramp_v6"
             if env_config.endpoint_motion_weight
             else "coupled_task_pose_tracking_and_hold_v5"
         )

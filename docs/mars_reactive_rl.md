@@ -1766,7 +1766,7 @@ and no UI error. The policy's base-only behavior is still unvalidated. Use the
 explicit Feedback controller selection for the tested manual base comparator;
 the UI never substitutes it silently for a learned policy.
 
-A nearby masked-coverage continuation is running at
+A nearby masked-coverage continuation was started at
 `logs/manipulation/nearby-masked-coverage/seed-27`, initialized from the final
 constant-LR fixed-case policy. It samples fresh reset cases rather than repeating
 one seed: base-only/hand-only/combined targets, target scale .25, heading range
@@ -1777,3 +1777,45 @@ validation and current-distribution curriculum reports remain separate; default
 safety gates and the explicitly declared .25-rad heading tolerance are logged.
 This addresses missing coverage, not a claim of improved distant-target behavior.
 No UI checkpoint is automatically promoted and no hardware is commanded.
+
+### Differential-drive base diagnosis
+
+The coverage continuation was stopped after an audit found that 29/29 active
+base targets started inside the accepted 5 cm XY region (maximum displacement
+3.82 cm). It did not teach meaningful translation. In paired 20 cm cardinal-goal
+tests, feedback succeeded 4/4 with 5–11 mm final error; the fixed-case learned
+policy succeeded 0/4 with 0.69–1.29 m final error. Reports are under
+`logs/manipulation/base-direction-audit/`. The UI was explicitly switched to the
+Feedback comparator while retaining the goal.
+
+Training now supports a forced base-only target mode and a minimum displacement
+outside the accepted region. A 12 cm minimum samples 12–18 cm translations,
+independent of the arm-target curriculum scale. An optional differential-drive
+reward emphasizes forward/reverse travel alignment away from the goal and final
+heading near the accepted region, allowing the initial turns needed for lateral
+targets. Nominal base-only endpoints receive a collision check; this does not
+certify the intervening dynamic path. Existing defaults remain unchanged.
+Thirty-one initial targeted tests passed. After adding the distance curriculum,
+27 tracking, curriculum, and training-option tests passed again. Corrected
+teacher validation admitted all 20 cases: all settled at least once, 14/20 were
+still successful at the endpoint, and six lost sustained settling. Final XY
+error mean/p95 was 18.2/23.7 mm; heading mean/p95 was .0098/.0148 rad. There were
+no unsafe contacts or wheel lifts. Mean first-settle time was 8.54 seconds.
+These results expose remaining feedback chatter rather than certify stability.
+
+The replacement scratch PPO run is
+`logs/manipulation/differential-base-curriculum-v1/seed-28`, W&B
+<https://wandb.ai/cpaxton/emet-mars-control/runs/9du79bdg>. It requests 1048576
+steps with two workers on cores 14–15, LR 1e-4 decaying to 1e-5, endpoint motion
+weight .25, low randomization .05, and no retargets or pushes initially. Base
+distance samples start at 8–12.05 cm (minimum .08 m, final maximum .35 m,
+target scale .15). The maximum grows with the existing validation-gated target
+scale; the minimum always exceeds the 5 cm accepted radius. Base-only cases
+require the strict success gate (at least 90% over 20 cases and no safety or
+initialization failures) to advance. Fixed full-distribution tests use 8–35 cm
+and full randomization, separately from current-stage tests. Checkpoints are
+compared to the teacher on identical cases every 65536 steps. Logs include
+current-stage outcome metrics, distance bounds, ever-settled rate, subsequent
+settling loss, and measured base-axis jerk. No corrected learned policy has yet
+been validated or promoted; this run isolates base control before reintroducing
+whole-body goals and dynamic goal changes.

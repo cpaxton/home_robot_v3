@@ -14,6 +14,18 @@ def tracking_score(position_error, orientation_error, level):
     return float(np.exp(-position_error / sigma_position - orientation_error / sigma_orientation))
 
 
+def differential_base_score(outside_region, final_heading_error, travel_bearing, position_scale):
+    """Reward travel alignment far away and final heading near the goal region.
+
+    Forward and reverse travel are equally valid; a differential base cannot
+    translate sideways while maintaining its final heading.
+    """
+    travel_weight = float(np.clip(outside_region / 0.05, 0, 1))
+    alignment = 0.2 + 0.8 * np.cos(travel_bearing) ** 2
+    heading = np.exp(-abs(final_heading_error) / 0.2)
+    return float(np.exp(-outside_region / position_scale) * (travel_weight * alignment + (1 - travel_weight) * heading))
+
+
 def stationary_tracking_score(position_error, orientation_error, joint_velocity, base_velocity, *, hand_active):
     """Smooth incentive to hold an accurate final pose, without a dead zone.
 
