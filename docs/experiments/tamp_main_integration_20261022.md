@@ -150,3 +150,23 @@ Validation job `20261023_131049_682a56`: **775 passed, zero failures/errors/skip
 regression set, extended with text/vision inference guard tests. It is not the
 entire repository suite. Ruff and whitespace checks pass. No live-task aggregate
 is rescored by these contract fixes.
+
+## Native planning boundary and phase attribution, October 23
+
+Re-review found the native execution-refinement catch still covered only budget
+exhaustion. The entire planning-only refinement and handle-validation region is
+now contained before `adapter.execute`: planning timeouts, malformed responses,
+missing handles and invalid handles return typed no-actuation failures. The actual
+adapter executor is deliberately outside this catch; an executor timeout remains
+an uncertain physical outcome.
+
+The task session labels a failed typed no-actuation receipt as `preflight` for
+the failed step. Earlier physical progress remains partial without relabeling
+that earlier work. Tests assert the phase as well as status, completed steps,
+execution-started flag, private-data redaction and absence of executor calls.
+The focused provider suite passes 55 checks.
+
+Validation job `20261023_154613_e3af8e`: **784 passed, zero failures/errors/skips**,
+93.868 seconds, covering the entire TAMP test directory plus the same integrated
+regression set. Ruff and whitespace checks pass. This is not the entire repository
+suite or a new live task-success trial.

@@ -15,7 +15,7 @@ from emet.simulation.sim_object_placements import placements_from_mujoco_model
 from .native_adapter import NativeTableAdapter
 from .task_budget import BudgetExhausted
 from .task_contracts import SceneBinding, fingerprint
-from .task_session import TaskExecutionResult
+from .task_session import TaskExecutionResult, provider_failure_code
 from .transfer_provider import RegionTransferProvider, TransferObservation, TransferRegion
 
 
@@ -195,10 +195,12 @@ class NativeTableTransferProvider(RegionTransferProvider):
         with self.adapter.lock:
             try:
                 plan_ref = self._refine(role, region, retain=True)
-            except BudgetExhausted:
-                # Refinement is planning-only. A successful feasibility probe
-                # can consume the last IK call before this second refinement.
-                return TaskExecutionResult(False, False, 'task_motion_budget_exhausted')
+                if plan_ref is not None and (not isinstance(plan_ref, str) or not plan_ref):
+                    raise ValueError('invalid_refinement_plan_handle')
+            except Exception as error:
+                # Refinement is planning-only, including result validation.
+                # Keep adapter.execute outside this no-actuation boundary.
+                return TaskExecutionResult(False, False, provider_failure_code(error))
             if plan_ref is None:
                 code = 'task_motion_budget_exhausted' if self._ik_remaining <= 0 else 'task_motion_planning_failed'
                 return TaskExecutionResult(False, False, code)

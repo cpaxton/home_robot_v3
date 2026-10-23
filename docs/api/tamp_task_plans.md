@@ -117,3 +117,10 @@ case. This distinction does not infer no actuation from arbitrary provider error
 configure a different orchestrator. Both remote OpenAI text and vision clients
 keep robot telemetry live during inference. Local inference retains its existing
 stream-pause guard.
+
+Native execution refinement also has a planning-only exception boundary: timeout,
+malformed-result and invalid-handle errors before `adapter.execute` return
+no-actuation receipts. Typed failed receipts with `execution_started: false`
+report `failed_phase: preflight`, even when an earlier step made physical
+progress. Exceptions from the actual adapter executor remain possible physical
+execution and are never reclassified by the planning-only catch.

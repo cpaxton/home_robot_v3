@@ -131,6 +131,8 @@ class TaskSession:
                     if isinstance(receipt, TaskExecutionResult):
                         started = previous_started or receipt.execution_started
                         success = receipt.success
+                        if not success and not receipt.execution_started:
+                            phase = "preflight"
                     else:
                         success = receipt is True
                     if not success:

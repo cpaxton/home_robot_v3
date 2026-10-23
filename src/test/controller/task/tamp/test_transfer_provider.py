@@ -320,6 +320,7 @@ def test_last_preflight_ik_call_cannot_claim_execution_started(prior_progress):
     assert result['data']['completed_steps'] == int(prior_progress)
     assert result['data']['failed_step_1based'] == 1 + int(prior_progress)
     assert domain._ik_remaining == 0 and commands == []
+    assert result['data']['failed_phase'] == 'preflight'
 
 
 @pytest.mark.parametrize('stage', ['snapshot', 'feasible'])
@@ -342,6 +343,7 @@ def test_provider_internal_preflight_failure_is_no_actuation(stage, reason):
     assert result['code'] == ('task_motion_budget_exhausted' if reason == 'budget' else reason)
     assert result['status'] == 'error' and result['data']['execution_started'] is False
     assert result['data']['completed_steps'] == 0 and calls == []
+    assert result['data']['failed_phase'] == 'preflight'
 
 
 def test_unknown_transfer_exception_remains_conservative():
@@ -368,3 +370,54 @@ def test_explicit_move_cannot_relocate_unrequested_object():
     done = session.execute(result['data']['plan_ref'])
     assert done['status'] == 'ok' and calls == [('alpha', 'buffer')]
     assert dict(domain.observe().locations)['beta'] == 'right'
+
+
+@pytest.mark.parametrize('failure', ['timeout', 'malformed_result', 'missing_handle', 'invalid_handle'])
+@pytest.mark.parametrize('prior_progress', [False, True])
+def test_native_planning_errors_are_no_actuation_and_preserve_prior_progress(failure, prior_progress):
+    native, _ = native_probe_domain()
+    session = TaskSession(native)
+    ref = session.plan('swap alpha and beta')['data']['plan_ref']
+    native.transfer = native._transfer_native
+    commands = []
+    native.adapter.execute = lambda handle: commands.append(handle)
+    def bad_plan(**kwargs):
+        if failure == 'timeout':
+            raise TimeoutError('/private/transport body_123')
+        if failure == 'malformed_result':
+            return None
+        return {'status': 'ok', 'code': 'ok',
+                'data': {} if failure == 'missing_handle' else {'plan_ref': 123}}
+    native.adapter.plan = bad_plan
+    if prior_progress:
+        domain, _, calls = make_domain()
+        session = TaskSession(domain)
+        ref = session.plan('swap alpha and beta')['data']['plan_ref']
+        transfer = domain.transfer
+        def next_transfer(obj, region):
+            if not calls:
+                return transfer(obj, region)
+            return native._transfer_native('beta', native.regions['buffer'])
+        domain.transfer = next_transfer
+    result = session.execute(ref)
+    assert result['status'] == ('partial' if prior_progress else 'error')
+    assert result['data']['execution_started'] is prior_progress
+    assert result['data']['completed_steps'] == int(prior_progress)
+    assert result['data']['failed_step_1based'] == 1 + int(prior_progress)
+    assert result['data']['failed_phase'] == 'preflight' and commands == []
+    assert '/private/' not in json.dumps(result) and 'body_123' not in json.dumps(result)
+
+
+def test_native_executor_timeout_is_not_misreported_as_preflight():
+    native, _ = native_probe_domain()
+    session = TaskSession(native)
+    ref = session.plan('swap alpha and beta')['data']['plan_ref']
+    native.transfer = native._transfer_native
+    native._refine = lambda *args, **kwargs: 'valid_handle'
+    def unknown(handle):
+        raise TimeoutError('command may have reached robot')
+    native.adapter.execute = unknown
+    result = session.execute(ref)
+    assert result['status'] == 'partial'
+    assert result['data']['execution_started'] is True
+    assert result['data']['failed_phase'] == 'execution'
