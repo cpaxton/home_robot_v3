@@ -46,10 +46,12 @@ Strike through or move to a PR when done.
       missing curtain context, then test existing opt-in pose history and
       retained-dialogue ablations. Preserve model authority and exact packets.
       See `docs/plans/shared_stack_readiness.md` for evidence and gate IDs.
-- [ ] Separate fresh pre-turn preservation from optional extra-history ranking.
+- [x] Separate fresh pre-turn preservation from optional extra-history ranking.
       q56 gains with selector on because image 2 finally shows bookshelf plus
       blue curtains; added pose-novelty images 3/4 are blank walls. Preserve
-      scope/age/dedup guards and model authority, then rerun the four-ID gate.
+      scope/age/dedup guards and model authority. Owner repair `92f31497`.
+- [ ] Clear the four-ID EQA gate for independent current/pre-turn handoff before
+      promoting the remaining context stack; unit tests do not establish gains.
 
 ## TAMP simulator API readiness (2026-10-05)
 

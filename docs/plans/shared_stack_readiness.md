@@ -1,5 +1,27 @@
 # Shared-agent stack readiness
 
+## Independent pre-turn handoff repair — 2026-10-22
+
+Implemented on owner #202 in `92f31497` and propagated through #216/#217.
+Two new regression tests failed before repair: capture enablement and handoff
+both required optional ranking configuration. The repaired adapter now requests
+one path/yaw-boundary capture per query independently of ranking, clears the
+previous query's capture, and defaults to **current + qualified pre-turn only**.
+Missing/unqualified captures retain the pre-approach fallback; no unrelated
+history frame is substituted. Acquisition clock, map epoch/history boundary,
+strictly earlier timestamp, existing age limit, dedup and image budget checks
+remain enforced. Model-facing labels distinguish before-turn from current RGB.
+No answer/stopping rule, model, budget, prompt heuristic, or extra-history
+ranking default changed. Unsupported robot adapters keep the existing fallback.
+
+97 focused owner tests passed; integrated dialogue/final-authority checks and
+the frozen EQA4 rerun are the next gates. The default pair emits
+`assessment_handoff`; optional additional-history policies still emit
+`view_selection`. This lets the rerun verify that it tests the bounded handoff,
+not the four-image pose-history diagnostic. Source SHA and driver/config hashes
+will be recorded by the acceptance runner; no new merge is authorized by unit
+results alone.
+
 ## Post-landing handoff — 2026-10-22
 
 Five PRs are merged: #218 `c6160d06`, #181 `53e41532`, #182 `36d11e5d`,
