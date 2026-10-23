@@ -2302,3 +2302,31 @@ production/resume behavior even on CUDA hosts. Execution traces enumerate only
 `data.contact[:data.ncon]`. An unconfirmed reactive stop intentionally retains
 ownership and skips navigation cleanup/release, with a regression test protecting
 that behavior.
+
+### Completed review qualification (2026-10-23)
+
+The immutable `2214c99a` simulator teacher rerun completed with **298/300
+carry successes**, all 300 references admitted, **30/30 continuous one-pedestal
+pick/place successes**, and zero unsafe-contact or wheel-unloading terminations.
+Per-mass carry success is 100/100 at 20 g, 100/100 at 50 g, and 98/100 at 100 g.
+The two existing `100g:orientation:10` and `100g:orientation:11` retention failures
+remain counted; no thresholds, frozen goals, or physics were relaxed.
+
+The combined readiness validator passed against both canonical catalogs, the
+expanded current source/asset/runtime manifest, and an independently constructed
+model fingerprint. The fresh source-bound regression receipt verifies 341 passing
+tests with no failures or skips. This gate retains per-mass admission/conditional
+thresholds, not a per-stratum or 95% end-to-end guarantee.
+
+[The v4 summary](../paper/data/whole_body_control/qualification_v4.json) includes
+all stratum denominators, failures, fingerprints, and checksums. Complete carry and
+pick/place reports are preserved as adjacent `qualification_v4_*.json.gz` archives;
+the JUnit XML and its source-bound receipt are archived there too. Local original
+reports are `logs/manipulation/carry-review-v4/report.json` and
+`logs/manipulation/carry-pick-place-review-v4/report.json`. Historical v2 and v3
+artifacts are unchanged. Archived receipts bind source contents rather than merely
+a commit name; future source changes require fresh evidence.
+
+PPO was not restarted by qualification. Learned-policy qualification, coordinated
+moving-base carry, public-tool agent acceptance, robot-controller integration,
+and real-world Herman testing remain separate gates tracked in the root TODO.

@@ -3,6 +3,22 @@
 Short checklist for agent/hardware polish that is not worth a full plan doc yet.
 Strike through or move to a PR when done.
 
+## RL controller integration and acceptance (Mars first)
+
+- [ ] Integrate the qualified controller with the robot command interface: masked
+      base SE(2), hand SE(3), and gripper targets; trajectory updates, measured versus
+      commanded state, speed/effort limits, deadlines, stop confirmation and ownership.
+      Keep simulator qualification separate from hardware readiness.
+- [ ] Test the integrated agent through public TAMP tools, first with ground-truth
+      oracle plans and then the agent: physical pick/carry/place, goal changes,
+      interruptions and recovery. Record retention, task success, tracking, settling,
+      jerk/contact loads and wheel support; include coordinated moving-base carry.
+- [ ] Test on Herman (real-world Innate Mars) after simulator and interface gates:
+      verify feedback and stop behavior, then staged bounded motion and compliant
+      interaction under an explicitly authorized hardware procedure. Compare measured
+      trajectories and loads against simulation; do not infer hardware safety from
+      simulator success or start motion from this checklist alone.
+
 ## Proprioceptive contact learning (2026-10-23)
 
 Reference: Bronars et al., [Blind Precise Assembly](https://arxiv.org/abs/2610.23849),
