@@ -13,9 +13,10 @@ class EvaluationQuestion:
     variant: str
     question: str
     category: str
-    scene: str
+    scene: str | None
     reference_answer: str
     frame_indices: tuple[int, ...] = ()
+    evidence_id: str | None = None
 
     def model_input(self):
         """Only the question enters model text; refs/categories/labels are scorer-only."""
@@ -79,9 +80,10 @@ def abstain_questions(answerable_rows, unanswerable_rows):
                 variant,
                 _text(row, "question"),
                 row["category"] if isinstance(row.get("category"), str) and row["category"].strip() else "unlabeled",
-                _text(row, "episode_history"),
+                None,  # episode_history identifies evidence, not a certified scene split.
                 _text(row, "answer"),
                 tuple(indices),
+                _text(row, "episode_history"),
             )
         by_variant[variant] = questions
     positive, negative = by_variant["answerable"], by_variant["unanswerable"]
@@ -90,7 +92,7 @@ def abstain_questions(answerable_rows, unanswerable_rows):
     output = []
     for qid in sorted(positive):
         a, b = positive[qid], negative[qid]
-        if a.scene != b.scene or a.frame_indices != b.frame_indices:
+        if a.evidence_id != b.evidence_id or a.frame_indices != b.frame_indices:
             raise ValueError(f"AbstainEQA pair evidence differs: {qid}")
         output.extend((a, b))
     return output
@@ -102,6 +104,8 @@ def development_pilot(questions, per_category=2):
         raise ValueError("Positive integer per_category required")
     if not questions:
         raise ValueError("No questions to select")
+    if len({q.benchmark for q in questions}) != 1:
+        raise ValueError("Pilot selection requires a homogeneous benchmark")
     paired = questions[0].benchmark == "abstaineqa"
     candidates = [q for q in questions if q.category != "unlabeled" and (not paired or q.variant == "unanswerable")]
     if not candidates:

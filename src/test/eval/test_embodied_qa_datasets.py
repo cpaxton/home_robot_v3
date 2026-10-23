@@ -73,3 +73,22 @@ def test_upstream_unlabeled_category_preserves_pair_but_is_not_pilot_category():
     assert len(questions) == 2 and questions[1].category == "unlabeled"
     with pytest.raises(ValueError, match="categorized"):
         development_pilot(questions)
+
+
+def test_abstention_variants_intentionally_differ_in_question_and_category():
+    original, ambiguous = abstain_row(), abstain_row()
+    original["question"] = "What is the white object above the TV?"
+    original["category"] = "object recognition"
+    paired = abstain_questions([original], [ambiguous])
+    assert len(development_pilot(paired, 1)) == 2
+    assert paired[0].scene is None
+    assert paired[0].evidence_id == paired[1].evidence_id == "scene"
+
+
+def test_mixed_benchmark_pilot_fails_instead_of_guessing_variant_policy():
+    express = express_questions(
+        [{"episode_id": 0, "question": "What?", "answer": "blue", "type": "attribute", "scene_id": "scene"}]
+    )
+    abstain = abstain_questions([abstain_row()], [abstain_row()])
+    with pytest.raises(ValueError, match="homogeneous"):
+        development_pilot(express + abstain, 1)

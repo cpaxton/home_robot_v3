@@ -24,14 +24,25 @@ episodes and scoring, not policies.
   as `unlabeled`; exclude it only from category-balanced development selection,
   never silently from full evaluation. The selected pilot has ten pairs.
 - `model_input()` exposes only question text, never answerability variant,
-  category, reference answer, oracle actions or goal pose. Frame indices are
-  retained for an evidence loader; active start-pose binding remains separate.
+  category, reference answer, oracle actions or goal pose. AbstainEQA frame
+  indices are retained for its evidence loader. EXPRESS evidence frames are
+  not yet parsed; its frame_indices remains empty. Active start-pose binding
+  remains separate.
 - Nine fixture tests cover reference isolation, identity, duplicate IDs,
   mismatched evidence, empty input and the upstream unlabeled-category case.
   Run `PYTHONPATH=src .venv/bin/python -m pytest -q src/test/eval/test_embodied_qa_datasets.py`.
 - No official data/code is vendored. AbstainEQA's repository declares MIT;
   EXPRESS redistribution terms still require verification. Large frame packs,
   scene downloads, cloud judges and full sweeps have not been run.
+
+AbstainEQA question/category equality is deliberately not required across a
+pair: the original question has an OpenEQA task category, while the altered
+question has an abstention category. Pilot stratification uses the latter and
+keeps both variants. Pair identity and evidence must still match. Its
+`episode_history` is retained as an opaque `evidence_id`; normalized `scene`
+is None until an explicit scene resolver is qualified. Do not use evidence IDs
+as scene-disjoint split keys. EXPRESS retains its explicit scene_id as scene.
+Mixed-benchmark pilot input is rejected rather than guessing variant policy.
 
 Metadata audit is not benchmark acceptance: still required are evidence/scene
 resolution, shared-model execution, official judge/scorer wiring, failure
