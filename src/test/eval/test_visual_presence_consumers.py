@@ -13,11 +13,12 @@ from emet.memory.graph_eqa.agentic.verify import visual_presence
 
 @pytest.mark.parametrize("retrieval", ["ABSENT", "PRESENT", "CANDIDATE"])
 @pytest.mark.parametrize("present", [True, False, None])
-def test_retraction_follows_visual_evidence_not_retrieval(retrieval, present):
+@pytest.mark.parametrize("policy", ["legacy", "grounded_v2"])
+def test_retraction_follows_visual_evidence_not_retrieval(retrieval, present, policy):
     graph = SimpleNamespace(retract_phrase_claim_at_obs=Mock(return_value={"ok": True}))
     executor = SimpleNamespace(
         graph_memory=graph,
-        decision_policy="legacy",
+        decision_policy=policy,
         _target_phrase="mug",
         _observation_room=lambda oid: None,
         _known_room_for_event=lambda: None,
@@ -31,6 +32,7 @@ def test_retraction_follows_visual_evidence_not_retrieval(retrieval, present):
         "obs_id": 7,
         "phrase": "mug",
         "answerable": False,
+        "vlm_assess": {"ok": True, "present": present, "answerable": False, "obs_id": 7},
     }
     _maybe_retract_claim_after_station(executor, 7, closest_m=0.5, verify_out=out)
     assert graph.retract_phrase_claim_at_obs.called is (present is False)
@@ -67,3 +69,28 @@ def test_attempt_ledger_keeps_separated_visual_status(status, expected):
     graph = SimpleNamespace(record_attempt=Mock())
     maybe_record_tool_attempt(graph, ToolOutcome(ok=True, tool="verify_siglip", status=status))
     assert graph.record_attempt.call_args.kwargs["outcome"] == expected
+
+
+@pytest.mark.parametrize("present", [True, False, None])
+def test_proposal_blocking_uses_close_visual_result(present):
+    from emet.mapping.voxel_localize import voxel_proposal_id
+    from emet.memory.graph_eqa.agentic.capture import _hypothesis_nav_blocked
+
+    oid = voxel_proposal_id()
+    record = PlaceInspectRecord(
+        investigate_count=1,
+        closest_m=0.5,
+        last_verify="VISUAL_ABSENT" if present is False else "ABSENT",
+        last_assess_present=present,
+    )
+    executor = SimpleNamespace(
+        action_progress_mode="off",
+        _nav_to_obs_counts={oid: 1},
+        _place_inspect={oid: record},
+        _place_approaches_exhausted=lambda oid: False,
+        _next_approach_index=lambda oid: 1,
+        _tried={},
+        _unreachable_obs_ids=set(),
+    )
+    executor._place_close_and_absent = lambda oid: _place_close_and_absent(executor, oid)
+    assert _hypothesis_nav_blocked(executor, oid) is (present is False)
