@@ -37,7 +37,6 @@ def checkpoints(roots, mode):
         from emet.rl.manipulation.profiles import PROFILES
 
         robot = "innate_mars" if mode == "mars-arm" else "stretch"
-        manipulation_contract = json.loads(json.dumps(PROFILES[robot].contract()))
     if mode in {"mars-base", "mars-coordinated"}:
         from emet.rl.base import BASE, BASE_CONTRACT
         from emet.rl.model import model_fingerprint
@@ -63,8 +62,13 @@ def checkpoints(roots, mode):
                     or (mode == "mars-coordinated" and coordinated)
                 ):
                     continue
-                if mode in MANIPULATION_MODES and data.get("contract") != manipulation_contract:
-                    continue
+                if mode in MANIPULATION_MODES:
+                    action_mode = data.get("action_mode", "residual")
+                    if action_mode not in {"residual", "direct_velocity"}:
+                        continue
+                    expected = json.loads(json.dumps(PROFILES[robot].contract(action_mode)))
+                    if data.get("contract") != expected:
+                        continue
                 if mode == "mars-coordinated":
                     from emet.rl.profile import MARS
 
@@ -586,6 +590,7 @@ class Simulation:
             "done": self.done,
             "simulation_only": True,
             "policy": self.policy_name,
+            "holding": bool(getattr(getattr(self.env, "control", None), "holding", False)),
             "fields": fields,
             "current": current,
             "goal": target,
@@ -690,6 +695,12 @@ class TestDrive:
                         elif op == "push":
                             reset_if_finished()
                             sim.push()
+                        elif op == "hold":
+                            if sim.mode not in MANIPULATION_MODES or not sim.resume_completed_reach():
+                                raise ValueError("hold requires a nonfaulted arm simulation")
+                            sim.env.control.hold_position()
+                            sim.obs = sim.env.control.observe()
+                            running, repeat = True, False
                         elif op == "policy":
                             sim.load_policy(command["id"], self.roots)
                         elif op == "target_mode":
@@ -938,6 +949,7 @@ def main():
                     "goal",
                     "nudge",
                     "push",
+                    "hold",
                     "policy",
                     "camera",
                     "target_mode",

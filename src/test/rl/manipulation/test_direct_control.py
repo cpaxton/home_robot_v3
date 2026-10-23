@@ -146,3 +146,50 @@ def test_residual_accept_advances_base_teacher_once_and_direct_never(monkeypatch
         assert len(calls) == 1
     finally:
         env.close()
+
+
+@pytest.mark.sim
+def test_explicit_hold_stays_quiet_and_new_goal_resumes_without_clearing_faults():
+    from emet.rl.manipulation.env import ManipulationConfig, ManipulationEnv
+
+    e = ManipulationEnv(
+        ManipulationConfig(
+            robot="innate_mars",
+            scenario="reach",
+            action_mode="direct_velocity",
+            trajectory_preview=True,
+            randomization_scale=0,
+            horizon=5,
+        )
+    )
+    try:
+        e.reset(seed=250000)
+        c = e.control
+        c.hold_position()
+        assert c.holding and not c.stopped
+        velocities = []
+        for step in range(60):
+            _, _, done, truncated, info = e.step(np.zeros(e.action_space.shape))
+            assert not done and not truncated, info
+            if step >= 40:
+                velocities.append(e.last_base_velocity.copy())
+        peak = np.max(np.abs(velocities), axis=0)
+        assert peak[0] < 0.0005, peak
+        assert peak[1] < 0.001, peak
+        c.accept(np.ones(e.action_space.shape))
+        np.testing.assert_array_equal(c.base_command, 0)
+        grip = c.grip_target
+        c.set_pose_targets(c.base_goal, c.base_mask, c.hand_goal)
+        assert c.holding
+        hand = c.hand_goal.copy()
+        hand[0] += 0.01
+        c.set_pose_targets(c.base_goal, c.base_mask, hand)
+        assert not c.holding and not c.stopped
+        assert c.grip_target == grip
+        c.stop()
+        with pytest.raises(ValueError):
+            c.hold_position()
+        c.set_pose_targets(c.base_goal, c.base_mask, c.hand_goal)
+        assert c.stopped
+    finally:
+        e.close()

@@ -1674,3 +1674,61 @@ The complete RL regression suite passed after the goal-age and LR changes:
 184 tests, no failures. Ruff and `git diff --check` also passed. The stability LR
 comparison is still running; no successful stable controller is assumed from
 these software checks.
+
+### Measured/commanded hold diagnosis and UI (2026-10-22)
+
+`python -m emet.rl.manipulation.hold_audit --policy BUNDLE --output DIRECTORY`
+records raw actor requests, slewed base/arm velocity commands, position actuator
+targets, measured joint/wheel/body velocities, pose-difference velocity and hand
+errors. Paired interventions use the same reset and policy prefix, switching at
+six seconds; summary windows exclude the first two seconds of intervention and
+the timeout's final stop-command rewrite. Plot/JSON artifacts are under
+`logs/manipulation/hold-command-audit-expanded/` and
+`logs/manipulation/explicit-hold-audit/`. Explicit holds are interventions, not
+learned-policy successes or hardware qualification.
+
+The zero-action intervention still moved the base: approximately .0022 m/s
+forward RMS and .0044 rad/s yaw RMS. Disabling the supplementary base feedback
+while sending zero reduced these to about 1.8e-6 m/s and 1.9e-5 rad/s, while hand
+error stayed below 1.6 mm in that audit. The fault-stop latch was similarly quiet.
+However, disabling that feedback globally worsened active yaw tracking and failed
+the existing pick/place regression. That candidate was rejected. Original
+tracking feedback and limits remain the default, including during zero actor
+requests unless an explicit hold is engaged. This separates plant/servo behavior
+from policy-induced small nonzero commands; additional training alone cannot
+remove every low-level zero-command oscillation.
+
+`ManipulationControl.hold_position()` is a normal hold distinct from a latched
+fault stop. It captures measured arm position, zeros velocity/base requests,
+freezes tracking trim, preserves the gripper target, and uses native zero wheel
+velocity targets without the supplementary feedback. Physics, gravity and safety
+monitoring stay active. Duplicate pose packets leave hold engaged; a changed
+active pose or a newly installed trajectory resumes tracking and resets the trim
+clock. Fault stops cannot be cleared by this API. No extra learned action output
+has been added; deciding to enter hold is currently an explicit caller/UI action.
+
+The simulation UI exposes **Hold pose** for Mars/Stretch arm modes, reports hold
+state and keeps physics running; moving a goal resumes tracking. Its checkpoint
+selector also now validates each bundle's action mode rather than assuming
+residual actions, fixing the hidden direct-policy entries. Loopback URL remains
+`http://localhost:8765`; from another machine forward it with
+`ssh -N -L 8765:127.0.0.1:8765 cpaxton@olympia`. Server execution remains pinned to
+cores 12–13 and offline audits to 14–15, with one BLAS/OpenMP thread.
+
+The explicit-hold audit passed its declared relaxed-heading contract: about
+.59 mm maximum tail hand error, 5.9 seconds continuously settled, first one-second
+hold at 7.1 seconds. The policy-only counterpart never achieved a one-second hold.
+Both retain about .21 rad base heading error; this success is under the explicit
+.25 rad diagnostic heading tolerance, not the old .04 rad contract. No unsafe
+contact or wheel unloading occurred in either audit rollout. Forty-one targeted
+UI/control tests passed, including both existing physical box pick/place teacher
+regressions. The new hold mode is caller-selected, not a trained binary policy.
+
+UI verification selected `stability-lr-paired/constant/seed-26/last`, issued an
+explicit hold through `/api/command`, confirmed `holding: true` with no UI error,
+and observed simulation time advance from .1 to .6 seconds while holding. This
+checks real server command handling rather than merely displaying a button.
+
+Final verification: all 186 RL tests passed after explicit hold and checkpoint
+selector changes. Ruff and whitespace checks passed. The rejected global
+feedback-removal candidate is not included in the final controller behavior.

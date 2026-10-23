@@ -42,6 +42,8 @@ class ManipulationControl:
         self.preview_sampler = None
         self.action_mode = "residual"
         self.base_xy_tolerance = 0.02
+        self.base_velocity_feedback_gain = 2.0
+        self.base_feedback_at_rest = True
         self.reset()
 
     def positions(self):
@@ -85,6 +87,7 @@ class ManipulationControl:
         self.phase = "reach"
         self.release_authorized = False
         self.stopped = False
+        self.holding = False
         self.history = None
         self.last_action = np.zeros(self.profile.action_size)
         self.base_command = np.zeros(2)
@@ -125,6 +128,8 @@ class ManipulationControl:
         )
         if meaningful_change:
             self.goal_changed_time = float(self.data.time)
+            self.holding = False
+            self._trim_time = float(self.data.time)
         changed = not np.allclose(base, self.base_goal, rtol=0, atol=1e-6) or not np.array_equal(mask, self.base_mask)
         self.base_goal = base.copy()
         self.base_mask = mask
@@ -154,6 +159,8 @@ class ManipulationControl:
         if np.any(trajectory.gripper < self.grip_limits[0]) or np.any(trajectory.gripper > self.grip_limits[1]):
             raise ValueError("gripper trajectory exceeds physical limits")
         self.task_trajectory = trajectory
+        self.holding = False
+        self._trim_time = float(self.data.time)
         self.task_trajectory_start = float(self.data.time)
         self.preview_sampler = lambda time: trajectory.sample(time - self.task_trajectory_start)
         base, hand, _ = trajectory.sample(0)
@@ -260,7 +267,7 @@ class ManipulationControl:
     def accept(self, action):
         p = self.profile
         action = np.clip(require_finite(action, (p.action_size,)), -1, 1)
-        if self.stopped:
+        if self.stopped or self.holding:
             return
         if p.wheel_bodies:
             scales = np.array([p.base_speed, p.base_yaw_speed])
@@ -304,8 +311,21 @@ class ManipulationControl:
             self.last_action[:2] = self.base_command / [p.base_speed, p.base_yaw_speed]
         self.apply()
 
+    def hold_position(self):
+        """Explicit nonfault hold; a new pose command resumes tracking."""
+        if self.stopped:
+            raise ValueError("cannot hold through a fault or completion stop")
+        self.target = require_finite(self.positions(), (self.profile.arm_size,)).copy()
+        self.velocity[:] = 0
+        self.base_command[:] = 0
+        self.last_action[:] = 0
+        self.holding = True
+        self._trim_time = float(self.data.time)
+        self.apply()
+
     def stop(self):
         self.stopped = True
+        self.holding = False
         measured = self.positions()
         # Corrupt feedback must not turn a stop into a NaN actuator command.
         self.target = np.where(np.isfinite(measured), measured, self.target)
@@ -326,7 +346,7 @@ class ManipulationControl:
     def apply(self):
         now = float(self.data.time)
         elapsed = max(0.0, now - self._trim_time)
-        if elapsed >= self.model.opt.timestep - 1e-9 and not self.stopped:
+        if elapsed >= self.model.opt.timestep - 1e-9 and not self.stopped and not self.holding:
             tracking_error = self.target - self.positions()
             self.tracking_integral = np.clip(
                 self.tracking_integral + tracking_error * elapsed,
@@ -339,13 +359,18 @@ class ManipulationControl:
         self.data.ctrl[self.grip_act] = self.grip_target
         if len(self.wheel_act):
             drive = self.base_command.copy()
-            if self.profile.robot == "innate_mars" and not self.stopped:
+            if (
+                self.profile.robot == "innate_mars"
+                and not self.stopped
+                and not self.holding
+                and (self.base_feedback_at_rest or np.any(np.abs(self.base_command) > 1e-6))
+            ):
                 spatial = np.zeros(6)
                 mujoco.mj_objectVelocity(self.model, self.data, mujoco.mjtObj.mjOBJ_BODY, self.base, spatial, 0)
                 forward = self.data.xmat[self.base].reshape(3, 3)[:, 0]
                 measured = np.array([spatial[3:] @ forward, spatial[2]])
                 limits = np.array([self.profile.base_speed, self.profile.base_yaw_speed])
-                drive = np.clip(drive + 2.0 * (drive - measured), -limits, limits)
+                drive = np.clip(drive + self.base_velocity_feedback_gain * (drive - measured), -limits, limits)
             left = (drive[0] - drive[1] * self.profile.wheel_separation / 2) / self.profile.wheel_radius
             right = (drive[0] + drive[1] * self.profile.wheel_separation / 2) / self.profile.wheel_radius
             # Velocity actuator targets are transmission-space velocities:

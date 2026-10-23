@@ -70,7 +70,8 @@ def test_coordinated_test_drive_switches_masked_base_and_ee_goals():
         sim.close()
 
 
-def test_checkpoint_discovery_filters_incomplete_and_wrong_robot(tmp_path):
+@pytest.mark.parametrize("action_mode", ["residual", "direct_velocity"])
+def test_checkpoint_discovery_filters_incomplete_and_wrong_robot(tmp_path, action_mode):
     manifest = tmp_path / "manifest.json"
     from emet.rl.manipulation.profiles import STRETCH
 
@@ -79,7 +80,8 @@ def test_checkpoint_discovery_filters_incomplete_and_wrong_robot(tmp_path):
             {
                 "format": "emet-manipulation-v1",
                 "robot": "stretch",
-                "contract": STRETCH.contract(),
+                "contract": STRETCH.contract(action_mode),
+                "action_mode": action_mode,
                 "steps": 1024,
             }
         )
