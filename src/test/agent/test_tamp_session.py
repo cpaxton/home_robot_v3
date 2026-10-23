@@ -78,12 +78,13 @@ def test_camera_free_mode_rejects_incompatible_sessions_before_connecting(monkey
     connect.assert_not_called()
 
 
-@pytest.mark.parametrize('remote', [True, False])
+@pytest.mark.parametrize('remote', ['text', 'vision', None])
 def test_remote_inference_keeps_telemetry_live_local_load_guard_preserved(monkeypatch, remote):
     from emet.llms.openai_client import OpenaiClient
 
     robot = MagicMock()
-    client = object.__new__(OpenaiClient) if remote else object()
+    from emet.llms.openai_vllm_client import OpenaiVLLMClient
+    client = object.__new__(OpenaiClient if remote == "text" else OpenaiVLLMClient) if remote else object()
 
     def generate(*args, **kwargs):
         assert robot.pause_streams.call_count == (0 if remote else 1)

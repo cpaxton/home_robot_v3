@@ -320,3 +320,51 @@ def test_last_preflight_ik_call_cannot_claim_execution_started(prior_progress):
     assert result['data']['completed_steps'] == int(prior_progress)
     assert result['data']['failed_step_1based'] == 1 + int(prior_progress)
     assert domain._ik_remaining == 0 and commands == []
+
+
+@pytest.mark.parametrize('stage', ['snapshot', 'feasible'])
+@pytest.mark.parametrize('reason', ['task_object_not_settled_on_support', 'budget'])
+def test_provider_internal_preflight_failure_is_no_actuation(stage, reason):
+    from emet.controller.task.tamp.task_budget import BudgetExhausted
+    domain, _, calls = make_domain()
+    session = TaskSession(domain)
+    ref = session.plan('swap alpha and beta')['data']['plan_ref']
+    original = domain.execute
+    def execute(operator):
+        def reject(*args):
+            if reason == 'budget':
+                raise BudgetExhausted('task_motion_budget_exhausted')
+            raise ValueError(reason)
+        setattr(domain, stage, reject)
+        return original(operator)
+    domain.execute = execute
+    result = session.execute(ref)
+    assert result['code'] == ('task_motion_budget_exhausted' if reason == 'budget' else reason)
+    assert result['status'] == 'error' and result['data']['execution_started'] is False
+    assert result['data']['completed_steps'] == 0 and calls == []
+
+
+def test_unknown_transfer_exception_remains_conservative():
+    domain, _, calls = make_domain()
+    session = TaskSession(domain)
+    ref = session.plan('swap alpha and beta')['data']['plan_ref']
+    def uncertain(*args):
+        raise RuntimeError('transport outcome unknown')
+    domain.transfer = uncertain
+    result = session.execute(ref)
+    assert result['status'] == 'partial' and result['data']['execution_started'] is True
+
+
+def test_explicit_move_cannot_relocate_unrequested_object():
+    domain, _, calls = make_domain()
+    session = TaskSession(domain)
+    domain.snapshot()
+    goal = domain.compile_goal('move alpha to right')
+    assert goal.protected == frozenset({('at', 'beta', 'right')})
+    assert session.plan('move alpha to right')['code'] == 'search_exhausted'
+    assert not calls
+    result = session.plan('move alpha to buffer')
+    assert result['status'] == 'ok'
+    done = session.execute(result['data']['plan_ref'])
+    assert done['status'] == 'ok' and calls == [('alpha', 'buffer')]
+    assert dict(domain.observe().locations)['beta'] == 'right'

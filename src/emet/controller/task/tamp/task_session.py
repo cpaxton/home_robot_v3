@@ -16,7 +16,7 @@ from .task_contracts import BudgetSpec, GoalSpec, TaskState
 from .task_planning import Operator, TaskDomain, search_task
 
 
-def _provider_failure(error: Exception) -> str:
+def provider_failure_code(error: Exception) -> str:
     """Return only public semantic reasons, never provider exception details."""
     if isinstance(error, BudgetExhausted):
         return "task_motion_budget_exhausted"
@@ -78,7 +78,7 @@ class TaskSession:
             try:
                 return response("scene_tasks", data=describe())
             except Exception as error:
-                return response("scene_tasks", code=_provider_failure(error))
+                return response("scene_tasks", code=provider_failure_code(error))
 
     def plan(self, instruction: str, strategy: str = 'beam') -> dict:
         if not isinstance(instruction, str) or not instruction.strip():
@@ -92,7 +92,7 @@ class TaskSession:
                     return response('plan_task', code=result.reason)
                 initial.binding.require_current(self.provider.snapshot().binding)
             except Exception as error:
-                return response("plan_task", code=_provider_failure(error))
+                return response("plan_task", code=provider_failure_code(error))
             ref = 'task_plan_' + uuid.uuid4().hex
             # Bound memory even if an agent continually asks for plans.
             if len(self._plans) >= self.budget.tool_rounds:
@@ -153,7 +153,7 @@ class TaskSession:
                 if not plan.goal.satisfied(current):
                     raise ValueError('task_goal_verification_failed')
             except Exception as error:
-                code = _provider_failure(error)
+                code = provider_failure_code(error)
                 return response('execute_task_plan', code=code, status='partial' if started else 'error',
                                 data={'execution_started': started, 'completed_steps': completed,
                                       'planned_steps': len(plan.operators), 'failed_step_1based': active_step,

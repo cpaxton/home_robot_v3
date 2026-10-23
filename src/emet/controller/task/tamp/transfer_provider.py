@@ -10,7 +10,7 @@ from dataclasses import dataclass
 
 from .task_contracts import GoalSpec, SceneBinding, TaskState
 from .task_planning import Operator
-from .task_session import TaskExecutionResult
+from .task_session import TaskExecutionResult, provider_failure_code
 
 
 @dataclass(frozen=True)
@@ -106,7 +106,8 @@ class RegionTransferProvider:
                 raise ValueError('unknown_task_object')
             if locations[a] not in self.regions or locations[b] not in self.regions:
                 raise ValueError('swap_requires_two_grounded_regions')
-            return GoalSpec(frozenset({('at', a, locations[b]), ('at', b, locations[a])}))
+            protected = frozenset(p for p in self._last.predicates if p[0] == 'at' and p[1] not in {a, b})
+            return GoalSpec(frozenset({('at', a, locations[b]), ('at', b, locations[a])}), protected)
         goals, assigned = set(), set()
         for clause in text.split(';'):
             match = re.fullmatch(r'(?:move|put|place) (.+?) (?:to|in|on) (.+)', clause.strip())
@@ -119,7 +120,8 @@ class RegionTransferProvider:
                 raise ValueError('conflicting_task_goals')
             assigned.add(obj)
             goals.add(('at', obj, target))
-        return GoalSpec(frozenset(goals))
+        protected = frozenset(p for p in self._last.predicates if p[0] == 'at' and p[1] not in assigned)
+        return GoalSpec(frozenset(goals), protected)
 
     def operators(self, state: TaskState) -> tuple[Operator, ...]:
         result = []
@@ -146,6 +148,12 @@ class RegionTransferProvider:
                 and all(self._footprints[obj][i] <= target.bounds[1][i] - target.bounds[0][i] for i in range(2)))
 
     def execute(self, operator):
-        if not self.feasible(self.snapshot(), operator):
-            return TaskExecutionResult(False, False)
-        return self.transfer(*self._selection(operator))
+        # These calls are read-only preflight. Only transfer may actuate; never
+        # catch its unknown exceptions as proof that execution did not start.
+        try:
+            if not self.feasible(self.snapshot(), operator):
+                return TaskExecutionResult(False, False, 'task_feasibility_failed')
+            selection = self._selection(operator)
+        except Exception as error:
+            return TaskExecutionResult(False, False, provider_failure_code(error))
+        return self.transfer(*selection)

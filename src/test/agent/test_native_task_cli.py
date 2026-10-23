@@ -34,3 +34,12 @@ def test_config_example_and_overlap_rejection(tmp_path):
     bad.write_text(json.dumps(config))
     result = CliRunner().invoke(main, ['--state-only-sim', '--native-task-config', str(bad)])
     assert result.exit_code == 2 and 'Invalid native task JSON' in result.output
+
+
+def test_native_config_cannot_be_silently_ignored_by_eqa_eval(tmp_path):
+    config = tmp_path / 'task.json'
+    config.write_text('not JSON')
+    result = CliRunner().invoke(main, ['--state-only-sim', '--native-task-config',
+                                      str(config), '--eqa-eval'])
+    assert result.exit_code == 2
+    assert '--native-task-config is incompatible with --eqa-eval' in result.output

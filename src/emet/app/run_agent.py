@@ -599,6 +599,8 @@ def main(
     """
     if native_task_config is not None and (not state_only_sim or offline or no_llm):
         raise click.UsageError("--native-task-config requires --state-only-sim and online LLM CHAT")
+    if native_task_config is not None and eqa_eval:
+        raise click.UsageError("--native-task-config is incompatible with --eqa-eval")
     parsed_native_task_config = _load_native_task_config(native_task_config)
     cmd_list = list(commands) if commands else None
     if eqa_eval:

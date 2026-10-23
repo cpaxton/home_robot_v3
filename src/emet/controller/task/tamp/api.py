@@ -19,7 +19,7 @@ PLACEMENT_CODES = frozenset({
 TASK_FAILURE_CODES = frozenset({
     "task_motion_planning_failed", "task_motion_budget_exhausted",
     "task_feasibility_failed", "stale_task_plan", "task_precondition_failed",
-    "task_execution_failed", "protected_goal_regression", "scene_identity_changed",
+    "task_execution_failed", "task_provider_failed", "protected_goal_regression", "scene_identity_changed",
     "task_effect_verification_failed", "task_goal_verification_failed",
     "task_object_not_settled_on_support", "ambiguous_region_occupancy",
     "task_input_source_mismatch", "incomplete_transfer_observation",

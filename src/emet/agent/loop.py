@@ -63,6 +63,7 @@ from emet.core.parameters import Parameters
 from emet.llms import get_llm_client
 from emet.llms.base import AbstractLLMClient, AbstractVLLMClient
 from emet.llms.openai_client import OpenaiClient
+from emet.llms.openai_vllm_client import OpenaiVLLMClient
 from emet.memory.backend import get_memory_backend
 from emet.memory.utils import print_memory_view_help_on_quit
 from emet.robots import ROBOT_REGISTRY
@@ -419,7 +420,7 @@ def _call_llm(
     Remote OpenAI-compatible inference keeps telemetry live: pausing it can leave
     an immediately dispatched manipulation tool with a stale measured snapshot.
     """
-    with nullcontext() if isinstance(llm_client, OpenaiClient) else paused_robot_streams(robot):
+    with nullcontext() if isinstance(llm_client, (OpenaiClient, OpenaiVLLMClient)) else paused_robot_streams(robot):
         return _call_llm_body(
             llm_client,
             text,

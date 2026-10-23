@@ -98,3 +98,22 @@ exception text. Partial-progress counts and one-shot consumption still apply.
 the provider's IK allowance. Neither constitutes a shared whole-agent ledger;
 CHAT calls and execution replanning must be connected before matched-budget
 whole-agent comparisons are claimed.
+
+## Preserved objects and execution preflight
+
+Explicit move goals protect the current `at` predicates of every unmentioned
+object. For example, `move alpha to right` cannot silently relocate beta from
+right into a buffer; that request is infeasible under the preserve-beta
+constraint. Explicitly include beta's desired destination, or request a swap,
+when moving it is authorized. Swap goals likewise protect other objects.
+
+The region provider converts errors from its read-only snapshot, feasibility
+and operator-selection preflight into typed no-actuation receipts. The transfer
+callback is outside that exception boundary: unknown exceptions there still
+mean execution may have started. Earlier measured progress is preserved in either
+case. This distinction does not infer no actuation from arbitrary provider errors.
+
+`--native-task-config` is incompatible with `--eqa-eval`; it cannot silently
+configure a different orchestrator. Both remote OpenAI text and vision clients
+keep robot telemetry live during inference. Local inference retains its existing
+stream-pause guard.

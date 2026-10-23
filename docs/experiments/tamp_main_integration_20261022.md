@@ -126,3 +126,27 @@ in 93.844 seconds. This includes all 161 tests in
 observation, navigation, runtime and scoring regression set. It is not a run of
 the entire repository suite. The focused API/provider run passed 89 overlapping
 checks. Ruff and whitespace checks pass. JUnit: `.tamp-runs/review-precommand/all-tests.xml`.
+
+## Second preflight/protected-goal review follow-up, October 23
+
+The previous budget fix covered native refinement only. Review correctly found
+that region-provider snapshot/feasibility can also fail after the session enters
+its execution phase but before transfer. The provider now contains an explicit
+read-only preflight exception boundary and returns a no-actuation receipt from
+that boundary. Transfer itself remains outside the catch, so unknown physical
+outcomes remain partial. Regressions inject both support-state rejection and
+budget exhaustion inside provider snapshot and feasibility, and separately
+verify conservative handling of an unknown transfer exception.
+
+Goal compilation now protects unmentioned objects' current locations. An explicit
+move into another object's occupied region cannot silently relocate that object;
+a multi-object goal or swap authorizes those moves. Native task configuration is
+rejected with EQA evaluation before JSON loading or runtime startup. Both remote
+OpenAI client classes retain live telemetry; the local-inference pause guard is
+unchanged and tested.
+
+Validation job `20261023_131049_682a56`: **775 passed, zero failures/errors/skips**,
+93.856 seconds. This covers the entire TAMP test directory and the integrated
+regression set, extended with text/vision inference guard tests. It is not the
+entire repository suite. Ruff and whitespace checks pass. No live-task aggregate
+is rescored by these contract fixes.
