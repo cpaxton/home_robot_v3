@@ -33,6 +33,26 @@ from emet.utils.logger import Logger
 _logger = Logger(__name__)
 
 
+def visual_presence(out):
+    """Read explicit visual evidence, never reinterpret a retrieval status."""
+    if not isinstance(out, dict):
+        return None
+    if out.get("visual_observation_available") is False:
+        return None
+    visual = out.get("visual")
+    if isinstance(visual, dict):
+        value = visual.get("present")
+    else:
+        assessed = out.get("vlm_assess")
+        if isinstance(assessed, dict):
+            if assessed.get("ok") is not True or assessed.get("visual_observation_available") is False:
+                return None
+            value = assessed.get("present")
+        else:
+            value = out.get("present")  # Explicit legacy visual field, not ABSENT/PRESENT scores.
+    return value if type(value) is bool else None
+
+
 def verification_feedback(retrieval_status, vlm_assess, grounding, obs_id):
     """Separate semantic evidence from retrieval scores and geometry admission."""
     visual = vlm_assess if isinstance(vlm_assess, dict) else {}

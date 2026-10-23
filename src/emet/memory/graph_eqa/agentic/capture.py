@@ -637,8 +637,7 @@ def _hypothesis_nav_blocked(self, obs_id: int) -> bool:
     # and a first approach from a bad bearing should be retried from another.
     if is_proposal_handle(oid) and int(self._nav_to_obs_counts.get(oid, 0)) >= 1:
         rec = self._place_inspect.get(oid)
-        last_verify = str(getattr(rec, "last_verify", "") or "") if rec is not None else ""
-        if last_verify.upper() == "ABSENT":
+        if rec is not None and self._place_close_and_absent(oid):
             return True
     if self._place_approaches_exhausted(oid):
         return True

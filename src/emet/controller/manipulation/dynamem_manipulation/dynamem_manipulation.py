@@ -74,7 +74,16 @@ class DynamemManipulationWrapper:
 
         # Constraining the robots movement
         self.clamp = lambda n, minn, maxn: max(min(maxn, n), minn)
-        self.pan, self.tilt = self.robot.get_pan_tilt()
+        # This Stretch-specific compatibility wrapper is constructed for all
+        # agents. Unsupported gaze must disable its operations, not startup.
+        self.pan, self.tilt = None, None
+
+    def _require_gaze(self):
+        if self.pan is None or self.tilt is None:
+            measured = np.asarray(self.robot.get_pan_tilt(), dtype=float)
+            if measured.shape != (2,) or not np.isfinite(measured).all():
+                raise RuntimeError("Measured gaze required for Stretch manipulation")
+            self.pan, self.tilt = map(float, measured)
 
     def get_joints(self):
         """
@@ -107,6 +116,8 @@ class DynamemManipulationWrapper:
         if base_theta is not None:
             self.robot.navigate_to([0, 0, base_theta], relative=True, blocking=True)
             return
+
+        self._require_gaze()
 
         # Base, arm and lift state update
         target_state = self.robot.get_six_joints()
@@ -198,6 +209,7 @@ class DynamemManipulationWrapper:
         """
         Given the desired joints movement this function will the joints accordingly
         """
+        self._require_gaze()
         state = self.robot.get_six_joints()
 
         # clamp rotational joints between -1.57 to 1.57
