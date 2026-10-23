@@ -11,6 +11,7 @@ in :mod:`emet.memory.graph_eqa.agentic_eqa`. Trace metadata is logging only.
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -273,11 +274,13 @@ def run_ovmm_agentic_localize(
             max_rounds=max_rounds,
             max_nav_steps=max_nav_steps,
             require_verified=require_verified,
+            require_grounded_object=bool(getattr(agent, "query_driven_memory", False)),
             router=router,
             trace_path=resolved_trace,
             trace_meta=trace_meta,
         )
     except Exception as exc:
+        logging.getLogger(__name__).exception("OVMM agentic localization failed for %r", q)
         return OvmmAgenticLocalizeResult(
             question=q,
             verified=False,

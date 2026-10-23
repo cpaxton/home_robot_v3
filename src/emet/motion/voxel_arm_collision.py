@@ -19,32 +19,13 @@ world-meter origin with ``convention="world_offset"``.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any, Literal
+from typing import Any
 
 import mujoco
 import numpy as np
 
-GridConvention = Literal["grid_params", "world_offset"]
-
-
-def world_xy_to_grid(
-    x: float,
-    y: float,
-    *,
-    grid_origin: np.ndarray,
-    resolution: float,
-    convention: GridConvention = "grid_params",
-) -> tuple[int, int]:
-    """World XY → obstacle-grid indices."""
-    go = np.asarray(grid_origin, dtype=np.float64).reshape(-1)
-    res = float(resolution)
-    if convention == "world_offset":
-        gi = int(np.floor((float(x) - float(go[0])) / res))
-        gj = int(np.floor((float(y) - float(go[1])) / res))
-    else:
-        gi = int(np.floor(float(x) / res + float(go[0])))
-        gj = int(np.floor(float(y) / res + float(go[1])))
-    return gi, gj
+# Re-export for existing arm-planning callers.
+from emet.motion.grid_coordinates import GridConvention, world_xy_to_grid
 
 
 def _xy_to_grid(x: float, y: float, *, grid_origin: np.ndarray, resolution: float) -> tuple[int, int]:

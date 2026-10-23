@@ -782,6 +782,20 @@ class MujocoZmqServer(BaseZmqServer):
             session["spawn_floor_map"] = self._environment_descriptor["spawn_floor_map"]
         env_kind = env.get("kind") if isinstance(env, dict) else None
         gt_model, gt_data = self._gt_model_data_for_session()
+        from emet.robots.head_capability import STRETCH_LEGACY_HEAD, HeadCapability, mujoco_head_capability
+
+        head = mujoco_head_capability(gt_model, ("joint_head_pan", "joint_head_tilt"))
+        if head is not None:
+            # Preserve the adapter's established pan safety envelope. Tilt uses
+            # intersected joint/position-actuator limits: unlike the legacy
+            # downward-only tilt fallback, this describes the active sim head.
+            # Real-robot adapters keep their own calibrated safety capability.
+            head = HeadCapability(
+                (max(head.pan[0], STRETCH_LEGACY_HEAD.pan[0]), min(head.pan[1], STRETCH_LEGACY_HEAD.pan[1])),
+                head.tilt,
+                head.source,
+            )
+            caps["head_motion"] = head.as_dict()
         self._articulation_model = gt_model
         attach_sim_object_placements_to_session(
             session,
@@ -1196,6 +1210,7 @@ class MujocoZmqServer(BaseZmqServer):
         message = {
             "rgb": rgb,
             "depth": depth,
+            "head_cam_left/image_timing": cam_data.image_timing_for(StretchCameras.cam_d435i_rgb),
             "camera_K": self.head_K,
             "camera_pose": head_cam_world,
             "ee_pose": ee_world,
@@ -1313,6 +1328,7 @@ class MujocoZmqServer(BaseZmqServer):
             "ee_cam/color_camera_K": scale_camera_matrix(self.ee_K, self.ee_image_scaling),
             "ee_cam/depth_camera_K": scale_camera_matrix(self.ee_K, self.ee_image_scaling),
             "ee_cam/color_image": compressed_ee_color_image,
+            "ee_cam/image_timing": cam_data.image_timing_for(StretchCameras.cam_d405_rgb),
             "ee_cam/depth_image": compressed_ee_depth_image,
             "ee_cam/color_image/shape": ee_color_image.shape,
             "ee_cam/depth_image/shape": ee_depth_image.shape,
@@ -1323,6 +1339,7 @@ class MujocoZmqServer(BaseZmqServer):
             "head_cam/color_camera_K": scale_camera_matrix(self.head_K, self.image_scaling),
             "head_cam/depth_camera_K": scale_camera_matrix(self.head_K, self.image_scaling),
             "head_cam/color_image": compressed_head_color_image,
+            "head_cam_left/image_timing": cam_data.image_timing_for(StretchCameras.cam_d435i_rgb),
             "head_cam/depth_image": compressed_head_depth_image,
             "head_cam/color_image/shape": head_color_image.shape,
             "head_cam/depth_image/shape": head_depth_image.shape,

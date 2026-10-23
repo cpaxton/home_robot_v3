@@ -1,0 +1,22 @@
+# Opt-in extracted-stack find diagnostic; not manipulation or hardware acceptance.
+# Flat override avoids inheriting the legacy grasp/placement experiment stack.
+extends: configs/emet/default.yaml
+mapping:
+  query_driven_memory: true
+  debug_perfect_sensor_depth: true
+  find_phase_nav_step_timeout_s: 30.0
+  motion_planner:
+    obstacle_map_mode: physical
+  query_memory:
+    grounding_backend: vlm
+    region_strategy: depth_candidates
+    mask_backend: yoloe_sam2
+    surface_presentation: context
+    whole_object_box: false
+    recover_proposals_with_vlm: true
+  eqa:
+    agentic_verify: true
+    collect_agentic_trace: true
+    vl_family: qwen3_vl
+    vl_hf_model_id: Qwen/Qwen3-VL-8B-Instruct
+    vl_quantization: int4

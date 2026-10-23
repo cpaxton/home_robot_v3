@@ -13,7 +13,7 @@ from emet.mapping.voxel.voxel_map_dynamem import SparseVoxelMapNavigationSpace
 def test_frontier_can_reach_goal_cell_while_object_keeps_standoff():
     obstacles = torch.zeros((6, 2), dtype=torch.bool)
     space = SimpleNamespace(
-        voxel_map=SimpleNamespace(get_2d_map=lambda: (obstacles, ~obstacles)),
+        get_navigation_map=lambda: (obstacles, ~obstacles),
         compute_theta=lambda x, y, px, py: float(np.arctan2(py - y, px - x)),
         is_valid=lambda pose: True,
         _line_of_sight_clear=lambda *args: True,

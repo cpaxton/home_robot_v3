@@ -15,11 +15,11 @@ from emet.controller.habitat_nav import (
     _frontier_explore_sort_key,
     _mujoco_accept_explore_xy,
     _planar_dist,
+    exploration_planar_xy,
     explore_grid_resolution_m,
     explore_min_travel_m,
     goal_key_xy,
     is_habitat_robot_client,
-    robot_planar_xy,
 )
 
 
@@ -67,7 +67,7 @@ def collect_explore_frontier_candidates(
 
     if min_travel_m <= 0.0:
         min_travel_m = explore_min_travel_m(agent)
-    robot_xy = robot_planar_xy(robot) if robot is not None else (0.0, 0.0)
+    robot_xy = exploration_planar_xy(agent)
 
     out: list[np.ndarray] = []
     seen: set[tuple[int, int]] = set()

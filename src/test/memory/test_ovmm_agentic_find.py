@@ -722,6 +722,20 @@ def test_run_ovmm_agentic_localize_uses_episode_dir_trace(mock_run, tmp_path, mo
 
 
 @patch("emet.memory.graph_eqa.agentic_eqa.run_agentic_eqa_result")
+def test_localization_exception_keeps_traceback_and_error_result(mock_run, caplog):
+    mock_run.side_effect = RuntimeError("checkpoint unavailable")
+    agent = MagicMock()
+    agent.graph_memory._retracted_nav_claims = set()
+    result = run_ovmm_agentic_localize(agent, "Where is the cylinder?")
+    assert result.error == "checkpoint unavailable"
+    assert result.xyz is None
+    assert result.verified is False
+    record = next(r for r in caplog.records if "OVMM agentic localization failed" in r.message)
+    assert record.exc_info is not None
+    assert "Where is the cylinder?" in record.message
+
+
+@patch("emet.memory.graph_eqa.agentic_eqa.run_agentic_eqa_result")
 def test_run_ovmm_agentic_localize_counts_new_retractions(mock_run):
     """Retraction count must be this run's delta, not the shared set's total."""
     claims = {("1", "jar")}

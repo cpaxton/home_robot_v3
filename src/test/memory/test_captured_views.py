@@ -65,3 +65,44 @@ def test_target_projection_uses_camera_world_pose_and_intrinsics():
     assert target_in_view(view, [3, -2, 3])["target_in_frame"]
     assert target_in_view(view, [3, -2, 0])["status"] == "behind_camera"
     assert target_in_view(view, [7, -2, 3])["status"] == "outside_frame"
+
+
+def test_molmo_missing_floor_patch_is_below_captured_view():
+    """Replay calibration, not a claim of head reachability or free floor.
+
+    Molmo seed 0, navigation-recovery-contract-20260930, floor capture
+    1790825723337744477: blocked grid cell [529, 525] is world XY [1.7, 1.3].
+    No simulator/assets needed. Z=0 is a diagnostic floor-height assumption;
+    its +/-5 cm sensitivity must not change the out-of-frame diagnosis.
+    """
+    pose = np.array(
+        [
+            [0.8908319569, 0.3804366637, -0.2483674084, 1.4130874241],
+            [0.4543327356, -0.7454153284, 0.4877886361, 1.6112846629],
+            [0.0004358080, -0.5473791493, -0.8368846258, 1.2781680349],
+            [0, 0, 0, 1],
+        ]
+    )
+    intrinsics = np.array([[302.8082988, 0, 119.5020747], [0, 303.5241412, 211.5011765], [0, 0, 1]])
+    view = CapturedView(1, 1, np.zeros((424, 240, 3), dtype=np.uint8), pose, intrinsics)
+    target = np.array([1.7, 1.3, 0.0])
+    for floor_z in (-0.05, 0.0, 0.05):
+        result = target_in_view(view, [*target[:2], floor_z])
+        assert result["status"] == "outside_frame"
+        assert result["target_in_frame"] is False
+        assert 0 < result["target_pixel_xy"][0] < 240
+        assert result["target_pixel_xy"][1] > 424
+    np.testing.assert_allclose(target_in_view(view, target)["target_pixel_xy"], [160.14, 584.70], atol=0.15)
+
+    # A geometrically aimed camera puts the patch at the principal point.
+    # Actual head limits/occlusion/depth validity still need a live check.
+    forward = target - pose[:3, 3]
+    forward /= np.linalg.norm(forward)
+    right = np.cross(forward, [0, 0, 1])
+    right /= np.linalg.norm(right)
+    aimed = pose.copy()
+    aimed[:3, :3] = np.column_stack((right, np.cross(forward, right), forward))
+    aimed_view = CapturedView(2, 2, view.rgb, aimed, intrinsics)
+    result = target_in_view(aimed_view, target)
+    assert result["target_in_frame"] is True
+    np.testing.assert_allclose(result["target_pixel_xy"], intrinsics[:2, 2])
