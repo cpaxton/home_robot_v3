@@ -1,0 +1,5 @@
+<mujoco model="stretch scene">
+  <include file="stretch.xml"/>
+  <include file="docking_station.xml"/>
+  <include file="scene_environment.xml"/>
+</mujoco>

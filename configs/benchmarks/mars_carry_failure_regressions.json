@@ -1,0 +1,121 @@
+{
+  "version": "mars-carry-failures-v2",
+  "source_revision": "0101dc35",
+  "suite_sha256": "60179faad77ccdf5b433cc58851e9495022975f105bf6ee16f09cce0f0300473",
+  "cases": [
+    {
+      "case": {
+        "id": "50g:disturbance:1",
+        "seed": 1904001,
+        "payload_mass_kg": 0.05,
+        "stratum": "disturbance"
+      },
+      "previous_code": "wheel_lift",
+      "scheduled_push": {
+        "step": 110,
+        "steps": 11,
+        "wrench": [
+          0.3225620618129116,
+          -0.19520660592966363,
+          0.06488432700883441,
+          -0.0069418701320262555,
+          0.012867630979818892,
+          -0.006184681858643481
+        ]
+      },
+      "previous_admission": {
+        "candidate_id": 0,
+        "accepted": true,
+        "endpoint_translation_m": 0.019342235531905564,
+        "endpoint_orientation_rad": 0.08835570395154513,
+        "goal": [
+          -0.006970856634717684,
+          -0.1940799122087476,
+          -0.5676149941577905,
+          0.7282497497688469,
+          -0.07986467758560492
+        ],
+        "reason": "timed_tamp_carry",
+        "planner": "PhysicalPickPlaceExecutor.plan_joint_target",
+        "minimum_sampled_margin_m": 0.005725507818317594,
+        "dynamic_feasibility_verified": false
+      }
+    },
+    {
+      "case": {
+        "id": "100g:orientation:10",
+        "seed": 1901010,
+        "payload_mass_kg": 0.1,
+        "stratum": "orientation"
+      },
+      "previous_code": "retention_lost",
+      "scheduled_push": {
+        "step": null,
+        "steps": 0,
+        "wrench": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "previous_admission": {
+        "candidate_id": 0,
+        "accepted": true,
+        "endpoint_translation_m": 5.551115123125783e-17,
+        "endpoint_orientation_rad": 0.21166003780979387,
+        "goal": [
+          -1.4112957493953036,
+          -0.15669733408069597,
+          -0.39821891095266143,
+          0.5587907385676634,
+          0.21285696681892677
+        ],
+        "reason": "timed_tamp_carry",
+        "planner": "PhysicalPickPlaceExecutor.plan_joint_target",
+        "minimum_sampled_margin_m": 0.015874264843916595,
+        "dynamic_feasibility_verified": false
+      }
+    },
+    {
+      "case": {
+        "id": "100g:orientation:11",
+        "seed": 1901011,
+        "payload_mass_kg": 0.1,
+        "stratum": "orientation"
+      },
+      "previous_code": "retention_lost",
+      "scheduled_push": {
+        "step": null,
+        "steps": 0,
+        "wrench": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "previous_admission": {
+        "candidate_id": 0,
+        "accepted": true,
+        "endpoint_translation_m": 0.0,
+        "endpoint_orientation_rad": 0.2560732424786419,
+        "goal": [
+          -1.4106340367811463,
+          -0.2106377175022554,
+          -0.3642989116996996,
+          0.5796724106577095,
+          0.25726919097606815
+        ],
+        "reason": "timed_tamp_carry",
+        "planner": "PhysicalPickPlaceExecutor.plan_joint_target",
+        "minimum_sampled_margin_m": 0.016079723846843256,
+        "dynamic_feasibility_verified": false
+      }
+    }
+  ]
+}

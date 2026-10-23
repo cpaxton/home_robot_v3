@@ -188,6 +188,9 @@ Discord / Mars agent: point `agent.llm` and `mapping.eqa.vl_endpoint` at the sam
 
 ## Quick Start (Simulation)
 
+For goal-conditioned base-and-arm control learning on Mars, see
+[Mars reactive RL](docs/mars_reactive_rl.md) for training, evaluation, and the opt-in simulator controller.
+
 Run DynaMem in MuJoCo simulation in a few steps:
 
 ```bash
@@ -351,6 +354,8 @@ Use this outline when updating docs or finding the right page. Prefer editing th
 | [attempt_ledger.md](docs/attempt_ledger.md) | Opt-in action-outcome ledger (nav/verify/manip attempts in graph memory) |
 | [eqa.md](docs/eqa.md) | Embodied QA overview (older Stretch path + pointers) |
 | [AGENT_RUN.md](docs/AGENT_RUN.md) | Discord/CHAT vs Habitat `EQA_EPISODE`; skill packs |
+| [Agent tools](docs/agent_tools.md) | Complete CHAT and EQA tool index, requirements, and reference links |
+| [TAMP overview](docs/tamp.md) | Task discovery, motion planning, execution, verification, and current limits |
 | [llm_serve.md](docs/llm_serve.md) | **Remote inference** (OpenAI LAN) + **testing LLMs** (`emet llm` / `emet run chat --host`) |
 | [llm_agent.md](docs/llm_agent.md) | Historical Stretch LLM pickup walkthrough → points at modern agent docs |
 | [adding_a_new_task.md](docs/adding_a_new_task.md) | Register a new LLM-callable task |

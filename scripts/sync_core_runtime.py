@@ -12,7 +12,14 @@ must carry identical runtime code without importing the workstation package.
 import argparse
 from pathlib import Path
 
-RUNTIME_FILES = ("server.py", "command_tracker.py", "command_runtime.py", "navigation_result.py", "command_client.py")
+RUNTIME_FILES = (
+    "server.py",
+    "command_tracker.py",
+    "command_runtime.py",
+    "navigation_result.py",
+    "command_client.py",
+    "reactive_runtime.py",
+)
 
 
 def sync(root: Path, *, check: bool) -> list[str]:

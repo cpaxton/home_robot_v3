@@ -104,6 +104,8 @@ dependencies = [
 emet = "emet.cli:main"
 
 [project.optional-dependencies]
+rl-tracking = ["wandb>=0.19,<1"]
+rl = ["gymnasium>=1.0,<2", "stable-baselines3>=2.5,<3", "mujoco>=3.4.0"]
 video = ["av"]
 dev = [
     "pre-commit",
@@ -216,6 +218,7 @@ emet = [
     "habitat/*.yaml.bundled",
     "perception/*.tsv",
     "assets/**/*",
+    "rl/*.html",
 ]
 
 [tool.black]

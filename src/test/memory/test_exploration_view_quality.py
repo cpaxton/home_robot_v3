@@ -39,6 +39,11 @@ def test_invalid_rays_do_not_amplify_sparse_near_depth():
     assert quality["blocked_fraction"] == pytest.approx(0.2)
     assert quality["invalid_fraction"] == pytest.approx(0.8)
     assert quality["reason"] == "partial_central_depth"
+    depth[5:10, 5:15] = 0.2
+    quality = exploration_view_quality(depth)
+    assert not quality["obstructed"]
+    assert quality["blocked_fraction"] == pytest.approx(0.5)
+    assert quality["invalid_fraction"] == pytest.approx(0.5)
     depth[5:13, 5:15] = 0.2
     assert exploration_view_quality(depth)["obstructed"]
 

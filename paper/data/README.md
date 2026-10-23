@@ -72,3 +72,18 @@ Cross-policy McNemar p≈0.09 (n.s. at α=0.05); Wilcoxon steps p≈1.8e-5. Prio
 VLM: `Qwen/Qwen3-VL-8B-Instruct`. Harness: Dynagraph, `explore_when_uncovered=off`, no MCQ debias, memory-summary on, owlv2 proposals, allow-unverified.
 
 More context: [docs/experiments/habitat_eqa_results.md](../../docs/experiments/habitat_eqa_results.md) (Classic vs agentic-verify section), [docs/experiments/agentic_scale.md](../../docs/experiments/agentic_scale.md).
+
+## Whole-body control development evidence
+
+`whole_body_control/development_checks.json` separates the initial carry admission
+failures from small feedback-only smoke checks.
+`whole_body_control/qualification_v2.json` records the source-bound 297/300 carry
+and 30/30 continuous one-pedestal pick/place results at `0101dc35`, including the
+wheel-unloading and retention failures that blocked training. Neither file is a
+learned-policy or hardware qualification result. Full per-case reports and
+execution traces remain local experiment artifacts; the control appendix and
+`docs/mars_reactive_rl.md` describe reproduction and subsequent gates.
+`whole_body_control/qualification_v3.json` records the follow-up at `ba658820`:
+298/300 carries, 30/30 continuous pick/return-place, no unsafe-contact or
+wheel-unloading events, and both persistent 100 g roll-slip failures. This passed
+the simulator teacher readiness gate; it is not a learned-policy result.

@@ -4,18 +4,19 @@
 """Bounded LLM selection over native CHAT tools on the frozen two-object fixture.
 
 Uses the run-agent prompt, parser and dispatcher, with an in-process actuator
-facade and privileged simulator geometry. It does not launch the interactive CLI,
-test IPC, or establish observed perception. Run as a managed job; reserve the GPU
-when selecting --device cuda.
+facade or a live ZMQ simulator and privileged geometry. It does not launch the
+interactive CLI or establish observed perception. Run as a managed job; reserve
+the GPU for local CUDA inference or hardware-accelerated camera rendering.
 """
 import argparse
 import json
+import os
 import subprocess
+from contextlib import nullcontext
 from pathlib import Path
 from types import SimpleNamespace
 
 import mujoco
-import numpy as np
 from eval_native_table_contact import ContactRobot
 from transformers import set_seed
 
@@ -24,36 +25,10 @@ from emet.agent.prompt import AgentPromptBuilder, parse_tool_calls_response
 from emet.agent.tools import get_tools
 from emet.controller.manipulation import physical_pick_place
 from emet.controller.task.tamp import native_adapter
+from emet.eval.native_table_scoring import goal_predicates, load_placement_regions
 from emet.llms.openai_client import OpenaiClient
 from emet.llms.qwen_client import Qwen25Client
 from emet.simulation.mujoco_server_stretch import default_scene_xml_path
-from emet.simulation.sim_object_placements import placements_from_mujoco_model
-
-
-def goal_predicates(robot, goals):
-    """Independent privileged scoring: whole XY footprint, support, and stillness."""
-    scratch = mujoco.MjData(robot.model)
-    mujoco.mj_copyData(scratch, robot.model, robot.data)
-    mujoco.mj_kinematics(robot.model, scratch)
-    mujoco.mj_collision(robot.model, scratch)
-    placements = placements_from_mujoco_model(robot.model, scratch)
-    table = robot.model.body('table').id
-    fingertips = {robot.model.body(name).id for name in ('rubber_tip_left', 'rubber_tip_right')}
-    rows = {}
-    for name, region in goals.items():
-        body = robot.model.body(name)
-        bounds = np.asarray(placements[name]['bounds'])[:, :2]
-        region = np.asarray(region)
-        inside = bool(np.all(bounds[0] >= region[0] - .005) and np.all(bounds[1] <= region[1] + .005))
-        touched = {int(other) for c in scratch.contact if body.id in robot.model.geom_bodyid[c.geom]
-                   for other in robot.model.geom_bodyid[c.geom] if other != body.id}
-        supported = table in touched and not fingertips.intersection(touched)
-        dof = robot.model.jnt_dofadr[body.jntadr[0]]
-        settled = bool(np.linalg.norm(scratch.qvel[dof:dof+3]) <= .01
-                       and np.linalg.norm(scratch.qvel[dof+3:dof+6]) <= .1)
-        rows[name] = {'in_region': inside, 'supported': supported, 'settled': settled,
-                      'satisfied': inside and supported and settled, 'bounds_xy': bounds.tolist()}
-    return rows
 
 
 def main():
@@ -66,18 +41,33 @@ def main():
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--base-url', help='Existing remote OpenAI-compatible inference endpoint')
     parser.add_argument('--remote-model', help='Exact model ID served by --base-url')
+    parser.add_argument('--live-sim', type=Path, help='Launch a live ZMQ simulator from this config; use a managed job')
     args = parser.parse_args()
     if bool(args.base_url) != bool(args.remote_model):
         parser.error('--base-url and --remote-model must be supplied together')
     if args.max_turns < 1:
         parser.error('--max-turns must be positive')
+    try:
+        regions = load_placement_regions(args.placement_regions)
+    except (OSError, ValueError, TypeError) as exc:
+        parser.error(str(exc))
     args.output.mkdir(parents=True, exist_ok=True)
-    regions = json.loads(args.placement_regions.read_text())
-    if len(regions) != 2:
-        parser.error('Expected cylinder and box regions, in that order')
-    goals = dict(zip(('object2', 'object1'), regions, strict=True))
     model = mujoco.MjModel.from_xml_path(default_scene_xml_path)
-    robot = ContactRobot(model, 'object1', separation=.15, separation_axis='y')
+    if args.live_sim:
+        from emet.eval.native_table_live import live_table_robot
+        os.environ['EMET_PHYSICAL_EXECUTION'] = '1'
+        os.environ['EMET_PHYSICAL_AUDIT'] = str((args.output / 'actuation.jsonl').resolve())
+        connection = live_table_robot(args.live_sim, args.output, model)
+    else:
+        connection = nullcontext(ContactRobot(model, 'object1', separation=.15, separation_axis='y'))
+    with connection as robot:
+        return run_episode(args, robot, model, regions=regions)
+
+
+def run_episode(args, robot, model, *, regions=None):
+    if regions is None:
+        regions = load_placement_regions(args.placement_regions)
+    goals = dict(zip(('object2', 'object1'), regions, strict=True))
     adapter = native_adapter.NativeTableAdapter(robot, model=model)
     original_sync = adapter.synchronize
 
@@ -104,7 +94,11 @@ def main():
                 'seed': args.seed, 'max_turns': args.max_turns, 'device': args.device,
                 'inference': 'remote' if args.base_url else 'local',
                 'remote_sampling': 'server defaults; seed is local only' if args.base_url else None,
-                'scope': 'LLM-selected CHAT tools; CPU native contact; privileged inputs; no live IPC',
+                'scope': ('LLM-selected CHAT tools; live ZMQ native contact; privileged inputs' if args.live_sim
+                          else 'LLM-selected CHAT tools; CPU native contact; privileged inputs; no live IPC'),
+                'physics_during_inference': bool(args.live_sim),
+                'sim_config': args.live_sim.read_text() if args.live_sim else None,
+                'cpu_affinity': sorted(os.sched_getaffinity(0)),
                 'goals': goals, 'instruction': instruction, 'system_prompt': str(prompt),
                 'initial_predicates': goal_predicates(robot, goals)}
     (args.output / 'protocol.json').write_text(json.dumps(protocol, indent=2))
@@ -119,14 +113,20 @@ def main():
     old_physical, old_native = physical_pick_place.time, native_adapter.time
     terminal = 'turn_budget_exhausted'
     try:
-        physical_pick_place.time = native_adapter.time = clock
+        if not args.live_sim:
+            physical_pick_place.time = native_adapter.time = clock
         for turn in range(args.max_turns):
             text = instruction + '\nPrevious tool outcomes:\n' + '\n'.join(history)
             client.reset()
+            robot.refresh()
+            sim_before = float(robot.data.time)
             raw, seconds = _call_llm(client, text, None, False, reset_context=True)
+            robot.refresh()
+            sim_after = float(robot.data.time)
             parsed = parse_tool_calls_response(raw)
             calls = parsed.get('tool_calls', [])
-            row = {'turn': turn, 'response': raw, 'calls': calls, 'model_wall_s': seconds}
+            row = {'turn': turn, 'response': raw, 'calls': calls, 'model_wall_s': seconds,
+                   'sim_time_before_inference': sim_before, 'sim_time_after_inference': sim_after}
             trace.append(row)
             # Enforce the experiment's one-action observation boundary.
             if len(calls) != 1 or calls[0].get('name') not in tools:
@@ -154,7 +154,13 @@ def main():
         physical_pick_place.time, native_adapter.time = old_physical, old_native
         (args.output / 'trace.json').write_text(json.dumps(trace, indent=2))
         (args.output / 'execution.json').write_text(json.dumps({'events': adapter.events, 'commands': robot.commands}, indent=2))
-    result = {'passed': terminal == 'goals_verified', 'terminal': terminal,
+    inference_progress = all(r['sim_time_after_inference'] > r['sim_time_before_inference'] for r in trace)
+    audit_path = args.output / 'actuation.jsonl'
+    audit = [json.loads(line) for line in audit_path.read_text().splitlines()] if audit_path.exists() else []
+    audit_ok = bool(audit) and not any(row.get('forbidden') for row in audit)
+    result = {'passed': terminal == 'goals_verified' and (not args.live_sim or (inference_progress and audit_ok)),
+              'terminal': terminal, 'physics_advanced_during_all_inference_calls': inference_progress,
+              'audit_commands': len(audit), 'forbidden_commands': sum(bool(row.get('forbidden')) for row in audit),
               'final_predicates': goal_predicates(robot, goals), 'turns': len(trace)}
     (args.output / 'summary.json').write_text(json.dumps(result, indent=2))
     print(json.dumps(result), flush=True)

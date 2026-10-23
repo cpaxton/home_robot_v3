@@ -28,6 +28,7 @@ class SAM2Perception(PerceptionModule):
         gpu_device_id: int | None = None,
         configuration: str = "l",
         verbose=False,
+        device: str | torch.device | None = None,
     ):
         """Load trained SAM2 model for inference.
 
@@ -63,7 +64,9 @@ class SAM2Perception(PerceptionModule):
         if not os.path.exists(checkpoint):
             wget.download(url, out=checkpoint)
 
-        if not torch.cuda.is_available():
+        if device is not None:
+            device = torch.device(device)
+        elif not torch.cuda.is_available():
             if gpu_device_id is not None:
                 print("Warning: CUDA is not available. Falling back to CPU.")
             device = torch.device("cpu")

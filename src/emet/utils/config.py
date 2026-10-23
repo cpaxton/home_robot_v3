@@ -164,7 +164,8 @@ def get_control_config(cfg_name):
     """Load standalone control YAML without mutating SAM2's global Hydra state.
 
     Control profiles contain no Hydra defaults/composition. Preserve DictConfig
-    access and interpolation without initializing a process-global application.
+    access and lazy OmegaConf interpolation without initializing a process-global
+    application. Hydra defaults composition is intentionally unsupported.
     """
     name = str(cfg_name)
     cfg = OmegaConf.load(Path(CONTROL_CONFIG_DIR) / (name if name.endswith(".yaml") else name + ".yaml"))
