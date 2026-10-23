@@ -57,6 +57,19 @@ def test_invalid_calibration_fails(options):
         floor_evidence([], (9, 9), 0.1, [4, 4], **({"reference_z_m": 0} | options))
 
 
+@pytest.mark.parametrize("origin", [[4, 4, 0, 0], [4], [float("nan"), 4]])
+def test_invalid_origin_fails_explicitly(origin):
+    with pytest.raises(ValueError, match="origin"):
+        floor_evidence([], (9, 9), 0.1, origin, reference_z_m=0)
+
+
+def test_numeric_calibration_strings_are_normalized_before_comparison():
+    layers = floor_evidence([[0, 0, 0]], (9, 9), "0.1", [4, 4, 0], reference_z_m="0")
+    assert layers.observed[4, 4]
+    with pytest.raises(ValueError):
+        floor_evidence([], (9, 9), "not-a-resolution", [4, 4], reference_z_m=0)
+
+
 @pytest.mark.parametrize("reference", [0, 2])
 def test_map_integration_does_not_turn_visited_disk_into_floor(tmp_path, reference):
     vm = SparseVoxelMap(

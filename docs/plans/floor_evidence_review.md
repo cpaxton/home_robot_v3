@@ -23,6 +23,10 @@ Independent of the frozen movement/EQA acceptance source in PR #220.
   calibrated floor reference; semantic points keep their original world frame.
 - Drop/raised-surface hints reach rejected-footprint feedback. Positive and
   negative hazards remain hard rejections, independent of model confidence.
+  They are enforced even against caller-supplied map snapshots; mixed hazards
+  are reported together in `terrain_hazards` with a compatibility summary.
+  Out-of-grid negative returns are filtered before density scattering, so they
+  cannot crash or wrap to another map cell.
 
 ## Configuration and limitations
 
@@ -41,6 +45,13 @@ parameters, not robot-specific certified step/drop limits. This is not a slope
 or stair-traversal model, nor a guarantee that every cliff is detected. Retained
 voxel points can lose thin/sparse structure; dense-depth hazard qualification
 and sensor-specific tests remain required before enabling on hardware.
+
+Floor layers currently accept a single retained point per cell; there is no
+minimum-support or noise-consensus threshold. The single-ray MuJoCo controls
+deliberately expose that sensitivity. One floor-level outlier can qualify a
+cell, and one off-floor return can block it while retained. This is a reason
+to keep the feature opt-in, not evidence of hardware safety. The existing
+negative-density path separately retains `obs_min_density` semantics.
 
 This does not yet implement measured footprint traversal history, qualified
 spawn-state support, bounded exploratory motion, or a complete resolution of

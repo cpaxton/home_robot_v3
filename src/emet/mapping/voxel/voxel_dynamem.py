@@ -481,7 +481,7 @@ class SparseVoxelMap(DynamemVoxelEQAMixin, DynamemVoxelLocalizeMixin, SparseVoxe
 
             # Geometry-only navigation evidence, not semantic/visual coverage.
             # Never infer a floor reference from the absence of depth returns.
-            reference_z = floor_config["reference_z_m"]
+            reference_z = float(floor_config["reference_z_m"])
             floor_layers = floor_evidence(
                 xyz[xyz[:, 2] - reference_z < self.obs_max_height].detach().cpu().numpy(),
                 tuple(self.grid_size),
@@ -491,8 +491,8 @@ class SparseVoxelMap(DynamemVoxelEQAMixin, DynamemVoxelLocalizeMixin, SparseVoxe
                 tolerance_m=floor_config.get("tolerance_m", 0.03),
                 hazard_height_m=floor_config.get("hazard_height_m", 0.08),
             )
-            # Height gates are relative to the calibrated floor, but semantic
-            # points and frame poses remain in their original world frame.
+            # Only this geometric copy is shifted. The source voxel cloud,
+            # separately-built semantic memory and frame poses stay world-aligned.
             xyz = xyz.clone()
             xyz[:, 2] -= reference_z
         negative = (
@@ -538,10 +538,12 @@ class SparseVoxelMap(DynamemVoxelEQAMixin, DynamemVoxelLocalizeMixin, SparseVoxe
             obstacles *= (1 - self._visited).bool()
 
         # A visited/self-filter mask must never erase a newly measured drop.
-        negative_density = torch.zeros(tuple(self.grid_size), device=device)
+        negative_density = torch.zeros(tuple(self.grid_size), device=device, dtype=counts.dtype)
         if negative.any():
             cells = xyz[negative, :2]
-            negative_density.index_put_((cells[:, 0], cells[:, 1]), counts[negative, 0], accumulate=True)
+            inside = ((cells >= 0) & (cells < torch.as_tensor(self.grid_size, device=device))).all(dim=1)
+            cells = cells[inside]
+            negative_density.index_put_((cells[:, 0], cells[:, 1]), counts[negative, 0][inside], accumulate=True)
         obstacles |= negative_density > self.obs_min_density
         if floor_layers is not None:
             obstacles |= torch.as_tensor(floor_layers.drops | floor_layers.raised, device=device)

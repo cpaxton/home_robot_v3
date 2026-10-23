@@ -27,13 +27,15 @@ def floor_evidence(points, shape, resolution, origin, *, reference_z_m, toleranc
     if any(isinstance(value, (bool, np.bool_)) for value in raw_values):
         raise ValueError("Floor calibration must be numeric, not boolean")
     values = np.asarray(raw_values, dtype=float)
+    resolution, reference_z_m, tolerance_m, hazard_height_m = values
     if not np.isfinite(values).all() or resolution <= 0 or not 0 < tolerance_m < hazard_height_m:
         raise ValueError("Finite calibrated floor reference and 0 < tolerance < hazard height required")
     xyz = np.asarray(points, dtype=float).reshape(-1, 3)
     xyz = xyz[np.isfinite(xyz).all(axis=1)]
-    origin = np.asarray(origin, dtype=float).reshape(-1)[:2]
-    if origin.shape != (2,) or not np.isfinite(origin).all():
-        raise ValueError("Finite two-dimensional grid origin required")
+    origin = np.asarray(origin, dtype=float).reshape(-1)
+    if origin.shape not in {(2,), (3,)} or not np.isfinite(origin).all():
+        raise ValueError("Finite XY or XYZ grid origin required")
+    origin = origin[:2]
     cells = np.floor(xyz[:, :2] / resolution + origin + 0.5).astype(int)
     valid = ((cells >= 0) & (cells < np.asarray(shape))).all(axis=1)
     cells, dz = cells[valid], xyz[valid, 2] - reference_z_m

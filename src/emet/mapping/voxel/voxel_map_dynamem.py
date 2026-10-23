@@ -85,11 +85,27 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
             obstacles = obstacles.cpu().numpy()
         if hasattr(explored, "cpu"):
             explored = explored.cpu().numpy()
+        obstacles, explored = np.asarray(obstacles), np.asarray(explored)
+        if obstacles.ndim != 2 or explored.shape != obstacles.shape:
+            self.last_validity = {"reason": "invalid_navigation_map"}
+            return False
         if not len(cells) or np.any(cells < 0) or np.any(cells >= np.asarray(obstacles.shape)):
             self.last_validity = {"reason": "footprint_out_of_map"}
             return False
         occupied = np.asarray(obstacles)[cells[:, 0], cells[:, 1]].astype(bool)
         observed = np.asarray(explored)[cells[:, 0], cells[:, 1]].astype(bool)
+        floor_layers = getattr(self.voxel_map, "_floor_evidence", None)
+        terrain_hazards = []
+        if floor_layers is not None:
+            for name, label in (("drops", "drop"), ("raised", "raised_surface")):
+                layer = np.asarray(getattr(floor_layers, name))
+                if layer.shape != obstacles.shape:
+                    self.last_validity = {"reason": "terrain_map_shape_mismatch"}
+                    return False
+                hits = layer[cells[:, 0], cells[:, 1]].astype(bool)
+                occupied |= hits  # Caller-supplied maps cannot suppress measured hazards.
+                if hits.any():
+                    terrain_hazards.append(label)
         self.last_validity = {
             "reason": "occupied_footprint"
             if occupied.any()
@@ -105,12 +121,9 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
                 (cells[~observed][:16] - np.asarray(origin)[:2]) * self.voxel_map.grid_resolution - np.asarray(pose)[:2]
             ).tolist(),
         }
-        floor_layers = getattr(self.voxel_map, "_floor_evidence", None)
-        if floor_layers is not None:
-            if floor_layers.drops[cells[:, 0], cells[:, 1]].any():
-                self.last_validity["terrain_hazard"] = "drop"
-            elif floor_layers.raised[cells[:, 0], cells[:, 1]].any():
-                self.last_validity["terrain_hazard"] = "raised_surface"
+        if terrain_hazards:
+            self.last_validity["terrain_hazard"] = terrain_hazards[0]  # Compatibility summary.
+            self.last_validity["terrain_hazards"] = terrain_hazards
         return bool(not occupied.any() and observed.all())
 
     def get_oriented_mask(self, theta):
