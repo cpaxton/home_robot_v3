@@ -45,6 +45,39 @@ score infrastructure failures as model misses or claim restored performance.
 
 ## Closeout progress — 2026-10-23
 
+### Resume checkpoint
+
+- Draft #220: `fix/shared-relative-motion-results`, frozen runtime `ac0269c8`.
+  Do not edit `/tmp/emet-episode-dialogue-review` while the EQA pair is active.
+- Live measured-gaze job `20261023_104156_cc0141` completed, 126.9 s:
+  bowl found, microwave not localized. Floor inspection now succeeds and
+  reduces unknown current-footprint cells 18 → 7. A later capture leaves 7.
+  These cell centers lie behind the base in body coordinates; saved projection
+  puts them below the image at the current permitted floor gaze. No unknown
+  cells were assumed free. Next diagnose calibrated footprint versus sensor
+  visibility and qualified gaze planning, not a depth/clearance relaxation.
+- Evidence root: `/home/cpaxton/runs/emet/measured-gaze-molmo-20261023`;
+  inspect floor-observation NPZ/RGB, camera poses, head angles and footprints.
+- Serial matched EQA12 job `20261023_104449_f2f394`: baseline `5a177e7d`
+  versus candidate `ac0269c8`, seed 0, model_final, identical local Qwen/budgets.
+  Output roots `/home/cpaxton/runs/emet/observation-context-eqa12-{baseline,candidate}-20261023`.
+  Four baseline records completed at last inspection; no comparison yet.
+  Initial jobs `20261023_104403_3192f2` / `20261023_104417_1a2986` were cancelled
+  before their runs to fix required OUT_DIR configuration; they are not arms.
+- Baseline/candidate YOLOE checkpoint SHA256 both
+  `14e9c146f7f7efa0bfea8c5f82952c9f95fb1f9c3bf0f18b3727b76624f9d746`.
+  Baseline setup downloaded assets; do not treat setup wall time as navigation.
+- #213 is still open at last inspection; integrate through main only after
+  review. No merges or robot/hardware experiments were performed.
+- Draft #221 contains metadata adapters only (`ce6f68a4`), nine fixture tests
+  and whole-upstream metadata validation. Full benchmark runners/scoring and
+  audited predictions remain pending; no benchmark accuracy claim.
+
+Next work: inspect EQA pair, diagnose the seven unobserved rear cells without
+weakening safety, finish isolated full-robot scenes and live S0/Molmo gates,
+then #213 integration and stack acceptance. Benchmark evidence/runtime/scoring
+qualification follows, not substitutes for those gates.
+
 Frozen `50575a34` diagnostic `20261023_103515_22ac60` also completed:
 bowl found, microwave not localized (123.8 s). It confirms failed-turn batch
 stopping and the model's selection of targeted floor recovery. Recovery now
