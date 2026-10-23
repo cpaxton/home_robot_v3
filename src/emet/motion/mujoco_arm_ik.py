@@ -68,27 +68,30 @@ def solve_pose_ik(
         or max_iters < 1
     ):
         raise ValueError("Pose IK requires a finite rigid target and positive solver parameters")
-    body_id = model.body(ee_body).id
+    body_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, ee_body)
+    if body_id < 0:
+        raise ValueError(f"body not found: {ee_body!r}")
     names = list(joint_names)
     if not names or len(set(names)) != len(names):
         raise ValueError("Pose IK requires distinct controlled joints")
     if not np.isfinite(data.qpos).all():
         raise ValueError("Pose IK requires finite initial joint state")
-    # Resolve native named views once, before the iterative solver. This avoids
-    # repeated pybind named-view lookups in the hot loop (the old crash site).
-    joint_ids = np.array([model.joint(name).id for name in names])
+    # Use integer IDs and flat arrays throughout: no grouped named-view binding
+    # objects (the old crash site) are constructed by pose IK.
+    joint_ids = np.array([mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, name) for name in names])
+    if np.any(joint_ids < 0):
+        raise ValueError("Pose IK joint not found")
     if not np.isin(model.jnt_type[joint_ids], [mujoco.mjtJoint.mjJNT_HINGE, mujoco.mjtJoint.mjJNT_SLIDE]).all():
         raise ValueError("Pose IK only supports hinge and slide joints")
     indices = {name: i for i, name in enumerate(names)}
     margins = dict(joint_limit_margins or {})
     if not set(margins).issubset(names) or any(not np.isfinite(v) or v < 0 for v in margins.values()):
         raise ValueError("Joint limit margins must be finite nonnegative values for controlled joints")
-    qadr, dadr = joint_qpos_addrs(model, names), joint_dof_addrs(model, names)
+    qadr, dadr = model.jnt_qposadr[joint_ids], model.jnt_dofadr[joint_ids]
     bounds = {}
-    for name in names:
-        joint = model.joint(name)
-        if model.jnt_limited[joint.id]:
-            lo, hi = model.jnt_range[joint.id]
+    for name, joint_id in zip(names, joint_ids, strict=True):
+        if model.jnt_limited[joint_id]:
+            lo, hi = model.jnt_range[joint_id]
             margin = margins.get(name, 0.0)
             if lo + margin >= hi - margin:
                 raise ValueError("Joint limit margin leaves no usable range")

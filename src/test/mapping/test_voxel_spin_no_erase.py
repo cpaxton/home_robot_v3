@@ -156,3 +156,24 @@ def test_static_floor_survives_filtered_spin():
     assert areas[0] > 0
     # Explored cells from a static mesh must be monotone non-decreasing across the spin.
     assert areas == sorted(areas), f"static floor explored shrank during spin: {areas}"
+
+
+def test_scene_graph_depth_points_stay_aligned_when_mapping_is_resized(tmp_path, monkeypatch):
+    from emet.mapping.scene_graph.processor import SceneGraphProcessor
+    from emet.utils.image import Camera, camera_xyz_to_global_xyz
+
+    vm = SparseVoxelMap(log=str(tmp_path), image_shape=(H // 2, W // 2), use_instance_memory=False)
+    processor = SceneGraphProcessor(config={}, device='cpu')
+    monkeypatch.setattr(processor, '_run_segmentation', lambda *args: [
+        {'mask': np.ones((H, W), bool), 'label': 'observed surface', 'score': .9}])
+    monkeypatch.setattr(processor, '_encode_siglip', lambda *args: None)
+    monkeypatch.setattr(processor, '_encode_dinov3', lambda *args: None)
+    vm.set_scene_graph_processor(processor)
+    rgb = np.zeros((H, W, 3), np.uint8)
+    depth = np.broadcast_to(1. + .001 * np.arange(W, dtype=np.float32), (H, W)).copy()
+    pose = _pose_at(.2, -.1, .3)
+    vm.process_rgbd_images(rgb, depth, K, pose, received_monotonic=100.)
+    node, = processor.scene_graph.nodes.values()
+    expected = camera_xyz_to_global_xyz(Camera.from_K(K, width=W, height=H).depth_to_xyz(depth), pose)
+    assert node.point_cloud.shape == (H * W, 3)
+    np.testing.assert_allclose(node.point_cloud.numpy(), expected.reshape(-1, 3), atol=1e-6)

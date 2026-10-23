@@ -187,6 +187,27 @@ EQA_SKILL_SPECS: tuple[SkillSpec, ...] = (
 # Chat skill metadata (funcs bind in emet.agent.tools.build_chat_tools).
 CHAT_SKILL_SPECS: tuple[SkillSpec, ...] = (
     SkillSpec(
+        name="plan_task",
+        modes=frozenset({AgentMode.CHAT}),
+        description="Plan a multi-step task without executing it. Requires a qualified task provider. "
+                    "Preserve the user's complete final goals. Unsupported strategies fail explicitly.",
+        parameters={"type": "object", "properties": {
+            "instruction": {"type": "string", "description": "Complete requested final goals."},
+            "strategy": {"type": "string", "enum": ["greedy", "beam", "mcts"], "default": "beam"}},
+            "required": ["instruction"], "additionalProperties": False},
+        returns_info=True,
+    ),
+    SkillSpec(
+        name="execute_task_plan",
+        modes=frozenset({AgentMode.CHAT}),
+        description="Execute a stored multi-step plan once, verifying measured effects after each skill. "
+                    "Stops immediately on failure or partial progress; do not retry automatically.",
+        parameters={"type": "object", "properties": {
+            "plan_ref": {"type": "string", "description": "Opaque plan handle returned by plan_task."}},
+            "required": ["plan_ref"], "additionalProperties": False},
+        returns_info=True,
+    ),
+    SkillSpec(
         name="query_memory",
         modes=frozenset({AgentMode.CHAT}),
         description="Questions about the scene (where is X, have I seen Y). Uses graph EQA when enabled, else voxel memory. Returns a final user-facing Answer line (not image numbers). For relations use list_scene_relations; for open-ended views use describe_scene and send_image.",
@@ -667,7 +688,8 @@ CHAT_SKILL_SPECS: tuple[SkillSpec, ...] = (
         description=(
             "Returns schema_version=1 JSON with status, code, data, and recovery; inspect these fields, "
             "not message text. For partial execution, inspect the scene before planning another action. "
-            "Enumerate candidate pick-and-place tasks supported by the current simulator adapter. "
+            "Enumerate candidate pick-and-place tasks from the configured input provider. "
+            "If discovery_only is true, report proposals and unavailable capabilities; do not plan or execute. "
             "Candidates are not promises of reachable grasps or feasible placement. Inspect the "
             "returned mode, inputs, and assistance before use; native contact does not imply "
             "observed perception or native articulation. Returns opaque semantic task_ref handles "
