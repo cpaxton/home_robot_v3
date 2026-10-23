@@ -121,6 +121,18 @@ def test_faster_checkpoint_cannot_hide_failures_or_worse_forces():
     changed = deepcopy(faster)
     changed["episodes"][1]["initial"]["reference"] = [1]
     assert not paired_comparison(teacher, changed)["eligible"]
+    base_teacher = deepcopy(teacher)
+    base_teacher["summary"]["reach"].update(
+        hand_target_count=0,
+        ee_position_error_p95=None,
+        ee_orientation_error_p95=None,
+        joint_error_mean=None,
+        base_contract_violation_p95=0,
+    )
+    base_candidate = deepcopy(base_teacher)
+    assert paired_comparison(base_teacher, base_candidate)["eligible"]
+    base_candidate["summary"]["reach"]["peak_contact_force_max"] = 2
+    assert not paired_comparison(base_teacher, base_candidate)["eligible"]
 
 
 @pytest.mark.sim

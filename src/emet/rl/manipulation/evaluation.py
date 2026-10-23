@@ -40,6 +40,9 @@ def evaluate(policy=None, *, config=None, episodes=20, seed=200000, scenarios=No
                 obs, info = env.reset(seed=episode_seed)
                 initial_base_distance = float(np.linalg.norm(env.control.base_goal[:2] - env.control.base_pose()[:2]))
                 initial = {
+                    "base_pose": env.control.base_pose().tolist(),
+                    "base_goal": env.control.base_goal.tolist(),
+                    "base_mask": env.control.base_mask.tolist(),
                     "task_contract": {
                         "base_xy_tolerance": config.base_xy_tolerance,
                         "base_heading_tolerance": config.base_heading_tolerance,
@@ -350,11 +353,12 @@ def paired_comparison(teacher, learned):
             if all(g.get("base_contract_violation_p95") is not None for g in (a, b))
             else "base_goal_error_p95"
         )
+        hand_active = not all(g.get("hand_target_count") == 0 for g in (a, b))
+        base_active = not all(g.get("base_target_count") == 0 for g in (a, b))
         for key in (
-            *(("joint_error_mean",) if base_metric == "base_goal_error_p95" else ()),
-            "ee_position_error_p95",
-            "ee_orientation_error_p95",
-            base_metric,
+            *(("joint_error_mean",) if hand_active and base_metric == "base_goal_error_p95" else ()),
+            *(("ee_position_error_p95", "ee_orientation_error_p95") if hand_active else ()),
+            *((base_metric,) if base_active else ()),
             "peak_contact_force_p95",
             "peak_contact_force_max",
             "contact_impulse_p95",

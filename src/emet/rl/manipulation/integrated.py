@@ -10,7 +10,7 @@ from emet.rl.manipulation.env import ManipulationConfig, ManipulationEnv, ResetM
 from emet.rl.manipulation.tamp_cases import execute_case, plan_case
 
 
-def _run_case(*, robot="innate_mars", seed=1800000, policy=None, action_mode="residual"):
+def _run_case(*, robot="innate_mars", seed=1800000, policy=None, action_mode="residual", payload_mass_kg=None):
     if policy is not None:
         action_mode = policy.action_mode
     env = ManipulationEnv(
@@ -19,6 +19,7 @@ def _run_case(*, robot="innate_mars", seed=1800000, policy=None, action_mode="re
             scenario="pregrasp",
             horizon=30,
             randomization_scale=0,
+            payload_mass_kg=payload_mass_kg,
             action_mode=action_mode,
             base_xy_tolerance=0.005,
             grasp_lift_height=0.045,
@@ -41,7 +42,13 @@ def _run_case(*, robot="innate_mars", seed=1800000, policy=None, action_mode="re
         placement_xy = env.data.xpos[env.payload, :2].copy()
         grasp_configuration = env.control.reference.copy()
         if info["initialization_failed"]:
-            return {"seed": seed, "success": False, "failure": "initialization_failed", "stages": stages}
+            return {
+                "seed": seed,
+                "success": False,
+                "failure": "initialization_failed",
+                "stages": stages,
+                "payload_properties": info["randomization"],
+            }
         env.control.set_pose_targets(
             env.control.base_pose(),
             np.ones(3, dtype=bool),
@@ -194,6 +201,12 @@ def run_case(**kwargs):
         scope="continuous simulator pick and return-place with GT TAMP arm paths; not a full public-tool task",
         controller="velocity_teacher" if policy is None else policy.manifest["weights_sha256"],
         action_mode=policy.action_mode if policy else kwargs.get("action_mode", "residual"),
+        requested_payload_mass_kg=kwargs.get("payload_mass_kg"),
+        payload_properties=(
+            result["stages"][0].get("randomization", {})
+            if result.get("stages")
+            else result.get("payload_properties", {})
+        ),
         contract={
             "lift_m": 0.045,
             "support_half_width_m": 0.04,
@@ -215,6 +228,12 @@ def main():
     p.add_argument("--seed", type=int, default=1800000)
     p.add_argument("--episodes", type=int, default=5)
     p.add_argument("--policy")
+    p.add_argument(
+        "--payload-masses-kg",
+        type=float,
+        nargs="+",
+        help="simulation mass sweep; uniform density scaling at fixed geometry and COM",
+    )
     p.add_argument("--action-mode", choices=["residual", "direct_velocity"], default="residual")
     p.add_argument("--output", type=Path, required=True)
     args = p.parse_args()
@@ -223,12 +242,18 @@ def main():
     from emet.rl.manipulation.policy import ManipulationPolicy
 
     policy = ManipulationPolicy(args.policy, robot=args.robot) if args.policy else None
-    rows = [
-        run_case(robot=args.robot, seed=args.seed + i, policy=policy, action_mode=args.action_mode)
-        for i in range(args.episodes)
-    ]
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps({"cases": rows}, indent=2) + "\n")
+    rows = []
+    for mass in args.payload_masses_kg or [None]:
+        for i in range(args.episodes):
+            row = run_case(
+                robot=args.robot, seed=args.seed + i, policy=policy, action_mode=args.action_mode, payload_mass_kg=mass
+            )
+            rows.append(row)
+            args.output.write_text(json.dumps({"cases": rows}, indent=2) + "\n")
+            print(
+                "payload", mass, "seed", args.seed + i, "success", row["success"], "failure", row["failure"], flush=True
+            )
     print(
         json.dumps(
             {

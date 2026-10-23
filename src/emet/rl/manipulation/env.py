@@ -65,6 +65,7 @@ class ManipulationConfig:
     diagnostics: bool = False
     disturbance_curriculum: bool = False
     randomization_scale: float = 1.0
+    payload_mass_kg: float | None = None
     initial_heading_range: float = 0.0
     target_scale: float = 1.0
     retarget_probability: float = 0.0
@@ -89,6 +90,8 @@ class ManipulationConfig:
     endpoint_motion_weight: float = 0.0
 
     def __post_init__(self):
+        if self.payload_mass_kg is not None and (not np.isfinite(self.payload_mass_kg) or self.payload_mass_kg <= 0):
+            raise ValueError("payload mass must be finite and positive")
         if not np.isfinite(self.base_only_min_distance) or not 0 <= self.base_only_min_distance <= 0.5:
             raise ValueError("base-only minimum distance must be in [0, .5]")
         if not np.isfinite(self.base_only_max_distance) or not 0 <= self.base_only_max_distance <= 0.75:
@@ -289,8 +292,11 @@ class ManipulationEnv(gym.Env):
         self.payload_name = str(self.np_random.choice(("object1", "object2")))
         self.payload = m.body(self.payload_name).id
         mass_factor = self.np_random.uniform(1 - 0.2 * self.randomization_scale, 1 + 0.2 * self.randomization_scale)
-        m.body_mass[self.payload] *= mass_factor
-        m.body_inertia[self.payload] *= mass_factor
+        density_factor = (
+            self.config.payload_mass_kg / self.mass[self.payload] if self.config.payload_mass_kg is not None else 1.0
+        )
+        m.body_mass[self.payload] *= density_factor * mass_factor
+        m.body_inertia[self.payload] *= density_factor * mass_factor
         friction_factor = self.np_random.uniform(1 - 0.2 * self.randomization_scale, 1 + 0.2 * self.randomization_scale)
         payload_geom = m.body_geomadr[self.payload]
         # Randomize the manipulated object's grip friction only. Scaling every
@@ -371,6 +377,9 @@ class ManipulationEnv(gym.Env):
         self.initial_object_height = float(d.xpos[self.payload, 2])
         self.randomization = {
             "mass_factor": mass_factor,
+            "payload_mass_kg": float(m.body_mass[self.payload]),
+            "payload_inertia_kg_m2": m.body_inertia[self.payload].tolist(),
+            "payload_com_local_m": m.body_ipos[self.payload].tolist(),
             "friction_factor": friction_factor,
             "scale": self.randomization_scale,
         }

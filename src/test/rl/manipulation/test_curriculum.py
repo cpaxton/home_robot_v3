@@ -192,3 +192,24 @@ def test_training_retarget_and_push_are_seeded_and_do_not_teleport():
         assert not np.any(env.disturbance_wrench)  # Zero randomization means no disturbance.
     finally:
         env.close()
+
+
+@pytest.mark.sim
+def test_payload_mass_override_scales_inertia_and_resets_without_accumulation():
+    env = ManipulationEnv(
+        ManipulationConfig(robot="innate_mars", scenario="reach", randomization_scale=0, payload_mass_kg=0.1)
+    )
+    try:
+        for _ in range(2):
+            _, info = env.reset(seed=19)
+            payload = env.payload
+            ratio = 0.1 / env.mass[payload]
+            assert env.model.body_mass[payload] == pytest.approx(0.1)
+            np.testing.assert_allclose(env.model.body_inertia[payload], env.inertia[payload] * ratio)
+            assert info["randomization"]["payload_mass_kg"] == pytest.approx(0.1)
+            np.testing.assert_allclose(info["randomization"]["payload_inertia_kg_m2"], env.model.body_inertia[payload])
+    finally:
+        env.close()
+    for mass in (0, -1, float("nan"), float("inf")):
+        with pytest.raises(ValueError):
+            ManipulationConfig(payload_mass_kg=mass)

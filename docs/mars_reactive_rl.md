@@ -1819,3 +1819,80 @@ current-stage outcome metrics, distance bounds, ever-settled rate, subsequent
 settling loss, and measured base-axis jerk. No corrected learned policy has yet
 been validated or promoted; this run isolates base control before reintroducing
 whole-body goals and dynamic goal changes.
+
+### Frozen base stress benchmark
+
+`python -m emet.rl.manipulation.base_benchmark` freezes seven strata before
+scoring: near targets, longer translations, full initial-heading range,
+mid-motion goal changes, finite end-effector pushes, full dynamics
+randomization, and a 40-second hold horizon. The default is 20 fresh cases per
+stratum (140 per controller), starting at seed 9300000, disjoint from training
+validation seeds. Acceptance tolerances come from the template bundle and remain
+unchanged. Raw initial base pose, goal and masks are recorded alongside seeded
+reference and disturbance information for replay. Initialization failures remain
+in the denominator. Success intervals are Wilson 95% intervals; per-stratum
+metrics remain visible rather than relying on pooled success alone.
+
+The first run is `logs/manipulation/base-stress-v1`, with a frozen `suite.json`
+and serial teacher results saved per stratum. It will evaluate the immutable
+`differential-base-curriculum-v1/seed-28/step-65536` bundle after that bundle is
+available, then save candidate reports and a paired comparison. It shares the
+existing two-core CPU cap and adds no simulator worker pool. Training continues;
+this audit does not select curriculum stages or promote a UI/hardware policy.
+
+```bash
+MPLCONFIGDIR=/tmp/mpl MUJOCO_GL=egl OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
+  taskset -c 14-15 .venv/bin/python -u -m emet.rl.manipulation.base_benchmark \
+  --template logs/manipulation/differential-base-curriculum-v1/seed-28/step-0 \
+  --policy logs/manipulation/differential-base-curriculum-v1/seed-28/step-65536 \
+  --wait-seconds 43200 --cases 20 --seed 9300000 \
+  --output logs/manipulation/base-stress-v1
+```
+
+This is base-control evidence, not a manipulation/TAMP or dedicated obstacle
+impact test. The paired comparison now skips hand accuracy metrics only when
+both reports explicitly have zero active hand targets; safety, force, jerk and
+base-contract comparisons remain active. Thirteen targeted tests passed,
+including seed separation, preserved tolerances, confidence intervals and
+base-only paired comparisons that still reject increased forces.
+
+### Payload-aware TAMP trajectory progression
+
+The current Mars primitive pick/return fixture has a nominal 20 g payload. It is
+not evidence of heavier-object manipulation. `ManipulationConfig.payload_mass_kg`
+and training's `--payload-mass-kg` now set a nominal mass before initialization;
+existing mass randomization is applied around that value. Inertia scales by the
+same density factor at fixed geometry and center of mass, and MuJoCo constants
+are recomputed before any scored motion. Each reset records actual mass,
+principal inertia and local COM in the randomization metadata, which generated
+TAMP component cases and integrated stage reports carry forward. Uniform density
+scaling does not represent arbitrary real-object mass distributions.
+
+The continuous integrated benchmark accepts `--payload-masses-kg`, retaining
+identical seeds, trajectories, controller speed limits and acceptance thresholds
+across the sweep. It saves each completed case immediately. A teacher sweep of
+.02/.05/.10 kg at box seed 1800006 is queued after the base stress suite, at
+`logs/manipulation/tamp-payload-sweep-v1/teacher.json`. These are simulator stress
+values, not hardware payload ratings. The existing nominal teacher regressions
+under residual and direct velocity interfaces remain separate from these new
+load cases.
+
+```bash
+MPLCONFIGDIR=/tmp/mpl MUJOCO_GL=egl OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
+  taskset -c 14-15 .venv/bin/python -m emet.rl.manipulation.integrated \
+  --robot innate_mars --seed 1800006 --episodes 1 --action-mode direct_velocity \
+  --payload-masses-kg .02 .05 .10 --output /tmp/mars-payload-sweep.json
+```
+
+The next manipulation gate should use the actual TAMP benchmark object assets
+and mass/inertia/COM data, with generated GT/oracle plans converted to timed hand
+SE(3), masked base SE(2), and gripper trajectories. Execute approach, grasp, lift,
+carry, lower, release and settle continuously, with no stage resets or object
+attachments. Compare teacher and a whole-body checkpoint on identical scenes
+and loads; the current base-only policy is not that checkpoint. Start near the
+nominal physical distribution and broaden load, grip friction, speeds, COM and
+persistent disturbance windows only after validation. Keep frozen retention,
+fingertip-clearance and placement thresholds unchanged. Report failures by stage,
+load, geometry and plan feasibility as well as tracking, slip, sag, jerk, support
+loads and wheel unloading. The current integrated fixture uses actual GT TAMP
+arm transport paths but is not yet full public-tool oracle pick-and-place.

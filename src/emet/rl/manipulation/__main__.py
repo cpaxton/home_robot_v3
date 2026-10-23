@@ -279,6 +279,7 @@ def train(args):
         scenario=args.scenario,
         horizon=args.horizon,
         randomization_scale=args.randomization_scale,
+        payload_mass_kg=args.payload_mass_kg,
         initial_heading_range=args.initial_heading_range,
         target_scale=args.target_scale,
         retarget_probability=args.retarget_probability,
@@ -465,6 +466,7 @@ def main():
     )
     p.add_argument("--horizon", type=float, default=20)
     p.add_argument("--randomization-scale", type=float, default=0.05)
+    p.add_argument("--payload-mass-kg", type=float, help="nominal payload mass before randomization")
     p.add_argument("--initial-heading-range", type=float, default=float(np.pi))
     p.add_argument("--target-scale", type=float, default=0.25)
     p.add_argument("--debug-reset-seed", type=int, help="overfit one reach case; training diagnostic only")
