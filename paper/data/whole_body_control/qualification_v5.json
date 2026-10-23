@@ -1,0 +1,96 @@
+{
+  "source_revision": "42aa2f30",
+  "scope": "simulator teacher; no learned-policy or hardware qualification",
+  "carry_cases": 300,
+  "carry_successes": 298,
+  "carry_summary": {
+    "0.02": {
+      "cases": 100,
+      "admitted": 100,
+      "admission_rate": 1.0,
+      "successes": 100,
+      "end_to_end_success_rate": 1.0,
+      "conditional_execution_success_rate": 1.0,
+      "unsafe_contact_count": 0,
+      "wheel_lift_count": 0,
+      "retention_lost_count": 0,
+      "failures": {},
+      "candidate_rejections": {
+        "trivial_carry_target": 32
+      }
+    },
+    "0.05": {
+      "cases": 100,
+      "admitted": 100,
+      "admission_rate": 1.0,
+      "successes": 100,
+      "end_to_end_success_rate": 1.0,
+      "conditional_execution_success_rate": 1.0,
+      "unsafe_contact_count": 0,
+      "wheel_lift_count": 0,
+      "retention_lost_count": 0,
+      "failures": {},
+      "candidate_rejections": {
+        "trivial_carry_target": 32
+      }
+    },
+    "0.1": {
+      "cases": 100,
+      "admitted": 100,
+      "admission_rate": 1.0,
+      "successes": 98,
+      "end_to_end_success_rate": 0.98,
+      "conditional_execution_success_rate": 0.98,
+      "unsafe_contact_count": 0,
+      "wheel_lift_count": 0,
+      "retention_lost_count": 2,
+      "failures": {
+        "retention_lost": 2
+      },
+      "candidate_rejections": {
+        "trivial_carry_target": 32
+      }
+    }
+  },
+  "carry_failures": [
+    {
+      "case_id": "100g:orientation:10",
+      "code": "retention_lost"
+    },
+    {
+      "case_id": "100g:orientation:11",
+      "code": "retention_lost"
+    }
+  ],
+  "continuous_pick_place_cases": 30,
+  "continuous_pick_place_successes": 27,
+  "pick_place_failures": [
+    {
+      "seed": 1860001,
+      "mass": 0.02,
+      "failure": "retention_lost"
+    },
+    {
+      "seed": 1860007,
+      "mass": 0.05,
+      "failure": "tracking_timeout"
+    },
+    {
+      "seed": 1860010,
+      "mass": 0.05,
+      "failure": "tracking_timeout"
+    }
+  ],
+  "combined_training_readiness_verified": false,
+  "training_restarted": false,
+  "complete_report_artifacts": {
+    "carry": {
+      "path": "paper/data/whole_body_control/qualification_v5_carry.json.gz",
+      "uncompressed_sha256": "09d93292eaf44f68747237642dae4c113ac665b87be20990f2943e2ad113ef8d"
+    },
+    "pick_place": {
+      "path": "paper/data/whole_body_control/qualification_v5_pick_place.json.gz",
+      "uncompressed_sha256": "0e3210c6bd98621573cd895d0b3fd2bc6005c1b855b41844fa86d9be4c30a937"
+    }
+  }
+}

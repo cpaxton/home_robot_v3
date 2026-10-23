@@ -23,6 +23,7 @@ import torch.nn.functional as F
 from scipy.ndimage import maximum_filter, median_filter
 from torch import Tensor
 
+from emet.controller.manipulation.native_inputs import RGBD_POINTCLOUD_SOURCE
 from emet.core.parameters import Parameters
 from emet.llms import OpenaiClient
 from emet.llms.eqa_vl_settings import resolve_vl_endpoint
@@ -599,6 +600,8 @@ class SparseVoxelMap(DynamemVoxelEQAMixin, DynamemVoxelLocalizeMixin, SparseVoxe
         base_xyt: np.ndarray | None = None,
         full_perception: bool = True,
         image_timing: dict | None = None,
+        received_monotonic: float | None = None,
+        depth_evidence_source: str = RGBD_POINTCLOUD_SOURCE,
     ):
         """
         Process rgbd images for Dynamem
@@ -747,6 +750,9 @@ class SparseVoxelMap(DynamemVoxelEQAMixin, DynamemVoxelLocalizeMixin, SparseVoxe
             if len(valid_xyz) != 0:
                 self.add_to_semantic_memory(valid_xyz, features, valid_rgb)
 
+        # Segmentation uses the original RGB/depth resolution. The mapping
+        # world_xyz above may be resized; let the processor unproject original
+        # depth with original intrinsics so masks and points remain aligned.
         # Update open-vocab scene graph if attached
         if self._scene_graph_processor is not None:
             try:
@@ -755,7 +761,8 @@ class SparseVoxelMap(DynamemVoxelEQAMixin, DynamemVoxelLocalizeMixin, SparseVoxe
                     depth=original_depth,
                     intrinsics=original_intrinsics,
                     camera_pose=original_pose,
-                    world_xyz=world_xyz,
+                    received_monotonic=received_monotonic,
+                    depth_evidence_source=depth_evidence_source,
                 )
             except Exception as e:
                 from emet.utils.logger import warning as _warn_colored

@@ -121,105 +121,150 @@ def query_answer(
     look_obs_id = self.last_eqa_look_obs_id
     if look_obs_id is None:
         look_obs_id = self.last_eqa_action_obs_id
-    count_nodes, _count_target = ([], None) if attribute_q else self._count_candidate_nodes(question)
-    pin_obs: list[int] = []
-    phrases = self._eqa_find_phrases()
-    visual_pins = self._visual_find_obs_ids(phrases, max_n=max_images)
-    q_low = str(question or "").lower()
-    clockish = any(s in q_low for s in ("what time", "time is it", "o'clock", "o’clock"))
-    if clockish:
-        self._merge_highlight_phrases(["clock", "wall clock"])
+    crop_oid = None
+    crop_rgb = None
+    if not evidence:
+        count_nodes, _count_target = ([], None) if attribute_q else self._count_candidate_nodes(question)
+        pin_obs: list[int] = []
         phrases = self._eqa_find_phrases()
         visual_pins = self._visual_find_obs_ids(phrases, max_n=max_images)
-    if (count_q or time_q or clockish) and not location_q and self._phrases_need_rgb_highlight(visual_pins, phrases):
-        extra_hl = self._highlight_relevant_from_latest_rgb(question)
-        if extra_hl:
-            self._merge_highlight_phrases(extra_hl)
+        q_low = str(question or "").lower()
+        clockish = any(s in q_low for s in ("what time", "time is it", "o'clock", "o’clock"))
+        if clockish:
+            self._merge_highlight_phrases(["clock", "wall clock"])
             phrases = self._eqa_find_phrases()
             visual_pins = self._visual_find_obs_ids(phrases, max_n=max_images)
-    # Location MCQs keep landmark Image 1; visual FIND is leftover recall there.
-    if not location_q:
-        for oid in visual_pins:
-            if oid not in pin_obs and self._obs_usable_for_eqa_image(oid):
-                pin_obs.append(int(oid))
-        # Instance FIND (count nodes + LOOK) even when visual-find returned spawn RGB.
-        for oid in self._eqa_find_obs_ids(
-            question,
-            attached_obs_ids=(),
-            robot_xyt=xyt,
-            max_n=max_images,
-            count_mcq_only=bool(count_q),
-            include_visual=False,
+        if (
+            (count_q or time_q or clockish)
+            and not location_q
+            and self._phrases_need_rgb_highlight(visual_pins, phrases)
         ):
-            if oid not in pin_obs and self._obs_usable_for_eqa_image(oid):
-                pin_obs.append(int(oid))
-    # YoloE instance nodes are FIND only when SigLIP retrieved nothing.
-    if not pin_obs:
-        for node in count_nodes:
-            oid = int(node.obs_id)
-            if oid in pin_obs:
-                continue
-            if self._obs_usable_for_eqa_image(oid):
-                pin_obs.append(oid)
-    if not pin_obs:
-        for node in self._location_finder_nodes()[:4]:
-            oid = int(node.obs_id)
-            if oid in pin_obs:
-                continue
-            if self._obs_usable_for_eqa_image(oid):
-                pin_obs.append(oid)
-    pin_obs = self._spread_obs_xy(pin_obs, max_n=max_images)
-    forced: list[int] = []
-    if force_obs_ids:
-        for oid in force_obs_ids:
-            oi = int(oid)
-            if oi in forced:
-                continue
-            if self._obs_usable_for_eqa_image(oi):
-                forced.append(oi)
-    selected = [
-        int(oid)
-        for oid in self._select_relevant_obs_ids(
+            extra_hl = self._highlight_relevant_from_latest_rgb(question)
+            if extra_hl:
+                self._merge_highlight_phrases(extra_hl)
+                phrases = self._eqa_find_phrases()
+                visual_pins = self._visual_find_obs_ids(phrases, max_n=max_images)
+        # Location MCQs keep landmark Image 1; visual FIND is leftover recall there.
+        if not location_q:
+            for oid in visual_pins:
+                if oid not in pin_obs and self._obs_usable_for_eqa_image(oid):
+                    pin_obs.append(int(oid))
+            # Instance FIND (count nodes + LOOK) even when visual-find returned spawn RGB.
+            for oid in self._eqa_find_obs_ids(
+                question,
+                attached_obs_ids=(),
+                robot_xyt=xyt,
+                max_n=max_images,
+                count_mcq_only=bool(count_q),
+                include_visual=False,
+            ):
+                if oid not in pin_obs and self._obs_usable_for_eqa_image(oid):
+                    pin_obs.append(int(oid))
+        # YoloE instance nodes are FIND only when SigLIP retrieved nothing.
+        if not pin_obs:
+            for node in count_nodes:
+                oid = int(node.obs_id)
+                if oid in pin_obs:
+                    continue
+                if self._obs_usable_for_eqa_image(oid):
+                    pin_obs.append(oid)
+        if not pin_obs:
+            for node in self._location_finder_nodes()[:4]:
+                oid = int(node.obs_id)
+                if oid in pin_obs:
+                    continue
+                if self._obs_usable_for_eqa_image(oid):
+                    pin_obs.append(oid)
+        pin_obs = self._spread_obs_xy(pin_obs, max_n=max_images)
+        forced: list[int] = []
+        if force_obs_ids:
+            for oid in force_obs_ids:
+                oi = int(oid)
+                if oi in forced:
+                    continue
+                if self._obs_usable_for_eqa_image(oi):
+                    forced.append(oi)
+        selected = [
+            int(oid)
+            for oid in self._select_relevant_obs_ids(
+                max_images=max_images,
+                choices=parsed_choices if parsed_choices else None,
+                attribute_question=attribute_q,
+                question=question,
+            )
+            if self._obs_usable_for_eqa_image(oid)
+        ]
+        obs_ids = self._compose_eqa_answer_obs_ids(
+            forced=forced,
+            pin_obs=pin_obs,
+            selected=selected,
             max_images=max_images,
-            choices=parsed_choices if parsed_choices else None,
-            attribute_question=attribute_q,
-            question=question,
+            count_question=count_q,
+            look_obs_id=look_obs_id,
         )
-        if self._obs_usable_for_eqa_image(oid)
-    ]
-    obs_ids = self._compose_eqa_answer_obs_ids(
-        forced=forced,
-        pin_obs=pin_obs,
-        selected=selected,
-        max_images=max_images,
-        count_question=count_q,
-        look_obs_id=look_obs_id,
+        crop_oid: int | None = None
+        crop_rgb: np.ndarray | None = None
+        if max_images >= 2:
+            crop_oid = self._eqa_pick_closeup_obs_id(obs_ids, look_obs_id, pin_obs)
+            if crop_oid is not None:
+                crop_rgb = self._eqa_crop_for_obs(crop_oid)
+            if crop_rgb is None:
+                crop_oid = None
+            elif len(obs_ids) >= max_images:
+                obs_ids = self._eqa_reserve_closeup_slot(obs_ids, pin_obs, look_obs_id)
+                if crop_oid not in obs_ids:
+                    crop_oid = self._eqa_pick_closeup_obs_id(obs_ids, look_obs_id, pin_obs)
+                    crop_rgb = self._eqa_crop_for_obs(crop_oid) if crop_oid is not None else None
+                    if crop_rgb is None:
+                        crop_oid = None
+    evidence_index: dict[int, int] = {}
+    evidence_roles = (
+        list(evidence_roles)
+        if evidence_roles is not None
+        else ["assessed_view"] + ["pre_approach_context"] * (len(evidence) - 1)
     )
-    crop_oid: int | None = None
-    crop_rgb: np.ndarray | None = None
-    if max_images >= 2:
-        crop_oid = self._eqa_pick_closeup_obs_id(obs_ids, look_obs_id, pin_obs)
-        if crop_oid is not None:
-            crop_rgb = self._eqa_crop_for_obs(crop_oid)
-        if crop_rgb is None:
-            crop_oid = None
-        elif len(obs_ids) >= max_images:
-            obs_ids = self._eqa_reserve_closeup_slot(obs_ids, pin_obs, look_obs_id)
-            if crop_oid not in obs_ids:
-                crop_oid = self._eqa_pick_closeup_obs_id(obs_ids, look_obs_id, pin_obs)
-                crop_rgb = self._eqa_crop_for_obs(crop_oid) if crop_oid is not None else None
-                if crop_rgb is None:
-                    crop_oid = None
     if evidence:
-        # Captured camera evidence need not be a graph object. Preserve the exact
-        # assessed packet instead of silently substituting navigation fallback RGB.
+        # Keep the assessed packet first, then admit explicitly requested FIND
+        # views and a detail crop within the same image budget. Never substitute
+        # unrelated graph selection for the captured packet.
         obs_ids = []
-        if evidence_obs_id is not None and self._obs_usable_for_eqa_image(evidence_obs_id):
-            if np.array_equal(self._eqa_rgb_for_obs(evidence_obs_id), evidence[0]):
-                obs_ids = [evidence_obs_id]
-        crop_oid = None
-        crop_rgb = None
+        candidates = ([evidence_obs_id] if evidence_obs_id is not None else []) + list(force_obs_ids or [])
+        for oid in dict.fromkeys(int(oid) for oid in candidates):
+            if not self._obs_usable_for_eqa_image(oid):
+                continue
+            rgb = self._eqa_rgb_for_obs(oid)
+            index = next((i for i, image in enumerate(evidence) if np.array_equal(image, rgb)), None)
+            if index is None and len(evidence) < max_images:
+                index = len(evidence)
+                evidence.append(rgb)
+                evidence_roles.append("find_view")
+            if index is not None:
+                obs_ids.append(oid)
+                evidence_index[oid] = index + 1
+        if len(evidence) < max_images and obs_ids:
+            crop_oid = self._eqa_pick_closeup_obs_id(obs_ids, look_obs_id, obs_ids)
+            crop_rgb = self._eqa_crop_for_obs(crop_oid) if crop_oid is not None else None
+            if crop_rgb is None or any(np.array_equal(crop_rgb, image) for image in evidence):
+                crop_oid, crop_rgb = None, None
+            else:
+                evidence_roles.append("detail_crop")
     self.last_eqa_obs_ids = list(obs_ids)
+    self.last_eqa_image_obs_ids = {index: oid for oid, index in evidence_index.items()} if evidence else None
+    self.last_eqa_image_count = len(evidence) + int(crop_rgb is not None) if evidence else 0
+
+    def attached_indices(text):
+        if not evidence:
+            return text
+        return re.sub(
+            r"\bImage (\d+)\b",
+            lambda match: (
+                f"Image {evidence_index[obs_ids[int(match[1]) - 1]]}"
+                if 1 <= int(match[1]) <= len(obs_ids)
+                else match[0]
+            ),
+            text,
+        )
+
     action_obs_ids = list(obs_ids)
     if crop_oid is not None:
         action_obs_ids.append(int(crop_oid))
@@ -253,12 +298,13 @@ def query_answer(
             "\n".join(evidence_labels)
             if evidence_labels is not None
             else (
-                "Image 1 is the assessed camera view. Any subsequent image is earlier "
+                "Image 1 is the assessed camera view. Images labeled pre_approach_context are earlier "
                 "pre-approach context, not proof of current visibility or object geometry. "
                 "Use both for room/relationship context without double-counting objects. "
-                "Context views need not correspond to graph objects."
+                "Context views need not correspond to graph objects. "
             )
         )
+        img_desc_str += "\nIMAGE_ROLES: " + ", ".join(f"Image {i}={role}" for i, role in enumerate(evidence_roles, 1))
     elif obs_ids:
         if include_image_descriptions:
             img_desc_str = self._get_image_descriptions_str(
@@ -297,10 +343,10 @@ def query_answer(
         )
     if crop_oid is not None and crop_rgb is not None and obs_ids:
         try:
-            parent_txt = f"Image {obs_ids.index(int(crop_oid)) + 1}"
+            parent_txt = f"Image {evidence_index[int(crop_oid)] if evidence else obs_ids.index(int(crop_oid)) + 1}"
         except ValueError:
             parent_txt = f"graph obs {int(crop_oid)}"
-        n_scene = len(obs_ids)
+        n_scene = len(evidence) if evidence else len(obs_ids)
         img_desc_str = str(img_desc_str).rstrip() + (
             f" Image {n_scene + 1} is a close-up of the object in {parent_txt} "
             "(the same instance, not another object). Count from the scene views. "
@@ -311,9 +357,12 @@ def query_answer(
     extra_hints: list[str] = []
     if obs_ids:
         extra_hints.append(
-            "ATTACHED_INDEX: " + ", ".join(f"Image {i}=obs{int(oid)}" for i, oid in enumerate(obs_ids, start=1))
+            "ATTACHED_INDEX: "
+            + ", ".join(
+                f"Image {evidence_index.get(int(oid), i)}=obs{int(oid)}" for i, oid in enumerate(obs_ids, start=1)
+            )
         )
-    room_ctx = self.format_eqa_room_context(question, obs_ids)
+    room_ctx = attached_indices(self.format_eqa_room_context(question, obs_ids))
     if room_ctx:
         extra_hints.append(room_ctx)
     if count_hint:
@@ -334,7 +383,7 @@ def query_answer(
     history = self._history_outputs
     start = max(0, len(history) - max_history) if max_history > 0 else 0
     history_slice = list(history[start:])
-    view_status = self.format_eqa_view_status(obs_ids)
+    view_status = attached_indices(self.format_eqa_view_status(obs_ids))
     prompt_max_tokens = resolve_eqa_prompt_max_tokens(self.parameters)
     text_blocks = self.build_eqa_prompt_text(
         question_line="Question: " + question,
@@ -420,9 +469,7 @@ def query_answer(
             crop_obs_id=crop_oid,
             nav_fallback_count=len(nav_fallback_tail),
             relevant_images=relevant_images,
-            image_roles=(evidence_roles or ["assessed_view"] + ["pre_approach_context"] * (len(evidence) - 1))
-            if evidence
-            else None,
+            image_roles=evidence_roles if evidence else None,
             view_status=view_status,
             close_look_status="",
             vlm_raw=f"Error: {exc}",
@@ -825,9 +872,7 @@ def query_answer(
         crop_obs_id=crop_oid,
         nav_fallback_count=len(nav_fallback_tail),
         relevant_images=relevant_images,
-        image_roles=(evidence_roles or ["assessed_view"] + ["pre_approach_context"] * (len(evidence) - 1))
-        if evidence
-        else None,
+        image_roles=evidence_roles if evidence else None,
         view_status=view_status,
         close_look_status="",
         vlm_raw=str(raw or ""),

@@ -318,7 +318,7 @@ def assess_view_with_vlm(
     multi_candidates = [
         np.asarray(c) for c in (multi_close_look_crops or []) if c is not None and getattr(c, "ndim", 0) == 3
     ]
-    has_context = context_rgb is not None and not np.array_equal(rgb, context_rgb)
+    has_context = len(unique_image_arrays([rgb, context_rgb])) > 1
     crops = unique_image_arrays(
         ([current_crop] if current_crop is not None else []) + multi_candidates,
         max_images=2 if has_context else 3,

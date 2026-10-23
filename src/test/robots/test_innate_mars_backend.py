@@ -48,6 +48,9 @@ def test_innate_mars_spec():
     assert s.planar_spawn_clip_guard_pad_m == 0.40
     assert s.planar_spawn_robocasa_first_clearance_m == 0.068
     assert s.robosuite_rgb_depth_ops == ("flipud",)
+    assert s.control_limits["arm_joint_velocity_rad_s"] == 2.0
+    assert "maurice.urdf" in s.control_limit_sources["arm_joint_velocity_rad_s"]
+    assert "base_velocity_m_s" not in s.control_limits
 
 
 def test_innate_mars_mjcf_registered():

@@ -233,6 +233,8 @@ def _load_default_scene_with_robot(robot_key: str):
         "Robosuite names (PandaOmron, Tiago, GR1) keep the robosuite robot."
     ),
 )
+@click.option("--controller", type=click.Choice(["legacy", "baseline", "base", "rl"]), default="legacy")
+@click.option("--policy-path", type=click.Path(exists=True, file_okay=False), default=None)
 def main(
     port_offset: int,
     send_port: int | None,
@@ -262,7 +264,13 @@ def main(
     molmospaces_session_index: int | None = None,
     steps: int | None = None,
     debug_molmospaces_spawn: bool = False,
+    controller: str = "legacy",
+    policy_path: str | None = None,
 ):
+    if controller != "legacy" and (robot != "innate_mars" or use_robocasa or scene_path or molmospaces_session_scene):
+        raise click.UsageError("Reactive control currently requires innate_mars with the default table scene")
+    if controller == "rl" and not policy_path:
+        raise click.UsageError("--controller rl requires --policy-path")
     from emet.utils.pythonpath import ensure_venv_site_packages_first
 
     # In-process ROS/cv2 + sys.path fix. Too late for numpy (imported at module top).
@@ -594,7 +602,12 @@ def main(
                     )
                     sys.exit(1)
             else:
-                scene_model = _load_default_scene_with_robot(robot_key)
+                if controller != "legacy":
+                    from emet.rl.model import build_model
+
+                    scene_model = build_model("table")
+                else:
+                    scene_model = _load_default_scene_with_robot(robot_key)
                 if scene_model is None:
                     logger.error(
                         "Default scene with robot not found (scene_environment.xml or robot MJCF missing). "
@@ -649,6 +662,9 @@ def main(
                 max_sim_steps=steps,
                 debug_molmospaces_spawn=debug_molmospaces_spawn,
                 scene_disk_path=spawn_scene_disk,
+                controller=controller,
+                policy_path=policy_path,
+                no_cameras=no_cameras,
             )
         except zmq.error.ZMQError as e:
             if "Address already in use" in str(e):

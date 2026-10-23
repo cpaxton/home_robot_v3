@@ -1,0 +1,100 @@
+{
+  "source_revision": "0101dc35",
+  "scope": "feedback simulator carry and continuous one-pedestal pick/place; not learned or hardware qualification",
+  "carry_suite_sha256": "60179faad77ccdf5b433cc58851e9495022975f105bf6ee16f09cce0f0300473",
+  "carry_cases": 300,
+  "carry_successes": 297,
+  "carry_summary": {
+    "0.02": {
+      "cases": 100,
+      "admitted": 100,
+      "admission_rate": 1.0,
+      "successes": 100,
+      "end_to_end_success_rate": 1.0,
+      "conditional_execution_success_rate": 1.0,
+      "unsafe_contact_count": 0,
+      "wheel_lift_count": 0,
+      "retention_lost_count": 0,
+      "failures": {},
+      "candidate_rejections": {
+        "trivial_carry_target": 32
+      }
+    },
+    "0.05": {
+      "cases": 100,
+      "admitted": 100,
+      "admission_rate": 1.0,
+      "successes": 99,
+      "end_to_end_success_rate": 0.99,
+      "conditional_execution_success_rate": 0.99,
+      "unsafe_contact_count": 0,
+      "wheel_lift_count": 1,
+      "retention_lost_count": 0,
+      "failures": {
+        "wheel_lift": 1
+      },
+      "candidate_rejections": {
+        "trivial_carry_target": 34
+      }
+    },
+    "0.1": {
+      "cases": 100,
+      "admitted": 100,
+      "admission_rate": 1.0,
+      "successes": 98,
+      "end_to_end_success_rate": 0.98,
+      "conditional_execution_success_rate": 0.98,
+      "unsafe_contact_count": 0,
+      "wheel_lift_count": 0,
+      "retention_lost_count": 2,
+      "failures": {
+        "retention_lost": 2
+      },
+      "candidate_rejections": {
+        "trivial_carry_target": 32
+      }
+    }
+  },
+  "carry_training_gate_passed": false,
+  "failures": [
+    {
+      "case_id": "50g:disturbance:1",
+      "seed": 1904001,
+      "code": "wheel_lift",
+      "time_s": 5.726000000001912,
+      "max_payload_rotation_rad": 0.00521073034231972,
+      "max_wheel_gap_m": [
+        0.0,
+        0.0,
+        0.00010136507802438813
+      ]
+    },
+    {
+      "case_id": "100g:orientation:10",
+      "seed": 1901010,
+      "code": "retention_lost",
+      "time_s": 7.3000000000012815,
+      "max_payload_rotation_rad": 0.10315103259656119,
+      "max_wheel_gap_m": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "case_id": "100g:orientation:11",
+      "seed": 1901011,
+      "code": "retention_lost",
+      "time_s": 8.450000000000644,
+      "max_payload_rotation_rad": 0.10079958859020262,
+      "max_wheel_gap_m": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    }
+  ],
+  "continuous_pick_place_cases": 30,
+  "continuous_pick_place_successes": 30,
+  "training_started": false
+}

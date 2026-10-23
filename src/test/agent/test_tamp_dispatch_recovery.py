@@ -35,7 +35,7 @@ def test_invalid_tamp_outcome_is_not_success(result):
 
 @pytest.mark.parametrize('status,code', [('partial', 'command_outcome_unknown'),
                                         ('error', 'scene_changed_replan'), ('ok', 'ok')])
-@pytest.mark.parametrize("tool", ["execute_pick_place_plan", "set_receptacle_state"])
+@pytest.mark.parametrize("tool", ["execute_pick_place_plan", "set_receptacle_state", "execute_task_plan", "plan_task"])
 def test_dispatch_stops_precomputed_batch_on_failure(status, code, tool):
     execute = Mock(return_value=json.dumps(response(tool, status=status, code=code)))
     next_action = Mock(return_value='moved')
@@ -63,3 +63,21 @@ def test_exception_stops_batch_but_allows_later_recovery_turn():
     inspect.assert_not_called()
     _dispatch_tool_calls([{'name': 'scene_tasks', 'arguments': {}}], tools, Mock())
     inspect.assert_called_once()
+
+
+@pytest.mark.parametrize('next_tool', ['plan_pick_place', 'execute_pick_place_plan', 'move_forward'])
+def test_discovery_only_stops_remaining_batch_before_any_followup(next_tool):
+    discovery = Mock(return_value=json.dumps(response('scene_tasks', data={
+        'tasks': [], 'discovery_only': True, 'planning_available': False, 'execution_available': False})))
+    followup = Mock(return_value='must not execute')
+    tools = {name: SimpleNamespace(func=fn, returns_info=True, to_executor=lambda args: [])
+             for name, fn in [('scene_tasks', discovery), (next_tool, followup)]}
+    keep_running, results, has_info = _dispatch_tool_calls([
+        {'name': 'scene_tasks', 'arguments': {}}, {'name': next_tool, 'arguments': {}}], tools, Mock())
+    assert keep_running and has_info
+    discovery.assert_called_once()
+    followup.assert_not_called()
+    bookkeeping = json.loads(results[-1].removeprefix('[dispatch] '))
+    assert bookkeeping['data']['stop_reason'] == 'discovery_only'
+    assert bookkeeping['data']['unattempted_tools'] == [next_tool]
+    assert 'failed_tool' not in bookkeeping['data']
