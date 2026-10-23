@@ -41,6 +41,8 @@ def query_answer(
     force_obs_ids: list[int] | None = None,
     evidence_images: list[np.ndarray] | None = None,
     evidence_obs_id: int | None = None,
+    evidence_labels: list[str] | None = None,
+    evidence_roles: list[str] | None = None,
 ) -> tuple[str, str, bool, str, np.ndarray | None, list[Image.Image]]:
     """
     Answer the question using the scene graph and task-relevant images.
@@ -96,6 +98,15 @@ def query_answer(
         self.refresh_siglip_confirmed_memory()
     max_images = get_eqa_vl_int(self.parameters, "eqa_max_images", 4)
     evidence = unique_image_arrays(evidence_images or [], max_images=max_images) if max_images > 0 else []
+    if evidence_labels is not None or evidence_roles is not None:
+        if (
+            evidence_labels is None
+            or evidence_roles is None
+            or len(evidence_labels) != len(evidence_images or [])
+            or len(evidence_roles) != len(evidence_labels)
+            or len(evidence) != len(evidence_labels)
+        ):
+            raise ValueError("Labeled evidence must fit the image budget without deduplication or truncation")
     include_image_descriptions = resolve_eqa_include_image_descriptions(self.parameters)
     parsed_choices = parse_mcq_choices_from_question(question)
     attribute_q = question_is_attribute_state(question) or choices_are_attribute_state(parsed_choices)
@@ -207,7 +218,11 @@ def query_answer(
                     if crop_rgb is None:
                         crop_oid = None
     evidence_index: dict[int, int] = {}
-    evidence_roles = ["assessed_view"] + ["pre_approach_context"] * (len(evidence) - 1)
+    evidence_roles = (
+        list(evidence_roles)
+        if evidence_roles is not None
+        else ["assessed_view"] + ["pre_approach_context"] * (len(evidence) - 1)
+    )
     if evidence:
         # Keep the assessed packet first, then admit explicitly requested FIND
         # views and a detail crop within the same image budget. Never substitute
@@ -280,13 +295,16 @@ def query_answer(
     graph_obs_ids = {int(n.obs_id) for n in self._nodes if not n.is_frontier and not n.is_viewpoint}
     if evidence:
         img_desc_str = (
-            "Image 1 is the assessed camera view. Images labeled pre_approach_context are earlier "
-            "pre-approach context, not proof of current visibility or object geometry. "
-            "Use both for room/relationship context without double-counting objects. "
-            "Context views need not correspond to graph objects. "
-            + "IMAGE_ROLES: "
-            + ", ".join(f"Image {i}={role}" for i, role in enumerate(evidence_roles, 1))
+            "\n".join(evidence_labels)
+            if evidence_labels is not None
+            else (
+                "Image 1 is the assessed camera view. Images labeled pre_approach_context are earlier "
+                "pre-approach context, not proof of current visibility or object geometry. "
+                "Use both for room/relationship context without double-counting objects. "
+                "Context views need not correspond to graph objects. "
+            )
         )
+        img_desc_str += "\nIMAGE_ROLES: " + ", ".join(f"Image {i}={role}" for i, role in enumerate(evidence_roles, 1))
     elif obs_ids:
         if include_image_descriptions:
             img_desc_str = self._get_image_descriptions_str(

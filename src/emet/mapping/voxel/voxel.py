@@ -19,6 +19,7 @@ from collections import namedtuple
 from pathlib import Path
 from threading import Lock
 from typing import Any
+from uuid import uuid4
 
 import numpy as np
 import open3d as open3d
@@ -280,6 +281,7 @@ class SparseVoxelMap:
 
     def reset(self) -> None:
         """Clear out the entire voxel map."""
+        self.observation_scope_id = uuid4().hex
         self.observations: list[Frame] = []
         # Create an instance memory to associate bounding boxes in space
         if self.use_instance_memory:
@@ -531,6 +533,7 @@ class SparseVoxelMap:
             full_world_xyz = full_world_xyz @ pose_correction[:3, :3].T + pose_correction[:3, 3]
 
         # add observations before we start changing things
+        info = {**info, "observation_scope_id": self.observation_scope_id}
         self.observations.append(
             Frame(
                 camera_pose,

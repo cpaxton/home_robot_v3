@@ -878,6 +878,8 @@ def _do_submit_answer(self, prefer_answer: str = "") -> dict[str, Any]:
             evidence_kw = (
                 {"evidence_images": assessed_images, "evidence_obs_id": answer_obs_id} if assessed_images else {}
             )
+            if assessed_images:
+                evidence_kw.update(getattr(self, "_assessed_image_metadata", {}).get(answer_obs_id, {}))
             (
                 _reasoning,
                 ans,
