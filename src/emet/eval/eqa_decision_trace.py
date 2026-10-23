@@ -6,11 +6,63 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 from typing import Any
 
 from PIL import Image
+
+
+def record_vlm_request(root, *, system_prompt, user_text, images, metadata, history=None):
+    """Save the exact client-level payload before model resizing/tokenization.
+
+    Captions/roles are preserved verbatim in user_text, not inferred here.
+    Refuse to overwrite another call's evidence. This does not change inference.
+    """
+    root = Path(root)
+    root.mkdir(parents=True, exist_ok=False)
+    entries = []
+    for slot, image in enumerate(images, 1):
+        name = f"image_{slot}.png"
+        image.save(root / name)
+        entries.append(
+            {
+                "slot": slot,
+                "path": name,
+                "size": list(image.size),
+                "mode": image.mode,
+                "pixel_sha256": hashlib.sha256(image.tobytes()).hexdigest(),
+            }
+        )
+    history_entries = []
+    for turn, message in enumerate(history or []):
+        content = message["content"]
+        if isinstance(content, str):
+            history_entries.append({"role": message["role"], "content": content})
+            continue
+        blocks = []
+        for slot, part in enumerate(content):
+            if isinstance(part, str):
+                blocks.append({"type": "text", "text": part})
+            else:
+                image = part if isinstance(part, Image.Image) else Image.fromarray(part)
+                name = f"history_{turn:03d}_{slot:02d}.png"
+                image.save(root / name)
+                blocks.append(
+                    {"type": "image", "path": name, "pixel_sha256": hashlib.sha256(image.tobytes()).hexdigest()}
+                )
+        history_entries.append({"role": message["role"], "content": blocks})
+    request = {
+        "system_prompt": system_prompt,
+        "user_text": user_text,
+        "images": entries,
+        "metadata": metadata,
+        "conversation_history": history_entries,
+        "capture_boundary": "client payload before model preprocessing; not a wire/token trace",
+    }
+    (root / "request.json").write_text(json.dumps(request, indent=2), encoding="utf-8")
+    return root / "request.json"
 
 
 def _prompt_text_from_blocks(text_blocks: list[Any]) -> str:

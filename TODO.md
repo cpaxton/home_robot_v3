@@ -5,6 +5,23 @@ Strike through or move to a PR when done.
 
 ## Shared evidence/navigation stack (#199 / #202)
 
+- [ ] Report wall-clock and simulator-clock elapsed time separately for episodes,
+      mapping, navigation and manipulation; publish actual sim time with boot/clock
+      identity, handle resets/missing clocks explicitly, and retain real-time factor.
+      Never estimate task sim duration by multiplying wall time by a sampled ratio.
+      Separate successful motion, settling, planning, recovery and VLM compute costs.
+- [ ] After correctness/clock reporting, evaluate mjlab/mjenv-style parallel MuJoCo
+      execution as a separate infrastructure study (confirm exact projects/APIs).
+      Compare physics/contact and robot-model parity, RGB-D rendering, per-env
+      state/clock isolation, deterministic seeds, memory/throughput and failure
+      reproducibility. Keep the same agent API; no simulator migration or changed
+      task dynamics before matched acceptance. Current heavy experiments stay serial.
+- [ ] Ablate episode history after the dialogue-contract repair: full multimodal
+      dialogue vs tool-results-only vs stateless inference, with identical model,
+      seeds, prompts, acquisition/answer budgets and view selection. Compare paired
+      EQA and small OVMM outcomes, repeated/no-op tool calls, context tokens,
+      latency and memory; inspect changed answers and preserve raw request evidence.
+      Keep unsupported-argument rejection enabled in every arm.
 - [x] Validate main integration: frozen `0fb37763` EQA diagnostic 1/4, unchanged
       from parent; no infrastructure errors. Not restored EQA acceptance.
 - [x] Fix reviewed SAM2 PIL input, lost sweep diagnostics, and invalid-depth
@@ -64,15 +81,22 @@ See the research roadmap in [the control runbook](docs/mars_reactive_rl.md#propr
 
 ## Shared-agent acceptance follow-up (2026-10-22)
 
-- [ ] Diagnose black/sky-only Stretch RGB in the default S0 scene before
-      treating failed searches as a perception/model comparison. Reproduced on
-      frozen main and provider slice, and in a stationary measured-head smoke.
+- [ ] Diagnose S0 optical heading and retained target-view coverage before
+      treating black/sky-only RGB as broken perception. Reproduced on frozen
+      main/provider; the stationary diagnostic pan faces away from the table
+      and CPU camera rays hit the dark floor, not the robot shell.
 - [ ] Clear context-stack acceptance without restoring answer overrides:
       EQA4 native scores 4/4 main versus 1/4 candidate; three main scores differ
       from its raw final model answer. Inspect q14 hallucinated TV and q56
       missing curtain context, then test existing opt-in pose history and
       retained-dialogue ablations. Preserve model authority and exact packets.
       See `docs/plans/shared_stack_readiness.md` for evidence and gate IDs.
+- [x] Separate fresh pre-turn preservation from optional extra-history ranking.
+      q56 gains with selector on because image 2 finally shows bookshelf plus
+      blue curtains; added pose-novelty images 3/4 are blank walls. Preserve
+      scope/age/dedup guards and model authority. Owner repair `92f31497`.
+- [ ] Clear the four-ID EQA gate for independent current/pre-turn handoff before
+      promoting the remaining context stack; unit tests do not establish gains.
 
 ## TAMP simulator API readiness (2026-10-05)
 

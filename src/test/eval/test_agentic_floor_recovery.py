@@ -26,7 +26,7 @@ def test_floor_tool_capability_and_canonical_schema():
     ex = executor()
     tool = next(t for t in bind_eqa_episode_tools(ex) if t.name == "observe_floor")
     spec = next(s for s in CHAT_SKILL_SPECS if s.name == "observe_floor")
-    assert tool.parameters == spec.parameters
+    assert tool.parameters == {**spec.parameters, "additionalProperties": False}
     assert tool.description == spec.description
     assert not supports_floor_observation(executor(physical=False).agent)
     assert "observe_floor" not in {t.name for t in bind_eqa_episode_tools(executor(physical=False))}
