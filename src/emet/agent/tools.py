@@ -1220,6 +1220,13 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
             return "Invalid degrees: must be finite."
         deg = float(np.clip(deg, -360.0, 360.0))
         agent = getattr(executor, "agent", None)
+        from emet.controller.dynamem.relative_motion import execute_relative_motion, supports_relative_motion
+
+        if supports_relative_motion(agent):
+            receipt = execute_relative_motion(agent, "rotate_base", deg)
+            if receipt.get("code") == "ok":
+                context["last_rotate_degrees"] = deg
+            return receipt
         if agent is not None and callable(getattr(agent, "rotate_base_degrees", None)):
             agent.rotate_base_degrees(deg)
             receipt = getattr(agent, "_last_relative_motion_result", None)
@@ -1340,6 +1347,10 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         dist = float(np.clip(dist, 0.0, 1.5))
         # Prefer controller path so every nudge (including 0.1 m) is map-clipped.
         agent = getattr(executor, "agent", None)
+        from emet.controller.dynamem.relative_motion import execute_relative_motion, supports_relative_motion
+
+        if supports_relative_motion(agent):
+            return execute_relative_motion(agent, "move_forward", dist)
         if agent is not None and hasattr(agent, "move_forward_meters"):
             commanded = float(agent.move_forward_meters(dist))
             receipt = getattr(agent, "_last_relative_motion_result", None)

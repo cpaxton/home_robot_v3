@@ -384,6 +384,37 @@ def _handle_observe_floor(self, args: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def _handle_relative_motion(self, args: dict[str, Any]) -> dict[str, Any]:
+    from emet.controller.dynamem.relative_motion import execute_relative_motion
+    from emet.controller.task.tamp.api import response
+
+    name = args["_tool_name"]
+    if self._n_nav >= self.max_nav_steps:
+        out = response(name, code="navigation_budget_exhausted")
+    else:
+        self._n_nav += 1
+        key = "meters" if name == "move_forward" else "degrees"
+        out = execute_relative_motion(self.agent, name, args.get(key))
+        # A failed motion may still have changed the camera pose. Capture the
+        # actual outcome, not the intended endpoint, and assess it normally.
+        if out.get("data", {}).get("execution_started"):
+            try:
+                hypothesis_id = self._begin_policy_approach("look", -3_000_000 - self._n_nav, self.query_text)
+                out["capture"] = self._tool_capture_and_update()
+                if out["capture"].get("ok") and out["capture"].get("obs_id") is not None:
+                    self._policy_approached(hypothesis_id, int(out["capture"]["obs_id"]))
+                    if self.mode == "answer":
+                        try:
+                            out["verify"] = self._verify_after_motion(phrase=self.query_text)
+                        except Exception as exc:
+                            out["verify"] = {"ok": False, "status": "assessment_failed", "error": str(exc)[:200]}
+            except Exception as exc:
+                out["capture"] = {"ok": False, "status": "capture_failed", "error": str(exc)[:200]}
+    out["ok"] = out.get("status") == "ok" and out.get("code") == "ok"
+    self._append_trace(out)
+    return out
+
+
 TOOL_HANDLERS: dict[str, Any] = {
     "inspect_graph": _handle_inspect_graph,
     "explore_frontier": _handle_explore_frontier,
@@ -395,6 +426,8 @@ TOOL_HANDLERS: dict[str, Any] = {
     "submit_answer": _handle_submit_answer,
     "finish": _handle_finish,
     "observe_floor": _handle_observe_floor,
+    "move_forward": _handle_relative_motion,
+    "rotate_base": _handle_relative_motion,
 }
 
 
@@ -445,7 +478,7 @@ def _dispatch_tool(self, name: str, args: dict[str, Any] | None = None) -> dict[
     if handler is None:
         out = {"ok": False, "error": f"unknown tool {name!r}"}
     else:
-        if name in ("investigate", "navigate_to_obs"):
+        if name in ("investigate", "navigate_to_obs", "move_forward", "rotate_base"):
             args = {**args, "_tool_name": name}
         out = handler(self, args)
     self._tool_dispatch_depth = max(0, self._tool_dispatch_depth - 1)

@@ -341,7 +341,15 @@ def build_graph_eqa_system_prompt(
         fmt = _EQA_FORMAT_BLOCK_GROUNDED
     else:
         fmt = _EQA_FORMAT_BLOCK_LLM if policy == "llm" else _EQA_FORMAT_BLOCK_CANONICAL
-    return f"{_EQA_IDENTITY}\n\n{tools_block}\n\n{fmt}"
+    movement = ""
+    if {"move_forward", "rotate_base"}.issubset({tool.name for tool in tools}):
+        movement = (
+            "\nObservation movement is also an available choice: rotate_base or move_forward "
+            "with explicit bounded arguments can change the view without an object ID. "
+            "These use validated navigation and do not grant object localization. "
+            "Read measured movement, rejection reasons and the new capture before retrying.\n"
+        )
+    return f"{_EQA_IDENTITY}\n\n{tools_block}\n\n{fmt}{movement}"
 
 
 def _graph_stats_line(gm: Any) -> str:
