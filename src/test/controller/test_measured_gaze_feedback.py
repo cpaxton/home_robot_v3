@@ -86,3 +86,19 @@ def test_registered_adapter_gaze_contract(robot_name):
             for name in spec.look_joint_names
         )
         assert client.get_pan_tilt() == expected
+
+
+@pytest.mark.parametrize("robot_name", ["sourccey", "nori", "franka_fr3"])
+def test_optional_gaze_does_not_break_compatibility_wrapper_startup(robot_name):
+    from emet.controller.manipulation.dynamem_manipulation.dynamem_manipulation import DynamemManipulationWrapper
+
+    spec = get_robot_spec(robot_name)
+    client = GenericZmqClient.__new__(GenericZmqClient)
+    client._spec = spec
+    client.arm_to, client.gripper_to = Mock(), Mock()
+    wrapper = DynamemManipulationWrapper(client)
+    assert wrapper.pan is None and wrapper.tilt is None
+    with pytest.raises(RuntimeError, match="unavailable"):
+        wrapper.move_to_position(arm_pos=0.1, gripper_pos=0.5)
+    client.arm_to.assert_not_called()
+    client.gripper_to.assert_not_called()

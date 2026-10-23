@@ -1,5 +1,30 @@
 # Shared relative movement implementation status
 
+## Re-review: behavior migration and optional gaze startup
+
+The prior change updated verification output but missed three control paths:
+close-place exhaustion, proposal blocking and claim retraction still compared
+to legacy retrieval ABSENT. These now consume explicit visual evidence;
+skipped/missing assessments cannot establish visual absence. The attempt
+ledger also understands VISUAL_PRESENT/VISUAL_ABSENT/NOT_ASSESSED. Legacy
+retrieval comparisons remain only in score generation, trace diagnostics and
+backward-compatible ledger parsing, not these semantic behavior decisions.
+
+Unsupported measured gaze remains an explicit capability error, not a fabricated
+zero pose. The shared agent no longer fails startup merely because it constructs
+a Stretch compatibility wrapper: that wrapper defers gaze reads until a
+gaze-dependent operation and rejects before actuation if unavailable. Actual
+registry specs for Sourccey/Nori/Franka are covered by startup/use tests.
+194 focused behavior/robot/grounding tests pass (plus lint); new behavior tests
+exercise disagreement between cheap retrieval and visual presence.
+
+Job `20261023_132503_95dd0d` completed without infrastructure failure on
+pre-fix `f723a151`: q12 wrong, q14 wrong, q6 correct, q56 correct (2/4).
+This does not clear accuracy acceptance. Re-run only after review fixes settle.
+The re-review message's detailed P1/nav-posture/rotation/map-clipping sections
+were truncated and not posted on GitHub at inspection; requested full text.
+Do not claim those remaining findings resolved based on their headings alone.
+
 ## Review follow-up — current
 
 PR #220 review fixes in `01ae5412`: EQA adapters retain dictionaries;
