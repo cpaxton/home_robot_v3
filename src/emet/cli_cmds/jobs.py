@@ -663,8 +663,10 @@ def jobs_run(
         f'EMET_PY="{root}/.venv/bin/python"\n'
         'if [ ! -x "$EMET_PY" ]; then EMET_PY="python3"; fi\n'
         f"{register_line}"
-        f"{gpu_lock_block}"
+        # A prerequisite may itself need the GPU lock. Never hold its resource
+        # while waiting for it, regardless of which queued supervisor wakes first.
         f"{wait_lines}"
+        f"{gpu_lock_block}"
         f"{need_block}"
         f"{cpu_block}"
         f'"$EMET_BIN" jobs update "$JOB_ID" --status running --pid $$\n'

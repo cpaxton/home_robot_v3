@@ -86,6 +86,12 @@ class RobotSpec:
     control_limit_sources: dict[str, str] = field(default_factory=dict)
     """Evidence/provenance for each entry in :attr:`control_limits`."""
     base_link_name: str = "base_link"
+    look_joint_names: tuple[str | None, str | None] | None = None
+    """Measured joints corresponding to the adapter's ``head_to(pan, tilt)``.
+    A None axis is fixed at zero; an absent pair means feedback unsupported.
+    This describes existing look actuation (which may move the upper torso),
+    not permission to assume arbitrary gaze limits or a head-only mechanism.
+    """
     # Curated arm kinematics (MJCF joint/body names) for kinematic pick/place. When set,
     # :meth:`ArmManipProfile.for_robot` uses it before MJCF auto-discovery. Optional: the
     # backend may instead implement :meth:`RobotBackend.build_arm_manip_profile`.

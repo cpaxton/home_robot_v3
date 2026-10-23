@@ -7,6 +7,39 @@
 import math
 from dataclasses import dataclass
 
+UNOBSERVED_FOOTPRINT_STATUS = "rejected_swept_footprint:unobserved_footprint"
+
+
+def sweep_rejection_status(reason: str) -> str:
+    """Wire status shared by navigation rejection and floor recovery."""
+    if reason == "unobserved_footprint":
+        return UNOBSERVED_FOOTPRINT_STATUS
+    return f"rejected_swept_footprint:{reason}"
+
+
+@dataclass
+class NavigationRoute:
+    """Base motion only; semantic target and chunk completion are not waypoints."""
+
+    waypoints: list
+    target_xyz: object = None
+    finished: bool = False
+
+    def __bool__(self):
+        return bool(self.waypoints) or self.finished
+
+    @classmethod
+    def from_value(cls, value):
+        """Compatibility boundary for old stored routes and controller adapters."""
+        if isinstance(value, cls):
+            return value
+        import numpy as np
+
+        points = list(value)
+        if len(points) >= 2 and np.isnan(np.asarray(points[-2], dtype=float)).all():
+            return cls(points[:-2], points[-1], True)
+        return cls(points)
+
 
 @dataclass(frozen=True)
 class NavigationPolicy:
@@ -106,14 +139,17 @@ class ArrivalMonitor:
         self.outside_since = None
         if self.progress is None:
             self.progress = (now, sample_time, xy, yaw)
-        elif now - self.progress[0] >= policy.progress_seconds and sample_time - self.progress[1] >= policy.progress_seconds:
+        elif (
+            now - self.progress[0] >= policy.progress_seconds
+            and sample_time - self.progress[1] >= policy.progress_seconds
+        ):
             # Fresh telemetry may advance more slowly than wall time in a
             # simulator. Judge motion over elapsed measured time too, just as
             # settling does. Stale-data and command wall deadlines still apply.
             _, _, old_xy, old_yaw = self.progress
-            improved = (old_xy > policy.xy_tolerance and old_xy - xy >= 0.01) or (
-                old_yaw > policy.yaw_tolerance and old_yaw - yaw >= 0.02
-            )
+            # Motion inside the acceptance radius still counts while the
+            # controller transitions to its final-heading phase.
+            improved = old_xy - xy >= 0.01 or old_yaw - yaw >= 0.02
             if not improved and not inside:
                 return "failed", {**result, "reason": "navigation stalled"}
             self.progress = (now, sample_time, xy, yaw)

@@ -303,6 +303,14 @@ class SparseVoxelMapNavigationSpace(XYT):
             "reason": "occupied_footprint" if collision else ("unobserved_footprint" if not is_safe else "ok"),
             "coverage": float(torch.sum(crop_exp & mask) / torch.sum(mask)),
         }
+        if not valid:
+            missing = (mask & ~crop_exp).nonzero()
+            self.last_validity.update(
+                checked_pose=state.tolist(),
+                footprint_cells=int(mask.sum()),
+                unknown_footprint_cells=len(missing),
+                unknown_cell_offsets_m=((missing[:16] - half_dim) * self.voxel_map.grid_resolution).tolist(),
+            )
         if debug:
             if collision:
                 print("- state in collision")

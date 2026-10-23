@@ -120,6 +120,11 @@ class BaseController(ABC):
         return self._grasp_match_threshold
 
     @property
+    def manipulation_radius(self) -> float:
+        """Configured reach shared by all memory-controller variants."""
+        return self._manipulation_radius
+
+    @property
     def voxel_size(self) -> float:
         """Return the voxel size in meters."""
         return self._voxel_size
