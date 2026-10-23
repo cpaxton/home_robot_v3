@@ -1896,3 +1896,77 @@ fingertip-clearance and placement thresholds unchanged. Report failures by stage
 load, geometry and plan feasibility as well as tracking, slip, sag, jerk, support
 loads and wheel unloading. The current integrated fixture uses actual GT TAMP
 arm transport paths but is not yet full public-tool oracle pick-and-place.
+
+### Native TAMP payload gate and reward audit (2026-10-23)
+
+`--payload-asset-set native_table` transfers the canonical TAMP table's actual
+box and cylinder bodies into the manipulation fixture. Both are 0.5 kg at source
+scale. The importer preserves compiled mass, inertia, COM, geometry and contact
+properties, explicitly overriding inherited robot defaults. The compiled model
+has a distinct fingerprint; incompatible policy bundles remain rejected. Source
+path, SHA256 and actual mass properties are recorded. `--payload-object` fixes
+object identity so a suite cannot accidentally omit one shape.
+
+Run the object-transfer gate with:
+
+```bash
+MPLCONFIGDIR=/tmp/mpl MUJOCO_GL=egl OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
+  taskset -c 14-15 .venv/bin/python -m emet.rl.manipulation.tamp_benchmark \
+  --robot innate_mars --episodes 3 --seed 1800006 --output /tmp/native-payload-tamp
+```
+
+This is continuous physical pick/return-place with GT TAMP transport, transferring
+objects into the existing support fixture. It does not reproduce the full native
+table scene or add Mars to the Stretch-only public native adapter. `--policy`
+adds the matching whole-body policy on identical cases; task completion never
+sets promotion. Suites are frozen and partial reports are saved atomically.
+
+Initial native-object execution (`native-payload-tamp-v1`) failed all six cases:
+three box timeouts and three cylinder wheel-unloading stops during approach.
+Reset diagnostics exposed a setup error: the oversized box had already fallen
+from its support, while the cylinder wedged between open fingers. The declared
+nominal centered pinch at 30 mm depth has about 21.8 mm open clearance; projected
+native box/cylinder widths are 80/40 mm. A scratch geometry admission now rejects
+that specific pinch before any scored motion. It does not prove all grasps are
+infeasible. `native-payload-tamp-v2` preserves all six rejections in its denominator
+rather than counting them as controller successes. The existing 16 mm training
+box is admitted. Neither objects nor hardware gripper limits are resized.
+
+The small-object teacher sweep (`tamp-payload-sweep-v1`) succeeded at 20 g but
+failed retention during lift at 50 and 100 g: peak relative rotations were
+.1154/.1084 rad against the unchanged .1 rad limit. A timed minimum-jerk lift
+trial did not fix the heavier loads and caused wheel unloading at 100 g; that
+trial was discarded. A grasp-depth diagnostic at 25/35/40 mm likewise failed to
+qualify either heavier load. Its configurable `--grasp-depth` is recorded as a
+fixture setting; frozen fixture goals and acceptance thresholds remain unchanged.
+No grip-force increase was made. These failures block manipulation qualification;
+more PPO is not evidence that these grasps or assets are suitable for Mars.
+
+Separately, the frozen 140-case base suite completed: teacher 102/140 sustained
+success, first learned checkpoint 0/140, with no wheel lifts in either report.
+The original run was stopped after its 131072-step validation also remained at
+0% success. The v7 objective rewarded stationary behavior outside the goal and
+charged an endpoint motion penalty before a static goal was reached. New opt-in
+`--goal-gated-settling` restricts both terms to the accepted active pose region;
+force, measured jerk, action-rate and other safety terms remain active everywhere.
+The per-control-step PPO discount is now explicit through `--discount` (legacy
+.99 default). At 20 Hz, .99 discounts over roughly five seconds, whereas .9975
+covers roughly twenty seconds.
+
+`python -m emet.rl.manipulation.reward_audit --output PATH` compares teacher and
+idle returns on identical fresh seeds before training. In four local cases,
+v7/.99 preferred idle in one case. Goal-gated settling preferred the teacher in
+all four at both discounts. With .9975, teacher-minus-idle discounted return was
+10.13–17.27, compared with -.14–1.49 under v7/.99. This is an incentive diagnostic,
+not learned-controller success or broad qualification. The full RL suite passed
+200 tests before the final admission/metadata checks; targeted final checks also
+cover source-asset fidelity, pre-motion rejection, the reward counterexample and
+unchanged nominal physical pick/place.
+
+Next manipulation work remains gated on a suitable grasp distribution: select
+Mars-admissible real object grasps, fix heavier-load retention without raising
+unsafe forces, and then train/retest full timed hand/base/gripper trajectories.
+Use the native assets that fit each robot, retain inadmissible cases as planning
+rejections, and keep controller failures distinct from reachability/geometry
+failures. The public native adapter still needs an explicit Mars arm/gripper
+facade before claiming public-tool oracle task coverage for Mars.

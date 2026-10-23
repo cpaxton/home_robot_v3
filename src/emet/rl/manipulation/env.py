@@ -66,6 +66,8 @@ class ManipulationConfig:
     disturbance_curriculum: bool = False
     randomization_scale: float = 1.0
     payload_mass_kg: float | None = None
+    payload_asset_set: str = "training"
+    payload_object: str | None = None
     initial_heading_range: float = 0.0
     target_scale: float = 1.0
     retarget_probability: float = 0.0
@@ -88,8 +90,13 @@ class ManipulationConfig:
     tracking_reward: bool = False
     tracking_precision: int = 0
     endpoint_motion_weight: float = 0.0
+    goal_gated_settling: bool = False
 
     def __post_init__(self):
+        if self.payload_asset_set not in {"training", "native_table"}:
+            raise ValueError("invalid payload asset set")
+        if self.payload_object not in {None, "object1", "object2"}:
+            raise ValueError("invalid payload object")
         if self.payload_mass_kg is not None and (not np.isfinite(self.payload_mass_kg) or self.payload_mass_kg <= 0):
             raise ValueError("payload mass must be finite and positive")
         if not np.isfinite(self.base_only_min_distance) or not 0 <= self.base_only_min_distance <= 0.5:
@@ -117,6 +124,8 @@ class ManipulationConfig:
             and 0 < self.hand_orientation_tolerance <= 0.10
         ):
             raise ValueError("hand tolerances may only tighten the 15 mm / 0.1 rad contract")
+        if not np.isfinite(self.grasp_depth) or not 0 <= self.grasp_depth <= 0.05:
+            raise ValueError("grasp depth must be between zero and 50 mm")
         if not np.isfinite(self.support_half_width) or not 0.012 <= self.support_half_width <= 0.15:
             raise ValueError("support half width must be between 12 and 150 mm")
         if not np.isfinite(self.grasp_lift_height) or not 0.045 <= self.grasp_lift_height <= 0.10:
@@ -145,7 +154,9 @@ class ManipulationEnv(gym.Env):
     def __init__(self, config=None):
         self.config = config if isinstance(config, ManipulationConfig) else ManipulationConfig(**(config or {}))
         self.profile = PROFILES[self.config.robot]
-        self.model, self.fingerprint = build_manipulation_model(self.config.robot, diagnostics=self.config.diagnostics)
+        self.model, self.fingerprint = build_manipulation_model(
+            self.config.robot, diagnostics=self.config.diagnostics, payload_asset_set=self.config.payload_asset_set
+        )
         self.data = mujoco.MjData(self.model)
         mujoco.mj_forward(self.model, self.data)
         self.control = ManipulationControl(self.model, self.data, self.profile)
@@ -289,7 +300,8 @@ class ManipulationEnv(gym.Env):
         m.body_mass[:] = self.mass
         m.body_inertia[:] = self.inertia
         m.geom_friction[:] = self.friction
-        self.payload_name = str(self.np_random.choice(("object1", "object2")))
+        sampled_payload = str(self.np_random.choice(("object1", "object2")))
+        self.payload_name = self.config.payload_object or sampled_payload
         self.payload = m.body(self.payload_name).id
         mass_factor = self.np_random.uniform(1 - 0.2 * self.randomization_scale, 1 + 0.2 * self.randomization_scale)
         density_factor = (
@@ -331,6 +343,25 @@ class ManipulationEnv(gym.Env):
             d.qpos[address : address + 4] = result
             mujoco.mj_forward(m, d)
             self.control.reset()
+        from emet.rl.manipulation.payload_assets import provenance
+
+        self.randomization = {
+            **provenance(self.config.payload_asset_set),
+            "mass_factor": mass_factor,
+            "payload_mass_kg": float(m.body_mass[self.payload]),
+            "payload_inertia_kg_m2": m.body_inertia[self.payload].tolist(),
+            "payload_com_local_m": m.body_ipos[self.payload].tolist(),
+            "friction_factor": friction_factor,
+            "scale": self.randomization_scale,
+        }
+        if self.config.payload_asset_set == "native_table" and self.scenario != "reach" and p.robot == "innate_mars":
+            from emet.rl.manipulation.payload_assets import nominal_pinch_admission
+
+            admission = nominal_pinch_admission(m, d, p, self.payload, self.config.grasp_depth)
+            self.randomization["nominal_pinch_admission"] = admission
+            if not admission["accepted"]:
+                self.initialization_failure_reason = admission["reason"]
+                return False
         points = [
             d.body(name).xpos
             + d.body(name).xmat.reshape(3, 3)
@@ -375,14 +406,6 @@ class ManipulationEnv(gym.Env):
                 return False
         self.monitor.reset()
         self.initial_object_height = float(d.xpos[self.payload, 2])
-        self.randomization = {
-            "mass_factor": mass_factor,
-            "payload_mass_kg": float(m.body_mass[self.payload]),
-            "payload_inertia_kg_m2": m.body_inertia[self.payload].tolist(),
-            "payload_com_local_m": m.body_ipos[self.payload].tolist(),
-            "friction_factor": friction_factor,
-            "scale": self.randomization_scale,
-        }
         self._scheduled_push = self.scenario == "disturbance" or (
             self.scenario == "reach"
             and self.config.reach_push_probability > 0
@@ -472,6 +495,7 @@ class ManipulationEnv(gym.Env):
             self.disturbance_episodes += 1
         else:
             self.disturbance_difficulty = 1.0
+        self.initialization_failure_reason = None
         self.initialization_rejections = 0
         self.initialization_failed = True
         for _ in range(self.config.initialization_attempts):
@@ -875,6 +899,7 @@ class ManipulationEnv(gym.Env):
             "rejected_trajectories": len(self.trajectory_rejections),
             "robot": self.profile.robot,
             "initialization_failed": self.initialization_failed,
+            "initialization_failure_reason": self.initialization_failure_reason,
             "initialization_rejections": self.initialization_rejections,
             "retention_lost": self.retention_lost,
             "max_payload_translation": self.max_translation,
@@ -1168,7 +1193,8 @@ class ManipulationEnv(gym.Env):
                     base_error, base_delta[2] * self.control.base_mask[2], bearing, base_sigma
                 )
             density = 4 * pose_score * self.control.hand_mask + base_score * self.control.base_mask.any()
-            if at_reference_end:
+            in_goal = base_within_pose and hand_settled
+            if at_reference_end and (not self.config.goal_gated_settling or in_goal):
                 density += base_score * stationary_tracking_score(
                     hand_position_error,
                     hand_orientation_error,
@@ -1180,6 +1206,8 @@ class ManipulationEnv(gym.Env):
             endpoint_cost = self.config.endpoint_motion_weight * endpoint_motion_cost(
                 self._reference_end_elapsed(), velocity, base_velocity, hand_active=self.control.hand_mask
             )
+            if self.config.goal_gated_settling and not in_goal:
+                endpoint_cost = 0.0
             reward = dt * (density - action_rate - endpoint_cost) - physical_cost + 10 * success_event - 20 * failure
         else:
             reward = 10 * (self._previous_cost - cost) - physical_cost + 10 * success - 20 * failure

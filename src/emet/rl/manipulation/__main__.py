@@ -265,7 +265,11 @@ def train(args):
         0,
         args.steps,
     )
-    options.update(learning_rate=args.learning_rate, final_learning_rate=args.final_learning_rate)
+    if not np.isfinite(args.discount) or not 0 < args.discount < 1:
+        raise ValueError("discount must be finite and between zero and one")
+    options.update(
+        learning_rate=args.learning_rate, final_learning_rate=args.final_learning_rate, discount=args.discount
+    )
     if args.resume_from is not None:
         if args.dagger or args.initialization_steps:
             raise ValueError("resume requires zero initialization steps and no DAgger")
@@ -280,6 +284,8 @@ def train(args):
         horizon=args.horizon,
         randomization_scale=args.randomization_scale,
         payload_mass_kg=args.payload_mass_kg,
+        payload_asset_set=args.payload_asset_set,
+        payload_object=args.payload_object,
         initial_heading_range=args.initial_heading_range,
         target_scale=args.target_scale,
         retarget_probability=args.retarget_probability,
@@ -299,6 +305,7 @@ def train(args):
         tracking_reward=args.tracking_reward,
         tracking_precision=args.tracking_precision,
         endpoint_motion_weight=args.endpoint_motion_weight,
+        goal_gated_settling=args.goal_gated_settling,
     )
     # Admit the model before starting workers or a tracking run.
     probe = ManipulationEnv(config)
@@ -379,6 +386,7 @@ def train(args):
                 target_kl=0.01,
                 clip_range=0.1,
                 ent_coef=0,
+                gamma=args.discount,
                 policy_kwargs={
                     "features_extractor_class": ManipulationHistoryFeatures
                     if args.architecture == "history"
@@ -392,6 +400,7 @@ def train(args):
                 model.policy.action_net.bias.zero_()
             if args.resume_from is not None:
                 model = resume_training(args.resume_from, env, config, fingerprint, args.architecture)
+                model.gamma = model.rollout_buffer.gamma = args.discount
             actor = [
                 *model.policy.action_net.parameters(),
                 *model.policy.mlp_extractor.policy_net.parameters(),
@@ -467,6 +476,8 @@ def main():
     p.add_argument("--horizon", type=float, default=20)
     p.add_argument("--randomization-scale", type=float, default=0.05)
     p.add_argument("--payload-mass-kg", type=float, help="nominal payload mass before randomization")
+    p.add_argument("--payload-asset-set", choices=["training", "native_table"], default="training")
+    p.add_argument("--payload-object", choices=["object1", "object2"])
     p.add_argument("--initial-heading-range", type=float, default=float(np.pi))
     p.add_argument("--target-scale", type=float, default=0.25)
     p.add_argument("--debug-reset-seed", type=int, help="overfit one reach case; training diagnostic only")
@@ -484,6 +495,8 @@ def main():
     p.add_argument("--base-only-max-distance", type=float, default=0.0)
     p.add_argument("--reach-target-mode", choices=["mixed", "base", "hand", "combined"], default="mixed")
     p.add_argument("--differential-base-reward", action="store_true")
+    p.add_argument("--goal-gated-settling", action="store_true")
+    p.add_argument("--discount", type=float, default=0.99, help="PPO per-control-step discount")
     p.add_argument("--hand-position-tolerance", type=float, default=0.005)
     p.add_argument("--hand-orientation-tolerance", type=float, default=0.05)
     p.add_argument("--trajectory-preview", action=argparse.BooleanOptionalAction, default=True)

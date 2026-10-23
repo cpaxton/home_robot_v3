@@ -10,7 +10,7 @@ from emet.rl.model import robot_xml
 from emet.robots.innate_mars.chassis import add_physical_chassis
 
 
-def build_manipulation_model(robot, *, diagnostics=False):
+def build_manipulation_model(robot, *, diagnostics=False, payload_asset_set="training"):
     if robot == "innate_mars":
         root = add_physical_chassis(robot_xml())
         root.find("option").set("noslip_iterations", "5")
@@ -49,6 +49,17 @@ def build_manipulation_model(robot, *, diagnostics=False):
             root.remove(child)
     else:
         raise ValueError("unsupported manipulation robot")
+    if payload_asset_set != "training":
+        from emet.rl.manipulation.payload_assets import native_table_bodies, provenance
+
+        provenance(payload_asset_set)  # Reject unsupported sets before compilation.
+        world = root.find("worldbody")
+        for body in native_table_bodies():
+            old = world.find(f"body[@name='{body.get('name')}']")
+            if old is None:
+                raise ValueError("scene is missing a required payload slot")
+            world.remove(old)
+            world.append(body)
     option = root.find("option")
     if option is None:
         option = ET.SubElement(root, "option")

@@ -10,7 +10,17 @@ from emet.rl.manipulation.env import ManipulationConfig, ManipulationEnv, ResetM
 from emet.rl.manipulation.tamp_cases import execute_case, plan_case
 
 
-def _run_case(*, robot="innate_mars", seed=1800000, policy=None, action_mode="residual", payload_mass_kg=None):
+def _run_case(
+    *,
+    robot="innate_mars",
+    seed=1800000,
+    policy=None,
+    action_mode="residual",
+    payload_mass_kg=None,
+    payload_asset_set="training",
+    payload_object=None,
+    grasp_depth=0.03,
+):
     if policy is not None:
         action_mode = policy.action_mode
     env = ManipulationEnv(
@@ -20,11 +30,13 @@ def _run_case(*, robot="innate_mars", seed=1800000, policy=None, action_mode="re
             horizon=30,
             randomization_scale=0,
             payload_mass_kg=payload_mass_kg,
+            payload_asset_set=payload_asset_set,
+            payload_object=payload_object,
             action_mode=action_mode,
             base_xy_tolerance=0.005,
             grasp_lift_height=0.045,
             support_half_width=0.04,
-            grasp_depth=0.03,
+            grasp_depth=grasp_depth,
             hand_position_tolerance=0.005,
             hand_orientation_tolerance=0.05,
             trajectory_preview=policy is not None and "preview" in policy.normalization,
@@ -46,6 +58,9 @@ def _run_case(*, robot="innate_mars", seed=1800000, policy=None, action_mode="re
                 "seed": seed,
                 "success": False,
                 "failure": "initialization_failed",
+                "initialization_failure_reason": info.get("initialization_failure_reason"),
+                "fingerprint": env.fingerprint,
+                "initial_qpos": start,
                 "stages": stages,
                 "payload_properties": info["randomization"],
             }
@@ -202,6 +217,7 @@ def run_case(**kwargs):
         controller="velocity_teacher" if policy is None else policy.manifest["weights_sha256"],
         action_mode=policy.action_mode if policy else kwargs.get("action_mode", "residual"),
         requested_payload_mass_kg=kwargs.get("payload_mass_kg"),
+        fixture_grasp_depth_m=kwargs.get("grasp_depth", 0.03),
         payload_properties=(
             result["stages"][0].get("randomization", {})
             if result.get("stages")
@@ -228,6 +244,9 @@ def main():
     p.add_argument("--seed", type=int, default=1800000)
     p.add_argument("--episodes", type=int, default=5)
     p.add_argument("--policy")
+    p.add_argument("--payload-asset-set", choices=["training", "native_table"], default="training")
+    p.add_argument("--payload-object", choices=["object1", "object2"])
+    p.add_argument("--grasp-depth", type=float, default=0.03)
     p.add_argument(
         "--payload-masses-kg",
         type=float,
@@ -247,7 +266,14 @@ def main():
     for mass in args.payload_masses_kg or [None]:
         for i in range(args.episodes):
             row = run_case(
-                robot=args.robot, seed=args.seed + i, policy=policy, action_mode=args.action_mode, payload_mass_kg=mass
+                robot=args.robot,
+                seed=args.seed + i,
+                policy=policy,
+                action_mode=args.action_mode,
+                payload_mass_kg=mass,
+                payload_asset_set=args.payload_asset_set,
+                payload_object=args.payload_object,
+                grasp_depth=args.grasp_depth,
             )
             rows.append(row)
             args.output.write_text(json.dumps({"cases": rows}, indent=2) + "\n")
