@@ -218,7 +218,8 @@ def _record_place_inspect(
     answerable = assess.get("answerable") if assess else None
     suggested = str(assess.get("suggested_answer") or "") if assess else ""
     if present is None and isinstance(verify_out, dict):
-        present = verify_out.get("present")
+        visual = verify_out.get("visual") or {}
+        present = visual.get("present", verify_out.get("present"))
         answerable = verify_out.get("answerable")
     if approach_index is not None:
         ap = int(approach_index) % PLACE_APPROACH_SAMPLES

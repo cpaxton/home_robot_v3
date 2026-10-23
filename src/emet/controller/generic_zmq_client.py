@@ -1246,9 +1246,16 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
                 angles.append(0.0)  # An explicitly fixed axis, not missing telemetry.
                 continue
             index = self._joint_index.get(name)
-            if index is None or index >= len(q) or not np.isfinite(q[index]):
+            if index is None:
+                # Some declared look joints have named observation feedback
+                # rather than a slot in the arm/base vector (e.g. joint_head).
+                snapshot = self._decoded_observation_snapshot()
+                value = snapshot.get(name) if isinstance(snapshot, dict) else None
+            else:
+                value = q[index] if index < len(q) else None
+            if value is None or not np.isfinite(value):
                 raise RuntimeError(f"Measured gaze joint unavailable: {name}")
-            angles.append(float(q[index]))
+            angles.append(float(value))
         return tuple(angles)
 
     def get_gripper_position(self, side: str = "left") -> float:

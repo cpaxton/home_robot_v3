@@ -126,3 +126,17 @@ def test_rejected_motion_preserves_navigation_budget():
     )
     assert not _handle_relative_motion(executor, {"_tool_name": "move_forward", "meters": 0.2})["ok"]
     assert executor._n_nav == 0
+
+
+@pytest.mark.parametrize("tool,value", [("move_forward", 0.0), ("rotate_base", 0.0), ("rotate_base", 0.0001)])
+def test_noop_motion_neither_executes_nor_charges_budget(tool, value):
+    from emet.memory.graph_eqa.agentic.executor_init import _handle_relative_motion
+
+    agent = agent_fixture()
+    executor = SimpleNamespace(agent=agent, _n_nav=0, max_nav_steps=2, _append_trace=MagicMock())
+    key = "meters" if tool == "move_forward" else "degrees"
+    out = _handle_relative_motion(executor, {"_tool_name": tool, key: value})
+    assert out["ok"] and out["data"]["no_op"]
+    assert not out["data"]["execution_started"] and executor._n_nav == 0
+    agent._filter_unsafe_nav_traj.assert_not_called()
+    agent._execute_validated_waypoints.assert_not_called()
