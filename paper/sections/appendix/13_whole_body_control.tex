@@ -79,6 +79,22 @@ reports are retained as observations, not authorization for training under the
 revised sources. The reported gate is per mass and conditional on admission,
 not a 95\% per-stratum or end-to-end success guarantee.
 
+\paragraph{Stage continuity and command-interface checks.}
+An explicit stage-rearming refactor retained the 298/300 carry result but reduced
+continuous pick/return-place success to 27/30: one retention loss and two tracking
+timeouts, all during placement. Development-selected ablations isolated loss of
+executor-authorized base compensation across the transition; restoring tracking
+trim alone did not recover all three cases. Explicitly authorizing compensation
+for verified free-space descent, while disabling it at support contact and on
+faults, restored 30/30 cases with unchanged contracts and zero unsafe-contact or
+wheel events. Full carry requalification under the revised source manifest
+remains separate. A simulator command-protocol prototype also replayed four
+admitted TAMP arm paths, including loaded carry, using task-pose schedules and
+a measured-Jacobian teacher. This component result does not establish full
+public-tool, learned-policy, or hardware acceptance. Complete placement and
+component evidence is archived as \texttt{placement\_recovery\_v6} and
+\texttt{task\_pose\_command\_smoke} in the control data directory.
+
 \paragraph{Qualification and learning.}
 The held-out protocol fixes 100 cases per payload mass, balanced across the five
 motion categories. It reports admission, success conditional on admission,
