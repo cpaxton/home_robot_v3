@@ -616,6 +616,7 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
             return "privileged_inputs_require_simulation"
         from emet.controller.manipulation.native_inputs import ObservationUnavailable
         from emet.controller.task.tamp.native_adapter import adapter_for
+
         try:
             return None if adapter_for(context, robot) is not None else "native_execution_unavailable"
         except (ObservationUnavailable, ValueError) as exc:
@@ -623,6 +624,7 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
 
     def _native_adapter():
         from emet.controller.task.tamp.native_adapter import adapter_for
+
         return adapter_for(context, _tamp_robot())
 
     def _fallback_pick_place(executor: Any, object_name: str, receptacle_name: str) -> dict:
@@ -651,6 +653,7 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         native_error = _native_input_gate()
         if native_error:
             from emet.controller.task.tamp.agent_bridge import AgentPlanBuild
+
             return AgentPlanBuild(None, None, "physical", True, native_error)
         selected = (context.get("_tamp_task_refs") or {}).get(requested_ref)
         if selected is not None and not isinstance(selected, AgentTaskRef):
@@ -706,7 +709,11 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
 
         if _tamp_manip_mode().strip().lower() == "physical":
             error = _native_input_gate()
-            return response("plan_pick_place", code=error) if error else _native_adapter().plan(task_ref, object_name, receptacle_name, placement_region)
+            return (
+                response("plan_pick_place", code=error)
+                if error
+                else _native_adapter().plan(task_ref, object_name, receptacle_name, placement_region)
+            )
         if placement_region is not None:
             return response("plan_pick_place", code="placement_region_unsupported")
         build = _build_tamp_plan(
@@ -746,9 +753,13 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         executor = context.get("executor")
         if executor is None and _tamp_robot() is None:
             return response("pick_place", code="robot_not_connected")
-        if executor is not None and _tamp_manip_mode().strip().lower() != "physical" and (
-            bool(getattr(executor, "visual_servo", False))
-            or _tamp_manip_mode().strip().lower() not in {"auto", "teleport", "kinematic"}
+        if (
+            executor is not None
+            and _tamp_manip_mode().strip().lower() != "physical"
+            and (
+                bool(getattr(executor, "visual_servo", False))
+                or _tamp_manip_mode().strip().lower() not in {"auto", "teleport", "kinematic"}
+            )
         ):
             return _fallback_pick_place(executor, object_name, receptacle_name)
         build = _build_tamp_plan(object_name=object_name, receptacle_name=receptacle_name)
@@ -1197,7 +1208,7 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         )
     )
 
-    def rotate_base(degrees: float = 90.0) -> str:
+    def rotate_base(degrees: float = 90.0) -> str | dict:
         executor = context.get("executor")
         if executor is None:
             return "Robot not connected."
@@ -1205,7 +1216,18 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
             deg = float(degrees)
         except (TypeError, ValueError):
             return f"Invalid degrees: {degrees!r}."
+        if not np.isfinite(deg):
+            return "Invalid degrees: must be finite."
         deg = float(np.clip(deg, -360.0, 360.0))
+        agent = getattr(executor, "agent", None)
+        if agent is not None and callable(getattr(agent, "rotate_base_degrees", None)):
+            agent.rotate_base_degrees(deg)
+            receipt = getattr(agent, "_last_relative_motion_result", None)
+            if isinstance(receipt, dict):
+                if receipt.get("code") == "ok":
+                    context["last_rotate_degrees"] = deg
+                return receipt
+            return "No rotation receipt available; no additional command issued."
         ok = executor([("rotate_base", str(deg))])
         if not ok:
             return "Rotate failed or interrupted."
@@ -1305,7 +1327,7 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         )
     )
 
-    def move_forward(meters: float = 0.1) -> str:
+    def move_forward(meters: float = 0.1) -> str | dict:
         executor = context.get("executor")
         if executor is None:
             return "Robot not connected."
@@ -1313,11 +1335,16 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
             dist = float(meters)
         except (TypeError, ValueError):
             return f"Invalid meters: {meters!r}."
+        if not np.isfinite(dist):
+            return "Invalid meters: must be finite."
         dist = float(np.clip(dist, 0.0, 1.5))
         # Prefer controller path so every nudge (including 0.1 m) is map-clipped.
         agent = getattr(executor, "agent", None)
         if agent is not None and hasattr(agent, "move_forward_meters"):
             commanded = float(agent.move_forward_meters(dist))
+            receipt = getattr(agent, "_last_relative_motion_result", None)
+            if isinstance(receipt, dict):
+                return receipt
             if commanded < 0.02:
                 return (
                     "I don't have enough explored map to drive that way yet "
