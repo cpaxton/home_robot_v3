@@ -14,12 +14,18 @@ import torch
 from torch import nn
 
 HEADS = ("success", "retention_lost", "unsafe_contact", "wheel_lift")
-SCHEMA = "emet-trajectory-risk-v1"
+SCHEMA = "emet-trajectory-risk-v2"
 
 
-def trajectory_features(history, trajectory, duration):
+def trajectory_features(history, trajectory, duration, *, profile=None):
+    """Robot-specific proprioception only; phase/task/preview columns are excluded."""
+    from emet.rl.manipulation.observation_layout import proprioceptive_layout
+    from emet.rl.manipulation.profiles import PROFILES
+
+    profile = PROFILES["innate_mars"] if profile is None else profile
+    fields, width = proprioceptive_layout(profile)
     history, trajectory = np.asarray(history, dtype=float), np.asarray(trajectory, dtype=float)
-    if history.shape != (20, 36) or trajectory.ndim != 2 or trajectory.shape[1] != 5 or len(trajectory) < 1:
+    if history.shape != (profile.history_steps, width) or trajectory.ndim != 2 or trajectory.shape[1] != profile.arm_size or len(trajectory) < 1:
         raise ValueError("risk inputs require manipulation history and five-coordinate arm trajectory")
     if (
         not np.isfinite(history).all()
@@ -28,9 +34,9 @@ def trajectory_features(history, trajectory, duration):
         or duration <= 0
     ):
         raise ValueError("nonfinite trajectory or invalid duration")
-    delta = trajectory - history[-1, :5]
-    segments = np.diff(np.vstack([history[-1, :5], trajectory]), axis=0)
-    motion = history[:, 5:15]
+    delta = trajectory - history[-1, fields["positions"]]
+    segments = np.diff(np.vstack([history[-1, fields["positions"]], trajectory]), axis=0)
+    motion = history[:, fields["velocities"].start : fields["base_command"].stop]
     return np.r_[
         history[-1],
         motion.mean(axis=0),

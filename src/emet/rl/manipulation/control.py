@@ -384,6 +384,21 @@ class ManipulationControl:
         self._trim_time = float(self.data.time)
         self.apply()
 
+    def rearm(self):
+        """Resume after executor-verified completion, retaining grasp and history.
+
+        Keep physical state and the closed-grip reference; discard release
+        authorization and accumulated motion commands before accepting new goals.
+        """
+        self.stop()
+        self.reference = self.target.copy()
+        self.task_trajectory = None
+        self.tracking_integral[:] = 0
+        self._base_yaw_integral = 0.0
+        self._trim_time = float(self.data.time)
+        self._base_velocity_time = float(self.data.time)
+        self.stopped = False
+
     def stop(self):
         self.stopped = True
         self.arm_holding = False
@@ -490,19 +505,25 @@ class ManipulationControl:
             target_tokens[~target_mask] = 0
             target_tokens[0, :2] *= self.base_mask[:2]
             target_tokens[0, 2:4] *= self.base_mask[2]
-        token = np.r_[
-            self.positions(),
-            self.velocities(),
-            self.base_pose(),
-            self.last_action[:2] if p.wheel_bodies else np.zeros(2),
-            self.target - self.positions(),
-            np.zeros(p.arm_size)
+        from emet.rl.manipulation.observation_layout import encode_proprioception
+
+        proprioception = encode_proprioception(
+            p,
+            positions=self.positions(),
+            velocities=self.velocities(),
+            base_pose=self.base_pose(),
+            base_command=self.last_action[:2] if p.wheel_bodies else np.zeros(2),
+            target_error=self.target - self.positions(),
+            reference_error=np.zeros(p.arm_size)
             if self.preview_enabled or self.pose_only_targets
             else self.reference - self.positions(),
-            self.data.qpos[self.grip_q],
-            self.grip_target - self.data.qpos[self.grip_q],
-            self.grip_reference,
-            self.last_action,
+            grip_position=self.data.qpos[self.grip_q],
+            grip_error=self.grip_target - self.data.qpos[self.grip_q],
+            grip_reference=self.grip_reference,
+            previous_action=self.last_action,
+        )
+        token = np.r_[
+            proprioception,
             phase,
             self.base_pose(),
             self.ee_pose(),

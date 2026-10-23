@@ -94,11 +94,8 @@ def _run_case(
         if not info["is_success"]:
             return {"seed": seed, "success": False, "failure": info["code"], "stages": stages, "initial_qpos": start}
         # Re-arm a completed contract without resetting physics or retention.
-        env.control.stopped = False
-        env.scenario = "carry"
+        env.resume_stage("carry")
         env.control.set_base_bias_compensation(True)
-        env._done = False
-        env.settle_time = 0
         # A small closed excursion exercises actual TAMP planner trajectories
         # while returning above the original support for placement.
         lifted = env.control.positions().copy()
@@ -118,11 +115,7 @@ def _run_case(
                     "failure": result["controller_failure"] or "transport_failed",
                     "stages": stages,
                 }
-        env.scenario = "place"
-        env._done = False
-        env.control.stopped = False
-        env.settle_time = 0
-        env.steps = 0
+        env.resume_stage("place", reset_clock=True)
         target = grasp_configuration
         from emet.rl.manipulation.dynamic_trajectory import ArmTrajectory, segment
 

@@ -2330,3 +2330,26 @@ a commit name; future source changes require fresh evidence.
 PPO was not restarted by qualification. Learned-policy qualification, coordinated
 moving-base carry, public-tool agent acceptance, robot-controller integration,
 and real-world Herman testing remain separate gates tracked in the root TODO.
+
+### Review follow-up: observation layout and stage lifecycle
+
+The proprioceptive prefix now has named, robot-specific fields shared by its
+producer and risk consumer. Mars has 36 prefix columns and Stretch has 34;
+phase and task/preview fields are excluded from risk features. Risk artifacts use
+schema `emet-trajectory-risk-v2`; older artifacts are rejected and must be refit.
+The task-frame preview keeps its independently declared `preview_contract()`.
+
+Continuous pick/place uses `resume_stage()` and control `rearm()` instead of
+writing private lifecycle flags. Terminal failures cannot resume through this
+API. Rearming preserves physical state, the grasp reference and history, while
+clearing accumulated commands, tracking trim, base bias and release permission.
+The executor must verify the preceding stage before requesting a transition.
+
+The v4 results above remain evidence for immutable `2214c99a`. These source
+changes invalidate that manifest for new training; they do not retroactively
+qualify the revised controller. A fresh carry/pick-place rerun is required.
+
+The review follow-up passed **349 fresh regression tests**, with zero failures or
+skips, including physical pick/transport/place variants and both robot layouts.
+The adjacent `mars-review-layout-regressions.*` artifacts preserve the new receipt
+and JUnit XML. The earlier 341-test artifacts remain unchanged.

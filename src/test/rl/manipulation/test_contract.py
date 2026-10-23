@@ -269,3 +269,34 @@ def test_arm_floor_loading_physically_lifts_wheels_and_is_detected():
     assert monitor.wheel_lift
     assert monitor.peak_force > 0
     assert max(monitor.max_wheel_gap) > 0.01
+
+
+def test_stage_rearm_preserves_physics_grasp_and_history_but_clears_motion_state():
+    env = ManipulationEnv(ManipulationConfig(robot="innate_mars", scenario="reach", randomization_scale=0))
+    try:
+        env.reset(seed=9)
+        control = env.control
+        control.observe()
+        control.stop()
+        qpos, qvel = env.data.qpos.copy(), env.data.qvel.copy()
+        history = control.history.copy()
+        grip = control.grip_reference
+        control.base_velocity_integral[:] = 1
+        control.tracking_integral[:] = 1
+        env._done = True
+        env._last_stage_success = False
+        with pytest.raises(RuntimeError, match="failed contract"):
+            env.resume_stage("carry")
+        assert control.stopped
+        env._last_stage_success = True
+        env.resume_stage("carry")
+        assert not control.stopped and not env._done
+        assert control.grip_reference == grip
+        assert not control.release_authorized
+        assert not control.base_velocity_integral.any()
+        assert not control.tracking_integral.any()
+        np.testing.assert_array_equal(env.data.qpos, qpos)
+        np.testing.assert_array_equal(env.data.qvel, qvel)
+        np.testing.assert_array_equal(control.history, history)
+    finally:
+        env.close()

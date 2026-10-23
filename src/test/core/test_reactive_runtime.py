@@ -156,3 +156,12 @@ def test_shutdown_does_not_cleanup_navigation_or_release_when_reactive_stop_is_u
     assert robot._reactive_command is not None
     with pytest.raises(RuntimeError, match="another client"):
         send_reactive_goal(connect(robot), base=[0, 0, 0])
+
+
+def test_confirmed_session_handoff_clears_reactive_handle():
+    robot = Robot()
+    client = connect(robot)
+    send_reactive_goal(client, base=[0, 0, 0])
+    assert client._last_reactive_command is not None
+    close_command_session(client)
+    assert client._last_reactive_command is None

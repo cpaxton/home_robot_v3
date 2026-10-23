@@ -25,8 +25,9 @@ def _messages(client):
     return [m for name in ("_state", "_obs", "_servo") if isinstance(m := getattr(client, name, None), dict)]
 
 
-def _check_peer(client, boot=None):
-    protocols = [m["command_protocol"] for m in _messages(client) if "command_protocol" in m]
+def _check_peer(client, boot=None, *, protocols=None):
+    if protocols is None:
+        protocols = [m["command_protocol"] for m in _messages(client) if "command_protocol" in m]
     if not protocols or any(p.get("version") != PROTOCOL_VERSION for p in protocols):
         raise RuntimeError("Bridge lacks command protocol v2; deploy matching core and bridge before motion")
     boots = {p.get("server_boot_id") for p in protocols}
@@ -59,13 +60,12 @@ def send_command(client, payload, *, timeout=5.0, reliable=True):
     if not math.isfinite(timeout) or timeout <= 0:
         raise ValueError("acknowledgement timeout must be positive and finite")
     with client._act_lock:
-        boot = _check_peer(client, getattr(client, "_command_boot", None))
+        protocols = [m["command_protocol"] for m in _messages(client) if "command_protocol" in m]
+        boot = _check_peer(client, getattr(client, "_command_boot", None), protocols=protocols)
         if any(k in payload for k in ("reactive_goal", "update_reactive_goal", "cancel_reactive_goal")):
-            protocols = [m["command_protocol"] for m in _messages(client) if "command_protocol" in m]
             if not all(p.get("reactive_control", False) for p in protocols):
                 raise RuntimeError("Bridge does not advertise reactive control; motion not sent")
         if "nav_policy" in payload:
-            protocols = [m["command_protocol"] for m in _messages(client) if "command_protocol" in m]
             if not all(payload["nav_policy"] in p.get("navigation_policies", []) for p in protocols):
                 raise RuntimeError("Bridge does not advertise the requested navigation policy; motion not sent")
         client._command_boot = boot
@@ -163,6 +163,7 @@ def close_command_session(client):
                 if not cancel_navigation(client, action):
                     raise RuntimeError("navigation stop was not confirmed")
         send_command(client, {"release_control": True}, timeout=2.0)
+        client._last_reactive_command = None
     except (RuntimeError, TimeoutError) as exc:
         logging.getLogger(__name__).warning("Control handoff not confirmed: %s", exc)
 

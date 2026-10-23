@@ -86,3 +86,18 @@ def test_target_list_is_pinned_to_control_and_safety_suites():
         "src/test/robots/test_mars_motion_boundary.py",
         "src/test/robots/test_head_capability.py",
     } <= set(gate.REGRESSION_TARGETS)
+
+
+@pytest.mark.parametrize('count', ['oops', '-1', 'NaN'])
+def test_malformed_xml_counts_fail_closed(tmp_path, count):
+    path = tmp_path / 'bad.xml'
+    path.write_text(f'<testsuite tests="{count}"><testcase name="x"/></testsuite>')
+    with pytest.raises(RuntimeError, match='malformed regression XML'):
+        gate.check_xml(path, tmp_path)
+
+
+def test_malformed_xml_syntax_fails_closed(tmp_path):
+    path = tmp_path / 'bad.xml'
+    path.write_text('<testsuite')
+    with pytest.raises(RuntimeError, match='malformed regression XML'):
+        gate.check_xml(path, tmp_path)

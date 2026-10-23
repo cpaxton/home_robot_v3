@@ -69,3 +69,20 @@ def test_risk_rejects_frozen_data_duplicate_episodes_and_wrong_controller(tmp_pa
         fit_risk([data[0], *data], tmp_path, robot="stretch", fingerprint="model", controller_id="controller")
     with pytest.raises(ValueError, match="one robot"):
         fit_risk(data, tmp_path, robot="stretch", fingerprint="model", controller_id="changed")
+
+
+@pytest.mark.parametrize('robot', ['stretch', 'innate_mars'])
+def test_robot_specific_prefix_excludes_phase_and_retains_every_action(robot):
+    from emet.rl.manipulation.observation_layout import proprioceptive_layout
+    from emet.rl.manipulation.profiles import PROFILES
+
+    profile = PROFILES[robot]
+    fields, width = proprioceptive_layout(profile)
+    token = np.zeros((profile.history_steps, width + 7))
+    token[:, fields['previous_action']] = np.arange(profile.action_size) + 10
+    token[:, width:] = 999  # phase must never become previous actions
+    features = trajectory_features(token[:, :width], np.zeros((1, profile.arm_size)), 1, profile=profile)
+    assert np.array_equal(features[:width], token[-1, :width])
+    assert 999 not in features
+    with pytest.raises(ValueError):
+        trajectory_features(token, np.zeros((1, profile.arm_size)), 1, profile=profile)

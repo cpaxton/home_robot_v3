@@ -553,6 +553,24 @@ class ManipulationEnv(gym.Env):
         lifted = d.xpos[self.payload, 2] - self.initial_object_height > 0.04
         return bool(lifted and stable_steps == 20)
 
+    def resume_stage(self, scenario, *, reset_clock=False):
+        """Resume a verified successful stage without resetting physical state.
+
+        The executor must verify the preceding stage before calling this method;
+        terminal failures cannot be resumed through this API.
+        """
+        if scenario not in ("carry", "place") or self.initialization_failed:
+            raise ValueError("invalid continuous stage transition")
+        if self._done and not self._last_stage_success:
+            raise RuntimeError("cannot resume a failed contract")
+        self.control.rearm()
+        self.scenario = scenario
+        self._last_stage_success = False
+        self._done = False
+        self.settle_time = 0
+        if reset_clock:
+            self.steps = 0
+
     def reset(self, *, seed=None, options=None):
         super().reset(seed=seed)
         if options:
@@ -600,6 +618,7 @@ class ManipulationEnv(gym.Env):
         self._configure_preview()
         self.steps = 0
         self.start_time = float(self.data.time)
+        self._last_stage_success = False
         self._done = False
         self.retention_reference = (
             relative_pose(self.data, self.control.ee, self.payload)
@@ -688,10 +707,12 @@ class ManipulationEnv(gym.Env):
             prepare(self)
         self._previous_cost = self._tracking_cost()
         obs = self.control.observe()
+        from emet.rl.manipulation.observation_layout import proprioceptive_layout
         from emet.rl.manipulation.risk import trajectory_features
 
         self.risk_features = trajectory_features(
-            obs["history"][:, :36], self.control.reference[None], self.config.horizon
+            obs["history"][:, :proprioceptive_layout(self.profile)[1]],
+            self.control.reference[None], self.config.horizon, profile=self.profile
         ).tolist()
         return obs, self._info()
 
@@ -1305,6 +1326,7 @@ class ManipulationEnv(gym.Env):
         self._previous_cost = cost
         self.steps += 1
         truncated = self.steps * dt >= self.config.horizon and not (failure or terminal_success)
+        self._last_stage_success = bool(terminal_success)
         self._done = bool(failure or terminal_success or truncated)
         if truncated:
             self.control.stop()

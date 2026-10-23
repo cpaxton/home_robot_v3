@@ -56,16 +56,23 @@ def source_state(root):
 
 
 def check_xml(path, root):
-    suites = list(ET.parse(path).getroot().iter("testsuite"))
-    cases = list(ET.parse(path).getroot().iter("testcase"))
+    try:
+        document = ET.parse(path).getroot()
+        suites = list(document.iter("testsuite"))
+        cases = list(document.iter("testcase"))
+        counts = [{key: int(s.get(key, 0)) for key in ("tests", "failures", "errors", "skipped")} for s in suites]
+        if any(value < 0 for count in counts for value in count.values()):
+            raise ValueError("negative test count")
+    except (ET.ParseError, ValueError, OSError) as exc:
+        raise RuntimeError("malformed regression XML or count attributes") from exc
     if (
         not suites
         or not cases
-        or any(int(s.get("failures", 0)) or int(s.get("errors", 0)) or int(s.get("skipped", 0)) for s in suites)
+        or any(c[key] for c in counts for key in ("failures", "errors", "skipped"))
         or any(c.find(tag) is not None for c in cases for tag in ("failure", "error", "skipped"))
     ):
         raise RuntimeError("complete passing regression tests required")
-    if sum(int(s.get("tests", 0)) for s in suites) != len(cases):
+    if sum(c["tests"] for c in counts) != len(cases):
         raise RuntimeError("regression test count mismatch")
     identities = [(c.get("classname"), c.get("name")) for c in cases]
     if len(set(identities)) != len(identities):
