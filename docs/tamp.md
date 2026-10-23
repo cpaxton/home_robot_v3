@@ -97,6 +97,12 @@ privileged. No fictitious tactile sensors are assumed on hardware.
 
 ## What has been demonstrated
 
+The [main-integration regression](experiments/tamp_main_integration_20261022.md)
+passes 616 selected checks and repeats both successful multi-step controls
+(2/2 and 3/3 transfers) after main's runtime, navigation and wheel-contact updates.
+These remain privileged stationary trials; navigation and camera updates require
+their own end-to-end task gate.
+
 The [October 22 multi-step integration cases](experiments/tamp_native_task_provider_20261022.md)
 use the actual `run agent` CLI with remote Caliban inference and native Stretch
 physics. A two-goal task completed **2/2 transfers**; a separate swap with a wider
