@@ -78,3 +78,23 @@ followed by step-2 preflight rejection is partial progress, not a failed first
 transfer. Debug mode can include private simulator state in JSON logs for offline
 replay; public tool responses and public motion evidence never include it.
 See [measured integration cases and captured-state controls](../experiments/tamp_native_task_provider_20261022.md).
+
+## Provider failures and budgets
+
+Discovery and planning use the same public failure translation as execution.
+A changed scene during planning returns `stale_task_plan` with `recovery: replan`
+and stores no plan. Typed unavailable observations return `stale_observation`
+for known stale measurements, otherwise `observation_unavailable`. These errors
+remain failures and do not authorize an automatic execution retry.
+
+Execution preserves allowlisted provider reasons, including
+`task_object_not_settled_on_support`, `ambiguous_region_occupancy`,
+`native_execution_unavailable` and `object_not_lifted`, through both exceptions
+and typed receipts. Unknown provider errors return `task_provider_failed` without
+exception text. Partial-progress counts and one-shot consumption still apply.
+
+`TaskBudget` is currently tested infrastructure without a production caller.
+`BudgetSpec` bounds task search, and native planning probes separately consume
+the provider's IK allowance. Neither constitutes a shared whole-agent ledger;
+CHAT calls and execution replanning must be connected before matched-budget
+whole-agent comparisons are claimed.

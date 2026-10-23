@@ -1,6 +1,11 @@
 # Copyright (c) Chris Paxton 2026
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
-"""Thread-safe shared reservations for agent, ranking, and geometric calls."""
+"""Unwired shared-budget infrastructure; not a production episode limit.
+
+Current task search uses BudgetSpec and native probes use their own IK allowance.
+No production caller constructs TaskBudget yet. Matched whole-agent budget claims
+require wiring one ledger through CHAT, ranking, execution replanning and IK.
+"""
 import threading
 import time
 

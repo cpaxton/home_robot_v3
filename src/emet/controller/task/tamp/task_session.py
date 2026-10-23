@@ -8,10 +8,24 @@ import uuid
 from dataclasses import dataclass
 from typing import Protocol
 
-from .api import response
+from emet.controller.manipulation.native_inputs import ObservationUnavailable
+
+from .api import failure_code, response
 from .task_budget import BudgetExhausted
 from .task_contracts import BudgetSpec, GoalSpec, TaskState
 from .task_planning import Operator, TaskDomain, search_task
+
+
+def _provider_failure(error: Exception) -> str:
+    """Return only public semantic reasons, never provider exception details."""
+    if isinstance(error, BudgetExhausted):
+        return "task_motion_budget_exhausted"
+    if isinstance(error, ObservationUnavailable):
+        return ("stale_observation" if str(error) in {
+            "object_observation_stale", "joint_observation_stale", "stale_observation"
+        } else "observation_unavailable")
+    code = failure_code(str(error))
+    return code if code != "operation_failed" else "task_provider_failed"
 
 
 @dataclass(frozen=True)
@@ -23,7 +37,8 @@ class TaskExecutionResult:
     def __post_init__(self):
         if type(self.success) is not bool or type(self.execution_started) is not bool:
             raise ValueError('invalid_task_execution_receipt')
-        if self.failure_code not in {'task_execution_failed', 'task_motion_planning_failed', 'task_motion_budget_exhausted'}:
+        if (not isinstance(self.failure_code, str) or self.failure_code == 'operation_failed'
+                or failure_code(self.failure_code) != self.failure_code):
             raise ValueError('invalid_task_execution_code')
 
 
@@ -60,21 +75,24 @@ class TaskSession:
             describe = getattr(self.provider, "describe", None)
             if describe is None:
                 return response("scene_tasks", code="task_discovery_unavailable")
-            return response("scene_tasks", data=describe())
+            try:
+                return response("scene_tasks", data=describe())
+            except Exception as error:
+                return response("scene_tasks", code=_provider_failure(error))
 
     def plan(self, instruction: str, strategy: str = 'beam') -> dict:
         if not isinstance(instruction, str) or not instruction.strip():
             return response("plan_task", code="invalid_input")
         with self._lock:
-            initial = self.provider.snapshot()
-            goal = self.provider.compile_goal(instruction)
             try:
+                initial = self.provider.snapshot()
+                goal = self.provider.compile_goal(instruction)
                 result = search_task(self.provider, initial, goal, strategy=strategy, budget=self.budget)
-            except BudgetExhausted:
-                return response("plan_task", code="task_motion_budget_exhausted")
-            if result.reason != 'ok':
-                return response('plan_task', code=result.reason)
-            initial.binding.require_current(self.provider.snapshot().binding)
+                if result.reason != 'ok':
+                    return response('plan_task', code=result.reason)
+                initial.binding.require_current(self.provider.snapshot().binding)
+            except Exception as error:
+                return response("plan_task", code=_provider_failure(error))
             ref = 'task_plan_' + uuid.uuid4().hex
             # Bound memory even if an agent continually asks for plans.
             if len(self._plans) >= self.budget.tool_rounds:
@@ -135,10 +153,7 @@ class TaskSession:
                 if not plan.goal.satisfied(current):
                     raise ValueError('task_goal_verification_failed')
             except Exception as error:
-                allowed = {'task_motion_planning_failed', 'task_motion_budget_exhausted', 'task_feasibility_failed', 'stale_task_plan', 'task_precondition_failed', 'task_execution_failed',
-                           'protected_goal_regression', 'scene_identity_changed',
-                           'task_effect_verification_failed', 'task_goal_verification_failed'}
-                code = str(error) if str(error) in allowed else 'task_provider_failed'
+                code = _provider_failure(error)
                 return response('execute_task_plan', code=code, status='partial' if started else 'error',
                                 data={'execution_started': started, 'completed_steps': completed,
                                       'planned_steps': len(plan.operators), 'failed_step_1based': active_step,

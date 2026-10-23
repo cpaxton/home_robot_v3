@@ -179,3 +179,111 @@ def test_debug_state_is_json_in_logs_but_not_public_motion_evidence(caplog):
     assert payload['debug_state']['qpos'] == [.1]
     assert payload['stage'] == 'task_search_probe'
     assert 'debug_state' not in domain.motion_evidence[-1]
+
+
+@pytest.mark.parametrize('tool', ['scene_tasks', 'plan_task'])
+@pytest.mark.parametrize('reason,expected', [
+    ('joint_observation_stale', 'stale_observation'),
+    ('object_state_unknown', 'observation_unavailable'),
+])
+def test_observation_errors_are_public_codes_through_json_tools(tool, reason, expected):
+    from emet.controller.manipulation.native_inputs import ObservationUnavailable
+    domain, _, calls = make_domain()
+    def unavailable(*args):
+        raise ObservationUnavailable(reason)
+    if tool == 'scene_tasks':
+        domain.describe = unavailable
+    else:
+        domain.snapshot = unavailable
+    session = TaskSession(domain)
+    tools = {t.name: t for t in get_tools({'tamp_task_session': session})}
+    result = json.loads(tools[tool].func(**({'instruction': 'swap alpha and beta'} if tool == 'plan_task' else {})))
+    assert result['code'] == expected and result['status'] == 'error'
+    assert not session._plans and not calls
+
+
+def test_scene_change_during_planning_returns_replan_without_storing_handle():
+    domain, _, calls = make_domain()
+    snapshot = domain.snapshot
+    count = 0
+    def changing():
+        nonlocal count
+        count += 1
+        state = snapshot()
+        return replace(state, binding=replace(state.binding, snapshot_revision=count))
+    domain.snapshot = changing
+    session = TaskSession(domain)
+    tools = {t.name: t for t in get_tools({'tamp_task_session': session})}
+    result = json.loads(tools['plan_task'].func(instruction='swap alpha and beta'))
+    assert result['code'] == 'stale_task_plan' and result['recovery'] == 'replan'
+    assert not session._plans and not calls
+
+
+@pytest.mark.parametrize('phase', ['discover', 'snapshot', 'compile_goal', 'search', 'execute'])
+def test_provider_exception_details_never_escape(phase):
+    domain, _, calls = make_domain()
+    session = TaskSession(domain)
+    ref = session.plan('swap alpha and beta')['data']['plan_ref'] if phase == 'execute' else None
+    def broken(*args):
+        raise RuntimeError('/private/path body_123 secret')
+    setattr(domain, {'discover': 'describe', 'search': 'feasible'}.get(phase, phase), broken)
+    if phase == 'discover':
+        result = session.discover()
+    elif phase == 'execute':
+        result = session.execute(ref)
+    else:
+        result = session.plan('swap alpha and beta')
+    assert result['code'] == 'task_provider_failed'
+    assert 'private' not in json.dumps(result) and 'body_123' not in json.dumps(result)
+    assert not calls
+
+
+@pytest.mark.parametrize('code', ['task_object_not_settled_on_support', 'ambiguous_region_occupancy',
+                                 'native_execution_unavailable', 'object_not_lifted'])
+@pytest.mark.parametrize('receipt', [False, True])
+def test_actionable_provider_failures_preserve_code_and_progress(code, receipt):
+    domain, _, calls = make_domain()
+    session = TaskSession(domain)
+    ref = session.plan('swap alpha and beta')['data']['plan_ref']
+    if receipt:
+        domain.transfer = lambda *args: TaskExecutionResult(False, False, code)
+    else:
+        def reject(*args):
+            raise ValueError(code)
+        domain.snapshot = reject
+    result = session.execute(ref)
+    assert result['code'] == code and result['status'] == 'error'
+    assert result['data']['execution_started'] is False
+    assert result['data']['completed_steps'] == 0 and not calls
+    assert session.execute(ref)['code'] == 'unknown_plan'
+
+
+def test_receipt_rejects_unknown_private_codes():
+    with pytest.raises(ValueError, match='invalid_task_execution_code'):
+        TaskExecutionResult(False, False, '/private/path body_123')
+
+
+def test_native_transfer_preserves_adapter_failure_code():
+    domain, _ = native_probe_domain()
+    domain._refine = lambda *args, **kwargs: 'plan'
+    domain.adapter.execute = lambda ref: {'status': 'error', 'code': 'object_not_lifted',
+                                         'data': {'execution_started': True}}
+    result = domain._transfer_native('alpha', domain.regions['buffer'])
+    assert result == TaskExecutionResult(False, True, 'object_not_lifted')
+
+
+def test_semantic_failure_after_progress_stops_and_preserves_first_transfer():
+    domain, _, calls = make_domain()
+    original = domain.transfer
+    def transfer(obj, region):
+        if not calls:
+            return original(obj, region)
+        return TaskExecutionResult(False, False, 'native_execution_unavailable')
+    domain.transfer = transfer
+    session = TaskSession(domain)
+    ref = session.plan('swap alpha and beta')['data']['plan_ref']
+    result = session.execute(ref)
+    assert result['code'] == 'native_execution_unavailable' and result['status'] == 'partial'
+    assert result['data']['completed_steps'] == 1
+    assert result['data']['execution_started'] is True
+    assert result['data']['failed_step_1based'] == 2 and len(calls) == 1

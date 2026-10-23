@@ -63,3 +63,24 @@ Even passing stationary controls do not demonstrate navigation-to-manipulation,
 observed multi-step grounding, exploration, hardware sensors or native open/close.
 The next vertical slice must bind fresh observed task state after navigation and
 invalidate any plan made before the world/robot state changed.
+
+## PR review: failure contracts
+
+Follow-up review identified uncaught discovery/planning provider exceptions and
+loss of actionable execution codes. These are addressed through the shared
+public failure translator, typed observation handling, and receipt validation.
+Scene changes during planning return `stale_task_plan` with no stored handle;
+private provider details remain redacted. The native transfer wrapper also
+preserves the adapter's public code. Tests cover JSON tool boundaries, unknown
+exceptions, precommand rejection and partial progress followed by failure.
+
+The low-priority `TaskBudget` finding is confirmed: it has no production caller.
+Its module and the task API now label it as unwired infrastructure. Whole-agent
+budget wiring remains an explicit acceptance gate, not a claim of this PR.
+
+Validation: managed job `20261022_224214_a0ce72` passed 636 broad regression
+checks with zero failures/errors/skips. After the final added partial-progress
+case, the focused provider suite passed 38 checks (overlapping the broad suite;
+do not add these counts). Ruff and `git diff --check` are clean. These changes
+alter failure reporting, not trajectories; the live controls above predate this
+review follow-up and are not a new post-follow-up live result.
