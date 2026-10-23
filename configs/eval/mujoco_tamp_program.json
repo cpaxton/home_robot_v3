@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "status": "runtime_foundation",
+  "executable_registry": false,
+  "plan": "docs/plans/2026-10-22_mujoco_tamp_benchmarks.md",
+  "engine": "mujoco",
+  "agent": "production_chat",
+  "suites": ["robosuite", "robocasa", "molmospaces", "libero", "franka_kitchen", "metaworld"],
+  "robot_tracks": ["upstream", "stretch", "sourccey"],
+  "input_modes": ["privileged", "observed"],
+  "execution_modes_reported_separately": ["native_stepped", "live_async"],
+  "planned_strategies": ["react", "llm_plan", "greedy", "beam", "mcts", "pddlstream", "llm_affordance"],
+  "implemented_task_search_bindings": ["greedy", "beam", "mcts"],
+  "qualified_suite_providers": [],
+  "matched_episode_budgets": {
+    "tool_rounds": 32,
+    "llm_calls": 64,
+    "depth": 16,
+    "expansions": 500,
+    "beam_width": 8,
+    "mcts_iterations": 500,
+    "ik_calls": 2048,
+    "planning_seconds": 120.0,
+    "episode_seconds": 1800.0
+  },
+  "budget_wiring_complete": false,
+  "qualification": {"tasks_per_suite": 2, "resets_per_task": 2, "configurations": 24},
+  "first_frozen_subset": {"task_types_per_suite": 6, "resets_per_task": 2, "configurations": 72, "repeats": 3},
+  "household_adapted_protocol": "configs/eval/household_agent_tamp_protocol.json",
+  "initial_parallel_simulations": 2,
+  "vlm_host": "caliban",
+  "episodes": []
+}

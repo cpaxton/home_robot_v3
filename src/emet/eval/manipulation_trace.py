@@ -122,12 +122,11 @@ class ManipulationTrace:
         if data.time < self.next_time:
             return
         self.next_time = float(data.time) + 0.1
-        import mujoco
+        from emet.rl.contact import solved_contact_force
 
         contacts = []
         contact_evidence = []
         touched = set()
-        force = np.zeros(6)
         for index, contact in enumerate(data.contact[: data.ncon]):
             a, b = (int(model.geom_bodyid[g]) for g in contact.geom)
             if a in self.target_ids and b not in self.target_ids:
@@ -139,15 +138,13 @@ class ManipulationTrace:
             # MuJoCo's active contact margin can support an object with positive
             # surface distance. Penetration alone misses those valid contacts;
             # conversely, a proximity-only contact is not physical support.
-            if contact.efc_address < 0:
-                continue
-            mujoco.mj_contactForce(model, data, index, force)
-            if not np.isfinite(force[0]) or force[0] <= 0:
+            normal, _ = solved_contact_force(model, data, index)
+            if not np.isfinite(normal) or normal <= 0:
                 continue
             touched.add(other)
             contacts.append([model.body(a).name, model.body(b).name])
             contact_evidence.append(
-                {"bodies": contacts[-1], "distance_m": float(contact.dist), "normal_force_n": float(force[0])}
+                {"bodies": contacts[-1], "distance_m": float(contact.dist), "normal_force_n": normal}
             )
         obj = data.body(self.target)
         ee = data.body(self.ee)

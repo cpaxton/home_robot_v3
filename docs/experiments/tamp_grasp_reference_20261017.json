@@ -1,0 +1,102 @@
+{
+  "base_sha": "60c41d4e",
+  "production_patch_sha256": "511bc8c43550f7647ac12827d825b8cb90c2872b201169772e182ce6c8dc71db",
+  "scope": "scripted privileged contact diagnostics; not an agent baseline or actuation-audited acceptance",
+  "cases": [
+    {
+      "id": "in_process_familiar",
+      "ordering": "original",
+      "status": "ok",
+      "code": "ok",
+      "failed_stage": null,
+      "retention_failures": [],
+      "artifact": "/home/cpaxton/runs/emet/tamp-grasp-reference-20261017/tamp-lift-physics/familiar.json"
+    },
+    {
+      "id": "in_process_left",
+      "ordering": "original",
+      "status": "ok",
+      "code": "ok",
+      "failed_stage": null,
+      "retention_failures": [],
+      "artifact": "/home/cpaxton/runs/emet/tamp-grasp-reference-20261017/tamp-lift-physics/heldout_left.json"
+    },
+    {
+      "id": "live_shallow",
+      "ordering": "original",
+      "status": "partial",
+      "code": "payload_not_retained",
+      "failed_stage": "place",
+      "retention_failures": [
+        {
+          "sim_time": 18.69000000000052,
+          "phase": "payload_retention",
+          "accepted": false,
+          "reason": "payload_not_retained",
+          "translation_residual_m": 0.005544646845405529,
+          "rotation_residual_rad": 0.1000250140820355,
+          "translation_tolerance_m": 0.02,
+          "rotation_tolerance_rad": 0.1
+        }
+      ],
+      "artifact": "/home/cpaxton/runs/emet/tamp-grasp-reference-20261017/tamp-live-lift-physics/result.json"
+    },
+    {
+      "id": "live_steeper_probe",
+      "ordering": "steeper_first",
+      "status": "ok",
+      "code": "ok",
+      "failed_stage": null,
+      "retention_failures": [],
+      "artifact": "/home/cpaxton/runs/emet/tamp-grasp-reference-20261017/tamp-live-lift-pitch-settled/result.json"
+    },
+    {
+      "id": "live_steeper_confirm",
+      "ordering": "steeper_first",
+      "status": "ok",
+      "code": "ok",
+      "failed_stage": null,
+      "retention_failures": [],
+      "artifact": "/home/cpaxton/runs/emet/tamp-grasp-reference-20261017/tamp-left-confirm/result.json"
+    },
+    {
+      "id": "live_shallow_settled_control",
+      "ordering": "original",
+      "status": "partial",
+      "code": "payload_not_retained",
+      "failed_stage": "place",
+      "retention_failures": [
+        {
+          "sim_time": 20.96399999999926,
+          "phase": "payload_retention",
+          "accepted": false,
+          "reason": "payload_not_retained",
+          "translation_residual_m": 0.005746592961594131,
+          "rotation_residual_rad": 0.10006390544899382,
+          "translation_tolerance_m": 0.02,
+          "rotation_tolerance_rad": 0.1
+        }
+      ],
+      "artifact": "/home/cpaxton/runs/emet/tamp-grasp-reference-20261017/tamp-left-shallow-control/result.json"
+    },
+    {
+      "id": "live_familiar_regression",
+      "ordering": "steeper_first",
+      "status": "ok",
+      "code": "ok",
+      "failed_stage": null,
+      "retention_failures": [],
+      "artifact": "/home/cpaxton/runs/emet/tamp-grasp-reference-20261017/tamp-familiar-confirm/result.json"
+    }
+  ],
+  "regression_tests": {
+    "tests": 117,
+    "failures": 0,
+    "skipped": 0,
+    "artifact": "/home/cpaxton/runs/emet/tamp-grasp-reference-20261017/tamp-reference-checks.xml"
+  },
+  "in_process_contact_regressions": {
+    "passed": 2,
+    "total": 2
+  }
+}

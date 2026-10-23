@@ -291,6 +291,20 @@ Mars, and Nori A3 with the teleport oracle on floor objects).
 Full spec (episode schema, scatter protocol, probe, metrics, protocol): Appendix~\ref{app:tamp_clutter}.
 Runbook: \texttt{docs/experiments/tamp\_clutter.md}. Results: Section~\ref{sec:tamp_clutter_results}.
 
+\subsection{Native agent integration: preliminary study}
+\label{sec:native_agent_preliminary}
+
+We separately evaluate the actual language-agent tool loop with native contact
+execution in a stationary Stretch table scene. Three fixed placement variants,
+repeated twice each, yield 2/6 complete two-object tasks and 6/12 satisfied goals;
+all six attempted transfers succeed. This conditional execution result does not
+count planning failures as successes. Grounding is privileged and inference uses
+Caliban-hosted Qwen3-VL-8B-Instruct without camera input. Remaining failures are
+bounded planning and one malformed agent argument. Appendix~\ref{app:native_tamp}
+provides the protocol and provenance. These integration diagnostics are separate
+from assisted clutter controls and the proposed RoboCasa365/MolmoSpaces household
+composition study; no expanded-household benchmark score is reported.
+
 \subsection{Scaling to large scenes}
 \label{sec:scaling_large_scenes}
 

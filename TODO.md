@@ -16,6 +16,51 @@ Strike through or move to a PR when done.
 - [ ] Audit assessment/final-answer disagreements separately from view selection;
       do not tune answer precedence to q14. See
       [consolidated evidence and review](docs/plans/eqa_context_evidence.md).
+## RL controller integration and acceptance (Mars first)
+
+- [ ] Restore continuous pick/place after explicit stage rearming: v5 at
+      `42aa2f30` passed 27/30 versus v4 30/30. Diagnose the 20 g seed 1860001
+      retention loss and 50 g seeds 1860007/1860010 tracking timeouts; preserve
+      all cases and thresholds, then repeat source-bound qualification before PPO.
+
+- [ ] Integrate the qualified controller with the robot command interface: masked
+      base SE(2), hand SE(3), and gripper targets; trajectory updates, measured versus
+      commanded state, speed/effort limits, deadlines, stop confirmation and ownership.
+      Keep simulator qualification separate from hardware readiness.
+- [ ] Test the integrated agent through public TAMP tools, first with ground-truth
+      oracle plans and then the agent: physical pick/carry/place, goal changes,
+      interruptions and recovery. Record retention, task success, tracking, settling,
+      jerk/contact loads and wheel support; include coordinated moving-base carry.
+- [ ] Test on Herman (real-world Innate Mars) after simulator and interface gates:
+      verify feedback and stop behavior, then staged bounded motion and compliant
+      interaction under an explicitly authorized hardware procedure. Compare measured
+      trajectories and loads against simulation; do not infer hardware safety from
+      simulator success or start motion from this checklist alone.
+
+## Proprioceptive contact learning (2026-10-23)
+
+Reference: Bronars et al., [Blind Precise Assembly](https://arxiv.org/abs/2610.23849),
+[project](https://younghyopark.me/blind-proprioceptive-assembly/),
+[mjfit](https://github.com/younghyopark/mjfit).
+See the research roadmap in [the control runbook](docs/mars_reactive_rl.md#proprioceptive-contact-learning-research-roadmap).
+
+- [x] Add the paper citation, related-work scope, and staged research roadmap.
+- [ ] Audit available Mars feedback and identify effective actuator response from suitable
+      command/measurement logs. Report delay, lag, deadband and uncertainty; fit physical
+      friction/armature only when identifiable. Simulation logs are not hardware calibration;
+      hardware excitation needs a separately authorized procedure.
+- [ ] Test contact observability offline before modifying PPO. Label obstruction, support
+      contact and slip from simulation; evaluate history-only inference on held-out episodes
+      and geometries, including false negatives, detection delay and uncertainty.
+- [ ] Compare temporal convolution and the current transformer with identical history duration,
+      cadence, observations and budget. Then ablate auxiliary contact supervision and privileged
+      critic inputs separately; ground-truth labels must never reach the deployed actor.
+- [ ] Add separate mjfit passive-fit/contact probes and a local insertion fixture with pinned
+      generator provenance and explicit timestep/contact settings. Preserve existing carry and
+      frozen Stretch fixtures; mjfit is geometry generation, not actuator identification.
+- [ ] Compare each candidate with the baseline on tracking, retention, settling, jerk,
+      contact loads and wheel unloading. Keep hard effort/safety limits active throughout;
+      retain our goal-conditioned SE(2)/SE(3)/gripper interface and TAMP recovery layer.
 
 ## Shared-agent acceptance follow-up (2026-10-22)
 

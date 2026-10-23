@@ -1,0 +1,149 @@
+{
+  "version": "mars-carry-regressions-v1",
+  "carry_seeds": [
+    1850001,
+    1850002,
+    1850003,
+    1850004,
+    1850005,
+    1850006,
+    1850007,
+    1850008,
+    1850009,
+    1850010
+  ],
+  "carry_payload_mass_kg": 0.05,
+  "continuous_pick_place": [
+    {
+      "seed": 1860001,
+      "payload_mass_kg": 0.02
+    },
+    {
+      "seed": 1860001,
+      "payload_mass_kg": 0.05
+    },
+    {
+      "seed": 1860001,
+      "payload_mass_kg": 0.1
+    },
+    {
+      "seed": 1860002,
+      "payload_mass_kg": 0.02
+    },
+    {
+      "seed": 1860002,
+      "payload_mass_kg": 0.05
+    },
+    {
+      "seed": 1860002,
+      "payload_mass_kg": 0.1
+    },
+    {
+      "seed": 1860003,
+      "payload_mass_kg": 0.02
+    },
+    {
+      "seed": 1860003,
+      "payload_mass_kg": 0.05
+    },
+    {
+      "seed": 1860003,
+      "payload_mass_kg": 0.1
+    },
+    {
+      "seed": 1860004,
+      "payload_mass_kg": 0.02
+    },
+    {
+      "seed": 1860004,
+      "payload_mass_kg": 0.05
+    },
+    {
+      "seed": 1860004,
+      "payload_mass_kg": 0.1
+    },
+    {
+      "seed": 1860005,
+      "payload_mass_kg": 0.02
+    },
+    {
+      "seed": 1860005,
+      "payload_mass_kg": 0.05
+    },
+    {
+      "seed": 1860005,
+      "payload_mass_kg": 0.1
+    },
+    {
+      "seed": 1860006,
+      "payload_mass_kg": 0.02
+    },
+    {
+      "seed": 1860006,
+      "payload_mass_kg": 0.05
+    },
+    {
+      "seed": 1860006,
+      "payload_mass_kg": 0.1
+    },
+    {
+      "seed": 1860007,
+      "payload_mass_kg": 0.02
+    },
+    {
+      "seed": 1860007,
+      "payload_mass_kg": 0.05
+    },
+    {
+      "seed": 1860007,
+      "payload_mass_kg": 0.1
+    },
+    {
+      "seed": 1860008,
+      "payload_mass_kg": 0.02
+    },
+    {
+      "seed": 1860008,
+      "payload_mass_kg": 0.05
+    },
+    {
+      "seed": 1860008,
+      "payload_mass_kg": 0.1
+    },
+    {
+      "seed": 1860009,
+      "payload_mass_kg": 0.02
+    },
+    {
+      "seed": 1860009,
+      "payload_mass_kg": 0.05
+    },
+    {
+      "seed": 1860009,
+      "payload_mass_kg": 0.1
+    },
+    {
+      "seed": 1860010,
+      "payload_mass_kg": 0.02
+    },
+    {
+      "seed": 1860010,
+      "payload_mass_kg": 0.05
+    },
+    {
+      "seed": 1860010,
+      "payload_mass_kg": 0.1
+    }
+  ],
+  "previous_timeouts": [
+    {
+      "seed": 1860001,
+      "payload_mass_kg": 0.05
+    },
+    {
+      "seed": 1860008,
+      "payload_mass_kg": 0.1
+    }
+  ],
+  "scope": "fixed simulator regression identities; physics and contracts recorded in reports"
+}

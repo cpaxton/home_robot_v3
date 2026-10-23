@@ -1,0 +1,388 @@
+<?xml version="1.0"?>
+<robot name="maurice_bot">
+  <!-- Materials -->
+  <material name="matt_black">
+    <color rgba="0.05 0.05 0.05 1.0"/>
+  </material>
+  <material name="bright_orange">
+    <color rgba="1.0 0.5 0.0 1.0"/>
+  </material>
+  <material name="collision_material">
+    <color rgba="0.0 1.0 0.0 0.3"/>  <!-- Semi-transparent green -->
+  </material>
+
+  <!-- base_link is the root of the URDF tree -->
+  <!-- The odom -> base_link transform is published by bringup.py -->
+  <link name="base_link">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.89"/>
+      <inertia ixx="0.001" ixy="0.0" ixz="0.0" iyy="0.001" iyz="0.0" izz="0.001"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://maurice_sim/meshes/base.STL" scale="1 1 1"/>
+      </geometry>
+      <material name="matt_black"/>
+    </visual>
+    <!-- Simplified collision: Box 187.8mm x 182mm x 167.6mm, front face 35.2mm forward -->
+    <collision>
+      <origin xyz="-0.0587 0 0.0838" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.1878 0.182 0.1676"/>
+      </geometry>
+      <material name="collision_material"/>
+    </collision>
+  </link>
+
+  <!-- joint1 → link1 -->
+  <joint name="joint1" type="revolute">
+    <parent link="base_link"/>
+    <child  link="link1"/>
+    <origin xyz="0.086 -0.05285 0.04025" rpy="0 0 0"/>
+    <axis  xyz="0 0 1"/>
+    <dynamics damping="5"/>
+    <limit lower="-1.5708" upper="1.5708" effort="2.0" velocity="2.0"/>
+  </joint>
+  <link name="link1">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.065"/>
+      <inertia ixx="0.0001" ixy="0" ixz="0" iyy="0.0001" iyz="0" izz="0.0001"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://maurice_sim/meshes/link1.STL" scale="1 1 1"/>
+      </geometry>
+      <material name="matt_black"/>
+    </visual>
+    <!-- Simplified collision: Box 67mm x 40mm x 82mm -->
+    <collision>
+      <origin xyz="-0.005 0 0.018" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.067 0.040 0.082"/>
+      </geometry>
+      <material name="collision_material"/>
+    </collision>
+  </link>
+
+  <!-- joint2 → link2 -->
+  <joint name="joint2" type="revolute">
+    <parent link="link1"/>
+    <child  link="link2"/>
+    <origin xyz="0 0 0.04425" rpy="0 0 0"/>
+    <axis  xyz="0 1 0"/>
+    <dynamics damping="5"/>
+    <limit lower="-1.5708" upper="1.22" effort="2.0" velocity="2.0"/>
+  </joint>
+  <link name="link2">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.080"/>
+      <inertia ixx="0.0001" ixy="0" ixz="0" iyy="0.0001" iyz="0" izz="0.0001"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://maurice_sim/meshes/link2.STL" scale="1 1 1"/>
+      </geometry>
+      <material name="matt_black"/>
+    </visual>
+    <!-- Simplified collision: Box 37mm x 54mm x 156mm -->
+    <collision>
+      <origin xyz="0 0 0.061" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.037 0.054 0.156"/>
+      </geometry>
+      <material name="collision_material"/>
+    </collision>
+  </link>
+
+  <!-- joint3 → link3 -->
+  <joint name="joint3" type="revolute">
+    <parent link="link2"/>
+    <child  link="link3"/>
+    <origin xyz="0.02825 0 0.12125" rpy="0 0 0"/>
+    <axis  xyz="0 1 0"/>
+    <dynamics damping="5"/>
+    <limit lower="-1.5708" upper="1.7453" effort="2.0" velocity="2.0"/>
+  </joint>
+  <link name="link3">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.055"/>
+      <inertia ixx="0.0001" ixy="0" ixz="0" iyy="0.0001" iyz="0" izz="0.0001"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://maurice_sim/meshes/link3.STL" scale="1 1 1"/>
+      </geometry>
+      <material name="matt_black"/>
+    </visual>
+    <!-- Simplified collision: Box 134mm x 54mm x 35mm -->
+    <collision>
+      <origin xyz="0.050 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.134 0.054 0.035"/>
+      </geometry>
+      <material name="collision_material"/>
+    </collision>
+  </link>
+
+  <!-- joint4 → link4 -->
+  <joint name="joint4" type="revolute">
+    <parent link="link3"/>
+    <child  link="link4"/>
+    <origin xyz="0.1375 0 0.0045" rpy="0 0 0"/>
+    <axis  xyz="0 1 0"/>
+    <dynamics damping="5"/>
+    <limit lower="-1.9199" upper="1.7453" effort="2.0" velocity="2.0"/>
+  </joint>
+  <link name="link4">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.022"/>
+      <inertia ixx="0.00005" ixy="0" ixz="0" iyy="0.00005" iyz="0" izz="0.00005"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://maurice_sim/meshes/link4.STL" scale="1 1 1"/>
+      </geometry>
+      <material name="matt_black"/>
+    </visual>
+    <!-- Simplified collision: Box 32mm x 39mm x 20mm -->
+    <collision>
+      <origin xyz="0.006 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.032 0.039 0.020"/>
+      </geometry>
+      <material name="collision_material"/>
+    </collision>
+  </link>
+
+  <!-- joint5 → link5 -->
+  <joint name="joint5" type="revolute">
+    <parent link="link4"/>
+    <child  link="link5"/>
+    <origin xyz="0.019 0 0" rpy="0 0 0"/>
+    <axis  xyz="1 0 0"/>
+    <dynamics damping="5"/>
+    <limit lower="-1.5708" upper="1.5708" effort="2.0" velocity="2.0"/>
+  </joint>
+  <link name="link5">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.050"/>
+      <inertia ixx="0.00005" ixy="0" ixz="0" iyy="0.00005" iyz="0" izz="0.00005"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://maurice_sim/meshes/link5.STL" scale="1 1 1"/>
+      </geometry>
+      <material name="matt_black"/>
+    </visual>
+    <!-- Simplified collision: Box 54mm x 44mm x 93mm -->
+    <collision>
+      <origin xyz="0.027 0 0.031" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.054 0.044 0.093"/>
+      </geometry>
+      <material name="collision_material"/>
+    </collision>
+  </link>
+
+  <!-- joint6 → link61 (main gripper finger) -->
+  <joint name="joint6" type="revolute">
+    <parent link="link5"/>
+    <child  link="link61"/>
+    <origin xyz="0.044 -0.0092 0" rpy="0 0 0"/>
+    <axis  xyz="0 0 -1"/>
+    <dynamics damping="5"/>
+    <limit lower="-0.8727" upper="0.3491" effort="2.0" velocity="2.0"/>
+  </joint>
+  <link name="link61">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.012"/>
+      <inertia ixx="0.00002" ixy="0" ixz="0" iyy="0.00002" iyz="0" izz="0.00002"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://maurice_sim/meshes/link61.STL" scale="1 1 1"/>
+      </geometry>
+      <material name="matt_black"/>
+    </visual>
+    <!-- Simplified collision: Box 48mm x 16mm x 38.9mm -->
+    <collision>
+      <origin xyz="0.024 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.048 0.016 0.0389"/>
+      </geometry>
+      <material name="collision_material"/>
+    </collision>
+  </link>
+
+  <!-- joint6M → link62 (mirrored gripper finger, geared with joint6) -->
+  <joint name="joint6M" type="revolute">
+    <parent link="link5"/>
+    <child  link="link62"/>
+    <origin xyz="0.044 0.0091 0" rpy="0 0 0"/>
+    <axis  xyz="0 0 -1"/>
+    <dynamics damping="5"/>
+    <limit lower="-0.8727" upper="0.3491" effort="2.0" velocity="2.0"/>
+    <mimic joint="joint6" multiplier="-1" offset="0"/>
+  </joint>
+  <link name="link62">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.012"/>
+      <inertia ixx="0.00002" ixy="0" ixz="0" iyy="0.00002" iyz="0" izz="0.00002"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://maurice_sim/meshes/link62.STL" scale="1 1 1"/>
+      </geometry>
+      <material name="matt_black"/>
+    </visual>
+    <!-- Simplified collision: Box 48mm x 16mm x 38.9mm -->
+    <collision>
+      <origin xyz="0.024 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.048 0.016 0.0389"/>
+      </geometry>
+      <material name="collision_material"/>
+    </collision>
+  </link>
+
+  <!-- End Effector Link -->
+  <joint name="ee_joint" type="fixed">
+    <parent link="link5"/>
+    <child  link="ee_link"/>
+    <origin xyz="0.091838 0 0" rpy="0 0 0"/>
+  </joint>
+  <link name="ee_link">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.001"/>
+      <inertia ixx="0.00001" ixy="0" ixz="0" iyy="0.00001" iyz="0" izz="0.00001"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <sphere radius="0.005"/>
+      </geometry>
+      <material name="matt_black"/>
+    </visual>
+  </link>
+
+  <!-- fixed camera link -->
+  <joint name="fixed_arm_camera_link" type="fixed">
+    <parent link="link5"/>
+    <child  link="arm_camera_link"/>
+    <origin xyz="0.03378 0 0.05052" rpy="0 0.43633 0"/>
+  </joint>
+  <link name="arm_camera_link">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.01"/>
+      <inertia ixx="0.0001" ixy="0" ixz="0" iyy="0.0001" iyz="0" izz="0.0001"/>
+    </inertial>
+    <!-- for simulation you can attach a Gazebo camera plugin here -->
+  </link>
+
+  <!-- Head Link -->
+  <joint name="joint_head" type="revolute">
+    <parent link="base_link"/>
+    <child  link="head"/>
+    <origin xyz="-0.040751 -0.0002 0.25882" rpy="0 0 0"/>
+    <axis xyz="0 -1 0"/>
+    <dynamics damping="5"/>
+    <limit lower="-0.1745" upper="0.5236" effort="2.0" velocity="2.0"/>
+  </joint>
+  <link name="head">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.148"/>
+      <inertia ixx="0.0002" ixy="0" ixz="0" iyy="0.0001" iyz="0" izz="0.0002"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://maurice_sim/meshes/head.STL" scale="1 1 1"/>
+      </geometry>
+      <material name="matt_black"/>
+    </visual>
+    <!-- Simplified collision: Box 113mm x 121mm x 36mm -->
+    <collision>
+      <origin xyz="0.007 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.113 0.121 0.036"/>
+      </geometry>
+      <material name="collision_material"/>
+    </collision>
+  </link>
+
+  <!-- Head Camera Left Link -->
+  <joint name="fixed_head_camera_left" type="fixed">
+    <parent link="head"/>
+    <child  link="head_camera_left"/>
+    <origin xyz="0.04327 0.0297 -0.000275" rpy="0 0 0"/>
+  </joint>
+  <link name="head_camera_left">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.01"/>
+      <inertia ixx="0.00001" ixy="0" ixz="0" iyy="0.00001" iyz="0" izz="0.00001"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <sphere radius="0.005"/>
+      </geometry>
+      <material name="matt_black"/>
+    </visual>
+  </link>
+
+  <!-- Camera Optical Frame (at left camera, used for depth/pointcloud) -->
+  <!-- Optical frame convention: Z forward, X right, Y down -->
+  <joint name="fixed_camera_optical_frame" type="fixed">
+    <parent link="head_camera_left"/>
+    <child link="camera_optical_frame"/>
+    <origin xyz="0 0 0" rpy="-1.5708 0 -1.5708"/>
+  </joint>
+  <link name="camera_optical_frame"/>
+
+  <!-- Head Camera Right Link -->
+  <joint name="fixed_head_camera_right" type="fixed">
+    <parent link="head"/>
+    <child  link="head_camera_right"/>
+    <origin xyz="0.04327 -0.0303 -0.000275" rpy="0 0 0"/>
+  </joint>
+  <link name="head_camera_right">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.01"/>
+      <inertia ixx="0.00001" ixy="0" ixz="0" iyy="0.00001" iyz="0" izz="0.00001"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <sphere radius="0.005"/>
+      </geometry>
+      <material name="matt_black"/>
+    </visual>
+  </link>
+<joint name="fixed_right_camera_optical_frame" type="fixed">
+  <parent link="head_camera_right"/>
+  <child link="right_camera_optical_frame"/>
+  <origin xyz="0 0 0" rpy="-1.5708 0 -1.5708"/>
+</joint>
+<link name="right_camera_optical_frame"/>
+</robot>
