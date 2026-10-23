@@ -1,5 +1,13 @@
 # Living TODOs (small / near-term)
 
+- [ ] Run the repaired relative-motion → targeted-floor handoff in the Molmo
+      pilot, then S0/EQA regression gates. Catalogue: `docs/testing/agent_observation_cases.md`.
+- [ ] Author isolated live visible-far, unknown-floor, occupied-route and
+      absent-target variants; synthetic contracts are not model/sensor acceptance.
+- [ ] Integrate EXPRESS-Bench and AbstainEQA after these gates; pin official
+      data/evaluators and validate tiny pilots first. Requirements:
+      `docs/environments/embodied_qa_extensions.md`.
+
 Short checklist for agent/hardware polish that is not worth a full plan doc yet.
 Strike through or move to a PR when done.
 
