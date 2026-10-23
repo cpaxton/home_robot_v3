@@ -15,6 +15,7 @@ REGRESSION_TARGETS = (
     "src/test/rl",
     "src/test/core",
     "src/test/robots/test_mars_motion_boundary.py",
+    "src/test/robots/test_mars_control_session.py",
     "src/test/robots/test_head_capability.py",
     "src/test/scripts/test_train_mars_carry_when_ready.py",
     "src/test/scripts/test_trace_mars_carry.py",

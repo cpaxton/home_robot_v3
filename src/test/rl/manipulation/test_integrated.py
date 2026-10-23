@@ -51,3 +51,16 @@ def test_mars_box_physical_pick_transport_place(action_mode, mass, cone, balance
     assert final["released"]
     assert final["support_load_n"] > 0
     assert final["settle_time"] >= 2
+
+
+@pytest.mark.sim
+@pytest.mark.parametrize('seed,mass', [(1860001, 0.02), (1860007, 0.05), (1860010, 0.05)])
+def test_verified_carry_to_place_restores_free_space_bias_before_contact(seed, mass):
+    result = run_case(
+        robot='innate_mars', seed=seed, payload_object='object1', payload_mass_kg=mass,
+        action_mode='direct_velocity', contact_cone='elliptic', contact_impratio=3,
+        balanced_grasp_setup=True,
+    )
+    assert result['success'], result
+    assert all(not s.get('unsafe_contact') and not s.get('wheel_lift') for s in result['stages'])
+    assert result['stages'][-1]['max_payload_rotation'] < 0.1

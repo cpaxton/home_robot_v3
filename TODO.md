@@ -5,6 +5,15 @@ Strike through or move to a PR when done.
 
 ## RL controller integration and acceptance (Mars first)
 
+Accepted plan: [Mars controller integration](docs/plans/mars_controller_integration.md).
+
+- [x] Isolate placement rearm bias regression with matched frozen-case ablations;
+      add explicit free-space compensation authorization and regression tests.
+      Full source-bound requalification remains required below.
+- [x] Add simulator task-pose command-protocol prototype, GT TAMP component replay,
+      measured-Jacobian teacher, and disabled-by-default guarded driver interface.
+      These are not public-tool, learned-policy, or hardware qualification.
+
 - [ ] Restore continuous pick/place after explicit stage rearming: v5 at
       `42aa2f30` passed 27/30 versus v4 30/30. Diagnose the 20 g seed 1860001
       retention loss and 50 g seeds 1860007/1860010 tracking timeouts; preserve

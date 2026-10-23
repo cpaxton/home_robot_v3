@@ -2364,3 +2364,63 @@ and must be diagnosed before further qualification or controller integration.
 [The v5 summary](../paper/data/whole_body_control/qualification_v5.json) and
 adjacent compressed full reports preserve the failures. The initial merge is a
 simulator development baseline, not a qualified learned or hardware controller.
+
+### Placement recovery and command-interface prototype
+
+The follow-up plan is tracked in
+[the Mars integration acceptance plan](plans/mars_controller_integration.md).
+The placement candidate restores **executor-authorized base compensation during
+verified free-space descent**, after conservative stage rearming. Compensation
+still turns off at support contact, and every fault stop still clears it.
+Development ablations recovered all three frozen failures by restoring bias;
+restoring tracking trim alone recovered only one. These diagnostics are archived
+in `paper/data/whole_body_control/placement_rearm_ablation.json` and do not
+replace the full frozen qualification.
+
+`TaskPoseCommandRuntime` provides a **simulator loopback** for validated
+`TaskPoseTrajectory` records through the real `CommandRuntime` ownership,
+identity, deadline, update, cancellation and stop-confirmation logic. A runtime
+owns an already prepared active environment: starting a command never resets
+physics, clears a failed contract, opens the gripper, or releases an object.
+Only a peer explicitly advertising `task_pose_control` accepts the helper.
+Schedules retain SE(2)/SE(3) masks and executor-only gripper release.
+
+The joint-reference teacher cannot follow arbitrary pose-only inputs. The new
+pose-command path uses a damped measured Jacobian to produce bounded teacher
+velocities, compensating measured base motion. This is a teacher baseline, not
+an iterative configuration IK loop or a restriction on learned actors. Learned
+policies receive normal history and preview observations. Both pass through the
+same actuator velocity/slew limits and environment safety checks. This teacher
+has not been qualified for general dynamic manipulation.
+
+Generate and execute **component** TAMP paths through that interface:
+
+```bash
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MUJOCO_GL=egl \
+  taskset -c 14-15 .venv/bin/python -m emet.rl.manipulation.tamp_cases \
+  --robot innate_mars --episodes 2 --seed 610000 --execute \
+  --execution-interface command --emit-pose-trajectories \
+  --output /tmp/mars-tamp-command-smoke.json
+```
+
+The initial development smoke passed 4/4 planned paths, including loaded carry;
+initialization and planning failures remain in the case list. This is not the
+30-case two-support public-tool benchmark, full agent acceptance, a deployed
+ZMQ pose server, or hardware qualification. The native public TAMP adapter still
+requires Mars support before those gates can run.
+
+`GuardedControlSession` is an **unwired, opt-in driver interface** with loopback
+tests. It checks declared whole-body velocity, measured-stop, and robot-watchdog
+capabilities before starting; it enforces fresh feedback, profile speed and
+acceleration bounds, initial-XY holding with a 5 cm measured hard boundary,
+±45° yaw targets/±47° measured stop boundary, target-loss stop, and latching on
+command gaps or faults. It exposes no gripper release or contact procedure.
+No existing Mars bridge advertises this interface, and no network/hardware
+connection is opened by its constructor. Driver declarations and loopback tests
+are not evidence of measured real-robot stopping or calibrated force control.
+
+The placement recovery rerun passed **30/30 frozen continuous pick/place**
+with zero unsafe-contact or wheel events. The expanded source-bound regression
+gate passed **367 tests**, with zero failures or skips; see the archived
+`mars-integration-regressions-v2.*` evidence. Full carry requalification is
+still required for the revised manifest, and PPO remains stopped.
