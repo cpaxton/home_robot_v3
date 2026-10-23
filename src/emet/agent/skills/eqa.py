@@ -16,9 +16,8 @@ if TYPE_CHECKING:
 
 
 def _dispatch(executor: AgenticEQAExecutor, name: str):
-    def _fn(**kwargs: Any) -> str:
-        out = executor.handle_tool(name, kwargs)
-        return str(out)
+    def _fn(**kwargs: Any) -> dict:
+        return executor.handle_tool(name, kwargs)
 
     return _fn
 

@@ -183,8 +183,8 @@ def test_voxel_sim_upgrades_only_matching_captured_frame():
     _require_agentic()
     import torch
 
-    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
     from emet.memory.graph_eqa.agentic.views import VIEW_ID_BASE, CapturedView
+    from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
 
     agent = MagicMock()
     agent.parameters = {"eqa": {}}
@@ -215,12 +215,11 @@ def test_voxel_sim_upgrades_only_matching_captured_frame():
     ex._dense_max_sim_for_rgb = lambda *_a, **_k: None  # type: ignore[method-assign]
     assert ex._voxel_max_sim_for_obs("large bookshelf", 7) is None
     view_id = VIEW_ID_BASE + 7
-    ex._captured_views = {
-        view_id: CapturedView(view_id, 7, np.zeros((8, 8, 3), dtype=np.uint8), np.eye(4))
-    }
+    ex._captured_views = {view_id: CapturedView(view_id, 7, np.zeros((8, 8, 3), dtype=np.uint8), np.eye(4))}
     ex._run_vlm_view_assess = MagicMock(return_value={"answerable": False})
     out = ex._tool_verify_siglip("large bookshelf", view_id)
-    assert out["status"] == "PRESENT"
+    assert out["status"] == "NOT_ASSESSED"
+    assert out["retrieval"]["status"] == "PRESENT"
     # Voxel PRESENT is a cheap proposal; submit unlock requires VLM assess.
     assert out["verified"] is False
     assert out["answerable"] is False
@@ -254,7 +253,8 @@ def test_never_reverify_same_view():
     ex._dense_max_sim_for_rgb = lambda *_a, **_k: None  # type: ignore[method-assign]
     first = ex._tool_verify_siglip("towel", 5)
     assert first["ok"] is True
-    assert first["status"] == "ABSENT"
+    assert first["status"] == "NOT_ASSESSED"
+    assert first["retrieval"]["status"] == "ABSENT"
     second = ex._tool_verify_siglip("towel", 5)
     assert second["ok"] is False
     assert second["status"] == "SKIPPED_SAME_VIEW"
@@ -308,13 +308,15 @@ def test_image_verify_three_band_absent_candidate_present():
         ex._dense_max_sim_for_rgb = lambda *_a, **_k: None  # type: ignore[method-assign]
         return ex._tool_verify_siglip("towel", 1)
 
-    assert _run(0.05)["status"] == "ABSENT"
+    assert _run(0.05)["retrieval"]["status"] == "ABSENT"
     assert _run(0.05)["verified"] is False
     mid = _run(0.105)
-    assert mid["status"] == "CANDIDATE"
+    assert mid["status"] == "NOT_ASSESSED"
+    assert mid["retrieval"]["status"] == "CANDIDATE"
     assert mid["verified"] is False
     hi = _run(0.13)
-    assert hi["status"] == "PRESENT"
+    assert hi["status"] == "NOT_ASSESSED"
+    assert hi["retrieval"]["status"] == "PRESENT"
     # Image SigLIP is a proposal channel; it cannot establish fused verification alone.
     assert hi["verified"] is False
     assert hi["fused_verified"] is False
@@ -372,7 +374,8 @@ def test_vlm_assess_unlocks_even_when_siglip_absent(monkeypatch):
     ex._dense_max_sim_for_rgb = lambda *_a, **_k: None  # type: ignore[method-assign]
     ex._target_phrase = "utensils"
     out = ex._tool_verify_siglip("utensils", 9)
-    assert out["status"] == "ABSENT"
+    assert out["status"] == "VISUAL_PRESENT"
+    assert out["retrieval"]["status"] == "ABSENT"
     assert out["verified"] is True
     assert out["answerable"] is True
     assert ex._evidence_policy.state == AgenticState.ANSWER
@@ -1235,9 +1238,9 @@ def test_prefer_explore_after_close_absent():
         38,
         closest_m=0.4,
         verify_out={
-            "status": "ABSENT",
+            "status": "VISUAL_ABSENT",
             "phrase": "fruit bowl",
-            "present": False,
+            "visual": {"present": False},
             "answerable": False,
         },
         approach_index=1,
