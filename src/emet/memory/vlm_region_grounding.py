@@ -164,6 +164,7 @@ def select_supported_region(
     proposal_masks=None,
     candidate_filter=None,
     purpose="object",
+    search_padding=0,
 ):
     """One geometry-feedback correction at most; semantic abstentions stand."""
     if strategy == "depth_candidates":
@@ -181,7 +182,10 @@ def select_supported_region(
             proposal_masks=proposal_masks,
             candidate_filter=candidate_filter,
             purpose=purpose,
+            search_padding=search_padding,
         )
+    if search_padding != 0:
+        raise ValueError("Search padding requires depth_candidates strategy")
     if candidate_filter is not None:
         raise ValueError("Candidate filtering requires depth_candidates strategy")
     if segmenter is not None or proposal_masks is not None or presentation != "isolated" or whole_object:
@@ -232,6 +236,7 @@ def select_candidate_surface(
     whole_object=False,
     candidate_filter=None,
     purpose="object",
+    search_padding=0,
 ):
     from emet.memory.surface_candidates import (
         SurfaceCandidateOverflow,
@@ -240,6 +245,10 @@ def select_candidate_surface(
         surface_candidates,
     )
 
+    if type(search_padding) is not int or not 0 <= search_padding <= 100:
+        raise ValueError("Search padding must be an integer in 0..100 normalized image units")
+    if search_padding and (segmenter is not None or proposal_masks is not None):
+        raise ValueError("Search padding is only supported for RGBD component proposals")
     if client is None:
         raise RuntimeError("Query grounding VLM client is not initialized")
     target = _grounding_target(query, description)
@@ -267,6 +276,25 @@ def select_candidate_surface(
         return parsed, mask, audit
     try:
         region_box = parsed.get("box")
+        if search_padding:
+            if (
+                not isinstance(region_box, list)
+                or len(region_box) != 4
+                or any(type(v) is not int or not 0 <= v <= 1000 for v in region_box)
+                or region_box[0] >= region_box[2]
+                or region_box[1] >= region_box[3]
+            ):
+                raise ValueError("Invalid normalized search box")
+            # Expand only the untrusted search region. Measured components,
+            # overflow, whole-mask filtering and semantic abstention still gate
+            # acceptance; the original model box is preserved in parsed/audit.
+            region_box = [
+                max(0, region_box[0] - search_padding),
+                max(0, region_box[1] - search_padding),
+                min(1000, region_box[2] + search_padding),
+                min(1000, region_box[3] + search_padding),
+            ]
+            audit["search_region"] = {"box": region_box, "padding": search_padding}
         if segmenter is not None:
             box = region_box
             if (
@@ -405,6 +433,7 @@ def ground_vlm_region(
     proposal_masks=None,
     candidate_filter=None,
     purpose="object",
+    search_padding=0,
 ):
     rgb = frame_rgb_hwc_uint8(frame)
     depth = frame.depth.detach().cpu().numpy() if hasattr(frame.depth, "detach") else np.asarray(frame.depth)
@@ -431,6 +460,7 @@ def ground_vlm_region(
         proposal_masks=proposal_masks,
         candidate_filter=candidate_filter,
         purpose=purpose,
+        search_padding=search_padding,
     )
     if not verification["valid"]:
         return detected, [], [], verification

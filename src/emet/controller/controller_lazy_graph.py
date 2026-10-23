@@ -394,6 +394,8 @@ class LazyGraphController(DynagraphController):
             detector = get_shared_yoloe_perception(confidence_threshold=0.05, device=self.device, size="l")
             _, instances, _ = detector.predict(rgb, draw_instance_predictions=False, vocabulary=[query])
             options["proposal_masks"] = refine_instance_proposals(rgb, instances, options.pop("segmenter"))
+        if "search_padding" in config:
+            options["search_padding"] = config["search_padding"]
         if "surface_presentation" in config:
             options["presentation"] = config["surface_presentation"]
         if "whole_object_box" in config:

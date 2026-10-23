@@ -1,0 +1,557 @@
+{
+  "scope": "offline RGBD region diagnostic; no tracking or native execution acceptance",
+  "source_commit": "79ae048e",
+  "job_id": "20261023_194152_4bf30e",
+  "model": "Qwen/Qwen3-VL-8B-Instruct",
+  "source_frame": ".tamp-runs/observed-integration/views/head_1.npz",
+  "results": [
+    {
+      "variant": "existing_candidates",
+      "query": "red cylinder",
+      "valid": true,
+      "selected_pixels": 29,
+      "red_pixels": 29,
+      "blue_pixels": 0,
+      "audit": {
+        "source": "vlm_region",
+        "purpose": "object",
+        "prompt": "Locate the visible object 'red cylinder' in the image. Return a bounding box around the visible target; coordinates are integers normalized to 0..1000 in x,y order. Abstain if the object is absent or ambiguous in this image. Return JSON {\"verified\":true,\"box\":[x_min,y_min,x_max,y_max],\"reason\":\"...\"} or {\"verified\":false,\"reason\":\"...\"}. Do not predict a 3D position or surface point.",
+        "system_prompt": "Ground a robot target in the provided image. Do not invent missing visual evidence.",
+        "raw": "```json\n{\n  \"verified\": true,\n  \"box\": [478, 547, 521, 600],\n  \"reason\": \"The image contains a small red cylinder located centrally on a brown surface. The bounding box is normalized to 0..1000 and tightly encloses the visible red cylinder.\"\n}\n```",
+        "image_order": [
+          "rgb_file"
+        ],
+        "valid": true,
+        "strategy": "depth_candidates",
+        "surface_candidates": [
+          {
+            "id": 0,
+            "bbox_xyxy": [
+              114,
+              175,
+              126,
+              192
+            ],
+            "mask_bits": "/////////+/4/w/g/g/g/g/g/g/g/g/g/gA=",
+            "points": 146
+          },
+          {
+            "id": 1,
+            "bbox_xyxy": [
+              121,
+              180,
+              126,
+              188
+            ],
+            "mask_bits": "G//3vOM=",
+            "points": 29
+          }
+        ],
+        "surface_selection": {
+          "prompt": "Select a measured surface of 'red cylinder'. Image 1 is the original reference, NOT a candidate. Every subsequent image is ONE candidate, labeled with its ID. Image 2 is candidate 0, image 3 is candidate 1, and so on. All candidate images use the same enlarged context crop. In each candidate panel, ONLY pixels on the measured surface are retained; pixels outside that candidate have been replaced with black. Black background is not evidence. These unlabelled geometry proposals may include table, wall, occluders, or mixed objects. Select only a region whose bright pixels belong to the requested object, not its support furniture. A partial visible object surface is sufficient. If a region mixes target and other objects, or the target is ambiguous, abstain. Available IDs: [0, 1]. Return JSON {\"selected_id\":integer or null,\"target_unambiguous\":true or false,\"reason\":\"...\"}.",
+          "system_prompt": "Choose a visually supported surface, not an object location guess. Reply with JSON only.",
+          "raw": "{\"selected_id\":1,\"target_unambiguous\":true,\"reason\":\"Candidate 1 shows only the red cylinder's surface, with no mixing of other objects. The red pixels correspond to the requested object, and the black background indicates only the measured surface is retained.\"}",
+          "image_order": [
+            "rgb_file",
+            "surface_candidate_0_rgb_file",
+            "surface_candidate_1_rgb_file"
+          ],
+          "presentation": "isolated"
+        },
+        "selected_id": 1,
+        "proposal_source": "rgbd_components"
+      },
+      "seconds": 14.638514381003915
+    },
+    {
+      "variant": "existing_candidates",
+      "query": "blue cube",
+      "valid": true,
+      "selected_pixels": 115,
+      "red_pixels": 0,
+      "blue_pixels": 115,
+      "audit": {
+        "source": "vlm_region",
+        "purpose": "object",
+        "prompt": "Locate the visible object 'blue cube' in the image. Return a bounding box around the visible target; coordinates are integers normalized to 0..1000 in x,y order. Abstain if the object is absent or ambiguous in this image. Return JSON {\"verified\":true,\"box\":[x_min,y_min,x_max,y_max],\"reason\":\"...\"} or {\"verified\":false,\"reason\":\"...\"}. Do not predict a 3D position or surface point.",
+        "system_prompt": "Ground a robot target in the provided image. Do not invent missing visual evidence.",
+        "raw": "```json\n{\n  \"verified\": true,\n  \"box\": [478, 625, 521, 750],\n  \"reason\": \"The blue cube is visible in the image, located in the center of the brown surface, directly below a red cylinder. The bounding box is normalized to 0..1000 and covers the visible portion of the blue cube.\"\n}\n```",
+        "image_order": [
+          "rgb_file"
+        ],
+        "valid": true,
+        "strategy": "depth_candidates",
+        "surface_candidates": [
+          {
+            "id": 0,
+            "bbox_xyxy": [
+              114,
+              200,
+              126,
+              240
+            ],
+            "mask_bits": "/g/g/g/w/8///////////g/g/g/g/g/g/g/g/g/g/g/g/g/g/g/g/g/g/g/g/g/g/g/g/g/g/g/g/g/g",
+            "points": 309
+          },
+          {
+            "id": 1,
+            "bbox_xyxy": [
+              121,
+              211,
+              126,
+              234
+            ],
+            "mask_bits": "///////////////////g",
+            "points": 115
+          },
+          {
+            "id": 2,
+            "bbox_xyxy": [
+              121,
+              234,
+              126,
+              240
+            ],
+            "mask_bits": "/////A==",
+            "points": 30
+          }
+        ],
+        "surface_selection": {
+          "prompt": "Select a measured surface of 'blue cube'. Image 1 is the original reference, NOT a candidate. Every subsequent image is ONE candidate, labeled with its ID. Image 2 is candidate 0, image 3 is candidate 1, and so on. All candidate images use the same enlarged context crop. In each candidate panel, ONLY pixels on the measured surface are retained; pixels outside that candidate have been replaced with black. Black background is not evidence. These unlabelled geometry proposals may include table, wall, occluders, or mixed objects. Select only a region whose bright pixels belong to the requested object, not its support furniture. A partial visible object surface is sufficient. If a region mixes target and other objects, or the target is ambiguous, abstain. Available IDs: [0, 1, 2]. Return JSON {\"selected_id\":integer or null,\"target_unambiguous\":true or false,\"reason\":\"...\"}.",
+          "system_prompt": "Choose a visually supported surface, not an object location guess. Reply with JSON only.",
+          "raw": "{\"selected_id\":1,\"target_unambiguous\":true,\"reason\":\"Candidate 1 shows a clear, isolated blue rectangular region that matches the visible surface of the blue cube from the reference image. The other candidates either show non-blue surfaces or are too small/ambiguous to be the target object.\"}",
+          "image_order": [
+            "rgb_file",
+            "surface_candidate_0_rgb_file",
+            "surface_candidate_1_rgb_file",
+            "surface_candidate_2_rgb_file"
+          ],
+          "presentation": "isolated"
+        },
+        "selected_id": 1,
+        "proposal_source": "rgbd_components"
+      },
+      "seconds": 16.496312039002078
+    },
+    {
+      "variant": "expanded_search_candidates",
+      "query": "red cylinder",
+      "coarse": {
+        "verified": true,
+        "box": [
+          478,
+          547,
+          521,
+          600
+        ],
+        "reason": "The image contains a small red cylinder located centrally on a brown surface. The bounding box is normalized to 0..1000 and tightly encloses the visible red cylinder."
+      },
+      "search_box": [
+        428,
+        497,
+        571,
+        650
+      ],
+      "candidate_count": 3,
+      "valid": true,
+      "selected_pixels": 204,
+      "red_pixels": 204,
+      "blue_pixels": 0,
+      "audit": {
+        "source": "external_mask_proposals",
+        "valid": true,
+        "strategy": "depth_candidates",
+        "purpose": "object",
+        "surface_candidates": [
+          {
+            "id": 0,
+            "bbox_xyxy": [
+              102,
+              159,
+              138,
+              208
+            ],
+            "mask_bits": "///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////+H////4A////wAf///gAP///gAP///gAP///gAP///gAP///gAP///gAP///gAf///gAf///gAf///gAf///gAf///gAf///gAf///gAf///gAf///gAf///gAf///gAf///gAf///gAf///wA////8D///////////////////A=",
+            "points": 1465
+          },
+          {
+            "id": 1,
+            "bbox_xyxy": [
+              121,
+              179,
+              134,
+              188
+            ],
+            "mask_bits": "BwD+H/n/7/+//f/H/B+A",
+            "points": 83
+          },
+          {
+            "id": 2,
+            "bbox_xyxy": [
+              121,
+              185,
+              134,
+              205
+            ],
+            "mask_bits": "AAwAeAf///9/+//f/v/3/7/9/+//f/v/3/7/8/+f+D8A",
+            "points": 204
+          }
+        ],
+        "surface_selection": {
+          "prompt": "Select a measured surface of 'red cylinder'. Image 1 is the original reference, NOT a candidate. Every subsequent image is ONE candidate, labeled with its ID. Image 2 is candidate 0, image 3 is candidate 1, and so on. All candidate images use the same enlarged context crop. In each candidate panel, ONLY pixels on the measured surface are retained; pixels outside that candidate have been replaced with black. Black background is not evidence. These unlabelled geometry proposals may include table, wall, occluders, or mixed objects. Select only a region whose bright pixels belong to the requested object, not its support furniture. A partial visible object surface is sufficient. If a region mixes target and other objects, or the target is ambiguous, abstain. Available IDs: [0, 1, 2]. Return JSON {\"selected_id\":integer or null,\"target_unambiguous\":true or false,\"reason\":\"...\"}.",
+          "system_prompt": "Choose a visually supported surface, not an object location guess. Reply with JSON only.",
+          "raw": "{\"selected_id\":2,\"target_unambiguous\":true,\"reason\":\"Candidate 2 shows a clear, partial view of the red cylinder's side surface, matching the object in the reference image. The other candidates either show an incorrect shape (Candidate 0) or only a top view (Candidate 1) which is insufficient for identifying the cylinder's surface.\"}",
+          "image_order": [
+            "rgb_file",
+            "surface_candidate_0_rgb_file",
+            "surface_candidate_1_rgb_file",
+            "surface_candidate_2_rgb_file"
+          ],
+          "presentation": "isolated"
+        },
+        "selected_id": 2,
+        "proposal_source": "external_masks"
+      },
+      "seconds": 16.699893383003655
+    },
+    {
+      "variant": "expanded_search_candidates",
+      "query": "blue cube",
+      "coarse": {
+        "verified": true,
+        "box": [
+          478,
+          625,
+          521,
+          750
+        ],
+        "reason": "The blue cube is visible in the image, located in the center of the brown surface, directly below a red cylinder. The bounding box is normalized to 0..1000 and covers the visible portion of the blue cube."
+      },
+      "search_box": [
+        428,
+        575,
+        571,
+        800
+      ],
+      "candidate_count": 6,
+      "valid": true,
+      "selected_pixels": 336,
+      "red_pixels": 0,
+      "blue_pixels": 333,
+      "audit": {
+        "source": "external_mask_proposals",
+        "valid": true,
+        "strategy": "depth_candidates",
+        "purpose": "object",
+        "surface_candidates": [
+          {
+            "id": 0,
+            "bbox_xyxy": [
+              102,
+              184,
+              138,
+              256
+            ],
+            "mask_bits": "///gAP///gAP///gAP///gAP///gAP///gAf///gAf///gAf///gAf///gAf///gAf///gAf///gAf///gAf///gAf///gAf///gAf///gAf///gAf///wA////8D//////////////////////////////////gAH///gAH///gAH///gAH///gAH///gAH///gAH///gAH///gAH///gAH///gAD///gAD///gAD///gAD///gAD///gAD///gAD///gAD///gAD///gAD///gAD///gAD///gAD///gAD///gAD///gAD///gAD///gAD///gAD///gAD///gAD///gAD///gAD///gAD///gAD///gAH///gAH///gAH///gAH///gAH///gAH///gAP///gAP///gAP///gAP///gAP",
+            "points": 1679
+          },
+          {
+            "id": 1,
+            "bbox_xyxy": [
+              122,
+              184,
+              134,
+              188
+            ],
+            "mask_bits": "///+f8Pw",
+            "points": 38
+          },
+          {
+            "id": 2,
+            "bbox_xyxy": [
+              121,
+              185,
+              134,
+              205
+            ],
+            "mask_bits": "AAwAeAf///9/+//f/v/3/7/9/+//f/v/3/7/8/+f+D8A",
+            "points": 204
+          },
+          {
+            "id": 3,
+            "bbox_xyxy": [
+              121,
+              211,
+              136,
+              234
+            ],
+            "mask_bits": "//3/+//3/+//3/+//3/+//3//////////////////////////////////4A=",
+            "points": 336
+          },
+          {
+            "id": 4,
+            "bbox_xyxy": [
+              121,
+              234,
+              136,
+              251
+            ],
+            "mask_bits": "/////////////////////////////+//3/+//3/+//g=",
+            "points": 248
+          },
+          {
+            "id": 5,
+            "bbox_xyxy": [
+              121,
+              251,
+              134,
+              256
+            ],
+            "mask_bits": "//////////+A",
+            "points": 65
+          }
+        ],
+        "surface_selection": {
+          "prompt": "Select a measured surface of 'blue cube'. Image 1 is the original reference, NOT a candidate. Every subsequent image is ONE candidate, labeled with its ID. Image 2 is candidate 0, image 3 is candidate 1, and so on. All candidate images use the same enlarged context crop. In each candidate panel, ONLY pixels on the measured surface are retained; pixels outside that candidate have been replaced with black. Black background is not evidence. These unlabelled geometry proposals may include table, wall, occluders, or mixed objects. Select only a region whose bright pixels belong to the requested object, not its support furniture. A partial visible object surface is sufficient. If a region mixes target and other objects, or the target is ambiguous, abstain. Available IDs: [0, 1, 2, 3, 4, 5]. Return JSON {\"selected_id\":integer or null,\"target_unambiguous\":true or false,\"reason\":\"...\"}.",
+          "system_prompt": "Choose a visually supported surface, not an object location guess. Reply with JSON only.",
+          "raw": "{\"selected_id\":3,\"target_unambiguous\":true,\"reason\":\"Candidate 3 shows a distinct blue square, matching the blue cube from the reference image. The other candidates show red (Candidate 1, 2), brown (Candidate 0, 5), or ambiguous shapes (Candidate 4). Only Candidate 3 clearly represents the blue cube surface without mixing with other objects.\"}",
+          "image_order": [
+            "rgb_file",
+            "surface_candidate_0_rgb_file",
+            "surface_candidate_1_rgb_file",
+            "surface_candidate_2_rgb_file",
+            "surface_candidate_3_rgb_file",
+            "surface_candidate_4_rgb_file",
+            "surface_candidate_5_rgb_file"
+          ],
+          "presentation": "isolated"
+        },
+        "selected_id": 3,
+        "proposal_source": "external_masks"
+      },
+      "seconds": 18.729024473010213
+    }
+  ],
+  "production_path": {
+    "job_id": "20261023_194604_0ac11e",
+    "source": "79ae048e plus search_padding working diff",
+    "results": [
+      {
+        "variant": "production_padded_candidates",
+        "query": "red cylinder",
+        "valid": true,
+        "selected_pixels": 204,
+        "red_pixels": 204,
+        "blue_pixels": 0,
+        "audit": {
+          "source": "vlm_region",
+          "purpose": "object",
+          "prompt": "Locate the visible object 'red cylinder' in the image. Return a bounding box around the visible target; coordinates are integers normalized to 0..1000 in x,y order. Abstain if the object is absent or ambiguous in this image. Return JSON {\"verified\":true,\"box\":[x_min,y_min,x_max,y_max],\"reason\":\"...\"} or {\"verified\":false,\"reason\":\"...\"}. Do not predict a 3D position or surface point.",
+          "system_prompt": "Ground a robot target in the provided image. Do not invent missing visual evidence.",
+          "raw": "```json\n{\n  \"verified\": true,\n  \"box\": [478, 547, 521, 600],\n  \"reason\": \"The image contains a small red cylinder located centrally on a brown surface. The bounding box is normalized to 0..1000 and tightly encloses the visible red cylinder.\"\n}\n```",
+          "image_order": [
+            "rgb_file"
+          ],
+          "valid": true,
+          "strategy": "depth_candidates",
+          "search_region": {
+            "box": [
+              428,
+              497,
+              571,
+              650
+            ],
+            "padding": 50
+          },
+          "surface_candidates": [
+            {
+              "id": 0,
+              "bbox_xyxy": [
+                102,
+                159,
+                138,
+                208
+              ],
+              "mask_bits": "///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////+H////4A////wAf///gAP///gAP///gAP///gAP///gAP///gAP///gAP///gAf///gAf///gAf///gAf///gAf///gAf///gAf///gAf///gAf///gAf///gAf///gAf///gAf///gAf///wA////8D///////////////////A=",
+              "points": 1465
+            },
+            {
+              "id": 1,
+              "bbox_xyxy": [
+                121,
+                179,
+                134,
+                188
+              ],
+              "mask_bits": "BwD+H/n/7/+//f/H/B+A",
+              "points": 83
+            },
+            {
+              "id": 2,
+              "bbox_xyxy": [
+                121,
+                185,
+                134,
+                205
+              ],
+              "mask_bits": "AAwAeAf///9/+//f/v/3/7/9/+//f/v/3/7/8/+f+D8A",
+              "points": 204
+            }
+          ],
+          "surface_selection": {
+            "prompt": "Select a measured surface of 'red cylinder'. Image 1 is the original reference, NOT a candidate. Every subsequent image is ONE candidate, labeled with its ID. Image 2 is candidate 0, image 3 is candidate 1, and so on. All candidate images use the same enlarged context crop. In each candidate panel, ONLY pixels on the measured surface are retained; pixels outside that candidate have been replaced with black. Black background is not evidence. These unlabelled geometry proposals may include table, wall, occluders, or mixed objects. Select only a region whose bright pixels belong to the requested object, not its support furniture. A partial visible object surface is sufficient. If a region mixes target and other objects, or the target is ambiguous, abstain. Available IDs: [0, 1, 2]. Return JSON {\"selected_id\":integer or null,\"target_unambiguous\":true or false,\"reason\":\"...\"}.",
+            "system_prompt": "Choose a visually supported surface, not an object location guess. Reply with JSON only.",
+            "raw": "{\"selected_id\":2,\"target_unambiguous\":true,\"reason\":\"Candidate 2 shows a clear, partial view of the red cylinder's side surface, matching the object in the reference image. The other candidates either show an incorrect shape (Candidate 0) or only a top view (Candidate 1) which is insufficient for identifying the cylinder's surface.\"}",
+            "image_order": [
+              "rgb_file",
+              "surface_candidate_0_rgb_file",
+              "surface_candidate_1_rgb_file",
+              "surface_candidate_2_rgb_file"
+            ],
+            "presentation": "isolated"
+          },
+          "selected_id": 2,
+          "proposal_source": "rgbd_components"
+        },
+        "seconds": 16.841711592991487
+      },
+      {
+        "variant": "production_padded_candidates",
+        "query": "blue cube",
+        "valid": true,
+        "selected_pixels": 336,
+        "red_pixels": 0,
+        "blue_pixels": 333,
+        "audit": {
+          "source": "vlm_region",
+          "purpose": "object",
+          "prompt": "Locate the visible object 'blue cube' in the image. Return a bounding box around the visible target; coordinates are integers normalized to 0..1000 in x,y order. Abstain if the object is absent or ambiguous in this image. Return JSON {\"verified\":true,\"box\":[x_min,y_min,x_max,y_max],\"reason\":\"...\"} or {\"verified\":false,\"reason\":\"...\"}. Do not predict a 3D position or surface point.",
+          "system_prompt": "Ground a robot target in the provided image. Do not invent missing visual evidence.",
+          "raw": "```json\n{\n  \"verified\": true,\n  \"box\": [478, 625, 521, 750],\n  \"reason\": \"The blue cube is visible in the image, located in the center of the brown surface, directly below a red cylinder. The bounding box is normalized to 0..1000 and covers the visible portion of the blue cube.\"\n}\n```",
+          "image_order": [
+            "rgb_file"
+          ],
+          "valid": true,
+          "strategy": "depth_candidates",
+          "search_region": {
+            "box": [
+              428,
+              575,
+              571,
+              800
+            ],
+            "padding": 50
+          },
+          "surface_candidates": [
+            {
+              "id": 0,
+              "bbox_xyxy": [
+                102,
+                184,
+                138,
+                256
+              ],
+              "mask_bits": "///gAP///gAP///gAP///gAP///gAP///gAf///gAf///gAf///gAf///gAf///gAf///gAf///gAf///gAf///gAf///gAf///gAf///gAf///gAf///wA////8D//////////////////////////////////gAH///gAH///gAH///gAH///gAH///gAH///gAH///gAH///gAH///gAH///gAD///gAD///gAD///gAD///gAD///gAD///gAD///gAD///gAD///gAD///gAD///gAD///gAD///gAD///gAD///gAD///gAD///gAD///gAD///gAD///gAD///gAD///gAD///gAD///gAD///gAH///gAH///gAH///gAH///gAH///gAH///gAP///gAP///gAP///gAP///gAP",
+              "points": 1679
+            },
+            {
+              "id": 1,
+              "bbox_xyxy": [
+                122,
+                184,
+                134,
+                188
+              ],
+              "mask_bits": "///+f8Pw",
+              "points": 38
+            },
+            {
+              "id": 2,
+              "bbox_xyxy": [
+                121,
+                185,
+                134,
+                205
+              ],
+              "mask_bits": "AAwAeAf///9/+//f/v/3/7/9/+//f/v/3/7/8/+f+D8A",
+              "points": 204
+            },
+            {
+              "id": 3,
+              "bbox_xyxy": [
+                121,
+                211,
+                136,
+                234
+              ],
+              "mask_bits": "//3/+//3/+//3/+//3/+//3//////////////////////////////////4A=",
+              "points": 336
+            },
+            {
+              "id": 4,
+              "bbox_xyxy": [
+                121,
+                234,
+                136,
+                251
+              ],
+              "mask_bits": "/////////////////////////////+//3/+//3/+//g=",
+              "points": 248
+            },
+            {
+              "id": 5,
+              "bbox_xyxy": [
+                121,
+                251,
+                134,
+                256
+              ],
+              "mask_bits": "//////////+A",
+              "points": 65
+            }
+          ],
+          "surface_selection": {
+            "prompt": "Select a measured surface of 'blue cube'. Image 1 is the original reference, NOT a candidate. Every subsequent image is ONE candidate, labeled with its ID. Image 2 is candidate 0, image 3 is candidate 1, and so on. All candidate images use the same enlarged context crop. In each candidate panel, ONLY pixels on the measured surface are retained; pixels outside that candidate have been replaced with black. Black background is not evidence. These unlabelled geometry proposals may include table, wall, occluders, or mixed objects. Select only a region whose bright pixels belong to the requested object, not its support furniture. A partial visible object surface is sufficient. If a region mixes target and other objects, or the target is ambiguous, abstain. Available IDs: [0, 1, 2, 3, 4, 5]. Return JSON {\"selected_id\":integer or null,\"target_unambiguous\":true or false,\"reason\":\"...\"}.",
+            "system_prompt": "Choose a visually supported surface, not an object location guess. Reply with JSON only.",
+            "raw": "{\"selected_id\":3,\"target_unambiguous\":true,\"reason\":\"Candidate 3 shows a distinct blue square, matching the blue cube from the reference image. The other candidates show red (Candidate 1, 2), brown (Candidate 0, 5), or ambiguous shapes (Candidate 4). Only Candidate 3 clearly represents the blue cube surface without mixing with other objects.\"}",
+            "image_order": [
+              "rgb_file",
+              "surface_candidate_0_rgb_file",
+              "surface_candidate_1_rgb_file",
+              "surface_candidate_2_rgb_file",
+              "surface_candidate_3_rgb_file",
+              "surface_candidate_4_rgb_file",
+              "surface_candidate_5_rgb_file"
+            ],
+            "presentation": "isolated"
+          },
+          "selected_id": 3,
+          "proposal_source": "rgbd_components"
+        },
+        "seconds": 18.75676489599573
+      },
+      {
+        "variant": "production_padded_candidates",
+        "query": "green mug",
+        "valid": false,
+        "selected_pixels": 0,
+        "red_pixels": 0,
+        "blue_pixels": 0,
+        "audit": {
+          "source": "vlm_region",
+          "purpose": "object",
+          "prompt": "Locate the visible object 'green mug' in the image. Return a bounding box around the visible target; coordinates are integers normalized to 0..1000 in x,y order. Abstain if the object is absent or ambiguous in this image. Return JSON {\"verified\":true,\"box\":[x_min,y_min,x_max,y_max],\"reason\":\"...\"} or {\"verified\":false,\"reason\":\"...\"}. Do not predict a 3D position or surface point.",
+          "system_prompt": "Ground a robot target in the provided image. Do not invent missing visual evidence.",
+          "raw": "{\"verified\":false,\"reason\":\"There is no green mug visible in the image. The image contains a red and blue cylindrical object on a brown surface, but no mug, and none of the objects are green.\"}",
+          "image_order": [
+            "rgb_file"
+          ],
+          "valid": false,
+          "strategy": "depth_candidates",
+          "reason": "VLM abstained or returned invalid output"
+        },
+        "seconds": 4.917398132005474
+      }
+    ]
+  }
+}

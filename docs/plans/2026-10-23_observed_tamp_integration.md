@@ -55,3 +55,12 @@ visual effect verification and post-navigation acquisition admission. Missing or
 occluded evidence must remain unknown. Simulator contact/state stays available
 only to independent diagnostics/scoring. Shared whole-agent budget enforcement
 and native articulation remain separate follow-ups.
+
+## Grounding initialization diagnostic
+
+The [recorded-frame candidate comparison](../experiments/observed_surface_grounding_20261023.md)
+finds substantially cleaner object support than guessed point regions. Bounded
+RGBD search padding is now available as an opt-in existing-API setting. This is
+initialization work: remote selection still takes longer than the freshness limit.
+Fresh-frame association and observed execution remain outstanding; no timestamp
+renewal or simulator-pose fallback is authorized by this result.
