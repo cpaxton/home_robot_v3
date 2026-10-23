@@ -12,6 +12,7 @@ import multiprocessing
 from collections import Counter
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import asdict, replace
+from importlib import metadata
 from pathlib import Path
 
 import numpy as np
@@ -28,14 +29,42 @@ def digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, allow_nan=False).encode()).hexdigest()
 
 
+REPO_ROOT = Path(__file__).resolve().parents[4]
+CANONICAL_SUITE = REPO_ROOT / "configs/benchmarks/mars_carry_v2.json"
+CANONICAL_REGRESSIONS = REPO_ROOT / "configs/benchmarks/mars_carry_regressions.json"
+
+
+def canonical_digests():
+    return {
+        "expected_suite_sha256": digest(json.loads(CANONICAL_SUITE.read_text())),
+        "expected_regressions_sha256": digest(json.loads(CANONICAL_REGRESSIONS.read_text())),
+    }
+
+
 def source_hashes():
+    """Conservative teacher-source manifest, including shared safety helpers.
+
+    Whole packages cover function-local imports as well as direct imports; this
+    deliberately invalidates evidence on some non-behavioral source changes.
+    Compiled model fingerprints remain an independent geometry/dynamics check.
+    """
     root = Path(__file__).resolve().parents[2]
-    paths = list(Path(__file__).parent.glob("*.py")) + [
-        root / "controller/manipulation/physical_pick_place.py",
-        root / "motion/mujoco_collision.py",
-        root / "robots/innate_mars/chassis.py",
-    ]
-    return {str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(paths)}
+    paths = set()
+    for package in ("rl", "motion", "controller/manipulation", "robots"):
+        paths.update((root / package).rglob("*.py"))
+    for name in ("eval/physical_tamp.py", "simulation/sim_object_placements.py", "utils/logger.py", "utils/assets.py"):
+        paths.add(root / name)
+    # XML identities contain mesh paths, not mesh bytes. Bind the Mars input
+    # assets as well so replacing a mesh cannot preserve old safety evidence.
+    paths.update(p for p in (root / "assets/robot/innate_mars").rglob("*") if p.is_file())
+    for name in ("stretch.xml", "docking_station.xml", "scene_environment.xml"):
+        paths.add(root / "assets/robot" / name)
+    result = {str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(paths)}
+    versions = {name: metadata.version(name) for name in ("mujoco", "numpy", "torch", "stable-baselines3")}
+    result["@runtime"] = digest(versions)
+    result["@canonical_suite"] = hashlib.sha256(CANONICAL_SUITE.read_bytes()).hexdigest()
+    result["@canonical_regressions"] = hashlib.sha256(CANONICAL_REGRESSIONS.read_bytes()).hexdigest()
+    return result
 
 
 def default_config():
@@ -122,7 +151,18 @@ def ready(report):
     """Small smoke suites cannot qualify a distribution for training."""
     if not report.get("complete") or report.get("controller") != "teacher":
         return False
+    canonical = json.loads(CANONICAL_SUITE.read_text())
+    if report.get("suite_sha256") != digest(canonical) or report.get("suite") != canonical:
+        return False
     rows = report["episodes"]
+    if any(
+        type(r.get(key)) is not bool
+        for r in rows
+        for key in ("initialization_failed", "is_success", "unsafe_contact", "wheel_lift", "retention_lost")
+    ):
+        return False
+    if any(r["initialization_failed"] and r["is_success"] for r in rows):
+        return False
     if len({r["case_id"] for r in rows}) != len(rows):
         return False
     for mass in MASSES:
@@ -137,15 +177,36 @@ def ready(report):
     )
 
 
-def require_training_readiness(carry_report, pick_place_report, config, fingerprint):
+def require_training_readiness(
+    carry_report, pick_place_report, config, fingerprint, *, expected_suite_sha256, expected_regressions_sha256
+):
     """Require complete, current teacher evidence before launching PPO workers."""
     if carry_report.get("source_hashes") != source_hashes():
         raise ValueError("carry teacher readiness source hashes are missing or stale")
+    suite = json.loads(CANONICAL_SUITE.read_text())
+    regressions = json.loads(CANONICAL_REGRESSIONS.read_text())
+    if expected_suite_sha256 != digest(suite) or expected_regressions_sha256 != digest(regressions):
+        raise ValueError("expected benchmark digests do not match the canonical catalogs")
+    if (
+        carry_report.get("suite_sha256") != expected_suite_sha256
+        or digest(carry_report["suite"]) != expected_suite_sha256
+    ):
+        raise ValueError("carry readiness suite does not match the canonical benchmark")
+    expected_cases = {c["id"]: c for c in suite["cases"]}
+    episodes = carry_report["episodes"]
+    if len(episodes) != len(expected_cases) or {r["case_id"] for r in episodes} != set(expected_cases):
+        raise ValueError("carry readiness case identities do not match the canonical benchmark")
+    for row in episodes:
+        case = expected_cases[row["case_id"]]
+        if any(row.get(key) != case[key] for key in ("seed", "stratum", "payload_mass_kg")):
+            raise ValueError("carry readiness case parameters differ from the canonical benchmark")
+        if row.get("benchmark_config") != asdict(case_config(suite, case)):
+            raise ValueError("carry readiness episode configuration differs from the canonical benchmark")
+    if pick_place_report.get("regressions_sha256") != expected_regressions_sha256:
+        raise ValueError("pick/place regression catalog checksum mismatch")
     if not ready(carry_report):
         groups = summarize(carry_report.get("episodes", []))
         raise ValueError(f"carry teacher readiness failed: complete={carry_report.get('complete')}; per_mass={groups}")
-    if carry_report["suite_sha256"] != digest(carry_report["suite"]):
-        raise ValueError("carry readiness suite checksum mismatch")
     baseline = carry_report["suite"]["config"]
     for key in (
         "robot",
@@ -161,15 +222,21 @@ def require_training_readiness(carry_report, pick_place_report, config, fingerpr
         "grasp_pitch_rad",
         "trajectory_preview",
         "tracking_reward",
+        "base_xy_tolerance",
+        "base_heading_tolerance",
+        "hand_position_tolerance",
+        "hand_orientation_tolerance",
     ):
         if getattr(config, key) != baseline[key]:
             raise ValueError(f"training does not match qualified carry setup: {key}")
+    if config.payload_mass_kg not in MASSES or config.carry_push_scale > 0.1:
+        raise ValueError("training load or disturbance scale is outside the qualified distribution")
     if any(row["fingerprint"] != fingerprint for row in carry_report["episodes"]):
         raise ValueError("carry readiness model mismatch")
     rows = pick_place_report.get("cases", [])
-    expected = {(seed, mass) for seed in range(1860001, 1860011) for mass in MASSES}
+    expected = {(c["seed"], c["payload_mass_kg"]) for c in regressions["continuous_pick_place"]}
     actual = {(r["seed"], r.get("requested_payload_mass_kg")) for r in rows}
-    if not pick_place_report.get("complete") or len(rows) != 30 or actual != expected:
+    if not pick_place_report.get("complete") or len(rows) != len(expected) or actual != expected:
         raise ValueError("complete frozen 30-case pick/place evidence required")
     if any(
         not r["success"]
@@ -216,6 +283,7 @@ def run_suite(suite, output, *, policy=None, jobs=1):
 def _write_results(suite, output, results, rows, sources, policy):
     for case, row in zip(suite["cases"], results, strict=True):
         row.update(case_id=case["id"], payload_mass_kg=case["payload_mass_kg"], stratum=case["stratum"])
+        row["benchmark_config"] = asdict(case_config(suite, case))
         row["episode_id"] = f"innate_mars:carry:{case['id']}:{case['seed']}"
         rows.append(row)
         report = {
@@ -225,6 +293,15 @@ def _write_results(suite, output, results, rows, sources, policy):
             "controller": "teacher" if policy is None else policy.manifest["weights_sha256"],
             "complete": len(rows) == len(suite["cases"]),
             "summary": summarize(rows),
+            "strata": {
+                str(mass): {
+                    stratum: summarize([r for r in rows if r["payload_mass_kg"] == mass and r["stratum"] == stratum])[
+                        str(mass)
+                    ]
+                    for stratum in STRATA
+                }
+                for mass in MASSES
+            },
             "scope": "simulated carry component; separate continuous pick/place gate required",
             "source_hashes": sources,
         }

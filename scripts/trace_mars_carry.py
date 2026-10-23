@@ -18,6 +18,26 @@ from emet.rl.manipulation.env import ManipulationEnv
 from emet.rl.manipulation.safety import relative_pose
 
 
+def active_payload_contacts(model, data, payload):
+    contacts = []
+    for index, contact in enumerate(data.contact[: data.ncon]):
+        a, b = (int(model.geom_bodyid[g]) for g in contact.geom)
+        if payload not in (a, b):
+            continue
+        force = np.zeros(6)
+        mujoco.mj_contactForce(model, data, index, force)
+        contacts.append(
+            {
+                "bodies": [model.body(a).name, model.body(b).name],
+                "position_world_m": contact.pos.tolist(),
+                "contact_frame": contact.frame.tolist(),
+                "contact_wrench": force.tolist(),
+                "distance_m": float(contact.dist),
+            }
+        )
+    return contacts
+
+
 def trace_case(suite, case, policy_path=None):
     if suite["config"].get("robot") != "innate_mars":
         raise ValueError("this trace tool requires a Mars suite")
@@ -35,22 +55,7 @@ def trace_case(suite, case, policy_path=None):
         for _ in range(round(env.config.horizon / env.profile.dt) + 1):
             obs, _, done, truncated, info = env.step(env.teacher_action() if policy is None else policy(obs))
             control = env.control
-            contacts = []
-            for index, contact in enumerate(env.data.contact):
-                a, b = (int(env.model.geom_bodyid[g]) for g in contact.geom)
-                if env.payload not in (a, b):
-                    continue
-                force = np.zeros(6)
-                mujoco.mj_contactForce(env.model, env.data, index, force)
-                contacts.append(
-                    {
-                        "bodies": [env.model.body(a).name, env.model.body(b).name],
-                        "position_world_m": contact.pos.tolist(),
-                        "contact_frame": contact.frame.tolist(),
-                        "contact_wrench": force.tolist(),
-                        "distance_m": float(contact.dist),
-                    }
-                )
+            contacts = active_payload_contacts(env.model, env.data, env.payload)
             translation, rotation = relative_pose(env.data, control.ee, env.payload)
             rows.append(
                 {

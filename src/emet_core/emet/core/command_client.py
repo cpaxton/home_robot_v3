@@ -139,7 +139,12 @@ def wait_navigation(client, action, timeout):
 
 
 def close_command_session(client):
-    """Best-effort safe handoff before closing telemetry; uncertainty retains ownership."""
+    """Best-effort safe handoff before closing telemetry; uncertainty retains ownership.
+
+    An unconfirmed reactive stop intentionally skips navigation cleanup AND
+    release_control. Retaining the lease prevents a new owner from commanding
+    motion while the previous controller might still be active.
+    """
     if not hasattr(client, "_command_session"):
         return
     import logging

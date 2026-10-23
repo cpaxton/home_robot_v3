@@ -138,3 +138,21 @@ def test_legacy_peer_rejected_before_motion():
     with pytest.raises(RuntimeError, match="does not advertise"):
         send_reactive_goal(connect(robot), base=[1, 0, 0])
     assert robot.starts == 0
+
+
+def test_shutdown_does_not_cleanup_navigation_or_release_when_reactive_stop_is_unconfirmed(monkeypatch):
+    import emet.core.command_client as commands
+
+    robot = Robot()
+    client = connect(robot)
+    send_reactive_goal(client, base=[1, 0, 0])
+    robot.stopped = False
+    client._last_navigation_command = {"client_session_id": "other", "sequence": 999}
+    cleanup = []
+    monkeypatch.setattr(commands, "cancel_navigation", lambda *args: cleanup.append("navigation"))
+    close_command_session(client)
+    assert not cleanup
+    assert robot._reactive_fault
+    assert robot._reactive_command is not None
+    with pytest.raises(RuntimeError, match="another client"):
+        send_reactive_goal(connect(robot), base=[0, 0, 0])

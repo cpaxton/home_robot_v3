@@ -1,11 +1,16 @@
 """Carry admission, physical execution and benchmark qualification contracts."""
 
-from dataclasses import replace
+import json
+from dataclasses import asdict, replace
+from pathlib import Path
 
 import numpy as np
 import pytest
 
 from emet.rl.manipulation.carry_benchmark import (
+    CANONICAL_SUITE,
+    canonical_digests,
+    case_config,
     default_config,
     digest,
     make_suite,
@@ -66,11 +71,14 @@ def test_frozen_disturbance_uses_wider_support_without_weakening_the_push():
         env.close()
 
 
-def test_training_requires_complete_current_safe_evidence():
-    suite = make_suite()
+def passing_evidence():
+    suite = json.loads(CANONICAL_SUITE.read_text())
+    hashes = source_hashes()
     rows = [
         {
             "case_id": c["id"],
+            "seed": c["seed"],
+            "benchmark_config": asdict(case_config(suite, c)),
             "payload_mass_kg": c["payload_mass_kg"],
             "stratum": c["stratum"],
             "is_success": True,
@@ -90,9 +98,10 @@ def test_training_requires_complete_current_safe_evidence():
         "episodes": rows,
         "suite": suite,
         "suite_sha256": digest(suite),
-        "source_hashes": source_hashes(),
+        "source_hashes": hashes,
     }
     pick = {
+        "regressions_sha256": canonical_digests()["expected_regressions_sha256"],
         "complete": True,
         "cases": [
             {
@@ -100,7 +109,7 @@ def test_training_requires_complete_current_safe_evidence():
                 "requested_payload_mass_kg": mass,
                 "success": True,
                 "stages": [],
-                "control_source_sha256": digest(source_hashes()),
+                "control_source_sha256": digest(hashes),
                 "controller": "velocity_teacher",
                 "fingerprint": "model",
             }
@@ -108,18 +117,28 @@ def test_training_requires_complete_current_safe_evidence():
             for mass in (0.02, 0.05, 0.1)
         ],
     }
-    require_training_readiness(carry, pick, default_config(), "model")
+    return carry, pick
+
+
+def assert_ready(carry, pick):
+    return require_training_readiness(carry, pick, default_config(), "model", **canonical_digests())
+
+
+def test_training_requires_complete_current_safe_evidence():
+    carry, pick = passing_evidence()
+    rows = carry["episodes"]
+    assert_ready(carry, pick)
     rows[0]["wheel_lift"] = True
     with pytest.raises(ValueError, match="readiness"):
-        require_training_readiness(carry, pick, default_config(), "model")
+        assert_ready(carry, pick)
     rows[0]["wheel_lift"] = False
     pick["cases"][0]["success"] = False
     with pytest.raises(ValueError, match="pick/place"):
-        require_training_readiness(carry, pick, default_config(), "model")
+        assert_ready(carry, pick)
     pick["cases"][0]["success"] = True
     carry["source_hashes"] = {}
     with pytest.raises(ValueError, match="stale"):
-        require_training_readiness(carry, pick, default_config(), "model")
+        assert_ready(carry, pick)
 
 
 @pytest.mark.sim
@@ -209,3 +228,63 @@ def test_late_disturbance_reserves_recovery_and_can_finish_contract():
         assert info["is_success"], info
     finally:
         env.close()
+
+
+def test_same_shape_altered_catalog_and_case_parameters_are_rejected():
+    carry, pick = passing_evidence()
+    carry["suite"]["config"]["horizon"] += 1
+    carry["suite_sha256"] = digest(carry["suite"])
+    with pytest.raises(ValueError, match="canonical benchmark"):
+        assert_ready(carry, pick)
+    carry, pick = passing_evidence()
+    pick["regressions_sha256"] = "other-catalog"
+    with pytest.raises(ValueError, match="catalog checksum"):
+        assert_ready(carry, pick)
+    carry, pick = passing_evidence()
+    carry["episodes"][0]["seed"] += 1
+    with pytest.raises(ValueError, match="case parameters"):
+        assert_ready(carry, pick)
+
+
+@pytest.mark.parametrize("module", ["rl/control.py", "rl/contact.py", "rl/pose_targets.py"])
+def test_source_manifest_pins_shared_safety_modules_and_detects_changes(module, monkeypatch):
+    before = source_hashes()
+    assert {
+        "rl/control.py",
+        "rl/contact.py",
+        "rl/pose_targets.py",
+        "eval/physical_tamp.py",
+        "motion/arm_rrt.py",
+        "rl/regression_gate.py",
+    } <= before.keys()
+    original = Path.read_bytes
+
+    def edited(path):
+        data = original(path)
+        return data + b"\n# safety change\n" if str(path).endswith("/emet/" + module) else data
+
+    monkeypatch.setattr(Path, "read_bytes", edited)
+    after = source_hashes()
+    assert {key for key in before if before[key] != after[key]} == {module}
+
+
+def test_per_mass_gate_is_not_a_per_stratum_or_end_to_end_claim():
+    carry, _ = passing_evidence()
+    # 91/95 admitted successes passes 95% conditional, but is 91% end-to-end.
+    for row in carry["episodes"][:5]:
+        row["initialization_failed"] = True
+        row["is_success"] = False
+    for row in carry["episodes"][5:9]:
+        row["is_success"] = False
+    assert ready(carry)
+    from emet.rl.manipulation.carry_benchmark import summarize
+
+    assert summarize(carry["episodes"])["0.02"]["end_to_end_success_rate"] == 0.91
+
+
+def test_training_cannot_relax_the_qualified_pose_contract():
+    carry, pick = passing_evidence()
+    with pytest.raises(ValueError, match="hand_position_tolerance"):
+        require_training_readiness(
+            carry, pick, replace(default_config(), hand_position_tolerance=0.015), "model", **canonical_digests()
+        )

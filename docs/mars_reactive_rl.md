@@ -2181,12 +2181,12 @@ failure is served at `http://localhost:8766/100g-orientation-10-trace-v3.html`
 through the same SSH forwarding described above. Simulator contact wrenches
 are diagnostic ground truth, not signals already available on Herman.
 
-### v3 full qualification completed; first PPO phase launched
+### Historical v3 benchmark completed; first PPO phase launched
 
 The run at `ba658820` completed **298/300 carries**, with **300/300 admitted**:
 100/100 at 20 g, 100/100 at 50 g and 98/100 at 100 g. It recorded **zero unsafe
 contact or wheel-unloading terminations**. The follow-up continuous one-pedestal
-pick/place suite passed **30/30** again. Both source-bound readiness checks pass.
+pick/place suite passed **30/30** again. This passed the then-current readiness checks; the review-hardening section below supersedes their authorization logic.
 The two 100 g wrist-roll retention losses remain in the denominator and future
 paired evaluations; this result does not claim that those grasps are solved.
 
@@ -2198,3 +2198,107 @@ a one-million-step budget, two CPU-pinned workers and no automatic retry or
 checkpoint promotion. Launching training is not a learned-policy acceptance
 result. The next gate compares its checkpoints against the teacher on the same
 frozen carry and continuous pick/place cases.
+
+## Proprioceptive contact learning research roadmap
+
+Reference: Antonia Bronars, Younghyo Park, Kushal Kedia and Pulkit Agrawal,
+*Blind Precise Assembly: Proprioceptive Sim-to-Real Peg-in-Hole for Diverse Parts*
+(arXiv:2610.23849, 2026). [Paper](https://arxiv.org/abs/2610.23849),
+[project](https://younghyopark.me/blind-proprioceptive-assembly/),
+[mjfit](https://github.com/younghyopark/mjfit).
+The paper uses a 0.6 s temporal-convolution history, identified actuator dynamics,
+training-only contact supervision and an asymmetric critic. Real-world evidence
+is peg insertion on a seven-DoF arm; gear and nut demonstrations are simulated.
+Episodes begin in contact, and the local skill does not handle general dropped-part
+recovery. mjfit generates clearance-preserving collision geometry, not robot
+actuator identification. These are related-work results, not Emet capabilities.
+
+The current Emet history encoder is a transformer over 20 frames at 20 Hz (1 s).
+Auxiliary contact loss and privileged-critic training are not implemented. Preserve
+this baseline and its artifacts while preparing the following staged experiments:
+
+1. **Effective actuator response:** audit available signals, then fit delay, lag
+   and deadband from suitable command/measurement logs with uncertainty and held-out
+   validation. Fit physical friction or armature only when measurements identify
+   them. Distinguish simulation, loopback and hardware evidence; no hardware
+   excitation is authorized by this roadmap.
+2. **Offline observability:** use simulator labels for obstruction, support and
+   slip to test whether ordinary proprioceptive/command history contains enough
+   information. Split by episode and geometry, measure false negatives and delay,
+   and allow uncertainty/abstention. Slip is not assumed observable in every grasp.
+3. **Isolated learning ablations:** compare a temporal convolution with our
+   transformer at matched cadence, history duration and budget. Test auxiliary
+   contact loss and privileged critic inputs separately, keeping simulator labels
+   out of deployed actor inputs. Do not change the running baseline mid-experiment.
+4. **Assembly fixtures:** pin mjfit generator provenance, add passive known-fit
+   probes, then a local insertion benchmark with explicit timestep and contact
+   settings. Keep it separate from existing carry and frozen Stretch regressions.
+5. **Acceptance:** compare tracking, retention, settling, jerk, contact loads and
+   wheel unloading on identical cases. Hard effort and safety guards remain active
+   throughout learning. Keep the masked SE(2)/SE(3)/gripper contract and TAMP goal
+   conditioning; a contact skill does not replace approach planning or recovery.
+
+Unchecked implementation tasks are tracked in the root `TODO.md`. The present
+change adds references and this roadmap, not a dependency, training loss, policy
+architecture replacement or new hardware capability.
+
+## PR review hardening: evidence and regression binding
+
+Historical results remain unchanged: v2 is **297/300**, **30/30 pick/place**, and
+**gate false**, with no training launched from that attempt. Its embedded v1
+catalog has hash `60179faa...`; the canonical v2 catalog is `838b7d14...` (the
+version/default-field change is retained, not silently normalized away).
+Historical v3 met the earlier checks and launched the baseline; that is not
+current authorization under the stricter checks below. The baseline was stopped
+for this source/merge repair, with its saved checkpoints and original reports
+preserved. No checkpoint has been promoted.
+
+Current training requires:
+
+- A conservative source manifest covering RL (including shared invalid-physics,
+  contact-force and target code), motion/planning, manipulation and robot modules,
+  the TAMP collision adapter, asset inputs and relevant runtime versions. Model
+  fingerprints remain a separate check. Editing a shared safety module changes
+  the manifest; old reports are not upgraded by replacing their stored hashes.
+- Exact independently loaded canonical digests for
+  `configs/benchmarks/mars_carry_v2.json` and `mars_carry_regressions.json`.
+  Embedded catalog hashes, per-case seed/mass/stratum, declared episode settings,
+  and pick/place catalog identity must match. A different same-sized suite is
+  not accepted. Training cannot relax the qualified pose tolerances or select
+  an out-of-distribution nominal load/push scale.
+- Fresh execution of the canonical full RL/core/head-capability and launcher/trace
+  test suites by the supervisor, with no failures or skips. `--regression-xml`
+  now names a **new output**, not an existing input to trust. The generated
+  `.receipt.json` binds XML bytes, test identities, expected modules, source and
+  test content, launcher/config/lock files, and the successful subprocess. Source
+  changes during tests invalidate it. Direct TAMP carry training also requires
+  `--regression-receipt`; old or unrelated XML cannot authorize that entrypoint.
+
+The gate remains **per mass**, requiring at least 95% admission and 95% success
+conditional on admission, plus zero unsafe-contact/wheel-unloading events and
+all continuous pick/place cases passing. It does **not** claim 95% end-to-end
+success: with integer cases, 91 successes out of 95 admitted in 100 attempts can
+pass those two rates. Per-stratum outcomes are reported as diagnostics, not a
+95% per-stratum guarantee. These semantics are covered by tests.
+
+Use fresh report/output directories for requalification after the review fixes.
+The supervisor itself generates regression evidence after the teacher reports
+pass. For example:
+
+```bash
+.venv/bin/python scripts/train_mars_carry_when_ready.py \
+  --carry-report logs/manipulation/carry-review-v4/report.json \
+  --pick-place-report logs/manipulation/carry-pick-place-review-v4/report.json \
+  --qualification-pid-file /tmp/mars-carry-qualification.pid \
+  --output logs/manipulation/carry-ppo-review-v2 \
+  --regression-xml /tmp/mars-review-training-regressions.xml --wandb-mode online
+```
+
+Those report paths are examples, not evidence that requalification has completed.
+The regenerated `uv.lock` includes the RL/tracking extras; `uv lock --check
+--offline` checks its consistency without installing into the running environment.
+The optimizer-state test explicitly constructs its original PPO on CPU, matching
+production/resume behavior even on CUDA hosts. Execution traces enumerate only
+`data.contact[:data.ncon]`. An unconfirmed reactive stop intentionally retains
+ownership and skips navigation cleanup/release, with a regression test protecting
+that behavior.

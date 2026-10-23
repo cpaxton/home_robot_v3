@@ -1,7 +1,6 @@
 """Train/evaluate physical manipulation and fit separate outcome-risk heads."""
 
 import argparse
-import hashlib
 import json
 from dataclasses import asdict, replace
 from functools import partial
@@ -322,7 +321,7 @@ def train(args):
     fingerprint = probe.fingerprint
     probe.close()
     if config.tamp_carry_trajectories:
-        from emet.rl.manipulation.carry_benchmark import require_training_readiness
+        from emet.rl.manipulation.carry_benchmark import canonical_digests, require_training_readiness
 
         if not args.carry_readiness_report or not args.pick_place_readiness_report:
             raise ValueError("TAMP carry training requires --carry-readiness-report and --pick-place-readiness-report")
@@ -331,7 +330,15 @@ def train(args):
             json.loads(args.pick_place_readiness_report.read_text()),
             config,
             fingerprint,
+            **canonical_digests(),
         )
+        if not args.regression_receipt:
+            raise ValueError("TAMP carry training requires a fresh --regression-receipt")
+        from emet.rl.regression_gate import verify_regressions
+
+        verify_regressions(args.regression_receipt)
+    from emet.rl.manipulation.carry_benchmark import source_hashes as qualification_sources
+
     for seed in args.seeds:
         directory = Path(args.output) / f"seed-{seed}"
         directory.mkdir(parents=True, exist_ok=True)
@@ -347,10 +354,7 @@ def train(args):
                     "training_options": options,
                     "envs": args.envs,
                     "fingerprint": fingerprint,
-                    "source_hashes": {
-                        p.name: hashlib.sha256(p.read_bytes()).hexdigest()
-                        for p in sorted(Path(__file__).parent.glob("*.py"))
-                    },
+                    "source_hashes": qualification_sources(),
                     "evaluation_seed": 200000,
                     "eval_every": args.eval_every,
                     "eval_episodes_per_category": args.eval_episodes,
@@ -507,6 +511,7 @@ def main():
     )
     p.add_argument("--carry-push-scale", type=float, default=0)
     p.add_argument("--carry-push-probability", type=float, default=1)
+    p.add_argument("--regression-receipt", type=Path)
     p.add_argument("--carry-readiness-report", type=Path)
     p.add_argument("--pick-place-readiness-report", type=Path)
     p.add_argument("--grasp-lift-height", type=float, default=0.06)

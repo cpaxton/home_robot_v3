@@ -99,6 +99,7 @@ def test_mlp_ppo_update_and_bundle_roundtrip_without_demonstrations(tmp_path, pr
         model = PPO(
             "MultiInputPolicy",
             env,
+            device="cpu",
             n_steps=8,
             batch_size=4,
             n_epochs=1,

@@ -11,7 +11,6 @@ import json
 import os
 import subprocess
 import time
-import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import psutil
@@ -29,7 +28,9 @@ def parse_args(argv=None):
         type=Path,
         default=Path("logs/manipulation/carry-pick-place-qualification-v3/report.json"),
     )
-    parser.add_argument("--regression-xml", type=Path, default=Path("/tmp/mars-carry-final-regression.xml"))
+    parser.add_argument(
+        "--regression-xml", type=Path, help="fresh output path for supervisor-run pytest, not existing evidence"
+    )
     parser.add_argument("--qualification-pid-file", type=Path, default=Path("/tmp/mars-carry-qualification.pid"))
     parser.add_argument("--output", type=Path, default=Path("logs/manipulation/carry-ppo-v1"))
     parser.add_argument("--cpus", default="14,15")
@@ -41,13 +42,9 @@ def parse_args(argv=None):
 
 
 def check_regressions(path):
-    suites = list(ET.parse(path).getroot().iter("testsuite"))
-    if (
-        not suites
-        or sum(int(s.get("tests", 0)) for s in suites) < 200
-        or any(int(s.get("failures", 0)) or int(s.get("errors", 0)) or int(s.get("skipped", 0)) for s in suites)
-    ):
-        raise RuntimeError("complete passing regression tests required")
+    from emet.rl.regression_gate import run_regressions
+
+    return run_regressions(path)
 
 
 def training_command(args, *, root=ROOT):
@@ -128,6 +125,8 @@ def training_command(args, *, root=ROOT):
         str(args.carry_report),
         "--pick-place-readiness-report",
         str(args.pick_place_report),
+        "--regression-receipt",
+        str((args.regression_xml or args.output / "regressions.xml").with_suffix(".receipt.json")),
     ]
 
 
@@ -140,6 +139,7 @@ def supervise(args):
     os.sched_setaffinity(0, cpus)
     os.environ.update(OPENBLAS_NUM_THREADS="1", OMP_NUM_THREADS="1", MPLCONFIGDIR="/tmp/mpl", MUJOCO_GL="egl")
     args.output.mkdir(parents=True, exist_ok=True)
+    args.regression_xml = args.regression_xml or args.output / "regressions.xml"
     lock = (args.output / "supervisor.lock").open("a")
     try:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -172,7 +172,7 @@ def _supervise_locked(args):
             if not psutil.pid_exists(pid) or psutil.Process(pid).status() == psutil.STATUS_ZOMBIE:
                 raise RuntimeError("qualification process exited before both complete reports")
             time.sleep(30)
-        from emet.rl.manipulation.carry_benchmark import default_config, require_training_readiness
+        from emet.rl.manipulation.carry_benchmark import canonical_digests, default_config, require_training_readiness
         from emet.rl.manipulation.env import ManipulationEnv
 
         config = default_config()
@@ -181,8 +181,8 @@ def _supervise_locked(args):
             fingerprint = probe.fingerprint
         finally:
             probe.close()
-        require_training_readiness(reports[0], reports[1], config, fingerprint)
-        check_regressions(args.regression_xml)
+        require_training_readiness(reports[0], reports[1], config, fingerprint, **canonical_digests())
+        check_regressions(args.regression_xml or args.output / "regressions.xml")
         for proc in psutil.process_iter(["cmdline"]):
             try:
                 command = proc.info["cmdline"] or []
