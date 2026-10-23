@@ -447,13 +447,13 @@
       "case_id": "100g:orientation:10",
       "seed": 1901010,
       "code": "retention_lost",
-      "max_payload_rotation_rad": null
+      "max_payload_rotation_rad": 0.10315103259656119
     },
     {
       "case_id": "100g:orientation:11",
       "seed": 1901011,
       "code": "retention_lost",
-      "max_payload_rotation_rad": null
+      "max_payload_rotation_rad": 0.10079958859020262
     }
   ],
   "continuous_pick_place_cases": 30,
