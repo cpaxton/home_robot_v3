@@ -741,7 +741,7 @@ def _build_state_message(executor: AgenticEQAExecutor) -> str:
     if executor._last_verify is not None:
         lv = executor._last_verify
         lines.append(
-            f"Last proposal (verify_siglip): {lv.status} sim={float(lv.sim):.3f} "
+            f"Last retrieval proposal (not visual presence): {lv.status} sim={float(lv.sim):.3f} "
             f"obs_id={int(lv.obs_id)} — not VLM answerability"
         )
     if executor.max_rounds - executor._round <= 2:

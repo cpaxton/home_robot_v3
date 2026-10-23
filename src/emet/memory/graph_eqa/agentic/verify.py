@@ -33,6 +33,30 @@ from emet.utils.logger import Logger
 _logger = Logger(__name__)
 
 
+def verification_feedback(retrieval_status, vlm_assess, grounding, obs_id):
+    """Separate semantic evidence from retrieval scores and geometry admission."""
+    visual = vlm_assess if isinstance(vlm_assess, dict) else {}
+    present = (
+        visual.get("present")
+        if visual.get("ok") is True and visual.get("visual_observation_available") is not False
+        else None
+    )
+    status = "VISUAL_PRESENT" if present is True else "VISUAL_ABSENT" if present is False else "NOT_ASSESSED"
+    geometry = {"status": "not_attempted"}
+    if isinstance(grounding, dict) and grounding.get("view_obs_id") == obs_id:
+        geometry = {
+            "status": "admitted" if grounding.get("ok") else "not_admitted",
+            "reason": grounding.get("reason"),
+            "obs_id": grounding.get("obs_id"),
+        }
+    return {
+        "status": status,
+        "retrieval": {"status": retrieval_status, "semantics": "proposal score, not visual presence"},
+        "visual": {"present": present, "reason": visual.get("reason")},
+        "geometry": geometry,
+    }
+
+
 def _dense_max_sim_for_rgb(self, phrase: str, rgb: np.ndarray | None) -> float | None:
     """Max patch-token SigLIP cosine for *phrase* vs *rgb* (MaskSigLIP space).
 
@@ -523,7 +547,9 @@ def _tool_verify_siglip(self, phrase: str, obs_id: int | None) -> dict[str, Any]
     self._append_trace(row)
     return {
         "ok": True,
-        "status": result.status,
+        **verification_feedback(
+            result.status, vlm_out, getattr(self, "_last_view_grounding_result", None), int(result.obs_id)
+        ),
         "sim": float(result.sim),
         "verified": self._verified,
         "vlm_answerable": bool(self._verified),

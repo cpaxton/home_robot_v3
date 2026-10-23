@@ -102,7 +102,8 @@ def test_T3_multi_tool_reply_ordered_submit_gated():
     assert meta["tool_calls"] == ["verify_siglip", "submit_answer"]
     outs = [ex.handle_tool(n, a) for n, a in calls]
     assert outs[0]["ok"] is True
-    assert outs[0]["status"] == "CANDIDATE"
+    assert outs[0]["status"] == "NOT_ASSESSED"  # Missing RGB is not visual absence.
+    assert outs[0]["retrieval"]["status"] == "CANDIDATE"
     assert outs[1]["ok"] is False
     assert "verif" in str(outs[1].get("error", "")).lower()
     assert 7 in ex._tried

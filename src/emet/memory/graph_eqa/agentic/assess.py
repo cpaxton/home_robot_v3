@@ -729,6 +729,7 @@ def _run_vlm_view_assess(
     return {
         "ok": True,
         "obs_id": oid,
+        "visual_observation_available": rgb is not None,
         "present": assessment.present,
         "answerable": assessment.answerable,
         "need_more_views": assessment.need_more_views,

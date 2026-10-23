@@ -392,12 +392,12 @@ def _handle_relative_motion(self, args: dict[str, Any]) -> dict[str, Any]:
     if self._n_nav >= self.max_nav_steps:
         out = response(name, code="navigation_budget_exhausted")
     else:
-        self._n_nav += 1
         key = "meters" if name == "move_forward" else "degrees"
         out = execute_relative_motion(self.agent, name, args.get(key))
         # A failed motion may still have changed the camera pose. Capture the
         # actual outcome, not the intended endpoint, and assess it normally.
         if out.get("data", {}).get("execution_started"):
+            self._n_nav += 1
             try:
                 hypothesis_id = self._begin_policy_approach("look", -3_000_000 - self._n_nav, self.query_text)
                 out["capture"] = self._tool_capture_and_update()

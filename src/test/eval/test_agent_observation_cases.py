@@ -98,3 +98,32 @@ def test_visible_far_or_absent_target_does_not_create_geometry(present, depth):
     assert detections == [] and ids == []
     if not present:
         client.assert_called_once()  # No forced retry to turn semantic abstention into acceptance.
+
+
+@pytest.mark.parametrize("present,status", [(True, "VISUAL_PRESENT"), (False, "VISUAL_ABSENT"), (None, "NOT_ASSESSED")])
+def test_retrieval_miss_cannot_override_visual_evidence(present, status):
+    from emet.memory.graph_eqa.agentic.verify import verification_feedback
+
+    feedback = verification_feedback(
+        "ABSENT", {"ok": True, "present": present}, {"view_obs_id": 7, "ok": False, "reason": "no supported surface"}, 7
+    )
+    assert feedback["status"] == status
+    assert feedback["retrieval"]["status"] == "ABSENT"
+    assert feedback["geometry"]["status"] == "not_admitted"
+
+
+def test_stale_geometry_is_not_attached_to_current_assessment():
+    from emet.memory.graph_eqa.agentic.verify import verification_feedback
+
+    assert (
+        verification_feedback("PRESENT", None, {"view_obs_id": 6, "ok": True}, 7)["geometry"]["status"]
+        == "not_attempted"
+    )
+
+
+@pytest.mark.parametrize("tool", ["rotate_base", "move_forward"])
+def test_failed_relative_motion_requires_new_model_decision(tool):
+    from emet.memory.graph_eqa.agentic.run import requires_motion_replan
+
+    assert requires_motion_replan(tool, {"ok": False, "code": "motion_rejected"})
+    assert not requires_motion_replan(tool, {"ok": True})

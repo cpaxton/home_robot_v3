@@ -55,6 +55,7 @@ def ground_confirmed_view(executor, obs_id: int, query: str) -> dict | None:
     result = executor.agent.ground_query_view(
         query, source_obs_id=view.source_obs_id, target_description=executor.question
     )
+    executor._last_view_grounding_result = {"view_obs_id": obs_id, "query": query, **result}
     executor._append_trace({"tool": "ground_query_view", "view_obs_id": obs_id, "query": query, **result})
     if result["ok"]:
         executor._grounded_obs_id = result["obs_id"]

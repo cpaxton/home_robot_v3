@@ -113,3 +113,16 @@ def test_eqa_failed_motion_still_captures_actual_view():
     assert out["capture"]["obs_id"] == 123
     assert out["verify"]["present"] is True
     assert executor._n_nav == 1
+
+
+def test_rejected_motion_preserves_navigation_budget():
+    from emet.memory.graph_eqa.agentic.executor_init import _handle_relative_motion
+
+    executor = SimpleNamespace(
+        agent=agent_fixture(rejection="unknown_floor"),
+        _n_nav=0,
+        max_nav_steps=2,
+        _append_trace=MagicMock(),
+    )
+    assert not _handle_relative_motion(executor, {"_tool_name": "move_forward", "meters": 0.2})["ok"]
+    assert executor._n_nav == 0

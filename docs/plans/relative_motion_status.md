@@ -1,5 +1,30 @@
 # Shared relative movement implementation status
 
+## Closeout progress — 2026-10-23
+
+Frozen `a98f101b` pilot `20261023_102419_6dd703` completed without an
+infrastructure failure: bowl found, microwave not localized (109.0 s).
+The model did not select floor inspection in this run; therefore it does not
+validate the repaired handoff live. Outputs remain at
+`/home/cpaxton/runs/emet/relative-floor-handoff-molmo-20261023`.
+
+Next repair separates visual presence, retrieval proposals and geometry
+admission in the model-facing verification result; missing RGB is explicitly
+not assessed. It also preserves navigation budget for requests rejected before
+execution and stops a queued relative-motion batch after a failed turn/move.
+339 focused contract/regression tests pass. No safety threshold changed.
+
+Remaining order: isolated simulation observation cases; serial matched
+S0/Molmo and 12-question EQA development acceptance; integrate #213 through
+main when merged and run its qualified TAMP smoke; review/land the context
+and movement stack only after evidence clears; then implement EXPRESS-Bench
+and AbstainEQA adapters and small audited pilots. No full sweep or hardware.
+
+Safety/coverage cases and reproducible fast gate:
+`docs/testing/agent_observation_cases.md`. Benchmark requirements:
+`docs/environments/embodied_qa_extensions.md`. Full agent acceptance is still
+held, not implied by the passing contract suite.
+
 2026-10-23; repair branch `fix/shared-relative-motion-results`.
 
 The CHAT and EQA/OVMM adapters now share `move_forward(meters)` and
