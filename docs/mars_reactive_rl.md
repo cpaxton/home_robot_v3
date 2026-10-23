@@ -2180,3 +2180,21 @@ The tool refuses to overwrite an existing JSON trace. The preserved teacher
 failure is served at `http://localhost:8766/100g-orientation-10-trace-v3.html`
 through the same SSH forwarding described above. Simulator contact wrenches
 are diagnostic ground truth, not signals already available on Herman.
+
+### v3 full qualification completed; first PPO phase launched
+
+The run at `ba658820` completed **298/300 carries**, with **300/300 admitted**:
+100/100 at 20 g, 100/100 at 50 g and 98/100 at 100 g. It recorded **zero unsafe
+contact or wheel-unloading terminations**. The follow-up continuous one-pedestal
+pick/place suite passed **30/30** again. Both source-bound readiness checks pass.
+The two 100 g wrist-roll retention losses remain in the denominator and future
+paired evaluations; this result does not claim that those grasps are solved.
+
+The one-shot supervisor launched the first plain PPO phase after verifying these
+reports and the 243-case regression XML. Scalar W&B logging is at
+https://wandb.ai/cpaxton/emet-mars-control/runs/upjqh6kf. The additional two trace
+viewer tests also passed. The run is `logs/manipulation/carry-ppo-v1/seed-31`, with
+a one-million-step budget, two CPU-pinned workers and no automatic retry or
+checkpoint promotion. Launching training is not a learned-policy acceptance
+result. The next gate compares its checkpoints against the teacher on the same
+frozen carry and continuous pick/place cases.

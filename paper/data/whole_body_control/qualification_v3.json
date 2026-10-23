@@ -1,0 +1,76 @@
+{
+  "source_revision": "ba658820",
+  "scope": "simulator feedback carry and continuous one-pedestal pick/place; not learned-policy or hardware qualification",
+  "carry_suite_sha256": "838b7d14f4cbbce7b4271f5132c9b4a54a910ee6458a915fb8f833cb9107a85b",
+  "control_sources_sha256": "173d7cf166f9fe0d0faea91f5cede2f23042123d782c997ee1f5da288ddb5f6b",
+  "carry_cases": 300,
+  "carry_admitted": 300,
+  "carry_successes": 298,
+  "carry_summary": {
+    "0.02": {
+      "cases": 100,
+      "admitted": 100,
+      "admission_rate": 1.0,
+      "successes": 100,
+      "end_to_end_success_rate": 1.0,
+      "conditional_execution_success_rate": 1.0,
+      "unsafe_contact_count": 0,
+      "wheel_lift_count": 0,
+      "retention_lost_count": 0,
+      "failures": {},
+      "candidate_rejections": {
+        "trivial_carry_target": 32
+      }
+    },
+    "0.05": {
+      "cases": 100,
+      "admitted": 100,
+      "admission_rate": 1.0,
+      "successes": 100,
+      "end_to_end_success_rate": 1.0,
+      "conditional_execution_success_rate": 1.0,
+      "unsafe_contact_count": 0,
+      "wheel_lift_count": 0,
+      "retention_lost_count": 0,
+      "failures": {},
+      "candidate_rejections": {
+        "trivial_carry_target": 32
+      }
+    },
+    "0.1": {
+      "cases": 100,
+      "admitted": 100,
+      "admission_rate": 1.0,
+      "successes": 98,
+      "end_to_end_success_rate": 0.98,
+      "conditional_execution_success_rate": 0.98,
+      "unsafe_contact_count": 0,
+      "wheel_lift_count": 0,
+      "retention_lost_count": 2,
+      "failures": {
+        "retention_lost": 2
+      },
+      "candidate_rejections": {
+        "trivial_carry_target": 32
+      }
+    }
+  },
+  "carry_training_gate_passed": true,
+  "failures": [
+    {
+      "case_id": "100g:orientation:10",
+      "seed": 1901010,
+      "code": "retention_lost",
+      "max_payload_rotation_rad": 0.10315103259656119
+    },
+    {
+      "case_id": "100g:orientation:11",
+      "seed": 1901011,
+      "code": "retention_lost",
+      "max_payload_rotation_rad": 0.10079958859020262
+    }
+  ],
+  "continuous_pick_place_cases": 30,
+  "continuous_pick_place_successes": 30,
+  "combined_training_readiness_verified": true
+}

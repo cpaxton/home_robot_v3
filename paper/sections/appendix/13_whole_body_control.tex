@@ -55,6 +55,13 @@ carries; the exact failing disturbance passed a targeted replay without changing
 its wrench. Full requalification is required before starting PPO. Grasp-depth,
 contact-impedance, and timing ablations did not reliably resolve the roll-slip
 failures; no relaxed retention threshold or increased torque was adopted.
+Full requalification at \texttt{ba658820} then admitted 300/300 references and
+completed 298/300 carries (100/100, 100/100, and 98/100 by increasing mass), with
+zero unsafe-contact or wheel-unloading terminations. Continuous pick/return-place
+again passed 30/30. The two 100\,g roll-slip failures remained counted. These
+results met the simulator teacher gate and are retained in
+\texttt{paper/data/whole\_body\_control/qualification\_v3.json}; they do not
+qualify the subsequently trained policy or demonstrate hardware compliance.
 
 \paragraph{Qualification and learning.}
 The held-out protocol fixes 100 cases per payload mass, balanced across the five

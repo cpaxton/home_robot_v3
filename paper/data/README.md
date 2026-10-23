@@ -83,3 +83,7 @@ wheel-unloading and retention failures that blocked training. Neither file is a
 learned-policy or hardware qualification result. Full per-case reports and
 execution traces remain local experiment artifacts; the control appendix and
 `docs/mars_reactive_rl.md` describe reproduction and subsequent gates.
+`whole_body_control/qualification_v3.json` records the follow-up at `ba658820`:
+298/300 carries, 30/30 continuous pick/return-place, no unsafe-contact or
+wheel-unloading events, and both persistent 100 g roll-slip failures. This passed
+the simulator teacher readiness gate; it is not a learned-policy result.
