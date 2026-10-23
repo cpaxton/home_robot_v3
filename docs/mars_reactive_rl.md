@@ -1732,3 +1732,48 @@ checks real server command handling rather than merely displaying a button.
 Final verification: all 186 RL tests passed after explicit hold and checkpoint
 selector changes. Ruff and whitespace checks passed. The rejected global
 feedback-removal candidate is not included in the final controller behavior.
+
+### Visible base editing and Cartesian target modes (2026-10-22)
+
+The UI now has visible target buttons: 1 Base, 2 EE/base held, 3 EE/base allowed.
+The previous arm UI incorrectly masked the base target off in its labelled
+base-held mode. Mode 2 now constrains the base pose; mode 3 leaves the base target
+inactive for learned Cartesian policies so they may move it to satisfy the hand.
+For the feedback comparator, mode 3 still executes the private IK-generated base
+reference. Base-only mode requests an SE(2) target and disables the hand target.
+These choices expose controller masks, not a guarantee of learned base behavior.
+
+Learned Cartesian policies receive the requested SE(3) pose directly, without
+running the UI IK loop or using its joint solution. Rotation columns are checked
+for orthonormality. Feedback control retains IK for its joint-reference interface.
+The UI tracks Cartesian error rather than an obsolete joint-reference error.
+`Targets to robot` restores measured targets and engages normal hold without
+resetting/teleporting physics; changing a goal resumes tracking. Faults still
+require reset. The mode choice remains explicit instead of silently replacing a
+learned controller with feedback control.
+
+Fixed-case bundles are labelled using their saved training options: their local
+precision is not evidence of distant-goal recovery, base-only control, or general
+whole-body coverage. The current selected checkpoint has precisely that limited
+scope. Thirty UI tests passed, including mask semantics, direct pose input without
+IK, physical feedback base motion, reset/policy contracts and fault handling.
+JavaScript syntax, Ruff and whitespace checks passed.
+
+The served UI was verified after restart: visible target buttons and recovery
+control, active mode 1 with a blue base marker and three SE(2) goal components,
+normal hold engaged, saved policy retained, fixed-case scope warning visible,
+and no UI error. The policy's base-only behavior is still unvalidated. Use the
+explicit Feedback controller selection for the tested manual base comparator;
+the UI never substitutes it silently for a learned policy.
+
+A nearby masked-coverage continuation is running at
+`logs/manipulation/nearby-masked-coverage/seed-27`, initialized from the final
+constant-LR fixed-case policy. It samples fresh reset cases rather than repeating
+one seed: base-only/hand-only/combined targets, target scale .25, heading range
+.3 rad, randomization .05, retarget probability .25, no pushes initially, precision
+stage 2, LR 3e-5 to 5e-6 over 262144 additional steps, twenty paired validation
+cases every 65536 steps. Workers are limited to two on cores 14–15. Full-distribution
+validation and current-distribution curriculum reports remain separate; default
+safety gates and the explicitly declared .25-rad heading tolerance are logged.
+This addresses missing coverage, not a claim of improved distant-target behavior.
+No UI checkpoint is automatically promoted and no hardware is commanded.

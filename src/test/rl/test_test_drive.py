@@ -110,7 +110,7 @@ def test_stretch_test_drive_uses_physical_base_and_cartesian_hand_targets():
         sim.control_mode = 2
         sim.goal(pose)
         np.testing.assert_array_equal(sim.env.data.qpos, starting_qpos)
-        assert not control.base_mask.any()
+        assert control.base_mask.all()
         assert control.hand_mask
         sim.control_mode = 1
         base_target = control.base_pose().copy()
@@ -296,7 +296,7 @@ def test_target_selection_updates_masks_consistently_and_reset_can_keep_selectio
                 assert bool(sim.env.control.goal.mask[0]) == (selected != 2)
                 assert bool(sim.env.control.goal.mask[1:].any()) == (selected != 1)
             else:
-                assert bool(sim.env.control.base_mask.any()) == (selected != 2)
+                assert sim.env.control.base_mask.all()
                 assert sim.env.control.hand_mask == (selected != 1)
         sim.obs, sim.info = sim.env.reset(seed=610002)
         sim.select_target_mode(1, sampled=True)
@@ -336,7 +336,7 @@ def test_completed_physical_reach_can_resume_without_teleporting_or_clearing_fau
         sim.close()
 
 
-def test_preview_policy_contract_survives_simulation_replacement_and_feedback_switch():
+def test_preview_policy_contract_survives_simulation_replacement_and_feedback_switch(monkeypatch):
     from emet.rl.test_drive import Simulation
 
     sim = Simulation("mars-arm", "reach", seed=2100002)
@@ -365,6 +365,22 @@ def test_preview_policy_contract_survives_simulation_replacement_and_feedback_sw
 
         policy = PreviewPolicy()
         sim.use_policy(policy, "preview-test")
+
+        def no_ik(*args, **kwargs):
+            raise AssertionError("learned Cartesian targets must not run UI IK")
+
+        monkeypatch.setattr(sim, "_solve_manipulation_pose", no_ik)
+        original_q = sim.env.data.qpos.copy()
+        sim.select_target_mode(2)
+        sim.goal(sim.env.control.ee_pose())
+        assert sim.env.control.base_mask.all()
+        sim.select_target_mode(3)
+        assert not sim.env.control.base_mask.any()
+        goal = sim.env.control.ee_pose().copy()
+        goal[0] += 0.02
+        sim.goal(goal)
+        assert not sim.env.control.base_mask.any()
+        np.testing.assert_array_equal(sim.env.data.qpos, original_q)
         assert sim.env.observation_space.contains(sim.obs)
         sim.step()
         replacement = Simulation("mars-arm", "reach", seed=2100003)

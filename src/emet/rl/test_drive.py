@@ -177,6 +177,7 @@ class Simulation:
         self.done = False
         self.policy = None
         self.policy_name = "Feedback controller"
+        self.policy_scope = "Feedback controller"
         self.push_ticks = 0
         self.interventions = []
 
@@ -198,7 +199,12 @@ class Simulation:
                     "tracking_reward": source.get("tracking_reward", False),
                     **{
                         key: source[key]
-                        for key in ("base_xy_tolerance", "hand_position_tolerance", "hand_orientation_tolerance")
+                        for key in (
+                            "base_xy_tolerance",
+                            "base_heading_tolerance",
+                            "hand_position_tolerance",
+                            "hand_orientation_tolerance",
+                        )
                         if key in source
                     },
                 }
@@ -209,6 +215,25 @@ class Simulation:
             self.env.control.base_xy_tolerance = self.env.config.base_xy_tolerance
             self.obs = self.env.control.observe()
         self.policy, self.policy_name = candidate, name
+        self.policy_scope = (
+            "Feedback controller"
+            if candidate is None
+            else "Learned policy; interactive goals are not acceptance tests."
+        )
+        path = Path(name)
+        if candidate is not None and path.is_absolute():
+            for parent in (path, path.parent, path.parent.parent):
+                run = parent / "run.json"
+                if run.is_file():
+                    try:
+                        metadata = json.loads(run.read_text())
+                        if metadata.get("training_options", {}).get("debug_reset_seed") is not None:
+                            self.policy_scope = (
+                                "Fixed-case diagnostic policy: distant goals and base-only control are not validated."
+                            )
+                    except (OSError, ValueError):
+                        pass
+                    break
 
     def load_policy(self, path, roots):
         if path == "feedback":
@@ -241,7 +266,8 @@ class Simulation:
             base = c.base_goal.copy() if sampled and selected != 2 else c.base_pose()
             hand = self.env._fk_hand_pose(base, reference) if sampled else c.ee_pose()
             c.set_reference(reference, phase=c.phase)
-            c.set_pose_targets(base, np.full(3, selected != 2), hand, selected != 1)
+            base_active = selected != 3 or self.policy is None
+            c.set_pose_targets(base, np.full(3, base_active), hand, selected != 1)
             self.env.target_mode = selected
             self.env.settle_time = 0
             self.env._previous_cost = self.env._tracking_cost()
@@ -299,12 +325,18 @@ class Simulation:
             pose = np.asarray(values, dtype=float)
             if pose.shape != (9,) or not np.isfinite(pose).all():
                 raise ValueError("end-effector target must contain xyz and two rotation columns")
-            base_goal, arm_goal = self._solve_manipulation_pose(pose, base_locked=self.control_mode == 2)
             control = self.env.control
-            control.set_reference(arm_goal, phase=control.phase)
+            if self.policy is None:
+                base_goal, arm_goal = self._solve_manipulation_pose(pose, base_locked=self.control_mode == 2)
+                control.set_reference(arm_goal, phase=control.phase)
+            else:
+                columns = pose[3:].reshape(3, 2)
+                if not np.allclose(columns.T @ columns, np.eye(2), atol=1e-4):
+                    raise ValueError("hand target requires orthonormal rotation columns")
+                base_goal = control.base_goal.copy()
             control.set_pose_targets(
                 base_goal,
-                np.full(3, self.control_mode == 3),
+                np.full(3, self.control_mode == 2 or self.policy is None),
                 pose,
                 True,
             )
@@ -567,6 +599,10 @@ class Simulation:
             "code",
             "time",
             "joint_error",
+            "ee_position_error",
+            "ee_orientation_error",
+            "base_goal_error",
+            "base_heading_error_rad",
             "xy_error",
             "yaw_error",
             "peak_contact_force",
@@ -591,6 +627,7 @@ class Simulation:
             "simulation_only": True,
             "policy": self.policy_name,
             "holding": bool(getattr(getattr(self.env, "control", None), "holding", False)),
+            "policy_scope": self.policy_scope,
             "fields": fields,
             "current": current,
             "goal": target,
@@ -698,6 +735,13 @@ class TestDrive:
                         elif op == "hold":
                             if sim.mode not in MANIPULATION_MODES or not sim.resume_completed_reach():
                                 raise ValueError("hold requires a nonfaulted arm simulation")
+                            sim.env.control.hold_position()
+                            sim.obs = sim.env.control.observe()
+                            running, repeat = True, False
+                        elif op == "recenter":
+                            if sim.mode not in MANIPULATION_MODES or not sim.resume_completed_reach():
+                                raise ValueError("recenter requires a nonfaulted arm simulation")
+                            sim.select_target_mode(sim.control_mode)
                             sim.env.control.hold_position()
                             sim.obs = sim.env.control.observe()
                             running, repeat = True, False
@@ -950,6 +994,7 @@ def main():
                     "nudge",
                     "push",
                     "hold",
+                    "recenter",
                     "policy",
                     "camera",
                     "target_mode",
