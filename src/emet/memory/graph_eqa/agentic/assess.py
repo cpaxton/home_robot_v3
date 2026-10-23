@@ -474,8 +474,8 @@ def _run_vlm_view_assess(
             im.copy()
             for im in unique_image_arrays([rgb] + ([context_rgb] if context_rgb is not None else []), max_images=2)
         ]
-        while len(self._assessed_images) > 32:
-            del self._assessed_images[next(iter(self._assessed_images))]
+        # An earlier assessment can remain the selected answer evidence. Retain
+        # its packet for this executor's episode rather than FIFO-evicting it.
     query_image_paths = dump_query_rgb(self, oid, rgb, kind="vlm_assess")
     vlm_event_id = self._persist_agentic_evidence(
         stage="vlm_assessment",

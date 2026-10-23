@@ -129,7 +129,8 @@ def exploration_view_quality(depth):
     """Judge central free viewing distance, not target presence or brightness.
 
     Missing depth is unknown, never evidence of an obstruction. The conservative
-    gate triggers only when most central rays have measured very close geometry;
+    gate triggers only when 80% of all central rays have measured close geometry,
+    not merely 80% of the valid subset. Sparse depth cannot reject an RGB view;
     invalid rays do not vote for obstruction or establish navigable free space.
     """
     if depth is None:
