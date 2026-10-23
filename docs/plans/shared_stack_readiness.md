@@ -1,5 +1,35 @@
 # Shared-agent stack readiness
 
+## Completed small OVMM diagnostic — 2026-10-22
+
+Job `20261022_221812_acbc1d`, frozen integrated `5a177e7d`, completed
+both episodes without infrastructure errors. S0 Stretch passed object and
+destination find/localization (1286.7 s). Molmo rby1 found the bowl but failed
+microwave destination localization (127.6 s). This was candidate-only find,
+not a paired comparison or manipulation acceptance. The job's nonzero exit
+correctly represents the task failure; it is not an infrastructure crash.
+
+Manual inspection of the first microwave grounding RGB confirms the microwave
+above the stove. All six grounding attempts abstained: their offered mask
+candidates cover tiny regions on the far-right appliance, not the microwave.
+Saved depth in an approximate interior microwave ROI (x=270:334, y=8:46)
+has median 3.346 m and 10th/90th percentiles 3.237/3.465 m; no pixels in that
+ROI pass the configured 0.25–2.5 m admission range. This hand-selected ROI is
+a diagnostic, not a GT segmentation or localization metric. Geometry rejection
+is justified; semantic visibility does not establish admissible depth support.
+
+Recovery remains inadequate: repeated assessments identify the microwave,
+but three exploration attempts fail to sample a navigation endpoint and the
+remaining captures offer essentially the same view. Next diagnose the approach
+contract: expose visible-but-out-of-range evidence without admitting an object,
+and determine why a reachable closer observation was not requested/planned.
+Do not widen depth limits, accept unrelated masks, or override model answers
+to manufacture a pass. Keep the remaining context stack on acceptance hold.
+
+Durable artifacts: `/home/cpaxton/runs/emet/preturn-context-small-ovmm-20261022`.
+First microwave audit: `grounding-93f754a4415b432b99365cd2103a43e1.json`
+under the Molmo episode's `grounding/` directory, alongside RGB and depth NPZ.
+
 ## Independent pre-turn handoff EQA4 — 2026-10-22
 
 Repair `92f31497` on #202 separates bounded current/pre-turn evidence from
