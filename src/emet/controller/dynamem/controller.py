@@ -171,8 +171,8 @@ class DynamemController(BaseController):
             stretch_gripper_max = 0.64
             end_link = "link_gripper_s3_body"
         self.transform_node = end_link
-        # ManipulationWrapper.__init__ calls get_pan_tilt(); ZMQ clients use start_immediately=False in
-        # run_agent/run_dynamem so streams must be started here before any joint reads.
+        # ZMQ clients use start_immediately=False; connect before navigation and
+        # mapping. The Stretch compatibility wrapper defers optional gaze reads.
         if isinstance(self.robot, (StretchZmqClient, GenericZmqClient)):
             if not self.robot.start():
                 raise RuntimeError(

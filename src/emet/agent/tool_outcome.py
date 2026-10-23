@@ -166,11 +166,11 @@ def maybe_record_tool_attempt(
     status = str(outcome.status or payload.get("nav_note") or payload.get("error") or "")
     if kind == "verify":
         st = status.upper()
-        if st == "ABSENT":
+        if st in {"VISUAL_ABSENT", "ABSENT"}:
             outcome_str = "absent"
-        elif st == "PRESENT":
+        elif st in {"VISUAL_PRESENT", "PRESENT"}:
             outcome_str = "present"
-        elif st == "CANDIDATE":
+        elif st in {"CANDIDATE", "NOT_ASSESSED"}:
             outcome_str = "candidate"
         else:
             outcome_str = "ok" if outcome.ok else "failed"

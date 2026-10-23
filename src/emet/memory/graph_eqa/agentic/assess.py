@@ -685,6 +685,7 @@ def _run_vlm_view_assess(
         "suggested_answer": assessment.suggested_answer,
         "reason": assessment.reason,
         "raw_vlm_response": assessment.raw,
+        "visual_observation_available": rgb is not None,
         "vlm_prompt": getattr(assessment, "prompt", ""),
         "vlm_system_prompt": getattr(assessment, "system_prompt", ""),
         "vlm_image_count": getattr(assessment, "image_count", None),

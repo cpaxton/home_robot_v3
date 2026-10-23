@@ -214,12 +214,13 @@ def _record_place_inspect(
     if isinstance(verify_out, dict):
         verify_status = str(verify_out.get("status") or verify_out.get("decision") or "")
     assess = self._last_vlm_assess if isinstance(self._last_vlm_assess, dict) else {}
-    present = assess.get("present") if assess else None
+    from emet.memory.graph_eqa.agentic.verify import visual_presence
+
+    present = assess.get("present") if assess and assess.get("visual_observation_available") is not False else None
     answerable = assess.get("answerable") if assess else None
     suggested = str(assess.get("suggested_answer") or "") if assess else ""
-    if present is None and isinstance(verify_out, dict):
-        visual = verify_out.get("visual") or {}
-        present = visual.get("present", verify_out.get("present"))
+    if isinstance(verify_out, dict) and (isinstance(verify_out.get("visual"), dict) or present is None):
+        present = visual_presence(verify_out)
         answerable = verify_out.get("answerable")
     if approach_index is not None:
         ap = int(approach_index) % PLACE_APPROACH_SAMPLES
@@ -286,9 +287,9 @@ def _place_close_and_absent(self, obs_id: int) -> bool:
         return False
     if rec.last_assess_answerable:
         return False
-    if rec.last_assess_present is False:
-        return True
-    return str(rec.last_verify).upper() in {"ABSENT", "SKIPPED_SAME_VIEW"}
+    if rec.last_assess_present is not None:
+        return rec.last_assess_present is False
+    return str(rec.last_verify).upper() == "VISUAL_ABSENT"
 
 
 def _labels_for_room_stamp(self, obs_id: int, hyp: NavHypothesis | None = None) -> list[str]:
@@ -676,11 +677,14 @@ def _maybe_retract_claim_after_station(
         return None
     if not isinstance(verify_out, dict):
         return None
-    status = str(verify_out.get("status") or verify_out.get("decision") or "").upper()
-    if status != "ABSENT":
+    from emet.memory.graph_eqa.agentic.verify import visual_presence
+
+    if visual_presence(verify_out) is not False:
+        return None
+    if verify_out.get("answerable") is True:
         return None
     evidence_obs_id = int(verify_out.get("obs_id") or obs_id)
-    evidence_source = "siglip"
+    evidence_source = "vlm"
     if self.decision_policy == "grounded_v2":
         vlm = verify_out.get("vlm_assess")
         if not isinstance(vlm, dict) or not vlm.get("ok"):
