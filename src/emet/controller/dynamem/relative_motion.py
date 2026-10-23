@@ -4,6 +4,8 @@
 
 """Bounded relative goals through the ordinary validated navigation path."""
 
+from copy import deepcopy
+
 import numpy as np
 
 from emet.controller.task.tamp.api import response
@@ -28,6 +30,9 @@ def execute_relative_motion(agent, tool, value):
         return response(tool, code="motion_request_out_of_bounds")
     if not supports_relative_motion(agent):
         return response(tool, code="validated_motion_unavailable")
+    # Recovery tools consume the current navigation attempt, not a private
+    # receipt. Replace its identity so old floor captures cannot certify it.
+    agent._last_nav_plan = {"action": tool, "requested": value, "footprint": {}}
     execution_started = False
     try:
         start = np.asarray(agent._current_planning_xyt(), dtype=float)
@@ -42,6 +47,8 @@ def execute_relative_motion(agent, tool, value):
         agent.planner.reset()
         _, rejection, _ = agent._filter_unsafe_nav_traj([goal], start_xyt=start, explore_goal=False)
         if rejection:
+            footprint = deepcopy(getattr(agent, "_last_nav_sweep_failure", {}) or {})
+            agent._last_nav_plan.update(outcome=rejection, footprint=footprint)
             return response(
                 tool,
                 code="motion_rejected",
@@ -49,7 +56,7 @@ def execute_relative_motion(agent, tool, value):
                     "requested": value,
                     "execution_started": False,
                     "reason": rejection,
-                    "footprint": dict(getattr(agent, "_last_nav_sweep_failure", {}) or {}),
+                    "footprint": deepcopy(footprint),
                 },
             )
         execution_started = True
