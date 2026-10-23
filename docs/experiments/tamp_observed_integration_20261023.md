@@ -88,3 +88,23 @@ visual effect verification to the task session. Then exercise actual navigation
 and post-motion reacquisition in one CHAT episode. The existing provider still
 returns `discovery_only`; task planning/execution remain unavailable in observed
 mode. [Implementation sequence](../plans/2026-10-23_observed_tamp_integration.md).
+
+## Scheduled frozen repeats
+
+The later queue freezes source `fb0fb6cc` in a separate worktree. Validation job
+`20261023_174952_ab90e2` passes the 796-check selected integrated set and ten
+independent repeats of the 94-check boundary/provider set (940 test executions,
+overlapping coverage, not 940 additional unique tests).
+
+The two-goal lane `20261023_174952_8e6952` passes 3/3 episodes; the swap lane
+`20261023_174953_6c16d0` passes 2/3. Swap repeat 2 gets a valid plan, then emits
+malformed JSON (missing the tool-call list terminator). The strict parser
+produces no dispatched call. It records seven startup commands, zero attempted
+transfers and failed task completion, not a physical grasp failure. No attempt
+is excluded. The six episodes audit 3,094 commands with zero forbidden actions.
+
+[Paper data](../../paper/data/native_tamp/agent_control_repeats_20261023.json)
+retains per-case outcomes, source/job IDs and raw protocol/summary hashes. These
+are repeats of two development fixtures, not observed task or household
+acceptance. Raw artifacts are under the frozen worktree's
+`.tamp-runs/scheduled-20261023-fb0fb6cc/`.

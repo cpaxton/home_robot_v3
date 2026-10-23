@@ -54,7 +54,7 @@ Distinct \texttt{--debug-run-tag}s (or \texttt{OUT/bundles/\{arm\}\_qN} snapshot
 
 \noindent\textbf{Scale.}
 On the letter-balanced 32, paper-router agentic reaches 16/32 (50\%) vs.\ classic 9/32 (28\%) with mean planning steps cut from 48.7 to 32.7 (Figure~\ref{fig:hmeqa_agentic_h2h_bal32}; cross-policy McNemar $p{\approx}0.09$).
-The 16/32 agentic headline is stable across later agentic-only replications (11--16/32 over five July--August runs; the post-fix stack again reaches 16/32).
+Later agentic-only replications range from 11--16/32 over five July--August runs; the post-fix stack again reaches 16/32. This variability does not establish that the 16/32 result is stable across revisions.
 A prior matched router-off H2H was 11/32 vs.\ 9/32 (archived); an overnight replicate under that policy was 12/32 vs.\ 10/32.
 Checked-in summaries: \texttt{paper/data/hmeqa\_agentic\_h2h/balanced32\_summary.json} (composite) and \texttt{balanced32\_overnight\_replicate.json}.
 Appendix~\ref{app:agentic_verify_gate} documents the high-recall SigLIP role and the policy timeline.
@@ -329,9 +329,10 @@ Fill from \texttt{aggregate\_tamp\_clutter.csv}.
   manipulation success rate by mode $\times$ manip mode $\times$ tier.}
   \label{tab:tamp_clutter}
   \small
+  \setlength{\tabcolsep}{4pt}
   \begin{tabular}{@{}lllcccc@{}}
     \toprule
-    Mode & Tier & Manip & Task succ. & Obj. cleared & Manip rate & Wall (s) \\
+    Mode & Tier & Manip & Task succ. & Cleared & Manip. & Wall (s) \\
     \midrule
     cleanup & S1 & latch & 3/4 & 17/18 & 0.94 & 120 \\
     cleanup & S2 & latch & -- & -- & -- & -- \\
@@ -342,9 +343,9 @@ Fill from \texttt{aggregate\_tamp\_clutter.csv}.
   \end{tabular}
   \vspace{2pt}
   {\footnotesize Signal run (25-episode subset, iTHOR scenes 0--1); S2 rows pending the full
-  registry. $^{\dagger}$nav\_goal clears all clutter but the terminal nav is a straight-line
+  registry. $^{\dagger}$nav\_goal relocates most clutter but the terminal nav is a straight-line
   teleport and the post-clear chord still hits static furniture (e.g.\ a refrigerator), so the
-  landmark is not reached. See Appendix~\ref{app:model_choice_quantization}-style finding in
+  landmark is not reached. See the assisted-control diagnosis in
   \texttt{docs/experiments/tamp\_clutter.md}.}
 \end{table}
 
