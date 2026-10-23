@@ -2353,3 +2353,14 @@ The review follow-up passed **349 fresh regression tests**, with zero failures o
 skips, including physical pick/transport/place variants and both robot layouts.
 The adjacent `mars-review-layout-regressions.*` artifacts preserve the new receipt
 and JUnit XML. The earlier 341-test artifacts remain unchanged.
+
+### Initial baseline merge status: v5 qualification
+
+The complete `42aa2f30` rerun achieved **298/300 carry** but **27/30 continuous
+pick/place**, so combined training readiness is **false** and PPO remains stopped.
+The pick/place regressions are seed 1860001 at 20 g (`retention_lost`) and seeds
+1860007/1860010 at 50 g (`tracking_timeout`). These follow the stage-rearm change
+and must be diagnosed before further qualification or controller integration.
+[The v5 summary](../paper/data/whole_body_control/qualification_v5.json) and
+adjacent compressed full reports preserve the failures. The initial merge is a
+simulator development baseline, not a qualified learned or hardware controller.
