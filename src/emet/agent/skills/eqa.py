@@ -16,9 +16,8 @@ if TYPE_CHECKING:
 
 
 def _dispatch(executor: AgenticEQAExecutor, name: str):
-    def _fn(**kwargs: Any) -> str:
-        out = executor.handle_tool(name, kwargs)
-        return str(out)
+    def _fn(**kwargs: Any) -> dict:
+        return executor.handle_tool(name, kwargs)
 
     return _fn
 
@@ -45,4 +44,10 @@ def bind_eqa_episode_tools(executor: AgenticEQAExecutor, *, eqa_submode: str | N
         # a robot/task-specific recovery policy. Habitat's tool pack is unchanged.
         spec = next(spec for spec in CHAT_SKILL_SPECS if spec.name == "observe_floor")
         tools.append(bind_eqa_skill(executor, spec))
+    from emet.controller.dynamem.relative_motion import supports_relative_motion
+
+    if supports_relative_motion(getattr(executor, "agent", None)):
+        tools.extend(
+            bind_eqa_skill(executor, spec) for spec in CHAT_SKILL_SPECS if spec.name in {"rotate_base", "move_forward"}
+        )
     return tools

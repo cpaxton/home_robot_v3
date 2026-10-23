@@ -535,9 +535,12 @@ CHAT_SKILL_SPECS: tuple[SkillSpec, ...] = (
                 "degrees": {
                     "type": "number",
                     "description": "Relative yaw in degrees (e.g. 180, -90, 45, or -last for 'back').",
+                    "minimum": -180,
+                    "maximum": 180,
                 }
             },
             "required": ["degrees"],
+            "additionalProperties": False,
         },
         returns_info=True,
     ),
@@ -560,16 +563,19 @@ CHAT_SKILL_SPECS: tuple[SkillSpec, ...] = (
     SkillSpec(
         name="move_forward",
         modes=frozenset({AgentMode.CHAT}),
-        description="Drive the base forward along its current heading by approximately *meters*. Uses the 2D map (including a local_radius explored disk around the base when depth is still empty): shortens or refuses if blocked or the path leaves explored space. If refused, ask the user whether to scan_environment / rotate_base — do NOT auto-scan. If the user did not say how far, do NOT call this tool — ask how far first. Use meters=0.1 for 'a bit' / 'a little' / 'nudge'; ~0.5 for half a meter; ~1.0 for a meter. Cap near 1.5 m. Do not use for turning (use rotate_base).",
+        description="Request a bounded forward observation move along the current base heading. Pass explicit meters (0 to 1.5). No grounded object ID is needed. Validated physical navigation rejects unsafe or unknown swept space; a command is not proof of travel. Read measured progress and capture status before deciding the next action. If floor coverage is missing, use observe_floor when available. Use rotate_base for turning.",
         parameters={
             "type": "object",
             "properties": {
                 "meters": {
                     "type": "number",
+                    "minimum": 0,
+                    "maximum": 1.5,
                     "description": "Forward distance in meters (required). 0.1 for a small nudge / 'a bit'; 0.5 for half a meter; 1.0 for a meter.",
                 }
             },
             "required": ["meters"],
+            "additionalProperties": False,
         },
         returns_info=True,
     ),

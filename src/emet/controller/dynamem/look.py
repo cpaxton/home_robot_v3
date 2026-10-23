@@ -34,6 +34,9 @@ logger = Logger(__name__)
 def supports_floor_observation(agent) -> bool:
     """Advertise the shared tool only for adapters with its measured-view contract."""
     robot = getattr(agent, "robot", None)
+    spec = getattr(robot, "_spec", None)
+    if spec is not None and getattr(spec, "look_joint_names", None) is None:
+        return False
     return isinstance(getattr(robot, "_seq_id", None), int) and all(
         callable(getattr(robot, name, None)) for name in ("head_to", "get_pan_tilt", "get_observation")
     )
@@ -567,8 +570,78 @@ def rotate_in_place(self, *, n_steps: int | None = None):
     self._maybe_emit_navgrid_ascii(context="rotate_in_place")
 
 
+def _relative_motion_receipt(agent, tool, requested, commanded, before, returned):
+    """Keep server arrival, measured progress and map refresh separate."""
+    from emet.controller.task.tamp.api import response
+
+    measured = None
+    try:
+        after = np.asarray(agent.robot.get_base_pose(), dtype=float)
+        if before is not None and after.shape == (3,) and np.isfinite(after).all():
+            delta = after - before
+            c, s = np.cos(before[2]), np.sin(before[2])
+            measured = [
+                float(c * delta[0] + s * delta[1]),
+                float(-s * delta[0] + c * delta[1]),
+                float(np.arctan2(np.sin(delta[2]), np.cos(delta[2]))),
+            ]
+    except Exception:
+        pass
+    code = (
+        "ok"
+        if returned is True and measured is not None
+        else (
+            "motion_failed"
+            if returned is False
+            else "motion_measurement_unavailable"
+            if measured is None
+            else "ambiguous_navigation_result"
+        )
+    )
+    if code == "ok":
+        expected = (
+            np.array([commanded, 0.0, 0.0]) if tool == "move_forward" else np.array([0.0, 0.0, np.deg2rad(commanded)])
+        )
+        residual = np.asarray(measured) - expected
+        residual[2] = np.arctan2(np.sin(residual[2]), np.cos(residual[2]))
+        if np.linalg.norm(residual[:2]) > float(getattr(agent, "pos_err_threshold", 0.02)) or abs(residual[2]) > float(
+            getattr(agent, "rot_err_threshold", 0.03)
+        ):
+            code = "motion_arrival_unconfirmed"
+    observation = "not_refreshed"
+    if not getattr(agent, "_realtime_updates", False):
+        try:
+            agent.update()
+            observation = "map_update_returned"
+        except Exception:
+            observation = "map_update_failed"
+    agent._last_relative_motion_result = response(
+        tool,
+        code=code,
+        data={
+            "requested": requested,
+            "commanded": commanded,
+            "measured_body_delta_xyt": measured,
+            "server_arrived": returned if type(returned) is bool else None,
+            "observation_status": observation,
+        },
+    )
+    return commanded if code == "ok" else 0.0
+
+
+def _relative_motion_start(agent):
+    try:
+        pose = np.asarray(agent.robot.get_base_pose(), dtype=float)
+        return pose.copy() if pose.shape == (3,) and np.isfinite(pose).all() else None
+    except Exception:
+        return None
+
+
 def rotate_base_degrees(self, degrees: float) -> float:
-    """Relative in-place yaw (degrees). Positive = left/CCW. Returns commanded degrees."""
+    """Relative yaw, positive left/CCW; return command only after measured arrival, else zero."""
+    self._last_relative_motion_result = None
+    if not np.isfinite(float(degrees)):
+        raise ValueError("degrees must be finite")
     deg = float(np.clip(float(degrees), -360.0, 360.0))
     if abs(deg) < 1e-3:
         return 0.0
@@ -577,18 +650,14 @@ def rotate_base_degrees(self, degrees: float) -> float:
     nav_timeout = max(float(self._find_phase_nav_timeout()), abs(deg) / 45.0 * 5.0 + 8.0)
     if hasattr(self.robot, "move_to_nav_posture"):
         self.robot.move_to_nav_posture()
-    self.robot.move_base_to(
+    before = _relative_motion_start(self)
+    returned = self.robot.move_base_to(
         [0.0, 0.0, float(np.deg2rad(deg))],
         relative=True,
         blocking=True,
         timeout=nav_timeout,
     )
-    if not getattr(self, "_realtime_updates", False):
-        try:
-            self.update()
-        except Exception:
-            pass
-    return deg
+    return _relative_motion_receipt(self, "rotate_base", float(degrees), deg, before, returned)
 
 
 def _seed_local_radius_explored(self, vm) -> bool:
@@ -718,7 +787,14 @@ def clip_forward_distance_m(
 
 
 def move_forward_meters(self, meters: float) -> float:
-    """Drive forward along current heading; clips for obstacles. Returns distance commanded."""
+    """Clip forward motion; return command only after measured arrival, else zero.
+
+    Detailed measured progress and failures live in ``_last_relative_motion_result``.
+    The float return is retained for existing callers, not an odometry estimate.
+    """
+    self._last_relative_motion_result = None
+    if not np.isfinite(float(meters)):
+        raise ValueError("meters must be finite")
     requested = float(np.clip(float(meters), 0.0, 1.5))
     dist = self.clip_forward_distance_m(requested)
     if dist < 0.02:
@@ -732,15 +808,11 @@ def move_forward_meters(self, meters: float) -> float:
     if hasattr(self.robot, "move_to_nav_posture"):
         self.robot.move_to_nav_posture()
     # Relative body-frame: +x forward.
-    self.robot.move_base_to(
+    before = _relative_motion_start(self)
+    returned = self.robot.move_base_to(
         [float(dist), 0.0, 0.0],
         relative=True,
         blocking=True,
         timeout=nav_timeout,
     )
-    if not getattr(self, "_realtime_updates", False):
-        try:
-            self.update()
-        except Exception:
-            pass
-    return dist
+    return _relative_motion_receipt(self, "move_forward", float(meters), dist, before, returned)

@@ -4,6 +4,11 @@ Canonical guide for paper-relevant benchmarks: Habitat HM-EQA, OVMM find-phase (
 
 Deep dives:
 
+Reusable [agent observation/movement cases](testing/agent_observation_cases.md)
+define integration checks and live pilot gates. Planned additional QA coverage:
+[EXPRESS-Bench and AbstainEQA](environments/embodied_qa_extensions.md)
+(not yet runnable integrations).
+
 | Track | Doc |
 |-------|-----|
 | Habitat EQA | [habitat_eqa.md](habitat_eqa.md) → [habitat/](habitat/README.md) |

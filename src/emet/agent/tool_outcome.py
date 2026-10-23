@@ -57,6 +57,8 @@ class ToolOutcome:
             for key in ("manipulation", "navigation", "observation", "recovery_tools", "suggested_action")
             if key in self.payload
         }
+        if self.tool in {"rotate_base", "move_forward"} and "data" in self.payload:
+            details["motion"] = self.payload["data"]
         if details:
             bits.append(json.dumps(details, default=str))
         return " ".join(bits)
@@ -81,24 +83,29 @@ class ToolOutcome:
             if not result.tool:
                 result.tool = tool
             return result
-        if tool in TAMP_TOOLS:
+        if tool in TAMP_TOOLS or tool in {"rotate_base", "move_forward"}:
             try:
                 envelope = json.loads(result) if isinstance(result, str) else result
             except (ValueError, TypeError):
                 envelope = None
-            if (not isinstance(envelope, dict)
-                    or envelope.get("schema_version") != SCHEMA_VERSION
-                    or envelope.get("tool") != tool
-                    or not isinstance(envelope.get("status"), str)
-                    or envelope.get("status") not in {"ok", "error", "partial"}
-                    or not isinstance(envelope.get("code"), str)
-                    or not isinstance(envelope.get("data"), dict)):
-                return cls(ok=False, status="invalid_tool_result", tool=tool,
-                           payload={"recovery": "inspect"})
+            if (
+                not isinstance(envelope, dict)
+                or envelope.get("schema_version") != SCHEMA_VERSION
+                or envelope.get("tool") != tool
+                or not isinstance(envelope.get("status"), str)
+                or envelope.get("status") not in {"ok", "error", "partial"}
+                or not isinstance(envelope.get("code"), str)
+                or not isinstance(envelope.get("data"), dict)
+            ):
+                return cls(ok=False, status="invalid_tool_result", tool=tool, payload={"recovery": "inspect"})
             # Outcome.status stores the machine-readable reason code for the ledger.
-            return cls(ok=envelope["status"] == "ok" and envelope["code"] == "ok",
-                       status=envelope["code"], note=str(envelope.get("message", "")),
-                       tool=tool, payload=dict(envelope))
+            return cls(
+                ok=envelope["status"] == "ok" and envelope["code"] == "ok",
+                status=envelope["code"],
+                note=str(envelope.get("message", "")),
+                tool=tool,
+                payload=dict(envelope),
+            )
         if isinstance(result, dict) and "ok" in result:
             return cls.from_eqa_dict(tool, result)
         text = "" if result is None else str(result)
@@ -159,11 +166,11 @@ def maybe_record_tool_attempt(
     status = str(outcome.status or payload.get("nav_note") or payload.get("error") or "")
     if kind == "verify":
         st = status.upper()
-        if st == "ABSENT":
+        if st in {"VISUAL_ABSENT", "ABSENT"}:
             outcome_str = "absent"
-        elif st == "PRESENT":
+        elif st in {"VISUAL_PRESENT", "PRESENT"}:
             outcome_str = "present"
-        elif st == "CANDIDATE":
+        elif st in {"CANDIDATE", "NOT_ASSESSED"}:
             outcome_str = "candidate"
         else:
             outcome_str = "ok" if outcome.ok else "failed"
