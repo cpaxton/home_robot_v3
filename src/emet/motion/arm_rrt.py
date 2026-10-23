@@ -212,8 +212,12 @@ def plan_arm_joint_path(
     # Linear (explicit request or RRT fallback)
     path = interpolate_arm_waypoints(q0, q1, n_steps=int(linear_steps))
     for index, (a, b) in enumerate(zip(path, path[1:], strict=False)):
-        if not all(validate(q) for q in space.extend(a, b)):
-            return ArmRrtPlanResult(False, [], "linear", f"linear_collision_at_{index}")
+        for q in space.extend(a, b):
+            violation = arm_config_violation(
+                model, data, joint_names, q, collision, mins=space.mins, maxs=space.maxs
+            )
+            if violation is not None:
+                return ArmRrtPlanResult(False, [], "linear", f"linear_collision_at_{index}", detail=violation)
     return ArmRrtPlanResult(True, path, "linear", None)
 
 

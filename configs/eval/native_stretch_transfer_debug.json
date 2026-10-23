@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "input_mode": "privileged",
+  "robot": "stretch",
+  "reset_id": "recovered-two-goal-20261022",
+  "support_body": "table",
+  "objects": {
+    "red cylinder": "object2",
+    "blue cube": "object1"
+  },
+  "regions": [
+    {
+      "name": "cylinder goal",
+      "bounds": [
+        [
+          -0.08,
+          -0.86
+        ],
+        [
+          0.08,
+          -0.76
+        ]
+      ]
+    },
+    {
+      "name": "cube goal",
+      "bounds": [
+        [
+          -0.08,
+          -0.75
+        ],
+        [
+          0.08,
+          -0.62
+        ]
+      ]
+    }
+  ]
+}
