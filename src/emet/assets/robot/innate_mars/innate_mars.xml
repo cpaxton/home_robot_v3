@@ -1,10 +1,12 @@
 <mujoco model="maurice_bot">
   <compiler angle="radian" coordinate="local" meshdir="meshes" eulerseq="zyx"/>
-  <!-- Robot meshes: visual-only contact (external / simplified collision elsewhere). Use class `visual`
-       so merged scene_environment.xml geoms keep their own collision masks (global geom default must not be zeroed). -->
+  <!-- Keep detailed robot meshes visual-only and use simple contact geometry for collisions. -->
   <default>
     <default class="visual">
       <geom contype="0" conaffinity="0"/>
+    </default>
+    <default class="collision">
+      <geom group="3"/>
     </default>
   </default>
 
@@ -86,12 +88,14 @@
                         <inertial pos="0 0 0" mass="0.012" diaginertia="0.00002 0.00002 0.00002"/>
                         <joint name="joint6" type="hinge" axis="0 0 -1" limited="true" range="-1.57 1.57" damping="5"/>
                         <geom name="link61_geom" class="visual" type="mesh" mesh="link61_mesh" material="matt_black"/>
+                        <geom name="link61_contact" class="collision" type="box" pos="0.024 0 0" size="0.024 0.008 0.01945" mass="0"/>
                       </body>
 
                       <body name="link62" pos="0.044 0.0091 0">
                         <inertial pos="0 0 0" mass="0.012" diaginertia="0.00002 0.00002 0.00002"/>
                         <joint name="joint6M" type="hinge" axis="0 0 -1" limited="true" range="-1.57 1.57" damping="5"/>
                         <geom name="link62_geom" class="visual" type="mesh" mesh="link62_mesh" material="matt_black"/>
+                        <geom name="link62_contact" class="collision" type="box" pos="0.024 0 0" size="0.024 0.008 0.01945" mass="0"/>
                       </body>
 
                       <!-- Add End Effector -->

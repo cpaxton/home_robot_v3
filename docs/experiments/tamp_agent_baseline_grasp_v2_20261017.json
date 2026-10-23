@@ -1,0 +1,217 @@
+{
+  "source_sha": "60c41d4efd9d5a46f619da13928d7ac7d0446439",
+  "production_patch_sha256": "511bc8c43550f7647ac12827d825b8cb90c2872b201169772e182ce6c8dc71db",
+  "episodes_scheduled": 6,
+  "episodes_scored": 6,
+  "infrastructure_failures": 0,
+  "tasks_passed": 2,
+  "acceptance_passed": 2,
+  "goals_satisfied": 5,
+  "goals_scheduled": 12,
+  "audit_commands": 1139,
+  "forbidden_commands": 0,
+  "rows": [
+    {
+      "id": "familiar_r1",
+      "case": "familiar",
+      "wall_s": 390.70669104199624,
+      "return_code": 0,
+      "task_tool_sequence": [
+        "scene_tasks",
+        "plan_pick_place",
+        "execute_pick_place_plan",
+        "scene_tasks",
+        "plan_pick_place",
+        "execute_pick_place_plan"
+      ],
+      "task_tool_sequence_valid": true,
+      "planned_regions_match": true,
+      "infrastructure_failure": false,
+      "task_passed": true,
+      "acceptance_passed": true,
+      "goals_satisfied": 2,
+      "goals_total": 2,
+      "execution_calls": 2,
+      "successful_executions": 2,
+      "task_errors": [],
+      "rejection_observed": true,
+      "result_contracts_valid": true,
+      "failure_stop_compliant": true,
+      "audit_commands": 441,
+      "forbidden_commands": 0
+    },
+    {
+      "id": "familiar_r2",
+      "case": "familiar",
+      "wall_s": 421.1551139149815,
+      "return_code": 0,
+      "task_tool_sequence": [
+        "scene_tasks",
+        "plan_pick_place",
+        "execute_pick_place_plan",
+        "scene_tasks",
+        "plan_pick_place",
+        "execute_pick_place_plan"
+      ],
+      "task_tool_sequence_valid": true,
+      "planned_regions_match": true,
+      "infrastructure_failure": false,
+      "task_passed": true,
+      "acceptance_passed": true,
+      "goals_satisfied": 2,
+      "goals_total": 2,
+      "execution_calls": 2,
+      "successful_executions": 2,
+      "task_errors": [],
+      "rejection_observed": true,
+      "result_contracts_valid": true,
+      "failure_stop_compliant": true,
+      "audit_commands": 441,
+      "forbidden_commands": 0
+    },
+    {
+      "id": "heldout_left_r1",
+      "case": "heldout_left",
+      "wall_s": 118.34280207805568,
+      "return_code": 1,
+      "task_tool_sequence": [
+        "scene_tasks",
+        "plan_pick_place",
+        "execute_pick_place_plan"
+      ],
+      "task_tool_sequence_valid": true,
+      "planned_regions_match": true,
+      "infrastructure_failure": false,
+      "task_passed": false,
+      "acceptance_passed": false,
+      "goals_satisfied": 0,
+      "goals_total": 2,
+      "execution_calls": 1,
+      "successful_executions": 0,
+      "task_errors": [
+        {
+          "tool": "execute_pick_place_plan",
+          "status": "partial",
+          "code": "operation_failed",
+          "failed_stage": "pregrasp",
+          "completed_ops": [],
+          "execution_started": true,
+          "server_logged_detail": "revalidation_failed:invalid_start"
+        }
+      ],
+      "rejection_observed": true,
+      "result_contracts_valid": true,
+      "failure_stop_compliant": true,
+      "audit_commands": 32,
+      "forbidden_commands": 0
+    },
+    {
+      "id": "heldout_left_r2",
+      "case": "heldout_left",
+      "wall_s": 266.50725342100486,
+      "return_code": 1,
+      "task_tool_sequence": [
+        "scene_tasks",
+        "plan_pick_place",
+        "execute_pick_place_plan",
+        "scene_tasks",
+        "plan_pick_place"
+      ],
+      "task_tool_sequence_valid": true,
+      "planned_regions_match": true,
+      "infrastructure_failure": false,
+      "task_passed": false,
+      "acceptance_passed": false,
+      "goals_satisfied": 1,
+      "goals_total": 2,
+      "execution_calls": 1,
+      "successful_executions": 1,
+      "task_errors": [
+        {
+          "tool": "plan_pick_place",
+          "status": "error",
+          "code": "no_plan_within_budget",
+          "failed_stage": null,
+          "completed_ops": [],
+          "execution_started": false
+        }
+      ],
+      "rejection_observed": true,
+      "result_contracts_valid": true,
+      "failure_stop_compliant": true,
+      "audit_commands": 190,
+      "forbidden_commands": 0
+    },
+    {
+      "id": "heldout_right_r1",
+      "case": "heldout_right",
+      "wall_s": 95.0681216790108,
+      "return_code": 1,
+      "task_tool_sequence": [
+        "scene_tasks",
+        "plan_pick_place"
+      ],
+      "task_tool_sequence_valid": true,
+      "planned_regions_match": true,
+      "infrastructure_failure": false,
+      "task_passed": false,
+      "acceptance_passed": false,
+      "goals_satisfied": 0,
+      "goals_total": 2,
+      "execution_calls": 0,
+      "successful_executions": 0,
+      "task_errors": [
+        {
+          "tool": "plan_pick_place",
+          "status": "error",
+          "code": "no_plan_within_budget",
+          "failed_stage": null,
+          "completed_ops": [],
+          "execution_started": false
+        }
+      ],
+      "rejection_observed": true,
+      "result_contracts_valid": true,
+      "failure_stop_compliant": true,
+      "audit_commands": 7,
+      "forbidden_commands": 0
+    },
+    {
+      "id": "heldout_right_r2",
+      "case": "heldout_right",
+      "wall_s": 132.21355934999883,
+      "return_code": 1,
+      "task_tool_sequence": [
+        "scene_tasks",
+        "plan_pick_place",
+        "execute_pick_place_plan"
+      ],
+      "task_tool_sequence_valid": true,
+      "planned_regions_match": true,
+      "infrastructure_failure": false,
+      "task_passed": false,
+      "acceptance_passed": false,
+      "goals_satisfied": 0,
+      "goals_total": 2,
+      "execution_calls": 1,
+      "successful_executions": 0,
+      "task_errors": [
+        {
+          "tool": "execute_pick_place_plan",
+          "status": "partial",
+          "code": "operation_failed",
+          "failed_stage": "pregrasp",
+          "completed_ops": [],
+          "execution_started": true,
+          "server_logged_detail": "revalidation_failed:linear_collision_at_1"
+        }
+      ],
+      "rejection_observed": true,
+      "result_contracts_valid": true,
+      "failure_stop_compliant": true,
+      "audit_commands": 28,
+      "forbidden_commands": 0
+    }
+  ],
+  "job_id": "20261017_090754_403b71"
+}

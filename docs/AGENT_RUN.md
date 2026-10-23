@@ -1,13 +1,14 @@
 # Running the embodied agent (`emet run agent`)
 
-**Implementation status (2026-10-12):** main includes conversation isolation
-(#176), shared current-view grounding (#180), and structured simulator TAMP tools
-(#178). Additional grounding providers, measured navigation, and bounded
-inspection remain in draft #181 → #182 → #184 → #185, with follow-ups #198/#199/#202.
-Placement #179 and measured articulation #201 are now on main. Native
-input contracts #195 remain unmerged and do not yet wire native
-scene/execution adapters into `run agent`. See [project status](project_status.md)
-and the [main TAMP API contract](api/tamp.md) before selecting a workflow.
+Start with the [agent tool index](agent_tools.md) for the complete CHAT and EQA
+tool lists, or the [TAMP overview](tamp.md) for multi-step manipulation.
+Structured TAMP tools, placement, assisted articulation, input contracts, and the
+stationary Stretch native adapter are on main through #212. Native physical
+execution currently requires explicit privileged inputs and the supported table
+fixture; observed-input integration and full exploration acceptance remain open.
+See the [TAMP API contract](api/tamp.md) and
+[live agent validation](experiments/tamp_native_live_agent_20261014.md) for scope
+and evidence. The latter uses the shared CHAT stack, not the interactive CLI.
 
 Canonical entry: **`uv run emet run agent`** (or bare `emet run agent` after `uv sync`). Full flag list: `uv run emet run agent --help`.
 
@@ -318,3 +319,48 @@ tool-calling clients. Nested arrays, required fields, and parameter descriptions
 must remain visible; stripping them to argument names caused native TAMP calls
 to confuse robot identity with input mode and to invent task handles. Unknown
 native task handles request rediscovery rather than inspection.
+
+### Bounded multi-step TAMP sessions
+
+Successful TAMP tool results can continue the user's original task within the
+round budget. `--max-tool-rounds` defaults to 3 (range 1–32); use a larger budget,
+for example 12, for discovery, planning, execution, and rediscovery across objects.
+A failed/partial/unknown TAMP outcome ends that turn with a summary; no action
+returned by that final summary executes. Inspect before an explicit recovery
+turn. A request only to plan does not authorize execution.
+
+`--state-only-sim --memory-backend dynamem` is an explicit camera-free Stretch
+simulation diagnostic. It requires LLM CHAT, no EQA/camera input or checkpoint,
+and server metadata advertising zero cameras. Its CPU/manipulation-only executor
+setup disables perception model loading. Tool construction registers lazy
+callbacks before the allowed-tool filter; it does not load model weights. It
+exposes only TAMP tools and `quit`. Use explicit `--robot-ip 127.0.0.1` and matching
+ports for a local simulator, because an active connection profile can otherwise
+supply the host. Native tests also select `agent.manip_mode=physical` and
+`agent.tamp_inputs=privileged`. This mode does not validate observed exploration.
+See the [held-out/CLI experiment](experiments/tamp_native_heldout_chat_20261014.md)
+and [CLI evaluator](../scripts/eval_native_chat_session.py) for recorded commands
+and independent scoring.
+
+Remote OpenAI-compatible inference keeps ZMQ telemetry running. Local model
+inference retains the existing stream-pause behavior for decode/load contention.
+This distinction prevents stale-snapshot rejection when a remote model returns a
+native manipulation call; it does not relax the observation freshness limit.
+
+
+### Observed task discovery
+
+With the existing `open_vocab` memory backend and `agent.manip_mode=physical`,
+`agent.tamp_inputs=observed`, `scene_tasks` reads proposals from the current
+segmented RGBD frame. It reports object positions and horizontal support
+candidates with observation ages and sensor/estimated-depth provenance. The
+original Stretch RGBD receive time is preserved through mapping and segmentation.
+Reading memory does not renew it. Empty, missing, failed or stale observations
+cannot authorize manipulation.
+
+This requires camera observations and the configured scene-graph detector;
+`--state-only-sim` cannot exercise it. Plain voxel/GraphEQA presets do not install
+this provider. Python embedders can inject another `observed_tamp_provider`.
+Discovery results explicitly report `discovery_only`; CHAT summarizes and stops.
+Observed planning/execution remain unavailable pending collision geometry and
+verification providers. See the [provider contract](api/tamp.md#observed-discovery-integration-hook).

@@ -112,7 +112,7 @@ class PhysicalPickPlaceExecutor:
                     and (not self.use_sim_time or time.monotonic() - wall < self.settling_wall_timeout_s))
         return active
 
-    def plan_pose(self, position, rotation):
+    def plan_pose(self, position, rotation, *, ordered_groups=False):
         """Plan from the offline current state; caller preserves candidate state."""
         start = self.data.qpos.copy()
         result = solve_pose_ik(
@@ -132,9 +132,9 @@ class PhysicalPickPlaceExecutor:
             return None, f"pose_ik_failed:position={result.pos_error_m:.4f},rotation={result.orientation_error_rad:.4f}"
         goal = self.data.qpos[self.qadr].copy()
         self.data.qpos[:] = start
-        return self.plan_joint_target(goal)
+        return self.plan_joint_target(goal, ordered_groups=ordered_groups)
 
-    def plan_joint_target(self, goal):
+    def plan_joint_target(self, goal, *, ordered_groups=False):
         """Certify a profile posture transition using the same arm collision path."""
         start = self.data.qpos.copy()
         q0 = start[self.qadr].copy()
@@ -155,10 +155,15 @@ class PhysicalPickPlaceExecutor:
         # Coupled actuators cannot use independent-joint RRT samples. When a
         # simultaneous move cuts through furniture, try two bounded group orders
         # using the same segment checker (e.g. raise/orient, then extend).
-        if self.coupled_groups and not path.success and path.reason not in ("invalid_start", "invalid_goal"):
+        if self.coupled_groups and (ordered_groups or not path.success) and path.reason not in ("invalid_start", "invalid_goal"):
             coupled = {name for group in self.coupled_groups for name in group}
             groups = [[name] for name in self.joint_names if name not in coupled] + list(self.coupled_groups)
-            for order in (groups, list(reversed(groups))):
+            # Pregrasp uses the chain's lift/orient/extend ordering even when
+            # simultaneous interpolation is nominally clear: unequal controller
+            # lag can sweep low fingertips into the support during that motion.
+            if ordered_groups:
+                path = replace(path, success=False, reason="ordered_path_failed")
+            for order in ((groups,) if ordered_groups else (groups, list(reversed(groups)))):
                 self.data.qpos[:] = start
                 current = q0.copy()
                 waypoints = [current.copy()]
@@ -178,6 +183,11 @@ class PhysicalPickPlaceExecutor:
                         step_size=0.025,
                     )
                     if not segment.success:
+                        if ordered_groups:
+                            detail = segment.reason
+                            if segment.detail:
+                                detail = f"{detail}:{segment.detail}"
+                            path = replace(path, detail=detail)
                         break
                     waypoints.extend(segment.waypoints[1:])
                     current = target
@@ -313,7 +323,8 @@ class PhysicalPickPlaceExecutor:
                         _, error = self.plan_gripper_open()
                         if error:
                             return None, PhysicalMotionResult(False, error, "release")
-                path, error = self.plan_pose(np.asarray(point), np.asarray(rotation))
+                options = {"ordered_groups": True} if phase == "pregrasp" and self.coupled_groups else {}
+                path, error = self.plan_pose(np.asarray(point), np.asarray(rotation), **options)
                 if error:
                     return None, PhysicalMotionResult(False, f"measured_pose_replan_failed:{error}", phase)
                 paths.append(path)
@@ -378,8 +389,15 @@ class PhysicalPickPlaceExecutor:
                 goal_tolerance=0.001,
             )
             if not check.success:
-                self.event(phase=phase, reason=check.reason, measured=current.tolist(), contacts=list(self.collision.last_contacts))
-                return PhysicalMotionResult(False, f"revalidation_failed:{check.reason}", phase)
+                self.event(
+                    phase=phase, reason=check.reason, detail=check.detail,
+                    measured=current.tolist(), command=np.asarray(target).tolist(),
+                    contacts=list(self.collision.last_contacts) if check.detail == "collision" else [],
+                )
+                reason = f"revalidation_failed:{check.reason}"
+                if check.detail:
+                    reason += f":{check.detail}"
+                return PhysicalMotionResult(False, reason, phase)
             response = self.command_joints(np.asarray(target))
             ok = isinstance(response, (bool, np.bool_)) and bool(response)
             self.synchronize(self.data)

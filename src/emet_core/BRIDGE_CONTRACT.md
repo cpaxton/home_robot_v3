@@ -83,6 +83,22 @@ Canonical runtime sources are in `src/emet/core`. After changing them, run
 
 ## Message shapes (conventions)
 
+### Optional reactive control
+
+`command_protocol.reactive_control: true` advertises the simulation-first reactive
+extension. `reactive_goal` carries a world-frame `base: [x, y, yaw]` and/or an
+`arm` dictionary keyed by reaching-joint name; `reactive_timeout_s` defaults to
+10 seconds. It occupies the same motion slot as navigation.
+
+`update_reactive_goal: {target: {client_session_id, sequence}, goal: {...}}`
+replaces that goal at the next control tick without extending its deadline.
+`cancel_reactive_goal: {client_session_id, sequence}` requires a confirmed stop.
+Both are standalone commands with their own normal v2 identity envelopes.
+Updates acknowledge dispatch; the original goal receipt reports measured motion
+completion. Only the owning client may update or cancel it. Legacy bridges do
+not advertise this capability and reject these commands. See
+[Mars reactive RL](../../docs/mars_reactive_rl.md) for setup and limitations.
+
 Clients expect these keys when present. All bridges should use the same keys so the agent can treat backends interchangeably.
 
 ### get_state_message()

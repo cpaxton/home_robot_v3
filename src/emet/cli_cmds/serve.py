@@ -194,6 +194,18 @@ from emet.cli_cmds.habitat import _run_habitat_wrapper
     help="For ``serve llm``: load multimodal VLM (image_url). Default port becomes 8001.",
 )
 @click.argument("extra", nargs=-1, type=click.UNPROCESSED)
+@click.option(
+    "--controller",
+    type=click.Choice(["legacy", "baseline", "base", "rl"]),
+    default="legacy",
+    help="Mars default-table controller; legacy preserves current behavior.",
+)
+@click.option(
+    "--policy-path",
+    type=click.Path(exists=True, file_okay=False),
+    default=None,
+    help="Exported Mars RL policy bundle directory.",
+)
 def serve(
     backend: str,
     headless: bool,
@@ -224,6 +236,8 @@ def serve(
     llm_api_key: str | None,
     llm_vl: bool,
     extra: tuple[str, ...],
+    controller: str = "legacy",
+    policy_path: str | None = None,
 ) -> None:
     """Start a simulation server or OpenAI-compatible LLM HTTP API.
 
@@ -292,6 +306,14 @@ def serve(
         return
 
     extra_args = list(extra)
+    if controller != "legacy":
+        if backend != "mujoco" or robot != "innate_mars" or scene:
+            raise click.UsageError("Reactive control requires serve mujoco --robot innate_mars with the default scene")
+        if controller == "rl" and policy_path is None:
+            raise click.UsageError("--controller rl requires --policy-path")
+        extra_args.extend(["--controller", controller])
+        if policy_path is not None:
+            extra_args.extend(["--policy-path", policy_path])
     scene_value = scene
     if backend == "habitat":
         if list_robocasa_tasks:
