@@ -190,21 +190,29 @@ CHAT_SKILL_SPECS: tuple[SkillSpec, ...] = (
         name="plan_task",
         modes=frozenset({AgentMode.CHAT}),
         description="Plan a multi-step task without executing it. Requires a qualified task provider. "
-                    "Preserve the user's complete final goals. Unsupported strategies fail explicitly.",
-        parameters={"type": "object", "properties": {
-            "instruction": {"type": "string", "description": "Complete requested final goals."},
-            "strategy": {"type": "string", "enum": ["greedy", "beam", "mcts"], "default": "beam"}},
-            "required": ["instruction"], "additionalProperties": False},
+        "Preserve the user's complete final goals. Unsupported strategies fail explicitly.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "instruction": {"type": "string", "description": "Complete requested final goals."},
+                "strategy": {"type": "string", "enum": ["greedy", "beam", "mcts"], "default": "beam"},
+            },
+            "required": ["instruction"],
+            "additionalProperties": False,
+        },
         returns_info=True,
     ),
     SkillSpec(
         name="execute_task_plan",
         modes=frozenset({AgentMode.CHAT}),
         description="Execute a stored multi-step plan once, verifying measured effects after each skill. "
-                    "Stops immediately on failure or partial progress; do not retry automatically.",
-        parameters={"type": "object", "properties": {
-            "plan_ref": {"type": "string", "description": "Opaque plan handle returned by plan_task."}},
-            "required": ["plan_ref"], "additionalProperties": False},
+        "Stops immediately on failure or partial progress; do not retry automatically.",
+        parameters={
+            "type": "object",
+            "properties": {"plan_ref": {"type": "string", "description": "Opaque plan handle returned by plan_task."}},
+            "required": ["plan_ref"],
+            "additionalProperties": False,
+        },
         returns_info=True,
     ),
     SkillSpec(
@@ -324,9 +332,10 @@ CHAT_SKILL_SPECS: tuple[SkillSpec, ...] = (
             "type": "object",
             "properties": {
                 "placement_region": {
-                    "type": "array", "minItems": 2, "maxItems": 2,
-                    "items": {"type": "array", "minItems": 2, "maxItems": 2,
-                              "items": {"type": "number"}},
+                    "type": "array",
+                    "minItems": 2,
+                    "maxItems": 2,
+                    "items": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "number"}},
                     "description": "Optional world-frame XY bounds [[xmin,ymin],[xmax,ymax]] in meters. Use grounded geometry, never guessed coordinates.",
                 },
                 "task_ref": {
@@ -674,12 +683,16 @@ CHAT_SKILL_SPECS: tuple[SkillSpec, ...] = (
         name="set_receptacle_state",
         modes=frozenset({AgentMode.CHAT}),
         description="Returns schema_version=1 JSON. Simulator-assisted receptacle open/close "
-                    "using a scene_tasks handle; joint teleport, no collision guarantee. "
-                    "Verify status and replan afterward; partial means inspect before continuing.",
-        parameters={"type": "object", "properties": {
-            "task_ref": {"type": "string", "description": "Current scene_tasks handle."},
-            "state": {"type": "string", "enum": ["open", "closed"]},
-        }, "required": ["task_ref", "state"]},
+        "using a scene_tasks handle; joint teleport, no collision guarantee. "
+        "Verify status and replan afterward; partial means inspect before continuing.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "task_ref": {"type": "string", "description": "Current scene_tasks handle."},
+                "state": {"type": "string", "enum": ["open", "closed"]},
+            },
+            "required": ["task_ref", "state"],
+        },
         returns_info=True,
     ),
     SkillSpec(

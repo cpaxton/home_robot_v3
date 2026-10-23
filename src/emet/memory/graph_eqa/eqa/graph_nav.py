@@ -46,6 +46,7 @@ def _node_for_obs_id(self, obs_id: int) -> GraphNode | None:
             return n
     return None
 
+
 def _robot_planar_xy(self, robot_xyt: Any | None) -> tuple[float, float] | None:
     if robot_xyt is None:
         return None
@@ -53,6 +54,7 @@ def _robot_planar_xy(self, robot_xyt: Any | None) -> tuple[float, float] | None:
     if r.size < 2:
         return None
     return float(r[0]), float(r[1])
+
 
 def _viewpoint_xyz_for_obs(self, obs_id: int, obs: GraphObservation | None = None) -> np.ndarray | None:
     if obs is None:
@@ -66,6 +68,7 @@ def _viewpoint_xyz_for_obs(self, obs_id: int, obs: GraphObservation | None = Non
         if int(n.node_id) == int(vp_id) and n.is_viewpoint:
             return np.asarray(n.xyz, dtype=float).reshape(-1)[:3]
     return None
+
 
 def _standoff_waypoint_toward(
     self,
@@ -90,6 +93,7 @@ def _standoff_waypoint_toward(
     ux, uy = dx / dist, dy / dist
     return np.array([rx + ux * travel, ry + uy * travel, 1.0], dtype=float)
 
+
 def _obs_nav_anchor(self, obs_id: int) -> np.ndarray | None:
     obs = self._observation_by_id(obs_id)
     if obs is None:
@@ -98,6 +102,7 @@ def _obs_nav_anchor(self, obs_id: int) -> np.ndarray | None:
     if node is not None:
         return np.asarray(node.xyz, dtype=float).reshape(-1)[:3]
     return np.asarray(obs.xyz, dtype=float).reshape(-1)[:3]
+
 
 def place_footprint_for_obs(self, obs_id: int) -> Any:
     """Planar footprint for coverage / annulus sampling (``PlaceFootprint`` or None)."""
@@ -112,6 +117,7 @@ def place_footprint_for_obs(self, obs_id: int) -> Any:
         return fp
     anchor = self._obs_nav_anchor(int(obs_id))
     return footprint_from_xyz(anchor) if anchor is not None else None
+
 
 def place_coverage_for_obs(
     self,
@@ -158,6 +164,7 @@ def place_coverage_for_obs(
         _logger.warning(f"place_coverage_for_obs({obs_id}) failed: {e}")
         return coverage_from_frontier_count(None)
 
+
 def _orbit_approach_samples(
     self,
     anchor: np.ndarray,
@@ -187,6 +194,7 @@ def _orbit_approach_samples(
             )
         )
     return samples
+
 
 def _navigation_approach_waypoint_for_obs(
     self,
@@ -247,6 +255,7 @@ def _navigation_approach_waypoint_for_obs(
     idx = int(approach_index) % len(samples)
     return samples[idx]
 
+
 def _navigation_waypoint_for_obs(
     self,
     obs_id: int,
@@ -266,6 +275,7 @@ def _navigation_waypoint_for_obs(
         return self._standoff_waypoint_toward(robot_xy, anchor)
     return np.array([float(anchor[0]), float(anchor[1]), 1.0], dtype=float)
 
+
 def _target_point_from_image_id(
     self,
     image_id: int,
@@ -273,6 +283,7 @@ def _target_point_from_image_id(
 ) -> np.ndarray | None:
     """Return ``(x, y, 1)`` nav waypoint for observation ``image_id``."""
     return self._navigation_waypoint_for_obs(int(image_id), robot_xyt)
+
 
 def _resolve_eqa_action_image_ref(self, display_index: int, obs_ids: list[int] | None) -> int | None:
     """Map ``Action: Image N`` to a graph observation id.
@@ -285,12 +296,19 @@ def _resolve_eqa_action_image_ref(self, display_index: int, obs_ids: list[int] |
     idx = int(display_index)
     if idx < 1:
         return None
+    image_map = getattr(self, "last_eqa_image_obs_ids", None)
+    if image_map is not None and list(obs_ids or []) == list(self.last_eqa_obs_ids or []):
+        if idx <= getattr(self, "last_eqa_image_count", 0):
+            # Captured context without graph identity must not navigate to a
+            # different graph observation merely because its slot matches.
+            return image_map.get(idx)
     ids = [int(x) for x in (obs_ids or [])]
     if ids and 1 <= idx <= len(ids):
         return ids[idx - 1]
     if self._observation_by_id(idx) is not None:
         return idx
     return None
+
 
 def _target_point_from_display_image_index(
     self,
@@ -317,6 +335,7 @@ def _target_point_from_display_image_index(
             return self._standoff_waypoint_toward(robot_xy, anchor)
         return np.array([float(anchor[0]), float(anchor[1]), 1.0], dtype=float)
     return None
+
 
 def _count_candidate_nodes(self, question: str) -> tuple[list[GraphNode], CountTarget | None]:
     """Instance nodes whose primary label matches a count-MCQ target (FIND pointers)."""
@@ -366,9 +385,7 @@ def _count_candidate_nodes(self, question: str) -> tuple[list[GraphNode], CountT
         room_by_id = self._node_room_by_id()
         if room_by_id and all(int(node.node_id) in room_by_id for node in matches):
             scoped = [
-                node
-                for node in matches
-                if _count_phrase_matches(target.scope_tokens, room_by_id[int(node.node_id)])
+                node for node in matches if _count_phrase_matches(target.scope_tokens, room_by_id[int(node.node_id)])
             ]
             if scoped:
                 matches = scoped
@@ -380,22 +397,17 @@ def _count_candidate_nodes(self, question: str) -> tuple[list[GraphNode], CountT
         unique.setdefault(key, node)
     return _collapse_count_nodes_spatially(list(unique.values())), target
 
+
 def _look_candidate_nodes(self) -> list[GraphNode]:
     """CONFIRMED_MEMORY LOOK matches: phrase → instance node (same as the prompt row)."""
-    object_nodes = [
-        n
-        for n in self._nodes
-        if not n.is_frontier and not n.is_viewpoint and not is_ground_truth_node(n)
-    ]
+    object_nodes = [n for n in self._nodes if not n.is_frontier and not n.is_viewpoint and not is_ground_truth_node(n)]
     out: list[GraphNode] = []
     seen: set[int] = set()
     for obj in self._confirmed_memory_phrases():
         matches = [n for n in object_nodes if countable_primary_label_matches(obj, n)]
         if not matches:
             matches = [
-                n
-                for n in object_nodes
-                if any(label_matches_relevant_object(obj, lab) for lab in (n.labels or []))
+                n for n in object_nodes if any(label_matches_relevant_object(obj, lab) for lab in (n.labels or []))
             ]
         for node in matches:
             oid = int(node.obs_id)
@@ -404,6 +416,7 @@ def _look_candidate_nodes(self) -> list[GraphNode]:
             seen.add(oid)
             out.append(node)
     return out
+
 
 def _obs_is_camera_pose_place(self, obs_id: int, robot_xyt: Any | None) -> bool:
     """True when this observation's XY is the current robot (mapping view, not an object)."""
@@ -418,6 +431,7 @@ def _obs_is_camera_pose_place(self, obs_id: int, robot_xyt: Any | None) -> bool:
         xy = np.asarray(vp, dtype=float).reshape(-1)[:2]
     delta = np.asarray(xy, dtype=float).reshape(-1)[:2] - np.asarray(robot_xy, dtype=float)
     return float(np.linalg.norm(delta)) < float(_FIND_CAMERA_POSE_M)
+
 
 def _eqa_find_obs_ids(
     self,
@@ -488,6 +502,7 @@ def _eqa_find_obs_ids(
         ids = interior
     return self._spread_obs_xy(ids, max_n=max(1, int(max_n)))
 
+
 def _graph_count_hint(
     self,
     question: str,
@@ -533,6 +548,7 @@ def _graph_count_hint(
         "do not use this list length as the answer."
     )
 
+
 def _location_finder_nodes(self) -> list[GraphNode]:
     """Object nodes matching the question phrase (close-look name or detector primary)."""
     phrases = [p for p in self._confirmed_memory_phrases() if str(p).strip()]
@@ -568,6 +584,7 @@ def _location_finder_nodes(self) -> list[GraphNode]:
             seen_obs.add(oid)
             matches.append(node)
     return matches
+
 
 def _compose_eqa_answer_obs_ids(
     self,

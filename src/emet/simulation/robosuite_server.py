@@ -867,9 +867,11 @@ class RobosuiteZmqServer(ReactiveSimMixin, BaseZmqServer):
         if not self._passive_base_support:
             if weld >= 0:
                 base_id = self._mjmodel.body(self._spec.base_link_name).id
-                if (self._mjmodel.eq_type[weld] != mujoco.mjtEq.mjEQ_WELD
-                        or self._mjmodel.eq_obj1id[weld] != 0
-                        or self._mjmodel.eq_obj2id[weld] != base_id):
+                if (
+                    self._mjmodel.eq_type[weld] != mujoco.mjtEq.mjEQ_WELD
+                    or self._mjmodel.eq_obj1id[weld] != 0
+                    or self._mjmodel.eq_obj2id[weld] != base_id
+                ):
                     raise ValueError("emet_stationary_base must weld world to the robot base")
                 self._mjmodel.eq_data[weld, 3:10] = snap
                 self._mjdata.eq_active[weld] = True
@@ -1112,6 +1114,7 @@ class RobosuiteZmqServer(ReactiveSimMixin, BaseZmqServer):
             robot_root_name=self._spec.base_link_name,
         )
         from emet.simulation.articulation import scene_articulations
+
         session["sim_articulations"] = scene_articulations(self._mjmodel, self._mjdata, self._spec.base_link_name)
         session["articulation_revision"] = 0
         return session
@@ -1119,33 +1122,40 @@ class RobosuiteZmqServer(ReactiveSimMixin, BaseZmqServer):
     def _refresh_articulation_state(self):
         """Publish joint evidence and coherent geometry from private data under lock."""
         from emet.simulation.articulation import articulation_geometry_changed, scene_articulations
+
         if self._emet_session is None or self._mjmodel is None or self._mjdata is None:
             return
         groups = scene_articulations(self._mjmodel, self._mjdata, self._spec.base_link_name)
-        previous = getattr(self, "_articulation_geometry_groups",
-                           self._emet_session.get("sim_articulations") or [])
+        previous = getattr(self, "_articulation_geometry_groups", self._emet_session.get("sim_articulations") or [])
         previous_by_bodies = {tuple(g["bodies"]): g for g in previous}
         revision = self._emet_session.get("articulation_revision", 0)
         forced = revision != getattr(self, "_articulation_geometry_revision", revision)
-        changed = [g for g in groups if forced or articulation_geometry_changed(
-            g, previous_by_bodies.get(tuple(g["bodies"])))]
+        changed = [
+            g for g in groups if forced or articulation_geometry_changed(g, previous_by_bodies.get(tuple(g["bodies"])))
+        ]
         if changed or len(groups) != len(previous):
             scratch = mujoco.MjData(self._mjmodel)
             mujoco.mj_copyData(scratch, self._mjmodel, self._mjdata)
             env = self._emet_session.get("environment") or {}
             if env.get("kind") == "molmospaces" and not self._objects_info:
                 from emet.simulation.sim_object_placements import refresh_articulated_body_placements
+
                 bodies = {body for group in changed for body in group["bodies"]}
                 refresh_articulated_body_placements(
-                    self._emet_session["sim_object_placements"], self._mjmodel, scratch, bodies)
+                    self._emet_session["sim_object_placements"], self._mjmodel, scratch, bodies
+                )
                 changed_keys = {tuple(g["bodies"]) for g in changed}
-                geometry_groups = [g if tuple(g["bodies"]) in changed_keys else
-                                   previous_by_bodies[tuple(g["bodies"])] for g in groups]
+                geometry_groups = [
+                    g if tuple(g["bodies"]) in changed_keys else previous_by_bodies[tuple(g["bodies"])] for g in groups
+                ]
             else:
                 # Aggregate fixture maps need their provider's grouping rules.
                 attach_sim_object_placements_to_session(
-                    self._emet_session, objects_info=self._objects_info,
-                    environment_kind=env.get("kind"), model=self._mjmodel, data=scratch,
+                    self._emet_session,
+                    objects_info=self._objects_info,
+                    environment_kind=env.get("kind"),
+                    model=self._mjmodel,
+                    data=scratch,
                     robot_root_name=self._spec.base_link_name,
                 )
                 geometry_groups = groups
@@ -1172,7 +1182,8 @@ class RobosuiteZmqServer(ReactiveSimMixin, BaseZmqServer):
                     if not hasattr(self, "_dynamic_placement_tracker"):
                         self._dynamic_placement_tracker = DynamicPlacementTracker()
                     self._dynamic_placement_tracker.refresh(
-                        placements, self._mjmodel, self._mjdata, forced_bodies=dirty)
+                        placements, self._mjmodel, self._mjdata, forced_bodies=dirty
+                    )
                 self._placement_geometry_dirty = set()
                 # Measure object and EE together. Mixing observation AABBs with
                 # newer joint states invents apparent attachment slip.
@@ -1180,7 +1191,8 @@ class RobosuiteZmqServer(ReactiveSimMixin, BaseZmqServer):
                 for body, info in getattr(self, "_kinematic_attachments", {}).items():
                     try:
                         held_geometry[body] = measured_held_object_geometry(
-                            self._mjmodel, self._mjdata, body, info["ee_body"])
+                            self._mjmodel, self._mjdata, body, info["ee_body"]
+                        )
                     except ValueError as exc:
                         # Missing volume must reject placement, not stop telemetry
                         # and command receipts for the whole simulator.
@@ -2367,17 +2379,24 @@ class RobosuiteZmqServer(ReactiveSimMixin, BaseZmqServer):
         with self._mj_lock:
             if self._mjmodel is None or self._mjdata is None:
                 raise RuntimeError("scene not ready")
-            contacts = [teleport_endpoint_contacts(self._mjmodel, self._mjdata, self._spec, pose)
-                        for pose in poses]
-            return {"poses": poses.tolist(), "clear": [not c for c in contacts], "contacts": contacts,
-                    "sim_time": float(self._mjdata.time), "scope": "base_endpoint_only"}
+            contacts = [teleport_endpoint_contacts(self._mjmodel, self._mjdata, self._spec, pose) for pose in poses]
+            return {
+                "poses": poses.tolist(),
+                "clear": [not c for c in contacts],
+                "contacts": contacts,
+                "sim_time": float(self._mjdata.time),
+                "scope": "base_endpoint_only",
+            }
 
     def handle_action(self, action: dict[str, Any]):
         from emet.simulation.physical_execution import audit_physical_action
 
         audit_physical_action(
-            action, source=type(self).__name__,
-            implicit_teleport=("xyt" in action and self._is_molmospaces_session() and molmospaces_nav_teleport_enabled()),
+            action,
+            source=type(self).__name__,
+            implicit_teleport=(
+                "xyt" in action and self._is_molmospaces_session() and molmospaces_nav_teleport_enabled()
+            ),
         )
         if EMET_ACTION_MUJOCO_GROUND_TRUTH_KEY in action:
             path_gt, exclude_robot, as_json = parse_ground_truth_dump_action_field(
@@ -2436,12 +2455,14 @@ class RobosuiteZmqServer(ReactiveSimMixin, BaseZmqServer):
                 with self._mj_lock:
                     ok = set_named_joint_qpos(self._mjmodel, self._mjdata, joint, value)
                     if self._emet_session is not None:
-                        self._emet_session["articulation_revision"] = int(
-                            self._emet_session.get("articulation_revision", 0)) + 1
+                        self._emet_session["articulation_revision"] = (
+                            int(self._emet_session.get("articulation_revision", 0)) + 1
+                        )
                         self._refresh_articulation_state()
                         self._emet_session["articulation_result"] = {
                             "request_id": action[EMET_ACTION_SIM_SET_JOINT_QPOS_KEY].get("request_id"),
-                            "joint": joint, "applied": bool(ok),
+                            "joint": joint,
+                            "applied": bool(ok),
                         }
                 if ok:
                     logger.info(f"sim_set_joint_qpos: {joint!r} requested={value:.4f}")
@@ -2565,9 +2586,7 @@ class RobosuiteZmqServer(ReactiveSimMixin, BaseZmqServer):
                         # changing base/attachment poses or reporting arrival.
                         from emet.simulation.teleport_collision import teleport_endpoint_contacts
 
-                        contacts = teleport_endpoint_contacts(
-                            self._mjmodel, self._mjdata, self._spec, (wx, wy, wt)
-                        )
+                        contacts = teleport_endpoint_contacts(self._mjmodel, self._mjdata, self._spec, (wx, wy, wt))
                         if contacts:
                             self._nav_goal_world = None
                             self._contract_navigation_context["endpoint_contacts"] = contacts
@@ -2707,7 +2726,9 @@ class RobosuiteZmqServer(ReactiveSimMixin, BaseZmqServer):
                 if rgb_r.shape[0] == rgb.shape[0] and rgb_r.shape[1] == rgb.shape[1]:
                     message["rgb_right"] = compression.to_jpg(rgb_r)
                     message["camera_K_right"] = K_r
-                    message["camera_pose_right"] = self._camera_pose_world(right_name, data=getattr(self, "_camera_render_states", {}).get(right_name))
+                    message["camera_pose_right"] = self._camera_pose_world(
+                        right_name, data=getattr(self, "_camera_render_states", {}).get(right_name)
+                    )
             except Exception as e:
                 logger.debug(f"Stereo auxiliary RGB failed for {right_name}: {e!r}")
         if len(cam_names) >= 3 and allow_extra_cams:
@@ -2717,7 +2738,9 @@ class RobosuiteZmqServer(ReactiveSimMixin, BaseZmqServer):
                     rgb_t, K_t = self._primary_rgb_only_with_K(tertiary)
                     message["rgb_tertiary"] = compression.to_jpg(rgb_t)
                     message["camera_K_tertiary"] = K_t
-                    message["camera_pose_tertiary"] = self._camera_pose_world(tertiary, data=getattr(self, "_camera_render_states", {}).get(tertiary))
+                    message["camera_pose_tertiary"] = self._camera_pose_world(
+                        tertiary, data=getattr(self, "_camera_render_states", {}).get(tertiary)
+                    )
                     message["camera_name_tertiary"] = tertiary
                 except Exception as e:
                     logger.debug(f"Tertiary RGB failed for {tertiary}: {e!r}")

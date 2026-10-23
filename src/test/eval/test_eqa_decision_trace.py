@@ -8,9 +8,28 @@ import json
 from pathlib import Path
 
 import numpy as np
+import pytest
 from PIL import Image
 
 from emet.eval.eqa_decision_trace import finalize_eqa_decision_trace, record_eqa_decision_iteration
+
+
+def test_explicit_camera_roles_are_not_mislabeled_as_navigation_fallback(tmp_path):
+    images = [Image.new("RGB", (4, 4), color) for color in ("red", "blue")]
+    kwargs = {
+        "question": "Where?",
+        "text_blocks": ["Current and earlier context"],
+        "obs_ids": [],
+        "crop_obs_id": None,
+        "nav_fallback_count": 0,
+        "relevant_images": images,
+    }
+    path = record_eqa_decision_iteration(tmp_path, 1, **kwargs, image_roles=["assessed_view", "pre_approach_context"])
+    meta = json.loads((path / "meta.json").read_text())
+    assert [im["kind"] for im in meta["images"]] == ["assessed_view", "pre_approach_context"]
+    assert meta["nav_fallback_count"] == 0
+    with pytest.raises(ValueError, match="every attached image"):
+        record_eqa_decision_iteration(tmp_path, 2, **kwargs, image_roles=["assessed_view"])
 
 
 def test_record_eqa_decision_iteration_writes_prompt_and_images(tmp_path: Path) -> None:

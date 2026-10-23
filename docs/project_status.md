@@ -8,6 +8,13 @@ reported test counts belong to their cited revisions and are not additive.
 
 ## What is on main
 
+Stack follow-up (2026-10-12): #199/#202 now incorporate main `b7a1c22d`,
+including merged #195. Their frozen main-integration diagnostic at `0fb37763`
+remains **1/4**, identical to the preceding pilot, with no episode errors.
+Review repairs and outstanding gates are tracked in the
+[consolidated evidence record](plans/eqa_context_evidence.md).
+This follow-up does not rescore older results or refresh every PR SHA below.
+
 | Landed work | Source | Scope |
 | --- | --- | --- |
 | Query-driven memory and shared command/navigation lifecycle | [#163](https://github.com/cpaxton/home_robot_v3/pull/163), [#164](https://github.com/cpaxton/home_robot_v3/pull/164) | Shared infrastructure; learned end-to-end acceptance remains separate. |

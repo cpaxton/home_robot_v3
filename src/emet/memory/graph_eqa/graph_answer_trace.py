@@ -26,6 +26,7 @@ class GraphAnswerTraceMixin:
         close_look_status: str,
         vlm_raw: str,
         parsed: dict[str, Any],
+        image_roles: list[str] | None = None,
     ) -> None:
         trace_root = getattr(self, "_eqa_decision_trace_dir", None)
         if not trace_root:
@@ -45,4 +46,5 @@ class GraphAnswerTraceMixin:
             close_look_status=close_look_status,
             vlm_raw=vlm_raw,
             parsed=parsed,
+            image_roles=image_roles,
         )

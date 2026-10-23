@@ -22,6 +22,32 @@ def test_close_geometry_not_color_or_distant_wall_triggers_recovery():
     assert not exploration_view_quality(None)["obstructed"]
 
 
+@pytest.mark.parametrize("invalid", [np.nan, np.inf, 0.0, -1.0])
+def test_invalid_depth_is_unknown_not_obstruction(invalid):
+    quality = exploration_view_quality(np.full((20, 20), invalid))
+    assert not quality["obstructed"]
+    assert quality["valid_fraction"] == 0
+    assert quality["blocked_fraction"] == 0
+    assert quality["reason"] == "depth_unavailable"
+
+
+def test_invalid_rays_do_not_amplify_sparse_near_depth():
+    depth = np.full((20, 20), np.nan)
+    depth[5:7, 5:15] = 0.2
+    quality = exploration_view_quality(depth)
+    assert not quality["obstructed"]
+    assert quality["blocked_fraction"] == pytest.approx(0.2)
+    assert quality["invalid_fraction"] == pytest.approx(0.8)
+    assert quality["reason"] == "partial_central_depth"
+    depth[5:10, 5:15] = 0.2
+    quality = exploration_view_quality(depth)
+    assert not quality["obstructed"]
+    assert quality["blocked_fraction"] == pytest.approx(0.5)
+    assert quality["invalid_fraction"] == pytest.approx(0.5)
+    depth[5:13, 5:15] = 0.2
+    assert exploration_view_quality(depth)["obstructed"]
+
+
 def test_head_recovery_is_bounded_and_requires_current_capture():
     robot = SimpleNamespace(head_to=Mock(), wait_for_obs=Mock())
     vm = SimpleNamespace(observations=[])
@@ -160,6 +186,19 @@ def test_physical_inspection_rejects_missing_camera_geometry():
     result = aim_arrival_view(ex, {"ok": True, "obs_id": 1}, [0, 0, 1])
     assert not result["ok"] and result["reason"] == "missing_geometry"
     ex.agent.robot.head_to.assert_not_called()
+
+
+def test_anchorless_physical_view_remains_available_for_visual_verification():
+    ex = arrival_executor()
+    capture = {"ok": True, "obs_id": 1}
+    result = aim_arrival_view(ex, capture, None)
+    assert result["ok"] and result["obs_id"] == 1
+    assert result["aim_status"] == "unavailable"
+    assert result["aim_reason"] == "missing_target_anchor"
+    assert "target_in_frame" not in result
+    assert "verified" not in result
+    ex.agent.robot.head_to.assert_not_called()
+    ex._tool_capture_and_update.assert_not_called()
 
 
 def test_head_limit_is_exposed_before_sending_impossible_command():

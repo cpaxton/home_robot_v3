@@ -17,9 +17,9 @@ import json
 import os
 from pathlib import Path
 
-import hydra
 import yacs.config
 import yaml
+from omegaconf import OmegaConf
 
 import emet
 
@@ -161,8 +161,14 @@ def load_config(visualize: bool = False, print_images: bool = True, config_path=
 
 
 def get_control_config(cfg_name):
-    """Simpler version of the config utility for opening config"""
-    with hydra.initialize_config_dir(CONTROL_CONFIG_DIR, version_base="1.1"):
-        cfg = hydra.compose(config_name=cfg_name)
+    """Load standalone control YAML without mutating SAM2's global Hydra state.
 
+    Control profiles contain no Hydra defaults/composition. Preserve DictConfig
+    access and lazy OmegaConf interpolation without initializing a process-global
+    application. Hydra defaults composition is intentionally unsupported.
+    """
+    name = str(cfg_name)
+    cfg = OmegaConf.load(Path(CONTROL_CONFIG_DIR) / (name if name.endswith(".yaml") else name + ".yaml"))
+    if "defaults" in cfg:
+        raise ValueError("Control profiles must be standalone YAML, without Hydra defaults")
     return cfg

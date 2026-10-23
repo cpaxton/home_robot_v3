@@ -33,7 +33,6 @@ from emet.utils.logger import Logger
 _logger = Logger(__name__)
 
 
-
 def _tool_submit_answer(self, answer: str) -> dict[str, Any]:
     if self.mode == "explore":
         return {"ok": False, "error": "submit_answer unavailable in explore mode — use finish"}
@@ -66,6 +65,7 @@ def _tool_submit_answer(self, answer: str) -> dict[str, Any]:
         }
     return self._do_submit_answer(prefer_answer=answer)
 
+
 def _tool_finish(self, summary: str) -> dict[str, Any]:
     if self.mode != "explore":
         return {"ok": False, "error": "finish unavailable in answer mode — use submit_answer"}
@@ -75,6 +75,7 @@ def _tool_finish(self, summary: str) -> dict[str, Any]:
             "error": "exploration not finished — frontiers remain and nav budget left",
         }
     return self._do_finish(summary)
+
 
 def _do_finish(self, summary: str = "") -> dict[str, Any]:
     text = (summary or "").strip() or (
@@ -97,12 +98,14 @@ def _do_finish(self, summary: str = "") -> dict[str, Any]:
         "relevant_images": [],
     }
 
+
 def _pending_answerable_letter(self) -> str:
     """Letter from a deferred answerable assess, only if that view saw the target."""
     pending = self._pending_answerable or {}
     if not pending.get("present"):
         return ""
     return str(pending.get("letter") or "").strip().upper()
+
 
 def _uniform_prior_letter(self, n_choices: int) -> str:
     """Last-resort guess when no channel produced a letter.
@@ -122,6 +125,7 @@ def _uniform_prior_letter(self, n_choices: int) -> str:
     digest = hashlib.sha1((self.question or "").encode("utf-8")).hexdigest()
     return chr(ord("A") + valid[int(digest[:8], 16) % len(valid)])
 
+
 def _confidence_for_provenance(self, provenance: str) -> float:
     """Coarse calibrated confidence so a robot can say "I think X, but I'm unsure".
 
@@ -134,6 +138,7 @@ def _confidence_for_provenance(self, provenance: str) -> float:
     if self._verified or confirmed_vlm:
         score += 0.15
     return round(min(score, 0.95), 2)
+
 
 def _forced_answer_fallback(
     self,
@@ -181,13 +186,7 @@ def _forced_answer_fallback(
     # freeform + capped rotation voting before the fallback ladder.
     debias_letter = ""
     debias_detail: dict[str, Any] = {}
-    if (
-        self._mcq_debias
-        and choices
-        and len(choices) >= 2
-        and not grounded_decision
-        and not evidence_backed_decision
-    ):
+    if self._mcq_debias and choices and len(choices) >= 2 and not grounded_decision and not evidence_backed_decision:
         gm = self.graph_memory
         vote_fn = getattr(gm, "vote_mcq_letter", None) if gm is not None else None
         if callable(vote_fn):
@@ -285,13 +284,13 @@ def _forced_answer_fallback(
             ),
             "confidence": answer_verified,
             "discord_text": (
-                f"Answer:{answer}\nConfidence:{confidence_score}\n"
-                f"[answer_provenance:{provenance}] [forced: {reason}]"
+                f"Answer:{answer}\nConfidence:{confidence_score}\n[answer_provenance:{provenance}] [forced: {reason}]"
             ),
             "verified": answer_verified,
         }
     )
     return out
+
 
 def _abstain_unverified(
     self,
@@ -326,10 +325,12 @@ def _abstain_unverified(
         "verified": False,
     }
 
+
 @staticmethod
 def _looks_like_coordinate_dump(text: str) -> bool:
     """True for nearest-furniture XYZ dumps (``The fan is at approximately (x,y,z) m``)."""
     return bool(_COORD_DUMP_RE.search(text or ""))
+
 
 def _mcq_letter_from_text(self, text: str) -> str:
     """Extract a canonical A–D letter when the question is MCQ-shaped."""
@@ -354,6 +355,7 @@ def _mcq_letter_from_text(self, text: str) -> str:
         return raw.upper()
     return ""
 
+
 def _choice_text_for_letter(self, letter: str) -> str:
     """Return semantic option text for an internal benchmark letter."""
     from emet.habitat.metrics import parse_mcq_choices_from_question
@@ -366,6 +368,7 @@ def _choice_text_for_letter(self, letter: str) -> str:
         return ""
     idx = ord(canonical) - ord("A")
     return str(choices[idx]).strip() if 0 <= idx < len(choices) else ""
+
 
 def _semantic_answer_text(self, raw: str, letter: str) -> str:
     """Keep semantic text, replacing legacy letter-only forms with option text."""
@@ -384,6 +387,7 @@ def _semantic_answer_text(self, raw: str, letter: str) -> str:
     ):
         return text
     return self._choice_text_for_letter(letter) or text
+
 
 def _decision_for_letter(
     self,
@@ -410,6 +414,7 @@ def _decision_for_letter(
         choice_index=idx,
     )
 
+
 def _trusted_vlm_letter(self) -> str:
     """MCQ letter from the most recent assess that actually saw the target.
 
@@ -429,6 +434,7 @@ def _trusted_vlm_letter(self) -> str:
         if letter:
             return letter
     return self._last_positive_letter
+
 
 def _eqa_self_answer_text(self) -> str:
     """Semantic answer from the four-image EQA before post-model overrides."""
@@ -477,6 +483,7 @@ def _eqa_self_answer_text(self) -> str:
         return ""
     return field
 
+
 def _eqa_self_answer_letter(self) -> str:
     """Benchmark choice encoding derived from the EQA's semantic answer."""
     from emet.habitat.metrics import parse_mcq_choices_from_question
@@ -493,6 +500,7 @@ def _eqa_self_answer_letter(self) -> str:
         if idx is not None and 0 <= idx < 5:
             return chr(ord("A") + idx)
     return ""
+
 
 def _grounded_submit_decision(
     self,
@@ -595,6 +603,7 @@ def _grounded_submit_decision(
         source="query",
         confidence=0.0,
     )
+
 
 def _resolve_submit_answer_text(
     self,
@@ -722,6 +731,7 @@ def _resolve_submit_answer_text(
     self._final_answer_decision = FinalAnswerDecision("Unknown", "query", 0.0)
     return "Unknown", "query"
 
+
 def _best_evidence_obs_id(self) -> int | None:
     """Highest-signal VLM-assessed view for the final EQA Image 1.
 
@@ -746,6 +756,7 @@ def _best_evidence_obs_id(self) -> int | None:
     if best_rank == (0, 0):
         return None
     return best_oid
+
 
 def _count_find_obs_ids(self) -> list[int]:
     """Graph views to attach for a count MCQ (Action / FIND nodes, not the bathroom)."""
@@ -800,10 +811,12 @@ def _count_find_obs_ids(self) -> list[int]:
                 _add(getattr(node, "obs_id", None))
     return out
 
+
 def _count_find_unattached_obs_ids(self) -> list[int]:
     """FIND views that were not in the last attached Image 1..K set."""
     attached = {int(oid) for oid in (getattr(self.graph_memory, "last_eqa_obs_ids", None) or [])}
     return [oid for oid in self._count_find_obs_ids() if oid not in attached]
+
 
 def _downgrade_unattached_count_none(self, answer: str, confidence: bool) -> bool:
     """Do not score a confident count while FIND RGB was never attached."""
@@ -818,6 +831,7 @@ def _downgrade_unattached_count_none(self, answer: str, confidence: bool) -> boo
     if gm is not None and getattr(gm, "last_eqa_action_obs_id", None) is None:
         gm.last_eqa_action_obs_id = missing[0]
     return False
+
 
 def _do_submit_answer(self, prefer_answer: str = "") -> dict[str, Any]:
     from emet.eval.dynagraph_vram import release_siglip_for_vlm
@@ -836,15 +850,16 @@ def _do_submit_answer(self, prefer_answer: str = "") -> dict[str, Any]:
         # Prefer verified observation as Image 1 (query_answer must honor force_obs_ids;
         # setting last_eqa_obs_ids alone was overwritten by diversified selection).
         confirmed_evidence = self._confirmed_vlm_answer_evidence()
-        confirmed_obs_id = confirmed_evidence.obs_id if confirmed_evidence is not None else self._verified_obs_id
-        if confirmed_obs_id is not None and hasattr(gm, "select_obs_ids_for_verified_answer"):
-            force_obs_ids = gm.select_obs_ids_for_verified_answer(confirmed_obs_id, max_images=1)
+        answer_obs_id = confirmed_evidence.obs_id if confirmed_evidence is not None else self._verified_obs_id
+        if answer_obs_id is not None and hasattr(gm, "select_obs_ids_for_verified_answer"):
+            force_obs_ids = gm.select_obs_ids_for_verified_answer(answer_obs_id, max_images=1)
             gm.last_eqa_obs_ids = list(force_obs_ids)
         elif self._evidence_image and hasattr(gm, "select_obs_ids_for_verified_answer"):
             # Unverified: pin the best VLM-assessed view instead of a pure
             # diversified pick — the assess already said where the evidence is.
             evidence_obs_id = self._best_evidence_obs_id()
             if evidence_obs_id is not None:
+                answer_obs_id = evidence_obs_id
                 force_obs_ids = gm.select_obs_ids_for_verified_answer(evidence_obs_id, max_images=1)
                 gm.last_eqa_obs_ids = list(force_obs_ids)
         find_ids = self._count_find_obs_ids()
@@ -859,6 +874,10 @@ def _do_submit_answer(self, prefer_answer: str = "") -> dict[str, Any]:
         xyt = self._robot_xyt_world()
         planner = getattr(agent, "planner", None)
         try:
+            assessed_images = getattr(self, "_assessed_images", {}).get(answer_obs_id)
+            evidence_kw = (
+                {"evidence_images": assessed_images, "evidence_obs_id": answer_obs_id} if assessed_images else {}
+            )
             (
                 _reasoning,
                 ans,
@@ -871,6 +890,7 @@ def _do_submit_answer(self, prefer_answer: str = "") -> dict[str, Any]:
                 xyt,
                 planner,
                 force_obs_ids=force_obs_ids,
+                **evidence_kw,
             )
             query_ans = (ans or "").strip()
         except Exception as e:
@@ -911,9 +931,7 @@ def _do_submit_answer(self, prefer_answer: str = "") -> dict[str, Any]:
             "answer_source": answer_source,
             "query_answer": query_ans or None,
             "prefer_answer": prefer or None,
-            "vlm_suggested": (
-                None if self._last_vlm_assess is None else self._last_vlm_assess.get("suggested_answer")
-            ),
+            "vlm_suggested": (None if self._last_vlm_assess is None else self._last_vlm_assess.get("suggested_answer")),
             "answerable": self._evidence_policy.state == AgenticState.ANSWER,
             "answerability_probability": (
                 self._evidence_policy.beliefs[self._evidence_policy.active_hypothesis_id].answerability_probability
@@ -935,10 +953,9 @@ def _do_submit_answer(self, prefer_answer: str = "") -> dict[str, Any]:
         "discord_text": discord_text,
         "confidence": bool(confidence),
         "relevant_images": relevant_images,
-        "final_decision": (
-            self._final_answer_decision.to_dict() if self._final_answer_decision is not None else None
-        ),
+        "final_decision": (self._final_answer_decision.to_dict() if self._final_answer_decision is not None else None),
     }
+
 
 def _answer_unknownish(self, answer: Any) -> bool:
     from emet.habitat.metrics import parse_mcq_choices_from_question
@@ -947,6 +964,7 @@ def _answer_unknownish(self, answer: Any) -> bool:
         str(answer or ""),
         parse_mcq_choices_from_question(self.question),
     )
+
 
 def _finalize_unknown_location_letter(self, submit_out: dict[str, Any]) -> dict[str, Any]:
     """Keep scored Unknown; optionally log a salvage counterfactual letter.
@@ -1014,6 +1032,7 @@ def _finalize_unknown_location_letter(self, submit_out: dict[str, Any]) -> dict[
         }
     )
     return submit_out
+
 
 def _maybe_follow_eqa_explore_action(self, submit_out: dict[str, Any]) -> bool:
     """Navigate to EQA ``Action: N`` when submit returned an ungrounded guess.
