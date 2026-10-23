@@ -160,6 +160,18 @@ def _forced_answer_fallback(
         return self._abstain_unverified(reason=reason)
 
     out = self._do_submit_answer(prefer_answer=prefer_answer)
+    if self.decision_policy == "model_final":
+        self._append_trace(
+            {
+                "tool": "forced_answer",
+                "reason": reason,
+                "answer": out.get("answer"),
+                "answer_provenance": "model_final",
+                "confidence": out.get("confidence", False),
+                "final_decision": self._final_answer_decision.to_dict(),
+            }
+        )
+        return out
     answer = str(out.get("answer") or "")
     provenance = str(out.get("answer_source") or "query")
     choices = parse_mcq_choices_from_question(self.question)
@@ -880,6 +892,8 @@ def _do_submit_answer(self, prefer_answer: str = "") -> dict[str, Any]:
             )
             if assessed_images:
                 evidence_kw.update(getattr(self, "_assessed_image_metadata", {}).get(answer_obs_id, {}))
+            if self.decision_policy == "model_final":
+                evidence_kw["model_final"] = True
             (
                 _reasoning,
                 ans,
@@ -899,19 +913,32 @@ def _do_submit_answer(self, prefer_answer: str = "") -> dict[str, Any]:
             discord_text = f"Answer:Unknown\nEQA failed: {e}"
             query_ans = "Unknown"
             confidence = False
-        answer, answer_source = self._resolve_submit_answer_text(
-            prefer_answer=prefer,
-            query_answer=query_ans,
-        )
+        if self.decision_policy == "model_final":
+            answer, answer_source = query_ans or "Unknown", "model_final"
+            letter = self._mcq_letter_from_text(answer)
+            self._final_answer_decision = FinalAnswerDecision(
+                answer=answer,
+                answer_text=answer,
+                source=answer_source,
+                confidence=float(bool(confidence)),
+                choice_index=ord(letter) - ord("A") if letter else None,
+            )
+            self._answer_provenance = answer_source
+        else:
+            answer, answer_source = self._resolve_submit_answer_text(
+                prefer_answer=prefer,
+                query_answer=query_ans,
+            )
         # Semantic answer from VLM assess / tool arg is the decision we want to score; do not
         # inherit False confidence from a coordinate-dump query_answer path.
         if answer_source in ("prefer", "vlm_suggested") and self._mcq_letter_from_text(answer):
             confidence = bool(self._verified) or bool(confidence)
-        confidence = self._downgrade_unattached_count_none(answer, bool(confidence))
+        if self.decision_policy != "model_final":
+            confidence = self._downgrade_unattached_count_none(answer, bool(confidence))
         discord_text = f"Answer:{answer}\nConfidence:{confidence}\n[submit_source:{answer_source}]"
         if query_ans and query_ans != answer:
             discord_text += f"\n[query_answer:{query_ans[:160]}]"
-    elif prefer:
+    elif prefer and self.decision_policy != "model_final":
         answer, answer_source = self._resolve_submit_answer_text(
             prefer_answer=prefer,
             query_answer="",
@@ -922,7 +949,16 @@ def _do_submit_answer(self, prefer_answer: str = "") -> dict[str, Any]:
         discord_text = "Answer:Unknown\nNo graph memory"
         answer = "Unknown"
         answer_source = "query"
-    confidence = self._downgrade_unattached_count_none(str(answer or ""), bool(confidence))
+        if self.decision_policy == "model_final":
+            answer_source = self._answer_provenance = "model_final"
+            self._final_answer_decision = FinalAnswerDecision(
+                answer=answer,
+                answer_text=answer,
+                source=answer_source,
+                confidence=0.0,
+            )
+    if self.decision_policy != "model_final":
+        confidence = self._downgrade_unattached_count_none(str(answer or ""), bool(confidence))
     self._append_trace(
         {
             "tool": "submit_answer",
@@ -955,6 +991,7 @@ def _do_submit_answer(self, prefer_answer: str = "") -> dict[str, Any]:
         "discord_text": discord_text,
         "confidence": bool(confidence),
         "relevant_images": relevant_images,
+        **({"answer_confidence": float(bool(confidence))} if self.decision_policy == "model_final" else {}),
         "final_decision": (self._final_answer_decision.to_dict() if self._final_answer_decision is not None else None),
     }
 
@@ -977,6 +1014,8 @@ def _finalize_unknown_location_letter(self, submit_out: dict[str, Any]) -> dict[
     ``final_location_salvage_counterfactual`` so summaries can report both
     no-salvage and with-salvage accuracies.
     """
+    if self.decision_policy == "model_final":
+        return submit_out
     self._salvage_counterfactual_letter = ""
     if self.graph_memory is not None:
         self.graph_memory.last_salvage_counterfactual_letter = ""
@@ -1051,7 +1090,7 @@ def _maybe_follow_eqa_explore_action(self, submit_out: dict[str, Any]) -> bool:
     and the model is still Unknown, fall back to ``explore_frontier`` a few times
     instead of locking an empty letter.
     """
-    if self.mode != "answer" or self.decision_policy == "grounded_v2":
+    if self.mode != "answer" or self.decision_policy in {"grounded_v2", "model_final"}:
         return False
     gm = self.graph_memory
     if gm is None:

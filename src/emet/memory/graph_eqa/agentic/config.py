@@ -34,7 +34,7 @@ _COORD_DUMP_RE = re.compile(
 
 _TRUE = frozenset({"1", "true", "yes", "on"})
 _FALSE = frozenset({"0", "false", "no", "off"})
-_DECISION_POLICIES = frozenset({"legacy", "grounded_v2"})
+_DECISION_POLICIES = frozenset({"legacy", "grounded_v2", "model_final"})
 
 # Region escape: after this many consecutive "target not visible" view assessments,
 # require the next frontier to be at least ESCAPE_MIN_TRAVEL_M away so the robot
