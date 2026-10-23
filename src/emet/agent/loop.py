@@ -24,7 +24,10 @@ import timeit
 from collections.abc import Callable
 from contextlib import nullcontext
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from emet.controller.task.tamp.observed_discovery import ObservedTaskProvider
 
 import click
 import numpy as np
@@ -33,6 +36,7 @@ from termcolor import colored
 from emet.agent.env_flags import env_agent_camera_debug
 from emet.agent.model_debug import print_embodied_model_report, print_llm_invoke_line
 from emet.agent.prompt import DEFAULT_AGENT_NAME, AgentPromptBuilder, parse_tool_calls_response
+from emet.agent.tamp_session import tamp_followup
 from emet.agent.thinking_status import (
     env_agent_thinking_status,
     format_action_running_status,
@@ -58,6 +62,8 @@ from emet.core import get_parameters
 from emet.core.parameters import Parameters
 from emet.llms import get_llm_client
 from emet.llms.base import AbstractLLMClient, AbstractVLLMClient
+from emet.llms.openai_client import OpenaiClient
+from emet.llms.openai_vllm_client import OpenaiVLLMClient
 from emet.memory.backend import get_memory_backend
 from emet.memory.utils import print_memory_view_help_on_quit
 from emet.robots import ROBOT_REGISTRY
@@ -366,14 +372,17 @@ def _dispatch_tool_calls(
             gm = getattr(getattr(executor, "agent", None), "graph_memory", None)
             maybe_record_tool_attempt(gm, outcome, source="chat")
 
-        if name in TAMP_TOOLS and not outcome.ok:
-            # Later calls were chosen before the model saw this failure. Return
-            # control for inspection/replanning; do not execute that stale batch.
+        discovery_only = (name in TAMP_TOOLS and isinstance(outcome.payload.get('data'), dict)
+                          and outcome.payload['data'].get('discovery_only') is True)
+        if name in TAMP_TOOLS and (not outcome.ok or discovery_only):
+            # Later calls were chosen before the model saw this boundary. A
+            # discovery-only result also forbids continuing the precomputed batch.
             remaining = [c.get("name", "") for c in tool_calls[call_index + 1:]]
             if remaining:
                 stopped = tamp_response("dispatch", code="batch_stopped",
-                    data={"failed_tool": name, "unattempted_tools": remaining},
-                    recovery=outcome.payload.get("recovery") or "inspect")
+                    data={**({'stopped_tool': name, 'stop_reason': 'discovery_only'} if discovery_only
+                             else {'failed_tool': name}), 'unattempted_tools': remaining},
+                    recovery='none' if discovery_only else outcome.payload.get("recovery") or "inspect")
                 results.append("[dispatch] " + json.dumps(stopped))
             has_info = True
             break
@@ -407,9 +416,11 @@ def _call_llm(
     set, a daemon only emits heartbeats — it must not run the model.
 
     When *robot* supports ``pause_streams``, ZMQ JPEG/depth decode is paused for the
-    duration of generate (avoids multi-minute hangs after loading while streams spin).
+    duration of local generate (avoids multi-minute hangs while streams spin).
+    Remote OpenAI-compatible inference keeps telemetry live: pausing it can leave
+    an immediately dispatched manipulation tool with a stale measured snapshot.
     """
-    with paused_robot_streams(robot):
+    with nullcontext() if isinstance(llm_client, (OpenaiClient, OpenaiVLLMClient)) else paused_robot_streams(robot):
         return _call_llm_body(
             llm_client,
             text,
@@ -576,6 +587,11 @@ def run_agent_with_robot(
     embodied_overlay: EmbodiedAgentConfig | None = None,
     thinking_status: bool | None = None,
     agent_section: Any | None = None,
+    state_only_sim: bool = False,
+    max_tool_rounds: int = _MAX_TOOL_ROUNDS,
+    observed_tamp_provider: ObservedTaskProvider | None = None,
+    tamp_task_session: Any | None = None,
+    native_task_config: dict | None = None,
     **kwargs: Any,
 ) -> None:
     """Start robot, optional memory load, optional Discord; run command loop with tools.
@@ -583,6 +599,15 @@ def run_agent_with_robot(
     If *commands* is a non-empty list, each entry is fed as a user turn
     (LLM mode) or manual command (no-LLM mode) instead of reading stdin.
     The agent exits after all commands are consumed.
+
+    *observed_tamp_provider* supplies read-only observed task proposals to
+    ``scene_tasks``. Otherwise the existing open-vocabulary scene-graph processor
+    supplies its RGBD proposal provider when enabled. Discovery does not enable
+    native planning or execution.
+
+    *tamp_task_session* optionally binds a qualified multi-step provider to the
+    production CHAT tools. With no provider, multi-step calls explicitly return
+    task_provider_unavailable. This does not enable a simulator or input mode.
 
     *shutdown_sim_subprocess*, when set, is called after ``robot_client.stop()`` so a sim
     started with ``emet run agent --start-sim`` can exit as soon as the ZMQ client disconnects
@@ -604,6 +629,13 @@ def run_agent_with_robot(
     section), is merged into ``parameters["agent"]`` so the executor honors YAML /
     ``--set agent.manip_mode`` (etc.) without requiring ``EMET_MANIP_*`` env vars.
     """
+    if native_task_config is not None and (tamp_task_session is not None or not state_only_sim):
+        raise ValueError("native_task_config requires state-only simulation and no prebound session")
+    if not 1 <= max_tool_rounds <= 32:
+        raise ValueError("max_tool_rounds must be between 1 and 32")
+    if state_only_sim and (robot != "stretch" or memory_backend != "dynamem"
+                           or eqa or vl_include_camera or input_path or not use_llm):
+        raise ValueError("state_only_sim requires LLM CHAT, Stretch, dynamem, no EQA/camera input/checkpoint")
     _configure_agent_terminal_output()
     verbose_tools = bool(tool_debug) or _env_agent_tool_debug()
     show_thinking_status = env_agent_thinking_status() if thinking_status is None else bool(thinking_status)
@@ -628,6 +660,11 @@ def run_agent_with_robot(
         depth_mode = str(parameters.get("depth_source", "sensor")).lower()
         robot_key = robot.lower().replace("-", "_")
         allow_missing_depth = depth_mode in ("da3", "auto") or robot_key == "innate_mars"
+    if state_only_sim:
+        # Explicit diagnostic mode: no fabricated images or perception models.
+        parameters["use_instance_memory"] = False
+        parameters["force_eqa_siglip_encoder"] = False
+        _exec_kwargs.update(manipulation_only=True, cpu_only=True, visual_servo=False)
     robot_key = robot.lower().replace("-", "_")
     if robot_key == "stretch":
         # Do not start ZMQ in __init__: DynamemTaskExecutor calls agent.start() which invokes
@@ -643,6 +680,7 @@ def run_agent_with_robot(
             port_offset=port_offset,
             start_immediately=False,
             allow_missing_depth=allow_missing_depth,
+            state_only=state_only_sim,
         )
     elif robot_key in ROBOT_REGISTRY:
         mod = importlib.import_module(ROBOT_REGISTRY[robot_key])
@@ -788,10 +826,25 @@ def run_agent_with_robot(
             voxel_map=executor.agent.get_voxel_map(),
         )
     voxel_memory_backend = get_memory_backend("dynamem", voxel_map=executor.agent.get_voxel_map())
+    if native_task_config is not None:
+        from emet.controller.task.tamp.native_transfer import NativeTableTransferProvider
+        from emet.controller.task.tamp.task_session import TaskSession
+        try:
+            if executor._manip_mode != "physical" or executor._tamp_inputs != "privileged":
+                raise ValueError("native_task_config requires physical mode with privileged inputs")
+            tamp_task_session = TaskSession(NativeTableTransferProvider(robot_client, native_task_config, diagnostic_state=tool_debug))
+        except Exception:
+            robot_client.stop()
+            raise
     context: dict[str, Any] = {
         "executor": executor,
         "robot": robot_client,
+        "tamp_task_session": tamp_task_session,
         "memory_backend": voxel_memory_backend,
+        "observed_tamp_provider": (
+            observed_tamp_provider if observed_tamp_provider is not None else
+            getattr(getattr(executor.agent, '_open_vocab_sg_processor', None), 'observed_tamp_provider', None)
+        ),
         "graph_memory": _gm,
         "graph_memory_backend": _graph_backend,
         "scene_graph_processor": getattr(executor.agent, "_open_vocab_sg_processor", None),
@@ -848,6 +901,14 @@ def run_agent_with_robot(
 
     # Build tools from context
     tools = get_tools(context)
+    if tamp_task_session is None:
+        # Keep existing agent conditions unchanged until a provider is bound.
+        tools = [tool for tool in tools if tool.name not in {"plan_task", "execute_task_plan"}]
+    if state_only_sim:
+        # get_tools registers schemas/lazy closures; it does not load perception
+        # weights. CPU-only + manipulation_only executor setup above disables
+        # the model-loading paths; this filter limits what the LLM can invoke.
+        tools = [tool for tool in tools if tool.name in TAMP_TOOLS or tool.name == "quit"]
     tools_by_name = {t.name: t for t in tools}
     print(colored("Agent tools: " + ", ".join(t.name for t in tools), "yellow"))
 
@@ -913,8 +974,6 @@ def run_agent_with_robot(
                             )
                     except Exception as warm_err:
                         logger.warning("VL prefix cache warm failed: %s", warm_err)
-            from emet.llms.openai_client import OpenaiClient
-
             if isinstance(llm_client, OpenaiClient):
                 openai_tools_param = [t.schema() for t in tools]
         except Exception as e:
@@ -1172,7 +1231,7 @@ def run_agent_with_robot(
             # When that happens we feed the results back and let the LLM summarize.
             current_input = user_text
             turn_t0 = timeit.default_timer()
-            for _round in range(_MAX_TOOL_ROUNDS):
+            for _round in range(max_tool_rounds):
                 cam_image = None
                 followup_round = _round > 0
                 if vl_include_camera and _round == 0 and hasattr(robot_client, "get_observation"):
@@ -1211,7 +1270,7 @@ def run_agent_with_robot(
                 thinking_base = format_llm_thinking_status(
                     llm_label=llm_status_label,
                     round_idx=_round + 1,
-                    max_rounds=_MAX_TOOL_ROUNDS,
+                    max_rounds=max_tool_rounds,
                     has_image=cam_image is not None,
                     followup=followup_round,
                 )
@@ -1223,7 +1282,7 @@ def run_agent_with_robot(
 
                 if not show_thinking_status or debug_llm:
                     print_terminal(
-                        f"LLM start round {_round + 1}/{_MAX_TOOL_ROUNDS} "
+                        f"LLM start round {_round + 1}/{max_tool_rounds} "
                         f"image={cam_image is not None} followup={followup_round}",
                         color="cyan",
                     )
@@ -1241,7 +1300,7 @@ def run_agent_with_robot(
                 if debug_llm:
                     print(colored(f"[DEBUG] Raw response ({elapsed:.2f}s):", "yellow"), raw_response[:500])
                 print_terminal(
-                    f"LLM done round {_round + 1}/{_MAX_TOOL_ROUNDS} in {elapsed:.1f}s "
+                    f"LLM done round {_round + 1}/{max_tool_rounds} in {elapsed:.1f}s "
                     f"({len(raw_response or '')} chars)",
                     color="cyan",
                 )
@@ -1326,10 +1385,13 @@ def run_agent_with_robot(
                             break
                     # Last round: do not continue into exhaustion with a silent turn —
                     # force a no-tool summarize or relay tool text.
-                    last_round = _round >= _MAX_TOOL_ROUNDS - 1
+                    continuation = tamp_followup(user_text, results)
+                    tamp_stopped = any(c.get("name") in TAMP_TOOLS for c in tool_calls) and continuation is None
+                    last_round = _round >= max_tool_rounds - 1 or tamp_stopped
                     followup = (
                         f"[Tool results]\n{result_text}\n\n"
                         "Summarize these results for the user in your message. "
+                        "Use completed_steps and failed_step_1based when present: a later failure does not undo completed work. "
                         "Do not call any more tools."
                     )
                     if last_round:
@@ -1368,15 +1430,15 @@ def run_agent_with_robot(
                             _send_to_discord(fallback)
                         print_terminal(
                             f"turn done in {timeit.default_timer() - turn_t0:.1f}s "
-                            f"(forced final after {_MAX_TOOL_ROUNDS} rounds)",
+                            f"(forced final after {_round + 1} rounds)",
                             color="cyan",
                         )
                         break
-                    current_input = followup
+                    current_input = continuation or followup
                     if debug_llm or verbose_tools:
                         print(
                             colored("[→ LLM follow-up user message]", "magenta"),
-                            followup,
+                            current_input,
                             sep="\n",
                             flush=True,
                         )

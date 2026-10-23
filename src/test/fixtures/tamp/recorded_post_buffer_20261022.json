@@ -1,0 +1,384 @@
+{
+  "schema_version": 1,
+  "scope": "private planning regression; no physical success certificate",
+  "source_sha": "0adaec2637f72666c5bd6ee8ccb4316a44fedd9b",
+  "source_job": "20261022_165209_0e1a2f",
+  "source_record_sha256": "99de26f2ea054d40bd61b1d0b4bc638906a747b19ac15f6f3a7790c9954fbf24",
+  "snapshot": {
+    "source": "simulator_ground_truth",
+    "model_signature": "fb1e55839e4ef357cd214a758c88d3b00de3ab3fd31690f434d5e3196ce37f89",
+    "qpos": [
+      -0.01178498935001707,
+      0.0037535931942759134,
+      -0.0008410922296309333,
+      0.9999912112697099,
+      -1.2810572821796276e-05,
+      0.0017285382496592075,
+      0.0038196040037118844,
+      0.047374379366053945,
+      -6.204470984386671e-05,
+      0.7146813354238696,
+      0.10411249899394198,
+      0.10411235770373956,
+      0.10411220231806025,
+      0.10411215513946713,
+      0.009690689150912006,
+      -0.7907967892575316,
+      0.006780296159420807,
+      0.03809829616756928,
+      0.38088946188251416,
+      -0.00032745376128005344,
+      -0.00027076286289296506,
+      0.380891550344613,
+      -8.02651570426419e-10,
+      1.5498296812954581e-09,
+      -3.79368198867407e-05,
+      -0.5253117596888106,
+      0.00010758483229178957,
+      -1.0000002926110687,
+      -1.1037260326414704e-08,
+      0.0013402759949699085,
+      0.9999999938676484,
+      1.844796080007828e-05,
+      -0.000109198798273284,
+      1.431398223525453e-08,
+      -0.02,
+      -0.55,
+      0.5198922445797832,
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      -0.024607323445582377,
+      -0.8076244111466043,
+      0.5199117449309733,
+      0.9999738134707838,
+      2.031697781416491e-06,
+      1.3896279436310649e-05,
+      -0.0072368622664757175
+    ],
+    "qvel": [
+      -4.296901239425468e-08,
+      -9.03369456836448e-10,
+      -1.9503787237879265e-11,
+      1.4993464343450021e-09,
+      1.1532821727288506e-10,
+      -2.6184162267354385e-07,
+      -1.665863647805436e-06,
+      -5.281390529842245e-08,
+      0.00034102873425651475,
+      -1.889552729611997e-06,
+      -1.4796111832658383e-06,
+      -1.0457371425613773e-06,
+      -9.284776948375955e-07,
+      6.050573554113764e-05,
+      4.379706063598003e-06,
+      5.667855761721066e-06,
+      -8.944520304877135e-08,
+      -8.98308870616913e-07,
+      -4.466446891006245e-12,
+      6.800413505871714e-10,
+      -8.987537158921884e-07,
+      -1.3733787094203254e-09,
+      -1.6269676325186541e-09,
+      3.4581854313346675e-14,
+      1.3603578888927133e-13,
+      -8.906552020752143e-15,
+      -9.957073789704097e-17,
+      3.453245657494452e-16,
+      1.3766373299159797e-16,
+      -7.06509897288232e-16,
+      -7.29314981877619e-16,
+      8.749223188146718e-16,
+      0.0,
+      0.0,
+      1.4473332274322562e-14,
+      0.0,
+      0.0,
+      0.0,
+      -1.1721650431221109e-05,
+      7.385681845776852e-05,
+      -6.451065170835441e-06,
+      -0.001847016518562406,
+      -0.0003214334704349977,
+      -2.8458748036059177e-07
+    ],
+    "sim_time": 35.805999999997795,
+    "ik_rejections": [
+      {
+        "stage": "grasp",
+        "detail": "arm_path_failed:invalid_goal:collision"
+      },
+      {
+        "stage": "pregrasp",
+        "detail": "pose_ik_failed:position=0.0009,rotation=0.2422"
+      },
+      {
+        "stage": "pregrasp",
+        "detail": "pose_ik_failed:position=0.0007,rotation=0.1796"
+      },
+      {
+        "stage": "pregrasp",
+        "detail": "pose_ik_failed:position=0.0017,rotation=0.4385"
+      },
+      {
+        "stage": "pregrasp",
+        "detail": "pose_ik_failed:position=0.0014,rotation=0.3757"
+      },
+      {
+        "stage": "pregrasp",
+        "detail": "pose_ik_failed:position=0.0021,rotation=0.6345"
+      },
+      {
+        "stage": "pregrasp",
+        "detail": "pose_ik_failed:position=0.0019,rotation=0.5831"
+      },
+      {
+        "stage": "surface",
+        "detail": "no_collision_free_placement"
+      },
+      {
+        "stage": "pregrasp",
+        "detail": "pose_ik_failed:position=0.0009,rotation=0.2419"
+      },
+      {
+        "stage": "pregrasp",
+        "detail": "pose_ik_failed:position=0.0007,rotation=0.1799"
+      },
+      {
+        "stage": "pregrasp",
+        "detail": "pose_ik_failed:position=0.0017,rotation=0.4383"
+      },
+      {
+        "stage": "pregrasp",
+        "detail": "pose_ik_failed:position=0.0014,rotation=0.3760"
+      },
+      {
+        "stage": "pregrasp",
+        "detail": "pose_ik_failed:position=0.0021,rotation=0.6342"
+      },
+      {
+        "stage": "pregrasp",
+        "detail": "pose_ik_failed:position=0.0020,rotation=0.5833"
+      },
+      {
+        "stage": "surface",
+        "detail": "no_collision_free_placement"
+      },
+      {
+        "stage": "pregrasp",
+        "detail": "pose_ik_failed:position=0.0009,rotation=0.2417"
+      },
+      {
+        "stage": "pregrasp",
+        "detail": "pose_ik_failed:position=0.0007,rotation=0.1801"
+      },
+      {
+        "stage": "pregrasp",
+        "detail": "pose_ik_failed:position=0.0017,rotation=0.4381"
+      },
+      {
+        "stage": "pregrasp",
+        "detail": "pose_ik_failed:position=0.0014,rotation=0.3762"
+      },
+      {
+        "stage": "pregrasp",
+        "detail": "pose_ik_failed:position=0.0021,rotation=0.6341"
+      },
+      {
+        "stage": "pregrasp",
+        "detail": "pose_ik_failed:position=0.0020,rotation=0.5835"
+      },
+      {
+        "stage": "pregrasp",
+        "detail": "arm_path_failed:ordered_path_failed:invalid_goal:collision"
+      },
+      {
+        "stage": "pregrasp",
+        "detail": "pose_ik_failed:position=0.0011,rotation=0.3235"
+      },
+      {
+        "stage": "pregrasp",
+        "detail": "pose_ik_failed:position=0.0009,rotation=0.2657"
+      },
+      {
+        "stage": "pregrasp",
+        "detail": "pose_ik_failed:position=0.0021,rotation=0.6186"
+      },
+      {
+        "stage": "pregrasp",
+        "detail": "pose_ik_failed:position=0.0019,rotation=0.5609"
+      },
+      {
+        "stage": "pregrasp",
+        "detail": "pose_ik_failed:position=0.0037,rotation=1.1214"
+      },
+      {
+        "stage": "pregrasp",
+        "detail": "pose_ik_failed:position=0.0036,rotation=1.0704"
+      },
+      {
+        "stage": "grasp",
+        "detail": "arm_path_failed:invalid_goal:collision"
+      },
+      {
+        "stage": "pregrasp",
+        "detail": "pose_ik_failed:position=0.0007,rotation=0.1800"
+      },
+      {
+        "stage": "pregrasp",
+        "detail": "pose_ik_failed:position=0.0004,rotation=0.1123"
+      },
+      {
+        "stage": "pregrasp",
+        "detail": "pose_ik_failed:position=0.0013,rotation=0.3109"
+      },
+      {
+        "stage": "pregrasp",
+        "detail": "pose_ik_failed:position=0.0010,rotation=0.2417"
+      },
+      {
+        "stage": "pregrasp",
+        "detail": "pose_ik_failed:position=0.0013,rotation=0.3997"
+      },
+      {
+        "stage": "pregrasp",
+        "detail": "pose_ik_failed:position=0.0012,rotation=0.3481"
+      },
+      {
+        "stage": "grasp",
+        "detail": "arm_path_failed:invalid_goal:collision"
+      },
+      {
+        "stage": "pregrasp",
+        "detail": "pose_ik_failed:position=0.0007,rotation=0.1797"
+      },
+      {
+        "stage": "pregrasp",
+        "detail": "pose_ik_failed:position=0.0004,rotation=0.1126"
+      },
+      {
+        "stage": "pregrasp",
+        "detail": "pose_ik_failed:position=0.0013,rotation=0.3106"
+      },
+      {
+        "stage": "pregrasp",
+        "detail": "pose_ik_failed:position=0.0010,rotation=0.2420"
+      },
+      {
+        "stage": "pregrasp",
+        "detail": "pose_ik_failed:position=0.0013,rotation=0.3995"
+      },
+      {
+        "stage": "pregrasp",
+        "detail": "pose_ik_failed:position=0.0012,rotation=0.3484"
+      },
+      {
+        "stage": "surface",
+        "detail": "no_collision_free_placement"
+      },
+      {
+        "stage": "pregrasp",
+        "detail": "pose_ik_failed:position=0.0007,rotation=0.1795"
+      },
+      {
+        "stage": "pregrasp",
+        "detail": "pose_ik_failed:position=0.0004,rotation=0.1128"
+      },
+      {
+        "stage": "pregrasp",
+        "detail": "pose_ik_failed:position=0.0013,rotation=0.3104"
+      },
+      {
+        "stage": "pregrasp",
+        "detail": "pose_ik_failed:position=0.0010,rotation=0.2422"
+      },
+      {
+        "stage": "pregrasp",
+        "detail": "pose_ik_failed:position=0.0013,rotation=0.3993"
+      },
+      {
+        "stage": "pregrasp",
+        "detail": "pose_ik_failed:position=0.0012,rotation=0.3485"
+      },
+      {
+        "stage": "pregrasp",
+        "detail": "arm_path_failed:ordered_path_failed:invalid_goal:collision"
+      },
+      {
+        "stage": "pregrasp",
+        "detail": "pose_ik_failed:position=0.0011,rotation=0.3348"
+      },
+      {
+        "stage": "pregrasp",
+        "detail": "pose_ik_failed:position=0.0009,rotation=0.2786"
+      },
+      {
+        "stage": "pregrasp",
+        "detail": "pose_ik_failed:position=0.0022,rotation=0.6461"
+      },
+      {
+        "stage": "pregrasp",
+        "detail": "pose_ik_failed:position=0.0020,rotation=0.5900"
+      },
+      {
+        "stage": "pregrasp",
+        "detail": "pose_ik_failed:position=0.0046,rotation=1.3756"
+      },
+      {
+        "stage": "pregrasp",
+        "detail": "pose_ik_failed:position=0.0045,rotation=1.3249"
+      },
+      {
+        "stage": "grasp",
+        "detail": "arm_path_failed:invalid_goal:collision"
+      },
+      {
+        "stage": "pregrasp",
+        "detail": "pose_ik_failed:position=0.0009,rotation=0.2353"
+      },
+      {
+        "stage": "pregrasp",
+        "detail": "pose_ik_failed:position=0.0007,rotation=0.1840"
+      },
+      {
+        "stage": "pregrasp",
+        "detail": "pose_ik_failed:position=0.0016,rotation=0.4310"
+      },
+      {
+        "stage": "pregrasp",
+        "detail": "pose_ik_failed:position=0.0014,rotation=0.3781"
+      },
+      {
+        "stage": "pregrasp",
+        "detail": "pose_ik_failed:position=0.0021,rotation=0.6292"
+      },
+      {
+        "stage": "pregrasp",
+        "detail": "pose_ik_failed:position=0.0019,rotation=0.5781"
+      }
+    ]
+  },
+  "object_body": "object1",
+  "support_body": "table",
+  "narrow_region": [
+    [
+      -0.08,
+      -0.76
+    ],
+    [
+      0.08,
+      -0.64
+    ]
+  ],
+  "wider_region": [
+    [
+      -0.08,
+      -0.75
+    ],
+    [
+      0.08,
+      -0.62
+    ]
+  ]
+}

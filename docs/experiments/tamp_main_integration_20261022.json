@@ -1,0 +1,155 @@
+{
+  "schema_version": 1,
+  "source_sha": "eb74c624b38484c3366f039d55d29d830cb5e80b",
+  "main_sha": "80818ac4f50753325bac8bf7f703456b6b7f5da2",
+  "scope": "privileged stationary live Stretch; actual run agent CLI; Caliban remote inference; no cameras",
+  "tests": [
+    {
+      "job_id": "20261022_220202_7cbad3",
+      "junit_sha256": "db35e27936f85f55891af5b6bede65965fae5bd784d9d9ae06b417f3dc69875a",
+      "name": "pytest",
+      "errors": "0",
+      "failures": "0",
+      "skipped": "13",
+      "tests": "569",
+      "time": "83.308",
+      "timestamp": "2026-10-22T22:02:02.941087-04:00",
+      "hostname": "olympia"
+    },
+    {
+      "job_id": "20261022_220342_e41693",
+      "junit_sha256": "ffbfa630c942f4917ea43d9bf1ddf9766925dd1d723372f062fb614898ea473d",
+      "name": "pytest",
+      "errors": "0",
+      "failures": "0",
+      "skipped": "5",
+      "tests": "47",
+      "time": "2.294",
+      "timestamp": "2026-10-22T22:03:43.683465-04:00",
+      "hostname": "olympia"
+    },
+    {
+      "job_id": "20261022_220438_43ffb3",
+      "junit_sha256": "8b4b9ac34d0d36b9345517f45ead5f883c84778dfd7b1d742371acacd6d3038f",
+      "name": "pytest",
+      "errors": "0",
+      "failures": "0",
+      "skipped": "0",
+      "tests": "18",
+      "time": "5.030",
+      "timestamp": "2026-10-22T22:04:39.615472-04:00",
+      "hostname": "olympia"
+    }
+  ],
+  "cases": [
+    {
+      "case": "two-goal",
+      "job_id": "20261022_220310_70a4af",
+      "status": "completed",
+      "completed_steps": 2,
+      "summary_sha256": "9868632b6994292633cab0e7e7126aef8a0c93b704c00386f48bc092f9fec8fc",
+      "protocol_sha256": "6055e1f8529e96ee3e206bf30fc1828c22a28e4f8d5aaefa6022d68bff3fcf5d",
+      "result": {
+        "passed": true,
+        "task_passed": true,
+        "cli_exit_code": 0,
+        "audit_commands": 529,
+        "forbidden_commands": 0,
+        "failure_boundaries": [],
+        "final_predicates": {
+          "object2": {
+            "in_region": true,
+            "supported": true,
+            "settled": true,
+            "satisfied": true,
+            "bounds_xy": [
+              [
+                -0.03938618164222692,
+                -0.819358442008809
+              ],
+              [
+                0.0007120933958525144,
+                -0.7792605407176517
+              ]
+            ]
+          },
+          "object1": {
+            "in_region": true,
+            "supported": true,
+            "settled": true,
+            "satisfied": true,
+            "bounds_xy": [
+              [
+                -0.03976245603404018,
+                -0.7205773726089978
+              ],
+              [
+                0.0012178271836519872,
+                -0.640091763460927
+              ]
+            ]
+          }
+        }
+      }
+    },
+    {
+      "case": "wide-destination-swap",
+      "job_id": "20261022_220311_863e3f",
+      "status": "completed",
+      "completed_steps": 3,
+      "summary_sha256": "651520ef57c42edce894886c04920d1f7a5880ef4739537c1628e6bb1bf32253",
+      "protocol_sha256": "c340e19b360ae40bbab59e0ae17813473d7e4abbc66d6c4d0124741b097c62aa",
+      "result": {
+        "passed": true,
+        "task_passed": true,
+        "cli_exit_code": 0,
+        "audit_commands": 750,
+        "forbidden_commands": 0,
+        "failure_boundaries": [],
+        "final_predicates": {
+          "object2": {
+            "in_region": true,
+            "supported": true,
+            "settled": true,
+            "satisfied": true,
+            "bounds_xy": [
+              [
+                -0.03965971848091846,
+                -0.573243883139599
+              ],
+              [
+                0.0007255928292166369,
+                -0.5328587530670064
+              ]
+            ]
+          },
+          "object1": {
+            "in_region": true,
+            "supported": true,
+            "settled": true,
+            "satisfied": true,
+            "bounds_xy": [
+              [
+                -0.039487508887578536,
+                -0.7206508762380642
+              ],
+              [
+                0.0015137250240048125,
+                -0.6401549881823679
+              ]
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "selected_checks_passed": 616,
+  "initial_skips_resolved": 18,
+  "limitations": [
+    "One run per task configuration",
+    "Privileged stationary simulator state",
+    "No cameras or exploration/navigation exercised",
+    "Combined runtime and wheel-contact intervention; not a single-factor ablation",
+    "Caliban checkpoint/sampling not independently pinned"
+  ]
+}

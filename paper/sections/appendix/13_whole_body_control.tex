@@ -1,0 +1,94 @@
+% Copyright (c) Chris Paxton 2026
+% Licensed under the Apache License, Version 2.0.
+\section{Whole-body trajectory control: interface and qualification protocol}
+\label{app:whole_body_control}
+
+\paragraph{Task-space contract.}
+The control interface consists of a masked base pose in $SE(2)$, one masked
+end-effector pose in $SE(3)$ per hand, and a vector of gripper coordinates per
+hand. Mars and Stretch are the initial single-hand implementations. Inactive
+base constraints permit coordinated motion to satisfy an active hand target.
+The policy observes proprioceptive and command history together with a timed
+task-space preview; it does not observe simulator contact forces, object poses,
+or the joint-space witness used to construct reachable targets. The executor
+owns grasp/release transitions. Direct-velocity policies command bounded base
+and arm velocities; demonstration initialization remains optional rather than
+requiring a residual policy architecture.
+
+\paragraph{Related work and research direction.}
+Blind Precise Assembly~\cite{bronars2026blindpreciseassemblyproprioceptive}
+learns local assembly from proprioceptive history using identified actuator
+dynamics, training-only contact supervision, and a privileged critic. Real-world
+peg insertion is demonstrated on a seven-DoF arm; gear and nut tasks are shown
+in simulation. Its contact-starting local skill does not establish Mars grasp
+retention, mobile-base safety, or damage prevention. Its mjfit generator preserves
+assembly clearances in collision geometry rather than identifying robot dynamics.
+These motivate future observability and isolated training ablations, while we
+retain TAMP goal conditioning and hard safety limits; no such ablation is claimed
+as implemented or validated here.
+
+\paragraph{References and physical screening.}
+Ground-truth TAMP planning supplies collision-checked arm paths, retimed with
+minimum-jerk segments under robot-profile speed, acceleration, and jerk limits.
+Offline FK constructs reachable hand targets; no joint-reference hint is
+provided to the policy. Mars setup candidates preserve the world grasp pose
+while considering different base/arm configurations. Loaded static support
+margin is screened along the lift and carry path. This screening is not a
+certificate of dynamic feasibility: execution must independently satisfy
+retention, tracking, contact-load, and wheel-support checks. Payload attachment
+is restricted to scratch planning state; continuous evaluation uses physical
+gripper contacts without attachments or stage resets.
+
+\paragraph{Admission and execution are separate outcomes.}
+An initial ten-case Mars carry diagnostic admitted only two references; both
+executed successfully. Replays identified support-margin failures already at
+the initial path sample, alongside an inconsistent reset lift height.
+This motivated explicit rejection reasons, path-aware setup selection, and
+consistent configured lift heights. Subsequent development-selected checks
+admitted and executed ten of ten carry references. A separate fifteen-case
+smoke test covered 20, 50, and 100\,g box payloads across translation,
+orientation, combined motion, endpoint changes, and small windowed disturbances;
+all fifteen passed with the feedback controller. These changed development
+distributions are not a paired improvement estimate, a learned-policy result,
+or a general reliability estimate. Continuous pick/place regressions remain
+a separate gate; carry-component success does not establish that gate.
+
+\paragraph{Source-bound teacher qualification.}
+At revision \texttt{0101dc35}, all 300 carry references were admitted and
+297 executed successfully: 100/100 at 20\,g, 99/100 at 50\,g, and 98/100 at
+100\,g. One 50\,g disturbance case tripped the wheel-unloading guard; two
+100\,g wrist-roll cases exceeded the unchanged 0.1\,rad relative-object rotation
+limit. A separate continuous pick/return-place suite passed 30/30 cases on one
+pedestal. The wheel event blocked training despite the high average success.
+These feedback results and failures are retained under
+\texttt{paper/data/whole\_body\_control/qualification\_v2.json}.
+The subsequent setup revision chooses maximum support margin for disturbed
+carries; the exact failing disturbance passed a targeted replay without changing
+its wrench. Full requalification is required before starting PPO. Grasp-depth,
+contact-impedance, and timing ablations did not reliably resolve the roll-slip
+failures; no relaxed retention threshold or increased torque was adopted.
+Full requalification at \texttt{ba658820} then admitted 300/300 references and
+completed 298/300 carries (100/100, 100/100, and 98/100 by increasing mass), with
+zero unsafe-contact or wheel-unloading terminations. Continuous pick/return-place
+again passed 30/30. The two 100\,g roll-slip failures remained counted. These
+results met the then-current simulator teacher gate and are retained in
+\texttt{paper/data/whole\_body\_control/qualification\_v3.json}; they do not
+qualify the subsequently trained policy or demonstrate hardware compliance. Subsequent
+review tightened source, catalog and regression-test binding; these historical
+reports are retained as observations, not authorization for training under the
+revised sources. The reported gate is per mass and conditional on admission,
+not a 95\% per-stratum or end-to-end success guarantee.
+
+\paragraph{Qualification and learning.}
+The held-out protocol fixes 100 cases per payload mass, balanced across the five
+motion categories. It reports admission, success conditional on admission,
+end-to-end success, pose errors, settling time, post-completion drift, retention,
+jerk, contact loads, and wheel unloading. Training readiness requires at least
+95\% admission and 95\% conditional feedback execution success per mass, no
+unsafe-contact or wheel-lift terminations, and success on a separate thirty-case
+continuous pick/place regression. Learned checkpoints are compared with the
+feedback controller on identical cases. Progress and tracking rewards are
+combined with smoothness, effort, contact, overshoot, and settled-motion costs;
+randomization increases only after validation. Hardware force calibration,
+full public-tool Mars task execution, and qualification of larger native
+objects remain outside the evidence reported here.

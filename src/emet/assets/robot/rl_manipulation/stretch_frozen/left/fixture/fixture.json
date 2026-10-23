@@ -1,0 +1,16 @@
+{
+  "case": "left",
+  "initial_positions": {
+    "object1": [
+      -0.04,
+      -0.53,
+      0.6
+    ],
+    "object2": [
+      -0.04,
+      -0.68,
+      0.6
+    ]
+  },
+  "selection": "Frozen before executing either case; same goals and budgets as baseline"
+}

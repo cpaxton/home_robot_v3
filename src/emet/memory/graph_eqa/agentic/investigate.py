@@ -483,8 +483,8 @@ def _tool_investigate(
             self._inspection_context_by_obs = {}
         if context_view is not None:
             self._inspection_context_by_obs[station_oid] = context_view.rgb
-        while len(self._inspection_context_by_obs) > 32:
-            del self._inspection_context_by_obs[next(iter(self._inspection_context_by_obs))]
+        # Keep episode-local pre-approach evidence until assessment consumes it;
+        # navigation can revisit an earlier station after many other views.
         self._station_obs_ids.add(station_oid)
         self._fresh_obs_ids.add(station_oid)
         self._tried.pop(station_oid, None)

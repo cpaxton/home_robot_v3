@@ -4,6 +4,29 @@ Use when physical Mars is on the network. Requires [innate-os](https://github.co
 
 ## Prerequisites
 
+### Supervised whole-body hand tracking (in preparation)
+
+Herman's saved connection is `herman` (`jetson1@192.168.1.43`). SSH connectivity
+does not imply that the control bridge or robot drivers are running.
+
+The proposed hand-tracking experiment allows coordinated arm/base motion, with
+base yaw targets restricted to ±45° of the starting odometry pose. The measured
+hard boundary is ±47° (2° overrun tolerance). Translation requires an explicit
+experiment radius; it is not unlimited. `MotionBoundary` in
+`emet.robots.innate_mars.motion_boundary` implements a latched measured-pose
+check, including a 200 ms maximum odometry age. On violation its `enforce`
+method invokes the supplied whole-body stop, prints an error and stop-confirmation
+status, and exits with code 2. The origin must be captured once per experiment.
+
+This guard is currently standalone, not installed in the hardware command path.
+Before enabling the experiment, integrate it before every whole-body command,
+provide a bounded-time wheel-and-arm stop callback and an independent robot-side
+command watchdog, and select the translation radius. The current Mars bridge
+does not expose a whole-body velocity executor or calibrated contact-force
+limiting. Begin with hand tracking at clearance; contact testing requires those
+hardware capabilities to be verified. Neither this pose boundary nor joint
+tracking error alone constitutes a force limit.
+
 1. Robot running innate-os (`innate build`, drivers up: `maurice_bringup`, `maurice_cam`, `maurice_arm`, `maurice_nav` in **navigation** or **mapfree** mode).
 2. Workstation or onboard PC: `colcon build --packages-select innate_mars_bridge`, `source install/setup.bash`.
 3. Emet env: `uv sync` from `home_robot_v2` root.

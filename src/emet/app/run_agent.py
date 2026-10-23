@@ -54,6 +54,19 @@ from emet.utils.logger import Logger
 log = Logger(__name__)
 
 
+def _load_native_task_config(path: str | None) -> dict | None:
+    if path is None:
+        return None
+    import json
+    from pathlib import Path
+
+    from emet.controller.task.tamp.native_transfer import validate_native_task_config
+    try:
+        return validate_native_task_config(json.loads(Path(path).read_text()))
+    except (OSError, ValueError, TypeError, KeyError) as error:
+        raise click.BadParameter("Invalid native task JSON configuration", param_hint="--native-task-config") from error
+
+
 @click.command()
 @click.option(
     "--llm",
@@ -481,6 +494,10 @@ log = Logger(__name__)
         "Default is to discard sim logs so scripted runs stay readable."
     ),
 )
+@click.option("--state-only-sim", is_flag=True, help="Camera-free Stretch simulation TAMP only; requires --memory-backend dynamem. No vision/navigation tools.")
+@click.option("--native-task-config", type=click.Path(exists=True, dir_okay=False), default=None,
+              help="Privileged stationary Stretch region-transfer JSON; requires state-only physical mode.")
+@click.option("--max-tool-rounds", type=click.IntRange(1, 32), default=3, show_default=True, help="Bound tool rounds per user request; larger budgets permit multi-step TAMP.")
 @click.pass_context
 @emet_config_options()
 def main(
@@ -506,6 +523,9 @@ def main(
     cache_vl_prefix: bool | None,
     agent_name: str,
     commands: tuple[str, ...],
+    state_only_sim: bool = False,
+    max_tool_rounds: int = 3,
+    native_task_config: str | None = None,
     port_offset: int = 0,
     headless: bool = False,
     rerun: bool = False,
@@ -577,6 +597,11 @@ def main(
       emet run agent --robot stretch --start-sim --command "describe the scene"
       emet run agent --robot rby1 --start-sim --scene ithor --headless -c "describe the scene"
     """
+    if native_task_config is not None and (not state_only_sim or offline or no_llm):
+        raise click.UsageError("--native-task-config requires --state-only-sim and online LLM CHAT")
+    if native_task_config is not None and eqa_eval:
+        raise click.UsageError("--native-task-config is incompatible with --eqa-eval")
+    parsed_native_task_config = _load_native_task_config(native_task_config)
     cmd_list = list(commands) if commands else None
     if eqa_eval:
         if habitat_question_id is None:
@@ -898,6 +923,9 @@ def main(
                 embodied_overlay=runtime.config.embodied_agent() if runtime is not None else None,
                 thinking_status=thinking_status,
                 agent_section=agent_config_resolved.agent_section(),
+                state_only_sim=state_only_sim,
+                max_tool_rounds=max_tool_rounds,
+                native_task_config=parsed_native_task_config,
             )
         finally:
             if sim_shutdown is not None:

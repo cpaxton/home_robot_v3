@@ -119,6 +119,49 @@ def test_model_final_query_has_one_answer_authority_and_keeps_abstentions(answer
     client.assert_called_once()
 
 
+def test_assessed_packet_preserves_explicit_find_and_detail_with_correct_indices():
+    mem = GraphEQAMemory(eqa_client=lambda commands, **kw: "answer: 2", image_description_client=lambda x: "")
+    mem.extract_relevant_objects = lambda question: None
+    mem.memory_summary_enabled = False
+    current = np.full((8, 8, 3), 10, dtype=np.uint8)
+    context = np.full_like(current, 20)
+    find = np.full_like(current, 30)
+    crop = np.full((4, 4, 3), 40, dtype=np.uint8)
+    oid = mem.add_observation(find, np.array([0.0, 0.0, 0.5]), ["cup"])
+    mem._select_relevant_obs_ids = lambda **kw: (_ for _ in ()).throw(AssertionError("packet must skip selection"))
+    mem._eqa_pick_closeup_obs_id = lambda *args: oid
+    mem._eqa_crop_for_obs = lambda unused: crop
+    mem._graph_count_hint = lambda question, **kw: "COUNT_HINT" if oid in kw["attached_obs_ids"] else ""
+    *_, images = mem.query_answer(
+        "How many cups? A) 1 B) 2 C) 3", evidence_images=[current, context], force_obs_ids=[oid]
+    )
+    assert len(images) == 4
+    for actual, expected in zip(images, [current, context, find, crop], strict=True):
+        np.testing.assert_array_equal(actual, expected)
+    assert f"Image 3=obs{oid}" in mem.last_eqa_prompt_text
+    assert "COUNT_HINT" in mem.last_eqa_prompt_text
+    assert "Image 4 is a close-up" in mem.last_eqa_prompt_text
+    assert mem._resolve_eqa_action_image_ref(3, [oid]) == oid
+    assert mem._resolve_eqa_action_image_ref(2, [oid]) is None
+    *_, images = mem.query_answer(
+        "How many cups? A) 1 B) 2 C) 3",
+        evidence_images=[current, context],
+        evidence_labels=["Image 1: current capture", "Image 2: earlier context"],
+        evidence_roles=["current", "pre_turn"],
+        force_obs_ids=[oid],
+    )
+    assert len(images) == 4
+    assert "Image 2: earlier context" in mem.last_eqa_prompt_text
+    assert "Image 1=current, Image 2=pre_turn, Image 3=find_view, Image 4=detail_crop" in mem.last_eqa_prompt_text
+    mem.parameters = {"eqa_vl": {"eqa_max_images": 2}}
+    *_, images = mem.query_answer(
+        "How many cups? A) 1 B) 2 C) 3", evidence_images=[current, context], force_obs_ids=[oid]
+    )
+    assert len(images) == 2
+    assert mem.last_eqa_obs_ids == []
+    assert "COUNT_HINT" not in mem.last_eqa_prompt_text
+
+
 def test_graph_memory_to_string():
     """Scene graph serializes to a string for prompts."""
     mem = GraphEQAMemory(

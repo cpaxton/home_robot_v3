@@ -493,10 +493,7 @@ def _run_vlm_view_assess(
             if selection is not None
             else {}
         )
-        while len(self._assessed_images) > 32:
-            oldest = next(iter(self._assessed_images))
-            del self._assessed_images[oldest]
-            self._assessed_image_metadata.pop(oldest, None)
+        # Retain packets and matching labels for the entire executor episode.
     query_image_paths = dump_query_rgb(self, oid, rgb, kind="vlm_assess")
     vlm_event_id = self._persist_agentic_evidence(
         stage="vlm_assessment",

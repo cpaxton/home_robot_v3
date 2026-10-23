@@ -10,6 +10,9 @@ from typing import Protocol
 import numpy as np
 
 OBSERVED_POSE_SOURCES = frozenset({'rgbd_tracking', 'stereo_tracking'})
+RGBD_POINTCLOUD_SOURCE = 'rgbd_pointcloud'
+ESTIMATED_DEPTH_POINTCLOUD_SOURCE = 'estimated_depth_pointcloud'
+OBSERVED_POSITION_SOURCES = frozenset({RGBD_POINTCLOUD_SOURCE, ESTIMATED_DEPTH_POINTCLOUD_SOURCE})
 
 
 class ObservationUnavailable(RuntimeError):
