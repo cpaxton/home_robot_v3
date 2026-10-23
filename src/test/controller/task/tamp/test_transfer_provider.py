@@ -287,3 +287,36 @@ def test_semantic_failure_after_progress_stops_and_preserves_first_transfer():
     assert result['data']['completed_steps'] == 1
     assert result['data']['execution_started'] is True
     assert result['data']['failed_step_1based'] == 2 and len(calls) == 1
+
+
+@pytest.mark.parametrize('prior_progress', [False, True])
+def test_last_preflight_ik_call_cannot_claim_execution_started(prior_progress):
+    domain, probes = native_probe_domain()
+    session = TaskSession(domain)
+    ref = session.plan('swap alpha and beta')['data']['plan_ref']
+    domain._motion_cache.clear()
+    domain.transfer = domain._transfer_native
+    # The adapter probe consumes five calls and selects beta first.
+    domain._ik_remaining = 5
+    commands = []
+    domain.adapter.execute = lambda handle: commands.append(handle)
+    if prior_progress:
+        # Exercise this same precommand failure after one measured transfer.
+        symbolic, _, calls = make_domain()
+        session = TaskSession(symbolic)
+        ref = session.plan('swap alpha and beta')['data']['plan_ref']
+        first = symbolic.transfer
+        def transfer(obj, region):
+            if not calls:
+                return first(obj, region)
+            return domain._transfer_native('beta', domain.regions['buffer'])
+        symbolic.transfer = transfer
+        # Represent the successful preflight that consumed the last allowance.
+        domain._refine('beta', domain.regions['buffer'])
+    result = session.execute(ref)
+    assert result['code'] == 'task_motion_budget_exhausted'
+    assert result['status'] == ('partial' if prior_progress else 'error')
+    assert result['data']['execution_started'] is prior_progress
+    assert result['data']['completed_steps'] == int(prior_progress)
+    assert result['data']['failed_step_1based'] == 1 + int(prior_progress)
+    assert domain._ik_remaining == 0 and commands == []

@@ -193,7 +193,12 @@ class NativeTableTransferProvider(RegionTransferProvider):
 
     def _transfer_native(self, role, region):
         with self.adapter.lock:
-            plan_ref = self._refine(role, region, retain=True)
+            try:
+                plan_ref = self._refine(role, region, retain=True)
+            except BudgetExhausted:
+                # Refinement is planning-only. A successful feasibility probe
+                # can consume the last IK call before this second refinement.
+                return TaskExecutionResult(False, False, 'task_motion_budget_exhausted')
             if plan_ref is None:
                 code = 'task_motion_budget_exhausted' if self._ik_remaining <= 0 else 'task_motion_planning_failed'
                 return TaskExecutionResult(False, False, code)

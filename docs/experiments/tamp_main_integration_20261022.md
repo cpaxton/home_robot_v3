@@ -102,3 +102,27 @@ Historical experiment aggregates have not been rescored.
 
 Validation: 81 targeted runtime, scorer, dispatch and live-evaluator checks passed;
 Ruff and whitespace checks pass. No motion or controller behavior changed.
+
+## API contract and precommand budget review correction, October 23
+
+The earlier 636-check result was a selected regression set, not the full TAMP
+suite: it omitted `test_api_contract.py`. Reproducing the review command on that
+head fails with `KeyError: plan_task`. The fixture now supplies arguments for
+both new task tools and asserts that its keys exactly match `TAMP_TOOLS`, so
+future tool additions cannot silently escape this contract check.
+
+Native execution refinement now catches planning-only `BudgetExhausted` before
+calling the adapter executor and returns an explicit no-actuation receipt. A
+successful feasibility probe can consume the final IK allowance; the subsequent
+execution refinement must then return an error, not claim physical progress.
+The regression reproduces that path and verifies zero adapter execution calls.
+A second case checks that an earlier completed transfer remains partial progress.
+Unknown provider exceptions remain conservative; this fix does not infer that
+arbitrary exceptions imply no actuation.
+
+Validation job `20261023_124947_5a6a9b`: **760 passed, zero failures/errors/skips**
+in 93.844 seconds. This includes all 161 tests in
+`src/test/controller/task/tamp/` plus the listed integrated agent, native motion,
+observation, navigation, runtime and scoring regression set. It is not a run of
+the entire repository suite. The focused API/provider run passed 89 overlapping
+checks. Ruff and whitespace checks pass. JUnit: `.tamp-runs/review-precommand/all-tests.xml`.
