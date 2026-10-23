@@ -28,7 +28,7 @@ episodes and scoring, not policies.
   indices are retained for its evidence loader. EXPRESS evidence frames are
   not yet parsed; its frame_indices remains empty. Active start-pose binding
   remains separate.
-- Nine fixture tests cover reference isolation, identity, duplicate IDs,
+- Eleven fixture tests cover reference isolation, identity, duplicate IDs,
   mismatched evidence, empty input and the upstream unlabeled-category case.
   Run `PYTHONPATH=src .venv/bin/python -m pytest -q src/test/eval/test_embodied_qa_datasets.py`.
 - No official data/code is vendored. AbstainEQA's repository declares MIT;
