@@ -1970,3 +1970,20 @@ Use the native assets that fit each robot, retain inadmissible cases as planning
 rejections, and keep controller failures distinct from reachability/geometry
 failures. The public native adapter still needs an explicit Mars arm/gripper
 facade before claiming public-tool oracle task coverage for Mars.
+
+The final targeted run passed 10 tests after the admission and failure-metadata
+changes, including unchanged nominal physical pick/place. The final admission
+report is `logs/manipulation/native-payload-tamp-v3/teacher/report.json`; it labels
+all six centered-pinch rejections as `nominal_pinch_clearance` before motion.
+
+Fresh base PPO is running at
+`logs/manipulation/differential-base-goalgated-v2/seed-29`, W&B
+<https://wandb.ai/cpaxton/emet-mars-control/runs/w7w6ykpx>. It uses goal-gated
+settling, discount .9975, the existing 8–35 cm gated distance curriculum,
+1048576 requested steps, two workers on cores 14–15, randomization .05 and the
+same accuracy/safety tolerances. Training is from scratch. The separate fresh
+stress suite uses seed block 9500000 at
+`logs/manipulation/base-stress-goalgated-v2`, and will score the immutable
+65536-step bundle when available. It does not reuse the reward-audit cases or
+silently replace the UI controller. No manipulation-policy training or hardware
+promotion is inferred from this base run.
