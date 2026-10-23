@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import json
+from collections import Counter
 from collections.abc import Callable
 from typing import Any
 
@@ -62,6 +63,43 @@ def _agent_from_context(context: dict[str, Any]) -> Any | None:
     if executor is not None and hasattr(executor, "agent"):
         return executor.agent
     return context.get("agent")
+
+
+def navigation_feedback(agent: Any | None) -> dict:
+    """Bounded navigation evidence; never dump full waypoint arrays into prompts."""
+    meta = getattr(agent, "_last_nav_plan", None) or {}
+    keys = (
+        "mode",
+        "outcome",
+        "status_code",
+        "localize_source",
+        "goal_xyt",
+        "requested_goal_xyt",
+        "goal_resolution",
+        "motion_outcome",
+        "new_sensor_cells",
+        "new_sensor_area_m2",
+        "observation_outcome",
+        "n_planned",
+        "min_clearance_m",
+        "min_clearance_required_m",
+        "footprint",
+        "approach_sampling",
+    )
+    result = {key: meta[key] for key in keys if key in meta}
+    candidates = meta.get("view_candidates")
+    if candidates:
+        eligible = [candidate for candidate in candidates if candidate.get("reason") == "eligible"]
+        compact_keys = ("index", "resolved_goal", "estimated_gain_m2", "path_m", "turn_rad", "score")
+        result["view_selection"] = {
+            "candidate_count": len(candidates),
+            "reason_counts": dict(Counter(candidate.get("reason", "unknown") for candidate in candidates)),
+            "top_estimated_views": [
+                {key: candidate[key] for key in compact_keys if key in candidate}
+                for candidate in sorted(eligible, key=lambda c: -c.get("score", 0))[:3]
+            ],
+        }
+    return result
 
 
 def format_last_nav_plan_summary(agent: Any | None) -> str:
@@ -590,10 +628,11 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
     def _fallback_pick_place(executor: Any, object_name: str, receptacle_name: str) -> dict:
         keep_going = executor([("pickup", object_name), ("place", receptacle_name)])
         task_ok = keep_going and bool(getattr(executor, "_last_exec_ok", True))
-        return response("pick_place", code="ok" if task_ok else "controller_failed",
-                        data={"mode": "configured_controller", "assistance": None,
-                              "completed_ops": None, "measurements": None})
-
+        return response(
+            "pick_place",
+            code="ok" if task_ok else "controller_failed",
+            data={"mode": "configured_controller", "assistance": None, "completed_ops": None, "measurements": None},
+        )
 
     def _build_tamp_plan(
         *,
@@ -657,7 +696,6 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         return response("plan_pick_place", data=plan_data(plan, build.mode, plan_ref))
 
     @json_tool
-
     def plan_pick_place(
         task_ref: str = "",
         object_name: str = "",
@@ -716,6 +754,7 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         build = _build_tamp_plan(object_name=object_name, receptacle_name=receptacle_name)
         if build.plan is not None and build.plan.success:
             from emet.controller.task.tamp.agent_bridge import execute_stored_agent_plan_result, store_agent_plan
+
             plan_ref = store_agent_plan(context, _tamp_robot(), build)
             result = execute_stored_agent_plan_result(_tamp_robot(), context, plan_ref)
             result["tool"] = "pick_place"
@@ -815,6 +854,9 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
     @json_tool
     def scene_tasks(object_filter: str = "", robot: str = "") -> dict:
         """Enumerate pick-and-place options from the current scene as a compact digest."""
+        session = context.get("tamp_task_session")
+        if session is not None:
+            return session.discover(object_filter, robot)
         if _tamp_manip_mode().strip().lower() == "physical":
             executor = context.get("executor")
             inputs = str(getattr(executor, "_tamp_inputs", None) or context.get("tamp_inputs") or "observed")
@@ -852,6 +894,7 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         else:
             placements = {}
         from emet.controller.task.tamp.agent_bridge import robot_session_key
+
         session_key = robot_session_key(robot_obj)
         active_metadata = resolve_scene_metadata_for_session(session, scenes_dir=scene_dir)
         candidates = (
@@ -883,33 +926,46 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         if rid:
             try:
                 from emet.eval.scene_task_extractor import compute_reachability_priors
+
                 def _pose(body: str) -> np.ndarray:
                     info = placements.get(body)
                     if info is None and body.endswith("_1_1_0"):
-                        info = placements.get(body[:-len("_1_1_0")] + "_1_0_0")
+                        info = placements.get(body[: -len("_1_1_0")] + "_1_0_0")
                     pos = (info or {}).get("pos")
                     return np.asarray(pos, dtype=float).reshape(3) if pos is not None else np.zeros(3)
-                priors = compute_reachability_priors(objs, robot_id=rid, arm="left",
-                                                    **({"object_pose_fn": _pose} if placements else {}))
-                reachability = {"robot": rid,
-                                "source": "sim_placements" if placements else "zero_pose_proxy",
-                                "reachable_categories": sorted({r.category for r in priors.values() if r.reachable})}
+
+                priors = compute_reachability_priors(
+                    objs, robot_id=rid, arm="left", **({"object_pose_fn": _pose} if placements else {})
+                )
+                reachability = {
+                    "robot": rid,
+                    "source": "sim_placements" if placements else "zero_pose_proxy",
+                    "reachable_categories": sorted({r.category for r in priors.values() if r.reachable}),
+                }
                 reachability_status = "evaluated"
             except Exception:
                 reachability_status = "unavailable"
         from emet.simulation.articulation import articulation_access
-        def access(ref):
-            return articulation_access(session if live_sim else {}, ref.receptacle_body)
-        return response("scene_tasks", data={
-            "tasks": [{"task_ref": ref.ref, "object_name": ref.object_query,
-                       "receptacle_name": ref.receptacle_query, "start_receptacle": ref.start_receptacle,
-                       "access": access(ref)}
-                      for ref in task_refs],
-            "pickable_categories": sorted({p.category for p in picks}),
-            "receptacle_categories": sorted({r.category for r in recepts}),
-            "reachability": reachability,
-            "reachability_status": reachability_status,
-        })
+
+        return response(
+            "scene_tasks",
+            data={
+                "tasks": [
+                    {
+                        "task_ref": ref.ref,
+                        "object_name": ref.object_query,
+                        "receptacle_name": ref.receptacle_query,
+                        "start_receptacle": ref.start_receptacle,
+                        "access": articulation_access(session if live_sim else {}, ref.receptacle_body),
+                    }
+                    for ref in task_refs
+                ],
+                "pickable_categories": sorted({p.category for p in picks}),
+                "receptacle_categories": sorted({r.category for r in recepts}),
+                "reachability": reachability,
+                "reachability_status": reachability_status,
+            },
+        )
 
     tools.append(
         Tool(
@@ -936,6 +992,30 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
             returns_info=True,
         )
     )
+
+    # Multi-step tools remain unavailable until a qualified provider is bound.
+    # Looking it up at call time keeps tool registration free of runtime/model IO.
+    @json_tool
+    def plan_task(instruction: str, strategy: str = "beam") -> dict:
+        from emet.controller.task.tamp.api import response
+        session = context.get("tamp_task_session")
+        if session is None:
+            return response("plan_task", code="task_provider_unavailable")
+        return session.plan(instruction, strategy)
+
+    @json_tool
+    def execute_task_plan(plan_ref: str) -> dict:
+        from emet.controller.task.tamp.api import response
+        session = context.get("tamp_task_session")
+        if session is None:
+            return response("execute_task_plan", code="task_provider_unavailable")
+        return session.execute(plan_ref)
+
+    from emet.agent.skills.specs import CHAT_SKILL_SPECS
+    for name, func in (("plan_task", plan_task), ("execute_task_plan", execute_task_plan)):
+        spec = next(spec for spec in CHAT_SKILL_SPECS if spec.name == name)
+        tools.append(Tool(name=name, description=spec.description, parameters=spec.parameters,
+                          func=func, returns_info=True))
 
     # -- find_objects --------------------------------------------------------
     def find_objects(text: str) -> str:
@@ -1087,6 +1167,30 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
             parameters=_NO_PARAMS,
             func=lambda: _exec("go_home", ""),
             executor_commands=_simple_exec_mapping("go_home"),
+        )
+    )
+
+    def observe_floor(pan_rad=None, tilt_rad=-1.0, target_blocker=False):
+        from emet.agent.tool_outcome import ToolOutcome
+        from emet.controller.dynamem.look import observe_floor as capture_floor
+
+        agent = _agent_from_context(context)
+        if agent is None:
+            return ToolOutcome(False, status="unavailable", note="Robot not connected.")
+        return ToolOutcome.from_eqa_dict(
+            "observe_floor", capture_floor(agent, pan_rad=pan_rad, tilt_rad=tilt_rad, target_blocker=target_blocker)
+        )
+
+    from emet.agent.skills.specs import CHAT_SKILL_SPECS
+
+    floor_spec = next(spec for spec in CHAT_SKILL_SPECS if spec.name == "observe_floor")
+    tools.append(
+        Tool(
+            name=floor_spec.name,
+            description=floor_spec.description,
+            parameters=floor_spec.parameters,
+            func=observe_floor,
+            returns_info=True,
         )
     )
 
@@ -1613,6 +1717,7 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
                 "go_home",
                 "pick_place",
                 "execute_pick_place_plan",
+                "execute_task_plan",
                 "hand_over",
             }
         )

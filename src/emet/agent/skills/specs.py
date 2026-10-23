@@ -187,6 +187,27 @@ EQA_SKILL_SPECS: tuple[SkillSpec, ...] = (
 # Chat skill metadata (funcs bind in emet.agent.tools.build_chat_tools).
 CHAT_SKILL_SPECS: tuple[SkillSpec, ...] = (
     SkillSpec(
+        name="plan_task",
+        modes=frozenset({AgentMode.CHAT}),
+        description="Plan a multi-step task without executing it. Requires a qualified task provider. "
+                    "Preserve the user's complete final goals. Unsupported strategies fail explicitly.",
+        parameters={"type": "object", "properties": {
+            "instruction": {"type": "string", "description": "Complete requested final goals."},
+            "strategy": {"type": "string", "enum": ["greedy", "beam", "mcts"], "default": "beam"}},
+            "required": ["instruction"], "additionalProperties": False},
+        returns_info=True,
+    ),
+    SkillSpec(
+        name="execute_task_plan",
+        modes=frozenset({AgentMode.CHAT}),
+        description="Execute a stored multi-step plan once, verifying measured effects after each skill. "
+                    "Stops immediately on failure or partial progress; do not retry automatically.",
+        parameters={"type": "object", "properties": {
+            "plan_ref": {"type": "string", "description": "Opaque plan handle returned by plan_task."}},
+            "required": ["plan_ref"], "additionalProperties": False},
+        returns_info=True,
+    ),
+    SkillSpec(
         name="query_memory",
         modes=frozenset({AgentMode.CHAT}),
         description="Questions about the scene (where is X, have I seen Y). Uses graph EQA when enabled, else voxel memory. Returns a final user-facing Answer line (not image numbers). For relations use list_scene_relations; for open-ended views use describe_scene and send_image.",
@@ -444,6 +465,45 @@ CHAT_SKILL_SPECS: tuple[SkillSpec, ...] = (
             "properties": {},
             "required": [],
         },
+    ),
+    SkillSpec(
+        name="observe_floor",
+        modes=frozenset({AgentMode.CHAT}),
+        description=(
+            "For a rejected unknown footprint, set target_blocker=true to aim at its missing region "
+            "with at most two bounded head captures (overrides pan/tilt). "
+            "Look downward with the head without moving the base; update the map from fresh RGB-D. "
+            "Use for insufficient_floor_coverage, or to check nearby floor after no_reachable_workspace. "
+            "This does not guarantee clearance: replan after observing. Requires a movable head, "
+            "measured pose, and fresh calibrated depth. Optional pan_rad selects an absolute head pan "
+            "in [-1, 1] radians to inspect adjacent floor instead of repeating the same view; "
+            "omit to retain measured pan. Optional tilt_rad in [-1.4, -0.7] defaults to -1.0; "
+            "more negative looks nearer the base. Check footprint_before/after, not total map growth. "
+            "If blocking cells remain, change the view within these bounds or stop. The base stays stationary."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "target_blocker": {
+                    "type": "boolean",
+                    "description": "Aim at a currently unknown rejected-footprint cell.",
+                },
+                "pan_rad": {
+                    "type": "number",
+                    "minimum": -1.0,
+                    "maximum": 1.0,
+                    "description": "Absolute head pan in radians; omit to retain measured pan.",
+                },
+                "tilt_rad": {
+                    "type": "number",
+                    "minimum": -1.4,
+                    "maximum": -0.7,
+                    "description": "Absolute downward tilt; default -1.0, more negative looks nearer the base.",
+                },
+            },
+            "required": [],
+        },
+        returns_info=True,
     ),
     SkillSpec(
         name="scan_environment",

@@ -97,3 +97,44 @@ all agent failures in the appropriate denominator. Observed-input manipulation,
 exploration, native articulation, Sourccey acceptance, and hardware transfer are
 not established by the stationary table results. Simulator-assisted articulation
 must remain a separate condition.
+
+The implementation program standardizes on MuJoCo and separates upstream
+robot/task protocols from Stretch and Sourccey adaptations. Shared episode and
+scene-binding contracts, native control-step accounting, and measured multi-step
+plan verification are under development. Greedy, beam and UCT search use a
+common grounded-operator interface; LLM sequence planning, affordance ranking
+and PDDLStream integration remain qualification work. These interfaces and
+runtime smoke tests are not evidence of household agent success. No six-suite
+or matched-planner performance numbers are claimed here.
+
+\paragraph{Native multi-step tool integration.}
+An additional stationary, privileged diagnostic exercises the production agent's
+region discovery, task-skeleton search and per-step native motion refinement.
+A two-goal causal case completes two measured transfers. An occupied-destination
+swap with a narrow allowed destination completes its first transfer to a buffer,
+then stops before the next cube motion. A separately labeled, wider-destination
+variant completes all three transfers and both final goals with the same solver
+and safety checks. A narrower-buffer variant is rejected during first-move
+search. These are distinct integration cases, not a frozen population or a
+household success-rate estimate. The checked-in
+\texttt{paper/data/native\_tamp/agent\_task\_provider\_20261022.json}
+records source revisions, raw-summary hashes, measured footprints and command
+audits; no forbidden commands occur in these runs. A private recorded-state control finds no accepted plan in the original
+destination, but accepts a transfer in 14 IK calls when only the permitted
+destination region is enlarged and shifted. Additional IK seeds and nearby yaw
+samples do not resolve the original case under the same budget. The original
+failed task remains failed; the altered region is a separate diagnostic, not a
+rescore of the failed original task. Figure~\ref{fig:native-task-integration} visualizes
+measured endpoints without reconstructing unobserved intermediate paths.
+
+\begin{figure}[ht]
+  \centering
+  \includegraphics[width=\linewidth]{figures/native_task_integration_20261022.pdf}
+  \caption{Privileged stationary Stretch integration diagnostics. Dashed outlines
+  are measured initial footprints; filled boxes are final footprints. The
+  narrow-destination swap stops after one transfer; a wider-destination variant
+  completes all three. Dotted rectangles mark configured regions. Goals differ
+  between panels; this is not a success-rate comparison. This is an endpoint view, not
+  trajectory or observed-perception evidence.}
+  \label{fig:native-task-integration}
+\end{figure}

@@ -30,8 +30,12 @@ def main():
     parser.add_argument('--base-url', required=True)
     parser.add_argument('--remote-model', required=True)
     parser.add_argument('--placement-regions', type=Path, required=True)
+    parser.add_argument('--native-task-config', type=Path)
+    parser.add_argument('--task-instruction')
     parser.add_argument('--reject-first', action='store_true', help='Request one invalid-plan call, then a separate authorized task turn')
     args = parser.parse_args()
+    if bool(args.native_task_config) != bool(args.task_instruction):
+        parser.error("--native-task-config and --task-instruction must be supplied together")
     out = args.output.resolve()
     out.mkdir(parents=True, exist_ok=True)
     repo = Path(__file__).resolve().parents[1]
@@ -53,6 +57,18 @@ def main():
         'execution; no held-object recovery is available. Do not drop constraints. Goals: '
         + json.dumps({'red cylinder': goals['object2'], 'blue cube': goals['object1']})
     )
+    if args.native_task_config:
+        from emet.controller.task.tamp.native_transfer import validate_native_task_config
+        try:
+            validate_native_task_config(json.loads(args.native_task_config.read_text()))
+        except (OSError, ValueError, TypeError, KeyError) as exc:
+            parser.error(str(exc))
+        instruction = (
+            'These are privileged stationary simulator inputs. Discover task roles with scene_tasks, '
+            'then use plan_task and execute_task_plan for the complete final goals below. '
+            'Use one tool call per round. Do not stop at a plan. The planner selects ordering; '
+            'do not manually script transfers. Stop on failure, partial or unknown execution. '
+            'After goal_verified, report the outcome and stop. Final goals: ' + args.task_instruction)
     commands = []
     if args.reject_first:
         commands.append('Diagnostic only: call execute_pick_place_plan once with plan_ref '
@@ -65,6 +81,8 @@ def main():
            '--headless', '--debug-tools', '--port-offset', str(config.port_offset),
            '--llm', f'openai@{args.base_url}#{args.remote_model}',
            '--set', 'agent.manip_mode=physical', '--set', 'agent.tamp_inputs=privileged']
+    if args.native_task_config:
+        cli += ["--native-task-config", str(args.native_task_config.resolve())]
     for command in commands:
         cli += ['--command', command]
     model = mujoco.MjModel.from_xml_path(default_scene_xml_path)
@@ -72,6 +90,8 @@ def main():
         initial = goal_predicates(robot, goals)
         protocol = {'source_sha': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=repo, text=True).strip(),
                     'cli': cli, 'goals': goals, 'initial_predicates': initial,
+                    'native_task_config': None if args.native_task_config is None else json.loads(args.native_task_config.read_text()),
+                    'task_instruction': args.task_instruction,
                     'scope': 'actual run-agent CLI; live physics; privileged stationary Stretch; no cameras',
                     'cpu_affinity': sorted(os.sched_getaffinity(0)), 'sim_config': args.live_sim.read_text()}
         (out / 'protocol.json').write_text(json.dumps(protocol, indent=2))

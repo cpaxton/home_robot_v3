@@ -80,11 +80,6 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
     update_base_pose_from_full_obs: bool = False
     num_state_report_steps: int = 10000
 
-    _head_pan_min = -np.pi
-    _head_pan_max = np.pi / 4
-    _head_tilt_min = -np.pi
-    _head_tilt_max = 0
-
     def _create_recv_socket(
         self,
         port: int,
@@ -576,6 +571,19 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         next_action = {"joint": joint_angles, "manip_blocking": blocking}
         self.send_action(next_action=next_action, timeout=timeout)
 
+    def get_head_capability(self):
+        from emet.robots.head_capability import STRETCH_LEGACY_HEAD, HeadCapability
+
+        session = self.get_emet_session()
+        # Only the explicit simulator advertisement can expand legacy limits.
+        if (
+            isinstance(session, dict)
+            and session.get("runtime_kind") == "stretch_mujoco_sim"
+            and session.get("is_simulation") is True
+        ):
+            return HeadCapability.from_session(session) or STRETCH_LEGACY_HEAD
+        return STRETCH_LEGACY_HEAD
+
     def head_to(
         self,
         head_pan: float,
@@ -593,16 +601,11 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
             timeout: How long to wait for the motion to complete
             reliable: Whether to resend the action if it is not received
         """
-        if head_pan < self._head_pan_min or head_pan > self._head_pan_max:
-            logger.warning(
-                f"Head pan is restricted to be between {self._head_pan_min} and {self._head_pan_max} for safety: was {head_pan}"
-            )
-        if head_tilt > self._head_tilt_max or head_tilt < self._head_tilt_min:
-            logger.warning(
-                f"Head tilt is restricted to be between {self._head_tilt_min} and {self._head_tilt_max} for safety: was{head_tilt}"
-            )
-        head_pan = np.clip(head_pan, self._head_pan_min, self._head_pan_max)
-        head_tilt = np.clip(head_tilt, -np.pi / 2, 0)
+        capability = self.get_head_capability()
+        if not capability.contains([head_pan, head_tilt]):
+            logger.warning(f"Head request exceeds effective limits: {capability.as_dict()}")
+        head_pan = np.clip(head_pan, *capability.pan)
+        head_tilt = np.clip(head_tilt, *capability.tilt)
         next_action = {"head_to": [float(head_pan), float(head_tilt)], "manip_blocking": blocking}
         sent = self.send_action(next_action, timeout=timeout, reliable=reliable)
 
@@ -613,21 +616,16 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
             whole_body_q[HelloStretchIdx.HEAD_TILT] = float(head_tilt)
 
             time.sleep(0.1)
-            self._wait_for_head(
+            return self._wait_for_head(
                 whole_body_q,
                 timeout=timeout,
                 resend_action=next_action if reliable else None,
                 block_id=step,
             )
-            time.sleep(0.1)
-
-            # time.sleep(0.25)
-            # self._wait_for_head(whole_body_q, block_id=step)
-            # time.sleep(0.25)
 
     def look_front(self, blocking: bool = True, timeout: float = 10.0):
         """Point camera forward with a slight downward tilt (room-scale view)."""
-        self.head_to(
+        return self.head_to(
             constants.look_front[0],
             constants.look_front[1],
             blocking=blocking,
@@ -637,7 +635,7 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
 
     def look_ahead(self, blocking: bool = True, timeout: float = 10.0):
         """Point camera forward horizontally."""
-        self.head_to(
+        return self.head_to(
             constants.look_ahead[0],
             constants.look_ahead[1],
             blocking=blocking,
@@ -647,7 +645,7 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
 
     def look_at_ee(self, blocking: bool = True, timeout: float = 10.0):
         """Let robot look to its arm."""
-        self.head_to(
+        return self.head_to(
             constants.look_at_ee[0],
             constants.look_at_ee[1],
             blocking=blocking,
@@ -1035,8 +1033,8 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         resend_action: dict | None = None,
         block_id: int = -1,
         verbose: bool = False,
-    ) -> None:
-        """Wait for the head to move to a particular configuration."""
+    ) -> bool:
+        """Return true only after measured head arrival and settling, within timeout."""
         timeout = self._scaled_motion_timeout(timeout)
         t0 = timeit.default_timer()
         at_goal = False
@@ -1052,6 +1050,9 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         prev_joint_positions = None
         prev_t = None
         while not self._finish:
+            if timeit.default_timer() - t0 >= timeout:
+                logger.warning(f"Timeout ({timeout:.1f}s) waiting for measured head arrival")
+                return False
             # Check to make sure message was sent and received
             if self.out_of_date():
                 time.sleep(0.01)
@@ -1065,13 +1066,13 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
 
             pan_err = np.abs(joint_positions[HelloStretchIdx.HEAD_PAN] - q[HelloStretchIdx.HEAD_PAN])
             tilt_err = np.abs(joint_positions[HelloStretchIdx.HEAD_TILT] - q[HelloStretchIdx.HEAD_TILT])
-            head_speed = np.linalg.norm(joint_velocities[HelloStretchIdx.HEAD_PAN : HelloStretchIdx.HEAD_TILT])
+            head_slice = slice(HelloStretchIdx.HEAD_PAN, HelloStretchIdx.HEAD_TILT + 1)
+            head_speed = np.linalg.norm(joint_velocities[head_slice])
 
             if prev_joint_positions is not None:
-                head_speed_v2 = np.linalg.norm(
-                    joint_positions[HelloStretchIdx.HEAD_PAN : HelloStretchIdx.HEAD_TILT]
-                    - prev_joint_positions[HelloStretchIdx.HEAD_PAN : HelloStretchIdx.HEAD_TILT]
-                ) / (timeit.default_timer() - prev_t)
+                head_speed_v2 = np.linalg.norm(joint_positions[head_slice] - prev_joint_positions[head_slice]) / max(
+                    timeit.default_timer() - prev_t, 1e-9
+                )
             else:
                 head_speed_v2 = float("inf")
 
@@ -1080,7 +1081,7 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
             head_speed = max(head_speed, head_speed_v2)
 
             # Save the current joint positions to compute speed
-            prev_joint_positions = joint_positions
+            prev_joint_positions = joint_positions.copy()
             prev_t = timeit.default_timer()
 
             if verbose:
@@ -1094,30 +1095,18 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
                 if not at_goal:
                     at_goal_t = timeit.default_timer()
                 at_goal = True
-            elif resend_action is not None:
-                now = timeit.default_timer()
-                if now - last_resend_t >= resend_period_s:
-                    self.send_message(resend_action)
-                    last_resend_t = now
             else:
                 at_goal = False
+                if resend_action is not None:
+                    now = timeit.default_timer()
+                    if now - last_resend_t >= resend_period_s:
+                        self.send_message(resend_action)
+                        last_resend_t = now
 
             if at_goal and timeit.default_timer() - at_goal_t > min_wait_time and head_speed < speed_tol:
-                break
-
-            t1 = timeit.default_timer()
-            if t1 - t0 > min_wait_time and head_speed < speed_tol:
-                if verbose:
-                    logger.debug("Head settled before reaching target (stationary, min_wait elapsed).")
-                break
-
-            if t1 - t0 > timeout:
-                logger.warning(
-                    f"Timeout ({timeout:.1f}s) waiting for head: pan_err={float(pan_err):.4f} "
-                    f"tilt_err={float(tilt_err):.4f} (target may be unreachable or sim slow)"
-                )
-                break
+                return True
             time.sleep(0.01)
+        return False
 
     def _wait_for_arm(self, q: np.ndarray, timeout: float = 10.0, resend_action: dict | None = None) -> bool:
         """Wait for the arm to move to a particular configuration. Will throw an exception if the arm is not moving; probably means a packet was dropped. Arm configuration is in full-body joint space, as defined by the HelloStretchIdx enum.

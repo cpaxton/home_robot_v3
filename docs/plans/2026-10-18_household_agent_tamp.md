@@ -3,6 +3,10 @@
 Status: design and integration plan; no household benchmark scores yet.
 Date: October 18, 2026.
 
+Expanded implementation: [shared-agent MuJoCo benchmarks](2026-10-22_mujoco_tamp_benchmarks.md)
+adds six-suite coverage and matched planning methods. The historical design and
+results below remain unchanged.
+
 ## Decision
 
 Use **RoboCasa365 composite tasks as the primary public benchmark** and

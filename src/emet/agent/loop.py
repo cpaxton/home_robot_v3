@@ -589,6 +589,8 @@ def run_agent_with_robot(
     state_only_sim: bool = False,
     max_tool_rounds: int = _MAX_TOOL_ROUNDS,
     observed_tamp_provider: ObservedTaskProvider | None = None,
+    tamp_task_session: Any | None = None,
+    native_task_config: dict | None = None,
     **kwargs: Any,
 ) -> None:
     """Start robot, optional memory load, optional Discord; run command loop with tools.
@@ -601,6 +603,10 @@ def run_agent_with_robot(
     ``scene_tasks``. Otherwise the existing open-vocabulary scene-graph processor
     supplies its RGBD proposal provider when enabled. Discovery does not enable
     native planning or execution.
+
+    *tamp_task_session* optionally binds a qualified multi-step provider to the
+    production CHAT tools. With no provider, multi-step calls explicitly return
+    task_provider_unavailable. This does not enable a simulator or input mode.
 
     *shutdown_sim_subprocess*, when set, is called after ``robot_client.stop()`` so a sim
     started with ``emet run agent --start-sim`` can exit as soon as the ZMQ client disconnects
@@ -622,6 +628,8 @@ def run_agent_with_robot(
     section), is merged into ``parameters["agent"]`` so the executor honors YAML /
     ``--set agent.manip_mode`` (etc.) without requiring ``EMET_MANIP_*`` env vars.
     """
+    if native_task_config is not None and (tamp_task_session is not None or not state_only_sim):
+        raise ValueError("native_task_config requires state-only simulation and no prebound session")
     if not 1 <= max_tool_rounds <= 32:
         raise ValueError("max_tool_rounds must be between 1 and 32")
     if state_only_sim and (robot != "stretch" or memory_backend != "dynamem"
@@ -817,9 +825,20 @@ def run_agent_with_robot(
             voxel_map=executor.agent.get_voxel_map(),
         )
     voxel_memory_backend = get_memory_backend("dynamem", voxel_map=executor.agent.get_voxel_map())
+    if native_task_config is not None:
+        from emet.controller.task.tamp.native_transfer import NativeTableTransferProvider
+        from emet.controller.task.tamp.task_session import TaskSession
+        try:
+            if executor._manip_mode != "physical" or executor._tamp_inputs != "privileged":
+                raise ValueError("native_task_config requires physical mode with privileged inputs")
+            tamp_task_session = TaskSession(NativeTableTransferProvider(robot_client, native_task_config, diagnostic_state=tool_debug))
+        except Exception:
+            robot_client.stop()
+            raise
     context: dict[str, Any] = {
         "executor": executor,
         "robot": robot_client,
+        "tamp_task_session": tamp_task_session,
         "memory_backend": voxel_memory_backend,
         "observed_tamp_provider": (
             observed_tamp_provider if observed_tamp_provider is not None else
@@ -881,6 +900,9 @@ def run_agent_with_robot(
 
     # Build tools from context
     tools = get_tools(context)
+    if tamp_task_session is None:
+        # Keep existing agent conditions unchanged until a provider is bound.
+        tools = [tool for tool in tools if tool.name not in {"plan_task", "execute_task_plan"}]
     if state_only_sim:
         # get_tools registers schemas/lazy closures; it does not load perception
         # weights. CPU-only + manipulation_only executor setup above disables
@@ -1368,6 +1390,7 @@ def run_agent_with_robot(
                     followup = (
                         f"[Tool results]\n{result_text}\n\n"
                         "Summarize these results for the user in your message. "
+                        "Use completed_steps and failed_step_1based when present: a later failure does not undo completed work. "
                         "Do not call any more tools."
                     )
                     if last_round:

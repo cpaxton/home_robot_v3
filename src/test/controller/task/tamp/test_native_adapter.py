@@ -337,3 +337,55 @@ def test_partial_progress_reports_execution_started_even_before_next_stage():
     assert result['data']['execution_started'] is True
     assert result['data']['completed_ops'] == ['grasp']
     assert result['recovery'] == 'inspect'
+
+
+def native_transfer_config(native):
+    _, _, context, _ = native
+    adapter = context['_native_tamp_adapter']
+    adapter.synchronize(adapter.data)
+    entries = placements_from_mujoco_model(adapter.model, adapter.data)
+    patch = np.asarray(entries['table']['support_surfaces'])[0]
+    extent = np.max([np.diff(np.asarray(entries[n]['bounds'])[:, :2], axis=0)[0]
+                     for n in ('object1', 'object2')], axis=0) / 2 + .015
+    regions = []
+    for role, name in [('cube home', 'object1'), ('cylinder home', 'object2')]:
+        center = np.mean(np.asarray(entries[name]['bounds'])[:, :2], axis=0)
+        bounds = np.array([np.maximum(center-extent, patch[0, :2]),
+                           np.minimum(center+extent, patch[1, :2])])
+        regions.append({'name': role, 'bounds': bounds.tolist()})
+    for x in np.linspace(patch[0, 0]+.08, patch[1, 0]-.08, 8):
+        for y in np.linspace(patch[0, 1]+.08, patch[1, 1]-.08, 8):
+            bounds = np.array([[x-.07, y-.07], [x+.07, y+.07]])
+            if all(not (np.all(bounds[0] < np.asarray(r['bounds'])[1])
+                        and np.all(np.asarray(r['bounds'])[0] < bounds[1])) for r in regions):
+                regions.append({'name': 'buffer', 'bounds': bounds.tolist()})
+                return {'schema_version': 1, 'input_mode': 'privileged', 'robot': 'stretch',
+                        'reset_id': 'fixture', 'support_body': 'table',
+                        'objects': {'blue cube': 'object1', 'red cylinder': 'object2'}, 'regions': regions}
+    pytest.fail('No disjoint fixture buffer')
+
+
+def test_native_transfer_grounding_is_measured_and_private(native):
+    from emet.controller.task.tamp.native_transfer import NativeTableTransferProvider
+    robot, live, context, _ = native
+    before_q, before_ctrl = live.qpos.copy(), live.ctrl.copy()
+    domain = NativeTableTransferProvider(robot, native_transfer_config(native),
+                                          adapter=context['_native_tamp_adapter'])
+    discovery = domain.describe()
+    assert discovery['free_regions'] == ['buffer']
+    assert 'object1' not in json.dumps(discovery)
+    assert discovery['inputs'] == 'privileged'
+    np.testing.assert_array_equal(live.qpos, before_q)
+    np.testing.assert_array_equal(live.ctrl, before_ctrl)
+    robot.arm_to.assert_not_called()
+
+
+def test_native_transfer_rejects_unsettled_snapshot(native):
+    from emet.controller.task.tamp.native_transfer import NativeTableTransferProvider
+    robot, _, context, _ = native
+    adapter = context['_native_tamp_adapter']
+    domain = NativeTableTransferProvider(robot, native_transfer_config(native), adapter=adapter)
+    joint = adapter.model.body('object1').jntadr[0]
+    robot._state['native_tamp_snapshot']['qvel'][adapter.model.jnt_dofadr[joint]] = .2
+    with pytest.raises(ValueError, match='not_settled'):
+        domain.snapshot()

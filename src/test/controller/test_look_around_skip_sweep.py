@@ -9,6 +9,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import numpy as np
+import pytest
 
 from emet.controller.controller_dynamem import (
     DynamemController,
@@ -32,6 +33,50 @@ def _look_around_on(robot) -> DynamemController:
     agent.update = MagicMock()
     agent._head_to_sweep = MagicMock()
     return agent
+
+
+def test_verified_sweep_stops_and_preserves_gaze(monkeypatch):
+    monkeypatch.setenv("EMET_FORCE_HEAD_SWEEP", "1")
+    monkeypatch.setattr("emet.controller.dynamem.look.time.sleep", lambda _: None)
+    agent = _look_around_on(MagicMock(spec=StretchZmqClient))
+    events = []
+    agent.robot.head_to.side_effect = lambda *a, **kw: events.append(("head", kw["blocking"]))
+    monkeypatch.setattr("emet.controller.dynamem.look.wait_post_motion_obs", lambda *a, **kw: events.append("fresh"))
+    agent.update.side_effect = lambda **kw: events.append("update")
+    verifier = MagicMock(side_effect=[False, True])
+    assert agent.look_around(on_observation=verifier) is True
+    assert agent.update.call_count == 2
+    agent._head_to_sweep.assert_not_called()  # Neither soft wait nor gaze reset.
+    assert agent.robot.head_to.call_count == 2
+    assert events == [("head", True), "fresh", "update"] * 2
+
+
+def test_verified_sweep_does_not_check_view_after_head_motion_error(monkeypatch):
+    import pytest
+
+    monkeypatch.setenv("EMET_FORCE_HEAD_SWEEP", "1")
+    agent = _look_around_on(MagicMock(spec=StretchZmqClient))
+    agent.robot.head_to.side_effect = RuntimeError("head motion failed")
+    verifier = MagicMock()
+    with pytest.raises(RuntimeError, match="head motion failed"):
+        agent.look_around(on_observation=verifier)
+    agent.update.assert_not_called()
+    verifier.assert_not_called()
+
+
+def test_verified_sweep_rejects_failed_blocking_head_receipt(monkeypatch):
+    monkeypatch.setenv("EMET_FORCE_HEAD_SWEEP", "1")
+    wait = MagicMock()
+    monkeypatch.setattr("emet.controller.dynamem.look.wait_post_motion_obs", wait)
+    agent = _look_around_on(MagicMock(spec=StretchZmqClient))
+    agent.robot.head_to.return_value = False
+    verifier = MagicMock(return_value=True)
+    with pytest.raises(RuntimeError, match="Verified sweep head motion failed"):
+        agent.look_around(on_observation=verifier)
+    wait.assert_not_called()
+    agent.update.assert_not_called()
+    verifier.assert_not_called()
+    agent._head_to_sweep.assert_not_called()
 
 
 def _rotate_agent(robot) -> DynamemController:
@@ -138,7 +183,8 @@ def test_rotate_in_place_captures_heading_before_table_yaw(monkeypatch):
     robot.look_front.assert_not_called()
 
 
-def test_rotate_in_place_non_table_still_uses_45deg_after_capture(monkeypatch):
+@pytest.mark.parametrize("n_steps", [1, 4, 8, 16])
+def test_rotate_in_place_distributes_capture_budget_around_full_circle(monkeypatch, n_steps):
     monkeypatch.setattr("emet.controller.dynamem.look.time.sleep", lambda *_a, **_k: None)
     monkeypatch.setattr(
         "emet.eval.ovmm_find_phase._prepare_default_table_rby1_mapping_view",
@@ -146,11 +192,23 @@ def test_rotate_in_place_non_table_still_uses_45deg_after_capture(monkeypatch):
     )
     robot = MagicMock(spec=GenericZmqClient)
     agent = _rotate_agent(robot)
-    agent.rotate_in_place(n_steps=4)
-    assert agent.update.call_count == 4
+    agent.rotate_in_place(n_steps=n_steps)
+    assert agent.update.call_count == n_steps
     assert all(c.kwargs.get("full_perception") is True for c in agent.update.call_args_list)
-    np.testing.assert_allclose(_relative_yaws(robot), [np.pi / 4.0] * 3, atol=1e-6)
+    np.testing.assert_allclose(_relative_yaws(robot), [2 * np.pi / n_steps] * (n_steps - 1), atol=1e-6)
     robot.look_front.assert_called_once()
+
+
+@pytest.mark.parametrize("receipt", [False, None])
+def test_failed_mapping_turn_does_not_count_another_capture(monkeypatch, receipt):
+    monkeypatch.setattr("emet.controller.dynamem.look.wait_post_motion_obs", lambda *a, **kw: None)
+    monkeypatch.setattr("emet.eval.ovmm_find_phase._prepare_default_table_rby1_mapping_view", lambda _: False)
+    robot = MagicMock(spec=GenericZmqClient)
+    robot.move_base_to.return_value = receipt
+    agent = _rotate_agent(robot)
+    with pytest.raises(RuntimeError, match="Mapping scan turn failed"):
+        agent.rotate_in_place(n_steps=4)
+    assert agent.update.call_count == 1
 
 
 def test_rotate_in_place_updates_even_when_realtime(monkeypatch):

@@ -6,7 +6,50 @@ motion, executes commands, and reports what actually happened. Start with the
 [agent tool index](agent_tools.md) for the complete tool set or
 [run-agent guide](AGENT_RUN.md) for launching an agent.
 
-## The agent workflow
+## The combined agent
+
+One production CHAT loop handles the user goal and calls a shared tool registry.
+Perception, memory, navigation and manipulation are capabilities of that agent;
+task search and motion planning run behind tools rather than as separate LLMs.
+
+```mermaid
+flowchart TD
+    U[User goal] --> A[CHAT agent]
+    A --> W[Scene, memory, exploration and navigation tools]
+    A --> T[scene_tasks / plan_task / execute_task_plan]
+    T --> S[Task session: grounded predicates and goals]
+    S --> P[Greedy, beam or MCTS task search]
+    P --> M[Per-step IK and arm/payload motion planning]
+    M --> C[Actuator commands]
+    C --> V[Measured effects and final-goal checks]
+    V -->|Successful result| A
+    V -->|Failed, partial or unknown| F[Stop and inspect]
+    D[Privileged simulator provider: tested] --> S
+    O[Observed world/task provider: integration pending] -.-> S
+    W -.-> O
+```
+
+The task session chooses a sequence of qualified skills, such as moving an object
+into a buffer before placing another object. It revalidates scene identity and
+state, refines each motion from fresh geometry, and checks measured effects and
+protected goals after every step. A task skeleton is not a certificate that all
+later motions will succeed. The LLM chooses goals and tools, not motor commands.
+
+**Current integration:** multi-step tools are exposed only with a bound task
+provider. The native provider supports stationary Stretch region transfers using
+explicitly privileged simulator state. Discovery publishes semantic object and
+region names; the agent translates requests into the provider's bounded move/swap
+instruction forms. See [multi-step tools and configuration](api/tamp_task_plans.md).
+
+**Next integration gate:** connect observed discovery, exploration and navigation
+to a qualified task provider in the same CHAT loop. The target episode is: find
+the requested objects, explore when evidence is missing, navigate to the work
+area, refresh grounding, execute a multi-step task, and verify its final goals.
+Navigation or scene changes must invalidate stale plans. Existing perception and
+navigation tools do not establish that this complete chain already works.
+Native articulation and autonomous physical recovery remain separate gaps.
+
+## The primitive agent workflow
 
 ```mermaid
 flowchart LR
@@ -53,6 +96,22 @@ verification uses simulator contact and state information explicitly labeled as
 privileged. No fictitious tactile sensors are assumed on hardware.
 
 ## What has been demonstrated
+
+The [main-integration regression](experiments/tamp_main_integration_20261022.md)
+passes 616 selected checks and repeats both successful multi-step controls
+(2/2 and 3/3 transfers) after main's runtime, navigation and wheel-contact updates.
+These remain privileged stationary trials; navigation and camera updates require
+their own end-to-end task gate.
+
+The [October 22 multi-step integration cases](experiments/tamp_native_task_provider_20261022.md)
+use the actual `run agent` CLI with remote Caliban inference and native Stretch
+physics. A two-goal task completed **2/2 transfers**; a separate swap with a wider
+destination completed **3/3 transfers**, including use of a buffer. The original
+narrow-destination swap stopped after **1/3 transfers** at the next motion-planning
+check. These are distinct diagnostic configurations, not a pooled success rate.
+They demonstrate guarded task orchestration with privileged stationary inputs;
+they do not qualify observed exploration, household suites or hardware execution.
+
 
 The [2026-10-14 live agent experiment](experiments/tamp_native_live_agent_20261014.md)
 passed **2/2 two-goal episodes (4/4 transfers)** using a remote LLM and live ZMQ
@@ -102,6 +161,7 @@ to 6/12. Remaining failures are bounded planning and one malformed region argume
 | --- | --- |
 | Agent tools, capabilities, and modes | [Tool index](agent_tools.md) |
 | Public JSON API and native execution contract | [TAMP API](api/tamp.md) |
+| Multi-step task planning and execution | [Task-plan API](api/tamp_task_plans.md) |
 | Placement geometry, collision checks, search, replay | [Placement planning](api/placement.md) |
 | Assisted open/close | [Articulation API](api/tamp_articulation.md) |
 | Task bridge and native adapter | [TAMP implementation](../src/emet/controller/task/tamp/) |

@@ -30,6 +30,9 @@ class PlanResult:
         reason: str | None = None,
         planner: Optional["Planner"] = None,
         goal_index: int | None = None,
+        requested_goal: list[float] | None = None,
+        resolved_goal: list[float] | None = None,
+        goal_resolution: str | None = None,
     ):
         self.success = success
         self.trajectory = trajectory
@@ -37,6 +40,9 @@ class PlanResult:
         self.planner = planner
         # Multi-goal A*: index into the ``goals`` list that was reached (else None).
         self.goal_index = goal_index
+        self.requested_goal = requested_goal
+        self.resolved_goal = resolved_goal
+        self.goal_resolution = goal_resolution
 
     def get_success(self):
         """Was the trajectory planning successful?"""
