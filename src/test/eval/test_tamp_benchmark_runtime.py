@@ -305,3 +305,22 @@ def test_protected_goal_cannot_be_sacrificed_to_complete_task(strategy):
     goal = replace(domain.compile_goal('swap'), protected=frozenset({('at', 'a', 'left')}))
     result = search_task(domain, domain.state, goal, strategy=strategy, budget=BudgetSpec())
     assert result.reason != 'ok'
+
+
+@pytest.mark.parametrize('terminated,truncated,horizon,expected', [
+    (False, True, 3, 'upstream_truncated'),
+    (False, True, 1, 'upstream_truncated'),
+    (True, True, 1, 'terminated'),
+    (False, False, 1, 'horizon_exhausted'),
+])
+def test_runtime_preserves_upstream_stop_attribution(terminated, truncated, horizon, expected):
+    env = Env()
+    env.step = lambda action: StepResult('final', 0., terminated, truncated, {'native_reason': 'kept'})
+    with EpisodeRuntime(env, episode(horizon=horizon)) as runtime:
+        result = runtime.step('move')
+        assert runtime.stop_reason == expected
+        assert result.terminated is terminated and result.truncated is (truncated or horizon == 1)
+        assert result.info == {'native_reason': 'kept'}
+        assert runtime.control_steps == 1
+        with pytest.raises(EpisodeStopped, match=expected):
+            runtime.step('forbidden_retry')

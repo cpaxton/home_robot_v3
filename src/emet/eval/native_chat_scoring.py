@@ -34,7 +34,9 @@ def integration_evidence(rows):
         'code_counts': codes,
         'result_contracts_valid': counts['invalid'] == 0 if total else None,
         'failure_stop_compliant': not any(f['unexpected_tools'] for f in failures) if failures else None,
-        'failure_cases': len(failures),
+        'failure_cases': sum(f['boundary_kind'] == 'failure' for f in failures),
+        'discovery_only_cases': sum(f['boundary_kind'] == 'discovery_only' for f in failures),
+        'stop_boundary_cases': len(failures),
         'failure_boundaries': failures,
         'unassessed': ['task_interpretation', 'goal_coverage', 'physical_recovery',
                        'observed_grounding', 'navigation', 'exploration'],
@@ -42,12 +44,14 @@ def integration_evidence(rows):
 
 
 def failure_boundaries(rows):
-    """A failed TAMP result forbids more dispatched tools until a new user turn.
+    """Failed or discovery-only results forbid dispatch until a new user turn.
 
     Assistant prose or proposed calls are not execution evidence: only tool log
     entries count. This checks session control, never physical task success.
     Input must retain explicit user rows from ChatLog (including scripted turns).
-    Every later dispatch in the failed turn is a violation, even another failure.
+    Every later dispatch after either stop boundary is a violation, even another
+    failure. Discovery-only is a policy boundary, not a failed task; entries
+    distinguish boundary_kind and integration_evidence counts these separately.
     """
     failures, active = [], None
     for row in rows:
@@ -65,8 +69,10 @@ def failure_boundaries(rows):
             active['unexpected_tools'].append(name)
         if name in TAMP_TOOLS:
             outcome = ToolOutcome.coerce(name, body)
-            if not outcome.ok:
-                failure = {'tool': name, 'code': outcome.status, 'unexpected_tools': []}
+            discovery_only = outcome.ok and outcome.payload.get('data', {}).get('discovery_only') is True
+            if not outcome.ok or discovery_only:
+                failure = {'tool': name, 'code': outcome.status, 'unexpected_tools': [],
+                           'boundary_kind': 'discovery_only' if discovery_only else 'failure'}
                 failures.append(failure)
                 if active is None:
                     active = failure

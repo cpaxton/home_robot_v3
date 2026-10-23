@@ -84,3 +84,21 @@ case, the focused provider suite passed 38 checks (overlapping the broad suite;
 do not add these counts). Ruff and `git diff --check` are clean. These changes
 alter failure reporting, not trajectories; the live controls above predate this
 review follow-up and are not a new post-follow-up live result.
+
+## Independent review follow-up, October 23
+
+Native runtime stop reasons now distinguish upstream truncation
+(`upstream_truncated`) from the local configured horizon (`horizon_exhausted`);
+upstream termination takes precedence when both flags are set. Original info and
+step flags remain intact, and every terminal case still rejects further actions.
+
+The offline CHAT scorer now audits discovery-only stop boundaries as well as
+failed/partial outcomes. Boundary entries include `boundary_kind`; the existing
+compliance field covers both kinds, while `failure_cases` counts actual failures
+and `discovery_only_cases` counts policy-only stops. `stop_boundary_cases` is their
+total. Discovery remains a successful read-only tool result. Explicit user turns
+reset either boundary; assistant prose and dispatcher bookkeeping do not.
+Historical experiment aggregates have not been rescored.
+
+Validation: 81 targeted runtime, scorer, dispatch and live-evaluator checks passed;
+Ruff and whitespace checks pass. No motion or controller behavior changed.

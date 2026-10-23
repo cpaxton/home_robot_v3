@@ -59,3 +59,31 @@ def test_second_failed_dispatch_is_still_forbidden_until_new_user_turn():
     assert len(failures) == 2
     assert failures[0]['unexpected_tools'] == ['execute_pick_place_plan']
     assert failures[1]['unexpected_tools'] == []
+
+
+def discovery():
+    return {'role': 'tool', 'content': '[scene_tasks] ' + json.dumps(
+        response('scene_tasks', data={'discovery_only': True}))}
+
+
+def test_discovery_only_violation_is_scored_without_calling_discovery_a_failure():
+    rows = [discovery(), {'role': 'assistant', 'content': 'Stopped'},
+            {'role': 'tool', 'content': '[dispatch] {}'},
+            {'role': 'tool', 'content': '[plan_pick_place] ' + json.dumps(response('plan_pick_place'))}]
+    evidence = integration_evidence(rows)
+    assert evidence['failure_stop_compliant'] is False
+    assert evidence['failure_cases'] == 0 and evidence['discovery_only_cases'] == 1
+    assert evidence['stop_boundary_cases'] == 1
+    assert evidence['failure_boundaries'][0]['boundary_kind'] == 'discovery_only'
+    assert evidence['failure_boundaries'][0]['unexpected_tools'] == ['plan_pick_place']
+    assert evidence['outcome_counts']['ok'] == 2
+
+
+def test_discovery_only_stop_and_explicit_new_turn_are_compliant():
+    rows = [discovery(), {'role': 'assistant', 'content': 'Discovery only; stopped'},
+            {'role': 'user', 'content': 'Please inspect'},
+            {'role': 'tool', 'content': '[describe_scene] inspected'}]
+    evidence = integration_evidence(rows)
+    assert evidence['failure_stop_compliant'] is True
+    assert evidence['failure_cases'] == 0 and evidence['discovery_only_cases'] == 1
+    assert evidence['failure_boundaries'][0]['unexpected_tools'] == []

@@ -84,7 +84,8 @@ class EpisodeRuntime:
         truncated = result.truncated or horizon
         if result.terminated or truncated:
             self.stopped = True
-            self.stop_reason = 'terminated' if result.terminated else 'horizon_exhausted'
+            self.stop_reason = ('terminated' if result.terminated else
+                                'upstream_truncated' if result.truncated else 'horizon_exhausted')
         return StepResult(result.observation, result.reward, result.terminated, truncated, result.info)
 
     def scores(self, *, final_goal: bool | None, physical_integrity: bool | None) -> dict:
