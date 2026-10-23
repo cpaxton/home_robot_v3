@@ -41,6 +41,7 @@ from emet.core.zmq_protocol import (
     EMET_ZMQ_SESSION_SCHEMA_VERSION_KEY,
     EMET_ZMQ_SIM_TIME_RATIO_KEY,
 )
+from emet.rl.server import ReactiveSimMixin
 from emet.robots.base import RobotSpec
 from emet.simulation import molmospaces_spawn, scene_base_spawn
 from emet.simulation.env_flags import env_sim_nav_debug, warn_sim_nav_env_flags
@@ -129,7 +130,7 @@ _PRIMARY_RW, _PRIMARY_RH = 640, 480
 _SERVO_RW, _SERVO_RH = 320, 240
 
 
-class RobosuiteZmqServer(BaseZmqServer):
+class RobosuiteZmqServer(ReactiveSimMixin, BaseZmqServer):
     """ZMQ server backed by a robosuite environment.
 
     Unlike MujocoZmqServer (which uses stretch_mujoco), this server
@@ -152,8 +153,21 @@ class RobosuiteZmqServer(BaseZmqServer):
         scene_source_basename: str | None = None,
         session_extra: dict[str, Any] | None = None,
         objects_info: dict[str, Any] | None = None,
+        controller: str = "legacy",
+        policy_path: str | None = None,
+        no_cameras: bool = False,
         **kwargs,
     ):
+        if controller not in {"legacy", "baseline", "base", "rl"}:
+            raise ValueError("controller must be legacy, baseline, base or rl")
+        if controller != "legacy" and robot_spec.name != "innate_mars":
+            raise ValueError("reactive control currently supports innate_mars only")
+        if controller == "rl" and not policy_path:
+            raise ValueError("rl controller requires policy_path")
+        self._reactive_controller_kind = controller
+        self._reactive_policy_path = policy_path
+        self._reactive_controller = None
+        self._no_cameras = no_cameras
         if not all(np.isfinite(v) and v > 0 for v in (navigation_xy_tolerance, navigation_yaw_tolerance)):
             raise ValueError("Navigation tolerances must be finite and positive")
         max_sim_steps = kwargs.pop("max_sim_steps", None)
@@ -501,6 +515,10 @@ class RobosuiteZmqServer(BaseZmqServer):
             self._mjmodel = mujoco.MjModel.from_xml_string(self._scene_xml)
         else:
             raise ValueError("Either scene_xml or scene_model must be provided")
+        if self.supports_reactive_control():
+            # Mars has 360 rangefinder rays; evaluate them when publishing an
+            # observation, not in every physics/kinematics pass of the servo loop.
+            self._mjmodel.opt.disableflags |= int(mujoco.mjtDisableBit.mjDSBL_SENSOR)
         self._mjdata = mujoco.MjData(self._mjmodel)
         self._molmospaces_autoplace_snap_qpos0 = False
         self._planar_autoplace_snap_qpos0 = False
@@ -2277,6 +2295,11 @@ class RobosuiteZmqServer(BaseZmqServer):
         must therefore run afterward or planar XY commands are erased before
         physics can consume them.
         """
+        controller = getattr(self, "_reactive_controller", None)
+        if controller is not None and controller.active:
+            controller.step()
+            self._physics_fps_counter.tick(sim_time=float(self._mjdata.time))
+            return
         self._hold_stationary_base_if_idle()
         self._apply_joint_ctrl_hold_to_actuators(refresh_unpinned_hold=False)
         if self._nav_yaw_slew is None:
@@ -2613,6 +2636,8 @@ class RobosuiteZmqServer(BaseZmqServer):
     def get_full_observation_message(self) -> dict[str, Any]:
         if self._mjdata is None:
             return None
+        if getattr(self, "_no_cameras", False):
+            return self.get_state_message()
 
         cam_names = self._spec.camera_names
         if not cam_names:
@@ -2719,6 +2744,13 @@ class RobosuiteZmqServer(BaseZmqServer):
             from emet.simulation.mujoco_lidar import attach_lidar_to_zmq_message
 
             with self._mj_lock:
+                if self.supports_reactive_control():
+                    flags = self._mjmodel.opt.disableflags
+                    try:
+                        self._mjmodel.opt.disableflags &= ~int(mujoco.mjtDisableBit.mjDSBL_SENSOR)
+                        mujoco.mj_sensorPos(self._mjmodel, self._mjdata)
+                    finally:
+                        self._mjmodel.opt.disableflags = flags
                 attach_lidar_to_zmq_message(message, self._mjmodel, self._mjdata)
         with self._render_lock:
             self._last_full_obs_for_servo = message
@@ -2737,7 +2769,12 @@ class RobosuiteZmqServer(BaseZmqServer):
                 xpos = self._mjdata.body(self._spec.base_link_name).xpos
                 base_xyz = [float(xpos[0]), float(xpos[1]), float(xpos[2])]
                 base_up = float(self._mjdata.body(self._spec.base_link_name).xmat.reshape(3, 3)[2, 2])
-                if self._joint_ctrl_hold is not None:
+                controller = getattr(self, "_reactive_controller", None)
+                if controller is not None and controller.active:
+                    joint_targets = np.array(
+                        [self._mjdata.ctrl[self._mjmodel.actuator(n).id] for n in self._spec.actuator_names]
+                    )
+                elif self._joint_ctrl_hold is not None:
                     joint_targets = self._joint_ctrl_hold.copy()
         except Exception:
             base_xyz = None
@@ -2775,6 +2812,8 @@ class RobosuiteZmqServer(BaseZmqServer):
         """
         if self._mjdata is None:
             return None
+        if getattr(self, "_no_cameras", False):
+            return self.get_state_message()
 
         cam_names = self._spec.camera_names
         if not cam_names:
@@ -3128,6 +3167,7 @@ class RobosuiteZmqServer(BaseZmqServer):
                         "(Δq0 vs qpos0, dq, F_act, τ_dof, τ_con) on all torso joints + arm1 pair."
                     )
 
+        self._init_reactive_controller()
         super().start()
 
         self._sim_thread: threading.Thread | None = None
@@ -3156,6 +3196,10 @@ class RobosuiteZmqServer(BaseZmqServer):
                 time.sleep(1 / self.simulation_rate)
 
     def stop(self):
+        if getattr(self, "_reactive_controller", None) is not None:
+            with self._command_lock:
+                if self._reactive_command is not None and not self._reactive_fault:
+                    self._finish_reactive_cancel("cancelled", "server shutdown")
         self._close_renderers()
         self._running = False
         self._done = True
