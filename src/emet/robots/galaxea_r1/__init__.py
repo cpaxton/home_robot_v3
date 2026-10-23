@@ -100,6 +100,7 @@ class GalaxeaR1Backend(RobotBackend):
     def get_spec(self) -> RobotSpec:
         return RobotSpec(
             name="galaxea_r1",
+            look_joint_names=("torso_joint4", "torso_joint3"),
             dof=26,
             joint_names=R1_JOINT_NAMES,
             camera_names=R1_CAMERA_NAMES,

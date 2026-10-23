@@ -34,6 +34,9 @@ logger = Logger(__name__)
 def supports_floor_observation(agent) -> bool:
     """Advertise the shared tool only for adapters with its measured-view contract."""
     robot = getattr(agent, "robot", None)
+    spec = getattr(robot, "_spec", None)
+    if spec is not None and getattr(spec, "look_joint_names", None) is None:
+        return False
     return isinstance(getattr(robot, "_seq_id", None), int) and all(
         callable(getattr(robot, name, None)) for name in ("head_to", "get_pan_tilt", "get_observation")
     )

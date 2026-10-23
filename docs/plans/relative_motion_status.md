@@ -2,6 +2,21 @@
 
 ## Closeout progress — 2026-10-23
 
+Frozen `50575a34` diagnostic `20261023_103515_22ac60` also completed:
+bowl found, microwave not localized (123.8 s). It confirms failed-turn batch
+stopping and the model's selection of targeted floor recovery. Recovery now
+reaches the real head-arrival gate, but returns `head_pose_unconfirmed` with
+measured `[0, 0]` for a nonzero requested gaze. Source inspection identifies
+the adapter defect: GenericZmqClient only read XLERobot gaze joints and
+returned constant zeros for every other robot.
+
+The next repair populates existing `RobotSpec.look_joint_names` from the
+already implemented server mappings, reads those measured joints, and fails
+explicitly on missing/nonfinite feedback. It adds no new torso/head actuation
+mapping and does not certify torso motion as collision-free. Unqualified
+adapters do not advertise targeted floor observation. 255 focused gaze,
+head/floor and MuJoCo geometry tests pass; live validation is still required.
+
 Frozen `a98f101b` pilot `20261023_102419_6dd703` completed without an
 infrastructure failure: bowl found, microwave not localized (109.0 s).
 The model did not select floor inspection in this run; therefore it does not
