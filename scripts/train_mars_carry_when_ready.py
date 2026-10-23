@@ -22,12 +22,12 @@ ROOT = Path(__file__).resolve().parents[1]
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--carry-report", type=Path, default=Path("logs/manipulation/carry-qualification-v2/report.json")
+        "--carry-report", type=Path, default=Path("logs/manipulation/carry-qualification-v3/report.json")
     )
     parser.add_argument(
         "--pick-place-report",
         type=Path,
-        default=Path("logs/manipulation/carry-pick-place-qualification-v2/report.json"),
+        default=Path("logs/manipulation/carry-pick-place-qualification-v3/report.json"),
     )
     parser.add_argument("--regression-xml", type=Path, default=Path("/tmp/mars-carry-final-regression.xml"))
     parser.add_argument("--qualification-pid-file", type=Path, default=Path("/tmp/mars-carry-qualification.pid"))
@@ -85,6 +85,10 @@ def training_command(args, *, root=ROOT):
         "1",
         "--carry-push-scale",
         ".02",
+        "--carry-push-probability",
+        ".25",
+        "--carry-target-mode",
+        "mixed",
         "--retarget-probability",
         ".25",
         "--base-xy-tolerance",

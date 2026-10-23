@@ -11,7 +11,7 @@ from emet.rl.manipulation.tracking import TaskFrameFK
 
 def target_offsets(env, *, lift_end=None):
     """Nearby reachable witnesses; IK is offline generation, never actor input."""
-    mode = env.config.carry_target_mode
+    mode = env.carry_target_mode
     if mode == "orientation":
         offsets = np.zeros((12, env.profile.arm_size))
         offsets[:, -1] = env.np_random.choice([-1, 1], 12) * env.np_random.uniform(0.1, 0.3, 12)

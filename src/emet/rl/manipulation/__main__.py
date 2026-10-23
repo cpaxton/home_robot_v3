@@ -291,6 +291,7 @@ def train(args):
         tamp_carry_trajectories=args.tamp_carry_trajectories,
         carry_target_mode=args.carry_target_mode,
         carry_push_scale=args.carry_push_scale,
+        carry_push_probability=args.carry_push_probability,
         grasp_lift_height=args.grasp_lift_height,
         support_half_width=args.support_half_width,
         grasp_pitch_rad=args.grasp_pitch_rad,
@@ -327,7 +328,9 @@ def train(args):
             raise ValueError("TAMP carry training requires --carry-readiness-report and --pick-place-readiness-report")
         require_training_readiness(
             json.loads(args.carry_readiness_report.read_text()),
-            json.loads(args.pick_place_readiness_report.read_text()), config, fingerprint,
+            json.loads(args.pick_place_readiness_report.read_text()),
+            config,
+            fingerprint,
         )
     for seed in args.seeds:
         directory = Path(args.output) / f"seed-{seed}"
@@ -499,8 +502,11 @@ def main():
     p.add_argument("--contact-impratio", type=float, default=1.0)
     p.add_argument("--balanced-grasp-setup", action="store_true")
     p.add_argument("--tamp-carry-trajectories", action="store_true")
-    p.add_argument("--carry-target-mode", choices=["translation", "orientation", "combined"], default="combined")
+    p.add_argument(
+        "--carry-target-mode", choices=["translation", "orientation", "combined", "mixed"], default="combined"
+    )
     p.add_argument("--carry-push-scale", type=float, default=0)
+    p.add_argument("--carry-push-probability", type=float, default=1)
     p.add_argument("--carry-readiness-report", type=Path)
     p.add_argument("--pick-place-readiness-report", type=Path)
     p.add_argument("--grasp-lift-height", type=float, default=0.06)

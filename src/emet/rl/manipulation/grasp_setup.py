@@ -122,9 +122,13 @@ def plan_setup(env, *, minimum_margin=0.005, azimuths=(0.0, -0.7, 0.7, -1.0, 1.0
     if not candidates:
         return None
     nominal = next((item for item in candidates if item["azimuth_offset_rad"] == 0), None)
-    if nominal is not None:
+    disturbance = getattr(env, "_carry_push_selected", False)
+    if nominal is not None and not disturbance:
+        nominal["selection_reason"] = "nominal_path_margin"
         return nominal
     # Once a different setup is required, maximize its robustness margin.
     # Opposite turns have equal displacement to numerical precision, which
     # otherwise made the selected side depend on floating-point noise.
-    return min(candidates, key=lambda item: (-item["minimum_sampled_margin_m"], abs(item["azimuth_offset_rad"])))
+    selected = min(candidates, key=lambda item: (-item["minimum_sampled_margin_m"], abs(item["azimuth_offset_rad"])))
+    selected["selection_reason"] = "maximum_margin_for_disturbance" if disturbance else "maximum_margin"
+    return selected

@@ -14,7 +14,7 @@ from emet.rl.manipulation.carry_benchmark import (
     source_hashes,
 )
 from emet.rl.manipulation.carry_training import prepare
-from emet.rl.manipulation.env import ManipulationEnv
+from emet.rl.manipulation.env import ManipulationEnv, sample_carry_events
 
 
 def test_smoke_suite_cannot_qualify_training():
@@ -22,6 +22,48 @@ def test_smoke_suite_cannot_qualify_training():
     assert len({c["id"] for c in make_suite()["cases"]}) == 300
     assert not ready({"complete": False, "controller": "teacher"})
     assert not ready({"complete": True, "controller": "teacher", "episodes": []})
+
+
+def test_training_mixture_contains_quiet_and_disturbed_pose_categories():
+    config = replace(default_config(), carry_target_mode="mixed", carry_push_scale=0.02, carry_push_probability=0.25)
+    rng = np.random.default_rng(31)
+    events = [sample_carry_events(config, rng, "carry") for _ in range(2000)]
+    assert {mode for mode, _ in events} == {"translation", "orientation", "combined"}
+    assert 0.2 < np.mean([push for _, push in events]) < 0.3
+    for probability in (0, 1):
+        fixed = replace(config, carry_push_probability=probability)
+        assert all(sample_carry_events(fixed, rng, "carry")[1] == bool(probability) for _ in range(20))
+
+
+@pytest.mark.sim
+def test_frozen_disturbance_uses_wider_support_without_weakening_the_push():
+    env = ManipulationEnv(replace(default_config(), carry_push_scale=0.1))
+    try:
+        _, info = env.reset(seed=1904001)
+        assert not info["initialization_failed"]
+        setup = info["randomization"]["grasp_setup"]
+        assert setup["selection_reason"] == "maximum_margin_for_disturbance"
+        assert setup["minimum_sampled_margin_m"] > 0.02
+        np.testing.assert_allclose(
+            env.disturbance_wrench,
+            [
+                0.3225620618129116,
+                -0.19520660592966363,
+                0.06488432700883441,
+                -0.0069418701320262555,
+                0.012867630979818892,
+                -0.006184681858643481,
+            ],
+            atol=1e-12,
+        )
+        for _ in range(round(env.config.horizon / env.profile.dt) + 1):
+            _, _, done, truncated, info = env.step(env.teacher_action())
+            if done or truncated:
+                break
+        assert info["is_success"], info
+        assert not info["wheel_lift"]
+    finally:
+        env.close()
 
 
 def test_training_requires_complete_current_safe_evidence():

@@ -80,7 +80,7 @@ def make_suite(*, seed=1900000, per_stratum=20):
                         "stratum": stratum,
                     }
                 )
-    return {"version": "mars-carry-v1", "config": asdict(default_config()), "cases": cases}
+    return {"version": "mars-carry-v2", "config": asdict(default_config()), "cases": cases}
 
 
 def case_config(suite, case):
@@ -139,8 +139,11 @@ def ready(report):
 
 def require_training_readiness(carry_report, pick_place_report, config, fingerprint):
     """Require complete, current teacher evidence before launching PPO workers."""
-    if not ready(carry_report) or carry_report.get("source_hashes") != source_hashes():
-        raise ValueError("carry teacher readiness missing, failing, or stale")
+    if carry_report.get("source_hashes") != source_hashes():
+        raise ValueError("carry teacher readiness source hashes are missing or stale")
+    if not ready(carry_report):
+        groups = summarize(carry_report.get("episodes", []))
+        raise ValueError(f"carry teacher readiness failed: complete={carry_report.get('complete')}; per_mass={groups}")
     if carry_report["suite_sha256"] != digest(carry_report["suite"]):
         raise ValueError("carry readiness suite checksum mismatch")
     baseline = carry_report["suite"]["config"]

@@ -41,6 +41,21 @@ distributions are not a paired improvement estimate, a learned-policy result,
 or a general reliability estimate. Continuous pick/place regressions remain
 a separate gate; carry-component success does not establish that gate.
 
+\paragraph{Source-bound teacher qualification.}
+At revision \texttt{0101dc35}, all 300 carry references were admitted and
+297 executed successfully: 100/100 at 20\,g, 99/100 at 50\,g, and 98/100 at
+100\,g. One 50\,g disturbance case tripped the wheel-unloading guard; two
+100\,g wrist-roll cases exceeded the unchanged 0.1\,rad relative-object rotation
+limit. A separate continuous pick/return-place suite passed 30/30 cases on one
+pedestal. The wheel event blocked training despite the high average success.
+These feedback results and failures are retained under
+\texttt{paper/data/whole\_body\_control/qualification\_v2.json}.
+The subsequent setup revision chooses maximum support margin for disturbed
+carries; the exact failing disturbance passed a targeted replay without changing
+its wrench. Full requalification is required before starting PPO. Grasp-depth,
+contact-impedance, and timing ablations did not reliably resolve the roll-slip
+failures; no relaxed retention threshold or increased torque was adopted.
+
 \paragraph{Qualification and learning.}
 The held-out protocol fixes 100 cases per payload mass, balanced across the five
 motion categories. It reports admission, success conditional on admission,

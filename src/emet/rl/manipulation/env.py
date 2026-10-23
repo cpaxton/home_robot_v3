@@ -56,6 +56,20 @@ class ResetMotionUnreachable(ValueError):
     """A procedural reset cannot produce its requested kinematic lift."""
 
 
+def sample_carry_events(config, rng, scenario):
+    """Choose training categories once per reset, not once per grasp retry."""
+    mode = config.carry_target_mode
+    if scenario == "carry" and mode == "mixed":
+        mode = str(rng.choice(("translation", "orientation", "combined")))
+    push = (
+        scenario == "carry"
+        and config.carry_push_scale > 0
+        and config.carry_push_probability > 0
+        and (config.carry_push_probability == 1 or rng.random() < config.carry_push_probability)
+    )
+    return mode, push
+
+
 @dataclass(frozen=True)
 class ManipulationConfig:
     robot: str = "stretch"
@@ -73,6 +87,7 @@ class ManipulationConfig:
     tamp_carry_trajectories: bool = False
     carry_target_mode: str = "combined"
     carry_push_scale: float = 0.0
+    carry_push_probability: float = 1.0
     payload_object: str | None = None
     initial_heading_range: float = 0.0
     target_scale: float = 1.0
@@ -100,8 +115,10 @@ class ManipulationConfig:
     goal_gated_settling: bool = False
 
     def __post_init__(self):
-        if self.carry_target_mode not in {"translation", "orientation", "combined"}:
+        if self.carry_target_mode not in {"translation", "orientation", "combined", "mixed"}:
             raise ValueError("invalid carry target mode")
+        if not np.isfinite(self.carry_push_probability) or not 0 <= self.carry_push_probability <= 1:
+            raise ValueError("carry push probability must be in [0, 1]")
         if not np.isfinite(self.carry_push_scale) or not 0 <= self.carry_push_scale <= 1:
             raise ValueError("carry push scale must be in [0, 1]")
         if self.tamp_carry_trajectories and (
@@ -453,7 +470,7 @@ class ManipulationEnv(gym.Env):
         self.monitor.reset()
         self.initial_object_height = float(d.xpos[self.payload, 2])
         self._scheduled_push = (
-            (self.scenario == "carry" and self.config.carry_push_scale > 0)
+            self._carry_push_selected
             or self.scenario == "disturbance"
             or (
                 self.scenario == "reach"
@@ -547,6 +564,9 @@ class ManipulationEnv(gym.Env):
             str(self.np_random.choice(SCENARIOS, p=MIXTURE))
             if self.config.scenario == "mixed"
             else self.config.scenario
+        )
+        self.carry_target_mode, self._carry_push_selected = sample_carry_events(
+            self.config, self.np_random, self.scenario
         )
         if self.scenario == "disturbance":
             self.disturbance_difficulty = (
@@ -958,6 +978,8 @@ class ManipulationEnv(gym.Env):
         return {
             **self.monitor.metrics(),
             "scenario": self.scenario,
+            "carry_target_mode": self.carry_target_mode,
+            "carry_push_selected": self._carry_push_selected,
             "hand_target_active": bool(self.control.hand_mask),
             "base_target_active": bool(self.control.base_mask.any()),
             "retargets": self.retargets,

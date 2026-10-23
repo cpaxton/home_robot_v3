@@ -2028,7 +2028,7 @@ open. This does not authorize opening or replace support/retention checks.
 
 ### Reproduce, inspect, and qualify
 
-The checked-in `configs/benchmarks/mars_carry_v1.json` contains 300 cases: 100 per
+The checked-in `configs/benchmarks/mars_carry_v2.json` contains 300 cases: 100 per
 mass, 20 per motion category. Combined-motion cases retain the original ten
 carry seeds. `mars_carry_regressions.json` retains all 30 continuous pick/place
 identities, including the two original timeouts. Pose and retention thresholds
@@ -2041,15 +2041,15 @@ export MPLCONFIGDIR=/tmp/mpl MUJOCO_GL=egl
 
 # Fresh output directories are required; results are not overwritten.
 taskset -c 14-15 .venv/bin/python -m emet.rl.manipulation.carry_benchmark evaluate \
-  --suite configs/benchmarks/mars_carry_v1.json --jobs 2 \
-  --output logs/manipulation/carry-qualification-v2
+  --suite configs/benchmarks/mars_carry_v2.json --jobs 2 \
+  --output logs/manipulation/carry-qualification-v3
 
 taskset -c 14-15 .venv/bin/python -m emet.rl.manipulation.carry_benchmark pick-place \
-  --output logs/manipulation/carry-pick-place-qualification-v2
+  --output logs/manipulation/carry-pick-place-qualification-v3
 
 # Self-contained interactive 3D HTML; Plotly is needed only for export.
 taskset -c 14-15 .venv/bin/python -m emet.rl.manipulation.carry_benchmark replay \
-  --suite configs/benchmarks/mars_carry_v1.json --case-id 50g:combined:0 \
+  --suite configs/benchmarks/mars_carry_v2.json --case-id 50g:combined:0 \
   --output logs/manipulation/carry-replay/50g-combined-0.html
 ```
 
@@ -2107,9 +2107,9 @@ mode is disabled; online scalar logging is explicit):
 ```bash
 .venv/bin/python scripts/train_mars_carry_when_ready.py \
   --qualification-pid-file /tmp/mars-carry-qualification.pid \
-  --carry-report logs/manipulation/carry-qualification-v2/report.json \
-  --pick-place-report logs/manipulation/carry-pick-place-qualification-v2/report.json \
-  --regression-xml /tmp/mars-carry-final-regression.xml \
+  --carry-report logs/manipulation/carry-qualification-v3/report.json \
+  --pick-place-report logs/manipulation/carry-pick-place-qualification-v3/report.json \
+  --regression-xml /tmp/mars-carry-v3-regression.xml \
   --output logs/manipulation/carry-ppo-v1 --wandb-mode online
 ```
 
@@ -2118,3 +2118,65 @@ already-attempted training log or another active manipulation training process,
 and stops if qualification exits early or exceeds its waiting deadline. It
 uses CPU cores 14–15 and two workers on this machine; `--cpus` must explicitly
 select suitable cores elsewhere. It never retries training or promotes a model.
+
+### Completed v2 qualification and v3 follow-up
+
+The source-bound run at `0101dc35` completed all 300 carries with **297/300
+successes and 300/300 admissions**: 100/100 at 20 g, 99/100 at 50 g, and 98/100
+at 100 g. The continuous one-pedestal pick/place gate passed **30/30**. Training
+remained stopped because `50g:disturbance:1` crossed the unchanged wheel guard.
+The two other failures, `100g:orientation:10` and `100g:orientation:11`, were
+relative-object rotation losses during wrist roll. Exact case identities and
+original events are retained in `mars_carry_failure_regressions.json`; the paper
+has a compact `qualification_v2.json` summary.
+
+For disturbed carries, setup now chooses the valid candidate with the greatest
+support margin rather than accepting the first nominal posture that clears the
+static screen. The failing 50 g case's predicted setup margin increased from
+7.0 mm to 21.3 mm, and its physical replay passed with the *same* sampled wrench.
+This is a reset-time posture choice, not a weaker disturbance, a wider wheel
+threshold, or execution of a base approach. Quiet carries retain nominal setup
+when it passes. It remains a model prediction requiring physical qualification.
+
+Neither increased contact impedance, shifted grasp depth, nor removal of the
+intermediate trajectory stops reliably fixed both 100 g roll-slip cases. Those
+ablation results are not promoted. Contact geometry, friction, torque caps,
+pose/retention thresholds, and the original orientation range remain unchanged.
+The teacher readiness criterion remains at least 95% per-mass conditional
+success and zero unsafe-contact/wheel-lift events; it does not require zero
+retention failures. Any remaining retention failures must remain visible in
+paired policy evaluation rather than be dropped from the denominator.
+
+Training now supports `--carry-target-mode mixed` (uniform translation,
+orientation and combined categories) and `--carry-push-probability` independently
+of force scale. The supervised first PPO phase uses 25% small-push episodes and
+75% quiet episodes, with 25% mid-motion endpoint changes. Its nominal payload is
+50 g; passing this phase is not evidence that all payload masses or moving-base
+carry are qualified. Realized categories and push selection are logged in each
+episode. Events are selected once per reset, not resampled after a failed grasp.
+
+The fresh configuration catalog is `configs/benchmarks/mars_carry_v2.json` and
+the active follow-up reports are `carry-qualification-v3` and
+`carry-pick-place-qualification-v3`. The regression XML is
+`/tmp/mars-carry-v3-regression.xml`. The checked-in supervisor defaults to these
+new report paths. Commands above point to the current catalog and v3 reports;
+the older attempts remain preserved as failure evidence.
+
+To inspect *executed* motion rather than only nominal target geometry, use the
+single-case trace tool. It records commanded/measured base and hand poses,
+arm/gripper targets and feedback, grip torque, payload-relative pose, contact
+wrenches and wheel-gap history. The optional offline HTML overlays 3D paths
+with retention and support signals; the JSON keeps the complete evidence.
+
+```bash
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MPLCONFIGDIR=/tmp/mpl MUJOCO_GL=egl \
+  taskset -c 14-15 .venv/bin/python scripts/trace_mars_carry.py \
+  --suite configs/benchmarks/mars_carry_v2.json --case-id 100g:orientation:10 \
+  --output logs/manipulation/carry-replay/100g-orientation-10-trace-v3.json --html
+```
+
+Add `--policy BUNDLE` to replay a compatible learned policy on the same case.
+The tool refuses to overwrite an existing JSON trace. The preserved teacher
+failure is served at `http://localhost:8766/100g-orientation-10-trace-v3.html`
+through the same SSH forwarding described above. Simulator contact wrenches
+are diagnostic ground truth, not signals already available on Herman.
