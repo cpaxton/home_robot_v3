@@ -1,5 +1,23 @@
 # Shared relative movement implementation status
 
+## Review follow-up — current
+
+PR #220 review fixes in `01ae5412`: EQA adapters retain dictionaries;
+motion envelopes parse as dictionaries or JSON and malformed/legacy motion
+text cannot become success; zero/sub-millidegree requests do not execute or
+consume navigation budget; place inspection reads separated visual presence.
+The registry-level gaze suite enumerates all adapters/aliases and explicitly
+checks the Mobile ALOHA/YOR stubs as unsupported. It caught and fixed Mars'
+named `joint_head` observation feedback, outside its arm/base joint vector.
+112 focused tests pass, including the previously red room/navigation file.
+
+Matched EQA12 job `20261023_104449_f2f394` finished with CUDA allocation/cuDNN
+failures in the candidate arm. This pair is not valid acceptance evidence;
+failed artifacts remain preserved. Current GPU inspection is idle and does
+not establish which process held memory during the earlier failures. Recheck
+GPU availability and owned process cleanup before a new matched run; do not
+score infrastructure failures as model misses or claim restored performance.
+
 ## Closeout progress — 2026-10-23
 
 Frozen `50575a34` diagnostic `20261023_103515_22ac60` also completed:
