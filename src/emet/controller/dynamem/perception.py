@@ -321,6 +321,7 @@ def update(self, *, full_perception: bool | None = None):
         rgb, depth, K, camera_pose, base_xyt=base_xyt, full_perception=run_full,
         # Reused inferred depth does not describe this newly received frame.
         received_monotonic=None if depth_reused else getattr(obs, 'received_monotonic', None),
+        image_timing=getattr(obs, 'image_timing', None),
         # This flag describes sensor vs estimated provenance, not freshness.
         # depth_reused independently controls whether this frame has fresh evidence.
         depth_evidence_source=(ESTIMATED_DEPTH_POINTCLOUD_SOURCE if self._depth_source == 'lingbot'

@@ -23,6 +23,8 @@ from emet.controller.manipulation.native_inputs import (
 )
 from emet.controller.task.tamp.api import response
 
+from .observed_frames import ObservedFrameGate
+
 
 @dataclass(frozen=True)
 class ObservedPositionEvidence:
@@ -119,6 +121,9 @@ def discover_observed_tasks(provider: ObservedTaskProvider | None, object_filter
     })
 
 
+_FRAME_UNSET = object()
+
+
 class RgbdTaskProvider:
     """Fresh single-frame proposals from the existing segmentation/depth pipeline.
 
@@ -132,13 +137,27 @@ class RgbdTaskProvider:
     def __init__(self):
         self._lock = threading.Lock()
         self._candidates = ()
+        self.frame_gate = ObservedFrameGate()
+
+    def invalidate(self):
+        with self._lock:
+            self.frame_gate.invalidate()
+            self._candidates = ()
+
+    def begin_frame(self, received_monotonic, image_timing=None):
+        with self._lock:
+            self._candidates = ()
+            return self.frame_gate.begin(received_monotonic, image_timing)
 
     def observe_tasks(self):
         with self._lock:
             return self._candidates
 
-    def update(self, observations, *, received_monotonic=None, source=RGBD_POINTCLOUD_SOURCE):
+    def update(self, observations, *, received_monotonic=None, source=RGBD_POINTCLOUD_SOURCE,
+               image_timing=None, frame_ticket=_FRAME_UNSET):
+        ticket = self.begin_frame(received_monotonic, image_timing) if frame_ticket is _FRAME_UNSET else frame_ticket
         candidates = []
+        received_monotonic = None if ticket is None else ticket.received_monotonic
         if received_monotonic is not None and np.isfinite(received_monotonic):
             objects, supports = [], []
             for index, observation in enumerate(observations):
@@ -175,4 +194,4 @@ class RgbdTaskProvider:
                         candidates.append(ObservedTaskCandidate(
                             object_name, support_name, object_position, support_position))
         with self._lock:
-            self._candidates = tuple(candidates)
+            self._candidates = tuple(candidates) if self.frame_gate.current(ticket) else ()

@@ -172,6 +172,7 @@ class SceneGraphProcessor:
         vocabulary: list[str] | None = None,
         received_monotonic: float | None = None,
         depth_evidence_source: str = RGBD_POINTCLOUD_SOURCE,
+        image_timing: dict | None = None,
     ) -> list[int]:
         """Process a single RGBD frame and update the scene graph.
 
@@ -188,7 +189,7 @@ class SceneGraphProcessor:
         """
         self._step += 1
         # A failed new frame must not leave a previous proposal active.
-        self.observed_tamp_provider.update(())
+        frame_ticket = self.observed_tamp_provider.begin_frame(received_monotonic, image_timing)
         H, W = rgb.shape[:2]
 
         # Compute world xyz if not provided
@@ -252,7 +253,8 @@ class SceneGraphProcessor:
             observations.append(obs)
 
         self.observed_tamp_provider.update(
-            observations, received_monotonic=received_monotonic, source=depth_evidence_source)
+            observations, received_monotonic=received_monotonic, source=depth_evidence_source,
+            image_timing=image_timing, frame_ticket=frame_ticket)
 
         # Update scene graph
         node_ids = self.scene_graph.add_observations_batch(observations)

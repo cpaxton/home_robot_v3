@@ -601,6 +601,7 @@ class SparseVoxelMap(DynamemVoxelEQAMixin, DynamemVoxelLocalizeMixin, SparseVoxe
         full_perception: bool = True,
         received_monotonic: float | None = None,
         depth_evidence_source: str = RGBD_POINTCLOUD_SOURCE,
+        image_timing: dict | None = None,
     ):
         """
         Process rgbd images for Dynamem
@@ -761,6 +762,7 @@ class SparseVoxelMap(DynamemVoxelEQAMixin, DynamemVoxelLocalizeMixin, SparseVoxe
                     camera_pose=original_pose,
                     received_monotonic=received_monotonic,
                     depth_evidence_source=depth_evidence_source,
+                    image_timing=image_timing,
                 )
             except Exception as e:
                 from emet.utils.logger import warning as _warn_colored

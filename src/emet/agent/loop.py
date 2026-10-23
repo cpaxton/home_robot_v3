@@ -37,6 +37,7 @@ from emet.agent.env_flags import env_agent_camera_debug
 from emet.agent.model_debug import print_embodied_model_report, print_llm_invoke_line
 from emet.agent.prompt import DEFAULT_AGENT_NAME, AgentPromptBuilder, parse_tool_calls_response
 from emet.agent.tamp_session import tamp_followup
+from emet.agent.tamp_world import task_world_change
 from emet.agent.thinking_status import (
     env_agent_thinking_status,
     format_action_running_status,
@@ -236,6 +237,7 @@ def _dispatch_tool_calls(
     debug: bool = False,
     verbose_tools: bool = False,
     on_tool_start: Callable[[str], None] | None = None,
+    tamp_context: dict | None = None,
 ) -> tuple[bool, list[str], bool]:
     """Execute a list of parsed tool_calls in model-specified order.
 
@@ -302,7 +304,8 @@ def _dispatch_tool_calls(
                 return False, results, has_info
             if verbose_tools:
                 print(colored("[executor]", "yellow"), json.dumps(cmds, default=str), flush=True)
-            keep_going = executor(cmds)
+            with task_world_change(name, tamp_context):
+                keep_going = executor(cmds)
             if not keep_going:
                 # Quit (or stop) — abort the agent turn.
                 ok = False
@@ -341,7 +344,8 @@ def _dispatch_tool_calls(
             continue
 
         try:
-            result = tool.func(**args) if args else tool.func()
+            with task_world_change(name, tamp_context):
+                result = tool.func(**args) if args else tool.func()
             outcome = ToolOutcome.coerce(name, result)
             if isinstance(result, ToolOutcome) or (isinstance(result, dict) and "ok" in result):
                 result_str = outcome.render()
@@ -1357,6 +1361,7 @@ def run_agent_with_robot(
                         debug=debug_llm,
                         verbose_tools=verbose_tools,
                         on_tool_start=_on_tool_start if show_thinking_status else None,
+                        tamp_context=context,
                     )
                 tools_elapsed = timeit.default_timer() - tools_t0
                 print_terminal(
