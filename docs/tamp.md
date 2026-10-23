@@ -49,6 +49,11 @@ Navigation or scene changes must invalidate stale plans. Existing perception and
 navigation tools do not establish that this complete chain already works.
 Native articulation and autonomous physical recovery remain separate gaps.
 
+The [observed integration follow-up](plans/2026-10-23_observed_tamp_integration.md)
+starts from merged #213. Its first slice binds discovery to capture/motion epochs
+and invalidates stored handles around navigation. Observed native execution is
+still unavailable; see the [validation and visual diagnostic](experiments/tamp_observed_integration_20261023.md).
+
 ## The primitive agent workflow
 
 ```mermaid
