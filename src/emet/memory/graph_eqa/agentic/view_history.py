@@ -1,7 +1,7 @@
 # Copyright (c) Chris Paxton 2026
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
-"""Adapt the existing voxel-frame history to the optional shared view selector."""
+"""Preserve qualified before-turn evidence; optionally select extra history."""
 
 import os
 from uuid import uuid4
@@ -18,12 +18,14 @@ def select_assessment_history(executor, rgb, *, current_observation=None):
     settings = dict(_eqa_cfg(executor.agent).get("view_selection") or {})
     if os.environ.get("EMET_EQA_VIEW_SELECTION_POLICY"):
         settings["policy"] = os.environ["EMET_EQA_VIEW_SELECTION_POLICY"]
-    if not settings:
+    rank_history = bool(settings)
+    before = getattr(executor.agent.robot, "pre_turn_observation", None)
+    if not rank_history and before is None:
         return None
     limit = min(4, get_eqa_vl_int(executor.agent.parameters, "eqa_max_images", 4))
     if limit <= 0:
         return None
-    settings["max_images"] = min(settings.get("max_images", 4), limit)
+    settings["max_images"] = min(settings.get("max_images", 4 if rank_history else 2), limit)
     config = SelectionConfig(**settings)
     voxel_map = getattr(executor.agent, "voxel_map", None)
     history = getattr(voxel_map, "observations", ())
@@ -82,25 +84,41 @@ def select_assessment_history(executor, rgb, *, current_observation=None):
     ):
         current_id = frames[-1].view_id
     if current_id is None:
-        executor._append_trace({"event": "view_selection_unavailable", "reason": "current_acquisition_not_retained"})
+        executor._append_trace(
+            {
+                "event": "view_selection_unavailable" if rank_history else "assessment_handoff_unavailable",
+                "reason": "current_acquisition_not_retained",
+            }
+        )
         return None
     current = frames[-1]
     pre_turn_id = None
-    before = getattr(executor.agent.robot, "pre_turn_observation", None)
     if before is not None:
         timing = (getattr(before, "image_timing", None) or {}).get("head_cam_left") or {}
         stamp, clock = timing.get("timestamp_ns"), timing.get("clock_domain")
         if (
             isinstance(stamp, (int, float))
+            and not isinstance(stamp, bool)
             and np.isfinite(stamp)
+            and (getattr(before, "observation_scope_id", None) in (None, epoch))
             and f"{epoch}:{clock}" == current.scope_id
-            and 0 <= current.timestamp_s - stamp / 1e9 <= config.max_age_s
+            and 0 < current.timestamp_s - stamp / 1e9 <= config.max_age_s
             and stamp / 1e9 >= min(f.timestamp_s for f in frames if f.scope_id == current.scope_id)
         ):
             pre_turn_id = f"pre-turn:{stamp}"
             frames.append(
                 ViewFrame(pre_turn_id, current.scope_id, stamp / 1e9, before.rgb, camera_pose=before.camera_pose)
             )
+    if not rank_history:
+        if pre_turn_id is None:
+            # Keep the pre-approach fallback when the adapter has no qualified
+            # before-turn capture; never substitute unrelated history frames.
+            executor._append_trace(
+                {"event": "assessment_handoff_unavailable", "reason": "pre_turn_acquisition_unqualified"}
+            )
+            return None
+        frames = [frame for frame in frames if frame.view_id in (current_id, pre_turn_id)]
     selection = select_views(frames, current_id=current_id, pre_turn_id=pre_turn_id, config=config)
-    executor._append_trace({"event": "view_selection", **selection.to_dict()})
+    event = "view_selection" if rank_history else "assessment_handoff"
+    executor._append_trace({"event": event, **selection.to_dict()})
     return selection

@@ -138,9 +138,10 @@ def init_executor(
     cfg_decision = _eqa_cfg(agent).get("agentic_decision_policy", "legacy")
     self.decision_policy = resolve_agentic_decision_policy(env_decision if env_decision is not None else cfg_decision)
     eqa_cfg = _eqa_cfg(agent)
-    if eqa_cfg.get("view_selection") or os.environ.get("EMET_EQA_VIEW_SELECTION_POLICY"):
-        # Optional adapter capability: capture pixels at its actual path/yaw boundary.
-        # Adapters without a capture implementation provide no pre-turn pin.
+    if getattr(agent, "robot", None) is not None:
+        # Preserve one actual path/yaw-boundary frame independently of optional
+        # history ranking. Unsupported adapters provide no before-turn capture.
+        # Clear it per query so the previous phase cannot supply stale evidence.
         agent.robot.retain_navigation_views = True
         agent.robot.pre_turn_observation = None
     graph_mode = os.environ.get("EMET_EQA_GRAPH_EVIDENCE_MODE", "") or eqa_cfg.get("graph_evidence_mode", "off")
