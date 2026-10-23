@@ -1,12 +1,34 @@
 # Copyright (c) Chris Paxton 2026
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 import numpy as np
+import pytest
 import torch
 
 from emet.mapping.voxel.voxel_dynamem import SparseVoxelMap
 from emet.mapping.voxel.voxel_map_dynamem import SparseVoxelMapNavigationSpace
 from emet.motion.algo.a_star import AStar
 from emet.robots.footprint import Footprint
+
+
+@pytest.mark.parametrize("remove_visited", [False, True])
+def test_dynamem_preserves_enabled_negative_obstacle_evidence(tmp_path, remove_visited):
+    vm = SparseVoxelMap(
+        grid_size=[40, 40],
+        grid_resolution=0.1,
+        smooth_kernel_size=0,
+        obs_min_density=0.1,
+        use_negative_obstacles=True,
+        neg_obs_height=-0.1,
+        remove_visited_from_obstacles=remove_visited,
+        log=str(tmp_path),
+        use_instance_memory=False,
+        device="cpu",
+        image_shape=None,
+    )
+    vm.voxel_pcd.add(torch.tensor([[0.0, 0.0, -0.2]]), features=None, rgb=torch.zeros(1, 3), obs_count=1)
+    vm._visited[:] = 1
+    obstacles, _ = vm.get_navigation_map()
+    assert obstacles.any(), "A measured drop must not be flattened into traversable floor"
 
 
 def test_fractional_start_repair_preserves_unknown_and_obstacle_guards():

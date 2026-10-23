@@ -105,6 +105,12 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
                 (cells[~observed][:16] - np.asarray(origin)[:2]) * self.voxel_map.grid_resolution - np.asarray(pose)[:2]
             ).tolist(),
         }
+        floor_layers = getattr(self.voxel_map, "_floor_evidence", None)
+        if floor_layers is not None:
+            if floor_layers.drops[cells[:, 0], cells[:, 1]].any():
+                self.last_validity["terrain_hazard"] = "drop"
+            elif floor_layers.raised[cells[:, 0], cells[:, 1]].any():
+                self.last_validity["terrain_hazard"] = "raised_surface"
         return bool(not occupied.any() and observed.all())
 
     def get_oriented_mask(self, theta):
