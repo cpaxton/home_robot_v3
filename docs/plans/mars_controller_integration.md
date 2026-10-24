@@ -113,3 +113,16 @@ claims from measured outcomes. Mars first, with existing Stretch cases retained.
   verify any real actuator mode, watchdog, load limit or stop behavior.
 - Two-support public-tool acceptance and subsequent agent trials remain open;
   do not mark them complete based on the component smoke or 30-case return-place.
+- The complete `9dee06fc` public transfer run improved from 4/30 to **16/30**:
+  10/10 at 20 g, 6/10 at 50 g, 0/10 at 100 g. All thirty fixtures admitted;
+  five wheel-unloading stops, six retention losses, one base-drift stop and two
+  bounded-planning failures remain. The exact source passed **588 tests**.
+  Successful tasks took a median 67.55 simulated seconds. See the
+  [complete report](../experiments/mars_public_tamp_20261023.md).
+- Nearby hand-only FK-witness tests now use the free base for both Mars and
+  Stretch. These selected checks establish interface behavior, not full task
+  or hardware acceptance.
+- The [passive hardware audit](../experiments/herman_feedback_audit_20261023.md)
+  found upstream velocity-unit and fabricated-zero feedback issues. A proposed
+  patch passed offline C++ checks on temporary copies; it has not been applied
+  upstream, built as a ROS package, deployed or exercised on hardware.

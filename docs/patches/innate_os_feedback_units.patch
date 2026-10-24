@@ -1,0 +1,120 @@
+diff --git a/ros2_ws/src/maurice_bot/maurice_arm/maurice_arm/arm_control.cpp b/ros2_ws/src/maurice_bot/maurice_arm/maurice_arm/arm_control.cpp
+--- a/ros2_ws/src/maurice_bot/maurice_arm/maurice_arm/arm_control.cpp
++++ b/ros2_ws/src/maurice_bot/maurice_arm/maurice_arm/arm_control.cpp
+@@ -1,5 +1,6 @@
+ // arm_control.cpp — Control loop, gain scheduling, timing, limit/encoder conversion
+ #include "maurice_arm/arm_node.hpp"
++#include "maurice_arm/feedback_units.hpp"
+ 
+ namespace maurice_arm {
+ 
+@@ -42,7 +43,7 @@
+ 
+         std::vector<double> velocities_rad;
+         for (int vel : velocities) {
+-            velocities_rad.push_back((vel * 2 * M_PI) / 4096.0);
++            velocities_rad.push_back(dynamixelVelocityRadPerSecond(vel));
+         }
+ 
+         // Flip directions for joints 2, 3, 4, 6 (indices 1, 2, 3, 5)
+diff --git a/ros2_ws/src/maurice_bot/maurice_arm/maurice_arm/arm.cpp b/ros2_ws/src/maurice_bot/maurice_arm/maurice_arm/arm.cpp
+--- a/ros2_ws/src/maurice_bot/maurice_arm/maurice_arm/arm.cpp
++++ b/ros2_ws/src/maurice_bot/maurice_arm/maurice_arm/arm.cpp
+@@ -7,6 +7,7 @@
+ #include <std_srvs/srv/set_bool.hpp>
+ #include "maurice_arm/dynamixel.hpp"
+ #include "maurice_arm/robot.hpp"
++#include "maurice_arm/feedback_units.hpp"
+ #include "maurice_msgs/srv/goto_js.hpp"
+ #include "maurice_msgs/srv/goto_js_trajectory.hpp"
+ #include "maurice_msgs/msg/arm_status.hpp"
+@@ -664,7 +665,7 @@
+             
+             std::vector<double> velocities_rad;
+             for (int vel : velocities) {
+-                velocities_rad.push_back((vel * 2 * M_PI) / 4096.0);
++                velocities_rad.push_back(dynamixelVelocityRadPerSecond(vel));
+             }
+             
+             // Flip directions for joints 2, 3, 4, 6 (indices 1, 2, 3, 5)
+diff --git a/ros2_ws/src/maurice_bot/maurice_arm/maurice_arm/robot.cpp b/ros2_ws/src/maurice_bot/maurice_arm/maurice_arm/robot.cpp
+--- a/ros2_ws/src/maurice_bot/maurice_arm/maurice_arm/robot.cpp
++++ b/ros2_ws/src/maurice_bot/maurice_arm/maurice_arm/robot.cpp
+@@ -2,6 +2,7 @@
+ #include <iostream>
+ #include <chrono>
+ #include <thread>
++#include <stdexcept>
+ 
+ using namespace dynamixel;
+ 
+@@ -74,12 +75,15 @@
+             return readPosition(tries - 1);
+         } else {
+             std::cerr << "Failed to read position!" << std::endl;
+-            return std::vector<int>(servo_ids_.size(), 0);
++            throw std::runtime_error("Motor position read failed: feedback invalid");
+         }
+     }
+     
+     std::vector<int> positions;
+     for (int id : servo_ids_) {
++        if (!position_reader_->isAvailable(id, ADDR_PRESENT_POSITION, 4)) {
++            throw std::runtime_error("Motor feedback incomplete: sample invalid");
++        }
+         uint32_t position = position_reader_->getData(id, ADDR_PRESENT_POSITION, 4);
+         
+         // Convert to signed
+@@ -95,10 +99,15 @@
+ }
+ 
+ std::vector<int> Robot::readVelocity() {
+-    velocity_reader_->txRxPacket();
++    if (velocity_reader_->txRxPacket() != COMM_SUCCESS) {
++        throw std::runtime_error("Motor velocity read failed: feedback invalid");
++    }
+     
+     std::vector<int> velocities;
+     for (int id : servo_ids_) {
++        if (!velocity_reader_->isAvailable(id, ADDR_PRESENT_VELOCITY, 4)) {
++            throw std::runtime_error("Motor feedback incomplete: sample invalid");
++        }
+         uint32_t velocity = velocity_reader_->getData(id, ADDR_PRESENT_VELOCITY, 4);
+         
+         // Convert to signed
+@@ -123,8 +132,7 @@
+             return readState(tries - 1);
+         } else {
+             std::cerr << "Failed to read state!" << std::endl;
+-            auto z = std::vector<int>(servo_ids_.size(), 0);
+-            return {z, z, z};
++            throw std::runtime_error("Motor state read failed: feedback invalid");
+         }
+     }
+     
+@@ -133,6 +141,9 @@
+     std::vector<int> loads;
+     
+     for (int id : servo_ids_) {
++        if (!state_reader_->isAvailable(id, ADDR_PRESENT_LOAD, 10)) {
++            throw std::runtime_error("Motor feedback incomplete: sample invalid");
++        }
+         // Load: 2 bytes at address 126 (signed 16-bit)
+         int16_t load = static_cast<int16_t>(state_reader_->getData(id, ADDR_PRESENT_LOAD, 2));
+         loads.push_back(static_cast<int>(load));
+diff --git a/ros2_ws/src/maurice_bot/maurice_arm/include/maurice_arm/feedback_units.hpp b/ros2_ws/src/maurice_bot/maurice_arm/include/maurice_arm/feedback_units.hpp
+new file mode 100644
+--- /dev/null
++++ b/ros2_ws/src/maurice_bot/maurice_arm/include/maurice_arm/feedback_units.hpp
+@@ -0,0 +1,11 @@
++#pragma once
++#include <cstdint>
++
++namespace maurice_arm {
++// Present Velocity(128), XC330-M288 / XL430-W250 / XC430-W150:
++// 0.229 revolutions/minute per signed register unit, not position ticks/s.
++// https://emanual.robotis.com/docs/en/dxl/x/xc330-m288/#present-velocity128
++constexpr double dynamixelVelocityRadPerSecond(std::int32_t raw) noexcept {
++    return static_cast<double>(raw) * (0.229 * 2.0 * 3.14159265358979323846 / 60.0);
++}
++}  // namespace maurice_arm

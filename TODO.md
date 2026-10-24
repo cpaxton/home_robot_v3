@@ -33,6 +33,14 @@ Accepted plan: [Mars controller integration](docs/plans/mars_controller_integrat
 - [ ] Pass all 30 public-tool two-support transfers without changing the frozen
       cases or retention/force/wheel limits; diagnose loaded turning, then
       support-confirmed release and post-placement stability.
+- [x] Complete and archive the full public-tool v2/v3 reports: 4/30 at
+      `a17a5734`, then 16/30 at `9dee06fc` (20 g 10/10; 50 g 6/10; 100 g 0/10).
+      All fixtures admitted; the public gate remains false. The latest source-bound
+      regression receipt covers 588 passing tests. See the
+      [experiment report](docs/experiments/mars_public_tamp_20261023.md).
+- [x] Add free-base hand-only pose tracking to the teacher and actual nearby FK
+      witness tests for both Mars and Stretch. These free-space checks do not
+      qualify loaded tasks, learned checkpoints or real hardware.
 - [x] Complete one frozen public-tool 20 g transfer with actual base motion and
       independently measured support/release/stability. This selected positive
       case does not close the full gate. Preserve the earlier complete 0/30
@@ -61,6 +69,13 @@ Accepted plan: [Mars controller integration](docs/plans/mars_controller_integrat
       is installed. The default ROS graph showed only metadata topics; actual
       driver domain, modes, watchdog and stop behavior remain unverified. No
       deployment, service start, motion or contact commands were sent.
+- [x] Audit upstream velocity units and failed-read behavior; prepare and test
+      a patch on temporary copies without changing upstream or Herman. See the
+      [hardware feedback audit](docs/experiments/herman_feedback_audit_20261023.md).
+- [ ] Review/apply the upstream feedback patch, build the ROS package, propagate
+      invalid reads/source ages and actual odometry twist through the bridge,
+      and verify installed units/signs before implementing a physical velocity
+      driver. Calibrate typed current/load proxies before treating them as forces.
 
 ## Proprioceptive contact learning (2026-10-23)
 

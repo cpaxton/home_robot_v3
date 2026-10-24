@@ -2529,3 +2529,38 @@ ROS Humble is installed. The default-domain topic list showed only
 `/parameter_events` and `/rosout`; driver domains, live arm modes, feedback
 timestamps, robot watchdogs, force limits and measured stopping remain unverified.
 No hardware motion, deployment, service start or contact test was performed.
+
+### Completed public-tool reports and remaining work
+
+The complete `9dee06fc` teacher run achieved **16/30** on the same frozen catalog,
+up from 4/30 at `a17a5734`: **10/10 at 20 g, 6/10 at 50 g, 0/10 at 100 g**.
+All thirty fixtures admitted. Five wheel-unloading stops, six retention losses,
+one base-drift stop and two bounded-planning failures remain. The public gate is
+false. Full source-bound evidence is in
+[the v3 summary](../paper/data/whole_body_control/public_tamp_v3.json), its adjacent
+compressed report, and the archived **588-test** regression receipt. See
+[the experiment report](experiments/mars_public_tamp_20261023.md) for the complete
+comparison, corrected v2 execution denominator and failure stages.
+
+The planner evaluates a short straight base approach with arm motion before a
+larger transfer, checking downstream placement/retreat and loaded arm support
+margins. Endpoint control enters hold before verifying quiet motion, clears
+accumulated base bias during hold, and confirms a steady terminal hold before
+tool success. Successful tasks took 65.55–69.00 simulated seconds, median 67.55;
+this remains a slow baseline. No geometry, effort limits or frozen task thresholds
+were relaxed. The v3 plot includes all nominal arm endpoints and orientation axes:
+
+![Successful 50 g public transfer](../paper/data/whole_body_control/public_tamp_v3_50g.png)
+
+The pose teacher can now use differential-drive base motion when the base target
+is entirely masked out, while ignoring inactive target values. Nearby FK-witness
+tests passed for Mars and Stretch at approximately 0.54 mm/0.0018 rad and
+0.94 mm/0.0022 rad endpoint error. These selected free-space checks do not
+qualify manipulation, a learned policy or hardware.
+
+The [Herman source audit](experiments/herman_feedback_audit_20261023.md) identifies
+velocity-unit conversion, invalid-read, effort-unit and missing-base-velocity
+issues that must be resolved before measured stopping can be trusted. A proposed
+upstream patch and an offline validator are checked in. The upstream checkout and
+Herman are unchanged; the driver guard remains disabled. PPO and normal-observation
+agent qualification have not restarted based on these partial task results.
