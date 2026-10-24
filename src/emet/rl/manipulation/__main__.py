@@ -2,6 +2,7 @@
 
 import argparse
 import json
+from collections import Counter, defaultdict
 from dataclasses import asdict, replace
 from functools import partial
 from pathlib import Path
@@ -59,6 +60,7 @@ def resume_training(directory, env, config, fingerprint, architecture):
         or type(bundle.model.policy.features_extractor) is not expected
         or ("preview" in bundle.normalization) != config.trajectory_preview
         or bundle.manifest.get("pose_only_targets", False) != (config.trajectory_preview or config.tracking_reward)
+        or bundle.manifest.get("environment", {}).get("retention_context", False) != config.retention_context
     ):
         raise ValueError("resume policy architecture or control/observation semantics mismatch")
     if set(env.obs_rms) != set(bundle.normalization):
@@ -78,8 +80,76 @@ def resume_training(directory, env, config, fingerprint, architecture):
     return PPO.load(Path(directory) / "policy.zip", env=env, device="cpu")
 
 
+def initialize_retention_context(model, env, directory, config, fingerprint):
+    """Warm-start compatible weights with zero influence from the new suffix.
+
+    This deliberately starts a fresh PPO optimizer, unlike exact resume. Robot,
+    action, preview and model compatibility checks are never bypassed.
+    """
+    old = ManipulationPolicy(directory, robot=config.robot, fingerprint=fingerprint)
+    if (
+        not config.retention_context
+        or old.manifest.get("environment", {}).get("retention_context", False)
+        or old.action_mode != config.action_mode
+        or type(old.model.policy.features_extractor) is not type(model.policy.features_extractor)
+        or ("preview" in old.normalization) != config.trajectory_preview
+        or old.manifest.get("pose_only_targets", False) != (config.trajectory_preview or config.tracking_reward)
+    ):
+        raise ValueError("retention warm-start requires matching legacy control/observation semantics")
+    old_shape, new_shape = old.mean.shape, env.obs_rms["history"].mean.shape
+    if old_shape[0] != new_shape[0] or new_shape[1] != old_shape[1] + 2:
+        raise ValueError("retention warm-start requires exactly two appended history fields")
+    source = old.model.policy.state_dict()
+    target = model.policy.state_dict()
+    if source.keys() != target.keys():
+        raise ValueError("retention warm-start policy parameters differ")
+    for name, value in source.items():
+        if value.shape == target[name].shape:
+            target[name] = value.clone()
+        elif name.endswith("project.weight") and value.shape[1] == old_shape[1]:
+            target[name].zero_()
+            target[name][:, : old_shape[1]] = value
+        elif name in {"mlp_extractor.policy_net.0.weight", "mlp_extractor.value_net.0.weight"}:
+            steps = min(4, old_shape[0])
+            expanded = torch.zeros_like(target[name])
+            expanded[:, : steps * new_shape[1]].reshape(value.shape[0], steps, new_shape[1])[:, :, : old_shape[1]] = (
+                value[:, : steps * old_shape[1]].reshape(value.shape[0], steps, old_shape[1])
+            )
+            expanded[:, steps * new_shape[1] :] = value[:, steps * old_shape[1] :]
+            target[name] = expanded
+        else:
+            raise ValueError(f"unsupported retention warm-start parameter: {name}")
+    model.policy.load_state_dict(target)
+    for key, (mean, var) in old.normalization.items():
+        stats = env.obs_rms[key]
+        if key == "history":
+            stats.mean.fill(0)
+            stats.var.fill(1)
+            stats.mean[:, : old_shape[1]], stats.var[:, : old_shape[1]] = mean, var
+        else:
+            stats.mean, stats.var = mean.copy(), var.copy()
+        stats.count = old.manifest.get("normalization", {}).get(key, {}).get("count", old.manifest["count"])
+    env.epsilon, env.clip_obs = old.manifest["epsilon"], old.manifest["clip"]
+    return {
+        "source_weights_sha256": old.manifest["weights_sha256"],
+        "optimizer_restored": False,
+        "new_context_initial_influence": "zero",
+    }
+
+
 class Monitor(BaseCallback):
-    def __init__(self, directory, config, fingerprint, *, interval, episodes, run=None, debug_reset_seed=None):
+    def __init__(
+        self,
+        directory,
+        config,
+        fingerprint,
+        *,
+        interval,
+        episodes,
+        run=None,
+        debug_reset_seed=None,
+        held_estimator=None,
+    ):
         super().__init__()
         self.directory, self.config, self.fingerprint = directory, config, fingerprint
         self.interval, self.episodes, self.run = interval, episodes, run
@@ -89,6 +159,13 @@ class Monitor(BaseCallback):
         self.best = None
         self.completed = []
         self.debug_reset_seed = debug_reset_seed
+        self.held_estimator = held_estimator
+        self.episode_counts = Counter()
+        self.sample_steps = Counter()
+        self.sample_episodes = Counter()
+        self.episode_steps = Counter()
+        self.task_rewards = defaultdict(list)
+        self.reward_terms = defaultdict(list)
 
     def record(self, values):
         values = {"timesteps": self.num_timesteps, **values}
@@ -98,15 +175,58 @@ class Monitor(BaseCallback):
             self.run.log(values)
 
     def _on_step(self):
-        for done, info in zip(self.locals["dones"], self.locals["infos"], strict=True):
+        for i, (done, info) in enumerate(zip(self.locals["dones"], self.locals["infos"], strict=True)):
+            scenario = info.get("scenario", "unknown")
+            if self.episode_steps[i] == 0:
+                self.sample_episodes[scenario] += 1
+            self.episode_steps[i] += 1
+            self.sample_steps[scenario] += 1
+            self.task_rewards[scenario].append(float(self.locals["rewards"][i]))
+            for key, value in info.get("reward_terms", {}).items():
+                self.reward_terms[f"{scenario}/{key}"].append(float(value))
+            label = info.get("held_object_supervision", {})
+            if (
+                self.held_estimator is not None
+                and not info.get("invalid_physics")
+                and not info.get("initialization_failed")
+            ):
+                normalizer = self.model.get_vec_normalize_env()
+                if done:
+                    observation = normalizer.unnormalize_obs(info["terminal_observation"])
+                else:
+                    observation = {k: v[i] for k, v in normalizer.get_original_obs().items()}
+                # All samples of a vector-slot episode share one split. No
+                # adjacent frames from an audit episode enter head training.
+                audit = (self.episode_counts[i] + i) % 5 == 4
+                self.held_estimator.add(observation["history"], label, audit=audit)
             if done:
                 self.completed.append(info)
+                self.episode_counts[i] += 1
+                self.episode_steps[i] = 0
         return True
 
     def _on_rollout_end(self):
         values = {
             k: float(v) for k, v in self.model.logger.name_to_value.items() if isinstance(v, (int, float, np.number))
         }
+        for scenario in ("reach", "pregrasp", "carry", "place", "disturbance"):
+            values[f"sampling/{scenario}/step_fraction"] = self.sample_steps[scenario] / max(
+                1, sum(self.sample_steps.values())
+            )
+            values[f"sampling/{scenario}/episode_fraction"] = self.sample_episodes[scenario] / max(
+                1, sum(self.sample_episodes.values())
+            )
+            if self.task_rewards[scenario]:
+                values[f"tasks/{scenario}/reward_per_step"] = float(np.mean(self.task_rewards[scenario]))
+        for key, samples in self.reward_terms.items():
+            values[f"reward_terms/{key}"] = float(np.mean(samples))
+        if self.held_estimator is not None:
+            metrics = {**self.held_estimator.fit(), **self.held_estimator.audit_metrics()}
+            values.update({f"held_object/{k}": v for k, v in metrics.items()})
+        self.sample_steps.clear()
+        self.sample_episodes.clear()
+        self.task_rewards.clear()
+        self.reward_terms.clear()
         if self.completed:
             for key in (
                 "is_success",
@@ -130,6 +250,7 @@ class Monitor(BaseCallback):
             self.config,
             self.fingerprint,
             steps=self.num_timesteps,
+            held_estimator=self.held_estimator,
         )
         # Checkpoint selection always uses the same full distribution. An easy
         # curriculum stage must not masquerade as full-contract improvement.
@@ -231,6 +352,7 @@ class Monitor(BaseCallback):
                 self.config,
                 self.fingerprint,
                 steps=self.num_timesteps,
+                held_estimator=self.held_estimator,
             )
             (self.directory / "best/validation.json").write_text(json.dumps(report, indent=2) + "\n")
         self.last = self.num_timesteps
@@ -245,13 +367,54 @@ def training_options(args):
         raise ValueError("DAgger needs at least five vector steps")
     std = args.exploration_std
     if std is None:
-        std = 0.03 if args.dagger or args.action_mode == "residual" else 0.3
+        std = 0.03 if args.dagger or args.action_mode == "residual" or getattr(args, "initialize_from", None) else 0.3
     if not np.isfinite(std) or not 0 < std <= 1:
         raise ValueError("normalized exploration standard deviation must be in (0, 1]")
     return {
         "initialization": "dagger" if args.dagger else "critic_warmup" if args.action_mode == "residual" else "none",
         "architecture": args.architecture,
         "exploration_std": float(std),
+    }
+
+
+def retention_options(args):
+    """Tracking-majority opt-in preset; legacy sampling remains reproducible."""
+    from emet.rl.manipulation.retention_training import TRACKING_RETENTION_MIX, validate_mixture
+
+    preset = args.task_mix == "tracking-retention"
+    if (preset or args.scenario_weights is not None) and args.scenario != "mixed":
+        raise ValueError("task mixtures require --scenario mixed")
+    weights = args.scenario_weights if args.scenario_weights is not None else TRACKING_RETENTION_MIX if preset else None
+    if weights is not None:
+        weights = validate_mixture(weights)
+    if preset and weights[0] < 0.5:
+        raise ValueError("tracking-retention preset must retain at least 50% ordinary tracking resets")
+    context = args.retention_context or preset
+    if args.held_object_predictor and not context:
+        raise ValueError("held-object predictor requires retention context")
+    return {
+        "scenario_weights": weights,
+        "retention_context": context,
+        "empty_grasp_probability": args.empty_grasp_probability
+        if args.empty_grasp_probability is not None
+        else 0.2
+        if preset
+        else 0,
+        "carry_hold_probability": args.carry_hold_probability
+        if args.carry_hold_probability is not None
+        else 0.25
+        if preset
+        else 0,
+        "payload_mass_range_kg": args.payload_mass_range_kg
+        if args.payload_mass_range_kg is not None
+        else (0.02, 0.10)
+        if preset and args.payload_mass_kg is None
+        else None,
+        "payload_com_randomization_m": args.payload_com_randomization_m
+        if args.payload_com_randomization_m is not None
+        else 0.002
+        if preset
+        else 0,
     }
 
 
@@ -273,10 +436,20 @@ def train(args):
         if args.dagger or args.initialization_steps:
             raise ValueError("resume requires zero initialization steps and no DAgger")
         options["resume_from"] = str(args.resume_from.resolve())
+    if args.initialize_from is not None:
+        if args.resume_from is not None or args.dagger or args.initialization_steps:
+            raise ValueError("retention warm-start requires zero initialization steps, no DAgger and no exact resume")
+        options["initialize_from"] = str(args.initialize_from.resolve())
     if args.debug_reset_seed is not None:
         if args.scenario != "reach":
             raise ValueError("fixed-case learning audit requires reach")
         options["debug_reset_seed"] = args.debug_reset_seed
+    retention = retention_options(args)
+    options["task_mix"] = args.task_mix
+    options["held_object_predictor"] = (
+        args.held_object_predictor if args.held_object_predictor is not None else args.task_mix == "tracking-retention"
+    )
+    options["held_object_optimizer"] = "separate supervised BCE; no PPO reward or shared gradients"
     config = ManipulationConfig(
         robot=args.robot,
         scenario=args.scenario,
@@ -315,6 +488,7 @@ def train(args):
         tracking_precision=args.tracking_precision,
         endpoint_motion_weight=args.endpoint_motion_weight,
         goal_gated_settling=args.goal_gated_settling,
+        **retention,
     )
     # Admit the model before starting workers or a tracking run.
     probe = ManipulationEnv(config)
@@ -426,6 +600,38 @@ def train(args):
             if args.resume_from is not None:
                 model = resume_training(args.resume_from, env, config, fingerprint, args.architecture)
                 model.gamma = model.rollout_buffer.gamma = args.discount
+            if args.initialize_from is not None:
+                result = initialize_retention_context(model, env, args.initialize_from, config, fingerprint)
+                (directory / "retention-warm-start.json").write_text(json.dumps(result, indent=2) + "\n")
+            held_estimator = None
+            if args.held_object_predictor is True or (
+                args.held_object_predictor is None and args.task_mix == "tracking-retention"
+            ):
+                from emet.rl.manipulation.held_object import HeldObjectEstimator
+
+                if not config.retention_context:
+                    raise ValueError("held-object predictor requires --retention-context or tracking-retention mix")
+                held_estimator = HeldObjectEstimator(config.robot, env.observation_space["history"].shape, seed=seed)
+                if args.resume_from is not None:
+                    previous = ManipulationPolicy(args.resume_from).held_estimator
+                    if previous is not None and previous.feature_set == held_estimator.feature_set:
+                        held_estimator.head.load_state_dict(previous.head.state_dict())
+                        held_estimator.class_counts = previous.class_counts.copy()
+                        held_estimator.updates = previous.updates
+                    elif previous is not None:
+                        (directory / "held-object-initialization.json").write_text(
+                            json.dumps(
+                                {
+                                    "reinitialized": True,
+                                    "reason": "gripper-local feature contract replaces legacy arm/action inputs",
+                                    "previous_feature_set": previous.feature_set,
+                                    "feature_set": held_estimator.feature_set,
+                                    "ppo_optimizer_restored": True,
+                                },
+                                indent=2,
+                            )
+                            + "\n"
+                        )
             actor = [
                 *model.policy.action_net.parameters(),
                 *model.policy.mlp_extractor.policy_net.parameters(),
@@ -469,6 +675,7 @@ def train(args):
                 episodes=args.eval_episodes,
                 run=run,
                 debug_reset_seed=args.debug_reset_seed,
+                held_estimator=held_estimator,
             )
             monitor.init_callback(model)
             monitor.num_timesteps = model.num_timesteps
@@ -477,7 +684,15 @@ def train(args):
             monitor.num_timesteps = model.num_timesteps
             if monitor.last != model.num_timesteps:
                 monitor.checkpoint()
-            export(model, env, directory / "last", monitor.config, fingerprint, steps=model.num_timesteps)
+            export(
+                model,
+                env,
+                directory / "last",
+                monitor.config,
+                fingerprint,
+                steps=model.num_timesteps,
+                held_estimator=held_estimator,
+            )
             (directory / "complete.json").write_text(
                 json.dumps({"steps": model.num_timesteps, "promoted": False}) + "\n"
             )
@@ -499,6 +714,20 @@ def main():
         "--scenario", choices=["mixed", "reach", "pregrasp", "carry", "place", "disturbance"], default="mixed"
     )
     p.add_argument("--horizon", type=float, default=20)
+    p.add_argument("--task-mix", choices=["legacy", "tracking-retention"], default="legacy")
+    p.add_argument(
+        "--scenario-weights",
+        type=float,
+        nargs=5,
+        metavar=("REACH", "PREGRASP", "CARRY", "PLACE", "DISTURBANCE"),
+        help="episode probabilities summing to one; tracking-retention requires reach >= .5",
+    )
+    p.add_argument("--retention-context", action="store_true")
+    p.add_argument("--held-object-predictor", action=argparse.BooleanOptionalAction, default=None)
+    p.add_argument("--empty-grasp-probability", type=float, help="closed-empty counterexamples within reach tasks")
+    p.add_argument("--carry-hold-probability", type=float, help="stationary load-holding fraction within carry tasks")
+    p.add_argument("--payload-mass-range-kg", type=float, nargs=2, metavar=("MIN", "MAX"))
+    p.add_argument("--payload-com-randomization-m", type=float)
     p.add_argument("--randomization-scale", type=float, default=0.05)
     p.add_argument("--payload-mass-kg", type=float, help="nominal payload mass before randomization")
     p.add_argument("--payload-asset-set", choices=["training", "native_table"], default="training")
@@ -551,6 +780,11 @@ def main():
     p.add_argument("--learning-rate", type=float, default=1e-4)
     p.add_argument("--final-learning-rate", type=float, help="linearly decay to this LR over the additional steps")
     p.add_argument("--resume-from", type=Path, help="continue a validated manipulation bundle with its PPO optimizer")
+    p.add_argument(
+        "--initialize-from",
+        type=Path,
+        help="warm-start matching legacy actor/critic with two new context inputs; fresh optimizer",
+    )
     p.add_argument("--initialization-steps", type=int, default=32768)
     p.add_argument("--envs", type=int, default=4)
     p.add_argument("--seeds", type=int, nargs="+", default=[0, 1, 2])

@@ -79,6 +79,50 @@ reports are retained as observations, not authorization for training under the
 revised sources. The reported gate is per mass and conditional on admission,
 not a 95\% per-stratum or end-to-end success guarantee.
 
+\paragraph{Stage continuity and command-interface checks.}
+An explicit stage-rearming refactor retained the 298/300 carry result but reduced
+continuous pick/return-place success to 27/30: one retention loss and two tracking
+timeouts, all during placement. Development-selected ablations isolated loss of
+executor-authorized base compensation across the transition; restoring tracking
+trim alone did not recover all three cases. Explicitly authorizing compensation
+for verified free-space descent, while disabling it at support contact and on
+faults, restored 30/30 cases with unchanged contracts and zero unsafe-contact or
+wheel events. The subsequent immutable \texttt{b181db61} rerun completed 298/300
+carries and 30/30 continuous cases, with 367 fresh source-bound regression tests;
+the combined canonical readiness check passed for that snapshot. Both remaining
+100 g orientation retention failures are preserved. Complete evidence is archived
+in \texttt{qualification\_v6.json} and adjacent compressed reports; it does not
+qualify later public-tool or controller changes. A simulator command-protocol prototype also replayed four
+admitted TAMP arm paths, including loaded carry, using task-pose schedules and
+a measured-Jacobian teacher. This component result does not establish full
+public-tool, learned-policy, or hardware acceptance. Complete placement and
+component evidence is archived as \texttt{placement\_recovery\_v6} and
+\texttt{task\_pose\_command\_smoke} in the control data directory.
+
+The public Mars adapter now connects task discovery, private collision-checked
+planning and independently stepped physical execution on two distinct supports.
+A separate frozen thirty-case catalog spans two layouts, five seeds and three
+payload masses. All cases have reachable fixture witnesses. A selected 20 g
+transfer completed with 11.8 cm measured base displacement, 0.013 rad peak relative
+object rotation, 3.24 N peak contact load and stable support after release, without
+wheel-lift termination. Its roughly 100 s simulated execution used explicit
+geometric-path retiming and a bounded support-contact approach; it is not a
+fixed-deadline or full-catalog result. Heavier-payload retention remains open. A
+separate harness uses the normal agent prompt, parser and dispatcher, gated on
+oracle success and normal observed inputs. No actual observed-agent trial or
+hardware outcome is claimed from these interface tests.
+
+The subsequent complete public-tool run at \texttt{9dee06fc} improved from 4/30
+to 16/30 on that unchanged catalog: 10/10 at 20 g, 6/10 at 50 g, and 0/10 at
+100 g, with all thirty fixtures admitted and 588 source-bound regression tests
+passing. The remaining fourteen outcomes comprise six retention losses, five
+wheel-unloading stops, one base-drift stop and two planning failures. Successful
+tasks took a median 67.55 simulated seconds. Shorter base approaches and verified
+steady holds improved the baseline; heavier grasp/transport reliability remains
+unqualified. Full traces, failures and identities are archived in
+\texttt{public\_tamp\_v3.json} and its adjacent compressed report. These frozen
+benchmark results are not an untouched held-out generalization study.
+
 \paragraph{Qualification and learning.}
 The held-out protocol fixes 100 cases per payload mass, balanced across the five
 motion categories. It reports admission, success conditional on admission,
@@ -92,3 +136,15 @@ combined with smoothness, effort, contact, overshoot, and settled-motion costs;
 randomization increases only after validation. Hardware force calibration,
 full public-tool Mars task execution, and qualification of larger native
 objects remain outside the evidence reported here.
+
+An optional simulator research mixture reserves 70\% of resets for ordinary
+tracking, with 10\% pregrasp, 12\% carry, 5\% placement and 3\% disturbance.
+Loaded resets vary payload identity, mass, center of mass and object friction;
+closed-empty tracking trials distinguish a retention command from grasp success.
+A versioned observation suffix provides retention intent and gripper velocity.
+An advisory object-in-hand estimator learns from debounced bilateral-contact
+labels using encoder and command history, with a separate supervised optimizer
+and episode-disjoint audit samples. Its loss does not alter the PPO reward or
+share actor gradients. Contact occupancy does not certify force closure or
+future retention; probability calibration and no-regression task qualification
+remain required before using this estimate in execution decisions.

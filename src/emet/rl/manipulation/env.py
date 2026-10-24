@@ -81,6 +81,7 @@ class ManipulationConfig:
     randomization_scale: float = 1.0
     payload_mass_kg: float | None = None
     payload_asset_set: str = "training"
+    two_supports: bool = False
     contact_cone: str = "pyramidal"
     contact_impratio: float = 1.0
     balanced_grasp_setup: bool = False
@@ -113,8 +114,37 @@ class ManipulationConfig:
     tracking_precision: int = 0
     endpoint_motion_weight: float = 0.0
     goal_gated_settling: bool = False
+    scenario_weights: tuple[float, ...] | None = None
+    retention_context: bool = False
+    empty_grasp_probability: float = 0.0
+    carry_hold_probability: float = 0.0
+    payload_mass_range_kg: tuple[float, float] | None = None
+    payload_com_randomization_m: float = 0.0
 
     def __post_init__(self):
+        from emet.rl.manipulation.retention_training import validate_mixture
+
+        if self.scenario_weights is not None:
+            object.__setattr__(self, "scenario_weights", validate_mixture(self.scenario_weights))
+        if type(self.retention_context) is not bool:
+            raise ValueError("retention context must be boolean")
+        if not np.isfinite(self.empty_grasp_probability) or not 0 <= self.empty_grasp_probability <= 1:
+            raise ValueError("empty grasp probability must be in [0, 1]")
+        if self.empty_grasp_probability and not self.retention_context:
+            raise ValueError("empty grasp counterexamples require retention context")
+        if not np.isfinite(self.carry_hold_probability) or not 0 <= self.carry_hold_probability <= 1:
+            raise ValueError("carry hold probability must be in [0, 1]")
+        if self.payload_mass_range_kg is not None:
+            bounds = np.asarray(self.payload_mass_range_kg, dtype=float)
+            if bounds.shape != (2,) or not np.isfinite(bounds).all() or not 0 < bounds[0] <= bounds[1] <= 0.2:
+                raise ValueError("payload mass range must be ordered, positive and at most 200 g")
+            if self.payload_mass_kg is not None:
+                raise ValueError("choose a fixed payload mass or a mass range")
+            object.__setattr__(self, "payload_mass_range_kg", tuple(float(v) for v in bounds))
+        if not np.isfinite(self.payload_com_randomization_m) or not 0 <= self.payload_com_randomization_m <= 0.005:
+            raise ValueError("payload COM randomization must be in [0, 5 mm]")
+        if type(self.two_supports) is not bool or (self.two_supports and self.robot != "innate_mars"):
+            raise ValueError("two-support fixtures require Mars")
         if self.carry_target_mode not in {"translation", "orientation", "combined", "mixed"}:
             raise ValueError("invalid carry target mode")
         if not np.isfinite(self.carry_push_probability) or not 0 <= self.carry_push_probability <= 1:
@@ -203,12 +233,14 @@ class ManipulationEnv(gym.Env):
             self.config.robot,
             diagnostics=self.config.diagnostics,
             payload_asset_set=self.config.payload_asset_set,
+            two_supports=self.config.two_supports,
             contact_cone=self.config.contact_cone,
             contact_impratio=self.config.contact_impratio,
         )
         self.data = mujoco.MjData(self.model)
         mujoco.mj_forward(self.model, self.data)
         self.control = ManipulationControl(self.model, self.data, self.profile)
+        self.control.retention_context_enabled = self.config.retention_context
         self._reference_fk = None
         self.tracking_precision = self.config.tracking_precision
         self._configure_preview()
@@ -223,6 +255,7 @@ class ManipulationEnv(gym.Env):
         )
         self.mass = self.model.body_mass.copy()
         self.inertia = self.model.body_inertia.copy()
+        self.body_ipos = self.model.body_ipos.copy()
         self.friction = self.model.geom_friction.copy()
         self.randomization_scale = self.config.randomization_scale
         self.target_scale = self.config.target_scale
@@ -348,6 +381,7 @@ class ManipulationEnv(gym.Env):
         mujoco.mj_resetData(m, d)
         m.body_mass[:] = self.mass
         m.body_inertia[:] = self.inertia
+        m.body_ipos[:] = self.body_ipos
         m.geom_friction[:] = self.friction
         sampled_payload = str(self.np_random.choice(("object1", "object2")))
         self.payload_name = self.config.payload_object or sampled_payload
@@ -358,6 +392,19 @@ class ManipulationEnv(gym.Env):
         )
         m.body_mass[self.payload] *= density_factor * mass_factor
         m.body_inertia[self.payload] *= density_factor * mass_factor
+        if self.config.payload_mass_range_kg is not None:
+            low, high = self.config.payload_mass_range_kg
+            middle = (low + high) / 2
+            sampled_mass = self.np_random.uniform(
+                middle + (low - middle) * self.randomization_scale,
+                middle + (high - middle) * self.randomization_scale,
+            )
+            m.body_mass[self.payload] = sampled_mass
+            m.body_inertia[self.payload] = self.inertia[self.payload] * sampled_mass / self.mass[self.payload]
+            mass_factor = sampled_mass / self.mass[self.payload]
+        if self.config.payload_com_randomization_m:
+            bound = self.config.payload_com_randomization_m * self.randomization_scale
+            m.body_ipos[self.payload] += self.np_random.uniform(-bound, bound, 3)
         friction_factor = self.np_random.uniform(1 - 0.2 * self.randomization_scale, 1 + 0.2 * self.randomization_scale)
         payload_geom = m.body_geomadr[self.payload]
         # Randomize the manipulated object's grip friction only. Scaling every
@@ -579,12 +626,17 @@ class ManipulationEnv(gym.Env):
         self.arm_trajectory = None
         self.tamp_reference_case = None
         self.scenario = (
-            str(self.np_random.choice(SCENARIOS, p=MIXTURE))
+            str(self.np_random.choice(SCENARIOS, p=self.config.scenario_weights or MIXTURE))
             if self.config.scenario == "mixed"
             else self.config.scenario
         )
         self.carry_target_mode, self._carry_push_selected = sample_carry_events(
             self.config, self.np_random, self.scenario
+        )
+        self.carry_hold_trial = bool(
+            self.scenario == "carry"
+            and self.config.carry_hold_probability > 0
+            and self.np_random.random() < self.config.carry_hold_probability
         )
         if self.scenario == "disturbance":
             self.disturbance_difficulty = (
@@ -701,18 +753,39 @@ class ManipulationEnv(gym.Env):
         self.trajectory_admission = {"accepted": None, "reason": "not_requested"}
         if self.scenario == "reach" and (self.config.certify_reach_paths or self.config.dynamic_references):
             self._prepare_reach_trajectory()
-        if self.scenario == "carry" and self.config.tamp_carry_trajectories and not self.initialization_failed:
+        if (
+            self.scenario == "carry"
+            and self.config.tamp_carry_trajectories
+            and not self.initialization_failed
+            and not self.carry_hold_trial
+        ):
             from emet.rl.manipulation.carry_training import prepare
 
             prepare(self)
         self._previous_cost = self._tracking_cost()
+        # Closed-empty examples retain the ordinary reachable tracking task.
+        # The object was already placed far away by the reach reset. No scored
+        # state is teleported and no fabricated success/retention is introduced.
+        self.empty_grasp_trial = bool(
+            self.scenario == "reach"
+            and self.config.empty_grasp_probability > 0
+            and self.np_random.random() < self.config.empty_grasp_probability
+        )
+        if self.empty_grasp_trial and not self.initialization_failed:
+            self.control.grip_reference = self.profile.gripper_closed
+            self.control.retain_object = True
+        from emet.rl.manipulation.retention_training import HeldObjectLabel
+
+        self.held_object_label = HeldObjectLabel()
         obs = self.control.observe()
         from emet.rl.manipulation.observation_layout import proprioceptive_layout
         from emet.rl.manipulation.risk import trajectory_features
 
         self.risk_features = trajectory_features(
-            obs["history"][:, :proprioceptive_layout(self.profile)[1]],
-            self.control.reference[None], self.config.horizon, profile=self.profile
+            obs["history"][:, : proprioceptive_layout(self.profile)[1]],
+            self.control.reference[None],
+            self.config.horizon,
+            profile=self.profile,
         ).tolist()
         return obs, self._info()
 
@@ -853,6 +926,9 @@ class ManipulationEnv(gym.Env):
     def _make_reference(self):
         if self.scenario == "pregrasp":
             return
+        if self.carry_hold_trial:
+            self.control.set_reference(self.control.positions(), phase="carry")
+            return
         q = self.control.positions()
         if self.scenario == "place":
             q = self._vertical_reference(-0.05)
@@ -887,6 +963,10 @@ class ManipulationEnv(gym.Env):
     def _set_pose_targets(self):
         control, profile = self.control, self.profile
         base = control.base_pose()
+        if self.carry_hold_trial:
+            self.target_mode = 3 if profile.wheel_bodies else 2
+            control.set_pose_targets(base, np.full(3, bool(profile.wheel_bodies)), control.ee_pose(), True)
+            return
         if profile.wheel_bodies:
             if self.scenario == "reach":
                 self.target_mode = (
@@ -998,6 +1078,11 @@ class ManipulationEnv(gym.Env):
         heading_delta = self.control.base_goal[2] - self.control.base_pose()[2]
         return {
             **self.monitor.metrics(),
+            "empty_grasp_trial": getattr(self, "empty_grasp_trial", False),
+            "carry_hold_trial": getattr(self, "carry_hold_trial", False),
+            "held_object_supervision": self.held_object_label.record()
+            if hasattr(self, "held_object_label")
+            else {"target": 0.0, "valid": False},
             "scenario": self.scenario,
             "carry_target_mode": self.carry_target_mode,
             "carry_push_selected": self._carry_push_selected,
@@ -1249,7 +1334,8 @@ class ManipulationEnv(gym.Env):
         failure = unsafe or self.monitor.wheel_lift or self.retention_lost or invalid or self._motion_infeasible
         success = self.settle_time >= (2 if self.scenario == "place" else 1) and not failure
         continuing = self.config.tracking_reward and (
-            self.scenario == "reach" or (self.scenario == "carry" and self.config.tamp_carry_trajectories)
+            self.scenario == "reach"
+            or (self.scenario == "carry" and (self.config.tamp_carry_trajectories or self.carry_hold_trial))
         )
         success_event = success and self.first_settle_time is None
         if success_event:
@@ -1357,8 +1443,30 @@ class ManipulationEnv(gym.Env):
             self._previous_cost = self._tracking_cost()
         if not self._done and self.arm_trajectory is not None:
             self._advance_dynamic_reference()
+        if self.empty_grasp_trial:
+            self.control.retain_object = True
+        self.held_object_label.update(
+            bilateral=evidence["bilateral_contact"],
+            clearly_empty=(
+                np.linalg.norm(self.data.xpos[self.payload] - self.data.xpos[self.control.ee]) > 0.18
+                or self.control.gripper_is_open()
+            ),
+            dt=dt,
+            physics_valid=not invalid and not self._physics_invalid,
+        )
         info = {
             **self._info(),
+            "reward_terms": {
+                "physical_cost": float(physical_cost),
+                "success_bonus": float(10 * success_event if self.config.tracking_reward else 10 * success),
+                "failure_penalty": float(20 * failure),
+                "tracking_and_progress": float(
+                    reward
+                    - (10 * success_event if self.config.tracking_reward else 10 * success)
+                    + 20 * failure
+                    + physical_cost
+                ),
+            },
             "is_success": bool(success),
             "code": code,
             "invalid_physics": bool(invalid),
