@@ -1,9 +1,10 @@
 # Copyright (c) Chris Paxton 2026
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
-"""Stationary Stretch native-debug adapter for the public JSON TAMP tools.
+"""Native-debug adapters for the public JSON TAMP tools.
 
-Only the packaged table model is admitted. Motion uses normal client controllers;
-GT snapshots are explicit debug inputs. Observed discovery/execution is separate.
+Stretch uses the packaged table model. The explicit simulator Mars extension
+requires a matching model and control facade. GT snapshots are debug inputs;
+observed discovery/execution is separate.
 """
 from __future__ import annotations
 
@@ -37,9 +38,15 @@ class NativePlan:
     placement_region: np.ndarray | None = None
     object_name: str = ""
     receptacle_name: str = ""
+    transport: object | None = None
+    approach: object | None = None
+    object_initial_pose: np.ndarray | None = None
 
 
 class NativeTableAdapter:
+    robot_name = "stretch"
+    base_body = "base_link"
+    finger_bodies = ("rubber_tip_left", "rubber_tip_right")
     max_planning_ik_calls = 256
     input_mode = 'privileged'
 
@@ -81,7 +88,7 @@ class NativeTableAdapter:
         code = failure_code(reason)
         key = f'{phase}:{code}'
         self.planning_rejections[key] = self.planning_rejections.get(key, 0) + 1
-        self.events.append({'phase': 'planning_rejection', 'stage': phase, 'code': code,
+        self.events.append({'phase': 'planning_rejection', 'stage': phase, 'code': code, 'reason': reason,
                             'detail': reason, 'contacts': list(executor.collision.last_contacts) if code == 'collision' else []})
 
     def _failure(self, tool, reason, *, completed=(), phase=None, started=False, identity=None):
@@ -97,11 +104,11 @@ class NativeTableAdapter:
         with self.lock:
             try:
                 self.synchronize(self.data)
-                if robot and robot != 'stretch':
+                if robot and robot != self.robot_name:
                     return self._failure('scene_tasks', 'native_robot_unsupported')
                 placements = placements_from_mujoco_model(self.model, self.data)
                 labels = (self.robot.get_emet_session() or {}).get('sim_object_placements', {})
-                robot_ids = body_subtree(self.model, 'base_link')
+                robot_ids = body_subtree(self.model, self.base_body)
                 objects, supports = [], []
                 for name, entry in placements.items():
                     body = self.model.body(name)
@@ -198,6 +205,39 @@ class NativeTableAdapter:
         ee = scratch.body(STRETCH_ARM_CHAIN.ee_body)
         return ee.xmat.reshape(3, 3).T @ (np.mean(contacts, axis=0) - ee.xpos)
 
+    def _home_rotation(self, executor):
+        home = mujoco.MjData(self.model)
+        mujoco.mj_copyData(home, self.model, self.data)
+        for name in ('wrist_yaw', 'wrist_pitch', 'wrist_roll'):
+            home.qpos[self.model.joint('joint_'+name).qposadr[0]] = self.model.key_ctrl[0, self.model.actuator(name).id]
+        mujoco.mj_kinematics(self.model, home)
+        return home.body(executor.ee_body).xmat.reshape(3, 3).copy()
+
+    def _grasp_frames(self, home_rotation, rotation, height):
+        frames = []
+        for pitch in (np.pi / 4, np.pi / 12, np.pi / 3):
+            c, sn = np.cos(pitch), np.sin(pitch)
+            frame = home_rotation @ np.array([[c, sn, 0], [-sn, c, 0], [0, 0, 1]])
+            for fraction in ((0.,) if pitch == np.pi / 12 else (0., .25, .4)):
+                frames.append((frame, fraction * height))
+        return frames + [(home_rotation, 0.), (rotation, 0.)]
+
+    def _grasp_targets(self, grasp, rotation):
+        return [(grasp + delta, rotation) for delta in
+                ([0, .08, .04], [0, 0, 0], [0, 0, .17])]
+
+    def _prepare_approach(self, executor, obj):
+        return None, None
+
+    def _approach(self, plan):
+        return PhysicalMotionResult(True, 'stationary', 'approach')
+
+    def _prepare_transport(self, executor, obj, goal):
+        return None, None
+
+    def _transport(self, plan):
+        return PhysicalMotionResult(True, 'stationary', 'transport')
+
     def _place_targets(self, executor, obj, goal, rotation):
         # Compute the measured/predicted payload offset, not a category-specific center assumption.
         placements = placements_from_mujoco_model(self.model, self.data)
@@ -222,8 +262,7 @@ class NativeTableAdapter:
                 c, sn = np.cos(yaw), np.sin(yaw)
                 rotation = np.array([[c, -sn, 0], [sn, c, 0], [0, 0, 1]]) @ frame
                 grasp = point - rotation @ pinch_offset + [0, 0, grasp_height]
-                executor.grasp_targets = [(grasp + delta, rotation) for delta in
-                                          ([0, .08, .04], [0, 0, 0], [0, 0, .17])]
+                executor.grasp_targets = self._grasp_targets(grasp, rotation)
                 _, error = executor.plan_gripper_open()
                 if error:
                     self._record_rejection('gripper_open', error, executor)
@@ -292,33 +331,23 @@ class NativeTableAdapter:
                 try:
                     # The navigation wrist frame is not necessarily a valid grasp frame.
                     # Search bounded wrist yaw alternatives around measured and home frames.
-                    home = mujoco.MjData(self.model)
-                    mujoco.mj_copyData(home, self.model, self.data)
-                    for name in ('wrist_yaw', 'wrist_pitch', 'wrist_roll'):
-                        home.qpos[self.model.joint('joint_'+name).qposadr[0]] = self.model.key_ctrl[0, self.model.actuator(name).id]
-                    mujoco.mj_kinematics(self.model, home)
+                    approach, approach_error = self._prepare_approach(executor, obj)
+                    if approach_error:
+                        self._record_rejection('approach', approach_error, executor)
+                        return self._failure('plan_pick_place', 'no_plan_within_budget')
+                    grasp_start = self.data.qpos.copy()
                     pinch_offset = self._pinch_center_offset()
-                    home_rotation = home.body(executor.ee_body).xmat.reshape(3, 3).copy()
-                    # Prefer a steeper pinch before shallow approaches: angled,
-                    # compliant pads can roll a payload during a shallow lift.
-                    # Keep the same alternatives for every object; feasibility
-                    # and measured contact execution still decide acceptance.
-                    frames = []
+                    home_rotation = self._home_rotation(executor)
                     height = float(np.diff(np.asarray(placements[obj]['bounds'])[:, 2])[0])
-                    for pitch in (np.pi / 4, np.pi / 12, np.pi / 3):
-                        c, sn = np.cos(pitch), np.sin(pitch)
-                        frame = home_rotation @ np.array([[c, sn, 0], [-sn, c, 0], [0, 0, 1]])
-                        for fraction in ((0.,) if pitch == np.pi / 12 else (0., .25, .4)):
-                            frames.append((frame, fraction * height))
-                    frames.extend([(home_rotation, 0.), (rotation, 0.)])
-                    for rotation, paths in self._grasp_candidates(executor, before, point, frames, pinch_offset, obj):
+                    frames = self._grasp_frames(home_rotation, rotation, height)
+                    for rotation, paths in self._grasp_candidates(executor, grasp_start, point, frames, pinch_offset, obj):
                         executor.grasp_paths = paths
                         lifted = self.data.qpos.copy()
                         # Reuse the placement stack's obstacle-subtracted support search.
                         from emet.motion.placement_geometry import HeldObject, PlacementScene
                         from emet.motion.placement_surfaces import free_surface_centers
                         lifted_placements = placements_from_mujoco_model(self.model, self.data)
-                        robot_ids = body_subtree(self.model, 'base_link')
+                        robot_ids = body_subtree(self.model, self.base_body)
                         scene_entries = {name: entry for name, entry in lifted_placements.items()
                                          if self.model.body(name).id not in robot_ids}
                         scene = PlacementScene.from_placements(scene_entries, held_object=obj)
@@ -345,6 +374,10 @@ class NativeTableAdapter:
                                 continue
                             self.data.qpos[:] = lifted
                             mujoco.mj_kinematics(self.model, self.data)
+                            transport, transport_error = self._prepare_transport(executor, obj, goal)
+                            if transport_error:
+                                self._record_rejection('transport', transport_error, executor)
+                                continue
                             executor.place_targets = self._place_targets(executor, obj, goal, rotation)
                             # Pure planning: never call the measured-state replan here, which would reset the hypothetical lift.
                             candidates = []
@@ -363,7 +396,7 @@ class NativeTableAdapter:
                             if len(candidates) == 3:
                                 executor.place_paths = candidates
                                 ref = f'plan:{self.namespace}:{uuid.uuid4().hex}'
-                                self.plans[ref] = NativePlan(obj, support, initial, goal, rotation, executor, self.boot, region, **identity)
+                                self.plans[ref] = NativePlan(obj, support, initial, goal, rotation, executor, self.boot, region, **identity, transport=transport, approach=approach)
                                 return response('plan_pick_place', data=self._data(**identity, plan_ref=ref,
                                     planned_ops=['grasp', 'place'], completed_ops=[], failed_stage=None, measurements=[],
                                     planning_rejections=dict(self.planning_rejections),
@@ -394,7 +427,7 @@ class NativeTableAdapter:
             mujoco.mj_collision(self.model, scratch)
             oid = self.model.body(plan.object_body).id
             contacts = {self.model.body(self.model.geom_bodyid[c.geom2 if self.model.geom_bodyid[c.geom1] == oid else c.geom1]).name
-                        for c in scratch.contact if oid in self.model.geom_bodyid[c.geom]}
+                        for c in scratch.contact[:scratch.ncon] if oid in self.model.geom_bodyid[c.geom]}
             if released:
                 entry = placements_from_mujoco_model(self.model, scratch)[plan.object_body]
                 error = np.linalg.norm(np.asarray(entry['pos'])[:2]-plan.goal[:2])
@@ -403,7 +436,7 @@ class NativeTableAdapter:
                 speed = np.linalg.norm(self.data.qvel[dof:dof+3])
                 spin = np.linalg.norm(self.data.qvel[dof+3:dof+6])
                 height_error = abs(float(entry['pos'][2]) - (plan.goal[2]-.02))
-                valid = (plan.support_body in contacts and not {'rubber_tip_left','rubber_tip_right'} & contacts
+                valid = (plan.support_body in contacts and not set(self.finger_bodies) & contacts
                          and error <= .04 and height_error <= .025 and speed <= .01 and spin <= .1)
                 if plan.placement_region is not None:
                     bounds = np.asarray(entry['bounds'])[:, :2]
@@ -414,7 +447,7 @@ class NativeTableAdapter:
                 relative = ee.xmat.reshape(3,3).T @ (self.data.body(plan.object_body).xpos-ee.xpos)
                 if reference is None:
                     reference = relative.copy()
-                valid = {'rubber_tip_left','rubber_tip_right'} <= contacts and plan.support_body not in contacts and np.linalg.norm(relative-reference) <= .025
+                valid = set(self.finger_bodies) <= contacts and plan.support_body not in contacts and np.linalg.norm(relative-reference) <= .025
             if not valid:
                 start = None
             elif start is None:
@@ -443,6 +476,10 @@ class NativeTableAdapter:
                     return fail('scene_changed_replan')
                 ex = plan.executor
                 started = True
+                phase = 'approach'
+                result = self._approach(plan)
+                if not result.success:
+                    return fail(result.message, started=True, phase=result.phase)
                 phase = 'grasp'
                 result = ex.grasp_only('', object_gt_body=plan.object_body)
                 if not result.success:
@@ -452,7 +489,7 @@ class NativeTableAdapter:
                 completed.append('grasp')
                 self.synchronize(self.data)
                 ex.place_targets = self._place_targets(ex, plan.object_body, plan.goal, plan.rotation)
-                ex.transport = lambda: PhysicalMotionResult(True, 'stationary', 'transport')
+                ex.transport = lambda: self._transport(plan)
                 phase = 'place'
                 result = ex.place_only('', object_gt_body=plan.object_body, receptacle_gt_body=plan.support_body)
                 if not result.success:
@@ -481,7 +518,18 @@ def adapter_for(context, robot):
         return None
     cached = context.get('_native_tamp_adapter')
     boot = (state.get('command_protocol') or {}).get('server_boot_id')
-    if cached is None or cached.robot is not robot or cached.boot != boot:
-        cached = NativeTableAdapter(robot)
+    snapshot_signature = state['native_tamp_snapshot'].get('model_signature')
+    if cached is None or cached.robot is not robot or cached.boot != boot or cached.signature != snapshot_signature:
+        robot_name = state.get('native_tamp_robot', 'stretch')
+        if robot_name == 'innate_mars':
+            from emet.controller.task.tamp.mars_native_adapter import MarsNativeTableAdapter
+            model = context.get('_native_tamp_model')
+            if model is None:
+                raise ObservationUnavailable('native_mars_model_required')
+            cached = MarsNativeTableAdapter(robot, model=model)
+        elif robot_name == 'stretch':
+            cached = NativeTableAdapter(robot)
+        else:
+            raise ObservationUnavailable('native_robot_unsupported')
         context['_native_tamp_adapter'] = cached
     return cached

@@ -14,10 +14,35 @@ Accepted plan: [Mars controller integration](docs/plans/mars_controller_integrat
       measured-Jacobian teacher, and disabled-by-default guarded driver interface.
       These are not public-tool, learned-policy, or hardware qualification.
 
-- [ ] Restore continuous pick/place after explicit stage rearming: v5 at
+- [x] Restore continuous pick/place after explicit stage rearming: v5 at
       `42aa2f30` passed 27/30 versus v4 30/30. Diagnose the 20 g seed 1860001
       retention loss and 50 g seeds 1860007/1860010 tracking timeouts; preserve
-      all cases and thresholds, then repeat source-bound qualification before PPO.
+      all cases and thresholds. Immutable `b181db61` requalification passed
+      298/300 carry and 30/30 continuous pick/place, with 367 fresh regression
+      tests and a verified combined readiness receipt. PPO remains stopped;
+      this evidence does not qualify subsequent public-tool/control changes.
+
+- [x] Add explicit Mars simulator support to public TAMP discovery/planning/
+      execution, a frozen 30-case two-support catalog, independently measured
+      task scoring, per-stage failure reports and trajectory visualizations.
+      Implementation is not task qualification: moving-base retention remains
+      under investigation and all failures count toward the acceptance gate.
+- [x] Add the real agent prompt/parser/dispatcher harness with three local
+      agent seeds per case and an oracle-readiness prerequisite. Missing normal
+      observations stop before model calls; GT never substitutes for observations.
+- [ ] Pass all 30 public-tool two-support transfers without changing the frozen
+      cases or retention/force/wheel limits; diagnose loaded turning, then
+      support-confirmed release and post-placement stability.
+- [x] Complete one frozen public-tool 20 g transfer with actual base motion and
+      independently measured support/release/stability. This selected positive
+      case does not close the full gate. Preserve the earlier complete 0/30
+      development sweep and failed fixture-binding report alongside new results.
+- [ ] Improve public-task execution time after retention and wheel gates pass;
+      the first full successful diagnostic took about 100 simulated seconds.
+      Keep geometric retiming and fixed-deadline tracking scores distinct.
+- [ ] Install an observed-scene provider and run the normal-observation agent
+      acceptance trials after the public oracle gate passes. No real-model
+      success is established by parser/dispatcher tests.
 
 - [ ] Integrate the qualified controller with the robot command interface: masked
       base SE(2), hand SE(3), and gripper targets; trajectory updates, measured versus
@@ -32,6 +57,10 @@ Accepted plan: [Mars controller integration](docs/plans/mars_controller_integrat
       interaction under an explicitly authorized hardware procedure. Compare measured
       trajectories and loads against simulation; do not infer hardware safety from
       simulator success or start motion from this checklist alone.
+- [x] Passive Herman connection check (2026-10-23): SSH responds and ROS Humble
+      is installed. The default ROS graph showed only metadata topics; actual
+      driver domain, modes, watchdog and stop behavior remain unverified. No
+      deployment, service start, motion or contact commands were sent.
 
 ## Proprioceptive contact learning (2026-10-23)
 

@@ -76,12 +76,40 @@ claims from measured outcomes. Mars first, with existing Stretch cases retained.
 
 ## Implementation checkpoint
 
-- Candidate placement fix passed all 30 frozen continuous cases with zero unsafe
-  contact/wheel events; source-bound full carry rerun remains pending.
-- 367 fresh simulator/core/interface tests pass with no failures or skips.
+- The immutable `b181db61` placement recovery completed 298/300 carry and 30/30
+  continuous pick/place, with zero unsafe contact/wheel events. The two remaining
+  100 g orientation failures remain in the report. Canonical readiness and the
+  367-test source-bound receipt were verified for that snapshot only; PPO did
+  not restart. See `paper/data/whole_body_control/qualification_v6.json`.
 - Simulator task-pose protocol and measured-Jacobian teacher pass component
-  replay tests; the native public TAMP adapter remains Stretch-only.
+  replay tests. Public TAMP now has explicit simulator Mars routing, private
+  planning state and measured physical execution; this does not attach the
+  public adapter to a deployed ZMQ server or hardware driver.
+- The frozen two-support v2 catalog has 30/30 fixture admissions. Its v1 catalog
+  is retained: five right-layout 100 g cases lacked a valid arm-only witness;
+  v2 supplies a whole-body FK witness for those same targets. Fixture admission
+  does not establish executable transport or successful release.
+- Public execution traces expose loaded-turn retention failures. Keep this gate
+  open until all 30 full tasks pass. Source hashes bind the frozen catalog,
+  shared safety/control modules, public adapter and agent execution dependencies.
+- A revised executor completed the frozen left-layout 20 g diagnostic through
+  grasp, 11.8 cm base transfer, support-confirmed release and stable placement;
+  peak relative rotation was 0.013 rad and peak load 3.24 N, without wheel-lift
+  termination. This selected case took about 100 simulated seconds and is not
+  full task or speed qualification. The 100 g diagnostic still fails retention.
+- Final wheel slew and measured path retiming are explicit public-facade modes,
+  preserving the legacy default. A bounded 6 mm / 3 s contact approach confirms
+  measured support before release. Fixed-time execution and new learned-policy
+  qualification remain separate requirements.
+- The normal prompt/parser/dispatcher agent harness is implemented, with
+  oracle-first admission and three local seeds per task. Observed inputs are
+  currently unavailable; this blocks normal-observation trials before model
+  calls. No actual LLM task trial has been qualified.
 - Guarded driver interface is loopback-tested and disabled by default. No
   physical driver is attached and no Herman motion has been sent.
+- Passive SSH reached Herman on 2026-10-23; ROS Humble is installed. Only
+  `/parameter_events` and `/rosout` appeared in the default ROS domain. This
+  does not establish absence of drivers in other domains/environments, nor
+  verify any real actuator mode, watchdog, load limit or stop behavior.
 - Two-support public-tool acceptance and subsequent agent trials remain open;
   do not mark them complete based on the component smoke or 30-case return-place.

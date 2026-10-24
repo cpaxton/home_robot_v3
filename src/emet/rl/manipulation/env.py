@@ -81,6 +81,7 @@ class ManipulationConfig:
     randomization_scale: float = 1.0
     payload_mass_kg: float | None = None
     payload_asset_set: str = "training"
+    two_supports: bool = False
     contact_cone: str = "pyramidal"
     contact_impratio: float = 1.0
     balanced_grasp_setup: bool = False
@@ -115,6 +116,8 @@ class ManipulationConfig:
     goal_gated_settling: bool = False
 
     def __post_init__(self):
+        if type(self.two_supports) is not bool or (self.two_supports and self.robot != "innate_mars"):
+            raise ValueError("two-support fixtures require Mars")
         if self.carry_target_mode not in {"translation", "orientation", "combined", "mixed"}:
             raise ValueError("invalid carry target mode")
         if not np.isfinite(self.carry_push_probability) or not 0 <= self.carry_push_probability <= 1:
@@ -203,6 +206,7 @@ class ManipulationEnv(gym.Env):
             self.config.robot,
             diagnostics=self.config.diagnostics,
             payload_asset_set=self.config.payload_asset_set,
+            two_supports=self.config.two_supports,
             contact_cone=self.config.contact_cone,
             contact_impratio=self.config.contact_impratio,
         )

@@ -45,6 +45,8 @@ class ManipulationControl:
         self.base_velocity_feedback_gain = 2.0
         self.base_velocity_integral_gain = 1.0
         self.base_feedback_at_rest = True
+        # Keep the qualified legacy servo until the opt-in mode is qualified.
+        self.physical_wheel_slew_enabled = False
         self.reset()
 
     def positions(self):
@@ -95,6 +97,8 @@ class ManipulationControl:
         self.grip_reference = float(self.data.qpos[self.grip_q])
         self.grip_target = self.grip_reference
         self.task_trajectory = None
+        self.task_progress = None
+        self.task_progress_rate = 1.0
         self.preview_sampler = None
         self.phase = "reach"
         self.release_authorized = False
@@ -104,6 +108,8 @@ class ManipulationControl:
         self.history = None
         self.last_action = np.zeros(self.profile.action_size)
         self.base_command = np.zeros(2)
+        self.applied_base_velocity = np.zeros(2)
+        self._applied_base_time = float(self.data.time)
         self.base_velocity_integral = np.zeros(2)
         self.base_bias_compensation_enabled = False
         self._base_velocity_time = float(self.data.time)
@@ -176,13 +182,53 @@ class ManipulationControl:
         if np.any(trajectory.gripper < self.grip_limits[0]) or np.any(trajectory.gripper > self.grip_limits[1]):
             raise ValueError("gripper trajectory exceeds physical limits")
         self.task_trajectory = trajectory
+        self.task_progress = None
+        self.task_progress_rate = 1.0
         self.arm_holding = False
         self.holding = False
         self._trim_time = float(self.data.time)
         self.task_trajectory_start = float(self.data.time)
-        self.preview_sampler = lambda time: trajectory.sample(time - self.task_trajectory_start)
+        self.preview_sampler = lambda time: trajectory.sample(
+            self.trajectory_elapsed() + (time - float(self.data.time)) * self.task_progress_rate
+        )
         base, hand, _ = trajectory.sample(0)
         self.set_pose_targets(base, trajectory.base_mask, hand, trajectory.hand_mask)
+
+    def clear_task_trajectory(self):
+        """End a timed schedule without clearing faults, goals, history or grip."""
+        self.task_trajectory = None
+        self.preview_sampler = None
+        self.task_progress = None
+        self.task_progress_rate = 1.0
+
+    def trajectory_elapsed(self):
+        return float(self.data.time) - self.task_trajectory_start if self.task_progress is None else self.task_progress
+
+    def set_trajectory_progress(self, elapsed, *, rate):
+        """Executor retiming preserves poses, faults and grip authority.
+
+        Slow the announced path without rewinding it or exceeding nominal speed.
+        The executor must separately bound total time and report actual progress.
+        Ordinary schedules retain the physics clock unless explicitly retimed.
+        """
+        if self.stopped or self.task_trajectory is None:
+            raise ValueError("retiming requires an active trajectory")
+        previous = 0.0 if self.task_progress is None else self.task_progress
+        if (
+            not np.isfinite([elapsed, rate]).all()
+            or not previous <= elapsed <= self.task_trajectory.end
+            or not 0 <= rate <= 1
+        ):
+            raise ValueError("invalid monotonic trajectory progress")
+        self.task_progress, self.task_progress_rate = float(elapsed), float(rate)
+        self.update_task_reference()
+
+    def set_physical_wheel_slew(self, enabled):
+        """Opt into experimental final motor slew without resetting physical state."""
+        if type(enabled) is not bool or (enabled and self.stopped):
+            raise ValueError("invalid physical wheel slew transition")
+        self.physical_wheel_slew_enabled = enabled
+        self._applied_base_time = float(self.data.time)
 
     def set_reference(self, reference, *, phase="reach", grip=None, release=False):
         reference = require_finite(reference, (self.profile.arm_size,))
@@ -469,6 +515,21 @@ class ManipulationControl:
                     -limits,
                     limits,
                 )
+            # Bound the final physical request, including feedback correction.
+            # Limiting only accept() lets PI compensation bypass acceleration
+            # limits at the 500 Hz physics/actuator boundary.
+            interval = max(0.0, now - self._applied_base_time)
+            acceleration = np.array([self.profile.base_acceleration, self.profile.base_yaw_acceleration])
+            if self.stopped:
+                self.applied_base_velocity[:] = 0
+            elif self.physical_wheel_slew_enabled:
+                self.applied_base_velocity += np.clip(
+                    drive - self.applied_base_velocity, -acceleration * interval, acceleration * interval
+                )
+            else:
+                self.applied_base_velocity[:] = drive
+            self._applied_base_time = now
+            drive = self.applied_base_velocity
             left = (drive[0] - drive[1] * self.profile.wheel_separation / 2) / self.profile.wheel_radius
             right = (drive[0] + drive[1] * self.profile.wheel_separation / 2) / self.profile.wheel_radius
             # Velocity actuator targets are transmission-space velocities:
@@ -483,7 +544,7 @@ class ManipulationControl:
 
     def update_task_reference(self):
         if self.task_trajectory is not None:
-            base, hand, _ = self.task_trajectory.sample(float(self.data.time) - self.task_trajectory_start)
+            base, hand, _ = self.task_trajectory.sample(self.trajectory_elapsed())
             self.set_pose_targets(base, self.task_trajectory.base_mask, hand, self.task_trajectory.hand_mask)
 
     def observe(self):

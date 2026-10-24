@@ -2406,8 +2406,8 @@ OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MUJOCO_GL=egl \
 The initial development smoke passed 4/4 planned paths, including loaded carry;
 initialization and planning failures remain in the case list. This is not the
 30-case two-support public-tool benchmark, full agent acceptance, a deployed
-ZMQ pose server, or hardware qualification. The native public TAMP adapter still
-requires Mars support before those gates can run.
+ZMQ pose server, or hardware qualification. Subsequent public Mars adapter work
+and its separate acceptance gate are described below.
 
 `GuardedControlSession` is an **unwired, opt-in driver interface** with loopback
 tests. It checks declared whole-body velocity, measured-stop, and robot-watchdog
@@ -2422,5 +2422,110 @@ are not evidence of measured real-robot stopping or calibrated force control.
 The placement recovery rerun passed **30/30 frozen continuous pick/place**
 with zero unsafe-contact or wheel events. The expanded source-bound regression
 gate passed **367 tests**, with zero failures or skips; see the archived
-`mars-integration-regressions-v2.*` evidence. Full carry requalification is
-still required for the revised manifest, and PPO remains stopped.
+`mars-integration-regressions-v2.*` evidence. The immutable `b181db61` full carry
+rerun subsequently completed **298/300**, with **300/300 admitted** and per-mass
+successes **100/100, 100/100, 98/100**. The two 100 g orientation retention losses
+remain failures. Canonical combined readiness and the regression receipt were
+verified for that snapshot; see
+[the v6 summary](../paper/data/whole_body_control/qualification_v6.json) and its
+adjacent complete compressed reports. PPO remains stopped. These results do not
+qualify later source changes.
+
+### Public Mars TAMP transfers and agent acceptance
+
+`MarsNativeTableAdapter` extends the existing public `scene_tasks`,
+`plan_pick_place` and `execute_pick_place_plan` tools for an explicitly supplied
+Mars simulator model and `MarsSimRobot` control facade. Default Stretch routing
+remains available. Planning uses private MuJoCo data and bounded IK attempts;
+execution issues actuator references without resetting or relocating the object.
+Partial execution consumes its handle and requests a measured whole-body stop.
+This is an in-process simulator harness, not a deployed network or hardware
+adapter. The current public baseline uses joint tracking for certified arm
+segments and task-pose tracking for timed whole-body transport. It is a teacher
+integration, not evidence for the learned actor.
+
+The separate catalog
+`configs/benchmarks/mars_public_tamp_whole_body_v2.json` freezes 30 transfers:
+two distinct support layouts, five seeds and 20/50/100 g payloads. All 30 have
+fixture admissions and whole-body FK target witnesses. The retained v1 catalog
+had 25/30 admissions because five right-layout 100 g witnesses exceeded arm-only
+joint limits; v2 uses a base-yaw witness for those targets. Reachability is not a
+claim that the teacher can execute every path. All planning and execution failures
+are retained. Public readiness requires the exact current catalog/source/model
+binding, 30/30 actual tool executions, continuous retention, moving-base transfer,
+support-confirmed release, a clear open gripper, two seconds of measured stability
+and unchanged force/wheel limits. A returned success dictionary cannot substitute
+for these measurements.
+
+The transport planner samples collision and loaded support margins and plans
+turns about the driven axle. Its current fixed-arm carry reference may rotate the
+hand in the world during turns; the final heading returns before placement.
+World-orientation-locked transport remains a separate harder distribution. The
+timed teacher includes reference twist feedforward and nonholonomic base-path
+tracking. The public simulator facade explicitly opts into final wheel-request
+slew limits, including velocity-feedback corrections. The legacy control default
+is preserved: enabling this during reset changed frozen initial states and
+regressed two existing 100 g integration tests, so that experiment was not
+promoted globally. Its failed fixture report and subsequent 0/30 development
+sweep are preserved as `public_tamp_v1_fixture_rejection` and
+`public_tamp_development_v1` in the paper data directory.
+
+The public executor slows geometric path progress when measured base/hand
+tracking lags, with a total transport budget of three times the nominal duration
+plus four seconds. It records the executed trajectory clock and rate in every
+trace. This retiming is explicit; these are not fixed-deadline trajectory results.
+A separate contact approach descends at most 6 mm over three seconds, holds the
+arm at measured half-weight support, and requires 200 ms of supported load before
+opening. Excessive support load latches a fault; force/wheel/retention guards stay
+active. Placement may use an already achieved point inside the frozen XY goal
+region, with the original final footprint checks unchanged. These are simulator
+procedures, not measured Mars damage ratings or real-robot force certificates.
+
+Run a complete public-tool oracle report on one pinned CPU:
+
+```bash
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MUJOCO_GL=egl MPLCONFIGDIR=/tmp/mpl \
+  taskset -c 14 .venv/bin/python -m emet.eval.mars_tamp_control evaluate \
+  --suite configs/benchmarks/mars_public_tamp_whole_body_v2.json \
+  --output logs/manipulation/mars-public-tamp-new
+```
+
+Use a fresh output directory. On this workstation use cores 14–15 and at most
+two concurrent physics/test processes. The report includes admission, planning,
+execution and end-to-end denominators per layout/mass, failure stages, pose
+errors, measured versus commanded velocities, unsmoothed acceleration/jerk,
+retention and contact/wheel evidence. Export a case for visual inspection:
+
+```bash
+MPLCONFIGDIR=/tmp/mpl .venv/bin/python -m emet.eval.mars_tamp_control plot \
+  --report logs/manipulation/mars-public-tamp-new/report.json \
+  --case left:20g:0 --output /tmp/mars-public-transfer.png
+```
+
+The first frozen 20 g left-layout transfer completed through all public tools:
+11.8 cm measured base displacement, 0.013 rad peak relative object rotation,
+3.24 N peak contact load, no wheel-lift termination, and two seconds of independent
+final stability. It took about 100 simulated seconds, including grasp, lift,
+transport, placement, release and retreat. This is a development-selected positive
+case, not the 30-case qualification or the speed target. The 100 g case still
+exceeded 0.1 rad retention during placement. Additional mass-based slowing,
+loaded-arm tucking and a higher grasp did not improve that diagnostic; those
+changes were discarded. The public gate remains **open**. Do not infer public
+TAMP readiness from the earlier 30/30 single-support result. The complete
+source-bound public report remains the acceptance evidence.
+
+`python -m emet.eval.mars_tamp_agent --help` describes the real agent harness.
+It requires a passing current public oracle report before constructing a client
+for an existing model endpoint. The harness uses the normal prompt, parser and
+dispatcher, three local seeds per task and independent physical scoring.
+Local seeds do not control a remote model sampler. Physics pauses during model
+inference, which is recorded explicitly; these trials do not certify a deployed
+asynchronous execution loop. Normal observed inputs never fall back to GT:
+the current missing observed-scene provider blocks before model calls and
+reports zero completed agent trials. Parser/dispatcher tests are not LLM results.
+
+Passive hardware audit on 2026-10-23: SSH reached `herman` at `192.168.1.43` and
+ROS Humble is installed. The default-domain topic list showed only
+`/parameter_events` and `/rosout`; driver domains, live arm modes, feedback
+timestamps, robot watchdogs, force limits and measured stopping remain unverified.
+No hardware motion, deployment, service start or contact test was performed.
