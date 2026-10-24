@@ -455,6 +455,9 @@ def _run_vlm_view_assess(
         n_rounds=self._round,
         n_nav=self._n_nav + self._n_explore,
     )
+    from emet.eval.agentic_vlm_assess import unique_image_arrays
+
+    context_rgb = getattr(self, "_inspection_context_by_obs", {}).get(oid)
     assessment = assess_view_with_vlm(
         client,
         question=self.question,
@@ -462,7 +465,17 @@ def _run_vlm_view_assess(
         inventory=inventory,
         target_phrase=self._target_phrase or phrase,
         is_mcq=self._question_is_mcq(),
+        context_rgb=context_rgb,
     )
+    if rgb is not None:
+        if not hasattr(self, "_assessed_images"):
+            self._assessed_images = {}
+        self._assessed_images[oid] = [
+            im.copy()
+            for im in unique_image_arrays([rgb] + ([context_rgb] if context_rgb is not None else []), max_images=2)
+        ]
+        # An earlier assessment can remain the selected answer evidence. Retain
+        # its packet for this executor's episode rather than FIFO-evicting it.
     query_image_paths = dump_query_rgb(self, oid, rgb, kind="vlm_assess")
     vlm_event_id = self._persist_agentic_evidence(
         stage="vlm_assessment",

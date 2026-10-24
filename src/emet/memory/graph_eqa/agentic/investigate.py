@@ -324,6 +324,9 @@ def _tool_investigate(
             look_at_xy=look_at_xy,
         )
 
+    from emet.memory.graph_eqa.agentic.views import retain_latest_view
+
+    context_view = retain_latest_view(self, after=0)
     nav_outcome = navigate_with_floor_recovery(self, navigate)
     finished = bool(nav_outcome.finished)
     nav_outcome_str = str(nav_outcome)
@@ -476,6 +479,12 @@ def _tool_investigate(
     # Only a successful capture advance counts as a new station view.
     if cap_adv:
         station_oid = int(cap["obs_id"])
+        if not hasattr(self, "_inspection_context_by_obs"):
+            self._inspection_context_by_obs = {}
+        if context_view is not None:
+            self._inspection_context_by_obs[station_oid] = context_view.rgb
+        # Keep episode-local pre-approach evidence until assessment consumes it;
+        # navigation can revisit an earlier station after many other views.
         self._station_obs_ids.add(station_oid)
         self._fresh_obs_ids.add(station_oid)
         self._tried.pop(station_oid, None)

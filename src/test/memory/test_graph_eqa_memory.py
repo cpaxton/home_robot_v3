@@ -51,6 +51,70 @@ def test_graph_memory_add_observation():
     assert any((1, 2, "near") == e or (2, 1, "near") == e for e in edges)
 
 
+def test_answer_attaches_exact_camera_evidence_without_creating_objects():
+    calls = []
+
+    def client(commands, **kwargs):
+        calls.append(commands)
+        return "reasoning: visible\nanswer: blue\nconfidence: true\naction:\nconfidence_reasoning: visible"
+
+    mem = GraphEQAMemory(eqa_client=client, image_description_client=lambda x: "")
+    mem.extract_relevant_objects = lambda question: None
+    mem.memory_summary_enabled = False
+    current = np.full((8, 8, 3), 10, dtype=np.uint8)
+    context = np.full_like(current, 20)
+    *_, images = mem.query_answer("What color?", evidence_images=[current, context, context.copy()])
+    assert len(images) == 2
+    np.testing.assert_array_equal(images[0], current)
+    np.testing.assert_array_equal(images[1], context)
+    assert mem.last_eqa_obs_ids == []
+    assert mem.last_eqa_nav_fallback_count == 0
+    assert not mem.get_nodes() and not mem.get_observations()
+    assert "earlier pre-approach context" in mem.last_eqa_prompt_text
+    oid = mem.add_observation(current, np.array([0.0, 0.0, 0.5]), ["cup"])
+    *_, images = mem.query_answer("What color?", evidence_images=[current, context], evidence_obs_id=oid)
+    assert mem.last_eqa_obs_ids == [oid]
+    assert len(images) == 2
+    assert len(mem.get_observations()) == 1
+    mem.parameters = {"eqa_vl": {"eqa_max_images": 1}}
+    *_, images = mem.query_answer("What color?", evidence_images=[current, context])
+    assert len(images) == 1
+    np.testing.assert_array_equal(images[0], current)
+
+
+def test_assessed_packet_preserves_explicit_find_and_detail_with_correct_indices():
+    mem = GraphEQAMemory(eqa_client=lambda commands, **kw: "answer: 2", image_description_client=lambda x: "")
+    mem.extract_relevant_objects = lambda question: None
+    mem.memory_summary_enabled = False
+    current = np.full((8, 8, 3), 10, dtype=np.uint8)
+    context = np.full_like(current, 20)
+    find = np.full_like(current, 30)
+    crop = np.full((4, 4, 3), 40, dtype=np.uint8)
+    oid = mem.add_observation(find, np.array([0.0, 0.0, 0.5]), ["cup"])
+    mem._select_relevant_obs_ids = lambda **kw: (_ for _ in ()).throw(AssertionError("packet must skip selection"))
+    mem._eqa_pick_closeup_obs_id = lambda *args: oid
+    mem._eqa_crop_for_obs = lambda unused: crop
+    mem._graph_count_hint = lambda question, **kw: "COUNT_HINT" if oid in kw["attached_obs_ids"] else ""
+    *_, images = mem.query_answer(
+        "How many cups? A) 1 B) 2 C) 3", evidence_images=[current, context], force_obs_ids=[oid]
+    )
+    assert len(images) == 4
+    for actual, expected in zip(images, [current, context, find, crop], strict=True):
+        np.testing.assert_array_equal(actual, expected)
+    assert f"Image 3=obs{oid}" in mem.last_eqa_prompt_text
+    assert "COUNT_HINT" in mem.last_eqa_prompt_text
+    assert "Image 4 is a close-up" in mem.last_eqa_prompt_text
+    assert mem._resolve_eqa_action_image_ref(3, [oid]) == oid
+    assert mem._resolve_eqa_action_image_ref(2, [oid]) is None
+    mem.parameters = {"eqa_vl": {"eqa_max_images": 2}}
+    *_, images = mem.query_answer(
+        "How many cups? A) 1 B) 2 C) 3", evidence_images=[current, context], force_obs_ids=[oid]
+    )
+    assert len(images) == 2
+    assert mem.last_eqa_obs_ids == []
+    assert "COUNT_HINT" not in mem.last_eqa_prompt_text
+
+
 def test_graph_memory_to_string():
     """Scene graph serializes to a string for prompts."""
     mem = GraphEQAMemory(
@@ -946,13 +1010,9 @@ def test_read_action_round_trips_through_history():
         answer="Unknown", confidence=False, action="read 2", reasoning="letters too small"
     )
     assert "action=read2" in read_entry
-    look_entry = mem.format_eqa_history_outcome(
-        answer="A", confidence=False, action="2", reasoning="look closer"
-    )
+    look_entry = mem.format_eqa_history_outcome(answer="A", confidence=False, action="2", reasoning="look closer")
     assert "action=2" in look_entry
-    empty_entry = mem.format_eqa_history_outcome(
-        answer="A", confidence=False, action="", reasoning="done"
-    )
+    empty_entry = mem.format_eqa_history_outcome(answer="A", confidence=False, action="", reasoning="done")
     assert "action=-" in empty_entry
 
 
@@ -1954,10 +2014,7 @@ def test_graph_count_hint_matches_bedside_table_nightstand_alias():
         identity_key="test:nightstand:2",
         countable_instance=True,
     )
-    q = (
-        "How many bedside tables are there in the bedroom? "
-        "A) One B) Two C) Three D) Four. Answer:"
-    )
+    q = "How many bedside tables are there in the bedroom? A) One B) Two C) Three D) Four. Answer:"
     hint = mem._graph_count_hint(q)
     assert "GRAPH_COUNT:" in hint
     assert "[graph obs 1]" in hint

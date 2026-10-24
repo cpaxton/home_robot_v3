@@ -40,6 +40,30 @@ class _MultiClient:
         return json.dumps(self._payload)
 
 
+def test_assessment_keeps_current_and_context_roles_and_image_budget():
+    client = _MultiClient({"present": False, "answerable": False})
+    current = np.full((8, 8, 3), 10, dtype=np.uint8)
+    context = np.full_like(current, 20)
+    crops = [np.full_like(current, i) for i in (30, 40, 50)]
+    result = assess_view_with_vlm(
+        client,
+        question="Where is the cup?",
+        rgb=current,
+        context_rgb=context,
+        is_mcq=False,
+        multi_close_look_crops=crops,
+    )
+    prompt, kwargs = client.mm_calls[-1]
+    assert len(kwargs["image"]) == result.image_count == 4
+    np.testing.assert_array_equal(kwargs["image"][0], current)
+    np.testing.assert_array_equal(kwargs["image"][-1], context)
+    assert "Judge present from Image 1 only" in prompt
+    assert "earlier pre-approach context" in prompt
+    assert not result.present and not result.answerable
+    assess_view_with_vlm(client, question="Where is the cup?", rgb=current, context_rgb=current.copy())
+    assert isinstance(client.mm_calls[-1][1]["image"], np.ndarray)
+
+
 def test_extract_target_from_question_parses_json():
     client = _TextClient({"target_phrase": "utensils", "question_type": "location", "notes": "ignore options"})
     extracted = extract_target_from_question(

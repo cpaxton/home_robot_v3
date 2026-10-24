@@ -37,8 +37,11 @@ def record_eqa_decision_iteration(
     close_look_status: str = "",
     vlm_raw: str | None = None,
     parsed: dict[str, Any] | None = None,
+    image_roles: list[str] | None = None,
 ) -> Path:
     """Write ``eqa_decisions/iter_NNN/`` under the episode bundle."""
+    if image_roles is not None and len(image_roles) != len(relevant_images):
+        raise ValueError("image_roles must describe every attached image")
     root = Path(trace_root)
     root.mkdir(parents=True, exist_ok=True)
     iter_dir = root / f"iter_{int(iteration):03d}"
@@ -56,6 +59,8 @@ def record_eqa_decision_iteration(
             kind = "closeup"
         else:
             kind = "nav_fallback"
+        if image_roles is not None:
+            kind = image_roles[idx]
         fname = f"image_{slot}"
         if obs_id is not None:
             fname += f"_obs{obs_id}"
