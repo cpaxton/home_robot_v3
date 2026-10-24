@@ -13,6 +13,7 @@ class ManipulationControl:
         self.v = [np.array([model.joint(n).dofadr[0] for n in group]) for group in profile.joint_groups]
         self.act = np.array([model.actuator(n).id for n in profile.actuators])
         self.grip_q = model.joint(profile.gripper_joint).qposadr[0]
+        self.grip_v = model.joint(profile.gripper_joint).dofadr[0]
         self.grip_act = model.actuator(profile.gripper_actuator).id
         self.limits = np.array(
             [np.sum([model.joint(n).range for n in group], axis=0) for group in profile.joint_groups]
@@ -40,6 +41,7 @@ class ManipulationControl:
         self.pose_only_targets = False
         self.preview_enabled = False
         self.preview_sampler = None
+        self.retention_context_enabled = False
         self.action_mode = "residual"
         self.base_xy_tolerance = 0.02
         self.base_velocity_feedback_gain = 2.0
@@ -102,6 +104,7 @@ class ManipulationControl:
         self.preview_sampler = None
         self.phase = "reach"
         self.release_authorized = False
+        self.retain_object = False
         self.stopped = False
         self.holding = False
         self.arm_holding = False
@@ -256,6 +259,7 @@ class ManipulationControl:
             self._trim_time = float(self.data.time)
         self.reference = reference.copy()
         self.phase, self.release_authorized = phase, bool(release)
+        self.retain_object = phase in {"close", "carry", "place", "disturbance"} and not release
         # Changing the reference does not clear history or a latched safety stop.
 
     def _base_tracking_delta(self):
@@ -596,6 +600,12 @@ class ManipulationControl:
             target_tokens.ravel(),
             target_mask.astype(float),
         ].astype(np.float32)
+        if self.retention_context_enabled:
+            # Intent and encoder velocity are available without object/contact
+            # ground truth. Keep the established proprioceptive prefix intact.
+            token = np.r_[token, float(self.retain_object), self.data.qvel[self.grip_v] / p.gripper_speed].astype(
+                np.float32
+            )
         now = float(self.data.time)
         if self.history is None:
             self.history = np.repeat(token[None], p.history_steps, axis=0)

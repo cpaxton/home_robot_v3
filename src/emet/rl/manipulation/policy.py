@@ -55,7 +55,7 @@ class ManipulationHistoryFeatures(BaseFeaturesExtractor):
         return torch.cat([features, obs["preview"].flatten(start_dim=1)], dim=1) if self.has_preview else features
 
 
-def export(model, normalizer, directory, env_config, fingerprint, *, steps):
+def export(model, normalizer, directory, env_config, fingerprint, *, steps, held_estimator=None):
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=True)
     model.save(directory / "policy.zip")
@@ -98,6 +98,14 @@ def export(model, normalizer, directory, env_config, fingerprint, *, steps):
         from emet.rl.manipulation.tracking import preview_contract
 
         manifest["preview_contract"] = preview_contract()
+    if env_config.retention_context:
+        from emet.rl.manipulation.retention_training import GRASP_CONTEXT_CONTRACT
+
+        manifest["grasp_context_contract"] = GRASP_CONTEXT_CONTRACT
+    if held_estimator is not None:
+        if not env_config.retention_context:
+            raise ValueError("held-object estimator requires retention context")
+        manifest["held_object_manifest_sha256"] = held_estimator.save(directory)
     (directory / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
 
 
@@ -109,6 +117,11 @@ class ManipulationPolicy:
         if m.get("format") != "emet-manipulation-v1" or m.get("robot") not in PROFILES:
             raise ValueError("not a supported manipulation policy")
         self.robot = m["robot"]
+        from emet.rl.manipulation.retention_training import GRASP_CONTEXT_CONTRACT
+
+        context = m.get("environment", {}).get("retention_context", False)
+        if m.get("grasp_context_contract") != (GRASP_CONTEXT_CONTRACT if context else None):
+            raise ValueError("grasp context contract mismatch")
         self.action_mode = m.get("action_mode", "residual")
         if self.action_mode not in {"residual", "direct_velocity"}:
             raise ValueError("unsupported policy action semantics")
@@ -150,6 +163,25 @@ class ManipulationPolicy:
             )
         ):
             raise ValueError("manipulation policy layout mismatch")
+        self.held_estimator = None
+        if "held_object_manifest_sha256" in m:
+            from emet.rl.manipulation.held_object import HeldObjectEstimator
+
+            if (
+                not context
+                or hashlib.sha256((directory / "held_object.json").read_bytes()).hexdigest()
+                != m["held_object_manifest_sha256"]
+            ):
+                raise ValueError("held-object manifest mismatch")
+            self.held_estimator = HeldObjectEstimator.load(directory)
+            if self.held_estimator.robot != self.robot or self.held_estimator.history_shape != self.mean.shape:
+                raise ValueError("held-object policy layout mismatch")
+
+    def estimate_held_object(self, observation):
+        """Advisory diagnostic only; does not change actor actions or release."""
+        if self.held_estimator is None:
+            return {"available": False, "calibrated": False, "advisory_only": True, "probability": None}
+        return self.held_estimator.estimate(observation["history"])
 
     def __call__(self, observation):
         if set(observation) != set(self.normalization):

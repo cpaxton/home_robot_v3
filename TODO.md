@@ -7,6 +7,20 @@ Strike through or move to a PR when done.
 
 Accepted plan: [Mars controller integration](docs/plans/mars_controller_integration.md).
 
+- [x] Add opt-in tracking-majority retention training: 70% tracking, bounded
+      grasp/carry/place/disturbance shares, retention intent, closed-empty
+      counterexamples, mass/COM randomization and separate advisory object-held
+      predictor. See [training plan](docs/plans/retention_training.md).
+- [x] Run 10,240 additional PPO smoke steps with offline W&B and a new-seed
+      paired occupancy diagnostic; preserve the failed arm/action heads. The
+      gripper-local head passed six closed-empty and six loaded attempts, but
+      full task success has not improved or qualified. See the
+      [experiment report](docs/experiments/mars_retention_training_20261024.md).
+- [ ] Qualify occupancy prediction on independent objects/grasps with calibration,
+      held recall and empty-hand false-positive rates; confirm loaded training
+      improves retention without degrading tracking, smoothness or wheel support.
+      A short training diagnostic does not close these performance gates.
+
 - [x] Isolate placement rearm bias regression with matched frozen-case ablations;
       add explicit free-space compensation authorization and regression tests.
       Full source-bound requalification remains required below.
@@ -19,7 +33,8 @@ Accepted plan: [Mars controller integration](docs/plans/mars_controller_integrat
       retention loss and 50 g seeds 1860007/1860010 tracking timeouts; preserve
       all cases and thresholds. Immutable `b181db61` requalification passed
       298/300 carry and 30/30 continuous pick/place, with 367 fresh regression
-      tests and a verified combined readiness receipt. PPO remains stopped;
+      tests and a verified combined readiness receipt. The canonical carry-training
+      supervisor remains stopped;
       this evidence does not qualify subsequent public-tool/control changes.
 
 - [x] Add explicit Mars simulator support to public TAMP discovery/planning/
@@ -35,7 +50,7 @@ Accepted plan: [Mars controller integration](docs/plans/mars_controller_integrat
       support-confirmed release and post-placement stability.
 - [x] Complete and archive the full public-tool v2/v3 reports: 4/30 at
       `a17a5734`, then 16/30 at `9dee06fc` (20 g 10/10; 50 g 6/10; 100 g 0/10).
-      All fixtures admitted; the public gate remains false. The latest source-bound
+      All fixtures admitted; the public gate remains false. That snapshot's source-bound
       regression receipt covers 588 passing tests. See the
       [experiment report](docs/experiments/mars_public_tamp_20261023.md).
 - [x] Add free-base hand-only pose tracking to the teacher and actual nearby FK

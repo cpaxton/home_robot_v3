@@ -2562,5 +2562,23 @@ The [Herman source audit](experiments/herman_feedback_audit_20261023.md) identif
 velocity-unit conversion, invalid-read, effort-unit and missing-base-velocity
 issues that must be resolved before measured stopping can be trusted. A proposed
 upstream patch and an offline validator are checked in. The upstream checkout and
-Herman are unchanged; the driver guard remains disabled. PPO and normal-observation
-agent qualification have not restarted based on these partial task results.
+Herman are unchanged; the driver guard remains disabled. Canonical carry-training
+promotion and normal-observation agent qualification remain gated. The simulator
+research experiment below is separate from those qualification tracks.
+
+### Tracking-majority retention experiment
+
+The opt-in `--task-mix tracking-retention` adds 70% ordinary tracking resets,
+10% pregrasp, 12% carry, 5% placement and 3% disturbance. It adds a retention
+command to observations, closed-empty counterexamples, bounded payload
+mass/COM randomization, and a separately optimized advisory occupancy predictor.
+The existing control reward and safety thresholds remain unchanged. Both actual
+reset/step shares and per-task reward terms are logged to local metrics and W&B;
+the classifier loss is not a PPO reward or a shared actor gradient.
+
+The [training plan](plans/retention_training.md) documents labels, unsupported
+transitions, predictor audits, compatibility-preserving warm starts and launch
+options. `estimate_held_object` reports an uncalibrated advisory probability;
+it does not assert a stable grasp or authorize opening. This simulator research
+track does not qualify the newer source tree against earlier frozen reports,
+and does not replace public TAMP or hardware gates.

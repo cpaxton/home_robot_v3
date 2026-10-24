@@ -19,6 +19,7 @@ def evaluate(policy=None, *, config=None, episodes=20, seed=200000, scenarios=No
             action_mode=policy.action_mode,
             trajectory_preview="preview" in policy.normalization,
             tracking_reward=settings.get("tracking_reward", config.tracking_reward),
+            retention_context=settings.get("retention_context", config.retention_context),
             hand_position_tolerance=min(
                 config.hand_position_tolerance, settings.get("hand_position_tolerance", config.hand_position_tolerance)
             ),
@@ -39,6 +40,14 @@ def evaluate(policy=None, *, config=None, episodes=20, seed=200000, scenarios=No
             for index in range(episodes):
                 episode_seed = seed + scenario_index * 10000 + index
                 obs, info = env.reset(seed=episode_seed)
+                held_counts = {
+                    "samples": 0,
+                    "positive": 0,
+                    "negative": 0,
+                    "true_positive": 0,
+                    "false_positive": 0,
+                    "squared_error": 0.0,
+                }
                 initial_base_distance = float(np.linalg.norm(env.control.base_goal[:2] - env.control.base_pose()[:2]))
                 initial = {
                     "base_pose": env.control.base_pose().tolist(),
@@ -77,6 +86,21 @@ def evaluate(policy=None, *, config=None, episodes=20, seed=200000, scenarios=No
                 for _ in range(round(config.horizon / env.profile.dt) + 1):
                     action = env.teacher_action() if policy is None else policy(obs)
                     obs, _, done, truncated, info = env.step(action)
+                    label = info.get("held_object_supervision", {})
+                    if policy is not None and hasattr(policy, "estimate_held_object") and label.get("valid"):
+                        estimate = policy.estimate_held_object(obs)
+                        if (
+                            estimate["available"]
+                            and not info.get("invalid_physics")
+                            and not info.get("initialization_failed")
+                        ):
+                            target, probability = label["target"], estimate["probability"]
+                            held_counts["samples"] += 1
+                            held_counts["positive"] += int(target == 1)
+                            held_counts["negative"] += int(target == 0)
+                            held_counts["true_positive"] += int(target == 1 and probability >= 0.5)
+                            held_counts["false_positive"] += int(target == 0 and probability >= 0.5)
+                            held_counts["squared_error"] += (probability - target) ** 2
                     if done or truncated:
                         break
                 rows.append(
@@ -88,6 +112,7 @@ def evaluate(policy=None, *, config=None, episodes=20, seed=200000, scenarios=No
                         "episode_id": f"{config.robot}:{scenario}:{episode_seed}",
                         "fingerprint": env.fingerprint,
                         "controller_id": "feedback-v1" if policy is None else policy.manifest["weights_sha256"],
+                        "held_object_estimation": {**held_counts, "calibrated": False, "advisory_only": True},
                     }
                 )
         finally:
@@ -105,7 +130,19 @@ def summarize(rows):
     for scenario in sorted({r["scenario"] for r in rows}):
         group = [r for r in rows if r["scenario"] == scenario]
         actual = [r for r in group if not r["initialization_failed"]]
+        held = {
+            key: sum(r.get("held_object_estimation", {}).get(key, 0) for r in group)
+            for key in ("samples", "positive", "negative", "true_positive", "false_positive", "squared_error")
+        }
         metrics = {
+            "held_object_samples": held["samples"],
+            "held_object_positive_samples": held["positive"],
+            "held_object_negative_samples": held["negative"],
+            "held_object_brier": held["squared_error"] / held["samples"] if held["samples"] else None,
+            "held_object_recall": held["true_positive"] / held["positive"] if held["positive"] else None,
+            "held_object_empty_false_positive_rate": held["false_positive"] / held["negative"]
+            if held["negative"]
+            else None,
             "episodes": len(group),
             "admitted_reference_count": sum(r.get("trajectory_admission", {}).get("accepted") is True for r in group),
             "rejected_reference_count": sum(r.get("rejected_trajectories", 0) for r in group),

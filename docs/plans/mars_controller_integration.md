@@ -36,6 +36,12 @@ are not substitutes for this gate.
 
 ## Agent and learned-policy gate
 
+An additional opt-in simulator research track is accepted in
+[tracking and held-object training](retention_training.md): tracking-majority
+sampling, randomized held payloads and an advisory occupancy estimator. Small
+training diagnostics on that distribution do not claim public TAMP readiness or
+replace the source-bound canonical supervisor below. Keep their reports separate.
+
 Run GT oracle plans through public tools first; then three fixed-seed agent
 trials per frozen task with normal observations. Record observed grasp,
 retention, support and recovery, not just tool return status. Exercise retargets,
@@ -126,3 +132,9 @@ claims from measured outcomes. Mars first, with existing Stretch cases retained.
   found upstream velocity-unit and fabricated-zero feedback issues. A proposed
   patch passed offline C++ checks on temporary copies; it has not been applied
   upstream, built as a ROS package, deployed or exercised on hardware.
+- The 2026-10-24 tracking-majority research track completed 10,240 additional
+  PPO smoke steps and 603 source-bound regression tests. Its gripper-local
+  occupancy head passed a selected twelve-attempt new-seed diagnostic, while
+  full task success has not improved or qualified. Keep these experiments
+  separate from canonical carry/public-tool promotion. See the
+  [training report](../experiments/mars_retention_training_20261024.md).

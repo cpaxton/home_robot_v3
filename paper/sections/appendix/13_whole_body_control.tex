@@ -136,3 +136,15 @@ combined with smoothness, effort, contact, overshoot, and settled-motion costs;
 randomization increases only after validation. Hardware force calibration,
 full public-tool Mars task execution, and qualification of larger native
 objects remain outside the evidence reported here.
+
+An optional simulator research mixture reserves 70\% of resets for ordinary
+tracking, with 10\% pregrasp, 12\% carry, 5\% placement and 3\% disturbance.
+Loaded resets vary payload identity, mass, center of mass and object friction;
+closed-empty tracking trials distinguish a retention command from grasp success.
+A versioned observation suffix provides retention intent and gripper velocity.
+An advisory object-in-hand estimator learns from debounced bilateral-contact
+labels using encoder and command history, with a separate supervised optimizer
+and episode-disjoint audit samples. Its loss does not alter the PPO reward or
+share actor gradients. Contact occupancy does not certify force closure or
+future retention; probability calibration and no-regression task qualification
+remain required before using this estimate in execution decisions.
