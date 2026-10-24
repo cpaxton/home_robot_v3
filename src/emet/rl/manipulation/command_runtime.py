@@ -84,6 +84,32 @@ def task_pose_teacher_action(control):
                     ]
                 )
     twist = feedforward + 4 * error - external_twist
+    if p.wheel_bodies and not c.base_mask.any() and c.hand_mask:
+        # With an unspecified base, a five-DOF arm cannot independently track
+        # every hand pose. Include feasible differential-drive forward/yaw
+        # motion in the same instantaneous solve. No inactive base target is
+        # consulted, and this remains a teacher, never an actor constraint.
+        yaw = c.base_pose()[2]
+        heading = np.array([np.cos(yaw), np.sin(yaw), 0.0])
+        pivot = c.data.xpos[c.base] + c.data.xmat[c.base].reshape(3, 3) @ c.axle_offset
+        yaw_axis = np.array([0.0, 0.0, 1.0])
+        base_jacobian = np.column_stack(
+            [
+                np.r_[heading, np.zeros(3)],
+                np.r_[np.cross(yaw_axis, current[:3] - pivot), yaw_axis],
+            ]
+        )
+        spatial = np.zeros(6)
+        mujoco.mj_objectVelocity(c.model, c.data, mujoco.mjtObj.mjOBJ_BODY, c.base, spatial, 0)
+        pivot_velocity = spatial[3:] + np.cross(spatial[:3], pivot - c.data.xpos[c.base])
+        measured = np.array([pivot_velocity @ heading, spatial[2]])
+        twist += base_jacobian @ measured
+        # Prefer arm motion when it suffices; use the base to supply missing
+        # task directions. Shared speed/slew/stop guards still bound commands.
+        scales = np.r_[0.5 * p.base_speed, 0.5 * p.base_yaw_speed, p.speed]
+        whole_body = np.column_stack([base_jacobian, arm]) * scales
+        velocity = scales * (whole_body.T @ np.linalg.solve(whole_body @ whole_body.T + 1e-4 * np.eye(6), twist))
+        return np.clip(np.r_[velocity / np.r_[p.base_speed, p.base_yaw_speed, p.speed], 0.0], -1, 1)
     velocity = arm.T @ np.linalg.solve(arm @ arm.T + 1e-4 * np.eye(6), twist)
     velocity *= float(c.hand_mask)
     base = (
@@ -218,6 +244,7 @@ class TaskPoseCommandRuntime(CommandRuntime):
         env = self.env
         env.control.stop()
         deadline = time.monotonic() + 0.75
+        simulation_deadline = float(env.data.time) + 0.75
         while True:
             control = env.control
             velocity = env.data.qvel[control.base_dof : control.base_dof + 6] if control.base_dof >= 0 else np.zeros(6)
@@ -229,6 +256,6 @@ class TaskPoseCommandRuntime(CommandRuntime):
                 and abs(velocity[5]) < 0.02
             ):
                 return True
-            if time.monotonic() >= deadline:
+            if time.monotonic() >= deadline or float(env.data.time) >= simulation_deadline:
                 return False
             env._tick(np.zeros(env.action_space.shape), score=False)

@@ -498,6 +498,7 @@ class NativeTableAdapter:
                     return fail('placement_verify_failed', completed=completed, phase='release')
                 completed.append('place')
                 return response('execute_pick_place_plan', data=self._data(**identity, plan_ref=plan_ref,
+                    execution_started=True,
                     planned_ops=['grasp','place'], completed_ops=completed, failed_stage=None,
                     measurements=[{'source':'simulator_ground_truth','bilateral_hold_s':1.,'stable_support_s':2.,
                                    'placement_region_verified': plan.placement_region is not None}]))

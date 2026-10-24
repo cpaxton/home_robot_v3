@@ -40,7 +40,6 @@ class MarsSimRobot:
         self.commands = []
         self.trace = []
         self.max_translation = self.max_rotation = 0.0
-        self.fk = TaskFrameFK(self.model, self.data, self.servo)
         self.servo.action_mode = "direct_velocity"
         self.servo.preview_enabled = self.servo.pose_only_targets = True
         self.servo.set_physical_wheel_slew(True)
@@ -85,7 +84,10 @@ class MarsSimRobot:
         if np.any(q < self.servo.limits[:, 0]) or np.any(q > self.servo.limits[:, 1]):
             raise ValueError("arm reference outside robot joint limits")
         self.servo.clear_task_trajectory()
-        hand = self.fk(self.servo.base_goal, q)
+        # A joint reference is certified in the current measured base frame.
+        # Reusing reset-frame FK silently mislabels its world pose after sag,
+        # tilt or base motion, including in actor previews and debug traces.
+        hand = TaskFrameFK(self.model, self.data, self.servo)(self.servo.base_pose(), q)
         self.commands.append(
             {"sim_time": float(self.data.time), "phase": self.phase, "arm": q.tolist(), "hand_pose": hand.tolist()}
         )
@@ -161,6 +163,7 @@ class MarsSimRobot:
                     "payload_height": float(self.data.xpos[self.payload, 2]),
                     "trajectory_progress_s": self.servo.trajectory_elapsed() if self.servo.task_trajectory else None,
                     "trajectory_rate": self.servo.task_progress_rate if self.servo.task_trajectory else None,
+                    "holding": self.servo.holding,
                 }
             )
         self.refresh()
@@ -189,7 +192,7 @@ class MarsSimRobot:
         self.servo.set_task_trajectory(path)
         progress, rate = 0.0, 0.0
         self.servo.set_trajectory_progress(0.0, rate=0.0)
-        held = 0.0
+        deadline = float(self.data.time) + 3 * path.end + 4
         # Geometric task contract with explicit, bounded retiming. Do not run
         # the hand ahead of an underactuated base and then demand an unreachable
         # instantaneous arm correction. Report the executed clock in the trace.
@@ -222,21 +225,37 @@ class MarsSimRobot:
             delta = self.servo.base_goal - self.servo.base_pose()
             yaw = np.arctan2(np.sin(delta[2]), np.cos(delta[2]))
             base_v = self.data.qvel[self.servo.base_dof : self.servo.base_dof + 6].copy()
-            settled = (
+            reached = (
                 progress >= path.end
                 and np.linalg.norm(hand[:3] - self.servo.hand_goal[:3]) < 0.005
                 and angle < 0.05
                 and np.linalg.norm(delta[:2]) < 0.005
                 and abs(yaw) < 0.04
-                and np.max(abs(self.servo.velocities())) < 0.03
-                and np.linalg.norm(base_v[:2]) < 0.005
-                and abs(base_v[5]) < 0.02
+                and np.max(abs(self.servo.velocities())) < 0.06
+                and np.linalg.norm(base_v[:2]) < 0.01
+                and abs(base_v[5]) < 0.04
             )
-            held = held + self.env.profile.dt if settled else 0.0
-            if held >= 1.0:
+            if reached:
+                # Enter hold once the pose is reached, then VERIFY settling.
+                # Requiring quiet motion before holding can make tiny pose
+                # corrections prevent the very settling we are waiting for.
                 self.servo.clear_task_trajectory()
+                self.servo.set_base_bias_compensation(False)
                 self.servo.hold_position()
-                return PhysicalMotionResult(True, "measured_pose_and_retention", "transport")
+                remaining = min(3.0, max(0.0, deadline - float(self.data.time)))
+                if self._verify_quiet_hold(1.0, remaining):
+                    now = self.servo.ee_pose()
+                    columns = now[3:].reshape(3, 2)
+                    actual = np.column_stack([columns, np.cross(columns[:, 0], columns[:, 1])])
+                    delta = self.servo.base_goal - self.servo.base_pose()
+                    if (
+                        np.linalg.norm(now[:3] - self.servo.hand_goal[:3]) < 0.005
+                        and np.arccos(np.clip((np.trace(target.T @ actual) - 1) / 2, -1, 1)) < 0.05
+                        and np.linalg.norm(delta[:2]) < 0.005
+                        and abs(np.arctan2(np.sin(delta[2]), np.cos(delta[2]))) < 0.04
+                    ):
+                        return PhysicalMotionResult(True, "measured_pose_and_retention", "transport")
+                break
         self.failure = "transport_tracking_timeout"
         self.servo.stop()
         return PhysicalMotionResult(False, self.failure, "transport")
@@ -245,6 +264,7 @@ class MarsSimRobot:
         self.failure = self.failure or reason
         self.servo.stop()
         deadline = time.monotonic() + 0.75
+        simulation_deadline = float(self.data.time) + 0.75
         while not self.env._physics_invalid:
             velocity = self.data.qvel[self.servo.base_dof : self.servo.base_dof + 6].copy()
             if (
@@ -254,10 +274,9 @@ class MarsSimRobot:
             ):
                 self.stop_confirmed = True
                 return True
-            if time.monotonic() >= deadline:
+            if time.monotonic() >= deadline or float(self.data.time) >= simulation_deadline:
                 break
-            self.env._tick(np.zeros(self.env.action_space.shape), score=True)
-            self.data, self.servo = self.env.data, self.env.control
+            self.step(self.env.profile.dt)
         self.stop_confirmed = False
         return False
 
@@ -294,6 +313,7 @@ class MarsSimRobot:
                 if not touched:
                     self.servo.clear_task_trajectory()
                     self.servo.set_base_bias_compensation(False)
+                    self.servo.set_pose_targets(self.servo.base_goal, self.servo.base_mask, self.servo.ee_pose(), True)
                     self.servo.hold_arm_position()
                     touched = True
                 held += self.env.profile.dt
@@ -311,6 +331,38 @@ class MarsSimRobot:
             self.step(self.env.profile.dt)
         self.servo.clear_task_trajectory()
         self.servo.hold_arm_position()
+        return False
+
+    def finish_and_hold(self):
+        """Complete only after two continuous seconds of measured quiet hold."""
+        if self.failure or self.retention_reference is not None or not self.servo.gripper_is_open():
+            return False
+        self.servo.clear_task_trajectory()
+        self.servo.set_base_bias_compensation(False)
+        self.servo.set_pose_targets(self.servo.base_goal, self.servo.base_mask, self.servo.ee_pose(), True)
+        self.servo.hold_position()
+        if self._verify_quiet_hold(2.0, 3.5):
+            return True
+        self.failure = self.failure or "terminal_motion_unsettled"
+        self.servo.stop()
+        return False
+
+    def _verify_quiet_hold(self, required_s, timeout_s):
+        held = 0.0
+        for _ in range(int(np.ceil(timeout_s / self.env.profile.dt))):
+            self.step(self.env.profile.dt)
+            velocity = self.data.qvel[self.servo.base_dof : self.servo.base_dof + 6].copy()
+            quiet = (
+                not self.failure
+                and np.max(abs(self.servo.velocities())) < 0.03
+                and np.linalg.norm(velocity[:2]) < 0.005
+                and abs(velocity[5]) < 0.02
+            )
+            held = held + self.env.profile.dt if quiet else 0.0
+            if held >= required_s:
+                return True
+            if self.failure:
+                return False
         return False
 
     def get_gripper_position(self):

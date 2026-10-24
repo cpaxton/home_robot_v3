@@ -61,11 +61,17 @@ def summarize(rows):
         calls = row.get("calls", [])
         entry["planned"] += any(x["tool"] == "plan_pick_place" and x["result"]["status"] == "ok" for x in calls)
         execution = next((x["result"] for x in calls if x["tool"] == "execute_pick_place_plan"), None)
-        entry["execution_started"] += bool(execution and execution.get("data", {}).get("execution_started"))
+        entry["execution_started"] += bool(
+            execution and (execution["status"] == "ok" or execution.get("data", {}).get("execution_started"))
+        )
         if not row["success"]:
             if execution:
                 stage = execution.get("data", {}).get("failed_stage") or "verification"
                 code = row.get("robot_failure") or execution["code"]
+                if execution["status"] == "ok":
+                    code = (
+                        ",".join(k for k, value in row.get("final_predicates", {}).items() if not value) or "stability"
+                    )
             elif row.get("exception"):
                 stage, code = "exception", row["exception"]
             elif not row.get("fixture_admission", {}).get("accepted"):
@@ -96,6 +102,13 @@ def plot_case(row, output):
     ee_axes = figure.add_subplot(221, projection="3d")
     ee_axes.plot(*target[:, :3].T, label="active target", linestyle="--")
     ee_axes.plot(*hand[:, :3].T, label="measured")
+    for i, endpoint in enumerate(row.get("pose_references", {}).get("arm_targets", [])):
+        pose = np.asarray(endpoint["hand"])
+        ee_axes.scatter(*pose[:3], marker="x", color="black", label="nominal stage targets" if i == 0 else None)
+        columns = pose[3:].reshape(3, 2)
+        rotation = np.column_stack([columns, np.cross(columns[:, 0], columns[:, 1])])
+        for axis, color in enumerate(("red", "green", "blue")):
+            ee_axes.quiver(*pose[:3], *rotation[:, axis], length=0.01, color=color, alpha=0.5)
     ee_axes.set(xlabel="world x (m)", ylabel="world y (m)", zlabel="world z (m)", title="Hand")
     ee_axes.legend()
     base_axes = figure.add_subplot(222)

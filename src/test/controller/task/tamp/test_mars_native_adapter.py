@@ -218,3 +218,21 @@ def test_loaded_gripper_cannot_open_or_probe_outside_place(mars):
     assert robot.failure == "release_support_unverified"
     assert not robot.commands and robot.servo.stopped
     np.testing.assert_array_equal(before, env.data.qpos)
+
+
+def test_joint_reference_preview_uses_measured_world_frame_after_base_tilt(mars):
+    import mujoco
+
+    env, robot, context, call = mars
+    q = robot.servo.positions().copy()
+    original = robot.servo.ee_pose().copy()
+    joint = env.model.body(env.profile.base_body).jntadr[0]
+    address = env.model.jnt_qposadr[joint]
+    tilt = np.array([np.cos(0.01 / 2), 0, np.sin(0.01 / 2), 0])
+    quat = env.data.qpos[address + 3 : address + 7].copy()
+    mujoco.mju_mulQuat(env.data.qpos[address + 3 : address + 7], tilt, quat)
+    mujoco.mj_forward(env.model, env.data)
+    expected = robot.servo.ee_pose().copy()
+    assert np.linalg.norm(expected[:3] - original[:3]) > 0.001
+    assert robot.command_arm_reference(q, blocking=False)
+    np.testing.assert_allclose(robot.servo.hand_goal, expected, atol=1e-10)

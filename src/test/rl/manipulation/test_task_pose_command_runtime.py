@@ -177,6 +177,78 @@ def test_executor_retiming_is_monotonic_bounded_and_does_not_release(runtime):
 
 
 @pytest.mark.sim
+def test_unconfirmed_stop_is_bounded_by_simulation_time(runtime, monkeypatch):
+    env = runtime.env
+    began = float(env.data.time)
+    monkeypatch.setattr(env.control, "velocities", lambda: np.ones(env.profile.arm_size))
+
+    def perpetually_moving(action, **kwargs):
+        env.data.time += env.profile.dt
+
+    monkeypatch.setattr(env, "_tick", perpetually_moving)
+    assert not runtime.cancel_reactive_command()
+    assert 0.75 <= float(env.data.time) - began <= 0.75 + env.profile.dt + 1e-8
+    assert env.control.stopped
+
+
+@pytest.mark.sim
+def test_hand_only_teacher_uses_free_base_and_ignores_inactive_base_values(runtime):
+    c = runtime.env.control
+    goal = c.ee_pose().copy()
+    goal[1] += 0.01
+    c.set_pose_targets(c.base_pose(), [False] * 3, goal, True)
+    first = task_pose_teacher_action(c)
+    assert np.linalg.norm(first[:2]) > 0.01
+    c.set_pose_targets(c.base_pose() + [100, -200, 2], [False] * 3, goal, True)
+    np.testing.assert_allclose(task_pose_teacher_action(c), first, atol=1e-10)
+    assert np.isfinite(first).all() and np.max(abs(first)) <= 1
+
+
+@pytest.mark.sim
+@pytest.mark.parametrize(("robot", "yaw_joint"), [("innate_mars", 0), ("stretch", 2)])
+def test_hand_only_pose_schedule_reaches_fk_witness_using_base(robot, yaw_joint):
+    env = ManipulationEnv(
+        ManipulationConfig(
+            robot=robot,
+            scenario="reach",
+            action_mode="direct_velocity",
+            trajectory_preview=True,
+            randomization_scale=0,
+            horizon=20,
+            goal_gated_settling=True,
+        )
+    )
+    try:
+        env.reset(seed=1900020)
+        c = env.control
+        initial = c.base_pose().copy()
+        witness_base = initial.copy()
+        witness_base[2] += 0.15
+        q = c.positions().copy()
+        q[yaw_joint] -= 0.15
+        assert np.all(q >= c.limits[:, 0]) and np.all(q <= c.limits[:, 1])
+        hand = TaskFrameFK(env.model, env.data, c)(witness_base, q)
+        env.set_task_trajectory(
+            TaskPoseTrajectory(
+                [0, 3],
+                [initial, initial],
+                [c.ee_pose(), hand],
+                [c.grip_reference] * 2,
+                base_mask=[False] * 3,
+            )
+        )
+        for _ in range(400):
+            _, _, done, truncated, info = env.step(task_pose_teacher_action(env.control))
+            if done or truncated:
+                break
+        assert info["is_success"], info
+        assert info["ee_position_error"] < 0.005 and info["ee_orientation_error"] < 0.05
+        assert abs(env.control.base_pose()[2] - initial[2]) > 0.02
+    finally:
+        env.close()
+
+
+@pytest.mark.sim
 def test_tamp_planner_pose_schedule_runs_through_protocol_without_relocation(runtime):
     from emet.rl.manipulation.tamp_cases import execute_pose_case, plan_case
 

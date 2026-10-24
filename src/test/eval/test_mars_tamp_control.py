@@ -170,3 +170,18 @@ def test_summary_keeps_admission_planning_and_execution_denominators():
         "end_to_end_success_rate": 0,
     }
     assert result["failure_stages"] == {"planning:no_admitted_plan": 1, "fixture:no_stable_grasp_setup": 1}
+
+
+def test_success_receipt_counts_execution_and_external_failures_name_predicate():
+    from emet.eval.mars_tamp_metrics import summarize
+
+    row = {
+        "case": {"layout": "left", "mass_kg": 0.05},
+        "fixture_admission": {"accepted": True},
+        "success": False,
+        "final_predicates": {"object_still": True, "robot_still": False},
+        "calls": [{"tool": "execute_pick_place_plan", "result": {"status": "ok", "code": "ok", "data": {}}}],
+    }
+    result = summarize([row])
+    assert result["strata"]["left:50g"]["execution_started"] == 1
+    assert result["failure_stages"] == {"verification:robot_still": 1}

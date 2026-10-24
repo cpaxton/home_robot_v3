@@ -76,6 +76,20 @@ class MarsPhysicalPickPlaceExecutor(PhysicalPickPlaceExecutor):
                 self.data.qpos[:] = initial
                 path, error = self.plan_joint_target(goal, ordered_groups=ordered_groups)
                 if error is None:
+                    from emet.rl.manipulation.grasp_setup import support_margin
+
+                    trial = mujoco.MjData(self.model)
+                    mujoco.mj_copyData(trial, self.model, self.data)
+                    payload = self.model.body(self.collision.payload_body).id if self.collision.payload_body else None
+                    for q in path:
+                        trial.qpos[self.qadr] = q
+                        if self.collision.configuration_collides(self.model, trial):
+                            error = "arm_path_collision"
+                            break
+                        if support_margin(self.model, trial, MARS, payload)["margin_m"] < 0.005:
+                            error = "arm_path_static_support_margin"
+                            break
+                if error is None:
                     self.remember_pose_seed(position, rotation, goal)
                     accepted = True
                     return path, None
@@ -225,6 +239,10 @@ class MarsNativeTableAdapter(NativeTableAdapter):
             self.robot.payload = self.robot.model.body(obj).id
             if phase == "lift":
                 self.robot.retention_reference = relative_pose(self.robot.data, self.robot.servo.ee, self.robot.payload)
+            if phase in {"preplace", "place"}:
+                # Resume compensation only for the verified free-space arm
+                # segment; the robot disables it again at support contact.
+                self.robot.servo.set_base_bias_compensation(True)
             result = original(phase, path)
             if phase == "lift" and result.success:
                 self.robot.servo.set_base_bias_compensation(True)
@@ -349,7 +367,60 @@ class MarsNativeTableAdapter(NativeTableAdapter):
     def _prepare_transport(self, executor, obj, goal):
         from emet.controller.task.tamp.mars_transport import plan_transport
 
-        return plan_transport(self.model, self.data, executor.collision, self.model.body(obj).id, goal)
+        initial = self.data.qpos.copy()
+        checker = executor.collision
+        attachment = (
+            checker.payload_body,
+            checker.payload_parent,
+            None if checker.payload_transform is None else checker.payload_transform.copy(),
+        )
+        base = self.data.body(MARS.base_body)
+        yaw = np.arctan2(base.xmat.reshape(3, 3)[1, 0], base.xmat.reshape(3, 3)[0, 0])
+        short = np.r_[base.xpos[:2] + 0.03 * np.array([np.cos(yaw), np.sin(yaw)]), yaw]
+        accepted = False
+        error = "no_feasible_transport"
+        try:
+            for strategy, target in (("short_straight_and_arm", short), ("full_base_transfer", None)):
+                self.data.qpos[:] = initial
+                checker.payload_body, checker.payload_parent, checker.payload_transform = attachment
+                mujoco.mj_kinematics(self.model, self.data)
+                move, error = plan_transport(
+                    self.model, self.data, checker, self.model.body(obj).id, goal, base_target=target
+                )
+                if error:
+                    self._record_rejection(strategy, error, executor)
+                    continue
+                endpoint = self.data.qpos.copy()
+                rotation = self.data.body(executor.ee_body).xmat.reshape(3, 3).copy()
+                targets = self._place_targets(executor, obj, goal, rotation)
+                # Select base motion by the complete downstream task, rather
+                # than forcing a lateral transfer when the arm can do the work.
+                # These are private planning probes within the same IK budget.
+                error = None
+                for i, (point, orientation) in enumerate(targets):
+                    if i == 2:
+                        checker.set_payload(self.model, self.data, None)
+                        _, error = executor.plan_gripper_open()
+                        if error:
+                            break
+                    _, error = executor.plan_pose(point, orientation)
+                    if error:
+                        break
+                if error:
+                    self._record_rejection(strategy, error, executor)
+                    continue
+                self.data.qpos[:] = endpoint
+                checker.payload_body, checker.payload_parent, checker.payload_transform = attachment
+                mujoco.mj_kinematics(self.model, self.data)
+                move.update(base_goal=move["trajectory"].base[-1].tolist(), strategy=strategy)
+                accepted = True
+                return move, None
+            return None, error
+        finally:
+            checker.payload_body, checker.payload_parent, checker.payload_transform = attachment
+            if not accepted:
+                self.data.qpos[:] = initial
+                mujoco.mj_kinematics(self.model, self.data)
 
     def _transport(self, plan):
         from emet.controller.manipulation.physical_pick_place import PhysicalMotionResult
@@ -358,7 +429,16 @@ class MarsNativeTableAdapter(NativeTableAdapter):
         self.synchronize(self.data)
         if not executor.payload_retained():
             return PhysicalMotionResult(False, "payload_not_retained", "transport")
-        transport, error = self._prepare_transport(executor, plan.object_body, plan.goal)
+        from emet.controller.task.tamp.mars_transport import plan_transport
+
+        transport, error = plan_transport(
+            self.model,
+            self.data,
+            executor.collision,
+            self.model.body(plan.object_body).id,
+            plan.goal,
+            base_target=plan.transport["base_goal"],
+        )
         if error:
             return PhysicalMotionResult(False, error, "transport")
         result = self.robot.follow_trajectory(transport["trajectory"])
@@ -397,6 +477,7 @@ class MarsNativeTableAdapter(NativeTableAdapter):
             if transport is not None:
                 result["data"]["transport_duration_s"] = transport["trajectory"].end
                 result["data"]["minimum_static_support_margin_m"] = transport["minimum_static_margin_m"]
+                result["data"]["transport_strategy"] = transport["strategy"]
         return result
 
     def pose_references(self, plan_ref):
@@ -408,6 +489,26 @@ class MarsNativeTableAdapter(NativeTableAdapter):
             return {
                 "transport": plan.transport["trajectory"].record(),
                 "approach_base": plan.approach["base_trajectory"].record(),
+                "arm_targets": [
+                    {
+                        "stage": stage,
+                        "kind": "nominal_planning_endpoint; execution_recertifies_measured_state",
+                        "base": plan.transport["trajectory"].base[0 if i < 3 else -1].tolist(),
+                        "hand": np.r_[point, orientation[:, :2].ravel()].tolist(),
+                        "gripper": MARS.gripper_open
+                        if stage in {"pregrasp", "grasp", "retreat"}
+                        else MARS.gripper_closed,
+                        "base_mask": [True] * 3,
+                        "hand_mask": True,
+                    }
+                    for i, (stage, (point, orientation)) in enumerate(
+                        zip(
+                            ("pregrasp", "grasp", "lift", "preplace", "place", "retreat"),
+                            [*plan.executor.grasp_targets, *plan.executor.place_targets],
+                            strict=True,
+                        )
+                    )
+                ],
             }
 
     def _place_targets(self, executor, obj, goal, rotation):
@@ -451,3 +552,8 @@ class MarsNativeTableAdapter(NativeTableAdapter):
                 raise
             finally:
                 self._executing = False
+
+    def _verify(self, plan, *, released, seconds):
+        if released and not self.robot.finish_and_hold():
+            return False
+        return super()._verify(plan, released=released, seconds=seconds) and not self.robot.failure
