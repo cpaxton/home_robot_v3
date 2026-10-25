@@ -161,4 +161,5 @@ class OpenaiVLLMClient(AbstractVLLMClient):
         return text
 
     def _conversation_user_content(self, content):
+        """Encode a prior user turn, including images, for multi-turn transport."""
         return self._content_blocks(content, None)
