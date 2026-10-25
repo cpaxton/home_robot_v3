@@ -57,6 +57,16 @@ def test_history_uses_acquisition_metadata_and_labels_old_views_without_preturn_
     assert ex._append_trace.call_args.args[0]["event"] == "view_selection"
 
 
+@pytest.mark.parametrize("stamp", [True, False])
+def test_history_rejects_boolean_acquisition_timestamp(stamp):
+    ex = executor()
+    history = ex.agent.voxel_map.observations
+    ex.agent.voxel_map.observations = [history[0], history[-1]]
+    ex.agent.voxel_map.observations[0].info["image_timing"]["head_cam_left"]["timestamp_ns"] = stamp
+    result = select_assessment_history(ex, ex.agent.voxel_map.observations[-1].rgb)
+    assert all(view.frame.view_id != "1" for view in result.views)
+
+
 def test_unknown_current_acquisition_or_mismatched_pixels_falls_back_explicitly():
     ex = executor()
     current = ex.agent.voxel_map.observations[-1]

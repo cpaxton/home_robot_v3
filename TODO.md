@@ -11,6 +11,11 @@
 Short checklist for agent/hardware polish that is not worth a full plan doc yet.
 Strike through or move to a PR when done.
 
+- [ ] Deferred coverage experiment (#198): preserve `feat/measured-coverage-scan`
+      at `cb481970`; reopen a small main-based slice only for a demonstrated view
+      coverage gap, with same-provider local/coverage, initial-heading and cost
+      comparisons. See [disposition](docs/plans/coverage_scan_disposition.md).
+
 ## Shared evidence/navigation stack (#199 / #202)
 
 - [ ] Report wall-clock and simulator-clock elapsed time separately for episodes,

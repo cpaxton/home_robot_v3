@@ -8,9 +8,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+import tempfile
+import warnings
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 from PIL import Image
 
 
@@ -21,7 +24,15 @@ def record_vlm_request(root, *, system_prompt, user_text, images, metadata, hist
     Refuse to overwrite another call's evidence. This does not change inference.
     """
     root = Path(root)
-    root.mkdir(parents=True, exist_ok=False)
+    original_root = root
+    try:
+        root.mkdir(parents=True, exist_ok=False)
+    except FileExistsError:
+        root = Path(tempfile.mkdtemp(prefix=root.name + "-retry-", dir=root.parent))
+        warnings.warn(
+            f"VLM audit path collision at {original_root}; saved separately in {root}", RuntimeWarning, stacklevel=2
+        )
+        metadata = {**metadata, "audit_path_collision": str(original_root)}
     entries = []
     for slot, image in enumerate(images, 1):
         name = f"image_{slot}.png"
@@ -46,6 +57,8 @@ def record_vlm_request(root, *, system_prompt, user_text, images, metadata, hist
             if isinstance(part, str):
                 blocks.append({"type": "text", "text": part})
             else:
+                if not isinstance(part, (Image.Image, np.ndarray)):
+                    raise TypeError(f"Unsupported raw conversation image part: {type(part).__name__}")
                 image = part if isinstance(part, Image.Image) else Image.fromarray(part)
                 name = f"history_{turn:03d}_{slot:02d}.png"
                 image.save(root / name)

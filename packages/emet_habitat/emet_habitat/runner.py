@@ -684,7 +684,7 @@ def run_hmeqa_episode(
         if isinstance(summary, dict) and summary.get("scored_policy"):
             scored_policy = str(summary.get("scored_policy") or "")
         elif grounded_decision is not None:
-            scored_policy = str(summary["decision_policy"])
+            scored_policy = str(summary.get("decision_policy"))
         elif salvage_pred or (isinstance(summary, dict) and "salvage_counterfactual_letter" in summary):
             scored_policy = "no_salvage"
 

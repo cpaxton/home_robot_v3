@@ -14,6 +14,33 @@ from PIL import Image
 from emet.eval.eqa_decision_trace import finalize_eqa_decision_trace, record_eqa_decision_iteration
 
 
+def test_audit_collision_preserves_both_requests_and_reports_relocation(tmp_path):
+    from emet.eval.eqa_decision_trace import record_vlm_request
+
+    kwargs = {"system_prompt": "system", "user_text": "one", "images": [], "metadata": {}}
+    first = record_vlm_request(tmp_path / "call_1", **kwargs)
+    with pytest.warns(RuntimeWarning, match="audit path collision"):
+        second = record_vlm_request(tmp_path / "call_1", **{**kwargs, "user_text": "two"})
+    assert first != second
+    assert json.loads(first.read_text())["user_text"] == "one"
+    assert json.loads(second.read_text())["user_text"] == "two"
+    assert json.loads(second.read_text())["metadata"]["audit_path_collision"] == str(first.parent)
+
+
+def test_audit_rejects_unsupported_raw_history_image(tmp_path):
+    from emet.eval.eqa_decision_trace import record_vlm_request
+
+    with pytest.raises(TypeError, match="Unsupported raw conversation image"):
+        record_vlm_request(
+            tmp_path / "call",
+            system_prompt="",
+            user_text="",
+            images=[],
+            metadata={},
+            history=[{"role": "user", "content": [{"type": "image_url"}]}],
+        )
+
+
 def test_router_request_preserves_system_user_image_order_and_pixels(tmp_path):
     import hashlib
 
