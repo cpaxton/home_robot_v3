@@ -69,6 +69,16 @@ def test_answer_attaches_exact_camera_evidence_without_creating_objects():
     np.testing.assert_array_equal(images[1], context)
     assert mem.last_eqa_obs_ids == []
     assert mem.last_eqa_nav_fallback_count == 0
+    *_, images = mem.query_answer(
+        "What color?",
+        evidence_images=[current, context],
+        evidence_labels=["Image 1 current", "Image 2 historical, 1 second ago"],
+        evidence_roles=["current", "context"],
+    )
+    assert "Image 2 historical, 1 second ago" in mem.last_eqa_prompt_text
+    assert "pre-approach context" not in mem.last_eqa_prompt_text
+    # Restore the legacy packet for its unchanged label contract below.
+    mem.query_answer("What color?", evidence_images=[current, context])
     assert not mem.get_nodes() and not mem.get_observations()
     assert "earlier pre-approach context" in mem.last_eqa_prompt_text
     oid = mem.add_observation(current, np.array([0.0, 0.0, 0.5]), ["cup"])
@@ -106,6 +116,16 @@ def test_assessed_packet_preserves_explicit_find_and_detail_with_correct_indices
     assert "Image 4 is a close-up" in mem.last_eqa_prompt_text
     assert mem._resolve_eqa_action_image_ref(3, [oid]) == oid
     assert mem._resolve_eqa_action_image_ref(2, [oid]) is None
+    *_, images = mem.query_answer(
+        "How many cups? A) 1 B) 2 C) 3",
+        evidence_images=[current, context],
+        evidence_labels=["Image 1: current capture", "Image 2: earlier context"],
+        evidence_roles=["current", "pre_turn"],
+        force_obs_ids=[oid],
+    )
+    assert len(images) == 4
+    assert "Image 2: earlier context" in mem.last_eqa_prompt_text
+    assert "Image 1=current, Image 2=pre_turn, Image 3=find_view, Image 4=detail_crop" in mem.last_eqa_prompt_text
     mem.parameters = {"eqa_vl": {"eqa_max_images": 2}}
     *_, images = mem.query_answer(
         "How many cups? A) 1 B) 2 C) 3", evidence_images=[current, context], force_obs_ids=[oid]

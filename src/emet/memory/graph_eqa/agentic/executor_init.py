@@ -138,6 +138,12 @@ def init_executor(
     cfg_decision = _eqa_cfg(agent).get("agentic_decision_policy", "legacy")
     self.decision_policy = resolve_agentic_decision_policy(env_decision if env_decision is not None else cfg_decision)
     eqa_cfg = _eqa_cfg(agent)
+    if getattr(agent, "robot", None) is not None:
+        # Preserve one actual path/yaw-boundary frame independently of optional
+        # history ranking. Unsupported adapters provide no before-turn capture.
+        # Clear it per query so the previous phase cannot supply stale evidence.
+        agent.robot.retain_navigation_views = True
+        agent.robot.pre_turn_observation = None
     graph_mode = os.environ.get("EMET_EQA_GRAPH_EVIDENCE_MODE", "") or eqa_cfg.get("graph_evidence_mode", "off")
     history_mode = os.environ.get("EMET_EQA_ROOM_HISTORY_MODE", "") or eqa_cfg.get("room_history_mode", "off")
     attempt_mode = os.environ.get("EMET_EQA_ATTEMPT_LEDGER_MODE", "") or eqa_cfg.get("attempt_ledger_mode", "off")

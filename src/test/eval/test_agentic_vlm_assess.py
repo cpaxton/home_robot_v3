@@ -64,6 +64,22 @@ def test_assessment_keeps_current_and_context_roles_and_image_budget():
     assert isinstance(client.mm_calls[-1][1]["image"], np.ndarray)
 
 
+def test_assessment_uses_exact_selected_packet_and_historical_labels():
+    from emet.memory.view_selection import ViewFrame, select_views
+
+    frames = [ViewFrame(str(i), "episode", float(i), np.full((8, 8, 3), i, dtype=np.uint8)) for i in range(4)]
+    selected = select_views(frames, current_id="3")
+    client = _MultiClient({"present": False, "answerable": False})
+    assessment = assess_view_with_vlm(client, question="Where is the cup?", rgb=frames[-1].rgb, selected_views=selected)
+    prompt, kwargs = client.mm_calls[-1]
+    assert assessment.image_count == 4
+    for actual, expected in zip(kwargs["image"], selected.views, strict=True):
+        np.testing.assert_array_equal(actual, expected.frame.rgb)
+    assert "Image 4" in prompt and "earlier context" in prompt
+    assert "pre-approach" not in prompt
+    assert "Judge present from Image 1 only" in prompt
+
+
 def test_extract_target_from_question_parses_json():
     client = _TextClient({"target_phrase": "utensils", "question_type": "location", "notes": "ignore options"})
     extracted = extract_target_from_question(
