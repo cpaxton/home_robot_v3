@@ -161,6 +161,7 @@ def _forced_answer_fallback(
 
     out = self._do_submit_answer(prefer_answer=prefer_answer)
     if self.decision_policy == "model_final":
+        decision = getattr(self, "_final_answer_decision", None)
         self._append_trace(
             {
                 "tool": "forced_answer",
@@ -168,7 +169,7 @@ def _forced_answer_fallback(
                 "answer": out.get("answer"),
                 "answer_provenance": "model_final",
                 "confidence": out.get("confidence", False),
-                "final_decision": self._final_answer_decision.to_dict(),
+                "final_decision": decision.to_dict() if decision is not None else None,
             }
         )
         return out
@@ -915,12 +916,14 @@ def _do_submit_answer(self, prefer_answer: str = "") -> dict[str, Any]:
             query_ans = "Unknown"
             confidence = False
         if self.decision_policy == "model_final":
-            answer, answer_source = query_ans or "Unknown", "model_final"
+            answer, answer_source = (query_ans or "Unknown"), "model_final"
             letter = self._mcq_letter_from_text(answer)
             self._final_answer_decision = FinalAnswerDecision(
                 answer=answer,
                 answer_text=answer,
                 source=answer_source,
+                # The current answer schema supplies boolean confidence, not
+                # a calibrated scalar probability.
                 confidence=float(bool(confidence)),
                 choice_index=ord(letter) - ord("A") if letter else None,
             )
