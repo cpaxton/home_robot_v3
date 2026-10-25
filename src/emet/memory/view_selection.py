@@ -149,7 +149,12 @@ class ViewSelection:
         labels = [view.label(i) for i, view in enumerate(self.views, 1)]
         if not self.config.spatial_labels or not labels:
             return labels
-        times = sorted({view.frame.timestamp_s for view in self.views})
+        sequences = {
+            view.frame.view_id: index
+            for index, view in enumerate(
+                sorted(self.views, key=lambda view: (view.frame.timestamp_s, view.frame.view_id)), 1
+            )
+        }
         for i, view in enumerate(self.views):
             pose = view.frame.camera_pose
             geometry = "camera position/direction unavailable"
@@ -157,10 +162,10 @@ class ViewSelection:
                 xyz = ", ".join(f"{x:.2f}" for x in pose[:3, 3])
                 forward = ", ".join(f"{x:.2f}" for x in pose[:3, 2])
                 geometry = f"camera XYZ=({xyz}) m; viewing direction=({forward})"
-            sequence = times.index(view.frame.timestamp_s) + 1
+            sequence = sequences[view.frame.view_id]
             labels[i] += f" Capture sequence={sequence}; {geometry}."
         labels[0] = (
-            "Capture sequence is chronological within this packet (1 = earliest); "
+            "Capture sequence is chronological within this packet (1 = earliest; equal timestamps use view ID order); "
             "image display order is different. Positions are camera XYZ in meters in "
             "one shared world frame; directions are camera optical-forward unit vectors "
             "in that frame. These are camera poses, not object locations.\n" + labels[0]
@@ -317,9 +322,10 @@ def select_views(
             frame, score = pinned, None
             values = features(frame)
         else:
+            candidate_features = {f.view_id: features(f) for f in unique}
 
             def rank(f):
-                values = features(f)
+                values = candidate_features[f.view_id]
                 score = (
                     sum(w * (values[k] or 0) for k, w in zip(FEATURES, config.weights, strict=True))
                     / sum(config.weights)
@@ -331,7 +337,7 @@ def select_views(
             # Stable view ID tie-break independent of input enumeration order.
             frame = max(sorted(unique, key=lambda f: f.view_id), key=rank)
             score, _ = rank(frame)
-            values = features(frame)
+            values = candidate_features[frame.view_id]
         role = "current" if frame.view_id == current_id else "pre_turn" if frame.view_id == pre_turn_id else "context"
         selected.append(SelectedView(frame, role, current.timestamp_s - frame.timestamp_s, score, values))
         covered.update(frame.visible_cells or ())

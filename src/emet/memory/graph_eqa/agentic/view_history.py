@@ -46,7 +46,13 @@ def select_assessment_history(executor, rgb, *, current_observation=None):
             continue
         timing = ((getattr(frame, "info", None) or {}).get("image_timing") or {}).get("head_cam_left") or {}
         stamp, clock = timing.get("timestamp_ns"), timing.get("clock_domain")
-        if not isinstance(stamp, (int, float)) or not np.isfinite(stamp) or stamp <= 0 or not clock:
+        if (
+            isinstance(stamp, bool)
+            or not isinstance(stamp, (int, float))
+            or not np.isfinite(stamp)
+            or stamp <= 0
+            or not clock
+        ):
             continue
         pixels = frame_rgb_hwc_uint8(frame)
         if pixels is None:
