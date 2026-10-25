@@ -33,6 +33,18 @@ def ids(result):
     return [v.frame.view_id for v in result.views]
 
 
+def test_spatial_sequences_are_unique_for_equal_acquisition_times():
+    result = select_views(
+        [frame(2, timestamp=3), frame(1, timestamp=3), frame(3, timestamp=4)],
+        current_id="3",
+        config=SelectionConfig(spatial_labels=True),
+    )
+    labels = dict(zip(ids(result), result.image_labels(), strict=True))
+    assert "Capture sequence=1;" in labels["1"]
+    assert "Capture sequence=2;" in labels["2"]
+    assert "Capture sequence=3;" in labels["3"]
+
+
 def test_spatial_labels_preserve_images_and_exact_packet_context_at_handoff():
     frames = [frame(1, x=2), frame(2, x=1)]
     plain = select_views(frames, current_id="2")

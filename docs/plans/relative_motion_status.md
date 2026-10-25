@@ -1,5 +1,21 @@
 # Shared relative movement implementation status
 
+## Re-review closeout, 2026-10-25
+
+- Rotation schema, CHAT dispatch and legacy controller all use the same ±180° bound.
+- Both navigation execution and legacy receipts use `relative_motion_progress`
+  for body-frame displacement and SE(2) arrival. Forward motion intentionally
+  checks heading drift; unconfirmed arrival retains the measured displacement.
+- Head feedback exceptions return structured failures through `observe_floor`;
+  direct blocked-floor aiming also catches unavailable measured gaze. The
+  head-sweep loop catches unavailable feedback; forward-distance clipping does
+  not read head pose in this revision.
+- Synthetic policy IDs are negative while real observation IDs are positive.
+  The legacy float result is documented as zero unless arrival is confirmed;
+  structured receipts preserve partial progress.
+- 134 targeted motion/gaze/room/visual-consumer tests pass. Live recovery and
+  manipulation qualification remain separate acceptance gates.
+
 ## Re-review: behavior migration and optional gaze startup
 
 The prior change updated verification output but missed three control paths:

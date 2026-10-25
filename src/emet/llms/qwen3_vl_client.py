@@ -408,6 +408,7 @@ class Qwen3VLClient(AbstractVLLMClient):
         return user_commands
 
     def _conversation_user_content(self, content):
+        """Encode a prior user turn, including images, in native Qwen history."""
         return self._process_input(content)
 
     def _model_device(self) -> torch.device:
