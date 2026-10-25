@@ -41,9 +41,12 @@ def express_questions(rows):
     questions, seen = [], set()
     for row in _nonempty_rows(rows):
         qid = row.get("episode_id")
-        if isinstance(qid, bool) or not isinstance(qid, int) or qid < 0 or qid in seen:
+        valid_id = (isinstance(qid, int) and not isinstance(qid, bool) and qid >= 0) or (
+            isinstance(qid, str) and qid.isascii() and qid.isdecimal()
+        )
+        if not valid_id or str(qid) in seen:
             raise ValueError("Invalid/duplicate EXPRESS episode_id")
-        seen.add(qid)
+        seen.add(str(qid))
         questions.append(
             EvaluationQuestion(
                 "express",
@@ -74,12 +77,13 @@ def abstain_questions(answerable_rows, unanswerable_rows):
                 or any(isinstance(i, bool) or not isinstance(i, int) or i < 0 for i in indices)
             ):
                 raise ValueError(f"Invalid frame_list: {qid}")
+            category = row.get("category")
             questions[qid] = EvaluationQuestion(
                 "abstaineqa",
                 qid,
                 variant,
                 _text(row, "question"),
-                row["category"] if isinstance(row.get("category"), str) and row["category"].strip() else "unlabeled",
+                category if isinstance(category, str) and category.strip() else "unlabeled",
                 None,  # episode_history identifies evidence, not a certified scene split.
                 _text(row, "answer"),
                 tuple(indices),
@@ -92,6 +96,8 @@ def abstain_questions(answerable_rows, unanswerable_rows):
     output = []
     for qid in sorted(positive):
         a, b = positive[qid], negative[qid]
+        # Categories describe each variant, not evidence identity. They may
+        # differ or coincide; pilot stratification uses the unanswerable arm.
         if a.evidence_id != b.evidence_id or a.frame_indices != b.frame_indices:
             raise ValueError(f"AbstainEQA pair evidence differs: {qid}")
         output.extend((a, b))

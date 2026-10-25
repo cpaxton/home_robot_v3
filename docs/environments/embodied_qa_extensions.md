@@ -1,5 +1,12 @@
 # Planned embodied-QA benchmark extensions
 
+Metadata review closeout (2026-10-25): EXPRESS accepts nonnegative integer IDs
+or decimal strings and preserves string spelling, including leading zeroes.
+Duplicate normalized string IDs are rejected. AbstainEQA categories belong to
+each variant and may coincide or differ; equality is not a malformed evidence
+pair. Pilot stratification uses the unanswerable variant's category, while
+question/reference/category fields remain isolated from model input.
+
 Status: metadata ingestion adapters implemented in
 `emet.eval.embodied_qa_datasets`; **no qualified active runner or scored result**.
 Finish the [observation/movement cases](../testing/agent_observation_cases.md)

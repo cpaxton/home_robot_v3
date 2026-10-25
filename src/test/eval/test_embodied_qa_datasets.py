@@ -83,6 +83,15 @@ def test_abstention_variants_intentionally_differ_in_question_and_category():
     assert len(development_pilot(paired, 1)) == 2
     assert paired[0].scene is None
     assert paired[0].evidence_id == paired[1].evidence_id == "scene"
+    assert paired[0].category == "object recognition"
+    assert paired[1].category == "Referential Underspecification"
+
+
+def test_express_string_ids_preserve_official_spelling_and_reject_collisions():
+    row = {"episode_id": "007", "question": "What?", "answer": "blue", "type": "attribute", "scene_id": "scene"}
+    assert express_questions([row])[0].question_id == "007"
+    with pytest.raises(ValueError, match="duplicate"):
+        express_questions([{**row, "episode_id": 7}, {**row, "episode_id": "7"}])
 
 
 def test_mixed_benchmark_pilot_fails_instead_of_guessing_variant_policy():
