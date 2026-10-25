@@ -8,7 +8,20 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
-from emet.controller.dynamem.relative_motion import execute_relative_motion
+from emet.controller.dynamem.relative_motion import execute_relative_motion, relative_motion_progress
+
+
+def test_motion_progress_keeps_translation_but_rejects_heading_drift():
+    measured, arrived = relative_motion_progress(
+        [0, 0, np.pi / 2], [0, 0.5, np.pi / 2 + 0.1], "move_forward", 0.5, 0.02, 0.03
+    )
+    np.testing.assert_allclose(measured, [0.5, 0, 0.1], atol=1e-10)
+    assert not arrived
+    measured, arrived = relative_motion_progress(
+        [0, 0, np.pi - 0.1], [0, 0, -np.pi + 0.1], "rotate_base", np.rad2deg(0.2), 0.02, 0.03
+    )
+    assert arrived
+    assert measured[2] == pytest.approx(0.2)
 
 
 def agent_fixture(rejection=None, arrived=True):

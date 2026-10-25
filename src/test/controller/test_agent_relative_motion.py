@@ -37,6 +37,8 @@ def test_rotate_base_and_move_forward_tools_registered():
     assert "180" in tools["rotate_base"].func(degrees=180)
     assert "0.50" in tools["move_forward"].func(meters=0.5)
     assert calls == [[("rotate_base", "180.0")], [("move_forward", "0.5")]]
+    tools["rotate_base"].func(degrees=200)
+    assert calls[-1] == [("rotate_base", "180.0")]
 
 
 def test_clip_forward_distance_hits_obstacle():

@@ -11,6 +11,29 @@ import numpy as np
 from emet.controller.task.tamp.api import response
 
 
+def relative_motion_progress(before, after, tool, commanded, position_tolerance, yaw_tolerance):
+    """Measured body-frame displacement and full SE(2) arrival confirmation.
+
+    Forward motion also checks yaw: heading drift changes the resulting pose.
+    This reports an unconfirmed arrival; it does not erase measured progress.
+    """
+    before, after = np.asarray(before, dtype=float), np.asarray(after, dtype=float)
+    if before.shape != (3,) or after.shape != (3,) or not np.isfinite([before, after]).all():
+        return None, False
+    delta = after - before
+    c, s = np.cos(before[2]), np.sin(before[2])
+    measured = np.array(
+        [c * delta[0] + s * delta[1], -s * delta[0] + c * delta[1], np.arctan2(np.sin(delta[2]), np.cos(delta[2]))]
+    )
+    expected = (
+        np.array([commanded, 0.0, 0.0]) if tool == "move_forward" else np.array([0.0, 0.0, np.deg2rad(commanded)])
+    )
+    residual = measured - expected
+    residual[2] = np.arctan2(np.sin(residual[2]), np.cos(residual[2]))
+    arrived = np.linalg.norm(residual[:2]) <= position_tolerance and abs(residual[2]) <= yaw_tolerance
+    return measured.tolist(), bool(arrived)
+
+
 def supports_relative_motion(agent):
     return getattr(getattr(agent, "space", None), "obstacle_map_mode", None) == "physical" and all(
         callable(getattr(agent, name, None))
@@ -66,22 +89,16 @@ def execute_relative_motion(agent, tool, value):
         execution_started = True
         ok, reason = agent._execute_validated_waypoints([goal], agent._find_phase_nav_timeout())
         end = np.asarray(agent._current_planning_xyt(), dtype=float)
-        measured = None
-        if end.shape == (3,) and np.isfinite(end).all():
-            delta = end - start
-            c, s = np.cos(start[2]), np.sin(start[2])
-            measured = [
-                float(c * delta[0] + s * delta[1]),
-                float(-s * delta[0] + c * delta[1]),
-                float(np.arctan2(np.sin(delta[2]), np.cos(delta[2]))),
-            ]
-            residual = end - goal
-            residual[2] = np.arctan2(np.sin(residual[2]), np.cos(residual[2]))
-            if np.linalg.norm(residual[:2]) > float(getattr(agent, "pos_err_threshold", 0.02)) or abs(
-                residual[2]
-            ) > float(getattr(agent, "rot_err_threshold", 0.03)):
-                if ok is True:
-                    ok, reason = False, "motion_arrival_unconfirmed"
+        measured, arrived = relative_motion_progress(
+            start,
+            end,
+            tool,
+            value,
+            float(getattr(agent, "pos_err_threshold", 0.02)),
+            float(getattr(agent, "rot_err_threshold", 0.03)),
+        )
+        if ok is True and not arrived:
+            ok, reason = False, "motion_arrival_unconfirmed"
         return response(
             tool,
             code="ok" if ok is True and measured is not None else (reason or "motion_arrival_unconfirmed"),
