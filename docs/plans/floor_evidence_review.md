@@ -1,5 +1,16 @@
 # Floor-evidence review slice
 
+## Re-review closeout, 2026-10-25
+
+Negative-obstacle Z classification and the post-visited XY scatter are both
+required: the latter restores hazards erased by the self/visited mask. Z slice
+indices clamp at zero even if `obs_min_height` is configured below the floor.
+Floor layers are read-only; conversion to a writable PyTorch map owns a copy.
+The floor-cell conversion shares the map's +0.5 offset for in-grid points, but
+deliberately rejects negative fractional edge coordinates instead of truncating
+them into cell zero. This stricter edge behavior prevents invented floor support.
+The bounds, hard-hazard rejection and single-return sensitivity remain explicit.
+
 Status: opt-in prototype for review, not navigation or hardware acceptance.
 Independent of the frozen movement/EQA acceptance source in PR #220.
 

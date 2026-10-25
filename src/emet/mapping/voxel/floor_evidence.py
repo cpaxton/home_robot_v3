@@ -15,6 +15,10 @@ class FloorEvidence:
     drops: np.ndarray
     raised: np.ndarray
 
+    def __post_init__(self):
+        for layer in (self.observed, self.inferred, self.drops, self.raised):
+            layer.setflags(write=False)
+
 
 def floor_evidence(points, shape, resolution, origin, *, reference_z_m, tolerance_m=0.03, hazard_height_m=0.08):
     """Fill only a single missing cell with four measured, level floor neighbors.
@@ -36,6 +40,9 @@ def floor_evidence(points, shape, resolution, origin, *, reference_z_m, toleranc
     if origin.shape not in {(2,), (3,)} or not np.isfinite(origin).all():
         raise ValueError("Finite XY or XYZ grid origin required")
     origin = origin[:2]
+    # Match the map's +0.5 cell offset for in-grid points. Floor intentionally
+    # rejects a negative fractional edge coordinate instead of truncating it
+    # into cell zero and manufacturing known-floor support outside the grid.
     cells = np.floor(xyz[:, :2] / resolution + origin + 0.5).astype(int)
     valid = ((cells >= 0) & (cells < np.asarray(shape))).all(axis=1)
     cells, dz = cells[valid], xyz[valid, 2] - reference_z_m

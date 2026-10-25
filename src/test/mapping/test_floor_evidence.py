@@ -20,6 +20,14 @@ def test_single_supported_hole_is_inferred_but_not_observed():
     assert layers.inferred.sum() == 1
 
 
+def test_floor_layers_are_read_only_and_outside_edge_cannot_create_support():
+    layers = floor_evidence([[-0.46, 0, 0]], (9, 9), 0.1, [4, 4], reference_z_m=0)
+    assert not layers.observed.any()
+    for layer in (layers.observed, layers.inferred, layers.drops, layers.raised):
+        with pytest.raises(ValueError, match="read-only"):
+            layer[0, 0] = True
+
+
 @pytest.mark.parametrize("height,kind", [(-0.2, "drops"), (0.1, "raised")])
 def test_discontinuity_is_hazard_never_filled(height, kind):
     layers = evidence([[0, 0, height]])

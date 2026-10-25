@@ -11,12 +11,14 @@ from emet.robots.footprint import Footprint
 
 
 @pytest.mark.parametrize("remove_visited", [False, True])
-def test_dynamem_preserves_enabled_negative_obstacle_evidence(tmp_path, remove_visited):
+@pytest.mark.parametrize("min_height", [0.1, -0.2])
+def test_dynamem_preserves_enabled_negative_obstacle_evidence(tmp_path, remove_visited, min_height):
     vm = SparseVoxelMap(
         grid_size=[40, 40],
         grid_resolution=0.1,
         smooth_kernel_size=0,
         obs_min_density=0.1,
+        obs_min_height=min_height,
         use_negative_obstacles=True,
         neg_obs_height=-0.1,
         remove_visited_from_obstacles=remove_visited,

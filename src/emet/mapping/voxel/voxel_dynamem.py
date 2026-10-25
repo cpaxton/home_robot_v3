@@ -38,6 +38,7 @@ from emet.utils.vram_debug import print_vram_snapshot
 
 from .dynamem_eqa import DynamemVoxelEQAMixin
 from .dynamem_localize import DynamemVoxelLocalizeMixin
+from .floor_evidence import floor_evidence
 from .voxel import VALID_FRAMES, Frame
 from .voxel import SparseVoxelMap as SparseVoxelMapBase
 
@@ -478,8 +479,6 @@ class SparseVoxelMap(DynamemVoxelEQAMixin, DynamemVoxelLocalizeMixin, SparseVoxe
         floor_layers = None
         floor_config = (self.parameters.get("floor_evidence", {}) or {}) if self.parameters is not None else {}
         if floor_config.get("enabled", False):
-            from .floor_evidence import floor_evidence
-
             # Geometry-only navigation evidence, not semantic/visual coverage.
             # Never infer a floor reference from the absence of depth returns.
             reference_z = float(floor_config["reference_z_m"])
@@ -505,7 +504,8 @@ class SparseVoxelMap(DynamemVoxelEQAMixin, DynamemVoxelLocalizeMixin, SparseVoxe
         xyz[xyz[:, -1] < 0, -1] = 0
 
         # Crop to robot height
-        min_height = int(self.obs_min_height / self.grid_resolution)
+        # Voxel Z indices are nonnegative after the floor-relative clamp.
+        min_height = max(0, int(self.obs_min_height / self.grid_resolution))
         max_height = int(self.obs_max_height / self.grid_resolution)
         # print('min_height', min_height, 'max_height', max_height)
         grid_size = self.grid_size + [max_height]
@@ -539,6 +539,8 @@ class SparseVoxelMap(DynamemVoxelEQAMixin, DynamemVoxelLocalizeMixin, SparseVoxe
             obstacles *= (1 - self._visited).bool()
 
         # A visited/self-filter mask must never erase a newly measured drop.
+        # The standard Z scatter preserves density semantics; this second XY
+        # scatter restores drop evidence erased by the visited/self mask.
         negative_density = torch.zeros(tuple(self.grid_size), device=device, dtype=counts.dtype)
         if negative.any():
             cells = xyz[negative, :2]
@@ -607,7 +609,8 @@ class SparseVoxelMap(DynamemVoxelEQAMixin, DynamemVoxelLocalizeMixin, SparseVoxe
             # or generic image-coverage morphology. Keep legacy coverage intact.
             # A missing return could also be a narrow pit. Inferred floor is
             # available for inspection proposals, never sole motion authority.
-            physical_explored = torch.as_tensor(floor_layers.observed, device=device)
+            # Own the tensor: floor evidence is a read-only retained snapshot.
+            physical_explored = torch.tensor(floor_layers.observed, device=device)
         self._physical_map2d = (physical_obstacles, physical_explored)
         self._map2d = (obstacles, explored)
         self._2d_last_updated = self._seq
