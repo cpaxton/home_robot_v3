@@ -109,7 +109,10 @@ def observe_blocked_floor(agent, *, max_observations: int = 2) -> dict:
             attempts.append(projection)
             break
         x, y, z = projection["target_camera_xyz"]
-        pan, tilt = agent.robot.get_pan_tilt()
+        try:
+            pan, tilt = agent.robot.get_pan_tilt()
+        except (ConnectionError, TimeoutError, RuntimeError) as exc:
+            return {"ok": False, "status": "head_observation_failed", "reason": str(exc)}
         pan = float(np.clip(pan + np.arctan2(-x, z), -1.0, 1.0))
         tilt = float(np.clip(tilt + np.arctan2(-y, np.hypot(x, z)), -1.4, -0.7))
         result = observe_floor(agent, pan_rad=pan, tilt_rad=tilt)
@@ -571,20 +574,23 @@ def rotate_in_place(self, *, n_steps: int | None = None):
 
 
 def _relative_motion_receipt(agent, tool, requested, commanded, before, returned):
-    """Keep server arrival, measured progress and map refresh separate."""
+    """Keep arrival, progress and refresh separate; legacy float is zero unless confirmed."""
     from emet.controller.task.tamp.api import response
 
     measured = None
     try:
         after = np.asarray(agent.robot.get_base_pose(), dtype=float)
         if before is not None and after.shape == (3,) and np.isfinite(after).all():
-            delta = after - before
-            c, s = np.cos(before[2]), np.sin(before[2])
-            measured = [
-                float(c * delta[0] + s * delta[1]),
-                float(-s * delta[0] + c * delta[1]),
-                float(np.arctan2(np.sin(delta[2]), np.cos(delta[2]))),
-            ]
+            from .relative_motion import relative_motion_progress
+
+            measured, arrived = relative_motion_progress(
+                before,
+                after,
+                tool,
+                commanded,
+                float(getattr(agent, "pos_err_threshold", 0.02)),
+                float(getattr(agent, "rot_err_threshold", 0.03)),
+            )
     except Exception:
         pass
     code = (
@@ -598,16 +604,8 @@ def _relative_motion_receipt(agent, tool, requested, commanded, before, returned
             else "ambiguous_navigation_result"
         )
     )
-    if code == "ok":
-        expected = (
-            np.array([commanded, 0.0, 0.0]) if tool == "move_forward" else np.array([0.0, 0.0, np.deg2rad(commanded)])
-        )
-        residual = np.asarray(measured) - expected
-        residual[2] = np.arctan2(np.sin(residual[2]), np.cos(residual[2]))
-        if np.linalg.norm(residual[:2]) > float(getattr(agent, "pos_err_threshold", 0.02)) or abs(residual[2]) > float(
-            getattr(agent, "rot_err_threshold", 0.03)
-        ):
-            code = "motion_arrival_unconfirmed"
+    if code == "ok" and not arrived:
+        code = "motion_arrival_unconfirmed"
     observation = "not_refreshed"
     if not getattr(agent, "_realtime_updates", False):
         try:
@@ -642,7 +640,7 @@ def rotate_base_degrees(self, degrees: float) -> float:
     self._last_relative_motion_result = None
     if not np.isfinite(float(degrees)):
         raise ValueError("degrees must be finite")
-    deg = float(np.clip(float(degrees), -360.0, 360.0))
+    deg = float(np.clip(float(degrees), -180.0, 180.0))
     if abs(deg) < 1e-3:
         return 0.0
     self.announce_action(f"Rotating {deg:+.0f}°")

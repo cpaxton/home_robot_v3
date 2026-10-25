@@ -177,6 +177,9 @@ class AbstractVLLMClient(AbstractLLMClient):
             raise ValueError("Vision dialogue must end in a user message")
         if any(message.get("role") not in {"system", "user", "assistant"} for message in messages):
             raise ValueError("Unsupported vision dialogue role")
+        system_positions = [i for i, message in enumerate(messages) if message.get("role") == "system"]
+        if system_positions not in ([], [0]):
+            raise ValueError("Vision dialogue permits one system message, at the beginning")
         with self.preserve_conversation():
             self.reset()
             for message in messages[:-1]:

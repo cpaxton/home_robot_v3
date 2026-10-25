@@ -43,6 +43,26 @@ def wrapper(model):
     return GraphEQAVLMClient(model, system_prompt="unchanged routing instructions", max_tokens=128)
 
 
+@pytest.mark.parametrize("roles", [("system", "system", "user"), ("user", "system", "user")])
+def test_explicit_dialogue_rejects_duplicate_or_nonleading_system(roles):
+    with pytest.raises(ValueError, match="one system message"):
+        FakeVision().generate_messages([{"role": role, "content": "text"} for role in roles])
+
+
+def test_direct_remote_calls_reset_by_default_and_only_explicitly_continue():
+    remote = OpenaiVLLMClient(base_url="http://localhost:9999/v1", model="fixture")
+    remote._openai.chat.completions.create = Mock(
+        return_value=SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content="answer"))])
+    )
+    remote.generate_multimodal("first")
+    remote.generate_multimodal("second")
+    assert "first" not in str(remote.get_history())
+    assert remote._iterations == 1
+    remote.generate_multimodal("third", reset_context=False)
+    assert "second" in str(remote.get_history())
+    assert remote._iterations == 2
+
+
 def test_session_preserves_images_assistant_and_all_tool_results_across_perception():
     model = FakeVision()
     conversation = VLMConversation()

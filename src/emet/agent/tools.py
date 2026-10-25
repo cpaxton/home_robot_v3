@@ -1256,7 +1256,7 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
             return f"Invalid degrees: {degrees!r}."
         if not np.isfinite(deg):
             return "Invalid degrees: must be finite."
-        deg = float(np.clip(deg, -360.0, 360.0))
+        deg = float(np.clip(deg, -180.0, 180.0))
         agent = getattr(executor, "agent", None)
         from emet.controller.dynamem.relative_motion import execute_relative_motion, supports_relative_motion
 

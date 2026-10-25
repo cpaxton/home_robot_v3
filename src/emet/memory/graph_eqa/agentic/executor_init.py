@@ -399,6 +399,7 @@ def _handle_relative_motion(self, args: dict[str, Any]) -> dict[str, Any]:
         if out.get("data", {}).get("execution_started"):
             self._n_nav += 1
             try:
+                # Negative IDs reserve synthetic motion attempts; real observation IDs are positive.
                 hypothesis_id = self._begin_policy_approach("look", -3_000_000 - self._n_nav, self.query_text)
                 out["capture"] = self._tool_capture_and_update()
                 if out["capture"].get("ok") and out["capture"].get("obs_id") is not None:
