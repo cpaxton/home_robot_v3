@@ -394,6 +394,13 @@ class LazyGraphController(DynagraphController):
             detector = get_shared_yoloe_perception(confidence_threshold=0.05, device=self.device, size="l")
             _, instances, _ = detector.predict(rgb, draw_instance_predictions=False, vocabulary=[query])
             options["proposal_masks"] = refine_instance_proposals(rgb, instances, options.pop("segmenter"))
+        if config.get("split_surface_normals", False):
+            from emet.memory.graph_eqa.ingest.instance_observations import frame_world_xyz_hw3
+
+            points = frame_world_xyz_hw3(frame)
+            if points is None:
+                raise ValueError("Surface-normal splitting requires world-aligned depth")
+            options["world_xyz"] = points.detach().cpu().numpy()
         if "search_padding" in config:
             options["search_padding"] = config["search_padding"]
         if "surface_presentation" in config:

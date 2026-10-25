@@ -23,7 +23,7 @@ from emet.controller.manipulation.native_inputs import (
 )
 from emet.controller.task.tamp.api import response
 
-from .observed_frames import ObservedFrameGate
+from .observed_frames import FrameTicket, ObservedFrameGate
 
 
 @dataclass(frozen=True)
@@ -195,3 +195,63 @@ class RgbdTaskProvider:
                             object_name, support_name, object_position, support_position))
         with self._lock:
             self._candidates = tuple(candidates) if self.frame_gate.current(ticket) else ()
+
+
+    def update_reacquired(
+        self,
+        observations,
+        *,
+        reference_ticket,
+        current_ticket,
+        reference_rgb,
+        reference_world_xyz,
+        rgb,
+        depth,
+        world_xyz,
+        min_depth,
+        max_depth,
+        now=None,
+    ):
+        """Refresh read-only proposals from new depth, without another VLM query.
+
+        Reference semantics expire after 30s. Only capture-identified frames in
+        the same motion epoch can associate. A failed surface clears the entire
+        snapshot. The caller must provide masks from the accepted reference
+        observation; this method cannot establish a new semantic identity.
+        """
+        from dataclasses import replace
+
+        from emet.memory.surface_reacquisition import reacquire_surface
+
+        now = time.monotonic() if now is None else now
+        with self._lock:
+            self._candidates = ()
+            if (
+                not isinstance(reference_ticket, FrameTicket)
+                or not isinstance(current_ticket, FrameTicket)
+                or not reference_ticket.identity_available
+                or not current_ticket.identity_available
+                or reference_ticket.motion_epoch != current_ticket.motion_epoch
+                or not self.frame_gate.current(current_ticket)
+                or not 0 < current_ticket.received_monotonic - reference_ticket.received_monotonic <= 30.0
+                or not 0 <= now - current_ticket.received_monotonic <= 2.0
+                or not 0 <= now - reference_ticket.received_monotonic <= 30.0
+            ):
+                raise ObservationUnavailable("surface_reacquisition_stale")
+        refreshed = []
+        for observation in observations:
+            selected = reacquire_surface(
+                reference_rgb,
+                reference_world_xyz,
+                observation.mask,
+                rgb,
+                depth,
+                world_xyz,
+                min_depth=min_depth,
+                max_depth=max_depth,
+            )
+            refreshed.append(replace(
+                observation, mask=selected.mask, points_3d=selected.points,
+                timestep=current_ticket.revision))
+        self.update(refreshed, frame_ticket=current_ticket)
+        return self.observe_tasks()

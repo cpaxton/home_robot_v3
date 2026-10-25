@@ -64,3 +64,19 @@ RGBD search padding is now available as an opt-in existing-API setting. This is
 initialization work: remote selection still takes longer than the freshness limit.
 Fresh-frame association and observed execution remain outstanding; no timestamp
 renewal or simulator-pose fallback is authorized by this result.
+
+## Local reacquisition slice (October 25)
+
+[Recorded results and failures](../experiments/observed_reacquisition_20261025.md):
+normal-split cylinder and unobstructed cube references each support ten current
+RGBD updates with only two remote initialization calls. Local updates take about
+9 ms; the full stationary privileged `run agent` regression still completes both
+goals. Reset settling, mixed support/object components and arm self-occlusion
+were concrete failure causes. They remain separate conditions in the records.
+
+`RgbdTaskProvider.update_reacquired` is now a tested read-only provider seam with
+capture-age and motion-epoch checks. Connect the actual acquisition worker next;
+this is not yet a continuous CHAT camera binding or native observed provider.
+Retain the original 2s current-geometry freshness gate and require a fresh semantic
+reference after external navigation/view-motion. Add clear-view/stow admission
+without turning occluded geometry into an executable placement claim.

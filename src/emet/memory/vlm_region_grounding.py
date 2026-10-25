@@ -165,6 +165,7 @@ def select_supported_region(
     candidate_filter=None,
     purpose="object",
     search_padding=0,
+    world_xyz=None,
 ):
     """One geometry-feedback correction at most; semantic abstentions stand."""
     if strategy == "depth_candidates":
@@ -183,7 +184,10 @@ def select_supported_region(
             candidate_filter=candidate_filter,
             purpose=purpose,
             search_padding=search_padding,
+            world_xyz=world_xyz,
         )
+    if world_xyz is not None:
+        raise ValueError("Surface-normal splitting requires depth_candidates strategy")
     if search_padding != 0:
         raise ValueError("Search padding requires depth_candidates strategy")
     if candidate_filter is not None:
@@ -237,6 +241,7 @@ def select_candidate_surface(
     candidate_filter=None,
     purpose="object",
     search_padding=0,
+    world_xyz=None,
 ):
     from emet.memory.surface_candidates import (
         SurfaceCandidateOverflow,
@@ -318,6 +323,7 @@ def select_candidate_surface(
             max_depth=max_depth,
             rgb=rgb,
             proposal_masks=proposal_masks,
+            world_xyz=world_xyz,
         )
     except (TypeError, ValueError) as exc:
         audit["reason"] = str(exc)
@@ -434,6 +440,7 @@ def ground_vlm_region(
     candidate_filter=None,
     purpose="object",
     search_padding=0,
+    world_xyz=None,
 ):
     rgb = frame_rgb_hwc_uint8(frame)
     depth = frame.depth.detach().cpu().numpy() if hasattr(frame.depth, "detach") else np.asarray(frame.depth)
@@ -461,6 +468,7 @@ def ground_vlm_region(
         candidate_filter=candidate_filter,
         purpose=purpose,
         search_padding=search_padding,
+        world_xyz=world_xyz,
     )
     if not verification["valid"]:
         return detected, [], [], verification

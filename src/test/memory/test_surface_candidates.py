@@ -285,3 +285,35 @@ def test_absent_target_does_not_trigger_proposal_selection():
         rgb, depth, "mug", "mug", client=client, min_depth=0.25, max_depth=4, strategy="depth_candidates"
     )[2]["valid"]
     client.assert_called_once()
+
+
+def test_world_normals_split_touching_similar_appearance_surfaces():
+    from emet.memory.surface_candidates import candidate_mask, surface_candidates
+
+    y, x = np.mgrid[:60, :60]
+    # A horizontal patch joins an upright patch at a measured crease. Same RGB
+    # and continuous depth defeat local color/depth adjacency alone.
+    world = np.stack([np.minimum(x, 30) * 0.005, y * 0.005, np.maximum(x - 30, 0) * 0.005], axis=-1)
+    depth = 1.0 + np.maximum(x - 30, 0) * 0.005
+    rgb = np.full((60, 60, 3), 100, dtype=np.uint8)
+    kwargs = {"min_depth": 0.1, "max_depth": 3.0, "rgb": rgb}
+    assert len(surface_candidates(depth, [0, 0, 1000, 1000], **kwargs)) == 1
+    regions = surface_candidates(depth, [0, 0, 1000, 1000], world_xyz=world, **kwargs)
+    assert len(regions) >= 2
+    for region in regions:
+        mask = candidate_mask(region, depth.shape)
+        assert not (mask[:, :20].any() and mask[:, 40:].any())
+    # Geometry splitting is also effective without appearance features.
+    assert len(surface_candidates(depth, [0, 0, 1000, 1000], min_depth=0.1, max_depth=3.0, world_xyz=world)) >= 2
+
+
+def test_invalid_world_alignment_rejected_and_degenerate_normals_not_invented():
+    from emet.memory.surface_candidates import surface_candidates
+
+    depth = np.ones((40, 40))
+    with pytest.raises(ValueError, match="aligned world XYZ"):
+        surface_candidates(depth, [0, 0, 1000, 1000], min_depth=0.1, max_depth=3.0, world_xyz=np.ones((20, 20, 3)))
+    assert (
+        surface_candidates(depth, [0, 0, 1000, 1000], min_depth=0.1, max_depth=3.0, world_xyz=np.zeros((40, 40, 3)))
+        == []
+    )

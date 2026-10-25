@@ -11,6 +11,7 @@ class FrameTicket:
     revision: int
     received_monotonic: float
     identity_available: bool
+    motion_epoch: int = 0
 
 
 class ObservedFrameGate:
@@ -23,6 +24,7 @@ class ObservedFrameGate:
     def __init__(self):
         self.lock = threading.RLock()
         self.revision = 0
+        self.motion_epoch = 0
         self._stream = None
         self._stamp = None
         self._received = None
@@ -32,6 +34,7 @@ class ObservedFrameGate:
     def invalidate(self):
         with self.lock:
             self.revision += 1
+            self.motion_epoch += 1
             self._barrier = self._stamp
             self._require_identity = True
 
@@ -46,7 +49,7 @@ class ObservedFrameGate:
             if not image_timing:
                 if self._require_identity:
                     return None
-                return FrameTicket(self.revision, received_monotonic, False)
+                return FrameTicket(self.revision, received_monotonic, False, self.motion_epoch)
             if not isinstance(image_timing, dict):
                 return None
             camera = 'head_cam_left'
@@ -70,7 +73,7 @@ class ObservedFrameGate:
             else:
                 self._received = received_monotonic
             self._stream, self._stamp = stream, stamp
-            return FrameTicket(self.revision, received_monotonic, True)
+            return FrameTicket(self.revision, received_monotonic, True, self.motion_epoch)
 
     def current(self, ticket):
         with self.lock:

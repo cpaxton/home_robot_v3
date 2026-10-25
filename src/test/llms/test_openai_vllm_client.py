@@ -180,3 +180,25 @@ def test_serve_llm_help_lists_vl() -> None:
     r = CliRunner().invoke(serve_llm_main, ["--help"])
     assert r.exit_code == 0
     assert "--vl" in r.output
+
+
+def test_call_timing_separates_encoding_from_request_and_preserves_errors():
+    from types import SimpleNamespace
+
+    import pytest
+
+    client = OpenaiVLLMClient(model="model", base_url="http://localhost:8000/v1")
+    client._openai = MagicMock()
+    client._openai.chat.completions.create.return_value = SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content="ok"))]
+    )
+    assert client.generate_multimodal(["look", np.zeros((8, 8, 3), dtype=np.uint8)]) == "ok"
+    metrics = client.last_call_metrics
+    assert metrics["completed"] and metrics["image_count"] == 1
+    assert metrics["encode_s"] >= 0 and metrics["request_s"] >= 0
+    assert abs(metrics["total_s"] - metrics["encode_s"] - metrics["request_s"]) < 1e-6
+    client._openai.chat.completions.create.side_effect = TimeoutError("timeout")
+    with pytest.raises(TimeoutError):
+        client.generate_multimodal("look")
+    assert client.last_call_metrics["completed"] is False
+    assert client.last_call_metrics["image_count"] == 0

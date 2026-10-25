@@ -16,7 +16,7 @@ class SurfaceCandidateOverflow(ValueError):
     """Proposal geometry exceeds the bounded semantic selection budget."""
 
 
-def _connected_surfaces(depth, valid, colors=None):
+def _connected_surfaces(depth, valid, colors=None, normals=None):
     """Measured adjacency, shared by RGB-D and external-mask proposals."""
     indices = np.arange(depth.size).reshape(depth.shape)
     rows, cols = [], []
@@ -24,6 +24,9 @@ def _connected_surfaces(depth, valid, colors=None):
         compatible = valid[a] & valid[b] & (np.abs(depth[a] - depth[b]) <= 0.08)
         if colors is not None:
             compatible &= np.max(np.abs(colors[a] - colors[b]), axis=-1) <= 35
+        if normals is not None:
+            compatible &= np.isfinite(normals[a]).all(axis=-1) & np.isfinite(normals[b]).all(axis=-1)
+            compatible &= np.sum(normals[a] * normals[b], axis=-1) >= np.cos(np.deg2rad(30.0))
         rows.append(indices[a][compatible])
         cols.append(indices[b][compatible])
     rows, cols = np.concatenate(rows), np.concatenate(cols)
@@ -35,11 +38,13 @@ def _connected_surfaces(depth, valid, colors=None):
         yield valid & (components == index)
 
 
-def surface_candidates(depth, box, *, min_depth, max_depth, rgb=None, proposal_masks=None):
+def surface_candidates(depth, box, *, min_depth, max_depth, rgb=None, proposal_masks=None, world_xyz=None):
     """Split a VLM search box into measured depth layers and connected components.
 
     Optional class-agnostic masks constrain candidates but still split at depth
-    discontinuities. Touching/coplanar objects need not separate. Overflow fails
+    discontinuities. Optional calibrated world XYZ also splits at measured
+    normal changes of 30 degrees; invalid/degenerate normals cannot connect
+    surfaces. Touching/coplanar objects still need not separate. Overflow fails
     closed instead of silently discarding a possibly relevant small surface.
     """
     depth = np.asarray(depth)
@@ -52,6 +57,16 @@ def surface_candidates(depth, box, *, min_depth, max_depth, rgb=None, proposal_m
     x1, y1 = np.ceil(np.array(box[2:]) * [w, h] / 1000).astype(int)
     if x0 >= x1 or y0 >= y1:
         raise ValueError("empty search box")
+    normals = None
+    if world_xyz is not None:
+        world_xyz = np.asarray(world_xyz, dtype=float)
+        if world_xyz.shape != (*depth.shape, 3) or min(depth.shape) < 3:
+            raise ValueError("surface normals require aligned world XYZ")
+        dy, dx = np.gradient(world_xyz, axis=(0, 1))
+        normals = np.cross(dx, dy)
+        lengths = np.linalg.norm(normals, axis=-1, keepdims=True)
+        normals = np.divide(normals, lengths, out=np.full_like(normals, np.nan), where=lengths > 1e-10)
+        normals = normals[y0:y1, x0:x1]
     roi = depth[y0:y1, x0:x1]
     valid = np.isfinite(roi) & (roi > min_depth) & (roi < max_depth)
     if not valid.any():
@@ -62,7 +77,9 @@ def surface_candidates(depth, box, *, min_depth, max_depth, rgb=None, proposal_m
             raise ValueError("RGB must be uint8 and aligned with depth")
         colors = rgb[y0:y1, x0:x1].astype(float)
         # Class-agnostic appearance boundary: no category/color vocabulary.
-        masks = _connected_surfaces(roi, valid, colors)
+        masks = _connected_surfaces(roi, valid, colors, normals)
+    elif proposal_masks is None and normals is not None:
+        masks = _connected_surfaces(roi, valid, normals=normals)
     elif proposal_masks is None:
         # Split only at measured gaps, not an assumed foreground or object depth.
         values = np.unique(roi[valid])
@@ -76,7 +93,7 @@ def surface_candidates(depth, box, *, min_depth, max_depth, rgb=None, proposal_m
             if mask.dtype != bool or mask.shape != depth.shape:
                 raise ValueError("proposal masks must be boolean and aligned with depth")
             external_masks.append(mask[y0:y1, x0:x1] & valid)
-        masks = (surface for mask in external_masks for surface in _connected_surfaces(roi, mask))
+        masks = (surface for mask in external_masks for surface in _connected_surfaces(roi, mask, normals=normals))
     regions = []
     for mask in masks:
         components, count = label(mask)
