@@ -590,7 +590,8 @@ def test_grasp_alternatives_replan_all_phases_before_any_gripper_command():
     d = mujoco.MjData(m)
     calls = []
     checker = SimpleNamespace(payload_body=None, payload_parent=None, payload_transform=None,
-                              set_payload=lambda *args: None)
+                              set_payload=lambda *args: None, capture_payload=lambda: None,
+                              restore_payload=lambda state: None)
     robot = SimpleNamespace(open_gripper=lambda **kw: calls.append('open') or False)
     executor = PhysicalPickPlaceExecutor(robot, input_mode="privileged", model=m, data=d, ee_body='ee', joint_names=['yaw'],
                                          collision=checker, synchronize=lambda data: None, command_joints=lambda q: True)

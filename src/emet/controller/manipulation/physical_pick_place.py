@@ -304,12 +304,9 @@ class PhysicalPickPlaceExecutor:
         """Arrival tolerance is not an IK certificate: rebuild world-pose paths."""
         self.synchronize(self.data)
         before = self.data.qpos.copy()
-        previous_payload = (
-            self.collision.payload_body,
-            self.collision.payload_parent,
-            None if self.collision.payload_transform is None else self.collision.payload_transform.copy(),
-        )
+        previous_payload = self.collision.capture_payload()
         paths = []
+        phase = phases[0] if phases else "planning"
         try:
             if grasp and open_gripper_geometry and self.gripper_open_configuration:
                 addresses = joint_qpos_addrs(self.model, tuple(self.gripper_open_configuration))
@@ -329,11 +326,11 @@ class PhysicalPickPlaceExecutor:
                     return None, PhysicalMotionResult(False, f"measured_pose_replan_failed:{error}", phase)
                 paths.append(path)
             return paths, None
+        except ObservationUnavailable as exc:
+            return None, PhysicalMotionResult(False, str(exc), phase)
         finally:
             self.data.qpos[:] = before
-            self.collision.payload_body, self.collision.payload_parent, self.collision.payload_transform = (
-                previous_payload
-            )
+            self.collision.restore_payload(previous_payload)
             mujoco.mj_kinematics(self.model, self.data)
 
     def _execute_path(self, phase, path):
@@ -504,9 +501,9 @@ class PhysicalPickPlaceExecutor:
         self.synchronize(self.data)
         try:
             initial_object_height = float(self._object_pose(object_gt_body)[2, 3])
+            self.collision.set_payload(self.model, self.data, object_gt_body, self.ee_body)
         except ObservationUnavailable as exc:
             return PhysicalMotionResult(False, str(exc), "grasp")
-        self.collision.set_payload(self.model, self.data, object_gt_body, self.ee_body)
         self.payload_body = object_gt_body
         result = self._execute_path("lift", self.grasp_paths[2])
         if result.success:

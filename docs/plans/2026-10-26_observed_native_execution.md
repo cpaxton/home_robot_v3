@@ -1,6 +1,8 @@
 # Observed native TAMP execution
 
-Status: proposed implementation plan after live-capture binding `ae924531`.
+Status: first attachment/geometry implementation complete; observed task execution
+remains disabled pending reference tracking, visual effects and the task adapter.
+Built after live-capture binding `ae924531`.
 First target: stationary Stretch, rigid opaque objects, observed tabletop supports,
 and the existing `scene_tasks` / primitive / multi-step JSON tools. Preserve the
 privileged control as an independent regression and evaluator. Add Sourccey only
@@ -198,3 +200,43 @@ or one PR for each small correction. Keep privileged controls green throughout.
 The first implementation should target milestone 1 plus the first real geometry
 consumer from milestone 2. This exposes the deepest coupling before investing in
 a pose estimator that the current body-based executor cannot actually use.
+
+
+## October 26 implementation checkpoint
+
+Implemented the first concrete consumer of observed geometry:
+
+- `PayloadGeometryEvidence` records an opaque object handle, reference frame,
+  immutable envelope vertices, construction tier, geometry revision and measured
+  pose. The provider supplies the complete bound; this change does not construct
+  one from a single visible mask or qualify pose observability.
+- `ObservedNativeCollisionChecker` reuses full robot/payload volume checking on a
+  robot-only MuJoCo model. Its native `set_payload` seam transforms supplied
+  reference geometry into the EE frame, never resolving the object handle as a
+  simulator body. It requires a bounded observed workspace and whole-volume
+  known-free checks, rejects stale/changed scene evidence, and binds retention to
+  the original geometry reference/revision. Release retains a conservative static
+  object volume for retreat; it does not verify physical release.
+- `ObservedWorkspace.from_depth` constructs an immutable 3D snapshot from registered
+  depth, intrinsics and the optical camera pose. Complete projected cell volumes
+  must precede all valid returns by an explicit margin before becoming free;
+  clipped, missing, out-of-range and occluded volumes remain unknown. Occupied
+  endpoint cells cannot erase the surrounding unknown region. It does not fuse
+  views, remove target/robot contributions, establish capture timing, or infer
+  complete payload geometry.
+- Native collision checkers now capture/restore their complete attachment state
+  around speculative executor replanning. Expected missing observed geometry
+  produces a failed preflight result before arm/gripper commands.
+
+Synthetic robot-only regressions exercise the real executor and measured-joint
+command seam without object bodies or scene/contact/attachment RPCs. They are not
+physical grasp or sensor qualification. An offline replay of the saved live ZMQ
+capture also checks that missing depth creates no free cells; see
+[the implementation evidence](../experiments/observed_native_geometry_20261026.md).
+
+Next: implement the actual `ObservedNativeAdapter`, coherent bounded pose/geometry
+production and visual effects before binding agent execution. In particular, the
+current strict two-second scene snapshot will reject long manipulation without a
+freshly rebuilt snapshot; do not extend its age or renew timestamps to bypass the
+missing refresh integration. Keep observed task discovery read-only until those
+gates pass, then run the frozen Caliban agent trials in milestone 5.

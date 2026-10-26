@@ -538,3 +538,22 @@ of CPU processing and exposed incorrect support labels. Live discovery acceptanc
 is still pending; see the [diagnostic report](../experiments/tamp_observed_discovery_20261014.md).
 Controlled segmentation tests cover real depth projection and the processor/tool
 paths, but do not establish detector accuracy.
+
+
+### Observed native geometry integration (internal)
+
+The internal `ObservedNativeCollisionChecker` consumes a robot-only MuJoCo model,
+`PayloadGeometryEvidence` from an observed provider, and an observed
+`PlacementScene` with a required whole-volume `known_free` predicate. Opaque object
+handles need no simulator body. `ObservedWorkspace.from_depth` supplies a bounded
+3D free/occupied/unknown snapshot from calibrated registered sensor depth. Missing
+or occluded depth remains unknown and blocks motion; geometry revisions and local
+receive ages are rechecked during sampled path validation.
+
+Payload attachment is only a collision-planning hypothesis. These interfaces do
+not certify grasp, retention, support contact, complete shape reconstruction or
+sensor-clock synchronization. `known_model_prior` and `multiview_bound` are explicit
+producer tiers, not permission to label visible-point bounds as complete shapes.
+No agent capability is enabled by these internal interfaces: observed discovery
+remains read-only until the execution adapter, measured tracking and visual effect
+verification pass the [implementation gates](../plans/2026-10-26_observed_native_execution.md).
