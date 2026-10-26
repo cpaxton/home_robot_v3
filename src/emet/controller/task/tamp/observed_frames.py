@@ -12,6 +12,7 @@ class FrameTicket:
     received_monotonic: float
     identity_available: bool
     motion_epoch: int = 0
+    capture_identity: tuple[str, str, str, int] | None = None
 
 
 class ObservedFrameGate:
@@ -73,7 +74,7 @@ class ObservedFrameGate:
             else:
                 self._received = received_monotonic
             self._stream, self._stamp = stream, stamp
-            return FrameTicket(self.revision, received_monotonic, True, self.motion_epoch)
+            return FrameTicket(self.revision, received_monotonic, True, self.motion_epoch, (*stream, stamp))
 
     def current(self, ticket):
         with self.lock:

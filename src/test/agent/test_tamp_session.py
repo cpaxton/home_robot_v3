@@ -216,3 +216,19 @@ def test_real_chat_logs_explicit_user_boundary_before_new_authorized_turn(monkey
     failures = failure_boundaries(rows)
     assert len(failures) == 1
     assert failures[0]['unexpected_tools'] == []
+
+
+@pytest.mark.parametrize('inputs,expected', [('observed', True), ('privileged', False)])
+def test_real_chat_startup_binds_only_observed_rgbd_capture(monkeypatch, inputs, expected):
+    from emet.controller.task.tamp.observed_discovery import RgbdTaskProvider
+
+    robot = setup_chat_loop(monkeypatch)
+    executor = loop.DynamemTaskExecutor()
+    executor._tamp_inputs = inputs
+    provider = RgbdTaskProvider()
+    loop.run_agent_with_robot(discord=False, use_llm=False, commands=['QUIT'],
+                              device='cpu', thinking_status=False,
+                              observed_tamp_provider=provider)
+    assert (provider._observation_source is not None) is expected
+    if expected:
+        assert provider._observation_source == robot.get_observation

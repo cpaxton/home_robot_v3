@@ -861,6 +861,10 @@ def run_agent_with_robot(
         "agent_memory_backend": mb,
     }
 
+    from emet.controller.task.tamp.observed_capture import bind_observed_capture_source
+
+    bind_observed_capture_source(context["observed_tamp_provider"], robot_client, executor._tamp_inputs)
+
     def update_xyt():
         if executor.agent.robot is not None and hasattr(executor.agent.robot, "get_base_pose"):
             context["xyt_for_query"] = executor.agent.robot.get_base_pose()

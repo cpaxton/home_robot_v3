@@ -73,7 +73,9 @@ class SceneGraphProcessor:
         self._segmenter = segmenter
         self._step = 0
         from emet.controller.task.tamp.observed_discovery import RgbdTaskProvider
-        self.observed_tamp_provider = RgbdTaskProvider()
+        voxel = config.get("voxel", {})
+        self.observed_tamp_provider = RgbdTaskProvider(
+            min_depth=voxel.get("min_depth", .25), max_depth=voxel.get("max_depth", 2.5))
 
     @property
     def text_encoder(self):
@@ -212,6 +214,9 @@ class SceneGraphProcessor:
         detections = self._run_segmentation(rgb, depth, vocab)
 
         if not detections:
+            self.observed_tamp_provider.update(
+                [], frame_ticket=frame_ticket, source=depth_evidence_source,
+                reference_rgb=rgb, reference_world_xyz=world_xyz.detach().cpu().numpy())
             return []
 
         # Build observations
@@ -254,7 +259,8 @@ class SceneGraphProcessor:
 
         self.observed_tamp_provider.update(
             observations, received_monotonic=received_monotonic, source=depth_evidence_source,
-            image_timing=image_timing, frame_ticket=frame_ticket)
+            image_timing=image_timing, frame_ticket=frame_ticket,
+            reference_rgb=rgb, reference_world_xyz=world_xyz.detach().cpu().numpy())
 
         # Update scene graph
         node_ids = self.scene_graph.add_observations_batch(observations)

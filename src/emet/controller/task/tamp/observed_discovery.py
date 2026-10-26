@@ -90,7 +90,10 @@ def discover_observed_tasks(provider: ObservedTaskProvider | None, object_filter
         return response('scene_tasks', code='input_provider_mismatch')
     if robot:
         return response('scene_tasks', code='observed_robot_filter_unsupported')
-    snapshot = provider.observe_tasks()
+    try:
+        snapshot = provider.observe_tasks()
+    except ObservationUnavailable:
+        return response('scene_tasks', code='observed_scene_unavailable')
     if not isinstance(snapshot, tuple) or not all(isinstance(c, ObservedTaskCandidate) for c in snapshot):
         return response('scene_tasks', code='invalid_observed_task_snapshot')
     now = time.monotonic() if now is None else now
@@ -124,37 +127,105 @@ def discover_observed_tasks(provider: ObservedTaskProvider | None, object_filter
 _FRAME_UNSET = object()
 
 
+@dataclass(frozen=True)
+class _ObservedReference:
+    observations: tuple
+    ticket: FrameTicket
+    rgb: np.ndarray
+    world: np.ndarray
+    snapshot: tuple[ObservedTaskCandidate, ...]
+
+
 class RgbdTaskProvider:
     """Fresh single-frame proposals from the existing segmentation/depth pipeline.
 
     Small segmented objects are paired with broad horizontal patches observed
     in that same frame. Patch extents are proposal heuristics; holes, occlusion,
     load bearing, graspability and collision clearance are not certified.
-    Accumulated graph nodes and cached semantic localizations are never used.
+    Accumulated graph geometry never supplies current positions. A bounded
+    semantic reference may be associated with new measured captures.
     """
     input_mode = 'observed'
 
-    def __init__(self):
+    def __init__(self, *, min_depth=.25, max_depth=2.5):
+        if not np.isfinite([min_depth, max_depth]).all() or not 0 < min_depth < max_depth:
+            raise ValueError("invalid_observed_depth_range")
+        self.min_depth, self.max_depth = min_depth, max_depth
         self._lock = threading.Lock()
         self._candidates = ()
         self.frame_gate = ObservedFrameGate()
+        self._reference = None
+        self._observation_source = None
+        self.last_reacquisition_error = None
+        self.last_reacquisition_diagnostics = {}
 
     def invalidate(self):
         with self._lock:
             self.frame_gate.invalidate()
             self._candidates = ()
+            self._reference = None
 
     def begin_frame(self, received_monotonic, image_timing=None):
         with self._lock:
             self._candidates = ()
             return self.frame_gate.begin(received_monotonic, image_timing)
 
+    def bind_observation_source(self, source):
+        """Use the robot's existing capture stream; this callback must not infer."""
+        self._observation_source = source
+
     def observe_tasks(self):
+        if self._observation_source is not None:
+            self._refresh_from_capture()
+            if self.last_reacquisition_error is not None:
+                raise ObservationUnavailable("observed_scene_unavailable")
         with self._lock:
             return self._candidates
 
+    def _refresh_from_capture(self):
+        from .observed_capture import capture_arrays
+
+        with self._lock:
+            reference = self._reference
+            self._candidates = ()
+        if reference is None or not reference.observations:
+            self.last_reacquisition_error = None
+            return
+        try:
+            observation = self._observation_source()
+        except (RuntimeError, TimeoutError) as exc:
+            self.last_reacquisition_error = str(exc)
+            return
+        if observation is None:
+            self.last_reacquisition_error = "observed_scene_unavailable"
+            return
+        try:
+            rgb, depth, world = capture_arrays(observation)
+            ticket = self.begin_frame(observation.received_monotonic, observation.image_timing)
+            observations, reference_ticket = reference.observations, reference.ticket
+            reference_rgb, reference_world, snapshot = reference.rgb, reference.world, reference.snapshot
+            if (ticket is not None and ticket.capture_identity == reference_ticket.capture_identity
+                    and ticket.motion_epoch == reference_ticket.motion_epoch
+                    and 0 <= time.monotonic() - ticket.received_monotonic <= 2.):
+                # Already verified capture: preserve its original evidence time.
+                # Querying again is not a new acquisition or semantic decision.
+                with self._lock:
+                    self._candidates = snapshot if self.frame_gate.current(ticket) else ()
+                self.last_reacquisition_error = None
+                return
+            self.update_reacquired(
+                observations, reference_ticket=reference_ticket, current_ticket=ticket,
+                reference_rgb=reference_rgb, reference_world_xyz=reference_world,
+                rgb=rgb, depth=depth, world_xyz=world, min_depth=self.min_depth, max_depth=self.max_depth)
+            self.last_reacquisition_error = None
+        except (ValueError, ObservationUnavailable) as exc:
+            self.last_reacquisition_error = str(exc)
+            with self._lock:
+                self._candidates = ()
+
     def update(self, observations, *, received_monotonic=None, source=RGBD_POINTCLOUD_SOURCE,
-               image_timing=None, frame_ticket=_FRAME_UNSET):
+               image_timing=None, frame_ticket=_FRAME_UNSET, reference_rgb=None, reference_world_xyz=None):
+        observations = tuple(observations)
         ticket = self.begin_frame(received_monotonic, image_timing) if frame_ticket is _FRAME_UNSET else frame_ticket
         candidates = []
         received_monotonic = None if ticket is None else ticket.received_monotonic
@@ -195,6 +266,24 @@ class RgbdTaskProvider:
                             object_name, support_name, object_position, support_position))
         with self._lock:
             self._candidates = tuple(candidates) if self.frame_gate.current(ticket) else ()
+            # A newer capture may have arrived during segmentation. Its semantic
+            # result may seed reassociation in the SAME motion epoch, but must
+            # never overwrite a newer seed or publish its old geometry.
+            if (ticket is not None and ticket.identity_available
+                    and ticket.motion_epoch == self.frame_gate.motion_epoch
+                    and source == RGBD_POINTCLOUD_SOURCE
+                    and reference_rgb is not None and reference_world_xyz is not None
+                    and (self._reference is None or ticket.received_monotonic > self._reference.ticket.received_monotonic)):
+                from dataclasses import replace
+
+                masks = [np.asarray(o.mask) for o in observations]
+                if any(m.dtype != bool or m.shape != np.asarray(reference_rgb).shape[:2] for m in masks):
+                    self._candidates = ()
+                    self._reference = None
+                    raise ValueError("invalid_observed_reference_mask")
+                self._reference = _ObservedReference(
+                    tuple(replace(o, mask=m.copy()) for o, m in zip(observations, masks, strict=True)),
+                    ticket, np.array(reference_rgb, copy=True), np.array(reference_world_xyz, copy=True), tuple(candidates))
 
 
     def update_reacquired(
@@ -239,7 +328,10 @@ class RgbdTaskProvider:
             ):
                 raise ObservationUnavailable("surface_reacquisition_stale")
         refreshed = []
-        for observation in observations:
+        self.last_reacquisition_diagnostics = {}
+        for index, observation in enumerate(observations):
+            diagnostics = {}
+            self.last_reacquisition_diagnostics[index] = diagnostics
             selected = reacquire_surface(
                 reference_rgb,
                 reference_world_xyz,
@@ -249,9 +341,11 @@ class RgbdTaskProvider:
                 world_xyz,
                 min_depth=min_depth,
                 max_depth=max_depth,
+                diagnostics=diagnostics,
             )
             refreshed.append(replace(
                 observation, mask=selected.mask, points_3d=selected.points,
                 timestep=current_ticket.revision))
         self.update(refreshed, frame_ticket=current_ticket)
-        return self.observe_tasks()
+        with self._lock:
+            return self._candidates
