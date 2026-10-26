@@ -48,6 +48,8 @@ def grounding_assets(roots, arms, backend):
 
 
 def run(args):
+    candidate_policy = getattr(args, "candidate_decision_policy", None)
+    floor_reference = getattr(args, "floor_reference_z", None)
     roots = {"main": args.main.resolve(), "candidate": args.candidate.resolve()}
     assets = grounding_assets(roots, args.arms, args.grounding_backend)
     revisions = {name: git(root, "rev-parse", "HEAD") for name, root in roots.items()}
@@ -63,6 +65,8 @@ def run(args):
         "arms": args.arms,
         "grounding_backend": args.grounding_backend,
         "decision_policy": getattr(args, "decision_policy", "legacy"),
+        "candidate_decision_policy": candidate_policy,
+        "floor_reference_z": floor_reference,
         "grounding_assets": assets,
         "driver_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
         "validator_sha256": hashlib.sha256(
@@ -91,8 +95,13 @@ def run(args):
                     else ""
                 )
                 + "  eqa:\n    agentic_verify: true\n    collect_agentic_trace: true\n"
-                + f"    agentic_decision_policy: {getattr(args, 'decision_policy', 'legacy')}\n"
+                + f"    agentic_decision_policy: {candidate_policy if arm == 'candidate' and candidate_policy else getattr(args, 'decision_policy', 'legacy')}\n"
                 + "    vl_family: qwen3_vl\n    vl_hf_model_id: Qwen/Qwen3-VL-8B-Instruct\n    vl_quantization: int4\n"
+                + (
+                    f"  floor_evidence:\n    enabled: true\n    reference_z_m: {floor_reference}\n"
+                    if floor_reference is not None
+                    else ""
+                )
             )
             env = os.environ.copy()
             for key in list(env):
@@ -212,6 +221,10 @@ if __name__ == "__main__":
     parser.add_argument("--arms", nargs="+", choices=("main", "candidate"), default=["main", "candidate"])
     parser.add_argument("--grounding-backend", choices=("yoloe", "vlm"), default="yoloe")
     parser.add_argument("--decision-policy", choices=("legacy", "model_final"), default="legacy")
+    parser.add_argument("--candidate-decision-policy", choices=("legacy", "model_final"))
+    parser.add_argument(
+        "--floor-reference-z", type=float, help="Enable calibrated floor evidence; use with candidate-only arms."
+    )
     parser.add_argument(
         "--episodes",
         nargs="+",
