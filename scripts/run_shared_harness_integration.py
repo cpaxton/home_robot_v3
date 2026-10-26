@@ -19,6 +19,17 @@ from emet.utils.process_tree import popen_session, terminate_process_tree
 
 QUESTIONS = (2, 6, 12, 14, 15, 16, 25, 28, 31, 56, 65, 68)
 ROOMS = ("default_table_s0_distinct_recep", "robocasa_pp_s1", "molmo_rby1_ithor_s2_idx0")
+TAMP_INSTRUCTION = "move red cylinder to cylinder goal; move blue cube to cube goal"
+
+
+def require_robocasa_assets(root):
+    from emet.simulation.robocasa_assets_check import robocasa_kitchen_assets_complete
+
+    package = root / "third_party/robocasa/robocasa"
+    if not robocasa_kitchen_assets_complete(package):
+        raise RuntimeError(
+            f"Missing RoboCasa assets in {root}; link existing fixture/registry/objaverse assets before freezing"
+        )
 
 
 def eqa_score(root):
@@ -64,6 +75,7 @@ def main():
     revisions = {arm: git(root, "rev-parse", "HEAD") for arm, root in roots.items()}
     for arm, root in roots.items():
         assert_frozen_source(root, revisions[arm])
+        require_robocasa_assets(root)
     args.output.mkdir(parents=True, exist_ok=False)
     shutil.copy2(__file__, args.output / Path(__file__).name)
     manifest = {
@@ -237,7 +249,7 @@ def main():
                 "--native-task-config",
                 str(task_config),
                 "--task-instruction",
-                "Put the red cylinder in cylinder goal and the blue cube in cube goal.",
+                TAMP_INSTRUCTION,
                 "--reject-first",
             ],
             root,

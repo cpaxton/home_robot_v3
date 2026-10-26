@@ -35,3 +35,26 @@ def test_tamp_fixture_compiles_with_preserved_geometry_and_current_assets(driver
     model = mujoco.MjModel.from_xml_path(str(tmp_path / "fixture/scene.xml"))
     assert model.body("object2").pos.tolist() == pytest.approx([-0.02, -0.70, 0.6])
     assert model.body("object1").pos.tolist() == pytest.approx([-0.02, -0.55, 0.6])
+
+
+def test_native_control_instruction_uses_discovered_roles_and_supported_grammar(driver):
+    from emet.controller.task.tamp.task_contracts import SceneBinding
+    from emet.controller.task.tamp.transfer_provider import RegionTransferProvider, TransferObservation, TransferRegion
+
+    observation = TransferObservation(
+        SceneBinding("a" * 64, "b" * 64, "boot", "reset", 0),
+        (("red cylinder", None), ("blue cube", None)),
+        (("red cylinder", (0.04, 0.04)), ("blue cube", (0.04, 0.08))),
+    )
+    provider = RegionTransferProvider(
+        (
+            TransferRegion("cylinder goal", ((0.0, 0.0), (1.0, 1.0))),
+            TransferRegion("cube goal", ((2.0, 0.0), (3.0, 1.0))),
+        ),
+        observe=lambda: observation,
+        transfer=lambda *args: False,
+        input_mode="privileged",
+    )
+    provider.snapshot()
+    goal = provider.compile_goal(driver["TAMP_INSTRUCTION"])
+    assert goal.required == frozenset({("at", "red cylinder", "cylinder goal"), ("at", "blue cube", "cube goal")})
