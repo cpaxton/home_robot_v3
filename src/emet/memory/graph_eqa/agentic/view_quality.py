@@ -31,6 +31,11 @@ def aim_arrival_view(executor, capture, target_xyz):
         if projection.get("target_in_frame") is True:
             return capture
         if projection.get("target_in_frame") is None:
+            if target_xyz is None:
+                # A search/view handle need not have localized object geometry.
+                # Keep the captured RGB available for verification; this makes
+                # no claim of visibility and never authorizes manipulation.
+                return {**capture, "aim_status": "unavailable", "aim_reason": "missing_target_anchor"}
             # Preserve nonphysical adapters; physical inspection must have geometry.
             if not isinstance(getattr(robot, "_seq_id", None), int):
                 return capture
@@ -124,8 +129,9 @@ def exploration_view_quality(depth):
     """Judge central free viewing distance, not target presence or brightness.
 
     Missing depth is unknown, never evidence of an obstruction. The conservative
-    gate triggers only when most central rays hit very close geometry or have
-    no valid range; blank walls farther away remain legitimate observations.
+    gate triggers only when 80% of all central rays have measured close geometry,
+    not merely 80% of the valid subset. Sparse depth cannot reject an RGB view;
+    invalid rays do not vote for obstruction or establish navigable free space.
     """
     if depth is None:
         return {"obstructed": False, "reason": "depth_unavailable"}
@@ -138,12 +144,13 @@ def exploration_view_quality(depth):
     center = depth[h // 4 : 3 * h // 4, w // 4 : 3 * w // 4]
     valid = np.isfinite(center) & (center > 0)
     near = valid & (center < 0.6)
-    blocked_fraction = float(np.mean(~valid | near))
+    blocked_fraction = float(np.mean(near))
     return {
         "obstructed": blocked_fraction >= 0.8,
         "blocked_fraction": blocked_fraction,
         "valid_fraction": float(valid.mean()),
-        "reason": "central_depth",
+        "invalid_fraction": float((~valid).mean()),
+        "reason": ("central_depth" if valid.all() else "partial_central_depth" if valid.any() else "depth_unavailable"),
     }
 
 

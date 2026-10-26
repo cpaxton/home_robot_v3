@@ -318,14 +318,22 @@ def update(self, *, full_perception: bool | None = None):
             self._cached_navigation_origin_xyt = np.asarray(org, dtype=np.float64).reshape(-1)[:3].copy()
 
     self.voxel_map.process_rgbd_images(
-        rgb, depth, K, camera_pose, base_xyt=base_xyt, full_perception=run_full,
+        rgb,
+        depth,
+        K,
+        camera_pose,
+        base_xyt=base_xyt,
+        full_perception=run_full,
         # Reused inferred depth does not describe this newly received frame.
-        received_monotonic=None if depth_reused else getattr(obs, 'received_monotonic', None),
-        image_timing=getattr(obs, 'image_timing', None),
+        received_monotonic=None if depth_reused else getattr(obs, "received_monotonic", None),
         # This flag describes sensor vs estimated provenance, not freshness.
         # depth_reused independently controls whether this frame has fresh evidence.
-        depth_evidence_source=(ESTIMATED_DEPTH_POINTCLOUD_SOURCE if self._depth_source == 'lingbot'
-                               or getattr(self, '_depth_map_from_da3_infer', False) else RGBD_POINTCLOUD_SOURCE),
+        depth_evidence_source=(
+            ESTIMATED_DEPTH_POINTCLOUD_SOURCE
+            if self._depth_source == "lingbot" or getattr(self, "_depth_map_from_da3_infer", False)
+            else RGBD_POINTCLOUD_SOURCE
+        ),
+        image_timing=getattr(obs, "image_timing", None),
     )
     if os.environ.get("EMET_DYNAMEM_MAP_DEBUG"):
         print(f"[update] process_rgbd={time.monotonic():.3f}", flush=True)

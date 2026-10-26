@@ -242,6 +242,8 @@ def assess_view_with_vlm(
     siglip_evidence: str = "",
     close_look_crop: np.ndarray | None = None,
     multi_close_look_crops: list[np.ndarray] | None = None,
+    context_rgb: np.ndarray | None = None,
+    selected_views=None,
 ) -> ViewAssessment:
     """Multimodal VLM: is this image enough to answer the question?
 
@@ -316,9 +318,10 @@ def assess_view_with_vlm(
     multi_candidates = [
         np.asarray(c) for c in (multi_close_look_crops or []) if c is not None and getattr(c, "ndim", 0) == 3
     ]
+    has_context = len(unique_image_arrays([rgb, context_rgb])) > 1
     crops = unique_image_arrays(
         ([current_crop] if current_crop is not None else []) + multi_candidates,
-        max_images=3,
+        max_images=2 if has_context else 3,
     )
     has_current_crop = current_crop is not None and bool(crops) and np.array_equal(crops[0], current_crop)
     if has_current_crop:
@@ -347,6 +350,29 @@ def assess_view_with_vlm(
     if current_crop is not None:
         images.append(current_crop)
     images.extend(multi)
+    if has_context:
+        # Keep the existing four-image ceiling; context replaces the last crop
+        # when all detail slots are occupied.
+        images.append(np.asarray(context_rgb))
+        user += (
+            f"\nImage {len(images)} is an earlier pre-approach context view, not the current view. "
+            "Image 1 is the current assessment view. Judge present from Image 1 only. "
+            "Use the earlier view for room/relationship context, not as proof the target is "
+            "currently visible or localizable. For an MCQ, answerability may use both views; "
+            "do not assume unseen landmarks or count the same object twice.\n"
+        )
+    if selected_views is not None:
+        if context_rgb is not None or close_look_crop is not None or multi_close_look_crops:
+            raise ValueError("Selected evidence cannot be combined with separately labeled context/crops")
+        images = [view.frame.rgb for view in selected_views.views]
+        if not images or len(images) > 4 or not np.array_equal(images[0], rgb):
+            raise ValueError("Selected evidence must start with current RGB and fit the four-image budget")
+        user += (
+            "\n"
+            + selected_views.prompt_labels()
+            + "\nJudge present from Image 1 only. Answerability may use the labeled historical context; "
+            "do not assume unseen landmarks or count the same object twice.\n"
+        )
     vl = getattr(client, "_vl", None)
     if vl is not None and hasattr(vl, "generate_multimodal"):
         try:

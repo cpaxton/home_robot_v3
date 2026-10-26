@@ -1,0 +1,58 @@
+{
+  "scope": "development-selected simulator feedback checks; not policy or hardware qualification",
+  "date": "2026-10-23",
+  "initial_carry": {
+    "episodes": 10,
+    "admitted": 2,
+    "end_to_end_success_rate": 0.2
+  },
+  "stratified_smoke": {
+    "episodes": 15,
+    "summary": {
+      "0.02": {
+        "cases": 5,
+        "admitted": 5,
+        "admission_rate": 1.0,
+        "successes": 5,
+        "end_to_end_success_rate": 1.0,
+        "conditional_execution_success_rate": 1.0,
+        "unsafe_contact_count": 0,
+        "wheel_lift_count": 0,
+        "retention_lost_count": 0,
+        "failures": {},
+        "candidate_rejections": {}
+      },
+      "0.05": {
+        "cases": 5,
+        "admitted": 5,
+        "admission_rate": 1.0,
+        "successes": 5,
+        "end_to_end_success_rate": 1.0,
+        "conditional_execution_success_rate": 1.0,
+        "unsafe_contact_count": 0,
+        "wheel_lift_count": 0,
+        "retention_lost_count": 0,
+        "failures": {},
+        "candidate_rejections": {}
+      },
+      "0.1": {
+        "cases": 5,
+        "admitted": 5,
+        "admission_rate": 1.0,
+        "successes": 5,
+        "end_to_end_success_rate": 1.0,
+        "conditional_execution_success_rate": 1.0,
+        "unsafe_contact_count": 0,
+        "wheel_lift_count": 0,
+        "retention_lost_count": 0,
+        "failures": {},
+        "candidate_rejections": {}
+      }
+    },
+    "controller": "feedback",
+    "note": "preceded final phase gating; separate continuous regressions failed and prompted further correction"
+  },
+  "full_qualification": "pending; use current source-bound 300-case carry and 30-case continuous reports",
+  "learned_policy_qualified": false,
+  "hardware_qualified": false
+}

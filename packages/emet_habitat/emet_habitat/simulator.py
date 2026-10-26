@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -28,6 +29,7 @@ class HabitatFrame:
     agent_state: object
     intrinsics: np.ndarray
     semantic: np.ndarray | None = None
+    acquisition_timestamp_ns: int | None = None
 
 
 class HabitatEQASimulator:
@@ -286,6 +288,7 @@ class HabitatEQASimulator:
             agent_state=self._agent.get_state(),
             intrinsics=self.intrinsics,
             semantic=semantic,
+            acquisition_timestamp_ns=time.monotonic_ns(),
         )
 
     def step(self, action: str) -> HabitatFrame:

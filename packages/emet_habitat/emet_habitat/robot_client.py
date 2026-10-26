@@ -141,7 +141,7 @@ class HabitatRobotClient(AbstractRobotClient, RobotModel):
             Latest :class:`~emet.core.interfaces.Observations` from Habitat-Sim.
         """
         frame = self._sim.get_frame()
-        return habitat_rgb_depth_to_observations(
+        observation = habitat_rgb_depth_to_observations(
             rgb=frame.rgb,
             depth=frame.depth,
             agent_state=frame.agent_state,
@@ -149,6 +149,12 @@ class HabitatRobotClient(AbstractRobotClient, RobotModel):
             semantic=frame.semantic if self._expose_semantics else None,
             **self._observation_kwargs(),
         )
+        stamp = getattr(frame, "acquisition_timestamp_ns", None)
+        if stamp is not None:
+            observation.image_timing = {
+                "head_cam_left": {"timestamp_ns": stamp, "clock_domain": "habitat_monotonic", "available": True}
+            }
+        return observation
 
     def get_base_pose(self, timeout: float = 5.0) -> np.ndarray:
         """Return planar base pose ``(x, z, heading)`` in Habitat world coordinates.
@@ -259,6 +265,8 @@ class HabitatRobotClient(AbstractRobotClient, RobotModel):
             if nav["phase"] == "path":
                 if nav["wp_i"] >= len(nav["waypoints"]):
                     if nav["goal_theta"] is not None:
+                        if getattr(self, "retain_navigation_views", False):
+                            self.pre_turn_observation = self.get_observation()
                         nav["phase"] = "yaw"
                         nav["yaw_steps"] = 0
                     else:

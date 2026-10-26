@@ -41,6 +41,7 @@ from emet.core.zmq_protocol import (
     EMET_ZMQ_SESSION_SCHEMA_VERSION_KEY,
     EMET_ZMQ_SIM_TIME_RATIO_KEY,
 )
+from emet.rl.server import ReactiveSimMixin
 from emet.robots.base import RobotSpec
 from emet.simulation import molmospaces_spawn, scene_base_spawn
 from emet.simulation.env_flags import env_sim_nav_debug, warn_sim_nav_env_flags
@@ -129,7 +130,7 @@ _PRIMARY_RW, _PRIMARY_RH = 640, 480
 _SERVO_RW, _SERVO_RH = 320, 240
 
 
-class RobosuiteZmqServer(BaseZmqServer):
+class RobosuiteZmqServer(ReactiveSimMixin, BaseZmqServer):
     """ZMQ server backed by a robosuite environment.
 
     Unlike MujocoZmqServer (which uses stretch_mujoco), this server
@@ -152,8 +153,21 @@ class RobosuiteZmqServer(BaseZmqServer):
         scene_source_basename: str | None = None,
         session_extra: dict[str, Any] | None = None,
         objects_info: dict[str, Any] | None = None,
+        controller: str = "legacy",
+        policy_path: str | None = None,
+        no_cameras: bool = False,
         **kwargs,
     ):
+        if controller not in {"legacy", "baseline", "base", "rl"}:
+            raise ValueError("controller must be legacy, baseline, base or rl")
+        if controller != "legacy" and robot_spec.name != "innate_mars":
+            raise ValueError("reactive control currently supports innate_mars only")
+        if controller == "rl" and not policy_path:
+            raise ValueError("rl controller requires policy_path")
+        self._reactive_controller_kind = controller
+        self._reactive_policy_path = policy_path
+        self._reactive_controller = None
+        self._no_cameras = no_cameras
         if not all(np.isfinite(v) and v > 0 for v in (navigation_xy_tolerance, navigation_yaw_tolerance)):
             raise ValueError("Navigation tolerances must be finite and positive")
         max_sim_steps = kwargs.pop("max_sim_steps", None)
@@ -501,6 +515,10 @@ class RobosuiteZmqServer(BaseZmqServer):
             self._mjmodel = mujoco.MjModel.from_xml_string(self._scene_xml)
         else:
             raise ValueError("Either scene_xml or scene_model must be provided")
+        if self.supports_reactive_control():
+            # Mars has 360 rangefinder rays; evaluate them when publishing an
+            # observation, not in every physics/kinematics pass of the servo loop.
+            self._mjmodel.opt.disableflags |= int(mujoco.mjtDisableBit.mjDSBL_SENSOR)
         self._mjdata = mujoco.MjData(self._mjmodel)
         self._molmospaces_autoplace_snap_qpos0 = False
         self._planar_autoplace_snap_qpos0 = False
@@ -849,9 +867,11 @@ class RobosuiteZmqServer(BaseZmqServer):
         if not self._passive_base_support:
             if weld >= 0:
                 base_id = self._mjmodel.body(self._spec.base_link_name).id
-                if (self._mjmodel.eq_type[weld] != mujoco.mjtEq.mjEQ_WELD
-                        or self._mjmodel.eq_obj1id[weld] != 0
-                        or self._mjmodel.eq_obj2id[weld] != base_id):
+                if (
+                    self._mjmodel.eq_type[weld] != mujoco.mjtEq.mjEQ_WELD
+                    or self._mjmodel.eq_obj1id[weld] != 0
+                    or self._mjmodel.eq_obj2id[weld] != base_id
+                ):
                     raise ValueError("emet_stationary_base must weld world to the robot base")
                 self._mjmodel.eq_data[weld, 3:10] = snap
                 self._mjdata.eq_active[weld] = True
@@ -1094,6 +1114,7 @@ class RobosuiteZmqServer(BaseZmqServer):
             robot_root_name=self._spec.base_link_name,
         )
         from emet.simulation.articulation import scene_articulations
+
         session["sim_articulations"] = scene_articulations(self._mjmodel, self._mjdata, self._spec.base_link_name)
         session["articulation_revision"] = 0
         return session
@@ -1101,33 +1122,40 @@ class RobosuiteZmqServer(BaseZmqServer):
     def _refresh_articulation_state(self):
         """Publish joint evidence and coherent geometry from private data under lock."""
         from emet.simulation.articulation import articulation_geometry_changed, scene_articulations
+
         if self._emet_session is None or self._mjmodel is None or self._mjdata is None:
             return
         groups = scene_articulations(self._mjmodel, self._mjdata, self._spec.base_link_name)
-        previous = getattr(self, "_articulation_geometry_groups",
-                           self._emet_session.get("sim_articulations") or [])
+        previous = getattr(self, "_articulation_geometry_groups", self._emet_session.get("sim_articulations") or [])
         previous_by_bodies = {tuple(g["bodies"]): g for g in previous}
         revision = self._emet_session.get("articulation_revision", 0)
         forced = revision != getattr(self, "_articulation_geometry_revision", revision)
-        changed = [g for g in groups if forced or articulation_geometry_changed(
-            g, previous_by_bodies.get(tuple(g["bodies"])))]
+        changed = [
+            g for g in groups if forced or articulation_geometry_changed(g, previous_by_bodies.get(tuple(g["bodies"])))
+        ]
         if changed or len(groups) != len(previous):
             scratch = mujoco.MjData(self._mjmodel)
             mujoco.mj_copyData(scratch, self._mjmodel, self._mjdata)
             env = self._emet_session.get("environment") or {}
             if env.get("kind") == "molmospaces" and not self._objects_info:
                 from emet.simulation.sim_object_placements import refresh_articulated_body_placements
+
                 bodies = {body for group in changed for body in group["bodies"]}
                 refresh_articulated_body_placements(
-                    self._emet_session["sim_object_placements"], self._mjmodel, scratch, bodies)
+                    self._emet_session["sim_object_placements"], self._mjmodel, scratch, bodies
+                )
                 changed_keys = {tuple(g["bodies"]) for g in changed}
-                geometry_groups = [g if tuple(g["bodies"]) in changed_keys else
-                                   previous_by_bodies[tuple(g["bodies"])] for g in groups]
+                geometry_groups = [
+                    g if tuple(g["bodies"]) in changed_keys else previous_by_bodies[tuple(g["bodies"])] for g in groups
+                ]
             else:
                 # Aggregate fixture maps need their provider's grouping rules.
                 attach_sim_object_placements_to_session(
-                    self._emet_session, objects_info=self._objects_info,
-                    environment_kind=env.get("kind"), model=self._mjmodel, data=scratch,
+                    self._emet_session,
+                    objects_info=self._objects_info,
+                    environment_kind=env.get("kind"),
+                    model=self._mjmodel,
+                    data=scratch,
                     robot_root_name=self._spec.base_link_name,
                 )
                 geometry_groups = groups
@@ -1154,7 +1182,8 @@ class RobosuiteZmqServer(BaseZmqServer):
                     if not hasattr(self, "_dynamic_placement_tracker"):
                         self._dynamic_placement_tracker = DynamicPlacementTracker()
                     self._dynamic_placement_tracker.refresh(
-                        placements, self._mjmodel, self._mjdata, forced_bodies=dirty)
+                        placements, self._mjmodel, self._mjdata, forced_bodies=dirty
+                    )
                 self._placement_geometry_dirty = set()
                 # Measure object and EE together. Mixing observation AABBs with
                 # newer joint states invents apparent attachment slip.
@@ -1162,7 +1191,8 @@ class RobosuiteZmqServer(BaseZmqServer):
                 for body, info in getattr(self, "_kinematic_attachments", {}).items():
                     try:
                         held_geometry[body] = measured_held_object_geometry(
-                            self._mjmodel, self._mjdata, body, info["ee_body"])
+                            self._mjmodel, self._mjdata, body, info["ee_body"]
+                        )
                     except ValueError as exc:
                         # Missing volume must reject placement, not stop telemetry
                         # and command receipts for the whole simulator.
@@ -2277,6 +2307,11 @@ class RobosuiteZmqServer(BaseZmqServer):
         must therefore run afterward or planar XY commands are erased before
         physics can consume them.
         """
+        controller = getattr(self, "_reactive_controller", None)
+        if controller is not None and controller.active:
+            controller.step()
+            self._physics_fps_counter.tick(sim_time=float(self._mjdata.time))
+            return
         self._hold_stationary_base_if_idle()
         self._apply_joint_ctrl_hold_to_actuators(refresh_unpinned_hold=False)
         if self._nav_yaw_slew is None:
@@ -2344,17 +2379,24 @@ class RobosuiteZmqServer(BaseZmqServer):
         with self._mj_lock:
             if self._mjmodel is None or self._mjdata is None:
                 raise RuntimeError("scene not ready")
-            contacts = [teleport_endpoint_contacts(self._mjmodel, self._mjdata, self._spec, pose)
-                        for pose in poses]
-            return {"poses": poses.tolist(), "clear": [not c for c in contacts], "contacts": contacts,
-                    "sim_time": float(self._mjdata.time), "scope": "base_endpoint_only"}
+            contacts = [teleport_endpoint_contacts(self._mjmodel, self._mjdata, self._spec, pose) for pose in poses]
+            return {
+                "poses": poses.tolist(),
+                "clear": [not c for c in contacts],
+                "contacts": contacts,
+                "sim_time": float(self._mjdata.time),
+                "scope": "base_endpoint_only",
+            }
 
     def handle_action(self, action: dict[str, Any]):
         from emet.simulation.physical_execution import audit_physical_action
 
         audit_physical_action(
-            action, source=type(self).__name__,
-            implicit_teleport=("xyt" in action and self._is_molmospaces_session() and molmospaces_nav_teleport_enabled()),
+            action,
+            source=type(self).__name__,
+            implicit_teleport=(
+                "xyt" in action and self._is_molmospaces_session() and molmospaces_nav_teleport_enabled()
+            ),
         )
         if EMET_ACTION_MUJOCO_GROUND_TRUTH_KEY in action:
             path_gt, exclude_robot, as_json = parse_ground_truth_dump_action_field(
@@ -2413,12 +2455,14 @@ class RobosuiteZmqServer(BaseZmqServer):
                 with self._mj_lock:
                     ok = set_named_joint_qpos(self._mjmodel, self._mjdata, joint, value)
                     if self._emet_session is not None:
-                        self._emet_session["articulation_revision"] = int(
-                            self._emet_session.get("articulation_revision", 0)) + 1
+                        self._emet_session["articulation_revision"] = (
+                            int(self._emet_session.get("articulation_revision", 0)) + 1
+                        )
                         self._refresh_articulation_state()
                         self._emet_session["articulation_result"] = {
                             "request_id": action[EMET_ACTION_SIM_SET_JOINT_QPOS_KEY].get("request_id"),
-                            "joint": joint, "applied": bool(ok),
+                            "joint": joint,
+                            "applied": bool(ok),
                         }
                 if ok:
                     logger.info(f"sim_set_joint_qpos: {joint!r} requested={value:.4f}")
@@ -2542,9 +2586,7 @@ class RobosuiteZmqServer(BaseZmqServer):
                         # changing base/attachment poses or reporting arrival.
                         from emet.simulation.teleport_collision import teleport_endpoint_contacts
 
-                        contacts = teleport_endpoint_contacts(
-                            self._mjmodel, self._mjdata, self._spec, (wx, wy, wt)
-                        )
+                        contacts = teleport_endpoint_contacts(self._mjmodel, self._mjdata, self._spec, (wx, wy, wt))
                         if contacts:
                             self._nav_goal_world = None
                             self._contract_navigation_context["endpoint_contacts"] = contacts
@@ -2613,6 +2655,8 @@ class RobosuiteZmqServer(BaseZmqServer):
     def get_full_observation_message(self) -> dict[str, Any]:
         if self._mjdata is None:
             return None
+        if getattr(self, "_no_cameras", False):
+            return self.get_state_message()
 
         cam_names = self._spec.camera_names
         if not cam_names:
@@ -2682,7 +2726,9 @@ class RobosuiteZmqServer(BaseZmqServer):
                 if rgb_r.shape[0] == rgb.shape[0] and rgb_r.shape[1] == rgb.shape[1]:
                     message["rgb_right"] = compression.to_jpg(rgb_r)
                     message["camera_K_right"] = K_r
-                    message["camera_pose_right"] = self._camera_pose_world(right_name, data=getattr(self, "_camera_render_states", {}).get(right_name))
+                    message["camera_pose_right"] = self._camera_pose_world(
+                        right_name, data=getattr(self, "_camera_render_states", {}).get(right_name)
+                    )
             except Exception as e:
                 logger.debug(f"Stereo auxiliary RGB failed for {right_name}: {e!r}")
         if len(cam_names) >= 3 and allow_extra_cams:
@@ -2692,7 +2738,9 @@ class RobosuiteZmqServer(BaseZmqServer):
                     rgb_t, K_t = self._primary_rgb_only_with_K(tertiary)
                     message["rgb_tertiary"] = compression.to_jpg(rgb_t)
                     message["camera_K_tertiary"] = K_t
-                    message["camera_pose_tertiary"] = self._camera_pose_world(tertiary, data=getattr(self, "_camera_render_states", {}).get(tertiary))
+                    message["camera_pose_tertiary"] = self._camera_pose_world(
+                        tertiary, data=getattr(self, "_camera_render_states", {}).get(tertiary)
+                    )
                     message["camera_name_tertiary"] = tertiary
                 except Exception as e:
                     logger.debug(f"Tertiary RGB failed for {tertiary}: {e!r}")
@@ -2719,6 +2767,13 @@ class RobosuiteZmqServer(BaseZmqServer):
             from emet.simulation.mujoco_lidar import attach_lidar_to_zmq_message
 
             with self._mj_lock:
+                if self.supports_reactive_control():
+                    flags = self._mjmodel.opt.disableflags
+                    try:
+                        self._mjmodel.opt.disableflags &= ~int(mujoco.mjtDisableBit.mjDSBL_SENSOR)
+                        mujoco.mj_sensorPos(self._mjmodel, self._mjdata)
+                    finally:
+                        self._mjmodel.opt.disableflags = flags
                 attach_lidar_to_zmq_message(message, self._mjmodel, self._mjdata)
         with self._render_lock:
             self._last_full_obs_for_servo = message
@@ -2737,7 +2792,12 @@ class RobosuiteZmqServer(BaseZmqServer):
                 xpos = self._mjdata.body(self._spec.base_link_name).xpos
                 base_xyz = [float(xpos[0]), float(xpos[1]), float(xpos[2])]
                 base_up = float(self._mjdata.body(self._spec.base_link_name).xmat.reshape(3, 3)[2, 2])
-                if self._joint_ctrl_hold is not None:
+                controller = getattr(self, "_reactive_controller", None)
+                if controller is not None and controller.active:
+                    joint_targets = np.array(
+                        [self._mjdata.ctrl[self._mjmodel.actuator(n).id] for n in self._spec.actuator_names]
+                    )
+                elif self._joint_ctrl_hold is not None:
                     joint_targets = self._joint_ctrl_hold.copy()
         except Exception:
             base_xyz = None
@@ -2775,6 +2835,8 @@ class RobosuiteZmqServer(BaseZmqServer):
         """
         if self._mjdata is None:
             return None
+        if getattr(self, "_no_cameras", False):
+            return self.get_state_message()
 
         cam_names = self._spec.camera_names
         if not cam_names:
@@ -3128,6 +3190,7 @@ class RobosuiteZmqServer(BaseZmqServer):
                         "(Δq0 vs qpos0, dq, F_act, τ_dof, τ_con) on all torso joints + arm1 pair."
                     )
 
+        self._init_reactive_controller()
         super().start()
 
         self._sim_thread: threading.Thread | None = None
@@ -3156,6 +3219,10 @@ class RobosuiteZmqServer(BaseZmqServer):
                 time.sleep(1 / self.simulation_rate)
 
     def stop(self):
+        if getattr(self, "_reactive_controller", None) is not None:
+            with self._command_lock:
+                if self._reactive_command is not None and not self._reactive_fault:
+                    self._finish_reactive_cancel("cancelled", "server shutdown")
         self._close_renderers()
         self._running = False
         self._done = True

@@ -390,9 +390,7 @@ class MujocoZmqServer(BaseZmqServer):
                     self._precision_xy_acquired = True
                 elif distance > outer:
                     self._precision_xy_acquired = False
-                self.controller.control.set_linear_error_tolerance(
-                    outer if self._precision_xy_acquired else inner
-                )
+                self.controller.control.set_linear_error_tolerance(outer if self._precision_xy_acquired else inner)
             # Compute control
             self.is_done = False
             v_cmd, w_cmd = self.controller.compute_control()
@@ -899,14 +897,26 @@ class MujocoZmqServer(BaseZmqServer):
             env = session.get("environment") or {}
             if env.get("kind") == "molmospaces" and not self.objects_info:
                 from emet.simulation.sim_object_placements import refresh_articulated_body_placements
-                refresh_articulated_body_placements(session["sim_object_placements"], model,
-                    scratch, {body for group in changed for body in group["bodies"]})
+
+                refresh_articulated_body_placements(
+                    session["sim_object_placements"],
+                    model,
+                    scratch,
+                    {body for group in changed for body in group["bodies"]},
+                )
                 keys = {tuple(g["bodies"]) for g in changed}
-                self._articulation_geometry_groups = [g if tuple(g["bodies"]) in keys
-                    else old[tuple(g["bodies"])] for g in groups]
+                self._articulation_geometry_groups = [
+                    g if tuple(g["bodies"]) in keys else old[tuple(g["bodies"])] for g in groups
+                ]
             else:
-                attach_sim_object_placements_to_session(session, objects_info=self.objects_info,
-                    environment_kind=env.get("kind"), model=model, data=scratch, robot_root_name="base_link")
+                attach_sim_object_placements_to_session(
+                    session,
+                    objects_info=self.objects_info,
+                    environment_kind=env.get("kind"),
+                    model=model,
+                    data=scratch,
+                    robot_root_name="base_link",
+                )
                 self._articulation_geometry_groups = groups
         placements = session.get("sim_object_placements")
         if isinstance(placements, dict):
@@ -991,8 +1001,11 @@ class MujocoZmqServer(BaseZmqServer):
         from emet.simulation.physical_execution import audit_physical_action
 
         audit_physical_action(
-            action, source=type(self).__name__,
-            implicit_teleport=("xyt" in action and self._is_molmospaces_session() and molmospaces_nav_teleport_enabled()),
+            action,
+            source=type(self).__name__,
+            implicit_teleport=(
+                "xyt" in action and self._is_molmospaces_session() and molmospaces_nav_teleport_enabled()
+            ),
         )
         if EMET_ACTION_MUJOCO_GROUND_TRUTH_KEY in action:
             path_gt, exclude_robot, as_json = parse_ground_truth_dump_action_field(
@@ -1049,11 +1062,13 @@ class MujocoZmqServer(BaseZmqServer):
                 measured = self.robot_sim.set_joint_qpos(joint, value, wait=True, timeout=2.0)
                 with self._articulation_lock:
                     if self._emet_session is not None:
-                        self._emet_session["articulation_revision"] = int(
-                            self._emet_session.get("articulation_revision", 0)) + 1
+                        self._emet_session["articulation_revision"] = (
+                            int(self._emet_session.get("articulation_revision", 0)) + 1
+                        )
                         self._emet_session["articulation_result"] = {
                             "request_id": action[EMET_ACTION_SIM_SET_JOINT_QPOS_KEY].get("request_id"),
-                            "joint": joint, "applied": measured is not None and bool(np.isfinite(measured)),
+                            "joint": joint,
+                            "applied": measured is not None and bool(np.isfinite(measured)),
                         }
                 if measured is not None:
                     logger.info(f"sim_set_joint_qpos: {joint!r} requested={value:.4f} measured={measured:.4f}")

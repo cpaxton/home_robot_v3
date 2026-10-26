@@ -51,13 +51,43 @@ def test_spin_in_place_grows_voxel_map():
 
     counts = []
     for yaw in np.linspace(0.0, 2 * np.pi, 8, endpoint=False):
-        vm.process_rgbd_images(rgb, depth, K, _pose_at(0.0, 0.0, float(yaw)), base_xyt=np.array([0.0, 0.0, float(yaw)]))
+        timing = {"head_cam_left": {"timestamp_ns": (len(counts) + 1) * 10**9, "clock_domain": "test"}}
+        vm.process_rgbd_images(
+            rgb,
+            depth,
+            K,
+            _pose_at(0.0, 0.0, float(yaw)),
+            base_xyt=np.array([0.0, 0.0, float(yaw)]),
+            image_timing=timing,
+        )
+        assert vm.observations[-1].info["image_timing"] == timing
+        assert vm.observations[-1].info["observation_scope_id"] == vm.observation_scope_id
         counts.append(_n_points(vm))
 
     assert counts[0] > 0
     assert counts == sorted(counts), f"spin erased mapped points: {counts}"
     # A full 360 deg scan with a ~74 deg FOV must see far more than the first frame.
     assert counts[-1] > 3 * counts[0], f"spin added almost nothing: {counts}"
+    from types import SimpleNamespace
+
+    from emet.memory.graph_eqa.agentic.view_history import select_assessment_history
+
+    executor = SimpleNamespace(
+        agent=SimpleNamespace(
+            parameters={"eqa": {"view_selection": {"policy": "pose"}}},
+            voxel_map=vm,
+            robot=SimpleNamespace(),
+        ),
+        _append_trace=lambda event: None,
+    )
+    selection = select_assessment_history(executor, rgb)
+    assert selection is not None
+    assert selection.views[0].frame.timestamp_s == 8.0
+    assert selection.views[0].frame.view_id == "8"
+    previous_epoch = vm.observation_scope_id
+    vm.reset()
+    assert vm.observation_scope_id != previous_epoch
+    assert not vm.observations
 
 
 def test_clear_points_keeps_geometry_where_depth_has_no_return():
@@ -163,11 +193,14 @@ def test_scene_graph_depth_points_stay_aligned_when_mapping_is_resized(tmp_path,
     from emet.utils.image import Camera, camera_xyz_to_global_xyz
 
     vm = SparseVoxelMap(log=str(tmp_path), image_shape=(H // 2, W // 2), use_instance_memory=False)
-    processor = SceneGraphProcessor(config={}, device='cpu')
-    monkeypatch.setattr(processor, '_run_segmentation', lambda *args: [
-        {'mask': np.ones((H, W), bool), 'label': 'observed surface', 'score': .9}])
-    monkeypatch.setattr(processor, '_encode_siglip', lambda *args: None)
-    monkeypatch.setattr(processor, '_encode_dinov3', lambda *args: None)
+    processor = SceneGraphProcessor(config={}, device="cpu")
+    monkeypatch.setattr(
+        processor,
+        "_run_segmentation",
+        lambda *args: [{"mask": np.ones((H, W), bool), "label": "observed surface", "score": 0.9}],
+    )
+    monkeypatch.setattr(processor, "_encode_siglip", lambda *args: None)
+    monkeypatch.setattr(processor, "_encode_dinov3", lambda *args: None)
     vm.set_scene_graph_processor(processor)
     rgb = np.zeros((H, W, 3), np.uint8)
     depth = np.broadcast_to(1. + .001 * np.arange(W, dtype=np.float32), (H, W)).copy()
@@ -177,6 +210,7 @@ def test_scene_graph_depth_points_stay_aligned_when_mapping_is_resized(tmp_path,
     vm.process_rgbd_images(rgb, depth, K, pose, received_monotonic=100., image_timing=timing)
     assert processor.observed_tamp_provider.frame_gate._stamp == 10000
     node, = processor.scene_graph.nodes.values()
+
     expected = camera_xyz_to_global_xyz(Camera.from_K(K, width=W, height=H).depth_to_xyz(depth), pose)
     assert node.point_cloud.shape == (H * W, 3)
     np.testing.assert_allclose(node.point_cloud.numpy(), expected.reshape(-1, 3), atol=1e-6)

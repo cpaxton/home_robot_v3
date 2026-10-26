@@ -1,0 +1,1848 @@
+{
+  "version": "mars-carry-v2",
+  "config": {
+    "robot": "innate_mars",
+    "scenario": "carry",
+    "horizon": 15,
+    "initialization_attempts": 20,
+    "diagnostics": false,
+    "disturbance_curriculum": false,
+    "randomization_scale": 0,
+    "payload_mass_kg": 0.05,
+    "payload_asset_set": "training",
+    "contact_cone": "elliptic",
+    "contact_impratio": 3,
+    "balanced_grasp_setup": true,
+    "tamp_carry_trajectories": true,
+    "carry_target_mode": "combined",
+    "carry_push_scale": 0.0,
+    "carry_push_probability": 1.0,
+    "payload_object": "object1",
+    "initial_heading_range": 0.0,
+    "target_scale": 1.0,
+    "retarget_probability": 0.0,
+    "reach_push_probability": 0.0,
+    "certify_reach_paths": false,
+    "dynamic_references": false,
+    "action_mode": "direct_velocity",
+    "base_xy_tolerance": 0.005,
+    "base_heading_tolerance": 0.04,
+    "base_only_min_distance": 0.0,
+    "base_only_max_distance": 0.0,
+    "reach_target_mode": "mixed",
+    "differential_base_reward": false,
+    "grasp_lift_height": 0.045,
+    "support_half_width": 0.04,
+    "grasp_depth": 0.03,
+    "grasp_pitch_rad": 0.0,
+    "hand_position_tolerance": 0.005,
+    "hand_orientation_tolerance": 0.05,
+    "trajectory_preview": true,
+    "tracking_reward": true,
+    "tracking_precision": 4,
+    "endpoint_motion_weight": 0.0,
+    "goal_gated_settling": true
+  },
+  "cases": [
+    {
+      "id": "20g:translation:0",
+      "seed": 1900000,
+      "payload_mass_kg": 0.02,
+      "stratum": "translation"
+    },
+    {
+      "id": "20g:translation:1",
+      "seed": 1900001,
+      "payload_mass_kg": 0.02,
+      "stratum": "translation"
+    },
+    {
+      "id": "20g:translation:2",
+      "seed": 1900002,
+      "payload_mass_kg": 0.02,
+      "stratum": "translation"
+    },
+    {
+      "id": "20g:translation:3",
+      "seed": 1900003,
+      "payload_mass_kg": 0.02,
+      "stratum": "translation"
+    },
+    {
+      "id": "20g:translation:4",
+      "seed": 1900004,
+      "payload_mass_kg": 0.02,
+      "stratum": "translation"
+    },
+    {
+      "id": "20g:translation:5",
+      "seed": 1900005,
+      "payload_mass_kg": 0.02,
+      "stratum": "translation"
+    },
+    {
+      "id": "20g:translation:6",
+      "seed": 1900006,
+      "payload_mass_kg": 0.02,
+      "stratum": "translation"
+    },
+    {
+      "id": "20g:translation:7",
+      "seed": 1900007,
+      "payload_mass_kg": 0.02,
+      "stratum": "translation"
+    },
+    {
+      "id": "20g:translation:8",
+      "seed": 1900008,
+      "payload_mass_kg": 0.02,
+      "stratum": "translation"
+    },
+    {
+      "id": "20g:translation:9",
+      "seed": 1900009,
+      "payload_mass_kg": 0.02,
+      "stratum": "translation"
+    },
+    {
+      "id": "20g:translation:10",
+      "seed": 1900010,
+      "payload_mass_kg": 0.02,
+      "stratum": "translation"
+    },
+    {
+      "id": "20g:translation:11",
+      "seed": 1900011,
+      "payload_mass_kg": 0.02,
+      "stratum": "translation"
+    },
+    {
+      "id": "20g:translation:12",
+      "seed": 1900012,
+      "payload_mass_kg": 0.02,
+      "stratum": "translation"
+    },
+    {
+      "id": "20g:translation:13",
+      "seed": 1900013,
+      "payload_mass_kg": 0.02,
+      "stratum": "translation"
+    },
+    {
+      "id": "20g:translation:14",
+      "seed": 1900014,
+      "payload_mass_kg": 0.02,
+      "stratum": "translation"
+    },
+    {
+      "id": "20g:translation:15",
+      "seed": 1900015,
+      "payload_mass_kg": 0.02,
+      "stratum": "translation"
+    },
+    {
+      "id": "20g:translation:16",
+      "seed": 1900016,
+      "payload_mass_kg": 0.02,
+      "stratum": "translation"
+    },
+    {
+      "id": "20g:translation:17",
+      "seed": 1900017,
+      "payload_mass_kg": 0.02,
+      "stratum": "translation"
+    },
+    {
+      "id": "20g:translation:18",
+      "seed": 1900018,
+      "payload_mass_kg": 0.02,
+      "stratum": "translation"
+    },
+    {
+      "id": "20g:translation:19",
+      "seed": 1900019,
+      "payload_mass_kg": 0.02,
+      "stratum": "translation"
+    },
+    {
+      "id": "20g:orientation:0",
+      "seed": 1901000,
+      "payload_mass_kg": 0.02,
+      "stratum": "orientation"
+    },
+    {
+      "id": "20g:orientation:1",
+      "seed": 1901001,
+      "payload_mass_kg": 0.02,
+      "stratum": "orientation"
+    },
+    {
+      "id": "20g:orientation:2",
+      "seed": 1901002,
+      "payload_mass_kg": 0.02,
+      "stratum": "orientation"
+    },
+    {
+      "id": "20g:orientation:3",
+      "seed": 1901003,
+      "payload_mass_kg": 0.02,
+      "stratum": "orientation"
+    },
+    {
+      "id": "20g:orientation:4",
+      "seed": 1901004,
+      "payload_mass_kg": 0.02,
+      "stratum": "orientation"
+    },
+    {
+      "id": "20g:orientation:5",
+      "seed": 1901005,
+      "payload_mass_kg": 0.02,
+      "stratum": "orientation"
+    },
+    {
+      "id": "20g:orientation:6",
+      "seed": 1901006,
+      "payload_mass_kg": 0.02,
+      "stratum": "orientation"
+    },
+    {
+      "id": "20g:orientation:7",
+      "seed": 1901007,
+      "payload_mass_kg": 0.02,
+      "stratum": "orientation"
+    },
+    {
+      "id": "20g:orientation:8",
+      "seed": 1901008,
+      "payload_mass_kg": 0.02,
+      "stratum": "orientation"
+    },
+    {
+      "id": "20g:orientation:9",
+      "seed": 1901009,
+      "payload_mass_kg": 0.02,
+      "stratum": "orientation"
+    },
+    {
+      "id": "20g:orientation:10",
+      "seed": 1901010,
+      "payload_mass_kg": 0.02,
+      "stratum": "orientation"
+    },
+    {
+      "id": "20g:orientation:11",
+      "seed": 1901011,
+      "payload_mass_kg": 0.02,
+      "stratum": "orientation"
+    },
+    {
+      "id": "20g:orientation:12",
+      "seed": 1901012,
+      "payload_mass_kg": 0.02,
+      "stratum": "orientation"
+    },
+    {
+      "id": "20g:orientation:13",
+      "seed": 1901013,
+      "payload_mass_kg": 0.02,
+      "stratum": "orientation"
+    },
+    {
+      "id": "20g:orientation:14",
+      "seed": 1901014,
+      "payload_mass_kg": 0.02,
+      "stratum": "orientation"
+    },
+    {
+      "id": "20g:orientation:15",
+      "seed": 1901015,
+      "payload_mass_kg": 0.02,
+      "stratum": "orientation"
+    },
+    {
+      "id": "20g:orientation:16",
+      "seed": 1901016,
+      "payload_mass_kg": 0.02,
+      "stratum": "orientation"
+    },
+    {
+      "id": "20g:orientation:17",
+      "seed": 1901017,
+      "payload_mass_kg": 0.02,
+      "stratum": "orientation"
+    },
+    {
+      "id": "20g:orientation:18",
+      "seed": 1901018,
+      "payload_mass_kg": 0.02,
+      "stratum": "orientation"
+    },
+    {
+      "id": "20g:orientation:19",
+      "seed": 1901019,
+      "payload_mass_kg": 0.02,
+      "stratum": "orientation"
+    },
+    {
+      "id": "20g:combined:0",
+      "seed": 1850001,
+      "payload_mass_kg": 0.02,
+      "stratum": "combined"
+    },
+    {
+      "id": "20g:combined:1",
+      "seed": 1850002,
+      "payload_mass_kg": 0.02,
+      "stratum": "combined"
+    },
+    {
+      "id": "20g:combined:2",
+      "seed": 1850003,
+      "payload_mass_kg": 0.02,
+      "stratum": "combined"
+    },
+    {
+      "id": "20g:combined:3",
+      "seed": 1850004,
+      "payload_mass_kg": 0.02,
+      "stratum": "combined"
+    },
+    {
+      "id": "20g:combined:4",
+      "seed": 1850005,
+      "payload_mass_kg": 0.02,
+      "stratum": "combined"
+    },
+    {
+      "id": "20g:combined:5",
+      "seed": 1850006,
+      "payload_mass_kg": 0.02,
+      "stratum": "combined"
+    },
+    {
+      "id": "20g:combined:6",
+      "seed": 1850007,
+      "payload_mass_kg": 0.02,
+      "stratum": "combined"
+    },
+    {
+      "id": "20g:combined:7",
+      "seed": 1850008,
+      "payload_mass_kg": 0.02,
+      "stratum": "combined"
+    },
+    {
+      "id": "20g:combined:8",
+      "seed": 1850009,
+      "payload_mass_kg": 0.02,
+      "stratum": "combined"
+    },
+    {
+      "id": "20g:combined:9",
+      "seed": 1850010,
+      "payload_mass_kg": 0.02,
+      "stratum": "combined"
+    },
+    {
+      "id": "20g:combined:10",
+      "seed": 1902010,
+      "payload_mass_kg": 0.02,
+      "stratum": "combined"
+    },
+    {
+      "id": "20g:combined:11",
+      "seed": 1902011,
+      "payload_mass_kg": 0.02,
+      "stratum": "combined"
+    },
+    {
+      "id": "20g:combined:12",
+      "seed": 1902012,
+      "payload_mass_kg": 0.02,
+      "stratum": "combined"
+    },
+    {
+      "id": "20g:combined:13",
+      "seed": 1902013,
+      "payload_mass_kg": 0.02,
+      "stratum": "combined"
+    },
+    {
+      "id": "20g:combined:14",
+      "seed": 1902014,
+      "payload_mass_kg": 0.02,
+      "stratum": "combined"
+    },
+    {
+      "id": "20g:combined:15",
+      "seed": 1902015,
+      "payload_mass_kg": 0.02,
+      "stratum": "combined"
+    },
+    {
+      "id": "20g:combined:16",
+      "seed": 1902016,
+      "payload_mass_kg": 0.02,
+      "stratum": "combined"
+    },
+    {
+      "id": "20g:combined:17",
+      "seed": 1902017,
+      "payload_mass_kg": 0.02,
+      "stratum": "combined"
+    },
+    {
+      "id": "20g:combined:18",
+      "seed": 1902018,
+      "payload_mass_kg": 0.02,
+      "stratum": "combined"
+    },
+    {
+      "id": "20g:combined:19",
+      "seed": 1902019,
+      "payload_mass_kg": 0.02,
+      "stratum": "combined"
+    },
+    {
+      "id": "20g:retarget:0",
+      "seed": 1903000,
+      "payload_mass_kg": 0.02,
+      "stratum": "retarget"
+    },
+    {
+      "id": "20g:retarget:1",
+      "seed": 1903001,
+      "payload_mass_kg": 0.02,
+      "stratum": "retarget"
+    },
+    {
+      "id": "20g:retarget:2",
+      "seed": 1903002,
+      "payload_mass_kg": 0.02,
+      "stratum": "retarget"
+    },
+    {
+      "id": "20g:retarget:3",
+      "seed": 1903003,
+      "payload_mass_kg": 0.02,
+      "stratum": "retarget"
+    },
+    {
+      "id": "20g:retarget:4",
+      "seed": 1903004,
+      "payload_mass_kg": 0.02,
+      "stratum": "retarget"
+    },
+    {
+      "id": "20g:retarget:5",
+      "seed": 1903005,
+      "payload_mass_kg": 0.02,
+      "stratum": "retarget"
+    },
+    {
+      "id": "20g:retarget:6",
+      "seed": 1903006,
+      "payload_mass_kg": 0.02,
+      "stratum": "retarget"
+    },
+    {
+      "id": "20g:retarget:7",
+      "seed": 1903007,
+      "payload_mass_kg": 0.02,
+      "stratum": "retarget"
+    },
+    {
+      "id": "20g:retarget:8",
+      "seed": 1903008,
+      "payload_mass_kg": 0.02,
+      "stratum": "retarget"
+    },
+    {
+      "id": "20g:retarget:9",
+      "seed": 1903009,
+      "payload_mass_kg": 0.02,
+      "stratum": "retarget"
+    },
+    {
+      "id": "20g:retarget:10",
+      "seed": 1903010,
+      "payload_mass_kg": 0.02,
+      "stratum": "retarget"
+    },
+    {
+      "id": "20g:retarget:11",
+      "seed": 1903011,
+      "payload_mass_kg": 0.02,
+      "stratum": "retarget"
+    },
+    {
+      "id": "20g:retarget:12",
+      "seed": 1903012,
+      "payload_mass_kg": 0.02,
+      "stratum": "retarget"
+    },
+    {
+      "id": "20g:retarget:13",
+      "seed": 1903013,
+      "payload_mass_kg": 0.02,
+      "stratum": "retarget"
+    },
+    {
+      "id": "20g:retarget:14",
+      "seed": 1903014,
+      "payload_mass_kg": 0.02,
+      "stratum": "retarget"
+    },
+    {
+      "id": "20g:retarget:15",
+      "seed": 1903015,
+      "payload_mass_kg": 0.02,
+      "stratum": "retarget"
+    },
+    {
+      "id": "20g:retarget:16",
+      "seed": 1903016,
+      "payload_mass_kg": 0.02,
+      "stratum": "retarget"
+    },
+    {
+      "id": "20g:retarget:17",
+      "seed": 1903017,
+      "payload_mass_kg": 0.02,
+      "stratum": "retarget"
+    },
+    {
+      "id": "20g:retarget:18",
+      "seed": 1903018,
+      "payload_mass_kg": 0.02,
+      "stratum": "retarget"
+    },
+    {
+      "id": "20g:retarget:19",
+      "seed": 1903019,
+      "payload_mass_kg": 0.02,
+      "stratum": "retarget"
+    },
+    {
+      "id": "20g:disturbance:0",
+      "seed": 1904000,
+      "payload_mass_kg": 0.02,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "20g:disturbance:1",
+      "seed": 1904001,
+      "payload_mass_kg": 0.02,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "20g:disturbance:2",
+      "seed": 1904002,
+      "payload_mass_kg": 0.02,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "20g:disturbance:3",
+      "seed": 1904003,
+      "payload_mass_kg": 0.02,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "20g:disturbance:4",
+      "seed": 1904004,
+      "payload_mass_kg": 0.02,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "20g:disturbance:5",
+      "seed": 1904005,
+      "payload_mass_kg": 0.02,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "20g:disturbance:6",
+      "seed": 1904006,
+      "payload_mass_kg": 0.02,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "20g:disturbance:7",
+      "seed": 1904007,
+      "payload_mass_kg": 0.02,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "20g:disturbance:8",
+      "seed": 1904008,
+      "payload_mass_kg": 0.02,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "20g:disturbance:9",
+      "seed": 1904009,
+      "payload_mass_kg": 0.02,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "20g:disturbance:10",
+      "seed": 1904010,
+      "payload_mass_kg": 0.02,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "20g:disturbance:11",
+      "seed": 1904011,
+      "payload_mass_kg": 0.02,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "20g:disturbance:12",
+      "seed": 1904012,
+      "payload_mass_kg": 0.02,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "20g:disturbance:13",
+      "seed": 1904013,
+      "payload_mass_kg": 0.02,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "20g:disturbance:14",
+      "seed": 1904014,
+      "payload_mass_kg": 0.02,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "20g:disturbance:15",
+      "seed": 1904015,
+      "payload_mass_kg": 0.02,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "20g:disturbance:16",
+      "seed": 1904016,
+      "payload_mass_kg": 0.02,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "20g:disturbance:17",
+      "seed": 1904017,
+      "payload_mass_kg": 0.02,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "20g:disturbance:18",
+      "seed": 1904018,
+      "payload_mass_kg": 0.02,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "20g:disturbance:19",
+      "seed": 1904019,
+      "payload_mass_kg": 0.02,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "50g:translation:0",
+      "seed": 1900000,
+      "payload_mass_kg": 0.05,
+      "stratum": "translation"
+    },
+    {
+      "id": "50g:translation:1",
+      "seed": 1900001,
+      "payload_mass_kg": 0.05,
+      "stratum": "translation"
+    },
+    {
+      "id": "50g:translation:2",
+      "seed": 1900002,
+      "payload_mass_kg": 0.05,
+      "stratum": "translation"
+    },
+    {
+      "id": "50g:translation:3",
+      "seed": 1900003,
+      "payload_mass_kg": 0.05,
+      "stratum": "translation"
+    },
+    {
+      "id": "50g:translation:4",
+      "seed": 1900004,
+      "payload_mass_kg": 0.05,
+      "stratum": "translation"
+    },
+    {
+      "id": "50g:translation:5",
+      "seed": 1900005,
+      "payload_mass_kg": 0.05,
+      "stratum": "translation"
+    },
+    {
+      "id": "50g:translation:6",
+      "seed": 1900006,
+      "payload_mass_kg": 0.05,
+      "stratum": "translation"
+    },
+    {
+      "id": "50g:translation:7",
+      "seed": 1900007,
+      "payload_mass_kg": 0.05,
+      "stratum": "translation"
+    },
+    {
+      "id": "50g:translation:8",
+      "seed": 1900008,
+      "payload_mass_kg": 0.05,
+      "stratum": "translation"
+    },
+    {
+      "id": "50g:translation:9",
+      "seed": 1900009,
+      "payload_mass_kg": 0.05,
+      "stratum": "translation"
+    },
+    {
+      "id": "50g:translation:10",
+      "seed": 1900010,
+      "payload_mass_kg": 0.05,
+      "stratum": "translation"
+    },
+    {
+      "id": "50g:translation:11",
+      "seed": 1900011,
+      "payload_mass_kg": 0.05,
+      "stratum": "translation"
+    },
+    {
+      "id": "50g:translation:12",
+      "seed": 1900012,
+      "payload_mass_kg": 0.05,
+      "stratum": "translation"
+    },
+    {
+      "id": "50g:translation:13",
+      "seed": 1900013,
+      "payload_mass_kg": 0.05,
+      "stratum": "translation"
+    },
+    {
+      "id": "50g:translation:14",
+      "seed": 1900014,
+      "payload_mass_kg": 0.05,
+      "stratum": "translation"
+    },
+    {
+      "id": "50g:translation:15",
+      "seed": 1900015,
+      "payload_mass_kg": 0.05,
+      "stratum": "translation"
+    },
+    {
+      "id": "50g:translation:16",
+      "seed": 1900016,
+      "payload_mass_kg": 0.05,
+      "stratum": "translation"
+    },
+    {
+      "id": "50g:translation:17",
+      "seed": 1900017,
+      "payload_mass_kg": 0.05,
+      "stratum": "translation"
+    },
+    {
+      "id": "50g:translation:18",
+      "seed": 1900018,
+      "payload_mass_kg": 0.05,
+      "stratum": "translation"
+    },
+    {
+      "id": "50g:translation:19",
+      "seed": 1900019,
+      "payload_mass_kg": 0.05,
+      "stratum": "translation"
+    },
+    {
+      "id": "50g:orientation:0",
+      "seed": 1901000,
+      "payload_mass_kg": 0.05,
+      "stratum": "orientation"
+    },
+    {
+      "id": "50g:orientation:1",
+      "seed": 1901001,
+      "payload_mass_kg": 0.05,
+      "stratum": "orientation"
+    },
+    {
+      "id": "50g:orientation:2",
+      "seed": 1901002,
+      "payload_mass_kg": 0.05,
+      "stratum": "orientation"
+    },
+    {
+      "id": "50g:orientation:3",
+      "seed": 1901003,
+      "payload_mass_kg": 0.05,
+      "stratum": "orientation"
+    },
+    {
+      "id": "50g:orientation:4",
+      "seed": 1901004,
+      "payload_mass_kg": 0.05,
+      "stratum": "orientation"
+    },
+    {
+      "id": "50g:orientation:5",
+      "seed": 1901005,
+      "payload_mass_kg": 0.05,
+      "stratum": "orientation"
+    },
+    {
+      "id": "50g:orientation:6",
+      "seed": 1901006,
+      "payload_mass_kg": 0.05,
+      "stratum": "orientation"
+    },
+    {
+      "id": "50g:orientation:7",
+      "seed": 1901007,
+      "payload_mass_kg": 0.05,
+      "stratum": "orientation"
+    },
+    {
+      "id": "50g:orientation:8",
+      "seed": 1901008,
+      "payload_mass_kg": 0.05,
+      "stratum": "orientation"
+    },
+    {
+      "id": "50g:orientation:9",
+      "seed": 1901009,
+      "payload_mass_kg": 0.05,
+      "stratum": "orientation"
+    },
+    {
+      "id": "50g:orientation:10",
+      "seed": 1901010,
+      "payload_mass_kg": 0.05,
+      "stratum": "orientation"
+    },
+    {
+      "id": "50g:orientation:11",
+      "seed": 1901011,
+      "payload_mass_kg": 0.05,
+      "stratum": "orientation"
+    },
+    {
+      "id": "50g:orientation:12",
+      "seed": 1901012,
+      "payload_mass_kg": 0.05,
+      "stratum": "orientation"
+    },
+    {
+      "id": "50g:orientation:13",
+      "seed": 1901013,
+      "payload_mass_kg": 0.05,
+      "stratum": "orientation"
+    },
+    {
+      "id": "50g:orientation:14",
+      "seed": 1901014,
+      "payload_mass_kg": 0.05,
+      "stratum": "orientation"
+    },
+    {
+      "id": "50g:orientation:15",
+      "seed": 1901015,
+      "payload_mass_kg": 0.05,
+      "stratum": "orientation"
+    },
+    {
+      "id": "50g:orientation:16",
+      "seed": 1901016,
+      "payload_mass_kg": 0.05,
+      "stratum": "orientation"
+    },
+    {
+      "id": "50g:orientation:17",
+      "seed": 1901017,
+      "payload_mass_kg": 0.05,
+      "stratum": "orientation"
+    },
+    {
+      "id": "50g:orientation:18",
+      "seed": 1901018,
+      "payload_mass_kg": 0.05,
+      "stratum": "orientation"
+    },
+    {
+      "id": "50g:orientation:19",
+      "seed": 1901019,
+      "payload_mass_kg": 0.05,
+      "stratum": "orientation"
+    },
+    {
+      "id": "50g:combined:0",
+      "seed": 1850001,
+      "payload_mass_kg": 0.05,
+      "stratum": "combined"
+    },
+    {
+      "id": "50g:combined:1",
+      "seed": 1850002,
+      "payload_mass_kg": 0.05,
+      "stratum": "combined"
+    },
+    {
+      "id": "50g:combined:2",
+      "seed": 1850003,
+      "payload_mass_kg": 0.05,
+      "stratum": "combined"
+    },
+    {
+      "id": "50g:combined:3",
+      "seed": 1850004,
+      "payload_mass_kg": 0.05,
+      "stratum": "combined"
+    },
+    {
+      "id": "50g:combined:4",
+      "seed": 1850005,
+      "payload_mass_kg": 0.05,
+      "stratum": "combined"
+    },
+    {
+      "id": "50g:combined:5",
+      "seed": 1850006,
+      "payload_mass_kg": 0.05,
+      "stratum": "combined"
+    },
+    {
+      "id": "50g:combined:6",
+      "seed": 1850007,
+      "payload_mass_kg": 0.05,
+      "stratum": "combined"
+    },
+    {
+      "id": "50g:combined:7",
+      "seed": 1850008,
+      "payload_mass_kg": 0.05,
+      "stratum": "combined"
+    },
+    {
+      "id": "50g:combined:8",
+      "seed": 1850009,
+      "payload_mass_kg": 0.05,
+      "stratum": "combined"
+    },
+    {
+      "id": "50g:combined:9",
+      "seed": 1850010,
+      "payload_mass_kg": 0.05,
+      "stratum": "combined"
+    },
+    {
+      "id": "50g:combined:10",
+      "seed": 1902010,
+      "payload_mass_kg": 0.05,
+      "stratum": "combined"
+    },
+    {
+      "id": "50g:combined:11",
+      "seed": 1902011,
+      "payload_mass_kg": 0.05,
+      "stratum": "combined"
+    },
+    {
+      "id": "50g:combined:12",
+      "seed": 1902012,
+      "payload_mass_kg": 0.05,
+      "stratum": "combined"
+    },
+    {
+      "id": "50g:combined:13",
+      "seed": 1902013,
+      "payload_mass_kg": 0.05,
+      "stratum": "combined"
+    },
+    {
+      "id": "50g:combined:14",
+      "seed": 1902014,
+      "payload_mass_kg": 0.05,
+      "stratum": "combined"
+    },
+    {
+      "id": "50g:combined:15",
+      "seed": 1902015,
+      "payload_mass_kg": 0.05,
+      "stratum": "combined"
+    },
+    {
+      "id": "50g:combined:16",
+      "seed": 1902016,
+      "payload_mass_kg": 0.05,
+      "stratum": "combined"
+    },
+    {
+      "id": "50g:combined:17",
+      "seed": 1902017,
+      "payload_mass_kg": 0.05,
+      "stratum": "combined"
+    },
+    {
+      "id": "50g:combined:18",
+      "seed": 1902018,
+      "payload_mass_kg": 0.05,
+      "stratum": "combined"
+    },
+    {
+      "id": "50g:combined:19",
+      "seed": 1902019,
+      "payload_mass_kg": 0.05,
+      "stratum": "combined"
+    },
+    {
+      "id": "50g:retarget:0",
+      "seed": 1903000,
+      "payload_mass_kg": 0.05,
+      "stratum": "retarget"
+    },
+    {
+      "id": "50g:retarget:1",
+      "seed": 1903001,
+      "payload_mass_kg": 0.05,
+      "stratum": "retarget"
+    },
+    {
+      "id": "50g:retarget:2",
+      "seed": 1903002,
+      "payload_mass_kg": 0.05,
+      "stratum": "retarget"
+    },
+    {
+      "id": "50g:retarget:3",
+      "seed": 1903003,
+      "payload_mass_kg": 0.05,
+      "stratum": "retarget"
+    },
+    {
+      "id": "50g:retarget:4",
+      "seed": 1903004,
+      "payload_mass_kg": 0.05,
+      "stratum": "retarget"
+    },
+    {
+      "id": "50g:retarget:5",
+      "seed": 1903005,
+      "payload_mass_kg": 0.05,
+      "stratum": "retarget"
+    },
+    {
+      "id": "50g:retarget:6",
+      "seed": 1903006,
+      "payload_mass_kg": 0.05,
+      "stratum": "retarget"
+    },
+    {
+      "id": "50g:retarget:7",
+      "seed": 1903007,
+      "payload_mass_kg": 0.05,
+      "stratum": "retarget"
+    },
+    {
+      "id": "50g:retarget:8",
+      "seed": 1903008,
+      "payload_mass_kg": 0.05,
+      "stratum": "retarget"
+    },
+    {
+      "id": "50g:retarget:9",
+      "seed": 1903009,
+      "payload_mass_kg": 0.05,
+      "stratum": "retarget"
+    },
+    {
+      "id": "50g:retarget:10",
+      "seed": 1903010,
+      "payload_mass_kg": 0.05,
+      "stratum": "retarget"
+    },
+    {
+      "id": "50g:retarget:11",
+      "seed": 1903011,
+      "payload_mass_kg": 0.05,
+      "stratum": "retarget"
+    },
+    {
+      "id": "50g:retarget:12",
+      "seed": 1903012,
+      "payload_mass_kg": 0.05,
+      "stratum": "retarget"
+    },
+    {
+      "id": "50g:retarget:13",
+      "seed": 1903013,
+      "payload_mass_kg": 0.05,
+      "stratum": "retarget"
+    },
+    {
+      "id": "50g:retarget:14",
+      "seed": 1903014,
+      "payload_mass_kg": 0.05,
+      "stratum": "retarget"
+    },
+    {
+      "id": "50g:retarget:15",
+      "seed": 1903015,
+      "payload_mass_kg": 0.05,
+      "stratum": "retarget"
+    },
+    {
+      "id": "50g:retarget:16",
+      "seed": 1903016,
+      "payload_mass_kg": 0.05,
+      "stratum": "retarget"
+    },
+    {
+      "id": "50g:retarget:17",
+      "seed": 1903017,
+      "payload_mass_kg": 0.05,
+      "stratum": "retarget"
+    },
+    {
+      "id": "50g:retarget:18",
+      "seed": 1903018,
+      "payload_mass_kg": 0.05,
+      "stratum": "retarget"
+    },
+    {
+      "id": "50g:retarget:19",
+      "seed": 1903019,
+      "payload_mass_kg": 0.05,
+      "stratum": "retarget"
+    },
+    {
+      "id": "50g:disturbance:0",
+      "seed": 1904000,
+      "payload_mass_kg": 0.05,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "50g:disturbance:1",
+      "seed": 1904001,
+      "payload_mass_kg": 0.05,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "50g:disturbance:2",
+      "seed": 1904002,
+      "payload_mass_kg": 0.05,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "50g:disturbance:3",
+      "seed": 1904003,
+      "payload_mass_kg": 0.05,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "50g:disturbance:4",
+      "seed": 1904004,
+      "payload_mass_kg": 0.05,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "50g:disturbance:5",
+      "seed": 1904005,
+      "payload_mass_kg": 0.05,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "50g:disturbance:6",
+      "seed": 1904006,
+      "payload_mass_kg": 0.05,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "50g:disturbance:7",
+      "seed": 1904007,
+      "payload_mass_kg": 0.05,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "50g:disturbance:8",
+      "seed": 1904008,
+      "payload_mass_kg": 0.05,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "50g:disturbance:9",
+      "seed": 1904009,
+      "payload_mass_kg": 0.05,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "50g:disturbance:10",
+      "seed": 1904010,
+      "payload_mass_kg": 0.05,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "50g:disturbance:11",
+      "seed": 1904011,
+      "payload_mass_kg": 0.05,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "50g:disturbance:12",
+      "seed": 1904012,
+      "payload_mass_kg": 0.05,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "50g:disturbance:13",
+      "seed": 1904013,
+      "payload_mass_kg": 0.05,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "50g:disturbance:14",
+      "seed": 1904014,
+      "payload_mass_kg": 0.05,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "50g:disturbance:15",
+      "seed": 1904015,
+      "payload_mass_kg": 0.05,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "50g:disturbance:16",
+      "seed": 1904016,
+      "payload_mass_kg": 0.05,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "50g:disturbance:17",
+      "seed": 1904017,
+      "payload_mass_kg": 0.05,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "50g:disturbance:18",
+      "seed": 1904018,
+      "payload_mass_kg": 0.05,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "50g:disturbance:19",
+      "seed": 1904019,
+      "payload_mass_kg": 0.05,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "100g:translation:0",
+      "seed": 1900000,
+      "payload_mass_kg": 0.1,
+      "stratum": "translation"
+    },
+    {
+      "id": "100g:translation:1",
+      "seed": 1900001,
+      "payload_mass_kg": 0.1,
+      "stratum": "translation"
+    },
+    {
+      "id": "100g:translation:2",
+      "seed": 1900002,
+      "payload_mass_kg": 0.1,
+      "stratum": "translation"
+    },
+    {
+      "id": "100g:translation:3",
+      "seed": 1900003,
+      "payload_mass_kg": 0.1,
+      "stratum": "translation"
+    },
+    {
+      "id": "100g:translation:4",
+      "seed": 1900004,
+      "payload_mass_kg": 0.1,
+      "stratum": "translation"
+    },
+    {
+      "id": "100g:translation:5",
+      "seed": 1900005,
+      "payload_mass_kg": 0.1,
+      "stratum": "translation"
+    },
+    {
+      "id": "100g:translation:6",
+      "seed": 1900006,
+      "payload_mass_kg": 0.1,
+      "stratum": "translation"
+    },
+    {
+      "id": "100g:translation:7",
+      "seed": 1900007,
+      "payload_mass_kg": 0.1,
+      "stratum": "translation"
+    },
+    {
+      "id": "100g:translation:8",
+      "seed": 1900008,
+      "payload_mass_kg": 0.1,
+      "stratum": "translation"
+    },
+    {
+      "id": "100g:translation:9",
+      "seed": 1900009,
+      "payload_mass_kg": 0.1,
+      "stratum": "translation"
+    },
+    {
+      "id": "100g:translation:10",
+      "seed": 1900010,
+      "payload_mass_kg": 0.1,
+      "stratum": "translation"
+    },
+    {
+      "id": "100g:translation:11",
+      "seed": 1900011,
+      "payload_mass_kg": 0.1,
+      "stratum": "translation"
+    },
+    {
+      "id": "100g:translation:12",
+      "seed": 1900012,
+      "payload_mass_kg": 0.1,
+      "stratum": "translation"
+    },
+    {
+      "id": "100g:translation:13",
+      "seed": 1900013,
+      "payload_mass_kg": 0.1,
+      "stratum": "translation"
+    },
+    {
+      "id": "100g:translation:14",
+      "seed": 1900014,
+      "payload_mass_kg": 0.1,
+      "stratum": "translation"
+    },
+    {
+      "id": "100g:translation:15",
+      "seed": 1900015,
+      "payload_mass_kg": 0.1,
+      "stratum": "translation"
+    },
+    {
+      "id": "100g:translation:16",
+      "seed": 1900016,
+      "payload_mass_kg": 0.1,
+      "stratum": "translation"
+    },
+    {
+      "id": "100g:translation:17",
+      "seed": 1900017,
+      "payload_mass_kg": 0.1,
+      "stratum": "translation"
+    },
+    {
+      "id": "100g:translation:18",
+      "seed": 1900018,
+      "payload_mass_kg": 0.1,
+      "stratum": "translation"
+    },
+    {
+      "id": "100g:translation:19",
+      "seed": 1900019,
+      "payload_mass_kg": 0.1,
+      "stratum": "translation"
+    },
+    {
+      "id": "100g:orientation:0",
+      "seed": 1901000,
+      "payload_mass_kg": 0.1,
+      "stratum": "orientation"
+    },
+    {
+      "id": "100g:orientation:1",
+      "seed": 1901001,
+      "payload_mass_kg": 0.1,
+      "stratum": "orientation"
+    },
+    {
+      "id": "100g:orientation:2",
+      "seed": 1901002,
+      "payload_mass_kg": 0.1,
+      "stratum": "orientation"
+    },
+    {
+      "id": "100g:orientation:3",
+      "seed": 1901003,
+      "payload_mass_kg": 0.1,
+      "stratum": "orientation"
+    },
+    {
+      "id": "100g:orientation:4",
+      "seed": 1901004,
+      "payload_mass_kg": 0.1,
+      "stratum": "orientation"
+    },
+    {
+      "id": "100g:orientation:5",
+      "seed": 1901005,
+      "payload_mass_kg": 0.1,
+      "stratum": "orientation"
+    },
+    {
+      "id": "100g:orientation:6",
+      "seed": 1901006,
+      "payload_mass_kg": 0.1,
+      "stratum": "orientation"
+    },
+    {
+      "id": "100g:orientation:7",
+      "seed": 1901007,
+      "payload_mass_kg": 0.1,
+      "stratum": "orientation"
+    },
+    {
+      "id": "100g:orientation:8",
+      "seed": 1901008,
+      "payload_mass_kg": 0.1,
+      "stratum": "orientation"
+    },
+    {
+      "id": "100g:orientation:9",
+      "seed": 1901009,
+      "payload_mass_kg": 0.1,
+      "stratum": "orientation"
+    },
+    {
+      "id": "100g:orientation:10",
+      "seed": 1901010,
+      "payload_mass_kg": 0.1,
+      "stratum": "orientation"
+    },
+    {
+      "id": "100g:orientation:11",
+      "seed": 1901011,
+      "payload_mass_kg": 0.1,
+      "stratum": "orientation"
+    },
+    {
+      "id": "100g:orientation:12",
+      "seed": 1901012,
+      "payload_mass_kg": 0.1,
+      "stratum": "orientation"
+    },
+    {
+      "id": "100g:orientation:13",
+      "seed": 1901013,
+      "payload_mass_kg": 0.1,
+      "stratum": "orientation"
+    },
+    {
+      "id": "100g:orientation:14",
+      "seed": 1901014,
+      "payload_mass_kg": 0.1,
+      "stratum": "orientation"
+    },
+    {
+      "id": "100g:orientation:15",
+      "seed": 1901015,
+      "payload_mass_kg": 0.1,
+      "stratum": "orientation"
+    },
+    {
+      "id": "100g:orientation:16",
+      "seed": 1901016,
+      "payload_mass_kg": 0.1,
+      "stratum": "orientation"
+    },
+    {
+      "id": "100g:orientation:17",
+      "seed": 1901017,
+      "payload_mass_kg": 0.1,
+      "stratum": "orientation"
+    },
+    {
+      "id": "100g:orientation:18",
+      "seed": 1901018,
+      "payload_mass_kg": 0.1,
+      "stratum": "orientation"
+    },
+    {
+      "id": "100g:orientation:19",
+      "seed": 1901019,
+      "payload_mass_kg": 0.1,
+      "stratum": "orientation"
+    },
+    {
+      "id": "100g:combined:0",
+      "seed": 1850001,
+      "payload_mass_kg": 0.1,
+      "stratum": "combined"
+    },
+    {
+      "id": "100g:combined:1",
+      "seed": 1850002,
+      "payload_mass_kg": 0.1,
+      "stratum": "combined"
+    },
+    {
+      "id": "100g:combined:2",
+      "seed": 1850003,
+      "payload_mass_kg": 0.1,
+      "stratum": "combined"
+    },
+    {
+      "id": "100g:combined:3",
+      "seed": 1850004,
+      "payload_mass_kg": 0.1,
+      "stratum": "combined"
+    },
+    {
+      "id": "100g:combined:4",
+      "seed": 1850005,
+      "payload_mass_kg": 0.1,
+      "stratum": "combined"
+    },
+    {
+      "id": "100g:combined:5",
+      "seed": 1850006,
+      "payload_mass_kg": 0.1,
+      "stratum": "combined"
+    },
+    {
+      "id": "100g:combined:6",
+      "seed": 1850007,
+      "payload_mass_kg": 0.1,
+      "stratum": "combined"
+    },
+    {
+      "id": "100g:combined:7",
+      "seed": 1850008,
+      "payload_mass_kg": 0.1,
+      "stratum": "combined"
+    },
+    {
+      "id": "100g:combined:8",
+      "seed": 1850009,
+      "payload_mass_kg": 0.1,
+      "stratum": "combined"
+    },
+    {
+      "id": "100g:combined:9",
+      "seed": 1850010,
+      "payload_mass_kg": 0.1,
+      "stratum": "combined"
+    },
+    {
+      "id": "100g:combined:10",
+      "seed": 1902010,
+      "payload_mass_kg": 0.1,
+      "stratum": "combined"
+    },
+    {
+      "id": "100g:combined:11",
+      "seed": 1902011,
+      "payload_mass_kg": 0.1,
+      "stratum": "combined"
+    },
+    {
+      "id": "100g:combined:12",
+      "seed": 1902012,
+      "payload_mass_kg": 0.1,
+      "stratum": "combined"
+    },
+    {
+      "id": "100g:combined:13",
+      "seed": 1902013,
+      "payload_mass_kg": 0.1,
+      "stratum": "combined"
+    },
+    {
+      "id": "100g:combined:14",
+      "seed": 1902014,
+      "payload_mass_kg": 0.1,
+      "stratum": "combined"
+    },
+    {
+      "id": "100g:combined:15",
+      "seed": 1902015,
+      "payload_mass_kg": 0.1,
+      "stratum": "combined"
+    },
+    {
+      "id": "100g:combined:16",
+      "seed": 1902016,
+      "payload_mass_kg": 0.1,
+      "stratum": "combined"
+    },
+    {
+      "id": "100g:combined:17",
+      "seed": 1902017,
+      "payload_mass_kg": 0.1,
+      "stratum": "combined"
+    },
+    {
+      "id": "100g:combined:18",
+      "seed": 1902018,
+      "payload_mass_kg": 0.1,
+      "stratum": "combined"
+    },
+    {
+      "id": "100g:combined:19",
+      "seed": 1902019,
+      "payload_mass_kg": 0.1,
+      "stratum": "combined"
+    },
+    {
+      "id": "100g:retarget:0",
+      "seed": 1903000,
+      "payload_mass_kg": 0.1,
+      "stratum": "retarget"
+    },
+    {
+      "id": "100g:retarget:1",
+      "seed": 1903001,
+      "payload_mass_kg": 0.1,
+      "stratum": "retarget"
+    },
+    {
+      "id": "100g:retarget:2",
+      "seed": 1903002,
+      "payload_mass_kg": 0.1,
+      "stratum": "retarget"
+    },
+    {
+      "id": "100g:retarget:3",
+      "seed": 1903003,
+      "payload_mass_kg": 0.1,
+      "stratum": "retarget"
+    },
+    {
+      "id": "100g:retarget:4",
+      "seed": 1903004,
+      "payload_mass_kg": 0.1,
+      "stratum": "retarget"
+    },
+    {
+      "id": "100g:retarget:5",
+      "seed": 1903005,
+      "payload_mass_kg": 0.1,
+      "stratum": "retarget"
+    },
+    {
+      "id": "100g:retarget:6",
+      "seed": 1903006,
+      "payload_mass_kg": 0.1,
+      "stratum": "retarget"
+    },
+    {
+      "id": "100g:retarget:7",
+      "seed": 1903007,
+      "payload_mass_kg": 0.1,
+      "stratum": "retarget"
+    },
+    {
+      "id": "100g:retarget:8",
+      "seed": 1903008,
+      "payload_mass_kg": 0.1,
+      "stratum": "retarget"
+    },
+    {
+      "id": "100g:retarget:9",
+      "seed": 1903009,
+      "payload_mass_kg": 0.1,
+      "stratum": "retarget"
+    },
+    {
+      "id": "100g:retarget:10",
+      "seed": 1903010,
+      "payload_mass_kg": 0.1,
+      "stratum": "retarget"
+    },
+    {
+      "id": "100g:retarget:11",
+      "seed": 1903011,
+      "payload_mass_kg": 0.1,
+      "stratum": "retarget"
+    },
+    {
+      "id": "100g:retarget:12",
+      "seed": 1903012,
+      "payload_mass_kg": 0.1,
+      "stratum": "retarget"
+    },
+    {
+      "id": "100g:retarget:13",
+      "seed": 1903013,
+      "payload_mass_kg": 0.1,
+      "stratum": "retarget"
+    },
+    {
+      "id": "100g:retarget:14",
+      "seed": 1903014,
+      "payload_mass_kg": 0.1,
+      "stratum": "retarget"
+    },
+    {
+      "id": "100g:retarget:15",
+      "seed": 1903015,
+      "payload_mass_kg": 0.1,
+      "stratum": "retarget"
+    },
+    {
+      "id": "100g:retarget:16",
+      "seed": 1903016,
+      "payload_mass_kg": 0.1,
+      "stratum": "retarget"
+    },
+    {
+      "id": "100g:retarget:17",
+      "seed": 1903017,
+      "payload_mass_kg": 0.1,
+      "stratum": "retarget"
+    },
+    {
+      "id": "100g:retarget:18",
+      "seed": 1903018,
+      "payload_mass_kg": 0.1,
+      "stratum": "retarget"
+    },
+    {
+      "id": "100g:retarget:19",
+      "seed": 1903019,
+      "payload_mass_kg": 0.1,
+      "stratum": "retarget"
+    },
+    {
+      "id": "100g:disturbance:0",
+      "seed": 1904000,
+      "payload_mass_kg": 0.1,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "100g:disturbance:1",
+      "seed": 1904001,
+      "payload_mass_kg": 0.1,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "100g:disturbance:2",
+      "seed": 1904002,
+      "payload_mass_kg": 0.1,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "100g:disturbance:3",
+      "seed": 1904003,
+      "payload_mass_kg": 0.1,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "100g:disturbance:4",
+      "seed": 1904004,
+      "payload_mass_kg": 0.1,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "100g:disturbance:5",
+      "seed": 1904005,
+      "payload_mass_kg": 0.1,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "100g:disturbance:6",
+      "seed": 1904006,
+      "payload_mass_kg": 0.1,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "100g:disturbance:7",
+      "seed": 1904007,
+      "payload_mass_kg": 0.1,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "100g:disturbance:8",
+      "seed": 1904008,
+      "payload_mass_kg": 0.1,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "100g:disturbance:9",
+      "seed": 1904009,
+      "payload_mass_kg": 0.1,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "100g:disturbance:10",
+      "seed": 1904010,
+      "payload_mass_kg": 0.1,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "100g:disturbance:11",
+      "seed": 1904011,
+      "payload_mass_kg": 0.1,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "100g:disturbance:12",
+      "seed": 1904012,
+      "payload_mass_kg": 0.1,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "100g:disturbance:13",
+      "seed": 1904013,
+      "payload_mass_kg": 0.1,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "100g:disturbance:14",
+      "seed": 1904014,
+      "payload_mass_kg": 0.1,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "100g:disturbance:15",
+      "seed": 1904015,
+      "payload_mass_kg": 0.1,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "100g:disturbance:16",
+      "seed": 1904016,
+      "payload_mass_kg": 0.1,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "100g:disturbance:17",
+      "seed": 1904017,
+      "payload_mass_kg": 0.1,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "100g:disturbance:18",
+      "seed": 1904018,
+      "payload_mass_kg": 0.1,
+      "stratum": "disturbance"
+    },
+    {
+      "id": "100g:disturbance:19",
+      "seed": 1904019,
+      "payload_mass_kg": 0.1,
+      "stratum": "disturbance"
+    }
+  ]
+}

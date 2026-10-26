@@ -808,7 +808,9 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
                 self._obs = obs
             self._servo_obs_rerun = decoded
             self._emet_session_cache, self._emet_session_cache_step = emet_session_cache_update(
-                self._emet_session_cache, self._emet_session_cache_step, msg,
+                self._emet_session_cache,
+                self._emet_session_cache_step,
+                msg,
             )
 
     def _decoded_observation_snapshot(self):
