@@ -86,11 +86,15 @@ separate runtime condition.
 \paragraph{Observed integration remains a gate.}
 The current RGBD discovery provider estimates visible positions and heuristic
 support patches, not complete object pose, volume, contact or stable grasp.
-It therefore remains read-only. The observed-integration revision
-\texttt{fb0fb6cc} retains capture identity through perception and invalidates
+It therefore remains read-only. The observed-integration path retains capture identity through perception and invalidates
 evidence/plan handles around CHAT navigation and view motion. Cached capture
 publication cannot renew its local evidence age, and in-flight pre-motion
-segmentation cannot publish afterward. Capture identity/order does not establish
+segmentation cannot publish afterward. The live-camera binding reuses bounded
+semantic references while obtaining current geometry from the robot's existing
+RGBD stream on discovery requests, without another semantic model call. Missing
+or ambiguous evidence rejects the update instead of renewing cached geometry.
+This refreshes visible positions, not full object pose or executable affordances.
+Capture identity/order does not establish
 cross-host clock synchronization or certify capture-after-motion. These guards
 do not enable observed manipulation or validate the full exploration--navigation--
 manipulation chain. Privileged simulator state/contact may support independent

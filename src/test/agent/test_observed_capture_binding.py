@@ -196,3 +196,24 @@ def test_actual_processor_seeds_stream_binding_and_negative_segmentation_clears_
     )
     robot.get_observation.return_value = capture(4, now)[0]
     assert p.observe_tasks() == ()
+
+
+@pytest.mark.parametrize("missing_depth", [False, True])
+def test_real_dispatch_stops_after_discovery_or_failed_live_refresh(missing_depth):
+    from emet.agent.loop import _dispatch_tool_calls
+
+    provider, robot, tools = setup()
+    if missing_depth:
+        robot.get_observation.return_value.depth = None
+    motion = Mock(side_effect=AssertionError("must not dispatch motion"))
+    tools["unsafe_motion"] = SimpleNamespace(func=motion, returns_info=True, to_executor=lambda args: [])
+    executor = Mock()
+    _dispatch_tool_calls(
+        [{"name": "scene_tasks", "arguments": {}}, {"name": "unsafe_motion", "arguments": {}}],
+        tools,
+        executor,
+        tamp_context={"observed_tamp_provider": provider},
+    )
+    motion.assert_not_called()
+    executor.assert_not_called()
+    assert [call[0] for call in robot.mock_calls] == ["get_observation"]

@@ -80,3 +80,23 @@ this is not yet a continuous CHAT camera binding or native observed provider.
 Retain the original 2s current-geometry freshness gate and require a fresh semantic
 reference after external navigation/view-motion. Add clear-view/stow admission
 without turning occluded geometry into an executable placement claim.
+
+## Live capture binding and main update (October 26)
+
+The acquisition binding now uses the robot's existing stream on demand: normal
+segmentation seeds a bounded semantic reference, and `scene_tasks` locally
+reassociates against current measured RGBD. It preserves capture age, rejects
+missing/ambiguous evidence and invalidates references across dispatched motion.
+Custom providers keep their own acquisition path. No extra inference worker was
+added. Negative segmentation discards the old semantic reference.
+
+The live ZMQ test exposed and fixed head-camera RGB/depth registration and render
+intrinsics. Unsampled depth remains unknown. Post-merge validation on main
+`61da55cb` passed five sensor refreshes, the separate two-goal privileged native
+CHAT control (529 audited commands, zero forbidden), and 369 regression checks.
+See [the complete record](../experiments/observed_capture_binding_20261026.md).
+
+Next qualify an observed execution provider with object-frame uncertainty,
+conservative payload/arm/unknown-space geometry and visual effects. The camera
+binding closes the acquisition seam, not the complete observed task path. Its
+single-object sensor smoke has no support seed or task-success denominator.

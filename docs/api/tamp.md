@@ -490,8 +490,26 @@ Native planning/execution gates remain unchanged and still reject observed mode.
 With `--memory-backend open_vocab`, `run agent` automatically uses the
 `RgbdTaskProvider` attached to its existing scene-graph processor. Explicit Python
 injection takes precedence. No new detector or tracking model is introduced. The
-provider uses only the current segmented RGBD frame; accumulated scene-graph
-bounds, cached semantic localizations and simulator metadata are not inputs.
+provider retains a bounded semantic reference from segmented RGBD. In observed
+mode the CHAT loop binds it to the robot's existing camera stream: each
+`scene_tasks` request reassociates against the latest measured depth without
+running the segmenter or VLM again. Accumulated scene-graph bounds and simulator
+object metadata never supply current geometry.
+
+Reference masks and calibrated world points are seeded by the existing
+perception processor. They expire after 30 seconds and are discarded around
+navigation/view-motion; current geometry still expires after two seconds. A
+repeated capture retains its first receive time. An already verified fresh
+capture can be reused without renewing its age. Missing depth/calibration,
+ambiguous or occluded surfaces, and stale captures return
+`observed_scene_unavailable`; they never fall back to cached coordinates. A
+negative segmentation clears the reference. Custom injected providers retain
+ownership of their own acquisition path.
+
+This is an on-demand binding to an already continuous camera stream, not a new
+inference worker. It refreshes read-only position proposals and does not install
+an observed native execution provider. See the
+[live sensor validation](../experiments/observed_capture_binding_20261026.md).
 
 The provider proposes small segmented objects (robust extent 1–30 cm) and broad
 horizontal upper depth patches (at least 15 cm in each horizontal direction and

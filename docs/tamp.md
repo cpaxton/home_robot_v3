@@ -51,8 +51,13 @@ Native articulation and autonomous physical recovery remain separate gaps.
 
 The [observed integration follow-up](plans/2026-10-23_observed_tamp_integration.md)
 starts from merged #213. Its first slice binds discovery to capture/motion epochs
-and invalidates stored handles around navigation. Observed native execution is
-still unavailable; see the [validation and visual diagnostic](experiments/tamp_observed_integration_20261023.md).
+and invalidates stored handles around navigation. The current RGBD provider also
+reacquires current positions from the live camera stream when `scene_tasks` is
+queried, using bounded reference semantics instead of repeated VLM calls. See
+[live sensor binding and calibration validation](experiments/observed_capture_binding_20261026.md).
+Observed native execution remains unavailable: visible surface positions do not
+supply tracked full pose, conservative payload/obstacle volumes, or independent
+visual effects. The privileged native adapter remains a separate control.
 
 ## The primitive agent workflow
 
