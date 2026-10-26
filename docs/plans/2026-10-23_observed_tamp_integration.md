@@ -100,3 +100,13 @@ Next qualify an observed execution provider with object-frame uncertainty,
 conservative payload/arm/unknown-space geometry and visual effects. The camera
 binding closes the acquisition seam, not the complete observed task path. Its
 single-object sensor smoke has no support seed or task-success denominator.
+
+## Observed execution implementation design
+
+The [observed-native execution plan](2026-10-26_observed_native_execution.md)
+identifies body-based payload attachment and privileged effect verification as
+additional coupling beyond pose-provider injection. It orders the next work as
+evidence/attachment separation, observed 3D free/occupied/unknown geometry,
+uncertainty-aware reference tracking, visual effects, then the same agent's
+held-out multi-step trials. Do not enable observed execution by changing a
+provenance string or manufacturing an object orientation/complete volume.

@@ -1,0 +1,200 @@
+# Observed native TAMP execution
+
+Status: proposed implementation plan after live-capture binding `ae924531`.
+First target: stationary Stretch, rigid opaque objects, observed tabletop supports,
+and the existing `scene_tasks` / primitive / multi-step JSON tools. Preserve the
+privileged control as an independent regression and evaluator. Add Sourccey only
+after passing the same gates. Do not start by adding more task-search baselines.
+
+## What exists, and the actual coupling to remove
+
+- Live registered RGBD capture, bounded semantic-reference reassociation, capture
+  ages and motion invalidation exist. Discovery produces visible positions and
+  heuristic support patches; it does not provide executable object geometry.
+- `PhysicalPickPlaceExecutor` accepts an observed pose provider, but payload
+  attachment/replanning still calls `collision.set_payload(model, data, body,
+  ee_body)`. That assumes an object body in the MuJoCo scene. Its pose contract
+  does not express uncertainty or symmetry.
+- `NativeTableAdapter` synchronizes full simulator qpos/qvel, discovers model
+  bodies and verifies gripper/support contacts, body velocities and final bounds.
+  It is explicitly privileged; changing a source string cannot make it observed.
+- `PlacementScene`, `HeldObject` and `PlacementCollisionChecker` already support
+  scene boxes and an EE-relative payload volume. However `known_free` is optional,
+  the checker is not a drop-in native attachment adapter, and the old voxel arm
+  checker is a 2D map projection. Neither is a complete observed native provider.
+
+Keep MuJoCo for the robot's calibrated kinematics/collision geometry, using a
+robot-only model. Environment/object observations must not be simulator bodies.
+
+## Milestone 1: separate evidence from simulator bodies
+
+Introduce an `ObservedNativeAdapter` alongside the privileged table adapter,
+implementing the same tool/session boundary. Extract shared robot-only IK, arm
+command conversion, private planning data and measured-joint settling; retain the
+existing privileged adapter and receipts as regression controls.
+
+Define immutable, revision-bound evidence records for:
+
+1. An object identity, reference-frame ID, measured surface points, pose hypotheses
+   or bounded SE(3) uncertainty, observable axes, capture identities and ages.
+2. Payload geometry in that reference frame, its construction assumptions and
+   uncertainty/coverage. Visible-point bounds alone are not a complete volume.
+3. Workspace occupancy and known-free cells, support geometry, unknown-space
+   policy and the revisions/captures establishing them.
+4. Effect checks returning `satisfied`, `violated` or `unknown`, with evidence IDs,
+   observation intervals and measured bounds. A controller acknowledgement is
+   separate from an observed effect.
+
+Add a geometric attachment interface accepting payload vertices/voxels and an
+EE-from-reference transform. Clearing/attaching it must not read object bodies,
+write object qpos, or invoke a scene attachment service. Keep public handles
+opaque; diagnostics stay structured JSON, with existing execution-started and
+preflight/partial receipt semantics.
+
+Gate: the shared executor can plan and command a robot-only rig with supplied
+observed evidence; tests deliberately make scene snapshots, body poses, simulator
+contacts and attach/set-body RPCs unavailable. Existing privileged tests pass.
+
+## Milestone 2: construct observed occupancy and payload bounds
+
+Build a bounded manipulation workspace from calibrated RGBD. Integrate rays as
+known-free only up to measured surfaces, with a noise margin. Surface endpoints
+are occupied; space behind surfaces, missing returns and unobserved cells remains
+unknown. Do not derive free space from the absence of accumulated map points.
+
+Use object-specific masks across measured views to build a reference-frame
+surface/occupancy model. Construct a conservative possible-object volume from
+multi-view visibility and depth, retaining occluded ambiguity. If that volume
+cannot be bounded inside the scanned workspace, request another view or reject.
+Do not label the visible-point AABB as complete geometry. A known-model prior can
+be an explicitly separate input tier, supplied independently of simulator truth;
+it must not become an object-name-specific implementation or an open-world claim.
+
+Track robot and target contributions separately from scene occupancy. Removing
+the robot/held target must not erase nearby obstacles or support voxels. Keep
+provenance for cells instead of cropping a large exclusion box around a target.
+
+Adapt `PlacementCollisionChecker` to the native attachment interface, checking
+full robot-link and payload volumes, dense path edges and self collision. Require
+a known-free predicate for observed mode. Existing observed occupancy constructor
+APIs currently allow that predicate to be absent; observed execution must not.
+Handle intentional finger/object contact and terminal support approach explicitly,
+by phase and geometric contact region, without exempting an entire receptacle.
+
+Gate: observed planning rejects a narrow payload-only collision, occluded swept
+space, a hidden/unbounded object extension, stale geometry, and an obstacle moved
+between segments. It also finds feasible paths after additional views reveal free
+space. Independently compare accepted paths against evaluator-only scene truth;
+never feed that truth back into runtime geometry.
+
+## Milestone 3: track a reference frame with observability
+
+Extend local surface association into measured rigid registration over the object
+reference model and fresh masks. Evaluate overlap, residuals, spatial support and
+pose observability; calibrate thresholds against independent held-out scenes.
+Reject background leakage, insufficient overlap and competing identities.
+
+A reference coordinate frame may be defined on the initial measured model; it
+need not equal a simulator/manufacturer body origin. Store that definition and
+express every payload vertex and subsequent pose in the same frame. An arbitrary
+initial coordinate convention is not evidence of physical orientation. Subsequent
+motion must come from measurements, not propagation of commanded EE motion.
+
+Represent symmetry or unobservable rotation explicitly. Do not force an arbitrary
+unique yaw or report zero uncertainty from a low registration residual. Check all
+relevant pose/geometry hypotheses; request another view or reject when the motion
+or placement depends on an unresolved axis. Shape-invariant rotations need not
+cause false rejection when every admissible volume satisfies the same constraints.
+
+Gripper closure establishes only measured aperture/stillness. A provisional
+attachment hypothesis is needed to collision-check the first lift, but it is not
+a verified grasp. Keep the possible still-unheld target in the collision state
+until lift/co-motion is observed; validate the initial bounded lift probe against
+both outcomes. Promote attachment to verified only after that visual evidence,
+then compare fresh observations with expected EE-relative geometry. A static or disappearing target
+must not pass because the arm moved or object height was guessed.
+
+Gate: known relative translations/rotations, symmetric objects, small visible
+patches, texture/shape ambiguity, distractors, occlusion and camera-pose error all
+produce appropriate bounded estimates or explicit unknown outcomes. No reference
+geometry or timestamps silently renew when tracking is lost.
+
+## Milestone 4: observed grasp and placement effects
+
+Add a visual effect verifier; do not reuse `NativeTableAdapter._verify` as an
+observed verifier. It may reuse robot measured-joint settling, not scene contacts
+or free-joint velocities.
+
+- Grasp/lift: the identified object moves with the measured gripper and separates
+  from its previous support, with consistent relative geometry across captures.
+  Height gain alone, finger proximity or successful closure is insufficient.
+- Transport: keep measured retention evidence fresh. When occlusion or uncertainty
+  makes it unavailable, stop with an unknown/partial receipt; do not silently
+  substitute predicted attachment pose or simulator contact.
+- Release/place: the object remains visible in the intended region after opening
+  and retreat; its conservative footprint fits, its estimated bottom is consistent
+  with observed support, and repeated captures establish settling. This verifies
+  visual placement evidence, not a hardware contact sensor we do not possess.
+- Distinguish unknown from measured failure. Unknown physical progress stops;
+  automatic regrasp or held-object recovery is outside this first milestone.
+
+Start with stop-and-observe transitions and stationary base/head during
+manipulation. Pose/capture alignment still needs explicit timing bounds: local
+receive freshness alone is insufficient. Use measured settling and fresh captures
+with validated pipeline latency bounds, or proper sensor-clock alignment. Reject
+when the timing relationship cannot be bounded; do not claim that a new image ID
+alone proves capture after motion. Moving-time verification requires a separately
+qualified joint/camera interpolation or conservative motion-error bound.
+
+Gate: dropped object, empty closure, object pushed upward without grasp, target
+occluded at lift, stale camera stream, release outside the region, unsupported
+placement and an unsettled object cannot pass. Include successful release/retreat
+and symmetry-tolerant retention cases to avoid a verifier that only rejects.
+
+## Milestone 5: same agent and tools, held-out task trials
+
+Bind observed predicates/effects into the existing task provider/session. Predicates
+come from one coherent evidence revision; task planning and every execution segment
+revalidate them. Unknown is not false: absence from a mask or map cannot become
+`not_at`, a free destination, or an unprotected object. Initially admit a complete
+symbolic snapshot only when the required goal, protected-object and action
+predicates are observed; otherwise request inspection/reject before task search.
+Keep the same greedy/beam/MCTS implementations, tool names,
+prompts and execution policy. Capability reporting states exactly which observed
+operations are qualified. No task discovery result alone enables execution.
+
+Run the actual CLI with Caliban inference and no local model/GPU requirement:
+
+1. Single transfer on held-out initial placements and object geometries.
+2. Two-goal transfer and a buffered swap, including occupied destinations.
+3. Explicit failures: missing/stale evidence, ambiguous identity, tracking loss,
+   moved obstacles and infeasible placement. Count valid task failures; separate
+   fixture-construction/runtime crashes and preserve all attempts.
+4. Navigate to the workspace, invalidate old plans/references, acquire a fresh
+   stationary scan, then run the same multi-step tools. Exploration and viewpoint
+   recovery become scored capabilities only when this whole chain is exercised.
+
+Independent evaluator truth scores identity, collision violations, retained/lifted
+objects, support, settling, final constraints and false-positive verifier decisions.
+Runtime code receives only sensor/joint observations and declared robot calibration.
+Include sensor misregistration, delayed frames and self-occlusion. The current head
+simulator hides robot geom groups for mapping; correct sensor rendering plus
+robot-point filtering must be qualified before claiming realistic self-occlusion.
+
+Report task success, false-positive/unknown verification rates, collision/unknown-
+space rejection, recovery-boundary compliance, VLM calls, capture ages and planning/
+execution latency. Freeze source, scene population, budgets and scoring rules before
+paper comparisons. Sensor smoke counts are not a task-success denominator.
+
+## Implementation order and review units
+
+Use the existing feature branch for the plan and small contract work. Keep code
+changes reviewable in dependency order: (1) simulator-independent evidence and
+attachment seam, (2) 3D free/occupied/unknown geometry, (3) measured pose hypotheses,
+(4) visual effects, (5) observed adapter/session and actual agent trials. Contracts
+and their first real consumer should land together; avoid adding unused scaffolding
+or one PR for each small correction. Keep privileged controls green throughout.
+
+The first implementation should target milestone 1 plus the first real geometry
+consumer from milestone 2. This exposes the deepest coupling before investing in
+a pose estimator that the current body-based executor cannot actually use.
