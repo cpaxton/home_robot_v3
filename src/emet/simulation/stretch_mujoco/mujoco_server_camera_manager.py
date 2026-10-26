@@ -142,7 +142,34 @@ class MujocoServerCameraManagerSync:
         new_imagery.cam_d405_K = self.get_camera_params(StretchCameras.cam_d405_rgb)
         new_imagery.cam_d435i_K = self.get_camera_params(StretchCameras.cam_d435i_rgb)
 
+        self._register_head_depth(new_imagery)
         self.mujoco_server.data_proxies.set_cameras(new_imagery)
+
+    def _register_head_depth(self, imagery):
+        from emet.simulation.depth_registration import register_depth, rendered_camera_intrinsics
+
+        if imagery.cam_d435i_rgb is None or imagery.cam_d435i_depth is None:
+            return
+        model = self.mujoco_server.mjmodel
+        rgb_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, "d435i_camera_rgb")
+        depth_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, "d435i_camera_depth")
+        if rgb_id < 0 or depth_id < 0 or model.cam_bodyid[rgb_id] != model.cam_bodyid[depth_id]:
+            raise ValueError("head_depth_registration_requires_rigid_camera_pair")
+        # Both optical cameras are rigidly attached to the same head body.
+        # MuJoCo camera axes are OpenGL; reprojection uses x-right/y-down/z-forward.
+        rotations = []
+        for camera_id in (rgb_id, depth_id):
+            matrix = np.empty(9)
+            mujoco.mju_quat2Mat(matrix, model.cam_quat[camera_id])
+            rotations.append(matrix.reshape(3, 3) @ np.diag([1., -1., -1.]))
+        transform = np.eye(4)
+        transform[:3, :3] = rotations[0].T @ rotations[1]
+        transform[:3, 3] = rotations[0].T @ (model.cam_pos[depth_id] - model.cam_pos[rgb_id])
+        rgb_shape, depth_shape = imagery.cam_d435i_rgb.shape[:2], imagery.cam_d435i_depth.shape
+        rgb_k = rendered_camera_intrinsics(model.cam_fovy[rgb_id], rgb_shape[1], rgb_shape[0])
+        depth_k = rendered_camera_intrinsics(model.cam_fovy[depth_id], depth_shape[1], depth_shape[0])
+        imagery.cam_d435i_depth = register_depth(imagery.cam_d435i_depth, depth_k, rgb_k, transform, rgb_shape)
+        imagery.cam_d435i_K = rgb_k
 
     def _create_camera_renderer(self, for_camera: StretchCameras):
         settings = for_camera.initial_camera_settings
@@ -391,4 +418,5 @@ class MujocoServerCameraManagerThreaded(MujocoServerCameraManagerSync):
         new_imagery.cam_d405_K = self.get_camera_params(StretchCameras.cam_d405_rgb)
         new_imagery.cam_d435i_K = self.get_camera_params(StretchCameras.cam_d435i_rgb)
 
+        self._register_head_depth(new_imagery)
         self.mujoco_server.data_proxies.set_cameras(new_imagery)

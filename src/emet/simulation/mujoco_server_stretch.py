@@ -241,20 +241,13 @@ class MujocoZmqServer(BaseZmqServer):
                 molmospaces_environment=molmospaces_environment,
                 debug_molmospaces_spawn=debug_molmospaces_spawn,
             )
-        # Get the intrinsic parameters of the d435i rgb camera
-        (
-            fx,
-            _,
-            cx,
-            _,
-            fy,
-            cy,
-            _,
-            _,
-            _,
-        ) = StretchCameras.cam_d435i_rgb.initial_camera_settings.get_intrinsic_params_k()
-        # Rotate the head camera matrix as the head camera realsense is rotated 90 degrees
-        self.head_K = np.array([[fy, 0, cy], [0, fx, cx], [0, 0, 1]])
+        from emet.simulation.depth_registration import rendered_camera_intrinsics
+
+        settings = StretchCameras.cam_d435i_rgb.initial_camera_settings
+        raw_k = rendered_camera_intrinsics(settings.field_of_view_vertical_in_degrees, settings.width, settings.height)
+        # Images rotate clockwise into the head optical convention.
+        self.head_K = np.array([[raw_k[1, 1], 0, settings.height - 1 - raw_k[1, 2]],
+                                [0, raw_k[0, 0], raw_k[0, 2]], [0, 0, 1]])
 
         # Get the intrinsic parameters of the d405 rgb camera
         (

@@ -317,3 +317,19 @@ def test_invalid_world_alignment_rejected_and_degenerate_normals_not_invented():
         surface_candidates(depth, [0, 0, 1000, 1000], min_depth=0.1, max_depth=3.0, world_xyz=np.zeros((40, 40, 3)))
         == []
     )
+
+
+def test_gradual_normal_chain_does_not_merge_horizontal_and_upright_bands():
+    from emet.memory.surface_candidates import candidate_mask, surface_candidates
+
+    theta = np.linspace(0.0, np.pi / 2.0, 60)
+    yy = np.arange(40)[:, None] * 0.005
+    world = np.empty((40, 60, 3))
+    world[..., 0] = np.sin(theta) * 0.2
+    world[..., 1] = yy
+    world[..., 2] = np.cos(theta) * 0.2
+    regions = surface_candidates(np.ones((40, 60)), [0, 0, 1000, 1000], min_depth=0.1, max_depth=3.0, world_xyz=world)
+    assert len(regions) >= 2
+    for region in regions:
+        mask = candidate_mask(region, (40, 60))
+        assert not (mask[:, :5].any() and mask[:, -5:].any())

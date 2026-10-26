@@ -26,7 +26,15 @@ def _connected_surfaces(depth, valid, colors=None, normals=None):
             compatible &= np.max(np.abs(colors[a] - colors[b]), axis=-1) <= 35
         if normals is not None:
             compatible &= np.isfinite(normals[a]).all(axis=-1) & np.isfinite(normals[b]).all(axis=-1)
-            compatible &= np.sum(normals[a] * normals[b], axis=-1) >= np.cos(np.deg2rad(30.0))
+            cosine = np.cos(np.deg2rad(30.0))
+            compatible &= np.sum(normals[a] * normals[b], axis=-1) >= cosine
+            # A locally smooth chain can turn an upright object surface into
+            # its horizontal support. Preserve a world-up orientation boundary
+            # even when each individual normal change is small. These remain
+            # geometry proposals, not object identities or support certificates.
+            horizontal_a = np.abs(normals[a][..., 2]) >= cosine
+            horizontal_b = np.abs(normals[b][..., 2]) >= cosine
+            compatible &= horizontal_a == horizontal_b
         rows.append(indices[a][compatible])
         cols.append(indices[b][compatible])
     rows, cols = np.concatenate(rows), np.concatenate(cols)
