@@ -12,6 +12,13 @@ the existing privileged stationary TAMP control. All phases run serially.
 
 Fixed population and gates:
 
+The contract phase includes every added/modified Python test file in the
+candidate's diff against the frozen baseline, plus shared dispatch, history,
+floor-recovery and TAMP regressions. The exact paths and PR-to-phase coverage
+matrix are written to the manifest. This prevents the integration test list
+from silently omitting a newly added stack regression. It does not imply full
+code-path, hardware, or every-environment coverage.
+
 1. Candidate contract tests: dialogue/audit, answer authority, current/pre-turn
    metadata, measured movement/gaze, visual consumers, floor hazards, metadata
    adapters, and public native TAMP API. Missing or skipped checks fail the gate.

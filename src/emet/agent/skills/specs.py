@@ -486,8 +486,9 @@ CHAT_SKILL_SPECS: tuple[SkillSpec, ...] = (
             "This does not guarantee clearance: replan after observing. Requires a movable head, "
             "measured pose, and fresh calibrated depth. Optional pan_rad selects an absolute head pan "
             "in [-1, 1] radians to inspect adjacent floor instead of repeating the same view; "
-            "omit to retain measured pan. Optional tilt_rad in [-1.4, -0.7] defaults to -1.0; "
-            "more negative looks nearer the base. Check footprint_before/after, not total map growth. "
+            "omit to retain measured pan. Optional tilt_rad defaults to -1.0 and must fit the advertised "
+            "robot head range with a downward upper bound of -0.7; legacy bridges use [-1.4, -0.7]. "
+            "Returned head_inspection_bounds_rad records the active bounds. Check footprint_before/after, not total map growth. "
             "If blocking cells remain, change the view within these bounds or stop. The base stays stationary."
         ),
         parameters={
@@ -505,9 +506,8 @@ CHAT_SKILL_SPECS: tuple[SkillSpec, ...] = (
                 },
                 "tilt_rad": {
                     "type": "number",
-                    "minimum": -1.4,
                     "maximum": -0.7,
-                    "description": "Absolute downward tilt; default -1.0, more negative looks nearer the base.",
+                    "description": "Absolute downward tilt within reported head inspection bounds; default -1.0.",
                 },
             },
             "required": [],

@@ -140,6 +140,41 @@ def main():
         "src/test/controller/task/tamp/test_api_contract.py",
         "src/test/controller/task/tamp/test_native_adapter.py",
     ]
+    changed_tests = git(
+        candidate,
+        "diff",
+        "--name-only",
+        "--diff-filter=AM",
+        revisions["main"],
+        revisions["candidate"],
+        "--",
+        "src/test",
+    ).splitlines()
+    tests = sorted(
+        set(
+            tests
+            + [path for path in changed_tests if path.endswith(".py") and Path(path).name.startswith("test_")]
+            + [
+                "src/test/agent/test_floor_recovery.py",
+                "src/test/agent/test_tool_outcome.py",
+                "src/test/agent/test_dispatch_tool_calls.py",
+                "src/test/agent/test_call_llm.py",
+                "src/test/agent/test_shared_vlm_conversation.py",
+                "src/test/memory/test_view_selection.py",
+                "src/test/controller/task/tamp/test_agent_bridge.py",
+                "src/test/controller/task/tamp/test_transfer_provider.py",
+            ]
+        )
+    )
+    manifest["contract_test_paths"] = tests
+    manifest["coverage_matrix"] = {
+        "216": ["model_final EQA12", "answer authority/abstention/scorer contract tests"],
+        "217": ["EQA and OVMM episode dialogue", "CLI TAMP", "history rollback/transport/schema/audit tests"],
+        "220": ["OVMM physical motion and floor recovery", "motion receipts/budgets/visual consumers/gaze tests"],
+        "221": ["metadata adapter tests; not benchmark runtime qualification"],
+        "223": ["floor-enabled S0", "negative/drop/raised/unknown/immutable-map contract tests"],
+    }
+    (args.output / "manifest.json").write_text(json.dumps(manifest, indent=2))
     run(
         "contracts",
         [sys.executable, "-m", "pytest", "-q", "--junitxml=" + str(args.output / "contracts.xml"), *tests],

@@ -59,6 +59,25 @@ def _rejected_footprint_status(agent, pose):
     }
 
 
+def floor_head_bounds(robot):
+    """Use advertised head limits; retain legacy bounds when unavailable.
+
+    Joint reachability does not certify collision clearance. Fresh captures and
+    map validation still decide whether inspection made navigation possible.
+    """
+    from emet.robots.head_capability import HeadCapability
+
+    getter = getattr(robot, "get_head_capability", None)
+    capability = getter() if callable(getter) else None
+    if not isinstance(capability, HeadCapability):
+        return (-1.0, 1.0), (-1.4, -0.7)
+    pan = (max(-1.0, capability.pan[0]), min(1.0, capability.pan[1]))
+    tilt = (capability.tilt[0], min(-0.7, capability.tilt[1]))
+    if not np.isfinite([*pan, *tilt]).all() or pan[0] > pan[1] or tilt[0] > tilt[1]:
+        return None
+    return pan, tilt
+
+
 def observe_blocked_floor(agent, *, max_observations: int = 2) -> dict:
     """At most two bounded head captures aimed at one currently unknown cell.
 
@@ -69,6 +88,9 @@ def observe_blocked_floor(agent, *, max_observations: int = 2) -> dict:
 
     if not supports_floor_observation(agent):
         return {"ok": False, "status": "unsupported_head_observation"}
+    bounds = floor_head_bounds(agent.robot)
+    if bounds is None:
+        return {"ok": False, "status": "floor_gaze_unavailable"}
     plan = getattr(agent, "_last_nav_plan", None) or {}
     pose = plan.get("footprint", {}).get("checked_pose")
     checked = _rejected_footprint_status(agent, pose)
@@ -113,8 +135,8 @@ def observe_blocked_floor(agent, *, max_observations: int = 2) -> dict:
             pan, tilt = agent.robot.get_pan_tilt()
         except (ConnectionError, TimeoutError, RuntimeError) as exc:
             return {"ok": False, "status": "head_observation_failed", "reason": str(exc)}
-        pan = float(np.clip(pan + np.arctan2(-x, z), -1.0, 1.0))
-        tilt = float(np.clip(tilt + np.arctan2(-y, np.hypot(x, z)), -1.4, -0.7))
+        pan = float(np.clip(pan + np.arctan2(-x, z), *bounds[0]))
+        tilt = float(np.clip(tilt + np.arctan2(-y, np.hypot(x, z)), *bounds[1]))
         result = observe_floor(agent, pan_rad=pan, tilt_rad=tilt)
         if not result.get("ok"):
             break
@@ -170,18 +192,21 @@ def _observe_floor(
     """
     if target_blocker:
         return observe_blocked_floor(agent, max_observations=max_observations)
+    bounds = floor_head_bounds(getattr(agent, "robot", None))
+    if bounds is None:
+        return {"ok": False, "status": "floor_gaze_unavailable"}
     if pan_rad is not None and (
         isinstance(pan_rad, bool)
         or not isinstance(pan_rad, (int, float))
         or not np.isfinite(pan_rad)
-        or abs(pan_rad) > 1.0
+        or not bounds[0][0] <= pan_rad <= bounds[0][1]
     ):
         return {"ok": False, "status": "invalid_head_pan"}
     if (
         isinstance(tilt_rad, bool)
         or not isinstance(tilt_rad, (int, float))
         or not np.isfinite(tilt_rad)
-        or not -1.4 <= tilt_rad <= -0.7
+        or not bounds[1][0] <= tilt_rad <= bounds[1][1]
     ):
         return {"ok": False, "status": "invalid_head_tilt"}
     robot = agent.robot
@@ -195,6 +220,12 @@ def _observe_floor(
     if not np.isfinite(pan):
         return {"ok": False, "status": "head_pose_unconfirmed"}
     tilt = float(tilt_rad)
+    get_base_pose = getattr(robot, "get_base_pose", None)
+    if not callable(get_base_pose):
+        return {"ok": False, "status": "base_pose_unavailable"}
+    base_before = np.asarray(get_base_pose(), dtype=float)
+    if base_before.shape != (3,) or not np.isfinite(base_before).all():
+        return {"ok": False, "status": "base_pose_unavailable"}
     moved = robot.head_to(float(pan), tilt, blocking=True)
     if moved is False:
         return {"ok": False, "status": "head_motion_failed"}
@@ -226,6 +257,18 @@ def _observe_floor(
     wait_post_motion_obs(robot, timeout=5.0)
     if robot._seq_id <= sequence:
         return {"ok": False, "status": "stale_observation"}
+    base_after = np.asarray(get_base_pose(), dtype=float)
+    if base_after.shape != (3,) or not np.isfinite(base_after).all():
+        return {"ok": False, "status": "base_pose_unavailable"}
+    yaw_delta = np.arctan2(np.sin(base_after[2] - base_before[2]), np.cos(base_after[2] - base_before[2]))
+    if np.linalg.norm(base_after[:2] - base_before[:2]) > float(getattr(agent, "pos_err_threshold", 0.02)) or abs(
+        yaw_delta
+    ) > float(getattr(agent, "rot_err_threshold", 0.03)):
+        return {
+            "ok": False,
+            "status": "base_moved_during_head_observation",
+            "observation": {"base_before_xyt": base_before.tolist(), "base_after_xyt": base_after.tolist()},
+        }
     obs = robot.get_observation()
     if obs is None or obs.rgb is None or obs.depth is None or obs.get_xyz_in_world_frame() is None:
         return {"ok": False, "status": "calibrated_depth_unavailable"}
@@ -284,6 +327,9 @@ def _observe_floor(
         "ok": True,
         "status": "floor_observed",
         "observation": {
+            "base_before_xyt": base_before.tolist(),
+            "base_after_xyt": base_after.tolist(),
+            "head_inspection_bounds_rad": {"pan": list(bounds[0]), "tilt": list(bounds[1])},
             "measured_head_pan_tilt_rad": measured.tolist(),
             "observed_cell_change": observed_delta,
             "checked_pose": checked_pose,
