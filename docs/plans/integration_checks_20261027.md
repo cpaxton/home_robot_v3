@@ -39,5 +39,11 @@ The active frozen evaluation checkout is unchanged. Its original contract
 result remains red; a fresh full contract run on the repaired revision is
 required before claiming a green contract gate.
 
+The fresh contract run at `835028dc` passes all 976 tests, with zero failures,
+errors, or skips. JUnit is retained in
+`.worktrees/validation-835028dc/contracts.xml`. This clears the unit/contract
+slice on that revision; it does not replace the live room gates or change the
+original frozen battery's red contract artifact.
+
 At this checkpoint EQA is running; later phases remain pending. Read the job's
 `progress.json`, retained logs, and final `gate.json` before reporting results.
