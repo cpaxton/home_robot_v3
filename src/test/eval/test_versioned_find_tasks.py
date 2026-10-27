@@ -11,7 +11,9 @@ from emet.eval.ovmm_find_phase import load_find_phase_episodes, resolve_object_q
 def test_versioned_robocasa_task_keeps_public_language_and_scoring_annotations_separate():
     root = Path(__file__).resolve().parents[3]
     episodes = {e.id: e for e in load_find_phase_episodes(root / "configs/ovmm/find_phase_episodes.yaml")}
-    assert episodes["robocasa_pp_s1"].object == "jar"  # Retain the invalid historical protocol.
+    assert "robocasa_pp_s1" not in episodes
+    archived = load_find_phase_episodes(root / "configs/ovmm/archive/invalid_robocasa_find_v1.yaml")
+    assert archived[0].object == "jar" and archived[0].goal_recep == "cab"
     fixed = episodes["robocasa_pp_s1_v2"]
     assert resolve_object_query(fixed, {"obj_main": {"cat": "sugar_cube"}}) == "sugar cube"
     assert fixed.goal_recep == "cabinet"

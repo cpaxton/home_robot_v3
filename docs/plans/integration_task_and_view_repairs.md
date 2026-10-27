@@ -17,7 +17,9 @@ in the result. No new navigation permission or semantic answer override is added
 
 ## RoboCasa protocol v2
 
-Keep the original `robocasa_pp_s1` and its failures unchanged. Its literal `jar`
+Keep the original `robocasa_pp_s1` and its failures unchanged, in
+`configs/ovmm/archive/invalid_robocasa_find_v1.yaml` for explicit historical
+reproduction rather than default acceptance. Its literal `jar`
 does not match `obj_main` (`sugar_cube` in the tested seeded scene), and `cab`
 is internal fixture shorthand. Simply renaming it to `cabinet` would silently
 switch the legacy selected body from `cab_1` to `cab_main`.

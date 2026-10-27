@@ -90,6 +90,9 @@ def main():
         "scope": "non-RL integration; native-policy comparison, not single-factor ablation; TAMP privileged stationary",
         "driver_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
     }
+    control_provenance = roots["main"] / "configs/eval/harness_control_provenance.json"
+    if control_provenance.is_file():
+        manifest["main_control_provenance"] = json.loads(control_provenance.read_text())
     (args.output / "manifest.json").write_text(json.dumps(manifest, indent=2))
     phases = {}
 

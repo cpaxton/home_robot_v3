@@ -29,26 +29,6 @@ episodes:
     success_radius_m: 0.30
     mapping_max_nav_steps: 0
 
-  - id: robocasa_pp_s1
-    tier: S1
-    sim: configs/sim/robocasa_pick_place_stretch.yaml
-    object: jar
-    object_gt_body: obj_main
-    start_recep: counter
-    goal_recep: cab
-    success_radius_m: 0.50
-    mapping_max_nav_steps: 0
-
-  - id: robocasa_pp_s1_explore5
-    tier: S1
-    sim: configs/sim/robocasa_pick_place_stretch.yaml
-    object: jar
-    object_gt_body: obj_main
-    start_recep: counter
-    goal_recep: cab
-    success_radius_m: 0.50
-    mapping_max_nav_steps: 8
-
   # Versioned correction: upstream seed 0 does not contain the old literal jar.
   # "obj" resolves the task's declared object noun, not its position. Scorer-only
   # annotations make any actual cabinet valid, without leaking body IDs to Qwen.

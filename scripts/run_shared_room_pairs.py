@@ -237,6 +237,6 @@ if __name__ == "__main__":
     parser.add_argument(
         "--episodes",
         nargs="+",
-        default=["default_table_s0_distinct_recep", "robocasa_pp_s1", "molmo_rby1_ithor_s2_idx0"],
+        default=["default_table_s0_distinct_recep", "robocasa_pp_s1_v2", "molmo_rby1_ithor_s2_idx0"],
     )
     raise SystemExit(run(parser.parse_args()))
