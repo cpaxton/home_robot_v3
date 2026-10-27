@@ -183,7 +183,7 @@ def main():
                 capture = client.get_observation()
                 audit_start = (out / "actuation.jsonl").read_bytes() if (out / "actuation.jsonl").exists() else b""
                 result["execution_readiness"] = assess_live_readiness(observation=capture, reference_rgb=rgb,
-                    reference_mask=mask, tools=tools, refreshes=[q["reacquisition_error"] is None
+                    reference_mask=mask, reference_world=world, tools=tools, refreshes=[q["reacquisition_error"] is None
                     and q["response"]["status"] == "ok" for q in result["queries"]])
                 audit_end = (out / "actuation.jsonl").read_bytes() if (out / "actuation.jsonl").exists() else b""
                 result["execution_readiness"]["audit_unchanged_during_admission_checks"] = audit_start == audit_end

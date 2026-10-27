@@ -7,6 +7,7 @@
 # Some code may be adapted from other open-source works with their respective licenses. Original
 # license information maybe found below, if so.
 
+import os
 import platform
 import threading
 import time
@@ -63,6 +64,8 @@ def head_camera_geomgroup_mask(model: mujoco.MjModel, base_body_name: str = "bas
     # Preserve MuJoCo's visual defaults: groups 3-5 are hidden. Enabling all
     # groups exposes collision proxies (e.g. MolmoSpaces' green group-4 hulls).
     mask = mujoco.MjvOption().geomgroup.copy()
+    if os.environ.get("EMET_SIM_HEAD_RENDER_ROBOT", "0").strip().lower() in {"1", "true", "yes", "on"}:
+        return mask
     for grp in robot_body_geom_groups(model, base_body_name=base_body_name):
         if 0 <= grp < 6:
             mask[grp] = 0
@@ -136,8 +139,8 @@ class MujocoServerCameraManagerSync:
         new_imagery.fps = self.camera_fps_counter.fps
 
         for camera, renderer in self.camera_renderers.items():
-            (_, data, timestamp_ns) = self._render_camera(renderer, camera)
-            new_imagery.set_camera_data(camera, data, timestamp_ns=timestamp_ns)
+            (_, data, timestamp_ns, end_ns) = self._render_camera(renderer, camera)
+            new_imagery.set_camera_data(camera, data, timestamp_ns=timestamp_ns, capture_end_ns=end_ns)
 
         new_imagery.cam_d405_K = self.get_camera_params(StretchCameras.cam_d405_rgb)
         new_imagery.cam_d435i_K = self.get_camera_params(StretchCameras.cam_d435i_rgb)
@@ -225,12 +228,15 @@ class MujocoServerCameraManagerSync:
             renderer.update_scene(data=self.mujoco_server.mjdata, camera=camera.camera_name_in_mjcf)
 
             render = renderer.render()
+            # Physics uses this same lock. Bounds describe this renderer's
+            # acquisition, not a joint sensor clock or synchronized stereo pair.
+            capture_end_ns = time.monotonic_ns()
 
         post_render = camera.post_processing_callback
         if post_render:
             render = post_render(render)
 
-        return (camera, render, timestamp_ns)
+        return (camera, render, timestamp_ns, capture_end_ns)
 
     def _remove_camera_renderer(self, camera: StretchCameras):
         """
@@ -412,8 +418,8 @@ class MujocoServerCameraManagerThreaded(MujocoServerCameraManagerSync):
 
         for future in futures:
             # Put the rendered image data into the new_imagery dictionary
-            (camera, render, timestamp_ns) = future.result()
-            new_imagery.set_camera_data(camera, render, timestamp_ns=timestamp_ns)
+            (camera, render, timestamp_ns, end_ns) = future.result()
+            new_imagery.set_camera_data(camera, render, timestamp_ns=timestamp_ns, capture_end_ns=end_ns)
 
         new_imagery.cam_d405_K = self.get_camera_params(StretchCameras.cam_d405_rgb)
         new_imagery.cam_d435i_K = self.get_camera_params(StretchCameras.cam_d435i_rgb)

@@ -126,3 +126,28 @@ and refusal diagnostics passed, not that observed execution is qualified; inspec
 The [October 27 live run](../experiments/observed_live_readiness_20261027.md)
 passed 5/5 surface refreshes but rejected the small object surface for insufficient
 pose-tracking features. Clock/geometry/provenance assembly gates remain open.
+
+### Scan geometry and camera fidelity
+
+`ObservedWorkspace.fuse_static(views)` combines aligned captures of an explicitly
+static scene; occupied evidence wins over free evidence. It supplies no capture
+freshness or scene-stability certificate. Old scans must be discarded when the
+scene changes. `partition(points_world, labels).excluding(object_refs)` retains
+mixed target/obstacle cells and leaves exclusive removed endpoints **unknown**,
+never free. Unattributed occupied cells stay background. This is the first target
+endpoint provenance consumer; it does not supply a full robot solid-volume or
+phase-specific contact policy.
+
+For simulator view qualification, `EMET_STRETCH_HEAD_CAMERA_SCALE=2` renders
+848×480 raw head samples with matching intrinsics/registration.
+`EMET_SIM_HEAD_RENDER_ROBOT=1` keeps robot self-occlusion. Both are opt-in to
+preserve existing controls. Proposal normals use a local measured-plane fit to
+tolerate millimetre depth quantization at finer pixel pitch; depths/holes and
+tracking thresholds are unchanged.
+
+Simulator images now retain separate RGB/depth acquisition intervals under the
+physics/render lock. `local_sim_capture_interval` maps their union only when the
+Linux boot/time-namespace clock identity matches the client. Other hosts,
+missing intervals and hardware clocks are rejected. The helper does not infer
+encoder capture times, camera/object stillness across the stereo gap, or zero
+alignment error. Hardware and full robot/camera alignment remain separate gates.

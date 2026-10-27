@@ -8,9 +8,11 @@ import time
 
 import numpy as np
 
+from emet.controller.manipulation.capture_clock import local_sim_capture_interval
 from emet.controller.manipulation.native_inputs import ObservationUnavailable
 from emet.controller.manipulation.rigid_rgbd_tracking import reference_features
 from emet.controller.task.tamp.observed_capture import capture_arrays
+from emet.memory.surface_reacquisition import reacquire_surface
 from emet.motion.observed_workspace import ObservedWorkspace
 
 
@@ -19,7 +21,7 @@ def capture_metadata(observation):
     return {'received_monotonic': observation.received_monotonic, 'image_timing': observation.image_timing}
 
 
-def assess_live_readiness(*, observation, reference_rgb, reference_mask, tools, refreshes,
+def assess_live_readiness(*, observation, reference_rgb, reference_mask, tools, refreshes, reference_world=None,
                           execution_source_installed=False):
     """Audit this camera-only harness, not arbitrary injected-provider qualification.
 
@@ -27,7 +29,7 @@ def assess_live_readiness(*, observation, reference_rgb, reference_mask, tools, 
     supplied by this harness. Passing image/feature checks cannot qualify them.
     Default physical planning must continue rejecting an uninstalled source.
     """
-    _, depth, _ = capture_arrays(observation)
+    rgb, depth, world = capture_arrays(observation)
     age = time.monotonic() - observation.received_monotonic
     valid_depth = np.isfinite(depth) & (depth > .1) & (depth <= 5.)
     features = {'state': 'unknown', 'reason': 'rigid_tracking_insufficient'}
@@ -43,6 +45,33 @@ def assess_live_readiness(*, observation, reference_rgb, reference_mask, tools, 
         workspace=[center-.3, center+.3], resolution=.025)
     counts = {name: int(np.count_nonzero(workspace.cells == index))
               for index, name in enumerate(('unknown', 'free', 'occupied'))}
+    clock_mapping = {'state': 'unknown'}
+    try:
+        timing = (observation.image_timing or {}).get('head_cam_left')
+        interval = local_sim_capture_interval(timing, received_monotonic=observation.received_monotonic,
+            observation_id='capture:'+str((timing or {}).get('timestamp_ns')))
+        interval.require(now=time.monotonic())
+        clock_mapping = {'state': 'passed', 'scope': 'local simulator RGB+depth interval union only',
+                         'acquisition_span_s': interval.latest-interval.earliest}
+    except ObservationUnavailable as error:
+        clock_mapping['reason'] = str(error)
+    provenance = {'state': 'not_configured'}
+    if reference_world is not None:
+        try:
+            surface = reacquire_surface(reference_rgb, reference_world, reference_mask,
+                rgb, depth, world, min_depth=.25, max_depth=2.5)
+            labels = np.where(surface.mask, 'target', 'background')
+            valid = np.isfinite(world).all(-1) & valid_depth
+            partition = workspace.partition(world[valid], labels[valid])
+            excluded = partition.excluding(['target'])
+            provenance = {'state': 'partial',
+                'occupied_before': int(np.count_nonzero(workspace.cells == 2)),
+                'occupied_after_target_exclusion': int(np.count_nonzero(excluded.cells == 2)),
+                'target_cells_retained_unknown': int(np.count_nonzero((workspace.cells == 2) & (excluded.cells == 0))),
+                'free_cells_added': int(np.count_nonzero((workspace.cells != 1) & (excluded.cells == 1))),
+                'scope': 'measured target/background endpoint attribution only; robot solid-volume and contact policies remain absent'}
+        except ValueError as exc:
+            provenance = {'state': 'unknown', 'reason': str(exc)}
     planned = json.loads(tools['plan_pick_place'].func(object_name='diagnostic object', receptacle_name='diagnostic support'))
     execution = json.loads(tools['execute_pick_place_plan'].func(plan_ref='not-an-executable-plan'))
     fail_closed = (planned['code'] == 'observed_scene_unavailable'
@@ -61,11 +90,12 @@ def assess_live_readiness(*, observation, reference_rgb, reference_mask, tools, 
             'reference_features': features,
             'depth_workspace': {'state': 'passed', 'cells': counts,
                                 'scope': 'depth carving only; not target/robot-separated execution geometry'},
+            'capture_clock_mapping': clock_mapping,
             'capture_encoder_alignment': {'state': 'not_configured',
                 'reason': 'stream timestamps do not supply qualified CaptureInterval or alignment bounds'},
             'complete_payload_geometry': {'state': 'not_configured',
                 'reason': 'partial visible surface is not a complete shape prior'},
-            'robot_target_occupancy_provenance': {'state': 'not_configured'},
+            'robot_target_occupancy_provenance': provenance,
             'support_grounding': {'state': 'not_configured', 'reason': 'single object seed, no support seed'},
             'visual_manipulation_effects': {'state': 'not_assessed', 'reason': 'no manipulation attempted'},
             'default_execution_boundary': {'state': 'passed' if fail_closed else 'failed',

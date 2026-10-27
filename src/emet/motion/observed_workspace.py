@@ -94,6 +94,54 @@ class ObservedWorkspace:
         cells[tuple(endpoints.T)] = 2
         return cls(bounds[0], resolution, cells)
 
+    @classmethod
+    def fuse_static(cls, views):
+        """Combine aligned views of a static scene; occupied evidence dominates.
+
+        This does not renew capture times or certify that a scene stayed static.
+        Callers must discard the scan on scene changes, not fuse moving objects
+        into a supposedly fresh execution snapshot.
+        """
+        views = tuple(views)
+        if not views:
+            raise ValueError('missing_observed_views')
+        first = views[0]
+        if any(v.cells.shape != first.cells.shape or v.resolution != first.resolution
+               or not np.array_equal(v.origin, first.origin) for v in views):
+            raise ValueError('observed_grid_alignment_mismatch')
+        cells = np.zeros_like(first.cells)
+        for view in views:
+            cells[(view.cells == 1) & (cells != 2)] = 1
+            cells[view.cells == 2] = 2
+        return cls(first.origin, first.resolution, cells)
+
+    def partition(self, points_world, labels):
+        """Attribute observed occupied cells without erasing unknown space.
+
+        Provide all measured endpoint labels from this snapshot. Unattributed
+        occupied cells remain background. Shared target/obstacle cells retain
+        both owners; excluding a target never removes their obstacle evidence.
+        """
+        points, labels = np.asarray(points_world, float), np.asarray(labels)
+        if (points.ndim != 2 or points.shape[1] != 3 or labels.shape != (len(points),)
+                or not np.isfinite(points).all() or labels.dtype.kind not in {'U', 'S'}
+                or np.any(labels == '')):
+            raise ValueError('invalid_occupancy_provenance')
+        labels = labels.astype(str)
+        upper = self.origin + np.array(self.cells.shape)*self.resolution
+        inside = np.all((points >= self.origin) & (points < upper), axis=1)
+        points, labels = points[inside], labels[inside]
+        indices = np.floor((points-self.origin)/self.resolution).astype(int)
+        ids = np.ravel_multi_index(indices.T, self.cells.shape)
+        occupied = self.cells.ravel() == 2
+        owners = {str(label): np.unique(ids[(labels == label) & occupied[ids]]) for label in np.unique(labels)}
+        attributed = np.zeros(self.cells.size, bool)
+        for values in owners.values():
+            attributed[values] = True
+        missing = np.flatnonzero(occupied & ~attributed)
+        owners['background'] = np.union1d(owners.get('background', []), missing).astype(int)
+        return ObservedOccupancyPartition(self, tuple((name, tuple(map(int, values))) for name, values in sorted(owners.items())))
+
     def known_free(self, bounds):
         """Require every cell intersecting the closed query volume to be free."""
         lo, hi = bounds_array(bounds)
@@ -114,3 +162,26 @@ class ObservedWorkspace:
         return PlacementScene.from_voxels(centers, resolution=self.resolution,
             workspace=[self.origin, self.origin + np.array(self.cells.shape) * self.resolution],
             known_free=self.known_free)
+
+
+@dataclass(frozen=True)
+class ObservedOccupancyPartition:
+    workspace: ObservedWorkspace
+    owners: tuple[tuple[str, tuple[int, ...]], ...]
+
+    def excluding(self, object_refs):
+        """Remove only exclusive endpoints; the vacated cell becomes UNKNOWN.
+
+        This is not a contact exception or proof of free space inside a shape.
+        New measured rays must establish free space after an object moves.
+        """
+        excluded = frozenset(object_refs)
+        if 'background' in excluded:
+            raise ValueError('background_occupancy_cannot_be_excluded')
+        keep = np.zeros(self.workspace.cells.size, bool)
+        for name, ids in self.owners:
+            if name not in excluded:
+                keep[list(ids)] = True
+        cells = self.workspace.cells.copy().reshape(-1)
+        cells[(cells == 2) & ~keep] = 0
+        return ObservedWorkspace(self.workspace.origin, self.workspace.resolution, cells.reshape(self.workspace.cells.shape))

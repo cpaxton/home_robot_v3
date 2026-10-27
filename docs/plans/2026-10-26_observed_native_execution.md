@@ -289,3 +289,15 @@ planning/execution correctly refused and sent no extra commands. This is a live
 prerequisite audit, not observed task acceptance. Prioritize a suitable measured
 view and source assembly before a full native agent trial; see
 [the evidence and next steps](../experiments/observed_live_readiness_20261027.md).
+
+## October 27 source assembly progress
+
+Actual 2× head renders with self-occlusion exposed proposal overflow; measured
+local-plane normals fixed that condition without changing depths or thresholds.
+Both repeats passed 5/5 sensor refreshes. The 800-pixel object still yields only
+five material landmarks and remains pose-unknown. Static scan fusion and target
+endpoint provenance now preserve unknown/obstacle cells. Simulator acquisition
+intervals and same-host clock mapping are implemented and exercised live; the
+RGB/depth union spans 203.5 ms and does not establish encoder alignment. See
+[all three attempts, validation and remaining source gates](../experiments/observed_source_assembly_20261027.md).
+Observed execution remains disabled; do not infer a transfer/swap score.

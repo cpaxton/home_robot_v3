@@ -148,3 +148,15 @@ uv run emet test src/test/config/test_robosuite_load_utils.py \
   src/test/config/test_robocasa_assets_check.py \
   src/test/config/test_molmospaces_spawn_metadata.py -q
 ```
+
+### Observed manipulation camera evidence
+
+`stretch_mujoco/mujoco_server_camera_manager.py` and
+`stretch_mujoco/datamodels/status_stretch_camera.py` preserve each renderer's
+acquisition interval while holding the shared physics/render lock. RGB metadata
+also identifies its separate depth interval; publication does not renew either.
+The local clock identity permits explicit same-host simulation mapping through
+`controller/manipulation/capture_clock.py`, not a hardware synchronization claim.
+`stretch_mujoco/enums/stretch_cameras.py` supports the opt-in head image scale and
+self-occlusion controls documented in [environment variables](environment_variables.md).
+See [live source assembly evidence](experiments/observed_source_assembly_20261027.md).

@@ -51,3 +51,27 @@ def test_foreground_pixel_prevents_background_free_space_carving():
     depth = np.full((21, 21), 1.)
     depth[10, 10] = .3
     assert not build(depth).known_free([[-.05, -.05, .4], [.05, .05, .6]])
+
+
+def test_static_multiview_fusion_expands_free_coverage_but_keeps_obstacles():
+    a = ObservedWorkspace(np.zeros(3), 1., np.array([[[1, 0, 2]]]))
+    b = ObservedWorkspace(np.zeros(3), 1., np.array([[[0, 1, 1]]]))
+    fused = ObservedWorkspace.fuse_static([a, b])
+    np.testing.assert_array_equal(fused.cells, [[[1, 1, 2]]])
+    assert fused.known_free([[.1, .1, .1], [.9, .9, 1.9]])
+    assert not a.known_free([[.1, .1, .1], [.9, .9, 1.9]])
+    with pytest.raises(ValueError, match='alignment'):
+        ObservedWorkspace.fuse_static([a, ObservedWorkspace(np.ones(3), 1., b.cells)])
+
+
+def test_target_exclusion_keeps_shared_obstacles_and_never_invents_free_space():
+    grid = ObservedWorkspace(np.zeros(3), 1., np.array([[[2, 2, 2, 0, 1]]]))
+    partition = grid.partition([[.5, .5, .5], [.5, .5, 1.5], [.6, .5, 1.6]],
+                               np.array(['target', 'target', 'obstacle']))
+    excluded = partition.excluding(['target'])
+    np.testing.assert_array_equal(excluded.cells, [[[0, 2, 2, 0, 1]]])
+    assert excluded.placement_scene().collides([[.1, .1, .1], [.9, .9, .9]])
+    assert excluded.placement_scene().collides([[.1, .1, 1.1], [.9, .9, 1.9]])
+    with pytest.raises(ValueError, match='background'):
+        partition.excluding(['background'])
+    np.testing.assert_array_equal(grid.cells, [[[2, 2, 2, 0, 1]]])

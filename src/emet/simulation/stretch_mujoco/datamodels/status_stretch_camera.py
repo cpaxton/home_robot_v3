@@ -13,6 +13,7 @@ from dataclasses import asdict, dataclass
 import cv2
 import numpy as np
 
+from emet.controller.manipulation.capture_clock import local_monotonic_clock_id
 from emet.simulation.stretch_mujoco.enums.stretch_cameras import StretchCameras
 from emet.simulation.stretch_mujoco.utils import dataclass_from_dict, get_depth_color_map
 
@@ -38,17 +39,28 @@ class StatusStretchCameras:
 
     # Host monotonic time at renderer scene capture, not IPC/ZMQ publish time.
     capture_timestamps_ns: dict[str, int] | None = None
+    capture_intervals_ns: dict[str, tuple[int, int]] | None = None
 
     def image_timing_for(self, camera: StretchCameras) -> dict | None:
         stamp = (self.capture_timestamps_ns or {}).get(camera.name)
         if not isinstance(stamp, int) or isinstance(stamp, bool) or stamp <= 0:
             return None
-        return {
+        result = {
             "timestamp_ns": stamp,
             "clock_domain": "mujoco_render_monotonic",
+            "clock_id": local_monotonic_clock_id(),
             "source": "renderer_scene_capture",
             "available": True,
         }
+        interval = (self.capture_intervals_ns or {}).get(camera.name)
+        if interval is not None and len(interval) == 2 and interval[0] == stamp and interval[1] >= stamp:
+            result["capture_interval_ns"] = list(interval)
+        paired = {StretchCameras.cam_d435i_rgb: StretchCameras.cam_d435i_depth,
+                  StretchCameras.cam_d405_rgb: StretchCameras.cam_d405_depth}.get(camera)
+        depth_interval = (self.capture_intervals_ns or {}).get(paired.name) if paired is not None else None
+        if depth_interval is not None:
+            result["depth_capture_interval_ns"] = list(depth_interval)
+        return result
 
     def get_all(
         self, *, auto_rotate: bool = True, auto_correct_rgb=True, use_depth_color_map=False
@@ -116,14 +128,22 @@ class StatusStretchCameras:
 
         return data
 
-    def set_camera_data(self, camera: StretchCameras, data: np.ndarray, *, timestamp_ns: int | None = None):
+    def set_camera_data(self, camera: StretchCameras, data: np.ndarray, *, timestamp_ns: int | None = None, capture_end_ns: int | None = None):
         """
         Use this to match a StretchCameras enum instance with its property in StatusStretchCameras dataclass, to set the camera data property within this dataclass.
 
         Note: This sets the values inside this dataclass; it does not send data to the simulator.
         """
+        if capture_end_ns is not None and (type(timestamp_ns) is not int or type(capture_end_ns) is not int
+                                            or timestamp_ns <= 0 or capture_end_ns < timestamp_ns):
+            raise ValueError("invalid_camera_capture_interval")
         if self.capture_timestamps_ns is None:
             self.capture_timestamps_ns = {}
+        if self.capture_intervals_ns is None:
+            self.capture_intervals_ns = {}
+        self.capture_intervals_ns.pop(camera.name, None)
+        if capture_end_ns is not None:
+            self.capture_intervals_ns[camera.name] = (timestamp_ns, capture_end_ns)
         # Replacing pixels without timing must not preserve an older frame's stamp.
         self.capture_timestamps_ns.pop(camera.name, None)
         if timestamp_ns is not None:

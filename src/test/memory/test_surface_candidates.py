@@ -333,3 +333,19 @@ def test_gradual_normal_chain_does_not_merge_horizontal_and_upright_bands():
     for region in regions:
         mask = candidate_mask(region, (40, 60))
         assert not (mask[:, :5].any() and mask[:, -5:].any())
+
+
+def test_local_normals_tolerate_millimetre_depth_quantization_without_changing_depth():
+    from emet.memory.surface_candidates import _local_surface_normals
+
+    yy, xx = np.indices((120, 160))
+    x, y = (xx-80)/650., (yy-60)/650.
+    depth = np.round((1./(1.+.3*x+.4*y))*1000)/1000
+    world = np.stack((x*depth, y*depth, depth), axis=-1)
+    original = world.copy()
+    normals = _local_surface_normals(world)[4:-4, 4:-4]
+    expected = np.array([.3, .4, 1.])
+    expected /= np.linalg.norm(expected)
+    angular_error = np.arccos(np.clip(np.sum(normals*expected, axis=-1), -1, 1))
+    assert np.quantile(angular_error, .95) < .12
+    np.testing.assert_array_equal(world, original)
