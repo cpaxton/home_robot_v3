@@ -125,7 +125,9 @@ EQA_SKILL_SPECS: tuple[SkillSpec, ...] = (
         name="look_around",
         modes=frozenset({AgentMode.EQA_EPISODE}),
         description=(
-            "Scan in place (head sweep / rotate) to refresh the map and graph at the current pose without navigating."
+            "Refresh camera evidence, map and graph at the current position using the configured scan policy. "
+            "When sweeping is disabled this captures the current heading only; it does not turn. "
+            "Use rotate_base for an explicit heading change."
         ),
         parameters=_NO_PARAMS,
     ),

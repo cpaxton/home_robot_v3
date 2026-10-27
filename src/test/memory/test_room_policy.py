@@ -163,5 +163,7 @@ def test_vlm_frontier_choice_reposes_question_not_fake_area():
     assert "best help determine the answer" in directive or "best help" in directive
     assert "Question area:" not in directive
     assert "dark blue" not in directive
+    assert "historical context" in directive
+    assert "not a preview from that frontier" in directive
     assert "Current place:" in directive
     assert "unhelpful" in directive or "more informative" in directive
