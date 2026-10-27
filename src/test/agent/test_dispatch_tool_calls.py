@@ -37,8 +37,8 @@ def test_rotate_base_clips_degrees_via_func():
     )
     assert ok
     assert has_info
-    assert calls == [[("rotate_base", "360.0")]]
-    assert any("360" in r for r in results)
+    assert calls == [[("rotate_base", "180.0")]]
+    assert any("180" in r for r in results)
 
 
 def test_move_forward_caps_distance_and_rejects_invalid():
