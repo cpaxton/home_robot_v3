@@ -112,3 +112,17 @@ qualification, followed by held-out stationary Stretch single transfers,
 multi-step plans and explicit recovery-boundary failures using Caliban inference.
 Only afterward should navigation/exploration or another robot enter the scored
 observed-task denominator.
+
+### Repeatable live readiness audit
+
+The existing camera diagnostic accepts `--execution-readiness`. It uses Caliban
+for semantic initialization, refreshes current surfaces through the real registry,
+and audits the production tracker's reference feature admission, depth carving,
+missing source prerequisites and default execution refusal. Capture files retain
+original receive times and image-timing metadata. Job completion means the sensor
+and refusal diagnostics passed, not that observed execution is qualified; inspect
+`execution_readiness.qualification` and each gate in `result.json`.
+
+The [October 27 live run](../experiments/observed_live_readiness_20261027.md)
+passed 5/5 surface refreshes but rejected the small object surface for insufficient
+pose-tracking features. Clock/geometry/provenance assembly gates remain open.

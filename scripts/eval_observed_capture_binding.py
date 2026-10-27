@@ -24,6 +24,7 @@ from emet.agent.tools import get_tools
 from emet.config.sim_launch_config import load_sim_launch_config_from_path
 from emet.controller.task.tamp.observed_capture import bind_observed_capture_source, capture_arrays
 from emet.controller.task.tamp.observed_discovery import RgbdTaskProvider
+from emet.eval.observed_readiness import assess_live_readiness, capture_metadata
 from emet.eval.sim_eval_session import (
     connect_benchmark_robot,
     launch_benchmark_sim_server,
@@ -42,6 +43,8 @@ def main():
     parser.add_argument("--model", required=True)
     parser.add_argument("--query", default="red cylinder")
     parser.add_argument("--samples", type=int, default=5)
+    parser.add_argument("--execution-readiness", action="store_true",
+                        help="Audit live execution prerequisites without attempting manipulation.")
     args = parser.parse_args()
     if args.samples < 1:
         parser.error("--samples must be positive")
@@ -83,6 +86,7 @@ def main():
                 world=world,
                 K=observation.camera_K,
                 pose=observation.camera_pose,
+                metadata_json=json.dumps(capture_metadata(observation)),
             )
             provider = RgbdTaskProvider()
             ticket = provider.begin_frame(observation.received_monotonic, observation.image_timing)
@@ -142,6 +146,7 @@ def main():
                         world=current_world,
                         K=capture.camera_K,
                         pose=capture.camera_pose,
+                        metadata_json=json.dumps(capture_metadata(capture)),
                     )
                     return capture
 
@@ -174,8 +179,23 @@ def main():
             result["reacquisition_passed"] = all(
                 q["reacquisition_error"] is None and q["response"]["status"] == "ok" for q in result["queries"]
             )
+            if args.execution_readiness:
+                capture = client.get_observation()
+                audit_start = (out / "actuation.jsonl").read_bytes() if (out / "actuation.jsonl").exists() else b""
+                result["execution_readiness"] = assess_live_readiness(observation=capture, reference_rgb=rgb,
+                    reference_mask=mask, tools=tools, refreshes=[q["reacquisition_error"] is None
+                    and q["response"]["status"] == "ok" for q in result["queries"]])
+                audit_end = (out / "actuation.jsonl").read_bytes() if (out / "actuation.jsonl").exists() else b""
+                result["execution_readiness"]["audit_unchanged_during_admission_checks"] = audit_start == audit_end
+            result["diagnostic_passed"] = result["reacquisition_passed"]
+            if args.execution_readiness:
+                readiness = result["execution_readiness"]
+                result["diagnostic_passed"] = bool(result["diagnostic_passed"]
+                    and readiness["audit_unchanged_during_admission_checks"]
+                    and readiness["gates"]["default_execution_boundary"]["state"] == "passed"
+                    and readiness["gates"]["live_rgbd"]["state"] == "passed")
             save()
-            return 0 if result["reacquisition_passed"] else 1
+            return 0 if result["diagnostic_passed"] else 1
         finally:
             try:
                 if client is not None:

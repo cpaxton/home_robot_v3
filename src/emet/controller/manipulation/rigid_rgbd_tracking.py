@@ -70,6 +70,28 @@ def fit_rigid_landmarks(reference, current, *, tolerance_m=.004, min_inliers=12,
     return pose, float(errors.max()), best
 
 
+def reference_features(rgb, mask):
+    """Use the tracker admission rule without inventing a complete shape prior."""
+    if (not isinstance(rgb, np.ndarray) or rgb.dtype != np.uint8 or rgb.ndim != 3 or rgb.shape[2] != 3
+            or not isinstance(mask, np.ndarray) or mask.dtype != bool or mask.shape != rgb.shape[:2]):
+        raise ObservationUnavailable('rigid_tracking_inputs_unavailable')
+    gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
+    interior = cv2.erode(mask.astype(np.uint8), np.ones((9, 9), np.uint8))
+    pixels = cv2.goodFeaturesToTrack(gray, maxCorners=128, qualityLevel=.02, minDistance=4,
+                                    mask=interior)
+    if pixels is None or len(pixels) < 12:
+        raise ObservationUnavailable('rigid_tracking_insufficient')
+    pixels = pixels.astype(np.float32)
+    patches = np.stack([cv2.getRectSubPix(gray, (9, 9), tuple(p[0])).ravel() for p in pixels]).astype(float)
+    distances = np.sqrt(np.mean((patches[:, None] - patches[None, :]) ** 2, axis=-1))
+    np.fill_diagonal(distances, np.inf)
+    unique = distances.min(axis=1) > 8.
+    pixels = pixels[unique]
+    if len(pixels) < 12:
+        raise ObservationUnavailable('rigid_tracking_unobservable')
+    return gray, pixels
+
+
 @dataclass(frozen=True)
 class RigidTrack:
     payload: PayloadGeometryEvidence
@@ -97,20 +119,7 @@ class RigidRgbdTracker:
                 or not 0 < reference_max_age_s <= 30):
             raise ValueError('invalid_tracking_calibration')
         self._validate(rgb, world_xyz, mask)
-        self.gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
-        interior = cv2.erode(mask.astype(np.uint8), np.ones((9, 9), np.uint8))
-        pixels = cv2.goodFeaturesToTrack(self.gray, maxCorners=128, qualityLevel=.02, minDistance=4,
-                                        mask=interior)
-        if pixels is None or len(pixels) < 12:
-            raise ObservationUnavailable('rigid_tracking_insufficient')
-        pixels = pixels.astype(np.float32)
-        patches = np.stack([cv2.getRectSubPix(self.gray, (9, 9), tuple(p[0])).ravel() for p in pixels]).astype(float)
-        distances = np.sqrt(np.mean((patches[:, None] - patches[None, :]) ** 2, axis=-1))
-        np.fill_diagonal(distances, np.inf)
-        unique = distances.min(axis=1) > 8.
-        self.pixels = pixels[unique]
-        if len(self.pixels) < 12:
-            raise ObservationUnavailable('rigid_tracking_unobservable')
+        self.gray, self.pixels = reference_features(rgb, mask)
         xy = np.rint(self.pixels[:, 0]).astype(int)
         world = world_xyz[xy[:, 1], xy[:, 0]]
         initial = ObjectPoseEvidence(world_from_reference, received_monotonic, 'rgbd_tracking', 'reference')

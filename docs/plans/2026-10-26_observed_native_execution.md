@@ -278,3 +278,14 @@ clock/inter-sample motion bounds and robot/target occupancy provenance still nee
 real sensor qualification. Current depth carving alone does not remove those
 couplings. Preserve unknown space and all failed attempts, then exercise held-out
 stationary Stretch tasks with Caliban before claiming observed agent success.
+
+## October 27 live audit
+
+Managed CPU/Caliban job `20261027_001043_cb29cc` passed 5/5 fresh surface refreshes,
+but the actual rigid tracker's feature gate rejected the 217-pixel surface (15
+interior pixels, zero landmarks). The source still lacks qualified timing,
+complete payload geometry, occupancy provenance and support grounding. Default
+planning/execution correctly refused and sent no extra commands. This is a live
+prerequisite audit, not observed task acceptance. Prioritize a suitable measured
+view and source assembly before a full native agent trial; see
+[the evidence and next steps](../experiments/observed_live_readiness_20261027.md).
