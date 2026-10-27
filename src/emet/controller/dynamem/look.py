@@ -156,8 +156,19 @@ def observe_blocked_floor(agent, *, max_observations: int = 2) -> dict:
             # also be wrong. Expose the measurement, not a free-space claim.
             after["reference_optical_depth_m"] = float(after["target_camera_xyz"][2])
         attempts.append({"requested_pan_tilt": [pan, tilt], "before": projection, "after": after})
-        if result.get("observation", {}).get("footprint_after", {}).get("pose_valid") or after.get("target_in_frame"):
+        if result.get("observation", {}).get("footprint_after", {}).get("pose_valid"):
             break
+        if after.get("target_in_frame"):
+            # Seeing one target is not completion: re-aim at the next measured
+            # map hole within this same bounded observation budget.
+            detail = agent.space.last_validity
+            offsets = detail.get("unknown_cell_offsets_m", [])
+            if detail.get("reason") != "unobserved_footprint" or not offsets:
+                break
+            next_target = [pose[0] + offsets[0][0], pose[1] + offsets[0][1], 0.0]
+            if not np.isfinite(next_target).all() or np.allclose(next_target, target):
+                break  # No mapped progress on this cell; do not repeat blindly.
+            target = next_target
     result.setdefault("observation", {})["targeted_floor"] = {
         "target_world_xyz": target,
         "floor_height_source": "navigation_zero_height_reference_not_measured_free_space",

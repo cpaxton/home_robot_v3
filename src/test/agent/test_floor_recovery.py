@@ -72,6 +72,48 @@ def test_targeted_floor_aim_is_bounded_and_projection_does_not_clear_map(monkeyp
     robot.head_to.assert_not_called()  # Only the existing capture primitive commands head motion.
 
 
+def test_targeted_floor_reaims_after_first_visible_cell_until_footprint_rechecked(monkeypatch):
+    detail = {
+        "reason": "unobserved_footprint",
+        "unknown_footprint_cells": 2,
+        "unknown_cell_offsets_frame": "world_xy_from_checked_pose",
+        "unknown_cell_offsets_m": [[0.0, 0.1]],
+    }
+    obs = SimpleNamespace(
+        rgb=np.zeros((4, 4, 3), dtype=np.uint8), camera_pose=np.eye(4), camera_K=np.eye(3), depth=None
+    )
+    robot = SimpleNamespace(_seq_id=1, head_to=Mock(), get_pan_tilt=lambda: (0.0, -1.0), get_observation=lambda: obs)
+    agent = SimpleNamespace(
+        robot=robot,
+        space=SimpleNamespace(is_valid=lambda p: False, last_validity=detail),
+        _last_nav_plan={"footprint": {"checked_pose": [0.0, 0.0, 0.0]}},
+    )
+    targets = []
+
+    def project(view, target):
+        targets.append(tuple(target))
+        return {
+            "status": "in_frame",
+            "target_in_frame": True,
+            "target_camera_xyz": [0.0, 0.2, 1.0],
+            "target_pixel_xy": [1.0, 1.0],
+        }
+
+    monkeypatch.setattr("emet.memory.graph_eqa.agentic.views.target_in_view", project)
+    calls = []
+
+    def capture(agent, **kwargs):
+        calls.append(kwargs)
+        detail["unknown_cell_offsets_m"] = [[0.1, 0.1]]
+        return {"ok": True, "observation": {"footprint_after": {"pose_valid": len(calls) == 2}}}
+
+    monkeypatch.setattr(look, "observe_floor", capture)
+    result = look.observe_blocked_floor(agent)
+    assert len(calls) == 2
+    assert set(targets) == {(0.0, 0.1, 0.0), (0.1, 0.1, 0.0)}
+    assert result["observation"]["footprint_after"]["pose_valid"]
+
+
 def test_final_tool_schema_exposes_floor_tilt_and_feedback():
     tool = next(tool for tool in get_tools({}) if tool.name == "observe_floor")
     tilt = tool.parameters["properties"]["tilt_rad"]
