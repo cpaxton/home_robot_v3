@@ -49,6 +49,7 @@ def grounding_assets(roots, arms, backend):
 
 def run(args):
     candidate_policy = getattr(args, "candidate_decision_policy", None)
+    shared_episodes = getattr(args, "episodes_file", None)
     floor_reference = getattr(args, "floor_reference_z", None)
     roots = {"main": args.main.resolve(), "candidate": args.candidate.resolve()}
     assets = grounding_assets(roots, args.arms, args.grounding_backend)
@@ -60,6 +61,8 @@ def run(args):
         "roots": {k: str(v) for k, v in roots.items()},
         "revisions": revisions,
         "episodes": args.episodes,
+        "shared_episodes_file": str(shared_episodes.resolve()) if shared_episodes else None,
+        "shared_episodes_sha256": hashlib.sha256(shared_episodes.read_bytes()).hexdigest() if shared_episodes else None,
         "seed": args.seed,
         "scan_steps": args.scan_steps,
         "arms": args.arms,
@@ -78,6 +81,11 @@ def run(args):
     all_complete, all_success = True, True
     for index, episode in enumerate(args.episodes):
         for arm in args.arms if index % 2 == 0 else list(reversed(args.arms)):
+            if (
+                shared_episodes
+                and hashlib.sha256(shared_episodes.read_bytes()).hexdigest() != manifest["shared_episodes_sha256"]
+            ):
+                raise RuntimeError("Frozen shared episode registry changed during paired evaluation")
             root = roots[arm]
             assert_frozen_source(root, revisions[arm])
             case = args.output / f"{episode}-{arm}"
@@ -138,7 +146,7 @@ def run(args):
                 "ovmm",
                 "find",
                 "--episodes",
-                "configs/ovmm/find_phase_episodes.yaml",
+                str(shared_episodes.resolve()) if shared_episodes else "configs/ovmm/find_phase_episodes.yaml",
                 "--backend",
                 "lazy_graph",
                 "--query-driven-memory",
@@ -217,6 +225,7 @@ if __name__ == "__main__":
     parser.add_argument("--candidate", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--episodes-file", type=Path, help="Same frozen task registry for both arms.")
     parser.add_argument("--scan-steps", type=int, choices=(4, 8), default=4)
     parser.add_argument("--arms", nargs="+", choices=("main", "candidate"), default=["main", "candidate"])
     parser.add_argument("--grounding-backend", choices=("yoloe", "vlm"), default="yoloe")

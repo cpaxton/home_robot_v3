@@ -18,7 +18,7 @@ from run_shared_room_pairs import assert_frozen_source, git
 from emet.utils.process_tree import popen_session, terminate_process_tree
 
 QUESTIONS = (2, 6, 12, 14, 15, 16, 25, 28, 31, 56, 65, 68)
-ROOMS = ("default_table_s0_distinct_recep", "robocasa_pp_s1", "molmo_rby1_ithor_s2_idx0")
+ROOMS = ("default_table_s0_distinct_recep", "robocasa_pp_s1_v2", "molmo_rby1_ithor_s2_idx0")
 TAMP_INSTRUCTION = "move red cylinder to cylinder goal; move blue cube to cube goal"
 
 
@@ -199,6 +199,8 @@ def main():
     room = [
         sys.executable,
         str(driver / "run_shared_room_pairs.py"),
+        "--episodes-file",
+        str(candidate / "configs/ovmm/find_phase_episodes.yaml"),
         "--main",
         str(roots["main"]),
         "--candidate",
