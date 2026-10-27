@@ -1,0 +1,8 @@
+{
+  "agent_base_sha": "61da55cb1c237b456b141d9572aec76cd44a6805",
+  "scope": "main agent with the identical shared RoboCasa v2 evaluation protocol; no candidate inference/history/navigation code",
+  "protocol_files": [
+    "src/emet/eval/ovmm_find_phase.py",
+    "configs/ovmm/find_phase_episodes.yaml"
+  ]
+}
