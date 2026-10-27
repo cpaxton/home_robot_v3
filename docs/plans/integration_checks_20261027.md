@@ -47,3 +47,27 @@ original frozen battery's red contract artifact.
 
 At this checkpoint EQA is running; later phases remain pending. Read the job's
 `progress.json`, retained logs, and final `gate.json` before reporting results.
+
+## Completed battery and follow-up
+
+The frozen battery finished: EQA main 8/12, candidate 9/12; ordinary S0 passes
+both arms; scripted and live privileged stationary TAMP pass both arms.
+RoboCasa candidate is incomplete, main fails object FIND and passes cabinet
+FIND. Both Molmo arms fail runtime discovery (missing wrapper), so they are
+infrastructure failures, not a fresh performance comparison. Floor-enabled S0
+fails receptacle FIND. The original contract artifact retains its one obsolete
+assertion failure; the separately repaired 976-test contract run above is green.
+The aggregate gate is red.
+
+Context-only follow-up at `3916b708`: RoboCasa completes, fails sugar-cube FIND,
+and passes cabinet FIND. S0 object FIND passes but receptacle FIND fails. These
+results do not establish a robust improvement or non-regression. At user
+request, the 2.8 cm sugar-cube episode is now optional stress coverage; historical
+scores remain unchanged and RoboCasa basic acceptance needs a replacement.
+
+The full-battery driver now requires and preflights an explicit Molmo interpreter,
+records it, and supplies it to both arms before any long run. Next use paired S0
+and Molmo checks on the current frozen integration source to separate persistent
+viewpoint/approach problems from runtime setup. No full sweep or merge is justified
+yet. Observed manipulation, nonprivileged multi-step TAMP, real-robot floor safety,
+Habitat OVMM, and EXPRESS/AbstainEQA runtime evaluation remain unqualified.

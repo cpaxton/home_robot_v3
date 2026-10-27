@@ -7,8 +7,12 @@ contains #213/#222 and #199/#202; those landed changes are shared by both arms.
 Run `scripts/run_shared_harness_integration.py` through `emet jobs run
 --cpu-safe --gpu-exclusive --need-mib 22000`. It requires clean frozen main and
 candidate worktrees, existing ignored `sam2.1_hiera_small.pt` links, the Habitat
-executable, a fresh output directory and a reachable Qwen OpenAI endpoint for
+executable, an explicit `--molmospaces-python /path/to/.venv-molmospaces/bin/python`,
+a fresh output directory and a reachable Qwen OpenAI endpoint for
 the existing privileged stationary TAMP control. All phases run serially.
+The Molmo interpreter is import-checked before evaluation and recorded in the
+manifest. Its venv path is preserved and passed to both arms. Missing Molmo
+runtime is an infrastructure failure, not an agent failure.
 
 Fixed population and gates:
 

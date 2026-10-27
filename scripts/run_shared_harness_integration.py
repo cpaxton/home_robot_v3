@@ -61,8 +61,15 @@ def main():
     parser.add_argument("--candidate", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--habitat-bin", required=True)
+    parser.add_argument("--molmospaces-python", type=Path, required=True)
     parser.add_argument("--tamp-base-url", required=True)
     args = parser.parse_args()
+    from emet.simulation.molmospaces_config import _python_can_import_molmo_spaces
+
+    # Preserve the venv path: resolving its python symlink loses pyvenv.cfg.
+    molmo_python = args.molmospaces_python.expanduser().absolute()
+    if not molmo_python.is_file() or not _python_can_import_molmo_spaces(molmo_python):
+        raise RuntimeError(f"Invalid MolmoSpaces interpreter: {molmo_python}; prepare its runtime before acceptance")
     roots = {"main": args.main.resolve(), "candidate": args.candidate.resolve()}
     driver = Path(__file__).resolve().parent
     revisions = {arm: git(root, "rev-parse", "HEAD") for arm, root in roots.items()}
@@ -76,6 +83,7 @@ def main():
         "questions": QUESTIONS,
         "rooms": ROOMS,
         "deferred_room_cases": DEFERRED_ROOMS,
+        "molmospaces_python": str(molmo_python),
         "seed": 0,
         "decision_policies": {"main": "legacy", "candidate": "model_final"},
         "tamp_model": "Qwen/Qwen3-VL-8B-Instruct",
@@ -99,6 +107,7 @@ def main():
         env.update(
             EMET_UV_RUN="1",
             HF_HUB_OFFLINE="1",
+            MOLMOSPACES_PYTHON=str(molmo_python),
             OMP_NUM_THREADS="1",
             OPENBLAS_NUM_THREADS="1",
             MKL_NUM_THREADS="1",
