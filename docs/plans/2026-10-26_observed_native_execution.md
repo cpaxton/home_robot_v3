@@ -268,8 +268,8 @@ swap passes through the real tools in a synthetic sensor/controller fixture.
 CHAT has an explicit Python factory hook; no CLI/default provider is silently
 enabled. External motion invalidates both primitive and task handles.
 
-Validation: 606 checks passed with zero skips/failures in managed CPU job
-`20261026_204444_18586d`; no new live sensor, contact or LLM agent task denominator.
+Validation: 610 checks passed with zero skips/failures on committed implementation
+`c532a758` in managed CPU job `20261026_205621_349c68`; no new live sensor, contact or LLM agent task denominator.
 See [the integration evidence](../experiments/observed_execution_integration_20261026.md).
 
 Next is concrete live source assembly/qualification, not another symbolic search

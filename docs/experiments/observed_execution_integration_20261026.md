@@ -42,13 +42,20 @@ sensor is introduced.
 
 ## Validation
 
-Managed CPU job **`20261026_204444_18586d`**: **606 passed**, zero failures, errors or
-skips; 125.667 s test time. Coverage includes all motion and TAMP tests, native
+Committed implementation **`c532a758`**, managed CPU job
+**`20261026_205621_349c68`**: **610 passed**, zero failures, errors or
+skips; 126.160 s test time. Coverage includes all motion and TAMP tests, native
 input isolation, real CHAT startup/tool/failure boundaries, observed discovery,
 live capture binding and skill packs. `MUJOCO_GL=disable`; no local GPU model,
 renderer or new VLM calls. Ruff on changed Python files and `git diff --check`
-pass. Raw JUnit: `.tamp-runs/observed-execution-20261026/regression.xml`; log:
-`.tamp-runs/observed-execution-20261026/job/job.log`.
+pass. Raw JUnit: `.tamp-runs/observed-execution-20261026/committed-regression.xml`; log:
+`.tamp-runs/observed-execution-20261026/committed-job/job.log`.
+The 52-page paper builds with no unresolved references/citations. Machine-readable
+results and source hashes are in [the evidence record](observed_execution_integration_20261026.json).
+
+Earlier overlapping development suites passed 606, 608 and 609 checks as scene,
+receipt and reconnect guards were added; do not sum these or count them as agent
+episodes. Final numbers above use the committed source and include all guards.
 
 ## Remaining work before observed-task numbers
 
