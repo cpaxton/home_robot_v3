@@ -122,6 +122,39 @@ def test_final_tool_schema_exposes_floor_tilt_and_feedback():
     assert "footprint_before/after" in tool.description
 
 
+@pytest.mark.parametrize("restore_ok", [False, True])
+def test_agent_inspection_restores_measured_task_gaze_and_captures_fresh_view(monkeypatch, restore_ok):
+    head = np.array([0.2, -0.3])
+    original = head.copy()
+    robot = SimpleNamespace(_seq_id=1, get_pan_tilt=lambda: head.copy(), get_base_pose=lambda: np.zeros(3))
+
+    def head_to(pan, tilt, **kwargs):
+        if restore_ok:
+            head[:] = [pan, tilt]
+        return restore_ok
+
+    robot.head_to = Mock(side_effect=head_to)
+    agent = SimpleNamespace(robot=robot, voxel_map=SimpleNamespace(observations=[]))
+    agent.update = Mock(side_effect=lambda **kw: agent.voxel_map.observations.append("task view"))
+
+    def floor(agent, **kwargs):
+        head[:] = [0.0, -1.8]
+        return {"ok": True, "status": "floor_observed", "observation": {"footprint_after": {"pose_valid": True}}}
+
+    monkeypatch.setattr(look, "observe_floor", floor)
+    monkeypatch.setattr(look, "wait_post_motion_obs", lambda robot, **kw: setattr(robot, "_seq_id", robot._seq_id + 1))
+    result = look.inspect_floor(agent, target_blocker=True)
+    assert result["ok"] is restore_ok
+    assert result["observation"]["footprint_after"]["pose_valid"]
+    if restore_ok:
+        np.testing.assert_allclose(head, original)
+        assert result["task_view"]["restored"]
+        agent.update.assert_called_once_with(full_perception=True)
+    else:
+        assert result["status"] == "task_view_unavailable"
+        agent.update.assert_not_called()
+
+
 def test_floor_bounds_follow_advertised_limits_with_legacy_fallback():
     from emet.robots.head_capability import HeadCapability
 

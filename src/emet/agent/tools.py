@@ -1196,7 +1196,7 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
 
     def observe_floor(pan_rad=None, tilt_rad=-1.0, target_blocker=False):
         from emet.agent.tool_outcome import ToolOutcome
-        from emet.controller.dynamem.look import observe_floor as capture_floor
+        from emet.controller.dynamem.look import inspect_floor as capture_floor
 
         agent = _agent_from_context(context)
         if agent is None:

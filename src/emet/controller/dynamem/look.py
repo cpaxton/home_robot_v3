@@ -181,6 +181,67 @@ def observe_blocked_floor(agent, *, max_observations: int = 2) -> dict:
     return result
 
 
+def inspect_floor(agent, **options):
+    """Agent-facing inspection: retain floor evidence, then restore task gaze."""
+    robot = getattr(agent, "robot", None)
+    getter = getattr(robot, "get_pan_tilt", None)
+    if not callable(getter):
+        return observe_floor(agent, **options)
+    out = {"ok": False}
+    try:
+        previous = np.asarray(getter(), dtype=float)
+        if previous.shape != (2,) or not np.isfinite(previous).all():
+            return {"ok": False, "status": "head_pose_unconfirmed"}
+        get_base = getattr(robot, "get_base_pose", None)
+        if not callable(get_base):
+            return observe_floor(agent, **options)
+        base_before = np.asarray(get_base(), dtype=float).copy()
+        out = observe_floor(agent, **options)
+        current = np.asarray(getter(), dtype=float)
+        if np.allclose(current, previous, atol=0.12):
+            return out
+        moved = robot.head_to(*previous, blocking=True)
+        if moved is False:
+            raise RuntimeError("head restoration rejected")
+        deadline = time.monotonic() + 5.0
+        while True:
+            measured = np.asarray(getter(), dtype=float)
+            if measured.shape == (2,) and np.isfinite(measured).all() and np.max(abs(measured - previous)) <= 0.12:
+                break
+            if time.monotonic() >= deadline:
+                raise RuntimeError("head restoration unconfirmed")
+            time.sleep(0.05)
+        sequence = robot._seq_id
+        wait_post_motion_obs(robot, timeout=5.0)
+        if robot._seq_id <= sequence:
+            raise RuntimeError("restored task view is stale")
+        from .relative_motion import relative_motion_progress
+
+        _, stationary = relative_motion_progress(
+            base_before,
+            get_base(),
+            "move_forward",
+            0.0,
+            float(getattr(agent, "pos_err_threshold", 0.02)),
+            float(getattr(agent, "rot_err_threshold", 0.03)),
+        )
+        if not stationary:
+            raise RuntimeError("base moved during task-view restoration")
+        before = len(agent.voxel_map.observations)
+        agent.update(full_perception=True)
+        if len(agent.voxel_map.observations) <= before:
+            raise RuntimeError("restored task view was not captured")
+        out["task_view"] = {
+            "restored": True,
+            "measured_pan_tilt_rad": measured.tolist(),
+            "observation_count": len(agent.voxel_map.observations),
+        }
+        return out
+    except (ConnectionError, TimeoutError, RuntimeError, ValueError, TypeError) as exc:
+        out.update(ok=False, status="task_view_unavailable", task_view={"restored": False, "reason": str(exc)})
+        return out
+
+
 def observe_floor(
     agent, pan_rad: float | None = None, tilt_rad: float = -1.0, target_blocker: bool = False, max_observations: int = 2
 ) -> dict:

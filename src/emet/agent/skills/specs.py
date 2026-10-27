@@ -489,7 +489,8 @@ CHAT_SKILL_SPECS: tuple[SkillSpec, ...] = (
             "omit to retain measured pan. Optional tilt_rad defaults to -1.0 and must fit the advertised "
             "robot head range with a downward upper bound of -0.7; legacy bridges use [-1.4, -0.7]. "
             "Returned head_inspection_bounds_rad records the active bounds. Check footprint_before/after, not total map growth. "
-            "If blocking cells remain, change the view within these bounds or stop. The base stays stationary."
+            "If blocking cells remain, change the view within these bounds or stop. The base stays stationary. "
+            "The agent-facing inspection restores the previous measured gaze and captures a fresh task view."
         ),
         parameters={
             "type": "object",
