@@ -14,7 +14,9 @@ def test_versioned_robocasa_task_keeps_public_language_and_scoring_annotations_s
     assert "robocasa_pp_s1" not in episodes
     archived = load_find_phase_episodes(root / "configs/ovmm/archive/invalid_robocasa_find_v1.yaml")
     assert archived[0].object == "jar" and archived[0].goal_recep == "cab"
-    fixed = episodes["robocasa_pp_s1_v2"]
+    assert "robocasa_pp_s1_v2" not in episodes
+    stress = load_find_phase_episodes(root / "configs/ovmm/stress/small_object_episodes.yaml")
+    fixed = next(e for e in stress if e.id == "robocasa_pp_s1_v2")
     assert resolve_object_query(fixed, {"obj_main": {"cat": "sugar_cube"}}) == "sugar cube"
     assert fixed.goal_recep == "cabinet"
     assert len(fixed.goal_recep_gt_bodies) == 6

@@ -1,5 +1,9 @@
 # Living TODOs (small / near-term)
 
+- [ ] Predeclare and validate a larger-object RoboCasa basic acceptance case.
+      Seed-0 `robocasa_pp_s1_v2` samples a 2.8 cm sugar cube and is excluded from
+      basic gates at user request; retain it in `configs/ovmm/stress/small_object_episodes.yaml`.
+      Reduced integration acceptance does not qualify RoboCasa; preserve historical failures.
 - [ ] Run the repaired relative-motion → targeted-floor handoff in the Molmo
       pilot, then S0/EQA regression gates. Catalogue: `docs/testing/agent_observation_cases.md`.
 - [ ] Author isolated live visible-far, unknown-floor, occupied-route and

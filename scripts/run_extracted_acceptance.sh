@@ -53,7 +53,7 @@ case "${1:?eqa or room}" in
         export EMET_CONFIG="${ACCEPTANCE_CONFIG:-$DRIVER_ROOT/configs/emet/shared_find_acceptance.yaml}"
         cp "$EMET_CONFIG" "$out/config.yaml"
         # Each phase is bounded; exit/metrics failures are retained and stop the run.
-        read -r -a episode_ids <<< "${FIND_EPISODES:-default_table_s0_distinct_recep robocasa_pp_s1_v2 molmo_ithor_s2_idx0}"
+        read -r -a episode_ids <<< "${FIND_EPISODES:-default_table_s0_distinct_recep molmo_ithor_s2_idx0}"
         for episode in "${episode_ids[@]}"; do
             timeout --signal=TERM --kill-after=20s 1500s "${EMET_PY:-$ROOT/.venv/bin/python}" -m emet.cli ovmm find \
                 --episodes configs/ovmm/find_phase_episodes.yaml --backend lazy_graph --query-driven-memory \

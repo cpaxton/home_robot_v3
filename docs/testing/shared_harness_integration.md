@@ -28,7 +28,7 @@ code-path, hardware, or every-environment coverage.
    single-factor ablation. All 12 records per arm must be valid, with candidate
    accuracy at least main accuracy. Small development results are not paper
    estimates of generalization.
-3. Paired S0, RoboCasa single-room and Molmo rby1-proxy FIND checks, same local
+3. Paired S0 and Molmo rby1-proxy FIND checks, same local
    model and budgets, native answer policy per arm. Both arms must complete;
    every candidate task must succeed. A shared baseline failure is reported,
    not grounds to waive a candidate failure or count infrastructure as a miss.
@@ -60,3 +60,14 @@ replace model answers, discard failed cases, or infer green from exit-zero alone
 After a green gate and review closeout, land in dependency order #216, #217,
 #220, then #221/#223. Squash/history refreshes must preserve the tested tree;
 any runtime change needs appropriate revalidation. Retain all failed artifacts.
+
+## Deferred RoboCasa small-object case
+
+At user request, `robocasa_pp_s1_v2` is excluded from basic acceptance. The
+upstream seeded task samples a SugarCube002 asset measuring approximately
+2.8 cm per side. Its unchanged episode is retained in
+`configs/ovmm/stress/small_object_episodes.yaml` for explicit opt-in runs.
+Historical failures and incomplete runs remain failures/incomplete; they are
+not rescored. New manifests and gate reports declare this exclusion. A green
+reduced gate does not qualify RoboCasa: a separate, predeclared larger-object
+acceptance case still needs to be created and validated.
