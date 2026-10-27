@@ -554,6 +554,8 @@ Payload attachment is only a collision-planning hypothesis. These interfaces do
 not certify grasp, retention, support contact, complete shape reconstruction or
 sensor-clock synchronization. `known_model_prior` and `multiview_bound` are explicit
 producer tiers, not permission to label visible-point bounds as complete shapes.
-No agent capability is enabled by these internal interfaces: observed discovery
-remains read-only until the execution adapter, measured tracking and visual effect
-verification pass the [implementation gates](../plans/2026-10-26_observed_native_execution.md).
+The default observed discovery provider remains read-only. An explicitly injected
+`ObservedNativeAdapter` now connects tracked poses and visual effects to the same
+primitive/task tools; its source must supply independently qualified sensor and
+geometry evidence. See [observed execution assembly](observed_native_tamp.md) and
+the [implementation gates](../plans/2026-10-26_observed_native_execution.md).

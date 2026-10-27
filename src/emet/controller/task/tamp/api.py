@@ -26,6 +26,9 @@ TASK_FAILURE_CODES = frozenset({
     "unknown_task_object", "unknown_task_role", "swap_requires_two_grounded_regions",
     "unsupported_task_instruction", "conflicting_task_goals",
     "observation_unavailable", "tracking_timeout", "verification_failed",
+    "visual_verification_unavailable", "visual_effect_unknown", "visual_lift_not_verified",
+    "visual_placement_not_verified", "scene_observation_stale", "scene_revision_changed",
+    "payload_geometry_unknown", "payload_geometry_changed", "capture_motion_alignment_unknown",
 })
 PLACEMENT_REJECTIONS = frozenset({
     "base_endpoint_rejected", "unsupported_base", "robot_self_collision",

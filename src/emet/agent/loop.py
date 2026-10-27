@@ -594,6 +594,7 @@ def run_agent_with_robot(
     state_only_sim: bool = False,
     max_tool_rounds: int = _MAX_TOOL_ROUNDS,
     observed_tamp_provider: ObservedTaskProvider | None = None,
+    observed_native_factory: Callable | None = None,
     tamp_task_session: Any | None = None,
     native_task_config: dict | None = None,
     **kwargs: Any,
@@ -608,6 +609,10 @@ def run_agent_with_robot(
     ``scene_tasks``. Otherwise the existing open-vocabulary scene-graph processor
     supplies its RGBD proposal provider when enabled. Discovery does not enable
     native planning or execution.
+
+    *observed_native_factory*, when supplied, explicitly constructs a qualified
+    observed adapter from (robot_client, executor). It requires physical/observed
+    mode and never derives execution geometry from discovery proposals.
 
     *tamp_task_session* optionally binds a qualified multi-step provider to the
     production CHAT tools. With no provider, multi-step calls explicitly return
@@ -860,6 +865,25 @@ def run_agent_with_robot(
         "camera_debug": camera_debug,
         "agent_memory_backend": mb,
     }
+
+    if observed_native_factory is not None:
+        from emet.controller.task.tamp.observed_adapter import ObservedNativeAdapter
+
+        try:
+            if executor._manip_mode != "physical" or executor._tamp_inputs != "observed":
+                raise ValueError("observed_native_factory requires physical mode with observed inputs")
+            adapter = observed_native_factory(robot_client, executor)
+            if not isinstance(adapter, ObservedNativeAdapter) or adapter.robot is not robot_client:
+                raise ValueError("invalid_observed_native_provider")
+            context["observed_native_adapter"] = adapter
+            if adapter.task_session is not None:
+                if tamp_task_session is not None:
+                    raise ValueError("conflicting task providers")
+                tamp_task_session = adapter.task_session
+                context["tamp_task_session"] = tamp_task_session
+        except Exception:
+            robot_client.stop()
+            raise
 
     from emet.controller.task.tamp.observed_capture import bind_observed_capture_source
 

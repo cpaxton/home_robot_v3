@@ -19,7 +19,7 @@ def task_world_change(name, context):
     if name not in WORLD_CHANGING_TOOLS or context is None:
         yield
         return
-    participants = [provider for key in ('observed_tamp_provider', 'tamp_task_session')
+    participants = [provider for key in ('observed_tamp_provider', 'tamp_task_session', 'observed_native_adapter')
                     if (provider := context.get(key)) is not None and callable(getattr(provider, 'invalidate', None))]
 
     def invalidate():

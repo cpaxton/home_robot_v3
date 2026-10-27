@@ -60,6 +60,7 @@ class PhysicalPickPlaceExecutor:
         gripper_open_configuration=(),
         input_mode: str = "observed",
         object_pose_provider=None,
+        visual_verifier=None,
     ):
         if input_mode not in {"observed", "privileged"}:
             raise ValueError("invalid_tamp_inputs")
@@ -71,6 +72,7 @@ class PhysicalPickPlaceExecutor:
         elif object_pose_provider is not None and object_pose_provider.input_mode != "privileged":
             raise ValueError("input_provider_mismatch")
         self.input_mode, self.object_pose_provider = input_mode, object_pose_provider
+        self.visual_verifier = visual_verifier
         self.robot, self.model, self.data = robot, model, data
         self.ee_body, self.joint_names = ee_body, tuple(joint_names)
         self.collision = collision
@@ -295,7 +297,8 @@ class PhysicalPickPlaceExecutor:
             if abs(current - previous) > 0.01:
                 stable_since = self._motion_time()
                 previous = current
-            if self._motion_time() - stable_since >= 0.3 and self.data.time - start_sim_time >= 0.25:
+            if (self._motion_time() - stable_since >= 0.3
+                    and (not self.use_sim_time or self.data.time - start_sim_time >= 0.25)):
                 self.event(phase="gripper_settled", measured=current, controller_success=True)
                 return PhysicalMotionResult(True, "gripper_settled", "grasp")
         return PhysicalMotionResult(False, "gripper_settling_timeout", "grasp")
@@ -452,7 +455,21 @@ class PhysicalPickPlaceExecutor:
         self.event(phase=f"{phase}_complete", controller_success=True, residual=residual)
         return PhysicalMotionResult(True, "ok", phase, residual)
 
+    def _visual_check(self, method):
+        try:
+            effect = getattr(self.visual_verifier, method)(after=time.monotonic())
+        except ObservationUnavailable as exc:
+            self.event(phase=method, accepted=False, reason=str(exc), evidence_state="unknown")
+            return PhysicalMotionResult(False, "visual_effect_unknown", method)
+        self.event(phase=method, accepted=effect.satisfied, effect=effect.as_dict())
+        if not effect.satisfied:
+            reason = "visual_effect_unknown" if effect.state == "unknown" else effect.reason
+            return PhysicalMotionResult(False, reason, method)
+        return None
+
     def grasp_only(self, object_query, *, object_gt_body=None, grasp_T_world=None):
+        if self.input_mode == "observed" and self.visual_verifier is None:
+            return PhysicalMotionResult(False, "visual_verification_unavailable", "preflight")
         if len(self.grasp_paths) != 3 or len(self.grasp_targets) != 3 or object_gt_body is None:
             return PhysicalMotionResult(False, "missing_validated_grasp", "grasp")
         if self.gripper_open_configuration:
@@ -495,6 +512,10 @@ class PhysicalPickPlaceExecutor:
             result = self._execute_path(phase, path)
             if not result.success:
                 return result
+        if self.input_mode == "observed":
+            error = self._visual_check("begin_grasp")
+            if error is not None:
+                return error
         closing = self._close_gripper_until_still()
         if not closing.success:
             return closing
@@ -513,9 +534,17 @@ class PhysicalPickPlaceExecutor:
                 return PhysicalMotionResult(False, str(exc), "lift")
             if height - initial_object_height < 0.05:
                 return PhysicalMotionResult(False, "object_not_lifted", "lift")
+            if self.input_mode == "observed":
+                error = self._visual_check("verify_lift")
+                if error is not None:
+                    return error
         return result
 
     def place_only(self, receptacle_query, *, object_gt_body=None, receptacle_gt_body=None):
+        if self.input_mode == "observed" and self.visual_verifier is None:
+            return PhysicalMotionResult(False, "visual_verification_unavailable", "preflight")
+        if self.input_mode == "observed" and self.visual_verifier.lift_reference is None:
+            return PhysicalMotionResult(False, "visual_effect_unknown", "preflight")
         if (
             self.payload_body != object_gt_body
             or len(self.place_paths) != 3
@@ -558,4 +587,9 @@ class PhysicalPickPlaceExecutor:
         if error is not None:
             return error
         self.place_paths[2] = paths[0]
-        return self._execute_path("retreat", paths[0])
+        result = self._execute_path("retreat", paths[0])
+        if result.success and self.input_mode == "observed":
+            error = self._visual_check("verify_place")
+            if error is not None:
+                return error
+        return result

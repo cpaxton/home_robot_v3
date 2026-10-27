@@ -40,6 +40,8 @@ class PayloadGeometryEvidence:
         # HeldObject validates finite positive extent; its EE naming is irrelevant
         # here because these vertices are still in the declared reference frame.
         vertices = HeldObject(self.vertices_reference).vertices_ee
+        if np.linalg.matrix_rank(vertices - vertices.mean(0), tol=1e-10) < 3:
+            raise ValueError('invalid_payload_geometry_evidence')
         if (not self.object_ref or not self.reference_id or not self.revision
                 or not isinstance(self.pose, ObjectPoseEvidence)
                 or self.construction not in {'known_model_prior', 'multiview_bound'}):

@@ -216,7 +216,7 @@ def test_missing_geometry_during_grasp_preflight_returns_before_commands():
     robot = SimpleNamespace(open_gripper=lambda **kw: calls.append('open'))
     executor = PhysicalPickPlaceExecutor(robot, model=model, data=data, ee_body='ee', joint_names=['x'],
         collision=checker, object_pose_provider=checker, synchronize=lambda d: None,
-        command_joints=lambda q: calls.append(q))
+        command_joints=lambda q: calls.append(q), visual_verifier=SimpleNamespace())
     executor.grasp_paths = [[np.zeros(1)]] * 3
     executor.grasp_targets = [([.1, 0, 0], np.eye(3))] * 3
     executor.plan_pose = lambda *args, **kwargs: ([np.zeros(1)], None)
@@ -224,3 +224,13 @@ def test_missing_geometry_during_grasp_preflight_returns_before_commands():
     assert not result.success and result.message == 'payload_geometry_unknown'
     assert result.phase == 'lift' and calls == []
     assert checker.payload is None and checker.payload_body is None
+
+
+def test_observed_grasp_without_visual_verifier_cannot_actuate():
+    model, data, checker, *_ = rig()
+    calls = []
+    executor = PhysicalPickPlaceExecutor(SimpleNamespace(open_gripper=lambda **kw: calls.append('open')),
+        model=model, data=data, ee_body='ee', joint_names=['x'], collision=checker,
+        object_pose_provider=checker, synchronize=lambda d: None, command_joints=lambda q: calls.append(q))
+    result = executor.grasp_only('object', object_gt_body='observed:opaque:1')
+    assert not result.success and result.message == 'visual_verification_unavailable' and calls == []

@@ -1,7 +1,9 @@
 # Observed native TAMP execution
 
-Status: first attachment/geometry implementation complete; observed task execution
-remains disabled pending reference tracking, visual effects and the task adapter.
+Status: attachment, reference tracking, visual-effect checks and the explicitly
+injected native/task adapter are implemented and pass synthetic integration tests.
+The default RGBD provider remains read-only pending live source assembly and
+sensor/geometry qualification.
 Built after live-capture binding `ae924531`.
 First target: stationary Stretch, rigid opaque objects, observed tabletop supports,
 and the existing `scene_tasks` / primitive / multi-step JSON tools. Preserve the
@@ -240,3 +242,39 @@ current strict two-second scene snapshot will reject long manipulation without a
 freshly rebuilt snapshot; do not extend its age or renew timestamps to bypass the
 missing refresh integration. Keep observed task discovery read-only until those
 gates pass, then run the frozen Caliban agent trials in milestone 5.
+
+
+## October 26 execution integration checkpoint
+
+`RigidRgbdTracker` now produces fixed-reference measured rigid poses from distinct
+RGB material features and paired depth points; RANSAC rejects outliers and poor
+spread, and lost/ambiguous tracking clears cached poses. It requires a current
+instance mask and a separately supplied complete prior. Textureless/symmetric
+orientation remains unknown; no canonical yaw is invented.
+
+`ObservedVisualVerifier` is consumed by the physical executor's observed grasp
+and place paths. It requires bounded capture intervals, explicit alignment/error
+bounds, measured robot brackets and fresh repeated co-motion or post-retreat
+settling evidence. Full calibrated gripper volumes must clear the object. Missing
+evidence is unknown; a command acknowledgement, closure or height gain cannot
+substitute. Observed placement requires a verified lift reference. Hardware-clock
+gripper settling no longer depends on private MuJoCo simulation time advancing.
+
+`ObservedNativeAdapter` now binds the existing primitive JSON tools to robot-only
+motion refinement and visual effects, refreshes actual scene evidence, preserves
+single-use plans and records the actual command boundary. `bind_regions` connects
+it to the same task search/session and protected-goal machinery. A three-transfer
+swap passes through the real tools in a synthetic sensor/controller fixture.
+CHAT has an explicit Python factory hook; no CLI/default provider is silently
+enabled. External motion invalidates both primitive and task handles.
+
+Validation: 606 checks passed with zero skips/failures in managed CPU job
+`20261026_204444_18586d`; no new live sensor, contact or LLM agent task denominator.
+See [the integration evidence](../experiments/observed_execution_integration_20261026.md).
+
+Next is concrete live source assembly/qualification, not another symbolic search
+baseline: mask/identity production, complete payload geometry and uncertainty,
+clock/inter-sample motion bounds and robot/target occupancy provenance still need
+real sensor qualification. Current depth carving alone does not remove those
+couplings. Preserve unknown space and all failed attempts, then exercise held-out
+stationary Stretch tasks with Caliban before claiming observed agent success.

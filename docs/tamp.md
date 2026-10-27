@@ -55,9 +55,12 @@ and invalidates stored handles around navigation. The current RGBD provider also
 reacquires current positions from the live camera stream when `scene_tasks` is
 queried, using bounded reference semantics instead of repeated VLM calls. See
 [live sensor binding and calibration validation](experiments/observed_capture_binding_20261026.md).
-Observed native execution remains unavailable: visible surface positions do not
-supply tracked full pose, conservative payload/obstacle volumes, or independent
-visual effects. The privileged native adapter remains a separate control.
+The default observed provider remains read-only: visible surface positions do not
+supply complete execution evidence. An [explicit observed execution adapter](api/observed_native_tamp.md)
+now connects tracked RGBD poses, conservative geometry, visual effects and the same
+multi-step tools. It passes synthetic integration tests; live source assembly and
+sensor/geometry qualification remain pending. The privileged native adapter remains
+a separate control.
 
 ## The primitive agent workflow
 
