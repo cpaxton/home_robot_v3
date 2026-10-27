@@ -68,6 +68,8 @@ def verification_feedback(retrieval_status, vlm_assess, grounding, obs_id):
             "status": "admitted" if grounding.get("ok") else "not_admitted",
             "reason": grounding.get("reason"),
             "obs_id": grounding.get("obs_id"),
+            "support_reason": grounding.get("support_reason"),
+            "depth_support": grounding.get("depth_support"),
         }
     return {
         "status": status,

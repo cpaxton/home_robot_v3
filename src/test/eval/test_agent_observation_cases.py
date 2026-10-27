@@ -112,6 +112,21 @@ def test_retrieval_miss_cannot_override_visual_evidence(present, status):
     assert feedback["geometry"]["status"] == "not_admitted"
 
 
+def test_range_feedback_reaches_model_without_becoming_visual_absence():
+    from emet.memory.graph_eqa.agentic.verify import verification_feedback
+
+    support = {"semantics": "unverified proposals, not localized targets", "max_depth_m": 2.5}
+    grounding = {"view_obs_id": 7, "ok": False, "support_reason": "no supported surfaces", "depth_support": support}
+    feedback = verification_feedback("ABSENT", {"ok": True, "present": True}, grounding, 7)
+    assert feedback["status"] == "VISUAL_PRESENT"
+    assert feedback["geometry"]["depth_support"] == support
+    assert feedback["geometry"]["support_reason"] == "no supported surfaces"
+    assert feedback["geometry"]["status"] == "not_admitted"
+    assert verification_feedback("ABSENT", {"ok": True, "present": True}, grounding, 8)["geometry"] == {
+        "status": "not_attempted"
+    }
+
+
 def test_stale_geometry_is_not_attached_to_current_assessment():
     from emet.memory.graph_eqa.agentic.verify import verification_feedback
 
