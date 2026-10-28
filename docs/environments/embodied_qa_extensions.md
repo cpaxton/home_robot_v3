@@ -7,11 +7,34 @@ each variant and may coincide or differ; equality is not a malformed evidence
 pair. Pilot stratification uses the unanswerable variant's category, while
 question/reference/category fields remain isolated from model input.
 
-Status: metadata ingestion adapters implemented in
-`emet.eval.embodied_qa_datasets`; **no qualified active runner or scored result**.
+Status: metadata ingestion and explicit recorded-evidence bindings implemented in
+`emet.eval.embodied_qa_datasets` and `emet.eval.embodied_qa_evidence`;
+**no qualified active runner or official scored result**.
 Finish the [observation/movement cases](../testing/agent_observation_cases.md)
 first. Reuse the same agent/provider/history/artifact contracts; adapters translate
 episodes and scoring, not policies.
+
+## Recorded-evidence binding (2026-10-28)
+
+The loader accepts a version-1 JSON manifest with `benchmark` and `episodes`
+keyed by official question ID. Each entry explicitly declares `evidence_id`,
+`scene` (including null when unresolved), and ordered `frames`, each containing
+`index`, relative `rgb`, and file `sha256`. Paths must stay under the supplied
+evidence root. Images are decoded/hash-checked before inference and rechecked
+when loaded. AbstainEQA follows its official frame-list order; both variants
+share the same binding. EXPRESS uses an explicitly declared recorded sequence,
+not a guessed filename order or oracle action labels.
+
+`bind_recorded_evidence(question, manifest, root=...)` returns a packet whose
+`model_input(max_images=...)` contains only question text and sensor RGB.
+Insufficient image budget raises rather than silently truncating; view selection
+must be a separately declared protocol. This is replay, not active exploration.
+
+Tests cover pair identity/order, missing/duplicate frames, wrong scene, path
+escape, corrupt hashes, changed files and annotation isolation. The pinned
+official metadata hashes were rechecked on 2026-10-28 and match the audit below.
+Official frame packs and evaluator execution are still unqualified: local
+rendered-fixture loader acceptance is not an official benchmark result.
 
 ## Pinned metadata audit — 2026-10-23
 
