@@ -14,6 +14,42 @@ from emet.controller.dynamem.look import observe_blocked_floor
 from emet.controller.dynamem.relative_motion import execute_relative_motion
 
 
+@pytest.mark.parametrize("angle", [0.0, np.pi / 2, None])
+def test_look_capture_reports_measured_camera_motion_without_claiming_a_sweep(angle):
+    from emet.memory.graph_eqa.agentic.capture import _tool_look_around
+    from emet.memory.graph_eqa.agentic.views import retain_latest_view
+
+    first = np.eye(4)
+    last = np.eye(4)
+    if angle is None:
+        first = last = None
+    else:
+        last[:2, :2] = [[np.cos(angle), -np.sin(angle)], [np.sin(angle), np.cos(angle)]]
+    frames = [SimpleNamespace(rgb=np.zeros((8, 8, 3), dtype=np.uint8), camera_pose=first)]
+
+    def look():
+        frames.append(SimpleNamespace(rgb=np.zeros((8, 8, 3), dtype=np.uint8), camera_pose=last))
+
+    ex = SimpleNamespace(
+        agent=SimpleNamespace(voxel_map=SimpleNamespace(observations=frames), look_around=look),
+        _refresh_room_after_motion=Mock(),
+        _append_trace=Mock(),
+    )
+
+    def capture():
+        view = retain_latest_view(ex, after=1)
+        return {"ok": True, "obs_id": view.obs_id}
+
+    ex._tool_capture_and_update = capture
+    out = _tool_look_around(ex, verify=False)
+    if angle is None:
+        assert out["camera_motion"] == {"status": "unavailable"}
+        return
+    assert out["camera_motion"]["translation_m"] == 0
+    assert out["camera_motion"]["rotation_deg"] == pytest.approx(np.degrees(angle))
+    assert out["capture"]["ok"] and out["verify"] is None
+
+
 def make_agent(reason):
     state = {"mapped": False}
     pose = np.zeros(3)

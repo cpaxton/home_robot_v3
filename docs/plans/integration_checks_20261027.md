@@ -97,3 +97,19 @@ in context Image 2 from its poorer current Image 1. Compare the actual packets
 and tool outcomes before attributing this to model variance or adding recovery
 rules. Wider room-search reliability and optional small-object stress coverage
 are separate follow-ups, not unconditional merge requirements.
+
+## S0 follow-up hypothesis
+
+The paired S0 traces diverge in retrieval geometry and first arrival pose,
+before final grounding. Main later approaches a different view and grounds the
+cube. Candidate chooses `look_around`, then its later approach times out.
+An empty inspect-graph argument is not established as the cause: this tool's
+schema is question-scoped, and both arms recall blue-cube hypotheses.
+
+The next minimal intervention adds measured before/after camera translation
+and rotation to the existing look-around tool result. A fresh frame alone
+does not certify a changed viewpoint. Missing calibration reports unavailable,
+not zero motion. This does not turn the robot, change admission/answer rules,
+interpret context RGB as current geometry, or force a recovery action. Test
+the hypothesis with a frozen paired S0 run at the existing budgets; do not
+claim the regression repaired from unit tests or a changed prompt alone.
