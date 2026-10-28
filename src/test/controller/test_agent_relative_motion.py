@@ -37,6 +37,8 @@ def test_rotate_base_and_move_forward_tools_registered():
     assert "180" in tools["rotate_base"].func(degrees=180)
     assert "0.50" in tools["move_forward"].func(meters=0.5)
     assert calls == [[("rotate_base", "180.0")], [("move_forward", "0.5")]]
+    tools["rotate_base"].func(degrees=200)
+    assert calls[-1] == [("rotate_base", "180.0")]
 
 
 def test_clip_forward_distance_hits_obstacle():
@@ -151,12 +153,70 @@ def test_rotate_base_degrees_calls_relative_move():
     def move_base_to(xyt, **kwargs):
         moved["xyt"] = list(xyt)
         moved["kwargs"] = kwargs
+        return True
 
     agent.robot = SimpleNamespace(
         move_to_nav_posture=lambda: None,
         move_base_to=move_base_to,
+        get_base_pose=lambda: np.array([0.0, 0.0, np.pi if moved else 0.0]),
     )
     out = agent.rotate_base_degrees(180)
     assert out == 180.0
     assert moved["kwargs"]["relative"] is True
     assert abs(moved["xyt"][2] - np.pi) < 1e-6
+
+
+@pytest.mark.parametrize("returned", [False, None])
+def test_relative_rotation_does_not_report_failed_command_as_travel(returned):
+    agent = DynamemController.__new__(DynamemController)
+    agent._realtime_updates = True
+    agent.announce_action = MagicMock()
+    agent._find_phase_nav_timeout = lambda: 2.0
+    agent.robot = SimpleNamespace(
+        move_base_to=MagicMock(return_value=returned),
+        get_base_pose=lambda: np.zeros(3),
+    )
+    assert agent.rotate_base_degrees(45) == 0.0
+    receipt = agent._last_relative_motion_result
+    assert receipt["status"] == "error"
+    assert receipt["data"]["commanded"] == 45
+    assert receipt["data"]["measured_body_delta_xyt"] == [0.0, 0.0, 0.0]
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), -float("inf")])
+def test_relative_rotation_rejects_nonfinite_before_motion(value):
+    agent = DynamemController.__new__(DynamemController)
+    agent.robot = SimpleNamespace(move_base_to=MagicMock())
+    with pytest.raises(ValueError, match="finite"):
+        agent.rotate_base_degrees(value)
+    agent.robot.move_base_to.assert_not_called()
+
+
+def test_relative_motion_receipt_rejects_false_arrival_and_preserves_partial_progress():
+    from emet.agent.tool_outcome import ToolOutcome
+    from emet.controller.dynamem.look import _relative_motion_receipt
+
+    agent = SimpleNamespace(
+        robot=SimpleNamespace(get_base_pose=lambda: np.array([0.1, 0.0, 0.0])),
+        _realtime_updates=True,
+    )
+    assert _relative_motion_receipt(agent, "move_forward", 0.5, 0.5, np.zeros(3), True) == 0.0
+    result = agent._last_relative_motion_result
+    assert result["code"] == "motion_arrival_unconfirmed"
+    assert result["data"]["measured_body_delta_xyt"] == [0.1, 0.0, 0.0]
+    outcome = ToolOutcome.coerce("move_forward", result)
+    assert outcome.ok is False
+    assert outcome.status == "motion_arrival_unconfirmed"
+    assert "measured_body_delta_xyt" in outcome.render()
+
+
+def test_relative_motion_update_failure_is_not_a_motion_failure():
+    from emet.controller.dynamem.look import _relative_motion_receipt
+
+    agent = SimpleNamespace(
+        robot=SimpleNamespace(get_base_pose=lambda: np.array([0.1, 0.0, 0.0])),
+        _realtime_updates=False,
+        update=MagicMock(side_effect=RuntimeError("disconnected")),
+    )
+    assert _relative_motion_receipt(agent, "move_forward", 0.1, 0.1, np.zeros(3), True) == 0.1
+    assert agent._last_relative_motion_result["data"]["observation_status"] == "map_update_failed"

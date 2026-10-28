@@ -1,0 +1,5 @@
+# Opt-in final semantic answer authority; acquisition defaults stay unchanged.
+extends: configs/emet/default.yaml
+mapping:
+  eqa:
+    agentic_decision_policy: model_final

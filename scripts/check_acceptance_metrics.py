@@ -11,6 +11,8 @@ def validate_record(phase: str, row: object, path: Path) -> None:
     errors = ("error", "agentic_find_error", "agentic_find_error_recep")
     if not isinstance(row, dict) or any(row.get(key) for key in errors):
         raise ValueError(f"Infrastructure error in {path}: {row}")
+    if phase == "room" and any(row.get(key) is False for key in ("find_object_scored", "find_recep_scored")):
+        raise ValueError(f"Invalid task annotation: missing scoring target in {path}")
     fields = ("correct",) if phase == "eqa" else ("find_object_success", "find_recep_success")
     if any(type(row.get(field)) is not bool for field in fields):
         raise ValueError(f"Missing boolean outcome {fields}: {path}")

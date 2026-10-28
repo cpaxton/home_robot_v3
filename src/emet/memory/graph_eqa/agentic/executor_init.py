@@ -212,6 +212,16 @@ def init_executor(
     if raw_session_id is None:
         raw_session_id = getattr(agent, "_episode_debug_dir", None)
     self._session_id = str(raw_session_id or f"session:{self._question_id}")
+    from emet.llms.conversation import VLMConversation
+
+    epoch = getattr(getattr(agent, "voxel_map", None), "observation_scope_id", None)
+    scope = (self._session_id, epoch if isinstance(epoch, str) else None)
+    conversation = getattr(agent, "_vlm_episode_conversation", None)
+    if not isinstance(conversation, VLMConversation) or getattr(agent, "_vlm_conversation_scope", None) != scope:
+        conversation = VLMConversation()
+        agent._vlm_episode_conversation = conversation
+        agent._vlm_conversation_scope = scope
+    self._conversation = conversation
     self._trace_meta.setdefault("question_id", self._question_id)
     self._trace_meta.setdefault("session_id", self._session_id)
     gm_context = self.graph_memory
@@ -359,7 +369,7 @@ def _handle_finish(self, args: dict[str, Any]) -> dict[str, Any]:
 
 
 def _handle_observe_floor(self, args: dict[str, Any]) -> dict[str, Any]:
-    from emet.controller.dynamem.look import observe_floor
+    from emet.controller.dynamem.look import inspect_floor
 
     plan = getattr(self.agent, "_last_nav_plan", None)
     options = {"pan_rad": args.get("pan_rad"), "tilt_rad": args.get("tilt_rad", -1.0)}
@@ -367,10 +377,42 @@ def _handle_observe_floor(self, args: dict[str, Any]) -> dict[str, Any]:
         options["target_blocker"] = True
         if "max_observations" in args:
             options["max_observations"] = args["max_observations"]
-    out = observe_floor(self.agent, **options)
+    out = inspect_floor(self.agent, **options)
     self._last_floor_observation = out
     self._floor_observation_nav_plan = plan
     self._append_trace({"tool": "observe_floor", **out})
+    return out
+
+
+def _handle_relative_motion(self, args: dict[str, Any]) -> dict[str, Any]:
+    from emet.controller.dynamem.relative_motion import execute_relative_motion
+    from emet.controller.task.tamp.api import response
+
+    name = args["_tool_name"]
+    if self._n_nav >= self.max_nav_steps:
+        out = response(name, code="navigation_budget_exhausted")
+    else:
+        key = "meters" if name == "move_forward" else "degrees"
+        out = execute_relative_motion(self.agent, name, args.get(key))
+        # A failed motion may still have changed the camera pose. Capture the
+        # actual outcome, not the intended endpoint, and assess it normally.
+        if out.get("data", {}).get("execution_started"):
+            self._n_nav += 1
+            try:
+                # Negative IDs reserve synthetic motion attempts; real observation IDs are positive.
+                hypothesis_id = self._begin_policy_approach("look", -3_000_000 - self._n_nav, self.query_text)
+                out["capture"] = self._tool_capture_and_update()
+                if out["capture"].get("ok") and out["capture"].get("obs_id") is not None:
+                    self._policy_approached(hypothesis_id, int(out["capture"]["obs_id"]))
+                    if self.mode == "answer":
+                        try:
+                            out["verify"] = self._verify_after_motion(phrase=self.query_text)
+                        except Exception as exc:
+                            out["verify"] = {"ok": False, "status": "assessment_failed", "error": str(exc)[:200]}
+            except Exception as exc:
+                out["capture"] = {"ok": False, "status": "capture_failed", "error": str(exc)[:200]}
+    out["ok"] = out.get("status") == "ok" and out.get("code") == "ok"
+    self._append_trace(out)
     return out
 
 
@@ -385,10 +427,41 @@ TOOL_HANDLERS: dict[str, Any] = {
     "submit_answer": _handle_submit_answer,
     "finish": _handle_finish,
     "observe_floor": _handle_observe_floor,
+    "move_forward": _handle_relative_motion,
+    "rotate_base": _handle_relative_motion,
 }
 
 
-def handle_tool(self, name: str, args: dict[str, Any] | None = None) -> dict[str, Any]:
+def handle_tool(
+    self, name: str, args: dict[str, Any] | None = None, *, validate_arguments: bool = True
+) -> dict[str, Any]:
+    name = (name or "").strip().lower()
+    args = dict(args or {})
+    top_level = self._tool_dispatch_depth == 0
+    if top_level and validate_arguments:
+        self._ensure_router_prompt()
+        tool = next((tool for tool in self._tools if tool.name == name), None)
+        allowed = set(tool.parameters.get("properties", {})) if tool else set()
+        unknown = sorted(set(args) - allowed)
+        if unknown:
+            out = {
+                "ok": False,
+                "status": "invalid_tool_arguments",
+                "tool": name,
+                "unknown_arguments": unknown,
+                "allowed_arguments": sorted(allowed),
+                "error": "Unsupported arguments; no tool executed.",
+            }
+            self._conversation.record_tool_result(name, args, out)
+            self._append_trace({"event": "tool_argument_rejected", **out})
+            return out
+    out = _dispatch_tool(self, name, args)
+    if top_level:
+        self._conversation.record_tool_result(name, args, out)
+    return out
+
+
+def _dispatch_tool(self, name: str, args: dict[str, Any] | None = None) -> dict[str, Any]:
     args = dict(args or {})
     name = (name or "").strip().lower()
     top_level = self._tool_dispatch_depth == 0
@@ -406,7 +479,7 @@ def handle_tool(self, name: str, args: dict[str, Any] | None = None) -> dict[str
     if handler is None:
         out = {"ok": False, "error": f"unknown tool {name!r}"}
     else:
-        if name in ("investigate", "navigate_to_obs"):
+        if name in ("investigate", "navigate_to_obs", "move_forward", "rotate_base"):
             args = {**args, "_tool_name": name}
         out = handler(self, args)
     self._tool_dispatch_depth = max(0, self._tool_dispatch_depth - 1)

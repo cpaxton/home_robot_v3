@@ -164,6 +164,35 @@ class AbstractVLLMClient(AbstractLLMClient):
         """Stable key for registry / dedup (subclasses override with ``family:hf:device:quant`` style)."""
         return f"{type(self).__name__}"
 
+    def _conversation_user_content(self, content):
+        raise NotImplementedError(f"{type(self).__name__} does not support multi-turn vision messages")
+
+    def generate_messages(self, messages, **kwargs):
+        """Generate from explicit dialogue without leaking state to shared tools.
+
+        Providers encode prior user content in their native history format.
+        No turns are flattened, inferred, or silently evicted.
+        """
+        if not messages or messages[-1].get("role") != "user":
+            raise ValueError("Vision dialogue must end in a user message")
+        if any(message.get("role") not in {"system", "user", "assistant"} for message in messages):
+            raise ValueError("Unsupported vision dialogue role")
+        system_positions = [i for i, message in enumerate(messages) if message.get("role") == "system"]
+        if system_positions not in ([], [0]):
+            raise ValueError("Vision dialogue permits one system message, at the beginning")
+        with self.preserve_conversation():
+            self.reset()
+            for message in messages[:-1]:
+                content = message["content"]
+                if message["role"] == "user":
+                    content = self._conversation_user_content(content)
+                self.add_history({"role": message["role"], "content": content})
+            self._iterations = sum(message["role"] == "assistant" for message in messages[:-1])
+            system = next((message["content"] for message in messages if message["role"] == "system"), "")
+            return self.generate_multimodal(
+                messages[-1]["content"], system_prompt=system, reset_context=False, **kwargs
+            )
+
     @property
     def vllm_id(self) -> str:
         """Same as :meth:`canonical_model_key` (explicit name for registry consumers)."""

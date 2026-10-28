@@ -20,6 +20,35 @@ from emet.eval.agentic_vlm_assess import _call_eqa_client, _parse_json_object
 from emet.memory.graph_eqa.ingest.instance_observations import frame_instances_to_detections, frame_rgb_hwc_uint8
 
 
+def proposal_depth_support(depth, masks, *, min_depth, max_depth):
+    """Describe unverified proposals rejected by range; never admit their geometry."""
+    rows = []
+    for index, mask in enumerate(masks):
+        mask = np.asarray(mask)
+        if mask.dtype != bool or mask.shape != depth.shape:
+            raise ValueError("proposal masks must be boolean and aligned with depth")
+        values = depth[mask]
+        measured = values[np.isfinite(values) & (values > 0)]
+        yy, xx = np.where(mask)
+        rows.append(
+            {
+                "proposal_index": index,
+                "bbox_xyxy": [int(xx.min()), int(yy.min()), int(xx.max() + 1), int(yy.max() + 1)] if len(xx) else None,
+                "measured_pixels": int(len(measured)),
+                "supported_pixels": int(np.count_nonzero((measured > min_depth) & (measured < max_depth))),
+                "beyond_max_pixels": int(np.count_nonzero(measured >= max_depth)),
+                "median_depth_m": float(np.median(measured)) if len(measured) else None,
+            }
+        )
+    return {
+        "semantics": "unverified proposals, not localized targets",
+        "min_depth_m": float(min_depth),
+        "max_depth_m": float(max_depth),
+        "proposal_count": len(rows),
+        "proposals": rows[:8],
+    }
+
+
 def region_depth_mask(depth, box, point, *, min_depth, max_depth):
     """Finite, depth-connected support around a VLM-selected interior pixel.
 
@@ -316,6 +345,11 @@ def select_candidate_surface(
             # Segmentation may correctly extend beyond a partial prompt box.
             region_box = [0, 0, 1000, 1000]
             audit["segmentation"] = {"source": type(segmenter).__name__, "prompt_boxes_xyxy": pixel_boxes.tolist()}
+        if proposal_masks is not None:
+            proposal_masks = list(proposal_masks)
+            audit["depth_support"] = proposal_depth_support(
+                depth, proposal_masks, min_depth=min_depth, max_depth=max_depth
+            )
         regions = surface_candidates(
             depth,
             region_box,

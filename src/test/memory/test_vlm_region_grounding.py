@@ -11,6 +11,61 @@ import pytest
 from emet.memory.vlm_region_grounding import ground_vlm_region, region_depth_mask
 
 
+def test_far_proposal_reports_range_without_admitting_geometry_or_semantics():
+    from emet.memory.vlm_region_grounding import select_supported_region
+
+    rgb = np.zeros((40, 40, 3), dtype=np.uint8)
+    depth = np.full((40, 40), 3.4)
+    depth[0, :3] = [np.nan, np.inf, 0]
+    client = Mock()
+    _, mask, audit = select_supported_region(
+        rgb,
+        depth,
+        "microwave",
+        "microwave",
+        client=client,
+        min_depth=0.25,
+        max_depth=2.5,
+        strategy="depth_candidates",
+        proposal_masks=[np.ones(depth.shape, dtype=bool)],
+    )
+    assert not audit["valid"] and np.all(mask == -1)
+    assert audit["failure_kind"] == "no_supported_surfaces"
+    support = audit["depth_support"]
+    assert support["max_depth_m"] == 2.5
+    assert support["proposals"][0] == {
+        "proposal_index": 0,
+        "bbox_xyxy": [0, 0, 40, 40],
+        "measured_pixels": 1597,
+        "supported_pixels": 0,
+        "beyond_max_pixels": 1597,
+        "median_depth_m": 3.4,
+    }
+    client.assert_not_called()
+
+
+def test_proposal_range_feedback_preserves_semantic_rejection():
+    from emet.memory.vlm_region_grounding import select_supported_region
+
+    rgb = np.zeros((40, 40, 3), dtype=np.uint8)
+    depth = np.ones((40, 40))
+    client = Mock(return_value='{"selected_id":null,"target_unambiguous":false,"reason":"wrong object"}')
+    _, mask, audit = select_supported_region(
+        rgb,
+        depth,
+        "microwave",
+        "microwave",
+        client=client,
+        min_depth=0.25,
+        max_depth=2.5,
+        strategy="depth_candidates",
+        proposal_masks=[np.ones(depth.shape, dtype=bool)],
+    )
+    assert not audit["valid"] and np.all(mask == -1)
+    assert audit["depth_support"]["proposals"][0]["supported_pixels"] == 1600
+    client.assert_called_once()
+
+
 def test_depth_support_excludes_background_and_disconnected_regions():
     depth = np.full((40, 40), 3.0)
     depth[10:30, 10:30] = 1.0

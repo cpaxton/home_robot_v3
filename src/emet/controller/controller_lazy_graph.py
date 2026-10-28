@@ -277,6 +277,8 @@ class LazyGraphController(DynagraphController):
                 "n_detections": len(detections),
                 "matching_ids": matching_ids,
                 "verification_source": verification["source"],
+                "support_reason": verification.get("reason"),
+                "depth_support": verification.get("depth_support"),
             }
         det = matches[0]
         created_handle = None

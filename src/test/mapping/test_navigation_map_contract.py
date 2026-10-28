@@ -1,12 +1,104 @@
 # Copyright (c) Chris Paxton 2026
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 import numpy as np
+import pytest
 import torch
 
 from emet.mapping.voxel.voxel_dynamem import SparseVoxelMap
 from emet.mapping.voxel.voxel_map_dynamem import SparseVoxelMapNavigationSpace
 from emet.motion.algo.a_star import AStar
 from emet.robots.footprint import Footprint
+
+
+@pytest.mark.parametrize("remove_visited", [False, True])
+@pytest.mark.parametrize("min_height", [0.1, -0.2])
+def test_dynamem_preserves_enabled_negative_obstacle_evidence(tmp_path, remove_visited, min_height):
+    vm = SparseVoxelMap(
+        grid_size=[40, 40],
+        grid_resolution=0.1,
+        smooth_kernel_size=0,
+        obs_min_density=0.1,
+        obs_min_height=min_height,
+        use_negative_obstacles=True,
+        neg_obs_height=-0.1,
+        remove_visited_from_obstacles=remove_visited,
+        log=str(tmp_path),
+        use_instance_memory=False,
+        device="cpu",
+        image_shape=None,
+    )
+    vm.voxel_pcd.add(torch.tensor([[0.0, 0.0, -0.2]]), features=None, rgb=torch.zeros(1, 3), obs_count=1)
+    vm._visited[:] = 1
+    obstacles, _ = vm.get_navigation_map()
+    assert obstacles.any(), "A measured drop must not be flattened into traversable floor"
+
+
+@pytest.mark.parametrize("xy", [(10.0, 0.0), (-2.2, 0.0), (0.0, 10.0), (0.0, -2.2)])
+@pytest.mark.parametrize("grid_size", [[40, 40], [40, 20]])
+def test_out_of_grid_negative_points_never_crash_or_wrap(tmp_path, xy, grid_size):
+    vm = SparseVoxelMap(
+        grid_size=grid_size,
+        grid_resolution=0.1,
+        smooth_kernel_size=0,
+        obs_min_density=0.1,
+        use_negative_obstacles=True,
+        neg_obs_height=-0.1,
+        remove_visited_from_obstacles=True,
+        log=str(tmp_path),
+        use_instance_memory=False,
+        device="cpu",
+        image_shape=None,
+    )
+    vm.voxel_pcd.add(torch.tensor([[*xy, -0.2]]), features=None, rgb=torch.zeros(1, 3), obs_count=1)
+    # Isolate the new negative-density scatter from legacy scatter3d's boundary
+    # clamping. An out-of-grid return must not wrap onto another valid cell.
+    vm._visited[:] = 1
+    obstacles, _ = vm.get_navigation_map()
+    assert not obstacles.any()
+
+
+@pytest.mark.parametrize("hazard", ["drops", "raised", "both"])
+@pytest.mark.parametrize("tensor_maps", [False, True])
+def test_caller_maps_cannot_override_measured_terrain_hazard(hazard, tensor_maps):
+    from types import SimpleNamespace
+
+    obstacles = np.zeros((9, 9), dtype=bool)
+    explored = np.ones_like(obstacles)
+    layers = SimpleNamespace(drops=obstacles.copy(), raised=obstacles.copy())
+    if hazard == "both":
+        layers.drops[4, 4] = layers.raised[4, 4] = True
+    else:
+        getattr(layers, hazard)[4, 4] = True
+    space = object.__new__(SparseVoxelMapNavigationSpace)
+    space.obstacle_map_mode = "physical"
+    space._footprint = Footprint(0.1, 0.1)
+    space.voxel_map = SimpleNamespace(
+        grid_resolution=0.1, grid=SimpleNamespace(grid_origin=np.array([4, 4])), _floor_evidence=layers
+    )
+    supplied_obstacles = torch.from_numpy(obstacles) if tensor_maps else obstacles
+    supplied_explored = torch.from_numpy(explored) if tensor_maps else explored
+    assert not space.is_valid(np.zeros(3), obstacles=supplied_obstacles, explored=supplied_explored)
+    assert space.last_validity["reason"] == "occupied_footprint"
+    expected = ["drop", "raised_surface"] if hazard == "both" else ["drop" if hazard == "drops" else "raised_surface"]
+    assert space.last_validity["terrain_hazard"] == expected[0]
+    assert space.last_validity["terrain_hazards"] == expected
+    assert [4, 4] in space.last_validity["occupied_cells"]
+    assert not obstacles.any()  # Do not mutate caller-owned map snapshots.
+
+
+def test_terrain_map_shape_mismatch_rejects_without_indexing():
+    from types import SimpleNamespace
+
+    space = object.__new__(SparseVoxelMapNavigationSpace)
+    space.obstacle_map_mode = "physical"
+    space._footprint = Footprint(0.1, 0.1)
+    space.voxel_map = SimpleNamespace(
+        grid_resolution=0.1,
+        grid=SimpleNamespace(grid_origin=np.array([4, 4])),
+        _floor_evidence=SimpleNamespace(drops=np.zeros((8, 8)), raised=np.zeros((9, 9))),
+    )
+    assert not space.is_valid(np.zeros(3), obstacles=np.zeros((9, 9)), explored=np.ones((9, 9)))
+    assert space.last_validity["reason"] == "terrain_map_shape_mismatch"
 
 
 def test_fractional_start_repair_preserves_unknown_and_obstacle_guards():

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 # Copyright (c) Hello Robot, Inc.
 # All rights reserved.
 #
@@ -16,6 +14,8 @@ from __future__ import annotations
 # of this source tree.
 
 """Innate Mars mobile manipulator — MuJoCo assets vendored as Maurice; real robot via innate_mars_bridge."""
+
+from __future__ import annotations
 
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -89,6 +89,7 @@ class InnateMarsBackend(RobotBackend):
     def get_spec(self) -> RobotSpec:
         return RobotSpec(
             name="innate_mars",
+            look_joint_names=(None, "joint_head"),
             dof=len(INNATE_MARS_JOINT_NAMES),
             joint_names=list(INNATE_MARS_JOINT_NAMES),
             camera_names=list(INNATE_MARS_CAMERA_NAMES),

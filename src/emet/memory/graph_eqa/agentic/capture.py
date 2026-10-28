@@ -47,7 +47,11 @@ def _pin_eqa_look_obs(self, obs_id: int | None) -> None:
 
 
 def _tool_look_around(self, *, verify: bool = True) -> dict[str, Any]:
+    from emet.memory.graph_eqa.agentic.views import captured_view, retain_latest_view
+
     agent = self.agent
+    frames = getattr(getattr(agent, "voxel_map", None), "observations", ())
+    before = retain_latest_view(self, after=-1) if isinstance(frames, (list, tuple)) and len(frames) else None
     hypothesis_id = None
     if verify:
         hypothesis_id = self._begin_policy_approach(
@@ -70,8 +74,27 @@ def _tool_look_around(self, *, verify: bool = True) -> dict[str, Any]:
         self._policy_approached(hypothesis_id, int(cap["obs_id"]))
         if verify and self.mode == "answer":
             verify_out = self._verify_after_motion(phrase=self.query_text)
-    self._append_trace({"tool": "look_around", "ok": ok})
-    return {"ok": ok, "capture": cap, "verify": verify_out}
+    after = captured_view(self, cap.get("obs_id"))
+    motion = {"status": "unavailable"}
+    if before is not None and after is not None:
+        poses = (before.camera_pose, after.camera_pose)
+        if all(p is not None and p.shape == (4, 4) and np.isfinite(p).all() for p in poses):
+            first, last = poses
+            rotation = first[:3, :3].T @ last[:3, :3]
+            motion = {
+                "status": "measured",
+                "translation_m": float(np.linalg.norm(last[:3, 3] - first[:3, 3])),
+                "rotation_deg": float(np.degrees(np.arccos(np.clip((np.trace(rotation) - 1) / 2, -1, 1)))),
+            }
+    out = {
+        "ok": ok,
+        "capture": cap,
+        "verify": verify_out,
+        "camera_motion": motion,
+        "note": "Fresh capture does not imply a changed viewpoint. Camera motion compares the views before and after this call, not earlier navigation. Use rotate_base for an explicit heading change.",
+    }
+    self._append_trace({"tool": "look_around", "ok": ok, "capture": cap, "camera_motion": motion})
+    return out
 
 
 def _siglip_phrase(self, phrase: str = "") -> str:
@@ -637,8 +660,7 @@ def _hypothesis_nav_blocked(self, obs_id: int) -> bool:
     # and a first approach from a bad bearing should be retried from another.
     if is_proposal_handle(oid) and int(self._nav_to_obs_counts.get(oid, 0)) >= 1:
         rec = self._place_inspect.get(oid)
-        last_verify = str(getattr(rec, "last_verify", "") or "") if rec is not None else ""
-        if last_verify.upper() == "ABSENT":
+        if rec is not None and self._place_close_and_absent(oid):
             return True
     if self._place_approaches_exhausted(oid):
         return True

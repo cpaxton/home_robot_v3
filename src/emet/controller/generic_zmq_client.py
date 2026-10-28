@@ -1233,17 +1233,30 @@ class GenericZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
         return np.zeros(6, dtype=float)
 
     def get_pan_tilt(self) -> tuple[float, float]:
-        """Head pan/tilt in radians (xlerobot ``head_pan_joint`` / ``head_tilt_joint``)."""
-        if self._spec.name == "xlerobot":
-            q, _, _ = self.get_joint_state(timeout=2.0)
-            if q is None:
-                return (0.0, 0.0)
-            pan_i = self._joint_index.get("head_pan_joint")
-            tilt_i = self._joint_index.get("head_tilt_joint")
-            pan = float(q[pan_i]) if pan_i is not None else 0.0
-            tilt = float(q[tilt_i]) if tilt_i is not None else 0.0
-            return (pan, tilt)
-        return (0.0, 0.0)
+        """Measured angles for the existing adapter look axes; never fabricate feedback."""
+        names = self._spec.look_joint_names
+        if names is None:
+            raise RuntimeError("Measured gaze joints unavailable for this adapter")
+        q, _, _ = self.get_joint_state(timeout=2.0)
+        if q is None:
+            raise RuntimeError("Measured gaze joint state unavailable")
+        angles = []
+        for name in names:
+            if name is None:
+                angles.append(0.0)  # An explicitly fixed axis, not missing telemetry.
+                continue
+            index = self._joint_index.get(name)
+            if index is None:
+                # Some declared look joints have named observation feedback
+                # rather than a slot in the arm/base vector (e.g. joint_head).
+                snapshot = self._decoded_observation_snapshot()
+                value = snapshot.get(name) if isinstance(snapshot, dict) else None
+            else:
+                value = q[index] if index < len(q) else None
+            if value is None or not np.isfinite(value):
+                raise RuntimeError(f"Measured gaze joint unavailable: {name}")
+            angles.append(float(value))
+        return tuple(angles)
 
     def get_gripper_position(self, side: str = "left") -> float:
         if self._spec.name == "xlerobot":

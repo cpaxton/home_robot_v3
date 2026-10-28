@@ -39,6 +39,11 @@ def redirect_rejected_candidates(agent, calls):
     return calls
 
 
+def requires_motion_replan(tool, out):
+    """A failed motion invalidates the rest of a model's queued motion sequence."""
+    return tool in {"rotate_base", "move_forward"} and not out.get("ok")
+
+
 def run(self) -> AgenticEQAResult:
     t0 = time.monotonic()
     final: dict[str, Any] | None = None
@@ -78,6 +83,7 @@ def run(self) -> AgenticEQAResult:
     self._verified_obs_id = None
     self._grounded_obs_id = None
     self._view_grounding_attempts = set()
+    self._last_view_grounding_result = None
     self._voxel_score_xyz = None
     self._voxel_score_phrase = None
     self._voxel_score_from_pin = None
@@ -365,6 +371,16 @@ def run(self) -> AgenticEQAResult:
             if not out.get("ok") and "budget" in str(out.get("error", "")):
                 # Budget gate rejected — stop dispatching the rest of this reply.
                 break
+            if requires_motion_replan(tool, out):
+                self._append_trace(
+                    {
+                        "event": "motion_batch_stopped",
+                        "tool": tool,
+                        "reason": out.get("code") or out.get("status") or out.get("error"),
+                        "note": "Remaining queued actions skipped; replan from actual state next round.",
+                    }
+                )
+                break
             self._recover_failed_router_motion(tool=tool, out=out)
             # Motion tools chain verify themselves (router + fallback). Do not
             # double-verify here — that burned rounds on SKIPPED_SAME_VIEW.
@@ -431,7 +447,7 @@ def run(self) -> AgenticEQAResult:
             "confidence": result.confidence,
             "verified": result.verified,
             "salvage_counterfactual_letter": salvage_cf,
-            "scored_policy": "no_salvage",
+            "scored_policy": "model_final" if self.decision_policy == "model_final" else "no_salvage",
             "answer_provenance": result.answer_provenance,
             "answer_confidence": result.answer_confidence,
             "decision_rounds": result.decision_rounds,
@@ -569,7 +585,7 @@ def _flush_trace_to_agent(self, result: AgenticEQAResult) -> None:
         "budget_hit": result.budget_hit,
         "tools": list(result.tool_log),
         "salvage_counterfactual_letter": salvage_cf,
-        "scored_policy": "no_salvage",
+        "scored_policy": "model_final" if self.decision_policy == "model_final" else "no_salvage",
         "answer_provenance": result.answer_provenance,
         "answer_confidence": result.answer_confidence,
         "decision_rounds": result.decision_rounds,

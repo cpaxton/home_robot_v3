@@ -43,6 +43,8 @@ def query_answer(
     evidence_obs_id: int | None = None,
     evidence_labels: list[str] | None = None,
     evidence_roles: list[str] | None = None,
+    model_final: bool = False,
+    conversation=None,
 ) -> tuple[str, str, bool, str, np.ndarray | None, list[Image.Image]]:
     """
     Answer the question using the scene graph and task-relevant images.
@@ -59,6 +61,8 @@ def query_answer(
             capped by eqa_max_images, without inserting graph objects.
         evidence_obs_id: Identity of Image 1, if known. Existing graph identity is
             retained only when its stored pixels match; voxel IDs need no node.
+        model_final: Return the model's parsed semantic answer without legacy
+            answer substitutions, extra inference, or graph-confidence gates.
 
     Returns:
         reasoning, answer, confidence, confidence_reasoning, target_point, relevant_images
@@ -437,6 +441,8 @@ def query_answer(
         t_vl = _time.monotonic()
         ans_cap = resolve_eqa_answer_max_new_tokens(self.parameters)
         eqa_kw: dict[str, Any] = {}
+        if conversation is not None:
+            eqa_kw["conversation"] = conversation
         if ans_cap > 0:
             eqa_kw["max_new_tokens"] = ans_cap
         # Force the first output field so Qwen cannot open with Caption: — prompt edits
@@ -449,9 +455,34 @@ def query_answer(
             f"assistant_prefill={assistant_prefill!r} prompt_variant={_variant!r} "
             f"answer_format={answer_format!r}"
         )
+        trace_root = getattr(self, "_eqa_decision_trace_dir", None)
+        if conversation is not None and trace_root:
+            from pathlib import Path
+
+            from emet.eval.eqa_decision_trace import record_vlm_request
+
+            try:
+                record_vlm_request(
+                    Path(trace_root) / "conversation_requests" / f"call_{len(self._history_outputs) + 1:03d}",
+                    system_prompt=getattr(self.eqa_client, "_system_prompt", ""),
+                    user_text="\n\n".join(str(block) for block in text_blocks),
+                    images=relevant_images,
+                    history=conversation.messages,
+                    metadata={
+                        "text_blocks": text_blocks,
+                        "assistant_prefill": assistant_prefill,
+                        "max_new_tokens": eqa_kw.get("max_new_tokens"),
+                    },
+                )
+            except (OSError, ValueError, TypeError) as exc:
+                _logger.warning(f"Final conversation trace capture failed: {exc}")
         try:
             raw = self.eqa_client(commands, **eqa_kw)
         except TypeError:
+            from emet.llms.graph_eqa_vlm import GraphEQAVLMClient
+
+            if conversation is not None and isinstance(self.eqa_client, GraphEQAVLMClient):
+                raise
             # Older / test doubles that only accept the command list.
             raw = self.eqa_client(commands)
         _logger.info(f"query_answer: eqa_client done wall_s={_time.monotonic() - t_vl:.1f} out_chars={len(raw or '')}")
@@ -520,6 +551,48 @@ def query_answer(
         action,
         confidence_reasoning,
     )
+    if model_final:
+        # Final answer authority belongs to this model call. No semantic
+        # replacement, re-voting, graph-based confidence gate or salvage call.
+        answer = str(answer or "").strip() or "Unknown"
+        confidence = bool(confidence) and not answer_is_unknownish(answer, parsed_choices)
+        self.last_eqa_parsed = (reasoning, answer, confidence, action, confidence_reasoning)
+        self.last_eqa_model_confident = confidence
+        self.last_eqa_salvage_used = False
+        self.last_eqa_answer_field_emitted = bool(re.search(r'["\']?answer["\']?\s*:', str(raw or ""), re.I))
+        self._record_eqa_decision_trace(
+            iteration=len(self._history_outputs) + 1,
+            question=question,
+            text_blocks=text_blocks,
+            obs_ids=list(obs_ids),
+            crop_obs_id=crop_oid,
+            nav_fallback_count=len(nav_fallback_tail),
+            relevant_images=relevant_images,
+            image_roles=(evidence_roles or ["assessed_view"] + ["pre_approach_context"] * (len(evidence) - 1))
+            if evidence
+            else None,
+            view_status=view_status,
+            close_look_status="",
+            vlm_raw=str(raw or ""),
+            parsed={
+                "reasoning": reasoning,
+                "answer": answer,
+                "confidence": confidence,
+                "action": action,
+                "confidence_reasoning": confidence_reasoning,
+            },
+        )
+        self._append_eqa_history(
+            self.format_eqa_history_outcome(
+                answer=answer,
+                confidence=confidence,
+                action=action,
+                reasoning=reasoning,
+                salvage=False,
+                obs_ids=list(obs_ids),
+            )
+        )
+        return reasoning, answer, confidence, confidence_reasoning, None, relevant_images
     answer_outputs = (raw or "").replace("*", "").replace("#", "").lower()
     # Salvage: small VLMs sometimes run away captioning and never emit ``answer:``.
     # Re-ask tersely for semantic option text.

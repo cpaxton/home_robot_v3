@@ -72,15 +72,117 @@ def test_targeted_floor_aim_is_bounded_and_projection_does_not_clear_map(monkeyp
     robot.head_to.assert_not_called()  # Only the existing capture primitive commands head motion.
 
 
+def test_targeted_floor_reaims_after_first_visible_cell_until_footprint_rechecked(monkeypatch):
+    detail = {
+        "reason": "unobserved_footprint",
+        "unknown_footprint_cells": 2,
+        "unknown_cell_offsets_frame": "world_xy_from_checked_pose",
+        "unknown_cell_offsets_m": [[0.0, 0.1]],
+    }
+    obs = SimpleNamespace(
+        rgb=np.zeros((4, 4, 3), dtype=np.uint8), camera_pose=np.eye(4), camera_K=np.eye(3), depth=None
+    )
+    robot = SimpleNamespace(_seq_id=1, head_to=Mock(), get_pan_tilt=lambda: (0.0, -1.0), get_observation=lambda: obs)
+    agent = SimpleNamespace(
+        robot=robot,
+        space=SimpleNamespace(is_valid=lambda p: False, last_validity=detail),
+        _last_nav_plan={"footprint": {"checked_pose": [0.0, 0.0, 0.0]}},
+    )
+    targets = []
+
+    def project(view, target):
+        targets.append(tuple(target))
+        return {
+            "status": "in_frame",
+            "target_in_frame": True,
+            "target_camera_xyz": [0.0, 0.2, 1.0],
+            "target_pixel_xy": [1.0, 1.0],
+        }
+
+    monkeypatch.setattr("emet.memory.graph_eqa.agentic.views.target_in_view", project)
+    calls = []
+
+    def capture(agent, **kwargs):
+        calls.append(kwargs)
+        detail["unknown_cell_offsets_m"] = [[0.1, 0.1]]
+        return {"ok": True, "observation": {"footprint_after": {"pose_valid": len(calls) == 2}}}
+
+    monkeypatch.setattr(look, "observe_floor", capture)
+    result = look.observe_blocked_floor(agent)
+    assert len(calls) == 2
+    assert set(targets) == {(0.0, 0.1, 0.0), (0.1, 0.1, 0.0)}
+    assert result["observation"]["footprint_after"]["pose_valid"]
+
+
 def test_final_tool_schema_exposes_floor_tilt_and_feedback():
     tool = next(tool for tool in get_tools({}) if tool.name == "observe_floor")
     tilt = tool.parameters["properties"]["tilt_rad"]
-    assert (tilt["minimum"], tilt["maximum"]) == (-1.4, -0.7)
+    assert "minimum" not in tilt  # The robot capability supplies the lower bound.
+    assert tilt["maximum"] == -0.7
     assert "footprint_before/after" in tool.description
 
 
+@pytest.mark.parametrize("restore_ok", [False, True])
+def test_agent_inspection_restores_measured_task_gaze_and_captures_fresh_view(monkeypatch, restore_ok):
+    head = np.array([0.2, -0.3])
+    original = head.copy()
+    robot = SimpleNamespace(_seq_id=1, get_pan_tilt=lambda: head.copy(), get_base_pose=lambda: np.zeros(3))
+
+    def head_to(pan, tilt, **kwargs):
+        if restore_ok:
+            head[:] = [pan, tilt]
+        return restore_ok
+
+    robot.head_to = Mock(side_effect=head_to)
+    agent = SimpleNamespace(robot=robot, voxel_map=SimpleNamespace(observations=[]))
+    agent.update = Mock(side_effect=lambda **kw: agent.voxel_map.observations.append("task view"))
+
+    def floor(agent, **kwargs):
+        head[:] = [0.0, -1.8]
+        return {"ok": True, "status": "floor_observed", "observation": {"footprint_after": {"pose_valid": True}}}
+
+    monkeypatch.setattr(look, "observe_floor", floor)
+    monkeypatch.setattr(look, "wait_post_motion_obs", lambda robot, **kw: setattr(robot, "_seq_id", robot._seq_id + 1))
+    result = look.inspect_floor(agent, target_blocker=True)
+    assert result["ok"] is restore_ok
+    assert result["observation"]["footprint_after"]["pose_valid"]
+    if restore_ok:
+        np.testing.assert_allclose(head, original)
+        assert result["task_view"]["restored"]
+        agent.update.assert_called_once_with(full_perception=True)
+    else:
+        assert result["status"] == "task_view_unavailable"
+        agent.update.assert_not_called()
+
+
+def test_floor_bounds_follow_advertised_limits_with_legacy_fallback():
+    from emet.robots.head_capability import HeadCapability
+
+    assert look.floor_head_bounds(SimpleNamespace()) == ((-1.0, 1.0), (-1.4, -0.7))
+    robot = SimpleNamespace(get_head_capability=lambda: HeadCapability((-3.0, 3.0), (-1.8326, 1.5), "fixture"))
+    assert look.floor_head_bounds(robot) == ((-1.0, 1.0), (-1.8326, -0.7))
+    robot.get_head_capability = lambda: HeadCapability((-0.2, 0.4), (-1.2, 0.0), "fixture")
+    assert look.floor_head_bounds(robot) == ((-0.2, 0.4), (-1.2, -0.7))
+    robot.get_head_capability = lambda: HeadCapability((0.0, 0.0), (-0.5, 0.0), "fixture")
+    assert look.floor_head_bounds(robot) is None
+
+
+def test_floor_observation_rejects_base_drift_before_mapping(monkeypatch):
+    robot = SimpleNamespace(
+        _seq_id=1,
+        head_to=Mock(return_value=True),
+        get_pan_tilt=Mock(side_effect=[(0.0, -0.5), (0.0, -1.0)]),
+        get_base_pose=Mock(side_effect=[np.zeros(3), np.array([0.1, 0.0, 0.0])]),
+    )
+    monkeypatch.setattr(look, "wait_post_motion_obs", lambda robot, **kw: setattr(robot, "_seq_id", robot._seq_id + 1))
+    agent = SimpleNamespace(robot=robot, update=Mock())
+    result = look.observe_floor(agent)
+    assert result["status"] == "base_moved_during_head_observation"
+    agent.update.assert_not_called()
+
+
 @pytest.mark.parametrize("pan_rad", [None, -0.8, 0.8])
-@pytest.mark.parametrize("tilt_rad", [-1.0, -1.4])
+@pytest.mark.parametrize("tilt_rad", [-1.0, -1.4, -1.8])
 @pytest.mark.parametrize(
     "remaining,reason,recovery_status",
     [
@@ -102,6 +204,10 @@ def test_floor_observation_requires_fresh_measured_capture(
     monkeypatch.setattr(look.time, "monotonic", lambda: next(clock))
     monkeypatch.setattr(look.time, "sleep", lambda _: None)
     robot = SimpleNamespace(_seq_id=1, head_to=Mock(return_value=True))
+    if tilt_rad < -1.4:
+        from emet.robots.head_capability import HeadCapability
+
+        robot.get_head_capability = lambda: HeadCapability((-1.0, 1.0), (-1.8326, 1.5), "fixture")
     robot.get_base_pose = lambda: np.array([1, 2, 0.3])
     expected_pan = 0.2 if pan_rad is None else pan_rad
     positions = itertools.chain(
@@ -178,7 +284,9 @@ def test_floor_observation_rejects_invalid_pan_before_motion(pan_rad):
     assert look.observe_floor(SimpleNamespace(), pan_rad=pan_rad) == {"ok": False, "status": "invalid_head_pan"}
 
 
-@pytest.mark.parametrize("error", [ConnectionError("disconnected"), TimeoutError("stale"), RuntimeError("bridge failed")])
+@pytest.mark.parametrize(
+    "error", [ConnectionError("disconnected"), TimeoutError("stale"), RuntimeError("bridge failed")]
+)
 def test_floor_observation_reports_bridge_failure_without_mapping(error):
     robot = SimpleNamespace(_seq_id=1, head_to=Mock(), get_pan_tilt=Mock(side_effect=error))
     agent = SimpleNamespace(robot=robot, update=Mock())

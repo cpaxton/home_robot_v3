@@ -1211,7 +1211,7 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
 
     def observe_floor(pan_rad=None, tilt_rad=-1.0, target_blocker=False):
         from emet.agent.tool_outcome import ToolOutcome
-        from emet.controller.dynamem.look import observe_floor as capture_floor
+        from emet.controller.dynamem.look import inspect_floor as capture_floor
 
         agent = _agent_from_context(context)
         if agent is None:
@@ -1261,7 +1261,7 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         )
     )
 
-    def rotate_base(degrees: float = 90.0) -> str:
+    def rotate_base(degrees: float = 90.0) -> str | dict:
         executor = context.get("executor")
         if executor is None:
             return "Robot not connected."
@@ -1269,7 +1269,25 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
             deg = float(degrees)
         except (TypeError, ValueError):
             return f"Invalid degrees: {degrees!r}."
-        deg = float(np.clip(deg, -360.0, 360.0))
+        if not np.isfinite(deg):
+            return "Invalid degrees: must be finite."
+        deg = float(np.clip(deg, -180.0, 180.0))
+        agent = getattr(executor, "agent", None)
+        from emet.controller.dynamem.relative_motion import execute_relative_motion, supports_relative_motion
+
+        if supports_relative_motion(agent):
+            receipt = execute_relative_motion(agent, "rotate_base", deg)
+            if receipt.get("code") == "ok":
+                context["last_rotate_degrees"] = deg
+            return receipt
+        if agent is not None and callable(getattr(agent, "rotate_base_degrees", None)):
+            agent.rotate_base_degrees(deg)
+            receipt = getattr(agent, "_last_relative_motion_result", None)
+            if isinstance(receipt, dict):
+                if receipt.get("code") == "ok":
+                    context["last_rotate_degrees"] = deg
+                return receipt
+            return "No rotation receipt available; no additional command issued."
         ok = executor([("rotate_base", str(deg))])
         if not ok:
             return "Rotate failed or interrupted."
@@ -1369,7 +1387,7 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         )
     )
 
-    def move_forward(meters: float = 0.1) -> str:
+    def move_forward(meters: float = 0.1) -> str | dict:
         executor = context.get("executor")
         if executor is None:
             return "Robot not connected."
@@ -1377,11 +1395,20 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
             dist = float(meters)
         except (TypeError, ValueError):
             return f"Invalid meters: {meters!r}."
+        if not np.isfinite(dist):
+            return "Invalid meters: must be finite."
         dist = float(np.clip(dist, 0.0, 1.5))
         # Prefer controller path so every nudge (including 0.1 m) is map-clipped.
         agent = getattr(executor, "agent", None)
+        from emet.controller.dynamem.relative_motion import execute_relative_motion, supports_relative_motion
+
+        if supports_relative_motion(agent):
+            return execute_relative_motion(agent, "move_forward", dist)
         if agent is not None and hasattr(agent, "move_forward_meters"):
             commanded = float(agent.move_forward_meters(dist))
+            receipt = getattr(agent, "_last_relative_motion_result", None)
+            if isinstance(receipt, dict):
+                return receipt
             if commanded < 0.02:
                 return (
                     "I don't have enough explored map to drive that way yet "

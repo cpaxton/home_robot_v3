@@ -48,6 +48,9 @@ def grounding_assets(roots, arms, backend):
 
 
 def run(args):
+    candidate_policy = getattr(args, "candidate_decision_policy", None)
+    shared_episodes = getattr(args, "episodes_file", None)
+    floor_reference = getattr(args, "floor_reference_z", None)
     roots = {"main": args.main.resolve(), "candidate": args.candidate.resolve()}
     assets = grounding_assets(roots, args.arms, args.grounding_backend)
     revisions = {name: git(root, "rev-parse", "HEAD") for name, root in roots.items()}
@@ -58,11 +61,15 @@ def run(args):
         "roots": {k: str(v) for k, v in roots.items()},
         "revisions": revisions,
         "episodes": args.episodes,
+        "shared_episodes_file": str(shared_episodes.resolve()) if shared_episodes else None,
+        "shared_episodes_sha256": hashlib.sha256(shared_episodes.read_bytes()).hexdigest() if shared_episodes else None,
         "seed": args.seed,
         "scan_steps": args.scan_steps,
         "arms": args.arms,
         "grounding_backend": args.grounding_backend,
         "decision_policy": getattr(args, "decision_policy", "legacy"),
+        "candidate_decision_policy": candidate_policy,
+        "floor_reference_z": floor_reference,
         "grounding_assets": assets,
         "driver_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
         "validator_sha256": hashlib.sha256(
@@ -74,6 +81,11 @@ def run(args):
     all_complete, all_success = True, True
     for index, episode in enumerate(args.episodes):
         for arm in args.arms if index % 2 == 0 else list(reversed(args.arms)):
+            if (
+                shared_episodes
+                and hashlib.sha256(shared_episodes.read_bytes()).hexdigest() != manifest["shared_episodes_sha256"]
+            ):
+                raise RuntimeError("Frozen shared episode registry changed during paired evaluation")
             root = roots[arm]
             assert_frozen_source(root, revisions[arm])
             case = args.output / f"{episode}-{arm}"
@@ -91,8 +103,13 @@ def run(args):
                     else ""
                 )
                 + "  eqa:\n    agentic_verify: true\n    collect_agentic_trace: true\n"
-                + f"    agentic_decision_policy: {getattr(args, 'decision_policy', 'legacy')}\n"
+                + f"    agentic_decision_policy: {candidate_policy if arm == 'candidate' and candidate_policy else getattr(args, 'decision_policy', 'legacy')}\n"
                 + "    vl_family: qwen3_vl\n    vl_hf_model_id: Qwen/Qwen3-VL-8B-Instruct\n    vl_quantization: int4\n"
+                + (
+                    f"  floor_evidence:\n    enabled: true\n    reference_z_m: {floor_reference}\n"
+                    if floor_reference is not None
+                    else ""
+                )
             )
             env = os.environ.copy()
             for key in list(env):
@@ -129,7 +146,7 @@ def run(args):
                 "ovmm",
                 "find",
                 "--episodes",
-                "configs/ovmm/find_phase_episodes.yaml",
+                str(shared_episodes.resolve()) if shared_episodes else "configs/ovmm/find_phase_episodes.yaml",
                 "--backend",
                 "lazy_graph",
                 "--query-driven-memory",
@@ -208,13 +225,18 @@ if __name__ == "__main__":
     parser.add_argument("--candidate", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--episodes-file", type=Path, help="Same frozen task registry for both arms.")
     parser.add_argument("--scan-steps", type=int, choices=(4, 8), default=4)
     parser.add_argument("--arms", nargs="+", choices=("main", "candidate"), default=["main", "candidate"])
     parser.add_argument("--grounding-backend", choices=("yoloe", "vlm"), default="yoloe")
     parser.add_argument("--decision-policy", choices=("legacy", "model_final"), default="legacy")
+    parser.add_argument("--candidate-decision-policy", choices=("legacy", "model_final"))
+    parser.add_argument(
+        "--floor-reference-z", type=float, help="Enable calibrated floor evidence; use with candidate-only arms."
+    )
     parser.add_argument(
         "--episodes",
         nargs="+",
-        default=["default_table_s0_distinct_recep", "robocasa_pp_s1", "molmo_rby1_ithor_s2_idx0"],
+        default=["default_table_s0_distinct_recep", "molmo_rby1_ithor_s2_idx0"],
     )
     raise SystemExit(run(parser.parse_args()))
