@@ -99,6 +99,11 @@ tracking, declared conservative geometry and temporally bounded visual effects
 through the same primitive and task tools. Robot-only integration tests, including
 a buffered swap, use synthetic feedback and do not qualify live sensor-driven
 execution; the default discovery provider does not instantiate this adapter.
+An experimental geometry tracker also fits declared primitive priors or measured
+multi-view surfaces, retaining distinct pose candidates and unobservable shape
+symmetries. Surface-fit residuals are diagnostics, not calibrated pose-error
+bounds. Geometry co-motion checks therefore remain separate from temporally
+qualified execution evidence and do not add observed task successes.
 Capture identity/order does not establish
 cross-host clock synchronization or certify capture-after-motion. These guards
 do not enable observed manipulation or validate the full exploration--navigation--

@@ -317,3 +317,26 @@ remain `object_geometry_unbounded` in offline spatial analysis. It preserves
 unknown/background contacts rather than carving them away; support-contact
 separation or explicit shape priors are still needed. No object yaw is inferred.
 See [validation and remaining gates](../experiments/observed_support_enclosure_20261028.md).
+
+## October 28 geometry tracking checkpoint
+
+Merged `main` at `cd169673` via `1844e4be`, preserving both multi-turn VLM history
+and request timing. Geometry fitting now shares an interface across explicitly
+declared primitive priors and measured multi-view surface models. Distinct poses
+and unobservable symmetry remain explicit; stale/lost fits are discarded.
+Geometry co-motion checks account for shape symmetry but do not qualify temporal
+alignment or contact.
+
+Live CPU/Caliban repeat `20261028_182754_73e62d` passed 5/5 geometry fits and 5/5
+observed discovery refreshes with a declared cylinder prior. The first attempt
+retains its 1/5 discovery failure: independent support grounding consumed the
+semantic reference lifetime. Scheduling support after object refreshes resolved
+that diagnostic without changing age gates. Surface residual is approximately
+0.30 mm, not pose accuracy. Main/source regression: 748 checks; final focused
+geometry suite: 9 checks, overlapping. Paper builds at 52 pages.
+
+See [evidence, figure and remaining gates](../experiments/geometry_tracking_20261028.md).
+Symmetric raw fits still cannot substitute for the native interface's unique
+pose. Independent calibration, encoder alignment, moving-instance segmentation,
+observed enclosure/contact policy and concrete source consumption remain before
+live observed task execution; no new task-success denominator is claimed.

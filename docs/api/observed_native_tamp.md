@@ -22,7 +22,7 @@ a contact-execution result, or a hardware sensor-availability claim.
 | `ObservedVisualVerifier` | Fresh repeated visual lift and post-retreat placement effects | Height-only lift, static/slipped object, occlusion, replay, unsupported/outside/unsettled placement, gripper volume still near object |
 | `ObservedRegionTransferProvider` | Complete observed role/region predicates and the existing task search/session interface | Missing roles, unsupported/held objects, ambiguous occupancy, unknown destination space |
 
-The tracker supplies measured relative rigid motion from material features; it
+The feature tracker supplies measured relative rigid motion from material features; it
 does not infer a canonical object yaw from a symmetric/untextured shape. Such
 objects return unknown in this implementation. Registration residuals are
 diagnostics, not uncertainty estimates: position/orientation admission bounds
@@ -171,3 +171,47 @@ The camera diagnostic's optional `--support-query` exercises the support produce
 separately from object-only task proposals. An unmet requested support diagnostic
 fails the process; passing it still does not qualify manipulation. See
 [October 28 evidence](../experiments/observed_support_enclosure_20261028.md).
+
+### Geometry tracking and co-motion diagnostics
+
+`GeometryTracker` is an alternative to material-feature tracking for freshly
+segmented 3D surfaces. It fits declared geometry using bounded multi-start
+registration, validates every original point against the fitted surface, and
+retains distinct candidate poses and local unobservable directions. Previous
+fits seed search only. A failed update clears the current fit; replayed captures,
+old receive times, scene changes and exhausted work budgets reject the update.
+The caller still supplies current instance segmentation and identity. The live
+diagnostic currently reassociates a stationary reference surface; arbitrary
+moving-object segmentation is not supplied by that harness.
+
+Two input tiers share the same registration interface:
+
+| Model | Input and limitation |
+| --- | --- |
+| `PrimitiveModel` | Explicit sphere/cylinder/box dimensions with `construction=known_model_prior`. This is a declared shape prior, never inferred from object names or hidden scene poses. Sphere rotation, cylinder yaw/axis sign and box symmetries stay ambiguous. |
+| `MeasuredSurfaceModel` | Reference-frame measured surfaces plus a separate free-space enclosure certificate. A visible-points box cannot replace that certificate. Static multi-view aggregation retains original capture IDs and the oldest receive time; incompatible scene revisions reject fusion. |
+
+`GeometryFit.as_dict()` includes candidate poses, surface residuals, local
+nullspaces, center spread and the union of candidate model volumes. These are
+search diagnostics, **not calibrated confidence bounds or a complete posterior**.
+`require_unique` needs independently calibrated position/rotation bounds and
+rejects unresolved orientation. A symmetric model is therefore not silently
+converted to the unique rigid pose required by the existing native executor.
+
+`check_geometry_comotion` compares all retained pose pairs against measured
+end-effector motion, accounting for declared shape symmetry. Lift checks also
+require object motion and support clearance. Its `consistent` state is geometric
+evidence only: `execution_qualified` remains false. Capture/encoder alignment,
+repeated temporal evidence, gripper clearance and contact policy are still
+required by the execution interface.
+
+The camera diagnostic accepts `--geometry-model PATH`, a JSON file containing
+`schema_version: 1`, `construction: "known_model_prior"`, `kind` and
+`dimensions_m`. Dimensions are a sphere radius, cylinder radius/half-height or
+three box half-extents, in metres. The fixture prior lives in
+`src/test/fixtures/geometry/cylinder_prior.json`. A requested fit failure fails
+the diagnostic; successful registration does not qualify manipulation. Caliban
+is used for initial semantic selection only; geometry refreshes add no VLM calls.
+
+See the [live geometry diagnostic and figure](../experiments/geometry_tracking_20261028.md)
+for both attempts and their distinct discovery/registration outcomes.
