@@ -71,3 +71,29 @@ and Molmo checks on the current frozen integration source to separate persistent
 viewpoint/approach problems from runtime setup. No full sweep or merge is justified
 yet. Observed manipulation, nonprivileged multi-step TAMP, real-robot floor safety,
 Habitat OVMM, and EXPRESS/AbstainEQA runtime evaluation remain unqualified.
+
+## Merge objective clarified, 2026-10-28
+
+The user clarified that this stack must demonstrate an improvement over main,
+not establish absolute task reliability. Assess added capabilities and repaired
+contracts together with matched task results; distinguish inherited limitations
+from candidate regressions. An all-candidate-tasks-must-succeed gate is stricter
+than that merge objective. Existing gate reports retain their original meaning;
+do not rewrite them as passing or pool away a task-specific regression.
+
+The completed `shared-room-gap-check-20261027` pilot at `bf7faccd` has valid
+artifacts for both arms on both tasks. S0 main localizes both targets; candidate
+localizes the cylinder but misses the blue cube. Molmo main localizes neither;
+candidate localizes the bowl but misses the microwave. Phase totals tie (2/4
+each), while complete-task success favors main (1/2 versus 0/2). Neither tally
+alone establishes overall improvement. The earlier EQA 9/12 versus 8/12 and
+controlled TAMP parity remain supporting, small-sample evidence.
+
+Prioritize the S0 difference. Main inspects graph with the explicit blue-cube
+query and later obtains a current view that grounds successfully. Candidate
+chooses a same-heading look-around and argument-free graph inspections, then
+submits without grounded geometry. Its first assessor distinguishes a blue cube
+in context Image 2 from its poorer current Image 1. Compare the actual packets
+and tool outcomes before attributing this to model variance or adding recovery
+rules. Wider room-search reliability and optional small-object stress coverage
+are separate follow-ups, not unconditional merge requirements.
