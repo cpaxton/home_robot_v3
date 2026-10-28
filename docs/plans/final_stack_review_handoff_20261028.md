@@ -111,6 +111,23 @@ regression must be understood rather than hidden by aggregate phase scores.
 
 ## Finish and approve
 
+Final results and review (2026-10-28): 990/990 contracts pass with zero skips
+or errors. Paired EQA is candidate 8/12 versus control 7/12 (candidate-only wins
+q65/q68, loss q25). On S0 seed 1 both ground the cylinder and miss the cube:
+main 287.2 s, candidate 798.6 s. Seed 2 succeeds in both arms: main 790.4 s,
+candidate 478.0 s. Both arms produce complete valid artifacts. The separate
+seed-0 pair succeeds in both arms (main 979.3 s, candidate 479.1 s).
+There is no consistent per-run runtime gain; prolonged unsuccessful search is
+a recorded candidate cost, not an excluded result. These small pilots support
+tooling/contract improvements with comparable task outcomes, not statistical
+superiority or general reliability.
+
+The consolidated review at #225 reports no blocking code findings and recommends
+landing with these results and the seed-1 runtime regression documented. The
+component PR comments redirect closeout here without additional blockers. No
+eligible GitHub approval is recorded: the reviewing account is the PR author.
+The following closeout checklist remains conditional on the final GitHub state.
+
 1. Read final results and visually audit any candidate-only failure and a win.
 2. Review integration-only repairs, current review summaries, safety defaults,
    truthful evidence roles and final-model authority.

@@ -1,5 +1,9 @@
 # Living TODOs (small / near-term)
 
+- [ ] Profile failed-search cost without answer overrides or target-specific rules:
+      final S0 seed 1 misses the receptacle in both arms but candidate takes
+      798.6 s versus control 287.2 s. Seed 2 succeeds faster (478.0 vs 790.4 s).
+      Evidence: `~/runs/emet/final-stack-review-20261028/`; no consistent speedup claim.
 - [ ] Predeclare and validate a larger-object RoboCasa basic acceptance case.
       Seed-0 `robocasa_pp_s1_v2` samples a 2.8 cm sugar cube and is excluded from
       basic gates at user request; retain it in `configs/ovmm/stress/small_object_episodes.yaml`.
