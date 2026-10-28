@@ -2,6 +2,9 @@
 
 ## Objective and canonical review target
 
+Canonical final review: [PR #225](https://github.com/cpaxton/home_robot_v3/pull/225).
+This consolidates the five component PRs and their integration-only repairs.
+
 Demonstrate useful capability/contract improvements over main without a material
 regression on shared tasks. General reliability, hardware qualification and
 paper-scale superiority are not this merge gate. Do not override model answers,
