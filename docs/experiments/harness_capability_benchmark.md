@@ -5,6 +5,38 @@ novelty. Build on the existing observation case catalogue and native TAMP
 fixtures rather than inventing another agent loop. Public EQA/OVMM tasks provide
 external relevance; controlled interventions explain which capabilities help.
 
+## Implemented development fixtures (2026-10-28)
+
+`configs/eval/harness_capability_dev.json` now freezes 12 development cases:
+seen/unseen recall, far/near approach, unknown-clear/occupied route,
+immediate/delayed task intent, unchanged/moved target, and unique/ambiguous box.
+The builder creates two ordered MuJoCo snapshots per case, with 20 x 40 x 30 cm
+blue target geometry and explicit camera calibration. These are synthetic
+ray/contact/evidence controls with a simple planar probe, not full robot models.
+The search-then-act prototypes retain a navigation/answer instruction; physical
+object transport is deliberately not represented as qualified here.
+
+```bash
+PYTHONPATH=src OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \
+  taskset -c 12 .venv/bin/python scripts/build_harness_capability_dev.py \
+  --output /tmp/capability-dev-geometry
+```
+
+Default execution is CPU-only: real MuJoCo rays and contacts, the production
+depth-support gate and swept-route validator. All 12 controls pass. Floor cases
+distinguish a floor return from an obstacle and validate clear/blocked geometry;
+they do NOT qualify a sensor-driven map update or actual wheel execution.
+
+For an agreed idle GPU window, add `--render` under a managed serial GPU job.
+This exports 24 RGB frames, metric depth, camera K/poses and scorer-only target
+masks. `evidence_manifest.json` references RGB only; `scorer-*.npz` never enters
+the evidence loader's model payload. `qualification.json` explicitly reports
+`active_agent_qualified=false` and `manipulation_qualified=false`.
+Rendering/loader validation is a prerequisite, not model success or an active
+benchmark. Real robot bindings, action-triggered interventions and independent
+end-to-end scoring remain next-stage work; this status must not be promoted from
+a successful geometry test or recorded-QA replay.
+
 ## Families and paired interventions
 
 | Family | Matched conditions | What it measures |

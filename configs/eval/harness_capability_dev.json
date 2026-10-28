@@ -1,0 +1,368 @@
+{
+  "schema_version": 1,
+  "split": "development",
+  "scope": "Controlled simulator snapshots and CPU geometry controls; not active-agent or physical manipulation qualification",
+  "episodes": [
+    {
+      "id": "cap-dev-01",
+      "family": "recall",
+      "variant": "seen",
+      "question": "What color was the box before the camera turned?",
+      "frames": [
+        {
+          "camera_xyz": [
+            1.2,
+            0,
+            0.8
+          ],
+          "yaw_deg": 0,
+          "target_present": true,
+          "target_y": 0
+        },
+        {
+          "camera_xyz": [
+            1.2,
+            0,
+            0.8
+          ],
+          "yaw_deg": 90,
+          "target_present": true,
+          "target_y": 0
+        }
+      ],
+      "expected": "blue"
+    },
+    {
+      "id": "cap-dev-02",
+      "family": "recall",
+      "variant": "unseen",
+      "question": "What color was the box before the camera turned?",
+      "frames": [
+        {
+          "camera_xyz": [
+            1.2,
+            0,
+            0.8
+          ],
+          "yaw_deg": 0,
+          "target_present": false,
+          "target_y": 0
+        },
+        {
+          "camera_xyz": [
+            1.2,
+            0,
+            0.8
+          ],
+          "yaw_deg": 90,
+          "target_present": false,
+          "target_y": 0
+        }
+      ],
+      "expected": "abstain"
+    },
+    {
+      "id": "cap-dev-03",
+      "family": "approach",
+      "variant": "far",
+      "question": "Where is the blue box?",
+      "frames": [
+        {
+          "camera_xyz": [
+            0,
+            0,
+            0.8
+          ],
+          "yaw_deg": 0,
+          "target_present": true,
+          "target_y": 0
+        },
+        {
+          "camera_xyz": [
+            1.2,
+            0,
+            0.8
+          ],
+          "yaw_deg": 0,
+          "target_present": true,
+          "target_y": 0
+        }
+      ],
+      "expected": "fresh_geometry",
+      "initial_grounding": false
+    },
+    {
+      "id": "cap-dev-04",
+      "family": "approach",
+      "variant": "near",
+      "question": "Where is the blue box?",
+      "frames": [
+        {
+          "camera_xyz": [
+            1.2,
+            0,
+            0.8
+          ],
+          "yaw_deg": 0,
+          "target_present": true,
+          "target_y": 0
+        },
+        {
+          "camera_xyz": [
+            1.2,
+            0,
+            0.8
+          ],
+          "yaw_deg": 0,
+          "target_present": true,
+          "target_y": 0
+        }
+      ],
+      "expected": "fresh_geometry",
+      "initial_grounding": true
+    },
+    {
+      "id": "cap-dev-05",
+      "family": "floor",
+      "variant": "unknown_clear",
+      "question": "Inspect the floor before moving to the viewing point.",
+      "frames": [
+        {
+          "camera_xyz": [
+            0,
+            0,
+            0.8
+          ],
+          "yaw_deg": 0,
+          "target_present": true,
+          "target_y": 0
+        },
+        {
+          "camera_xyz": [
+            0.6,
+            0,
+            0.8
+          ],
+          "yaw_deg": 0,
+          "target_present": true,
+          "target_y": 0,
+          "pitch_deg": -23.0
+        }
+      ],
+      "expected": "inspect_then_replan",
+      "obstacle": false
+    },
+    {
+      "id": "cap-dev-06",
+      "family": "floor",
+      "variant": "occupied",
+      "question": "Inspect the floor before moving to the viewing point.",
+      "frames": [
+        {
+          "camera_xyz": [
+            0,
+            0,
+            0.8
+          ],
+          "yaw_deg": 0,
+          "target_present": true,
+          "target_y": 0
+        },
+        {
+          "camera_xyz": [
+            0.6,
+            0,
+            0.8
+          ],
+          "yaw_deg": 0,
+          "target_present": true,
+          "target_y": 0,
+          "pitch_deg": -23.0
+        }
+      ],
+      "expected": "reject_occupied_route",
+      "obstacle": true
+    },
+    {
+      "id": "cap-dev-07",
+      "family": "search_act",
+      "variant": "immediate",
+      "question": "Find the blue box, visit the viewing point, then report the box color.",
+      "frames": [
+        {
+          "camera_xyz": [
+            1.2,
+            0,
+            0.8
+          ],
+          "yaw_deg": 0,
+          "target_present": true,
+          "target_y": 0
+        },
+        {
+          "camera_xyz": [
+            2,
+            1,
+            0.8
+          ],
+          "yaw_deg": 90,
+          "target_present": true,
+          "target_y": 0
+        }
+      ],
+      "expected": "blue",
+      "delay_turns": []
+    },
+    {
+      "id": "cap-dev-08",
+      "family": "search_act",
+      "variant": "delayed",
+      "question": "Find the blue box, visit the viewing point, then report the box color.",
+      "frames": [
+        {
+          "camera_xyz": [
+            1.2,
+            0,
+            0.8
+          ],
+          "yaw_deg": 0,
+          "target_present": true,
+          "target_y": 0
+        },
+        {
+          "camera_xyz": [
+            2,
+            1,
+            0.8
+          ],
+          "yaw_deg": 90,
+          "target_present": true,
+          "target_y": 0
+        }
+      ],
+      "expected": "blue",
+      "delay_turns": [
+        "Report whether you have moved.",
+        "Continue the original task."
+      ]
+    },
+    {
+      "id": "cap-dev-09",
+      "family": "changed",
+      "variant": "unchanged",
+      "question": "Where is the blue box now?",
+      "frames": [
+        {
+          "camera_xyz": [
+            1.2,
+            0,
+            0.8
+          ],
+          "yaw_deg": 0,
+          "target_present": true,
+          "target_y": 0
+        },
+        {
+          "camera_xyz": [
+            1.2,
+            0,
+            0.8
+          ],
+          "yaw_deg": 0,
+          "target_present": true,
+          "target_y": 0
+        }
+      ],
+      "expected": "fresh_geometry"
+    },
+    {
+      "id": "cap-dev-10",
+      "family": "changed",
+      "variant": "moved",
+      "question": "Where is the blue box now?",
+      "frames": [
+        {
+          "camera_xyz": [
+            1.2,
+            0,
+            0.8
+          ],
+          "yaw_deg": 0,
+          "target_present": true,
+          "target_y": 0
+        },
+        {
+          "camera_xyz": [
+            1.2,
+            0,
+            0.8
+          ],
+          "yaw_deg": 0,
+          "target_present": true,
+          "target_y": 0.6
+        }
+      ],
+      "expected": "fresh_geometry"
+    },
+    {
+      "id": "cap-dev-11",
+      "family": "insufficient",
+      "variant": "unique",
+      "question": "What color is the box?",
+      "frames": [
+        {
+          "camera_xyz": [
+            1.2,
+            0,
+            0.8
+          ],
+          "yaw_deg": 0,
+          "target_present": true,
+          "target_y": 0
+        },
+        {
+          "camera_xyz": [
+            1.2,
+            0,
+            0.8
+          ],
+          "yaw_deg": 0,
+          "target_present": true,
+          "target_y": 0
+        }
+      ],
+      "expected": "blue",
+      "decoy_box": false
+    },
+    {
+      "id": "cap-dev-12",
+      "family": "insufficient",
+      "variant": "ambiguous",
+      "question": "What color is the box?",
+      "frames": [
+        {
+          "camera_xyz": [
+            1.2,
+            0,
+            0.8
+          ],
+          "yaw_deg": 0,
+          "target_present": true,
+          "target_y": 0
+        },
+        {
+          "camera_xyz": [
+            1.2,
+            0,
+            0.8
+          ],
+          "yaw_deg": 0,
+          "target_present": true,
+          "target_y": 0
+        }
+      ],
+      "expected": "abstain",
+      "decoy_box": true
+    }
+  ]
+}
