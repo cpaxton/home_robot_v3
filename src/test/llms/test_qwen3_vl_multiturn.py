@@ -39,6 +39,28 @@ def test_has_system_in_history():
     assert client._has_system_in_history() is True
 
 
+def test_explicit_dialogue_encodes_prior_images_without_losing_assistant_turns():
+    import numpy as np
+
+    client = _make_client()
+    client._iterations = 0
+    client._downsample_image = lambda image: np.asarray(image)
+    seen = []
+    client.generate_multimodal = lambda content, **kwargs: seen.append(client.get_history()) or "reply"
+    client.generate_messages(
+        [
+            {"role": "system", "content": "system"},
+            {"role": "user", "content": ["earlier", np.zeros((4, 4, 3), dtype=np.uint8)]},
+            {"role": "assistant", "content": "previous decision"},
+            {"role": "user", "content": "TOOL_RESULT failed approach"},
+            {"role": "user", "content": "current state"},
+        ]
+    )
+    assert seen[0][1]["content"][1]["type"] == "image"
+    assert seen[0][2] == {"role": "assistant", "content": "previous decision"}
+    assert client.get_history() == []
+
+
 def test_prefix_ids_align():
     client = _make_client()
     full = torch.tensor([[1, 2, 3, 4, 5]])

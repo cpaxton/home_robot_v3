@@ -144,6 +144,7 @@ class XLeRobotBackend(RobotBackend):
     def get_spec(self) -> RobotSpec:
         return RobotSpec(
             name="xlerobot",
+            look_joint_names=("head_pan_joint", "head_tilt_joint"),
             dof=len(XLEROBOT_JOINT_NAMES),
             joint_names=list(XLEROBOT_JOINT_NAMES),
             camera_names=list(XLEROBOT_CAMERA_NAMES),

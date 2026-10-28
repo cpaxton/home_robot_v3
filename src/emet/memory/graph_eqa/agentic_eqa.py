@@ -115,8 +115,10 @@ class AgenticEQAExecutor:
             return
         setattr(sess, name, value)
 
-    def handle_tool(self, name: str, args: dict[str, Any] | None = None) -> dict[str, Any]:
-        return executor_init.handle_tool(self, name, args)
+    def handle_tool(
+        self, name: str, args: dict[str, Any] | None = None, *, validate_arguments: bool = True
+    ) -> dict[str, Any]:
+        return executor_init.handle_tool(self, name, args, validate_arguments=validate_arguments)
 
 
 for _mod in (

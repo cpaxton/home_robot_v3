@@ -1,10 +1,48 @@
 # Living TODOs (small / near-term)
 
+- [ ] Profile failed-search cost without answer overrides or target-specific rules:
+      final S0 seed 1 misses the receptacle in both arms but candidate takes
+      798.6 s versus control 287.2 s. Seed 2 succeeds faster (478.0 vs 790.4 s).
+      Evidence: `~/runs/emet/final-stack-review-20261028/`; no consistent speedup claim.
+- [ ] Predeclare and validate a larger-object RoboCasa basic acceptance case.
+      Seed-0 `robocasa_pp_s1_v2` samples a 2.8 cm sugar cube and is excluded from
+      basic gates at user request; retain it in `configs/ovmm/stress/small_object_episodes.yaml`.
+      Reduced integration acceptance does not qualify RoboCasa; preserve historical failures.
+- [ ] Run the repaired relative-motion → targeted-floor handoff in the Molmo
+      pilot, then S0/EQA regression gates. Catalogue: `docs/testing/agent_observation_cases.md`.
+- [ ] Author isolated live visible-far, unknown-floor, occupied-route and
+      absent-target variants; synthetic contracts are not model/sensor acceptance.
+- [ ] Integrate EXPRESS-Bench and AbstainEQA after these gates; pin official
+      data/evaluators and validate tiny pilots first. Requirements:
+      `docs/environments/embodied_qa_extensions.md`.
+
 Short checklist for agent/hardware polish that is not worth a full plan doc yet.
 Strike through or move to a PR when done.
 
+- [ ] Deferred coverage experiment (#198): preserve `feat/measured-coverage-scan`
+      at `cb481970`; reopen a small main-based slice only for a demonstrated view
+      coverage gap, with same-provider local/coverage, initial-heading and cost
+      comparisons. See [disposition](docs/plans/coverage_scan_disposition.md).
+
 ## Shared evidence/navigation stack (#199 / #202)
 
+- [ ] Report wall-clock and simulator-clock elapsed time separately for episodes,
+      mapping, navigation and manipulation; publish actual sim time with boot/clock
+      identity, handle resets/missing clocks explicitly, and retain real-time factor.
+      Never estimate task sim duration by multiplying wall time by a sampled ratio.
+      Separate successful motion, settling, planning, recovery and VLM compute costs.
+- [ ] After correctness/clock reporting, evaluate mjlab/mjenv-style parallel MuJoCo
+      execution as a separate infrastructure study (confirm exact projects/APIs).
+      Compare physics/contact and robot-model parity, RGB-D rendering, per-env
+      state/clock isolation, deterministic seeds, memory/throughput and failure
+      reproducibility. Keep the same agent API; no simulator migration or changed
+      task dynamics before matched acceptance. Current heavy experiments stay serial.
+- [ ] Ablate episode history after the dialogue-contract repair: full multimodal
+      dialogue vs tool-results-only vs stateless inference, with identical model,
+      seeds, prompts, acquisition/answer budgets and view selection. Compare paired
+      EQA and small OVMM outcomes, repeated/no-op tool calls, context tokens,
+      latency and memory; inspect changed answers and preserve raw request evidence.
+      Keep unsupported-argument rejection enabled in every arm.
 - [x] Validate main integration: frozen `0fb37763` EQA diagnostic 1/4, unchanged
       from parent; no infrastructure errors. Not restored EQA acceptance.
 - [x] Fix reviewed SAM2 PIL input, lost sweep diagnostics, and invalid-depth
@@ -64,15 +102,22 @@ See the research roadmap in [the control runbook](docs/mars_reactive_rl.md#propr
 
 ## Shared-agent acceptance follow-up (2026-10-22)
 
-- [ ] Diagnose black/sky-only Stretch RGB in the default S0 scene before
-      treating failed searches as a perception/model comparison. Reproduced on
-      frozen main and provider slice, and in a stationary measured-head smoke.
+- [ ] Diagnose S0 optical heading and retained target-view coverage before
+      treating black/sky-only RGB as broken perception. Reproduced on frozen
+      main/provider; the stationary diagnostic pan faces away from the table
+      and CPU camera rays hit the dark floor, not the robot shell.
 - [ ] Clear context-stack acceptance without restoring answer overrides:
       EQA4 native scores 4/4 main versus 1/4 candidate; three main scores differ
       from its raw final model answer. Inspect q14 hallucinated TV and q56
       missing curtain context, then test existing opt-in pose history and
       retained-dialogue ablations. Preserve model authority and exact packets.
       See `docs/plans/shared_stack_readiness.md` for evidence and gate IDs.
+- [x] Separate fresh pre-turn preservation from optional extra-history ranking.
+      q56 gains with selector on because image 2 finally shows bookshelf plus
+      blue curtains; added pose-novelty images 3/4 are blank walls. Preserve
+      scope/age/dedup guards and model authority. Owner repair `92f31497`.
+- [ ] Clear the four-ID EQA gate for independent current/pre-turn handoff before
+      promoting the remaining context stack; unit tests do not establish gains.
 
 ## TAMP simulator API readiness (2026-10-05)
 

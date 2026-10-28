@@ -116,6 +116,15 @@ class GraphEQAVLMClient:
     def __call__(self, command: str | list, **kwargs) -> str:
         max_new = int(kwargs.get("max_new_tokens", self._max_tokens))
         system_prompt = kwargs.get("system_prompt", self._system_prompt)
+        conversation = kwargs.get("conversation")
+        if conversation is not None:
+            return conversation.generate(
+                self._vl,
+                command,
+                system_prompt=system_prompt,
+                max_new_tokens=max_new,
+                assistant_prefill=kwargs.get("assistant_prefill"),
+            )
         return dynamem_vllm_call(
             self._vl,
             command,

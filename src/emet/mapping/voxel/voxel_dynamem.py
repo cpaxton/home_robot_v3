@@ -38,6 +38,7 @@ from emet.utils.vram_debug import print_vram_snapshot
 
 from .dynamem_eqa import DynamemVoxelEQAMixin
 from .dynamem_localize import DynamemVoxelLocalizeMixin
+from .floor_evidence import floor_evidence
 from .voxel import VALID_FRAMES, Frame
 from .voxel import SparseVoxelMap as SparseVoxelMapBase
 
@@ -475,11 +476,36 @@ class SparseVoxelMap(DynamemVoxelEQAMixin, DynamemVoxelLocalizeMixin, SparseVoxe
             obs_ids = torch.zeros(0)
 
         device = xyz.device
+        floor_layers = None
+        floor_config = (self.parameters.get("floor_evidence", {}) or {}) if self.parameters is not None else {}
+        if floor_config.get("enabled", False):
+            # Geometry-only navigation evidence, not semantic/visual coverage.
+            # Never infer a floor reference from the absence of depth returns.
+            reference_z = float(floor_config["reference_z_m"])
+            floor_layers = floor_evidence(
+                xyz[xyz[:, 2] - reference_z < self.obs_max_height].detach().cpu().numpy(),
+                tuple(self.grid_size),
+                self.grid_resolution,
+                self.grid_origin.detach().cpu().numpy(),
+                reference_z_m=floor_config["reference_z_m"],
+                tolerance_m=floor_config.get("tolerance_m", 0.03),
+                hazard_height_m=floor_config.get("hazard_height_m", 0.08),
+            )
+            # Only this geometric copy is shifted. The source voxel cloud,
+            # separately-built semantic memory and frame poses stay world-aligned.
+            xyz = xyz.clone()
+            xyz[:, 2] -= reference_z
+        negative = (
+            (xyz[:, 2] < self.neg_obs_height)
+            if self.use_negative_obstacles
+            else torch.zeros(len(xyz), dtype=torch.bool, device=device)
+        )
         xyz = ((xyz / self.grid_resolution) + self.grid_origin + 0.5).long()
         xyz[xyz[:, -1] < 0, -1] = 0
 
         # Crop to robot height
-        min_height = int(self.obs_min_height / self.grid_resolution)
+        # Voxel Z indices are nonnegative after the floor-relative clamp.
+        min_height = max(0, int(self.obs_min_height / self.grid_resolution))
         max_height = int(self.obs_max_height / self.grid_resolution)
         # print('min_height', min_height, 'max_height', max_height)
         grid_size = self.grid_size + [max_height]
@@ -488,7 +514,10 @@ class SparseVoxelMap(DynamemVoxelEQAMixin, DynamemVoxelLocalizeMixin, SparseVoxe
         # Mask out obstacles only above a certain height
         obs_mask = xyz[:, -1] < max_height
         xyz = xyz[obs_mask, :]
+        negative = negative[obs_mask]
         counts = counts[obs_mask][:, None]
+        # Preserve metric lower-surface evidence before clamping negative Z.
+        xyz[negative, 2] = min_height
         # print(counts)
         obs_ids = obs_ids[obs_mask][:, None]
 
@@ -508,6 +537,19 @@ class SparseVoxelMap(DynamemVoxelEQAMixin, DynamemVoxelLocalizeMixin, SparseVoxe
         if self._remove_visited_from_obstacles:
             # Remove "visited" points containing observations of the robot
             obstacles *= (1 - self._visited).bool()
+
+        # A visited/self-filter mask must never erase a newly measured drop.
+        # The standard Z scatter preserves density semantics; this second XY
+        # scatter restores drop evidence erased by the visited/self mask.
+        negative_density = torch.zeros(tuple(self.grid_size), device=device, dtype=counts.dtype)
+        if negative.any():
+            cells = xyz[negative, :2]
+            inside = ((cells >= 0) & (cells < torch.as_tensor(self.grid_size, device=device))).all(dim=1)
+            cells = cells[inside]
+            negative_density.index_put_((cells[:, 0], cells[:, 1]), counts[negative, 0][inside], accumulate=True)
+        obstacles |= negative_density > self.obs_min_density
+        if floor_layers is not None:
+            obstacles |= torch.as_tensor(floor_layers.drops | floor_layers.raised, device=device)
 
         physical_obstacles = obstacles.clone()
         if self.dilate_obstacles_kernel is not None:
@@ -560,7 +602,16 @@ class SparseVoxelMap(DynamemVoxelEQAMixin, DynamemVoxelLocalizeMixin, SparseVoxe
         _apply_map_boundary_2d(physical_obstacles, history_soft, self.parameters)
 
         # Update cache
-        self._physical_map2d = (physical_obstacles, explored)
+        physical_explored = explored
+        self._floor_evidence = floor_layers
+        if floor_layers is not None:
+            # Opt-in calibrated floor navigation does not inherit disk stamping
+            # or generic image-coverage morphology. Keep legacy coverage intact.
+            # A missing return could also be a narrow pit. Inferred floor is
+            # available for inspection proposals, never sole motion authority.
+            # Own the tensor: floor evidence is a read-only retained snapshot.
+            physical_explored = torch.tensor(floor_layers.observed, device=device)
+        self._physical_map2d = (physical_obstacles, physical_explored)
         self._map2d = (obstacles, explored)
         self._2d_last_updated = self._seq
         self._history_soft = history_soft

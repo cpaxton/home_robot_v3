@@ -226,6 +226,23 @@ def generate_chat(
                 "Request includes images but the loaded server model is text-only. "
                 "Restart with ``emet serve llm --vl`` (multimodal VLM)."
             )
+        if isinstance(client, AbstractVLLMClient):
+            dialogue = []
+            for message in messages:
+                role = message.get("role")
+                if role == "user":
+                    _, content = _openai_messages_to_multimodal([message])
+                elif role in {"system", "assistant"}:
+                    content = message.get("content", "")
+                else:
+                    raise ValueError(f"Unsupported vision dialogue role: {role}")
+                dialogue.append({"role": role, "content": content})
+            prefill = None
+            if dialogue and dialogue[-1]["role"] == "assistant":
+                prefill = dialogue.pop()["content"]
+            return client.generate_messages(dialogue, max_new_tokens=mt, assistant_prefill=prefill)
+        if any(message.get("role") == "assistant" for message in messages):
+            raise ValueError("This vision provider cannot preserve assistant history")
         system, user_parts = _openai_messages_to_multimodal(messages)
         if not user_parts:
             raise ValueError("messages must include a non-empty user turn")

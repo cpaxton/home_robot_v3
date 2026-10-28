@@ -561,7 +561,9 @@ class GraphEQAController(DynamemController):
         lines: list[str] = []
         for i, (_u, _d, n, _obs, _wp, froom, fnear) in enumerate(candidates, start=1):
             near_bit = f" near={fnear}" if fnear else ""
-            lines.append(f"Image {i}: unexplored room={froom}{near_bit} at ({n.xyz[0]:.1f}, {n.xyz[1]:.1f})")
+            lines.append(
+                f"Image {i}: recorded context for frontier room={froom}{near_bit} at ({n.xyz[0]:.1f}, {n.xyz[1]:.1f})"
+            )
         ctx: list[str] = []
         if current_room:
             ctx.append(f"Current place: {current_room}")
@@ -572,9 +574,12 @@ class GraphEQAController(DynamemController):
             )
         ctx_block = ("\n".join(ctx) + "\n") if ctx else ""
         directive = (
-            "You are exploring a home. Each image is an unexplored direction "
-            "(with graph room/nearby-object context). Which image would best help "
-            "determine the answer to the question? Reply with ONLY the image number.\n"
+            "You are exploring a home. Each image is a previously recorded camera frame associated with "
+            "a candidate frontier, with graph room/nearby-object context. It is historical context, "
+            "not a preview from that frontier or proof that an object is visible there. "
+            "Candidate coordinates are navigation suggestions, not localized object positions. "
+            "Which candidate would best help determine the answer to the question? "
+            "Reply with ONLY the image number.\n"
             f"{ctx_block}"
             f"Question: {question}\n" + "\n".join(lines)
         )

@@ -1,0 +1,14 @@
+<mujoco model="isolated_observation_geometry">
+  <option gravity="0 0 -9.81"/>
+  <worldbody>
+    <geom name="floor" type="plane" size="5 5 .01"/>
+    <geom name="target" type="box" pos="3.5 0 .8" size=".1 .2 .15" group="1"/>
+    <geom name="obstacle" type="box" pos="1.5 0 .2" size=".1 .3 .2" group="2"/>
+    <body name="probe_base" pos="0 0 .2">
+      <joint name="x" type="slide" axis="1 0 0"/>
+      <joint name="y" type="slide" axis="0 1 0"/>
+      <joint name="yaw" type="hinge" axis="0 0 1"/>
+      <geom name="footprint" type="box" size=".2 .15 .19" group="3"/>
+    </body>
+  </worldbody>
+</mujoco>

@@ -1,0 +1,16 @@
+# Optional small-object stress cases; excluded from basic acceptance.
+# Seed 0 samples a ~2.8 cm SugarCube002 asset. Historical results remain valid.
+episodes:
+  # Versioned correction: upstream seed 0 does not contain the old literal jar.
+  # "obj" resolves the task's declared object noun, not its position. Scorer-only
+  # annotations make any actual cabinet valid, without leaking body IDs to Qwen.
+  - id: robocasa_pp_s1_v2
+    tier: S1
+    sim: configs/sim/robocasa_pick_place_stretch.yaml
+    object: obj
+    object_gt_body: obj_main
+    start_recep: counter
+    goal_recep: cabinet
+    goal_recep_gt_bodies: [cab_1, cab_2, cab_3, cab_4, cab_main, cab_micro]
+    success_radius_m: 0.50
+    mapping_max_nav_steps: 0

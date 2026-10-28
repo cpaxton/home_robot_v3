@@ -34,6 +34,9 @@ logger = Logger(__name__)
 def supports_floor_observation(agent) -> bool:
     """Advertise the shared tool only for adapters with its measured-view contract."""
     robot = getattr(agent, "robot", None)
+    spec = getattr(robot, "_spec", None)
+    if spec is not None and getattr(spec, "look_joint_names", None) is None:
+        return False
     return isinstance(getattr(robot, "_seq_id", None), int) and all(
         callable(getattr(robot, name, None)) for name in ("head_to", "get_pan_tilt", "get_observation")
     )
@@ -56,6 +59,25 @@ def _rejected_footprint_status(agent, pose):
     }
 
 
+def floor_head_bounds(robot):
+    """Use advertised head limits; retain legacy bounds when unavailable.
+
+    Joint reachability does not certify collision clearance. Fresh captures and
+    map validation still decide whether inspection made navigation possible.
+    """
+    from emet.robots.head_capability import HeadCapability
+
+    getter = getattr(robot, "get_head_capability", None)
+    capability = getter() if callable(getter) else None
+    if not isinstance(capability, HeadCapability):
+        return (-1.0, 1.0), (-1.4, -0.7)
+    pan = (max(-1.0, capability.pan[0]), min(1.0, capability.pan[1]))
+    tilt = (capability.tilt[0], min(-0.7, capability.tilt[1]))
+    if not np.isfinite([*pan, *tilt]).all() or pan[0] > pan[1] or tilt[0] > tilt[1]:
+        return None
+    return pan, tilt
+
+
 def observe_blocked_floor(agent, *, max_observations: int = 2) -> dict:
     """At most two bounded head captures aimed at one currently unknown cell.
 
@@ -66,6 +88,9 @@ def observe_blocked_floor(agent, *, max_observations: int = 2) -> dict:
 
     if not supports_floor_observation(agent):
         return {"ok": False, "status": "unsupported_head_observation"}
+    bounds = floor_head_bounds(agent.robot)
+    if bounds is None:
+        return {"ok": False, "status": "floor_gaze_unavailable"}
     plan = getattr(agent, "_last_nav_plan", None) or {}
     pose = plan.get("footprint", {}).get("checked_pose")
     checked = _rejected_footprint_status(agent, pose)
@@ -106,9 +131,12 @@ def observe_blocked_floor(agent, *, max_observations: int = 2) -> dict:
             attempts.append(projection)
             break
         x, y, z = projection["target_camera_xyz"]
-        pan, tilt = agent.robot.get_pan_tilt()
-        pan = float(np.clip(pan + np.arctan2(-x, z), -1.0, 1.0))
-        tilt = float(np.clip(tilt + np.arctan2(-y, np.hypot(x, z)), -1.4, -0.7))
+        try:
+            pan, tilt = agent.robot.get_pan_tilt()
+        except (ConnectionError, TimeoutError, RuntimeError) as exc:
+            return {"ok": False, "status": "head_observation_failed", "reason": str(exc)}
+        pan = float(np.clip(pan + np.arctan2(-x, z), *bounds[0]))
+        tilt = float(np.clip(tilt + np.arctan2(-y, np.hypot(x, z)), *bounds[1]))
         result = observe_floor(agent, pan_rad=pan, tilt_rad=tilt)
         if not result.get("ok"):
             break
@@ -128,8 +156,19 @@ def observe_blocked_floor(agent, *, max_observations: int = 2) -> dict:
             # also be wrong. Expose the measurement, not a free-space claim.
             after["reference_optical_depth_m"] = float(after["target_camera_xyz"][2])
         attempts.append({"requested_pan_tilt": [pan, tilt], "before": projection, "after": after})
-        if result.get("observation", {}).get("footprint_after", {}).get("pose_valid") or after.get("target_in_frame"):
+        if result.get("observation", {}).get("footprint_after", {}).get("pose_valid"):
             break
+        if after.get("target_in_frame"):
+            # Seeing one target is not completion: re-aim at the next measured
+            # map hole within this same bounded observation budget.
+            detail = agent.space.last_validity
+            offsets = detail.get("unknown_cell_offsets_m", [])
+            if detail.get("reason") != "unobserved_footprint" or not offsets:
+                break
+            next_target = [pose[0] + offsets[0][0], pose[1] + offsets[0][1], 0.0]
+            if not np.isfinite(next_target).all() or np.allclose(next_target, target):
+                break  # No mapped progress on this cell; do not repeat blindly.
+            target = next_target
     result.setdefault("observation", {})["targeted_floor"] = {
         "target_world_xyz": target,
         "floor_height_source": "navigation_zero_height_reference_not_measured_free_space",
@@ -140,6 +179,67 @@ def observe_blocked_floor(agent, *, max_observations: int = 2) -> dict:
         "choose another already-safe viewing pose or stop; do not repeat the same unhelpful view."
     )
     return result
+
+
+def inspect_floor(agent, **options):
+    """Agent-facing inspection: retain floor evidence, then restore task gaze."""
+    robot = getattr(agent, "robot", None)
+    getter = getattr(robot, "get_pan_tilt", None)
+    if not callable(getter):
+        return observe_floor(agent, **options)
+    out = {"ok": False}
+    try:
+        previous = np.asarray(getter(), dtype=float)
+        if previous.shape != (2,) or not np.isfinite(previous).all():
+            return {"ok": False, "status": "head_pose_unconfirmed"}
+        get_base = getattr(robot, "get_base_pose", None)
+        if not callable(get_base):
+            return observe_floor(agent, **options)
+        base_before = np.asarray(get_base(), dtype=float).copy()
+        out = observe_floor(agent, **options)
+        current = np.asarray(getter(), dtype=float)
+        if np.allclose(current, previous, atol=0.12):
+            return out
+        moved = robot.head_to(*previous, blocking=True)
+        if moved is False:
+            raise RuntimeError("head restoration rejected")
+        deadline = time.monotonic() + 5.0
+        while True:
+            measured = np.asarray(getter(), dtype=float)
+            if measured.shape == (2,) and np.isfinite(measured).all() and np.max(abs(measured - previous)) <= 0.12:
+                break
+            if time.monotonic() >= deadline:
+                raise RuntimeError("head restoration unconfirmed")
+            time.sleep(0.05)
+        sequence = robot._seq_id
+        wait_post_motion_obs(robot, timeout=5.0)
+        if robot._seq_id <= sequence:
+            raise RuntimeError("restored task view is stale")
+        from .relative_motion import relative_motion_progress
+
+        _, stationary = relative_motion_progress(
+            base_before,
+            get_base(),
+            "move_forward",
+            0.0,
+            float(getattr(agent, "pos_err_threshold", 0.02)),
+            float(getattr(agent, "rot_err_threshold", 0.03)),
+        )
+        if not stationary:
+            raise RuntimeError("base moved during task-view restoration")
+        before = len(agent.voxel_map.observations)
+        agent.update(full_perception=True)
+        if len(agent.voxel_map.observations) <= before:
+            raise RuntimeError("restored task view was not captured")
+        out["task_view"] = {
+            "restored": True,
+            "measured_pan_tilt_rad": measured.tolist(),
+            "observation_count": len(agent.voxel_map.observations),
+        }
+        return out
+    except (ConnectionError, TimeoutError, RuntimeError, ValueError, TypeError) as exc:
+        out.update(ok=False, status="task_view_unavailable", task_view={"restored": False, "reason": str(exc)})
+        return out
 
 
 def observe_floor(
@@ -164,18 +264,21 @@ def _observe_floor(
     """
     if target_blocker:
         return observe_blocked_floor(agent, max_observations=max_observations)
+    bounds = floor_head_bounds(getattr(agent, "robot", None))
+    if bounds is None:
+        return {"ok": False, "status": "floor_gaze_unavailable"}
     if pan_rad is not None and (
         isinstance(pan_rad, bool)
         or not isinstance(pan_rad, (int, float))
         or not np.isfinite(pan_rad)
-        or abs(pan_rad) > 1.0
+        or not bounds[0][0] <= pan_rad <= bounds[0][1]
     ):
         return {"ok": False, "status": "invalid_head_pan"}
     if (
         isinstance(tilt_rad, bool)
         or not isinstance(tilt_rad, (int, float))
         or not np.isfinite(tilt_rad)
-        or not -1.4 <= tilt_rad <= -0.7
+        or not bounds[1][0] <= tilt_rad <= bounds[1][1]
     ):
         return {"ok": False, "status": "invalid_head_tilt"}
     robot = agent.robot
@@ -189,6 +292,12 @@ def _observe_floor(
     if not np.isfinite(pan):
         return {"ok": False, "status": "head_pose_unconfirmed"}
     tilt = float(tilt_rad)
+    get_base_pose = getattr(robot, "get_base_pose", None)
+    if not callable(get_base_pose):
+        return {"ok": False, "status": "base_pose_unavailable"}
+    base_before = np.asarray(get_base_pose(), dtype=float)
+    if base_before.shape != (3,) or not np.isfinite(base_before).all():
+        return {"ok": False, "status": "base_pose_unavailable"}
     moved = robot.head_to(float(pan), tilt, blocking=True)
     if moved is False:
         return {"ok": False, "status": "head_motion_failed"}
@@ -220,6 +329,18 @@ def _observe_floor(
     wait_post_motion_obs(robot, timeout=5.0)
     if robot._seq_id <= sequence:
         return {"ok": False, "status": "stale_observation"}
+    base_after = np.asarray(get_base_pose(), dtype=float)
+    if base_after.shape != (3,) or not np.isfinite(base_after).all():
+        return {"ok": False, "status": "base_pose_unavailable"}
+    yaw_delta = np.arctan2(np.sin(base_after[2] - base_before[2]), np.cos(base_after[2] - base_before[2]))
+    if np.linalg.norm(base_after[:2] - base_before[:2]) > float(getattr(agent, "pos_err_threshold", 0.02)) or abs(
+        yaw_delta
+    ) > float(getattr(agent, "rot_err_threshold", 0.03)):
+        return {
+            "ok": False,
+            "status": "base_moved_during_head_observation",
+            "observation": {"base_before_xyt": base_before.tolist(), "base_after_xyt": base_after.tolist()},
+        }
     obs = robot.get_observation()
     if obs is None or obs.rgb is None or obs.depth is None or obs.get_xyz_in_world_frame() is None:
         return {"ok": False, "status": "calibrated_depth_unavailable"}
@@ -278,6 +399,9 @@ def _observe_floor(
         "ok": True,
         "status": "floor_observed",
         "observation": {
+            "base_before_xyt": base_before.tolist(),
+            "base_after_xyt": base_after.tolist(),
+            "head_inspection_bounds_rad": {"pan": list(bounds[0]), "tilt": list(bounds[1])},
             "measured_head_pan_tilt_rad": measured.tolist(),
             "observed_cell_change": observed_delta,
             "checked_pose": checked_pose,
@@ -567,9 +691,74 @@ def rotate_in_place(self, *, n_steps: int | None = None):
     self._maybe_emit_navgrid_ascii(context="rotate_in_place")
 
 
+def _relative_motion_receipt(agent, tool, requested, commanded, before, returned):
+    """Keep arrival, progress and refresh separate; legacy float is zero unless confirmed."""
+    from emet.controller.task.tamp.api import response
+
+    measured = None
+    try:
+        after = np.asarray(agent.robot.get_base_pose(), dtype=float)
+        if before is not None and after.shape == (3,) and np.isfinite(after).all():
+            from .relative_motion import relative_motion_progress
+
+            measured, arrived = relative_motion_progress(
+                before,
+                after,
+                tool,
+                commanded,
+                float(getattr(agent, "pos_err_threshold", 0.02)),
+                float(getattr(agent, "rot_err_threshold", 0.03)),
+            )
+    except Exception:
+        pass
+    code = (
+        "ok"
+        if returned is True and measured is not None
+        else (
+            "motion_failed"
+            if returned is False
+            else "motion_measurement_unavailable"
+            if measured is None
+            else "ambiguous_navigation_result"
+        )
+    )
+    if code == "ok" and not arrived:
+        code = "motion_arrival_unconfirmed"
+    observation = "not_refreshed"
+    if not getattr(agent, "_realtime_updates", False):
+        try:
+            agent.update()
+            observation = "map_update_returned"
+        except Exception:
+            observation = "map_update_failed"
+    agent._last_relative_motion_result = response(
+        tool,
+        code=code,
+        data={
+            "requested": requested,
+            "commanded": commanded,
+            "measured_body_delta_xyt": measured,
+            "server_arrived": returned if type(returned) is bool else None,
+            "observation_status": observation,
+        },
+    )
+    return commanded if code == "ok" else 0.0
+
+
+def _relative_motion_start(agent):
+    try:
+        pose = np.asarray(agent.robot.get_base_pose(), dtype=float)
+        return pose.copy() if pose.shape == (3,) and np.isfinite(pose).all() else None
+    except Exception:
+        return None
+
+
 def rotate_base_degrees(self, degrees: float) -> float:
-    """Relative in-place yaw (degrees). Positive = left/CCW. Returns commanded degrees."""
-    deg = float(np.clip(float(degrees), -360.0, 360.0))
+    """Relative yaw, positive left/CCW; return command only after measured arrival, else zero."""
+    self._last_relative_motion_result = None
+    if not np.isfinite(float(degrees)):
+        raise ValueError("degrees must be finite")
+    deg = float(np.clip(float(degrees), -180.0, 180.0))
     if abs(deg) < 1e-3:
         return 0.0
     self.announce_action(f"Rotating {deg:+.0f}°")
@@ -577,18 +766,14 @@ def rotate_base_degrees(self, degrees: float) -> float:
     nav_timeout = max(float(self._find_phase_nav_timeout()), abs(deg) / 45.0 * 5.0 + 8.0)
     if hasattr(self.robot, "move_to_nav_posture"):
         self.robot.move_to_nav_posture()
-    self.robot.move_base_to(
+    before = _relative_motion_start(self)
+    returned = self.robot.move_base_to(
         [0.0, 0.0, float(np.deg2rad(deg))],
         relative=True,
         blocking=True,
         timeout=nav_timeout,
     )
-    if not getattr(self, "_realtime_updates", False):
-        try:
-            self.update()
-        except Exception:
-            pass
-    return deg
+    return _relative_motion_receipt(self, "rotate_base", float(degrees), deg, before, returned)
 
 
 def _seed_local_radius_explored(self, vm) -> bool:
@@ -718,7 +903,14 @@ def clip_forward_distance_m(
 
 
 def move_forward_meters(self, meters: float) -> float:
-    """Drive forward along current heading; clips for obstacles. Returns distance commanded."""
+    """Clip forward motion; return command only after measured arrival, else zero.
+
+    Detailed measured progress and failures live in ``_last_relative_motion_result``.
+    The float return is retained for existing callers, not an odometry estimate.
+    """
+    self._last_relative_motion_result = None
+    if not np.isfinite(float(meters)):
+        raise ValueError("meters must be finite")
     requested = float(np.clip(float(meters), 0.0, 1.5))
     dist = self.clip_forward_distance_m(requested)
     if dist < 0.02:
@@ -732,15 +924,11 @@ def move_forward_meters(self, meters: float) -> float:
     if hasattr(self.robot, "move_to_nav_posture"):
         self.robot.move_to_nav_posture()
     # Relative body-frame: +x forward.
-    self.robot.move_base_to(
+    before = _relative_motion_start(self)
+    returned = self.robot.move_base_to(
         [float(dist), 0.0, 0.0],
         relative=True,
         blocking=True,
         timeout=nav_timeout,
     )
-    if not getattr(self, "_realtime_updates", False):
-        try:
-            self.update()
-        except Exception:
-            pass
-    return dist
+    return _relative_motion_receipt(self, "move_forward", float(meters), dist, before, returned)

@@ -1,5 +1,63 @@
 # Shared-agent stack readiness
 
+## Independent pre-turn handoff repair — 2026-10-22
+
+Implemented on owner #202 in `92f31497` and propagated through #216/#217.
+Two new regression tests failed before repair: capture enablement and handoff
+both required optional ranking configuration. The repaired adapter now requests
+one path/yaw-boundary capture per query independently of ranking, clears the
+previous query's capture, and defaults to **current + qualified pre-turn only**.
+Missing/unqualified captures retain the pre-approach fallback; no unrelated
+history frame is substituted. Acquisition clock, map epoch/history boundary,
+strictly earlier timestamp, existing age limit, dedup and image budget checks
+remain enforced. Model-facing labels distinguish before-turn from current RGB.
+No answer/stopping rule, model, budget, prompt heuristic, or extra-history
+ranking default changed. Unsupported robot adapters keep the existing fallback.
+
+97 focused owner tests passed; integrated dialogue/final-authority checks and
+the frozen EQA4 rerun are the next gates. The default pair emits
+`assessment_handoff`; optional additional-history policies still emit
+`view_selection`. This lets the rerun verify that it tests the bounded handoff,
+not the four-image pose-history diagnostic. Source SHA and driver/config hashes
+will be recorded by the acceptance runner; no new merge is authorized by unit
+results alone.
+
+## Post-landing handoff — 2026-10-22
+
+Five PRs are merged: #218 `c6160d06`, #181 `53e41532`, #182 `36d11e5d`,
+#184 `f22eb739`, #185 `80818ac4`. The remaining evidence/selection/authority/
+dialogue stack stays held for context acceptance, not source-review blockers.
+It is reconciled with landed main; reviewed unknown-depth, clearance, boundary,
+PIL and anchor-less-view fixes are preserved. Squash-history conflicts were
+resolved on #199, not silently hidden by dropping either branch.
+
+Targeted diagnostic `20261022_174224_e401ca` completed without infrastructure
+failure: pose selection on gives q14 wrong / q56 correct (**1/2**), versus
+both wrong with selection off. Same frozen source `8a929910`, seed, model,
+model_final policy and budgets. No default changed.
+
+**Visual attribution matters:** q56's new image 2 is an actual pre-turn frame
+showing the bookshelf immediately beside blue curtains. The old image 2 was
+pre-approach hallway/doorway context with no curtains. New images 3 and 4 are
+mostly blank walls. Thus this is evidence for preserving the correct before-turn
+capture, not proof that generic pose-novelty ranking or additional images are
+better. q14 still chooses the TV answer. Do not promote from this two-question
+diagnostic alone or substitute an earlier answer for the final model decision.
+
+Next targeted repair/ablation: retain the fresh, same-episode before-turn view
+at the evidence handoff, with a clearly labeled pre-approach fallback where
+needed; test capture/scope/age/dedup contracts and EQA4. Separate that two-view
+handoff from optional extra-history ranking, so a correct pre-turn pin does not
+require enabling a broad selector. Keep the model as semantic arbiter and
+current-view geometry as the manipulation authority. This repair is not yet
+implemented or accepted.
+
+S0 note: black/sky-only frames are real views, not evidence of a failed sensor.
+A CPU ray check at the measured head pose hits the dark floor, not robot shell;
+the diagnostic head-pan direction faces away from the table. Inspect optical
+heading and retained target views before blaming renderer/model or adding
+robot-specific exceptions. Main/provider S0 both failed; useful observed OVMM
+acceptance is still outstanding.
 ## Completed small OVMM diagnostic — 2026-10-22
 
 Job `20261022_221812_acbc1d`, frozen integrated `5a177e7d`, completed

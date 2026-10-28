@@ -93,6 +93,7 @@ def test_agentic_explore_prefers_vlm_frontier_candidate():
     agent._habitat_blocked_goals = set()
     agent._habitat_recent_goals = []
     agent.navigate_to_target_pose = MagicMock(return_value=True)
+    agent._planning_base_xyt = lambda pose: np.asarray(pose, dtype=float)
 
     class _FakeRobot:
         def get_base_pose(self):

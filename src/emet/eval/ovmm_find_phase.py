@@ -172,8 +172,16 @@ class FindPhaseEpisode:
     floor_z_m: float | None = None
     # Optional per-episode full-OVMM override; batch CLI options take precedence.
     manip_mode: ManipMode | None = None
+    # Optional scorer-only acceptable target set; never passed to the agent.
+    goal_recep_gt_bodies: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
+        if (
+            not isinstance(self.goal_recep_gt_bodies, tuple)
+            or any(not isinstance(body, str) or not body.strip() for body in self.goal_recep_gt_bodies)
+            or len(set(self.goal_recep_gt_bodies)) != len(self.goal_recep_gt_bodies)
+        ):
+            raise ValueError("goal_recep_gt_bodies must contain unique nonempty body names")
         n = resolve_mapping_max_nav_steps(
             self.mapping_max_nav_steps,
             self.explore_steps,
@@ -250,6 +258,9 @@ def load_find_phase_episodes(path: str | Path) -> list[FindPhaseEpisode]:
         if row.get("explore_steps") is not None and row.get("mapping_max_nav_steps") is None:
             n_alias += 1
         budget = mapping_budget_from_row(row, source=str(full), default=0, warn=False)
+        targets = row.get("goal_recep_gt_bodies", [])
+        if not isinstance(targets, list):
+            raise ValueError("goal_recep_gt_bodies must be a list")
         out.append(
             FindPhaseEpisode(
                 id=str(row["id"]),
@@ -262,6 +273,7 @@ def load_find_phase_episodes(path: str | Path) -> list[FindPhaseEpisode]:
                 mapping_max_nav_steps=budget,
                 explore_steps=budget,
                 object_gt_body=(str(row["object_gt_body"]) if row.get("object_gt_body") else None),
+                goal_recep_gt_bodies=tuple(targets),
                 floor_object=bool(row.get("floor_object", False)),
                 floor_z_m=(float(row["floor_z_m"]) if row.get("floor_z_m") is not None else None),
                 manip_mode=(str(row["manip_mode"]).strip().lower() if row.get("manip_mode") is not None else None),
@@ -531,12 +543,14 @@ def score_ovmm_find_query(
     goal_recep: str,
     radius_m: float,
     object_gt_body: str | None = None,
+    goal_recep_gt_bodies: tuple[str, ...] = (),
     frame: PlanarFrame = "mujoco_xy",
 ) -> dict[str, Any]:
     """Score a shared FindObj/FindRec outcome (same GT radius logic on both runners)."""
     return compute_find_phase_metrics(
         obj_pred_xyz=query.obj_xyz,
         recep_pred_xyz=query.recep_xyz,
+        goal_recep_gt_bodies=goal_recep_gt_bodies,
         placements=placements,
         object_query=object_query,
         start_recep=start_recep,
@@ -1025,9 +1039,13 @@ def score_find_recep(
     goal_recep: str,
     *,
     radius_m: float,
+    goal_recep_gt_bodies: tuple[str, ...] = (),
     frame: PlanarFrame = "mujoco_xy",
 ) -> dict[str, Any]:
-    """Score FindRec against one disambiguated GT body matching ``goal_recep``.
+    """Score FindRec against a declared acceptable set, or the legacy ranked body.
+
+    Explicit body sets are scorer-only task annotations fixed before evaluation;
+    all must exist. They do not alter the language query or perception evidence.
 
     Candidate matches are retained in ``gt_recep_bodies`` for debugging; scoring uses
     :func:`pick_find_recep_gt_body` so long substring matches are not vacuous hits.
@@ -1041,9 +1059,20 @@ def score_find_recep(
             "gt_recep_body": None,
             "gt_recep_bodies": [],
         }
-    recep_bodies = bodies_matching_category(placements, goal_recep)
-    gt_body = pick_find_recep_gt_body(placements, goal_recep)
+    recep_bodies = (
+        list(goal_recep_gt_bodies) if goal_recep_gt_bodies else bodies_matching_category(placements, goal_recep)
+    )
+    gt_body = recep_bodies[0] if goal_recep_gt_bodies else pick_find_recep_gt_body(placements, goal_recep)
     pred = _pred_xyz_array(pred_xyz)
+    if goal_recep_gt_bodies and any(body not in placements for body in goal_recep_gt_bodies):
+        return {
+            "find_recep_success": False,
+            "find_recep_scored": False,
+            "find_recep_unscored_reason": "missing_annotated_target",
+            "localization_err_recep_m": None,
+            "gt_recep_body": None,
+            "gt_recep_bodies": recep_bodies,
+        }
     if gt_body is None:
         return {
             "find_recep_success": False,
@@ -1063,6 +1092,10 @@ def score_find_recep(
             "gt_recep_body": gt_body,
             "gt_recep_bodies": recep_bodies,
         }
+    if goal_recep_gt_bodies:
+        gt_body = min(
+            goal_recep_gt_bodies, key=lambda body: (distance_to_placement_xy(pred, placements[body], frame=frame), body)
+        )
     err_xy = distance_to_placement_xy(pred, placements[gt_body], frame=frame)
     return {
         "find_recep_success": err_xy <= float(radius_m),
@@ -1084,6 +1117,7 @@ def compute_find_phase_metrics(
     goal_recep: str,
     radius_m: float,
     object_gt_body: str | None = None,
+    goal_recep_gt_bodies: tuple[str, ...] = (),
     frame: PlanarFrame = "mujoco_xy",
 ) -> dict[str, Any]:
     """Combine FindObj / FindRec scores and OVMM-style partial success.
@@ -1100,7 +1134,14 @@ def compute_find_phase_metrics(
         object_gt_body=object_gt_body,
         frame=frame,
     )
-    rec = score_find_recep(recep_pred_xyz, placements, goal_recep, radius_m=radius_m, frame=frame)
+    rec = score_find_recep(
+        recep_pred_xyz,
+        placements,
+        goal_recep,
+        radius_m=radius_m,
+        frame=frame,
+        goal_recep_gt_bodies=goal_recep_gt_bodies,
+    )
     scored_vals: list[float] = []
     if obj.get("find_object_scored"):
         scored_vals.append(float(obj["find_object_success"]))
@@ -1787,11 +1828,16 @@ def run_episode_find_phase(
 
         session = robot.get_emet_session()
         placements = read_sim_object_placements(session)
+        missing_targets = set(episode.goal_recep_gt_bodies) - set(placements or {})
+        if missing_targets:
+            raise RuntimeError(f"Invalid task annotation: missing receptacle bodies {sorted(missing_targets)}")
         memory = get_memory_backend_for_agent(agent, run_cfg.backend)
         vm = getattr(agent, "voxel_map", None)
         nav_world = sim_kind == "robocasa"
 
         object_query = resolve_object_query(episode, placements)
+        if episode.goal_recep_gt_bodies and object_query.casefold() in {"obj", "object", "body", ""}:
+            raise RuntimeError("Invalid task annotation: task object noun could not be resolved")
 
         prefer_voxel = run_cfg.prefer_voxel and run_cfg.backend != "ground_truth"
         t_query0 = time.monotonic()
@@ -1841,6 +1887,7 @@ def run_episode_find_phase(
             goal_recep=episode.goal_recep,
             radius_m=episode.success_radius_m,
             object_gt_body=episode.object_gt_body,
+            goal_recep_gt_bodies=episode.goal_recep_gt_bodies,
         )
         query_wall_s = time.monotonic() - t_query0
 

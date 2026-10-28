@@ -6,11 +6,76 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
+import tempfile
+import warnings
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 from PIL import Image
+
+
+def record_vlm_request(root, *, system_prompt, user_text, images, metadata, history=None):
+    """Save the exact client-level payload before model resizing/tokenization.
+
+    Captions/roles are preserved verbatim in user_text, not inferred here.
+    Refuse to overwrite another call's evidence. This does not change inference.
+    """
+    root = Path(root)
+    original_root = root
+    try:
+        root.mkdir(parents=True, exist_ok=False)
+    except FileExistsError:
+        root = Path(tempfile.mkdtemp(prefix=root.name + "-retry-", dir=root.parent))
+        warnings.warn(
+            f"VLM audit path collision at {original_root}; saved separately in {root}", RuntimeWarning, stacklevel=2
+        )
+        metadata = {**metadata, "audit_path_collision": str(original_root)}
+    entries = []
+    for slot, image in enumerate(images, 1):
+        name = f"image_{slot}.png"
+        image.save(root / name)
+        entries.append(
+            {
+                "slot": slot,
+                "path": name,
+                "size": list(image.size),
+                "mode": image.mode,
+                "pixel_sha256": hashlib.sha256(image.tobytes()).hexdigest(),
+            }
+        )
+    history_entries = []
+    for turn, message in enumerate(history or []):
+        content = message["content"]
+        if isinstance(content, str):
+            history_entries.append({"role": message["role"], "content": content})
+            continue
+        blocks = []
+        for slot, part in enumerate(content):
+            if isinstance(part, str):
+                blocks.append({"type": "text", "text": part})
+            else:
+                if not isinstance(part, (Image.Image, np.ndarray)):
+                    raise TypeError(f"Unsupported raw conversation image part: {type(part).__name__}")
+                image = part if isinstance(part, Image.Image) else Image.fromarray(part)
+                name = f"history_{turn:03d}_{slot:02d}.png"
+                image.save(root / name)
+                blocks.append(
+                    {"type": "image", "path": name, "pixel_sha256": hashlib.sha256(image.tobytes()).hexdigest()}
+                )
+        history_entries.append({"role": message["role"], "content": blocks})
+    request = {
+        "system_prompt": system_prompt,
+        "user_text": user_text,
+        "images": entries,
+        "metadata": metadata,
+        "conversation_history": history_entries,
+        "capture_boundary": "client payload before model preprocessing; not a wire/token trace",
+    }
+    (root / "request.json").write_text(json.dumps(request, indent=2), encoding="utf-8")
+    return root / "request.json"
 
 
 def _prompt_text_from_blocks(text_blocks: list[Any]) -> str:

@@ -1,0 +1,22 @@
+# Historical reproduction only: task language does not match the sampled object.
+# Not part of default acceptance and not valid evidence of model/task failure.
+episodes:
+  - id: robocasa_pp_s1
+    tier: S1
+    sim: configs/sim/robocasa_pick_place_stretch.yaml
+    object: jar
+    object_gt_body: obj_main
+    start_recep: counter
+    goal_recep: cab
+    success_radius_m: 0.50
+    mapping_max_nav_steps: 0
+
+  - id: robocasa_pp_s1_explore5
+    tier: S1
+    sim: configs/sim/robocasa_pick_place_stretch.yaml
+    object: jar
+    object_gt_body: obj_main
+    start_recep: counter
+    goal_recep: cab
+    success_radius_m: 0.50
+    mapping_max_nav_steps: 8
