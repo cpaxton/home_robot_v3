@@ -41,8 +41,10 @@ def main():
             if not args.render:
                 continue
             height, width = 384, 512
+            options = mujoco.MjvOption()
+            options.geomgroup[3] = 0  # Contact probe is not a task object or sensor surface.
             with mujoco.Renderer(model, height=height, width=width) as renderer:
-                renderer.update_scene(data, camera="evidence")
+                renderer.update_scene(data, camera="evidence", scene_option=options)
                 rgb = renderer.render().copy()
                 renderer.enable_depth_rendering()
                 depth = renderer.render().copy()

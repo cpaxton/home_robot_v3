@@ -26,6 +26,9 @@ def load_development_cases(path):
     if len({c["id"] for c in cases}) != 12:
         raise ValueError("Duplicate case ID")
     for case in cases:
+        rgba = case.get("target_rgba", [0.05, 0.15, 0.9, 1])
+        if len(rgba) != 4 or not np.isfinite(rgba).all() or min(rgba) < 0 or max(rgba) > 1:
+            raise ValueError("Finite RGBA in [0,1] required")
         if len(case.get("frames", [])) != 2 or not case.get("question"):
             raise ValueError("Two ordered snapshots and a question required")
         for frame in case["frames"]:
@@ -65,7 +68,7 @@ def snapshot_model(case, index):
             pos=f"3.5 {frame['target_y']} .8",
             size=".1 .2 .15",
             group="1",
-            rgba=".05 .15 .9 1",
+            rgba=" ".join(map(str, case.get("target_rgba", [0.05, 0.15, 0.9, 1]))),
         )
     if case.get("decoy_box"):
         ET.SubElement(

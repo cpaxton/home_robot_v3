@@ -11,7 +11,9 @@ external relevance; controlled interventions explain which capabilities help.
 seen/unseen recall, far/near approach, unknown-clear/occupied route,
 immediate/delayed task intent, unchanged/moved target, and unique/ambiguous box.
 The builder creates two ordered MuJoCo snapshots per case, with 20 x 40 x 30 cm
-blue target geometry and explicit camera calibration. These are synthetic
+colored target geometry and explicit camera calibration. Color questions do not
+name the answer color; recall and delayed-task targets use green/yellow rather
+than a single constant blue answer. These are synthetic
 ray/contact/evidence controls with a simple planar probe, not full robot models.
 The search-then-act prototypes retain a navigation/answer instruction; physical
 object transport is deliberately not represented as qualified here.
@@ -36,6 +38,16 @@ Rendering/loader validation is a prerequisite, not model success or an active
 benchmark. Real robot bindings, action-triggered interventions and independent
 end-to-end scoring remain next-stage work; this status must not be promoted from
 a successful geometry test or recorded-QA replay.
+
+`scripts/replay_harness_capability_evidence.py` runs the six color/recall/ambiguity
+cases through the production `VLMConversation` and remote client, comparing
+full history with current RGB only. It saves exact request packets and raw
+responses. Its strict short-answer score is a development diagnostic requiring
+manual audit, not an official EQA judge. It cannot measure navigation, floor
+recovery, constraint-preserving action sequencing or manipulation; those four
+location/floor cases remain geometry controls at this stage. The remote endpoint's
+quantization is reported as unknown unless independently established; do not
+silently equate it to the prior local int4 pilot.
 
 ## Families and paired interventions
 

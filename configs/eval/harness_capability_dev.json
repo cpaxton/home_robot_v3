@@ -30,7 +30,13 @@
           "target_y": 0
         }
       ],
-      "expected": "blue"
+      "expected": "green",
+      "target_rgba": [
+        0.05,
+        0.8,
+        0.1,
+        1
+      ]
     },
     {
       "id": "cap-dev-02",
@@ -59,7 +65,13 @@
           "target_y": 0
         }
       ],
-      "expected": "abstain"
+      "expected": "abstain",
+      "target_rgba": [
+        0.05,
+        0.8,
+        0.1,
+        1
+      ]
     },
     {
       "id": "cap-dev-03",
@@ -187,7 +199,7 @@
       "id": "cap-dev-07",
       "family": "search_act",
       "variant": "immediate",
-      "question": "Find the blue box, visit the viewing point, then report the box color.",
+      "question": "Find the box, visit the viewing point, then report its color.",
       "frames": [
         {
           "camera_xyz": [
@@ -210,14 +222,20 @@
           "target_y": 0
         }
       ],
-      "expected": "blue",
-      "delay_turns": []
+      "expected": "yellow",
+      "delay_turns": [],
+      "target_rgba": [
+        0.9,
+        0.8,
+        0.05,
+        1
+      ]
     },
     {
       "id": "cap-dev-08",
       "family": "search_act",
       "variant": "delayed",
-      "question": "Find the blue box, visit the viewing point, then report the box color.",
+      "question": "Find the box, visit the viewing point, then report its color.",
       "frames": [
         {
           "camera_xyz": [
@@ -240,10 +258,16 @@
           "target_y": 0
         }
       ],
-      "expected": "blue",
+      "expected": "yellow",
       "delay_turns": [
         "Report whether you have moved.",
         "Continue the original task."
+      ],
+      "target_rgba": [
+        0.9,
+        0.8,
+        0.05,
+        1
       ]
     },
     {

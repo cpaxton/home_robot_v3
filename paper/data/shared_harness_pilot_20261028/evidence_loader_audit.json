@@ -1,0 +1,20 @@
+{
+  "status": "metadata_and_loader_contracts_only",
+  "express_records": 2044,
+  "express_dev": 14,
+  "abstain_pairs": 1636,
+  "abstain_dev_pairs": 10,
+  "abstain_frames_per_question": {
+    "min": 1,
+    "median": 137.0,
+    "max": 600
+  },
+  "official_frame_bindings_qualified": 0,
+  "official_scores_computed": false,
+  "next_required": "Local official frame/video packs, explicit evidence bindings, then official scoring; synthetic fixtures are not official frame qualification.",
+  "inputs": {
+    "answerable.json": "82ba3310a55d03350b58d41abafb0e9e69010c4115de7ef0027487b6c007fb81",
+    "unanswerable.json": "4018cc954a0a72a6ea2870e9f9231c74a568f012a6e9cf1720f5c75270f8ca2b",
+    "express.json": "977ced67fe7b72462745e7de5c52aeff0e6128dd1f8f85d14596953c95d3c59e"
+  }
+}

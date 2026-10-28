@@ -35,6 +35,11 @@ escape, corrupt hashes, changed files and annotation isolation. The pinned
 official metadata hashes were rechecked on 2026-10-28 and match the audit below.
 Official frame packs and evaluator execution are still unqualified: local
 rendered-fixture loader acceptance is not an official benchmark result.
+The pinned AbstainEQA metadata contains 1--600 frame indices per question
+(median 137). A 2--4 image packet is therefore a separate view-selection
+experiment, not automatically equivalent to the official supplied evidence.
+Never silently truncate or assume original answerability is preserved after
+selection. Audit summary: `paper/data/shared_harness_pilot_20261028/evidence_loader_audit.json`.
 
 ## Pinned metadata audit — 2026-10-23
 
