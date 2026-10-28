@@ -3,6 +3,54 @@
 
 Our primary result compares the classic and agentic controllers on a fixed Dynagraph memory profile (Section~\ref{sec:agentic_results}); Section~\ref{sec:hmeqa_results} situates both arms against GraphEQA prior art. Other tracks contain partial simulator controls and placeholders pending scored sweeps (operator index: \texttt{docs/experiments/habitat\_eqa\_results.md}).
 
+\subsection{Current shared-agent development pilot}
+\label{sec:shared_agent_pilot}
+
+The historical controller results below must not be interpreted as evaluations
+of the current shared-agent harness. A separate October integration pilot froze
+runtime revision \texttt{7391b522} and compared it with a main-agent control
+(\texttt{a2be9d40}, main plus a shared evaluation-protocol repair). Both arms
+used local Qwen3-VL-8B int4 and matched task budgets; the candidate used
+\texttt{model\_final}, whereas the control retained its legacy answer policy.
+This is a complete-system comparison, not a single-factor ablation.
+
+On the 12-question development set, the candidate answers 8/12 correctly versus
+7/12 for the control (two candidate-only wins, one loss). On the default-table
+FIND task, both arms localize both requested targets in two of three seeded
+episodes. Episode wall times are reported in Table~\ref{tab:shared_agent_pilot}:
+the candidate is faster on the two successful pairs but substantially slower
+on the failed pair. Thus these data establish neither a consistent speedup nor
+statistically supported accuracy superiority. Wall time includes sensing,
+model inference, planning and execution; it is not simulation time or pure
+navigation time. The successful seed-0 candidate did not invoke the new
+camera-motion feedback, so that result cannot establish its causal benefit.
+
+\begin{table}[t]
+  \centering
+  \caption{Shared-agent development pilot: complete episode wall time for
+  default-table object/receptacle FIND. Success requires both targets to be
+  localized with admitted object geometry; failed episodes remain included.}
+  \label{tab:shared_agent_pilot}
+  \small
+  \begin{tabular}{@{}lrrl@{}}
+    \toprule
+    Seed & Main control (s) & Candidate (s) & Outcome in both arms \\
+    \midrule
+    0 & 979.3 & 479.1 & Both targets localized \\
+    1 & 287.2 & 798.6 & Receptacle not localized \\
+    2 & 790.4 & 478.0 & Both targets localized \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The final contract suite passes 990 tests without skips or errors; this supports
+interface correctness, not learned task reliability. Privileged stationary TAMP
+controls pass in both arms, separately from learned-perception manipulation.
+The small RoboCasa sugar-cube episode is retained as optional stress coverage,
+not a basic acceptance result. Full task generalization and controlled
+capability ablations remain future evaluations. Paired outcomes and artifact
+hashes are retained in \texttt{paper/data/shared\_harness\_pilot\_20261028/}.
+
 \subsection{Classic vs.\ agentic verify}
 \label{sec:agentic_results}
 
