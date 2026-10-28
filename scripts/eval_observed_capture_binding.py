@@ -3,8 +3,8 @@
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 """Live RGBD stream -> bounded surface reassociation -> actual scene_tasks tool.
 
-Single-object sensor smoke, not full task acceptance: no support seed or native
-observed execution provider is installed. Caliban supplies semantic initialization
+Object-only discovery smoke, not full task acceptance. An optional support
+geometry candidate is measured separately; no observed execution provider is installed. Caliban supplies semantic initialization
 only; later tool calls read measured camera data without model inference. Run via
 emet jobs with an available software renderer when the local GPU is reserved.
 """
@@ -32,7 +32,8 @@ from emet.eval.sim_eval_session import (
 )
 from emet.llms.openai_vllm_client import OpenaiVLLMClient
 from emet.mapping.scene_graph.open_vocab_scene_graph import ObjectObservation
-from emet.memory.vlm_region_grounding import select_supported_region
+from emet.memory.vlm_region_grounding import select_supported_region, select_vlm_region
+from emet.motion.observed_support import fit_observed_support, support_mask_from_seed
 
 
 def main():
@@ -42,6 +43,7 @@ def main():
     parser.add_argument("--base-url", required=True)
     parser.add_argument("--model", required=True)
     parser.add_argument("--query", default="red cylinder")
+    parser.add_argument("--support-query", default="", help="Optionally ground and measure a support patch; does not enable execution.")
     parser.add_argument("--samples", type=int, default=5)
     parser.add_argument("--execution-readiness", action="store_true",
                         help="Audit live execution prerequisites without attempting manipulation.")
@@ -57,7 +59,7 @@ def main():
     os.environ["EMET_PHYSICAL_EXECUTION"] = "1"
     os.environ["EMET_PHYSICAL_AUDIT"] = str(out / "actuation.jsonl")
     result = {
-        "scope": "live ZMQ camera/provider/tool sensor smoke, no support seed or task execution acceptance",
+        "scope": "live ZMQ object discovery and optional support-geometry diagnostic; no task execution acceptance",
         "source_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip(),
         "script_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
         "task_success_assessed": False,
@@ -133,6 +135,25 @@ def main():
                 score=1.0,
                 timestep=1,
             )
+            support_patch, support_color = None, None
+            if args.support_query:
+                selection, support_audit = select_vlm_region(rgb, args.support_query, "", client=TimedClient(),
+                    purpose="placement_surface")
+                result["support_initialization"] = support_audit
+                save()
+                if selection.get("verified") is True:
+                    try:
+                        support_mask = support_mask_from_seed(observation, selection, measurement_margin_m=.005)
+                        np.save(out / "support-mask.npy", support_mask)
+                        support_color = np.median(rgb[support_mask].astype(float), axis=0)
+                        support_patch = fit_observed_support(observation, support_mask,
+                            observation_id="support-reference", measurement_margin_m=.005)
+                        result["support_reference"] = {"bounds": support_patch.bounds.tolist(),
+                            "proposal_source": "semantic_seeded_plane",
+                            "scope": "measured footprint candidate; 5mm admission margin is not hardware-calibrated"}
+                    except RuntimeError as error:
+                        result["support_geometry_error"] = str(error)
+                save()
             provider.update([reference], frame_ticket=ticket, reference_rgb=rgb, reference_world_xyz=world)
 
             class CaptureClient:
@@ -183,7 +204,8 @@ def main():
                 capture = client.get_observation()
                 audit_start = (out / "actuation.jsonl").read_bytes() if (out / "actuation.jsonl").exists() else b""
                 result["execution_readiness"] = assess_live_readiness(observation=capture, reference_rgb=rgb,
-                    reference_mask=mask, reference_world=world, tools=tools, refreshes=[q["reacquisition_error"] is None
+                    reference_mask=mask, reference_world=world, support_reference=support_patch,
+                    support_color=support_color, tools=tools, refreshes=[q["reacquisition_error"] is None
                     and q["response"]["status"] == "ok" for q in result["queries"]])
                 audit_end = (out / "actuation.jsonl").read_bytes() if (out / "actuation.jsonl").exists() else b""
                 result["execution_readiness"]["audit_unchanged_during_admission_checks"] = audit_start == audit_end
@@ -194,6 +216,11 @@ def main():
                     and readiness["audit_unchanged_during_admission_checks"]
                     and readiness["gates"]["default_execution_boundary"]["state"] == "passed"
                     and readiness["gates"]["live_rgbd"]["state"] == "passed")
+            if args.support_query:
+                result["support_diagnostic_passed"] = bool(support_patch is not None and (
+                    not args.execution_readiness
+                    or result["execution_readiness"]["gates"]["support_grounding"]["state"] == "candidate"))
+                result["diagnostic_passed"] = bool(result["diagnostic_passed"] and result["support_diagnostic_passed"])
             save()
             return 0 if result["diagnostic_passed"] else 1
         finally:

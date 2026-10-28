@@ -151,3 +151,23 @@ Linux boot/time-namespace clock identity matches the client. Other hosts,
 missing intervals and hardware clocks are rejected. The helper does not infer
 encoder capture times, camera/object stillness across the stereo gap, or zero
 alignment error. Hardware and full robot/camera alignment remain separate gates.
+
+### Measured support and full-extent admission
+
+`fit_observed_support` and `support_mask_from_seed` build a partial planar support
+patch from calibrated depth plus explicit semantic pixel evidence.
+`refresh_support_patch` remeasures its visible footprint without assuming a whole
+receptacle is observed; holes shrink/reject the patch. Measurement margins are
+explicit inputs and must be calibrated before hardware admission.
+
+`enclose_observed_object` constructs a world-frame bound only when measured free
+space closes the target's whole possible connected occupied/unknown component.
+Boundary-reaching components, including unseparated support contacts, are
+unbounded and rejected. It does not produce a tracked pose or automatically turn
+single-view points into `PayloadGeometryEvidence`. The connection assumption,
+scan revision, original oldest receive time and capture IDs are explicit.
+
+The camera diagnostic's optional `--support-query` exercises the support producer
+separately from object-only task proposals. An unmet requested support diagnostic
+fails the process; passing it still does not qualify manipulation. See
+[October 28 evidence](../experiments/observed_support_enclosure_20261028.md).

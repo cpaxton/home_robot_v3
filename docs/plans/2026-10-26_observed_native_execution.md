@@ -301,3 +301,19 @@ intervals and same-host clock mapping are implemented and exercised live; the
 RGB/depth union spans 203.5 ms and does not establish encoder alignment. See
 [all three attempts, validation and remaining source gates](../experiments/observed_source_assembly_20261027.md).
 Observed execution remains disabled; do not infer a transfer/swap score.
+
+## October 28 support/enclosure milestone
+
+A measured partial-support producer now projects full grid footprints into
+observed mask/depth evidence, fits a near-horizontal plane, and remeasures fresh
+geometry without filling unknown holes. The explicit semantic-seeded support
+path produced an 83x10 cm fresh patch with 0.64 mm residual in live CPU/Caliban
+trial `20261028_085139_b4f42d`; the earlier broad-proposal overflow is retained.
+Measurement margins are not yet independently calibrated.
+
+A free-space-enclosure constructor now rejects visible-only object bounds when
+the possible connected volume reaches a scan boundary. All five recorded frames
+remain `object_geometry_unbounded` in offline spatial analysis. It preserves
+unknown/background contacts rather than carving them away; support-contact
+separation or explicit shape priors are still needed. No object yaw is inferred.
+See [validation and remaining gates](../experiments/observed_support_enclosure_20261028.md).

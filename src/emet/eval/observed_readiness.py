@@ -13,6 +13,8 @@ from emet.controller.manipulation.native_inputs import ObservationUnavailable
 from emet.controller.manipulation.rigid_rgbd_tracking import reference_features
 from emet.controller.task.tamp.observed_capture import capture_arrays
 from emet.memory.surface_reacquisition import reacquire_surface
+from emet.motion.observed_object_bound import enclose_observed_object
+from emet.motion.observed_support import refresh_support_patch
 from emet.motion.observed_workspace import ObservedWorkspace
 
 
@@ -22,7 +24,7 @@ def capture_metadata(observation):
 
 
 def assess_live_readiness(*, observation, reference_rgb, reference_mask, tools, refreshes, reference_world=None,
-                          execution_source_installed=False):
+                          execution_source_installed=False, support_reference=None, support_color=None):
     """Audit this camera-only harness, not arbitrary injected-provider qualification.
 
     Complete geometry, timing bounds, support and occupancy provenance are not
@@ -56,6 +58,7 @@ def assess_live_readiness(*, observation, reference_rgb, reference_mask, tools, 
     except ObservationUnavailable as error:
         clock_mapping['reason'] = str(error)
     provenance = {'state': 'not_configured'}
+    object_geometry = {'state': 'not_configured', 'reason': 'no attributed target endpoints'}
     if reference_world is not None:
         try:
             surface = reacquire_surface(reference_rgb, reference_world, reference_mask,
@@ -64,6 +67,15 @@ def assess_live_readiness(*, observation, reference_rgb, reference_mask, tools, 
             valid = np.isfinite(world).all(-1) & valid_depth
             partition = workspace.partition(world[valid], labels[valid])
             excluded = partition.excluding(['target'])
+            try:
+                bound = enclose_observed_object(partition, 'target', observation_ids=('current-capture',),
+                    received_monotonic=observation.received_monotonic, scene_revision='current-scan', topology='connected_rigid')
+                object_geometry = {'state': 'candidate', 'bounds': bound.bounds_world.tolist(),
+                    'construction': 'observed_free_space_enclosure',
+                    'scope': 'geometry enclosure only; pose/robot/support-contact qualification still required'}
+            except ObservationUnavailable as error:
+                object_geometry = {'state': 'unknown', 'reason': str(error),
+                    'construction': 'observed_free_space_enclosure'}
             provenance = {'state': 'partial',
                 'occupied_before': int(np.count_nonzero(workspace.cells == 2)),
                 'occupied_after_target_exclusion': int(np.count_nonzero(excluded.cells == 2)),
@@ -72,6 +84,16 @@ def assess_live_readiness(*, observation, reference_rgb, reference_mask, tools, 
                 'scope': 'measured target/background endpoint attribution only; robot solid-volume and contact policies remain absent'}
         except ValueError as exc:
             provenance = {'state': 'unknown', 'reason': str(exc)}
+    support = {'state': 'not_configured', 'reason': 'single object seed, no support seed'}
+    if support_reference is not None:
+        try:
+            measured = refresh_support_patch(observation, support_reference,
+                observation_id='support-current', reference_color=support_color)
+            support = {'state': 'candidate', 'bounds': measured.bounds.tolist(), 'residual_m': measured.residual_m,
+                'received_monotonic': measured.received_monotonic,
+                'scope': 'fresh measured footprint; sensor/calibration margin not hardware-qualified'}
+        except ObservationUnavailable as error:
+            support = {'state': 'unknown', 'reason': str(error)}
     planned = json.loads(tools['plan_pick_place'].func(object_name='diagnostic object', receptacle_name='diagnostic support'))
     execution = json.loads(tools['execute_pick_place_plan'].func(plan_ref='not-an-executable-plan'))
     fail_closed = (planned['code'] == 'observed_scene_unavailable'
@@ -93,10 +115,9 @@ def assess_live_readiness(*, observation, reference_rgb, reference_mask, tools, 
             'capture_clock_mapping': clock_mapping,
             'capture_encoder_alignment': {'state': 'not_configured',
                 'reason': 'stream timestamps do not supply qualified CaptureInterval or alignment bounds'},
-            'complete_payload_geometry': {'state': 'not_configured',
-                'reason': 'partial visible surface is not a complete shape prior'},
+            'complete_payload_geometry': object_geometry,
             'robot_target_occupancy_provenance': provenance,
-            'support_grounding': {'state': 'not_configured', 'reason': 'single object seed, no support seed'},
+            'support_grounding': support,
             'visual_manipulation_effects': {'state': 'not_assessed', 'reason': 'no manipulation attempted'},
             'default_execution_boundary': {'state': 'passed' if fail_closed else 'failed',
                 'planning_code': planned['code'], 'execution_code': execution['code']},
