@@ -44,10 +44,36 @@ cases through the production `VLMConversation` and remote client, comparing
 full history with current RGB only. It saves exact request packets and raw
 responses. Its strict short-answer score is a development diagnostic requiring
 manual audit, not an official EQA judge. It cannot measure navigation, floor
-recovery, constraint-preserving action sequencing or manipulation; those four
+recovery, constraint-preserving action sequencing or manipulation; the six
 location/floor cases remain geometry controls at this stage. The remote endpoint's
 quantization is reported as unknown unless independently established; do not
 silently equate it to the prior local int4 pilot.
+
+## First recorded-evidence diagnostic
+
+At `06e8c243`, job `20261028_184222_324368` renders/binds all 12 cases and
+24 RGB-D snapshots successfully in about three seconds. The subsequent remote
+Qwen job `20261028_184235_7110ff` evaluates the six color/recall/ambiguity cases:
+full history 4/6, current RGB only 1/6, zero inference errors. Earlier green/yellow
+evidence is recovered with history; both arms guess a color on absent and
+ambiguous negatives. All twelve raw final outputs were manually inspected;
+the strict parser agrees with the visible color outcomes. This single synthetic
+development replay shows an evidence-availability effect, not active-agent,
+manipulation, generalization or statistical-superiority evidence.
+
+Artifacts: `~/runs/emet/capability-dev-render-colors-20261028/` and
+`~/runs/emet/capability-evidence-replay-20261028/`. Requests retain exact image
+history and text; actor packets contain no target masks, references or variants.
+Minimal results: `paper/data/shared_harness_pilot_20261028/capability_replay_summary.json`.
+The local GPU is reserved only for the brief render; remote replay does not hold
+the local GPU lock. Tests: 49 relevant dataset/loader/geometry/dialogue checks pass.
+
+![Audited recorded evidence examples and retained failures](../../paper/figs/harness_capability_dev_overview.png)
+
+Next stage is binding the same interventions to real Stretch/Molmo tasks through
+the existing agent, and evaluating active approach/recovery independently. Do
+not promote the synthetic planar probe to an implemented robot adapter. Official
+EXPRESS/AbstainEQA scoring still needs actual frame packs and evaluator wiring.
 
 ## Families and paired interventions
 

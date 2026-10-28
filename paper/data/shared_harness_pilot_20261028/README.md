@@ -30,3 +30,10 @@ and look-around receipts in final S0 seeds 1 and 2. The candidate uses that tool
 only once. These counts describe recorded tool use, not visibility, necessity,
 or the causal benefit of any feature. Seed-zero traces are not included in that
 coverage field; their outcomes/costs remain in the paired S0 table.
+
+`evidence_loader_audit.json` records pinned official metadata counts/hashes and
+the missing official frame qualification. `capability_replay_summary.json`
+records the separate six-case synthetic recorded-evidence diagnostic: 4/6 with
+history, 1/6 current-only, both failing the two negative cases. Neither result
+is an active-agent or official-benchmark score. Full requests and RGB-D/scorer
+artifacts remain in the referenced `~/runs/emet/` directories, not in this repo.

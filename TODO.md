@@ -1,5 +1,10 @@
 # Living TODOs (small / near-term)
 
+- [ ] Bind the 12 controlled development interventions to actual robot episodes
+      through the existing shared agent; geometry snapshots and recorded-QA replay
+      are implemented, not active robot acceptance. Qualify official frame packs
+      and evaluators for EXPRESS/AbstainEQA. Protocol/results:
+      `docs/experiments/harness_capability_benchmark.md`.
 - [ ] Profile failed-search cost without answer overrides or target-specific rules:
       final S0 seed 1 misses the receptacle in both arms but candidate takes
       798.6 s versus control 287.2 s. Seed 2 succeeds faster (478.0 vs 790.4 s).
