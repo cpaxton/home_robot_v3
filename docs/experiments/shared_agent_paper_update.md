@@ -1,5 +1,78 @@
 # Shared-agent paper update and figure plan
 
+## Post-merge evidence program (2026-10-28)
+
+The shared harness landed as #225, main `cd169673`. Its runtime matches final
+pilot `7391b522`. Work continues on `feat/harness-evidence-study`; keep RL
+branches/checkpoints separate. Current evidence is a development signal, not a
+paper-scale gain: EQA 8/12 vs 7/12; S0 outcomes tied across three seeds, with
+both runtime wins and a slower failed search. Summaries/hashes are in
+`paper/data/shared_harness_pilot_20261028/summary.json`.
+The final S0 traces select look-around only once for the candidate and emit one
+camera-motion receipt. Many new capabilities are not deliberately exercised by
+these tasks. This is a reason to add targeted opportunity/usage measurements,
+not evidence that an unused capability improves task success.
+
+### Resource contract
+
+RL has priority on the local 4090. Begin with CPU-only artifact analysis,
+statistics, paper updates and replay preparation on one stable core. Do not
+start a multi-hour exclusive agent job merely because the GPU is momentarily
+idle. The existing jobs lock prevents collisions, not RL starvation or
+preemption. GPU execution awaits an agreed time window; submit short resumable
+batches, use `--cpu-safe --gpu-exclusive`, and never parallelize heavy sims.
+Stop scheduling new batches when an RL window starts; retain completed units.
+Caliban can be an alternative only after checking its load; a model change is
+an explicit evaluation axis, not a silent throughput substitution.
+
+### Experiment order and stopping points
+
+| Stage | Population / comparison | Purpose / next gate |
+|---|---|---|
+| 0: existing evidence | Reproduce paired per-question and per-seed summaries; audit a win, a loss and slow failed searches | Establish honest claims and trace completeness without GPU work |
+| 1: external task coverage | Freeze 24 additional HM-EQA questions x 3 seeds x 2 arms; freeze 6 readable-object OVMM cases x 3 seeds x 2 arms | Test task quality and cost beyond the tuned pilot; pause after first batch for infrastructure audit, not score-based sample replacement |
+| 2: controlled capabilities | 12 development episodes, then scene-disjoint assessment population | Attribute view, context, grounding and recovery failures; see [protocol](harness_capability_benchmark.md) |
+| 3: targeted ablations | Six-case screen; one factor per comparison, then frozen assessment | Dialogue/context, view selection, ingestion and evidence feedback; no Cartesian sweep |
+| 4: extensions | Ten AbstainEQA pairs and 14 EXPRESS examples as adapter pilots; then separate active qualification | Official evidence/scorer correctness before any headline results |
+| 5: integrated manipulation | Four feasible multi-step templates, privileged control and learned perception separately | Hold the released RL skill checkpoint fixed; no contemporaneous training or robot-specific reasoning policy |
+
+The 24 new EQA IDs, scene bindings and OVMM fixtures must be predeclared before
+new tuning; they are NOT yet selected or run. Historical inspection of a scene
+must be disclosed: a fresh selection is not necessarily a pristine holdout.
+Current 12-question development IDs stay out of that selection. Include positive,
+negative, ambiguous and changed-target cases, with meaningful size/view strata.
+Persist paired outcomes, conditional failure stages and all infrastructure
+denominators. Cluster uncertainty by scene/task, not individual video frames;
+use paired exact tests for binary outcomes and paired distributions for costs.
+Small pilots cannot resolve modest accuracy effects.
+
+Common controls: one Qwen model/quantization, frozen source/config/scorer,
+same sensor inputs, shared task language and budgets, and fixed navigation/skill
+backends. Pre-stack versus merged is a complete-system comparison. Within-harness
+ablations isolate factors; do not infer causality from the complete-system delta.
+DynaMem/no-instance, lazy/query-driven and merge variants remain required memory
+comparisons, but screen them on the same trajectories before new active rollouts.
+Some ablation switches remain to be implemented; do not invent CLI flags in runbooks.
+
+### Paper and figure changes
+
+1. Keep historical controller results distinct from the merged shared harness;
+   do not relabel old graph runs as lazy/query-driven or model-final runs.
+2. Add the pinned development pilot, including S0 failure runtime. No stronger
+   headline until expanded frozen evidence supports it.
+3. Update method/appendix to describe evidence frames, search hypotheses,
+   grounded objects and measured action outcomes, with adapter capabilities.
+4. Generate paired top-down paths/coverage, time-to-useful-view curves,
+   visibility-to-grounding failure breakdowns, task timelines and camera panels
+   with question/instruction, frame time, pose, role and outcome. Include failures.
+5. Manipulation figures use actual settled/contact-scored execution. Chase-camera
+   recordings and head RGB provide complementary evidence; never substitute GT
+   overlays for what the model received.
+
+No deeper GPU sweep has been launched by this plan. The first deliverables are
+the reproducible CPU pilot analysis and a paper build; the next work is fixture
+and evidence-loader qualification under the resource agreement.
+
 **Current inventory:** see [project status (2026-10-12)](../project_status.md)
 for merged work, remaining PRs, latest acceptance evidence, and specific LaTeX
 inconsistencies. The dated pilot notes below preserve their original source and

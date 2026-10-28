@@ -1,5 +1,10 @@
 # Paper experiments — master index
 
+**Post-merge study (2026-10-28):** [RL-priority experiment and paper plan](shared_agent_paper_update.md#post-merge-evidence-program-2026-10-28),
+[proposed controlled capability suite](harness_capability_benchmark.md).
+The current shared-harness development pilot is separate from historical
+controller results. Deeper GPU runs await a compute window; CPU analysis comes first.
+
 **Status (2026-10-12):** [Main, open PRs, and paper evidence](../project_status.md)
 is the current inventory. The matrix below lists available harnesses and smokes;
 it does not mean every paper result is complete. Historical HM-EQA results exist,
