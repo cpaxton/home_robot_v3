@@ -67,6 +67,7 @@ def run_case(case, output, base_url, model, port):
     from emet.simulation.sim_manipulation import robot_zmq_set_body_pose
 
     output.mkdir(parents=True, exist_ok=False)
+    os.environ["EMET_PHYSICAL_AUDIT"] = str(output / "actuation.jsonl")
     scene, mjmodel = build_stretch_case(case, output / "fixture")
     cfg = SimLaunchDefaultMujoco(robot="stretch", headless=True, scene_path=str(scene), port_offset=port, seed=0)
     repo = Path(__file__).resolve().parents[1]

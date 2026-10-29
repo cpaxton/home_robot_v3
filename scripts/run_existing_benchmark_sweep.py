@@ -382,7 +382,13 @@ def main():
         started = time.monotonic()
         print("START " + task["id"], flush=True)
         with (case / "supervisor.log").open("a") as log:
-            result = subprocess.run(command, cwd=source, env=env | task["env"], stdout=log, stderr=subprocess.STDOUT)
+            result = subprocess.run(
+                command,
+                cwd=source,
+                env=env | task["env"] | {"EMET_PHYSICAL_AUDIT": str(case / "actuation.jsonl")},
+                stdout=log,
+                stderr=subprocess.STDOUT,
+            )
         if result.returncode == 3:  # Lost lock race: no episode ran; retain log, retry on resume.
             print("GPU lock busy; leaving this and later cases pending", flush=True)
             return
