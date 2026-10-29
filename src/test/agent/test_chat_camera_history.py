@@ -52,15 +52,21 @@ def test_live_chat_session_preserves_earlier_user_turn_and_camera(monkeypatch):
     client._openai = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
     monkeypatch.setattr(loop, "get_llm_client", lambda *a, **kw: client)
     monkeypatch.setattr(loop, "get_tools", lambda ctx: [])
+    turns = iter(["Observe this", "What was visible?", None])
+    factory = MagicMock(side_effect=AssertionError("must reuse the existing owner"))
+    monkeypatch.setattr(loop, "StretchZmqClient", factory)
     loop.run_agent_with_robot(
         discord=False,
         use_llm=True,
-        commands=["Observe this", "What was visible?"],
+        robot_client=robot,
+        input_reader=lambda _prompt: next(turns),
         device="cpu",
         vl_include_camera=True,
         thinking_status=False,
     )
     assert len(requests) == 2
+    factory.assert_not_called()
+    robot.stop.assert_called_once()
     assert [m["role"] for m in requests[1]] == ["system", "user", "assistant", "user"]
     assert requests[1][1]["content"][0]["text"] == "Observe this"
     assert requests[1][1]["content"][1]["type"] == "image_url"

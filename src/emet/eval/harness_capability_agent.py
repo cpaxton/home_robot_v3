@@ -88,7 +88,8 @@ def agent_turns(case):
     if family in {"recall", "search_act"}:
         turns = [
             "Observe the current camera image carefully. Remember what is visible for a later question.",
-            "Turn left 90 degrees. Do not describe new objects from memory as currently visible.",
+            "Turn left 90 degrees safely, inspecting the floor and replanning if needed. "
+            "Report the measured outcome. Do not describe remembered objects as currently visible.",
         ]
         if family == "search_act":
             turns[0] = (

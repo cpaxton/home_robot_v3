@@ -11,11 +11,9 @@ until action/evidence qualification, rather than interpreting a zero exit as suc
 import argparse
 import json
 import os
-import queue
 import subprocess
-import sys
-import threading
 import time
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 
 import numpy as np
@@ -24,10 +22,9 @@ from PIL import Image
 from emet.eval.chat_gateway import recorded_chat_gateway
 from emet.eval.harness_capability_agent import agent_turns, build_stretch_case, initial_gaze
 from emet.eval.harness_capability_fixtures import load_development_cases
-from emet.utils.process_tree import popen_session, terminate_process_tree
 
 
-def agent_child(settings):
+def run_agent_session(robot, input_reader, endpoint, model):
     from emet.agent.loop import run_agent_with_robot
     from emet.core import get_parameters
 
@@ -41,10 +38,11 @@ def agent_child(settings):
     # The lean diagnostic excludes learned object proposals/segmentation.
     run_agent_with_robot(
         robot="stretch",
-        port_offset=settings["port"],
+        robot_client=robot,
+        input_reader=input_reader,
         discord=False,
         use_llm=True,
-        llm=f"openai@{settings['base_url']}#{settings['model']}",
+        llm=f"openai@{endpoint}#{model}",
         device="cpu",
         parameters=parameters,
         memory_backend="dynamem",
@@ -52,6 +50,7 @@ def agent_child(settings):
         vl_include_camera=True,
         visual_servo=False,
         cpu_only=True,
+        manipulation_only=True,
         max_tool_rounds=8,
         max_tokens=512,
         debug_llm=True,
@@ -86,43 +85,12 @@ def run_case(case, output, base_url, model, port):
     }
     (output / "protocol.json").write_text(json.dumps(record, indent=2) + "\n")
     measured, intervention = [], None
-    robot, proc, reader = None, None, None
+    robot = None
     with (output / "server.log").open("w") as server_log:
         with benchmark_sim_server(cfg, repo=repo, cpu_only=False, server_stderr=server_log):
             try:
                 robot = connect_benchmark_robot(cfg, port, enable_rerun_server=False)
                 with recorded_chat_gateway(base_url, output / "model_requests") as endpoint:
-                    settings = output / "agent-settings.json"
-                    settings.write_text(json.dumps({"port": port, "model": model, "base_url": endpoint}))
-                    env = dict(
-                        os.environ,
-                        PYTHONUNBUFFERED="1",
-                        EMET_PHYSICAL_EXECUTION="1",
-                        EMET_SIM_NAV_TELEPORT="0",
-                        EMET_MOLMOSPACES_NAV_TELEPORT="0",
-                    )
-                    proc = popen_session(
-                        [sys.executable, str(Path(__file__).resolve()), "--agent-child", str(settings)],
-                        cwd=repo,
-                        env=env,
-                        stdin=subprocess.PIPE,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.STDOUT,
-                        text=True,
-                        bufsize=1,
-                    )
-                    lines = queue.Queue()
-
-                    def read_lines():
-                        with (output / "agent.log").open("w") as log:
-                            for line in proc.stdout:
-                                log.write(line)
-                                log.flush()
-                                lines.put(line)
-                        lines.put(None)
-
-                    reader = threading.Thread(target=read_lines, daemon=True)
-                    reader.start()
 
                     def capture(tag):
                         obs = robot.get_observation()
@@ -151,58 +119,45 @@ def run_case(case, output, base_url, model, port):
                         measured.append(row)
                         (output / "measured.json").write_text(json.dumps(measured, indent=2, default=str))
 
-                    def wait_for(marker, seconds=240):
-                        deadline = time.monotonic() + seconds
-                        while time.monotonic() < deadline:
-                            try:
-                                line = lines.get(timeout=1)
-                            except queue.Empty:
-                                if proc.poll() is not None:
-                                    raise RuntimeError(f"Agent exited before {marker}: {proc.returncode}") from None
-                                continue
-                            if line is None:
-                                raise RuntimeError(f"Agent output ended before {marker}")
-                            if marker in line:
-                                return
-                        raise TimeoutError(f"Agent did not reach {marker}")
+                    turn_index = 0
 
-                    wait_for("I'm online and ready to help", seconds=180)
-                    pan, tilt = initial_gaze(mjmodel)
-                    if robot.head_to(pan, tilt, blocking=True) is not True:
-                        raise RuntimeError("Initial head pose unconfirmed")
-                    time.sleep(1)
-                    capture("initial")
-                    for index, turn in enumerate(turns):
-                        if index == 1 and case["family"] == "changed" and case["variant"] == "moved":
-                            # Evaluator-only scripted world change between actual completed
-                            # turns. No target pose or reference answer is sent to the model.
-                            before = time.time()
+                    def next_turn(_prompt):
+                        nonlocal turn_index, intervention
+                        if turn_index:
+                            capture(f"turn-{turn_index}-after")
+                        else:
+                            pan, tilt = initial_gaze(mjmodel)
+                            if robot.head_to(pan, tilt, blocking=True) is not True:
+                                raise RuntimeError("Initial head pose unconfirmed")
+                            time.sleep(1)
+                            capture("initial")
+                        if turn_index == len(turns):
+                            return None
+                        if turn_index == 1 and case["family"] == "changed" and case["variant"] == "moved":
+                            # Same command owner, evaluator-only change between
+                            # completed turns. No coordinates reach the model.
                             robot_zmq_set_body_pose(robot, "target", [3.5, 0.6, 0.8])
                             intervention = {
                                 "type": "target_move",
-                                "requested_at": before,
+                                "requested_at": time.time(),
                                 "requested_position": [3.5, 0.6, 0.8],
                                 "verification": "inspect scorer physics snapshot",
                             }
                             time.sleep(0.5)
-                        capture(f"turn-{index + 1}-before")
-                        proc.stdin.write(turn + "\n")
-                        proc.stdin.flush()
-                        wait_for("turn done in")
-                        capture(f"turn-{index + 1}-after")
-                    proc.stdin.write("QUIT\n")
-                    proc.stdin.flush()
-                    rc = proc.wait(timeout=60)
-                    if rc != 0:
-                        raise RuntimeError(f"Agent shutdown exit {rc}")
-                    record.update(complete=True, exit_code=rc)
+                        capture(f"turn-{turn_index + 1}-before")
+                        turn = turns[turn_index]
+                        turn_index += 1
+                        return turn
+
+                    with (output / "agent.log").open("w", buffering=1) as log:
+                        with redirect_stdout(log), redirect_stderr(log):
+                            run_agent_session(robot, next_turn, endpoint, model)
+                    if turn_index != len(turns) or measured[-1]["tag"] != f"turn-{len(turns)}-after":
+                        raise RuntimeError("Agent exited before completing the declared turn protocol")
+                    record.update(complete=True, exit_code=0)
             except Exception as error:
                 record.update(error=f"{type(error).__name__}: {error}")
             finally:
-                if proc is not None:
-                    terminate_process_tree(proc)
-                if reader is not None:
-                    reader.join(timeout=5)
                 if robot is not None:
                     robot.stop()
     record["intervention"] = intervention
@@ -212,15 +167,12 @@ def run_case(case, output, base_url, model, port):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--agent-child", type=Path)
     p.add_argument("--config", type=Path, default=Path("configs/eval/harness_capability_dev.json"))
     p.add_argument("--output", type=Path)
     p.add_argument("--episodes", nargs="+", default=["cap-dev-01", "cap-dev-02"])
     p.add_argument("--base-url")
     p.add_argument("--model", default="Qwen/Qwen3-VL-8B-Instruct")
     args = p.parse_args()
-    if args.agent_child:
-        return agent_child(json.loads(args.agent_child.read_text()))
     if not args.output or not args.base_url:
         p.error("--output and --base-url are required")
     cases = {c["id"]: c for c in load_development_cases(args.config)}

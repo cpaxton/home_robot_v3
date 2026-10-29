@@ -604,6 +604,8 @@ def run_agent_with_robot(
     observed_tamp_provider: ObservedTaskProvider | None = None,
     tamp_task_session: Any | None = None,
     native_task_config: dict | None = None,
+    robot_client: Any | None = None,
+    input_reader: Callable[[str], str | None] | None = None,
     **kwargs: Any,
 ) -> None:
     """Start robot, optional memory load, optional Discord; run command loop with tools.
@@ -611,6 +613,11 @@ def run_agent_with_robot(
     If *commands* is a non-empty list, each entry is fed as a user turn
     (LLM mode) or manual command (no-LLM mode) instead of reading stdin.
     The agent exits after all commands are consumed.
+
+    An optional already-connected *robot_client* avoids opening a second control
+    owner (the loop still stops it on exit). *input_reader* supplies user turns
+    when scripted commands are absent, for integrations and controlled live
+    evaluations. It runs between completed turns, never during tool execution.
 
     *observed_tamp_provider* supplies read-only observed task proposals to
     ``scene_tasks``. Otherwise the existing open-vocabulary scene-graph processor
@@ -679,7 +686,7 @@ def run_agent_with_robot(
         parameters["force_eqa_siglip_encoder"] = False
         _exec_kwargs.update(manipulation_only=True, cpu_only=True, visual_servo=False)
     robot_key = robot.lower().replace("-", "_")
-    if robot_key == "stretch":
+    if robot_client is None and robot_key == "stretch":
         # Do not start ZMQ in __init__: DynamemTaskExecutor calls agent.start() which invokes
         # robot.start() again; double-start left orphan recv threads and led to ZMQ double-free crashes.
         robot_client = StretchZmqClient(
@@ -695,7 +702,7 @@ def run_agent_with_robot(
             allow_missing_depth=allow_missing_depth,
             state_only=state_only_sim,
         )
-    elif robot_key in ROBOT_REGISTRY:
+    elif robot_client is None and robot_key in ROBOT_REGISTRY:
         mod = importlib.import_module(ROBOT_REGISTRY[robot_key])
         backend_cls = None
         for attr_name in dir(mod):
@@ -717,7 +724,7 @@ def run_agent_with_robot(
             rerun_show_panels=rerun_show_panels,
             rerun_debug=rerun_debug,
         )
-    else:
+    elif robot_client is None:
         raise click.UsageError(
             f"Unknown robot '{robot}'. Known: stretch, {list(ROBOT_REGISTRY.keys())}. "
             "Start the server with the same robot: emet serve mujoco --robot <name>"
@@ -1208,6 +1215,8 @@ def run_agent_with_robot(
             return text
         if scripted:
             return None  # queue exhausted
+        if input_reader is not None:
+            return input_reader(prompt_text)
         if unified_input_queue is not None:
             return unified_input_queue.get()
         try:
