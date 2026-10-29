@@ -179,3 +179,10 @@ about 28 GB. Resume job `20261029_175505_ce82c1` uses the same manifest/source
 and skips the three completed entries; only q41/q47 remain to execute. The
 launch and cleanup record is `eqa_resume_launch.json` in the repair output root.
 Do not pool these failure-selected retries into an overall accuracy claim.
+
+The resume subsequently finishes q41 and q47, both without exceptions; q41 is
+wrong and q47 is correct. Final repair population: **5/5 completed, zero crashes,
+2/5 correct**. This validates recovery of the identified execution exception,
+not an accuracy advantage. The matched 39-question refresh still puts lazy
+graph at 19/39 in 49.3 minutes and static graph at 20/39 in 99.0 minutes: similar
+observed accuracy at lower cost, with no demonstrated accuracy superiority.

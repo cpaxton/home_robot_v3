@@ -7,8 +7,9 @@
       original scores and manifests. Diagnosis:
       `docs/experiments/benchmark_failure_audit_20261029.md`.
       Repaired live native two-object TAMP now passes (both goals, zero forbidden
-      commands). Three EQA retries complete without crashes (1/3 correct); q41/q47
-      resumed after offline package-cache pruning restored the disk reserve.
+      commands). All five EQA retries now complete without crashes (2/5 correct),
+      after offline package-cache pruning restored the disk reserve. This closes
+      the identified crash recovery; Molmo and integrated S0 remain open.
 - [ ] Qualify all 12 controlled development interventions through the shared
       agent. Full Stretch fixtures and production CHAT bindings now exist; live
       action/evidence audit, learned localization and manipulation are not yet
