@@ -22,6 +22,9 @@ def test_full_stretch_fixture_compiles_with_declared_interventions(tmp_path, cas
     assert present is case["frames"][0]["target_present"]
     obstacle = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "obstacle") >= 0
     assert obstacle is case.get("obstacle", False)
+    if present:
+        # A box-shaped support made the nominal one-box referent ambiguous.
+        assert model.geom("target_support").type == mujoco.mjtGeom.mjGEOM_CYLINDER
     if case["family"] in {"recall", "search_act"}:
         assert case["expected"] not in " ".join(agent_turns(case)).lower()
     if case["id"] == "cap-dev-01":

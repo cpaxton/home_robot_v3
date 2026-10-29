@@ -39,9 +39,9 @@ def build_stretch_case(case, output):
             world,
             "geom",
             name=f"{name}_support",
-            type="box",
+            type="cylinder",
             pos=f"3.5 {0.3 if case['family'] == 'changed' else y} .325",
-            size=".3 .9 .325" if case["family"] == "changed" else ".3 .3 .325",
+            size=".9 .325" if case["family"] == "changed" else ".3 .325",
             rgba=".5 .4 .3 1",
         )
         body = ET.SubElement(world, "body", name=name, pos=f"3.5 {y} .8")

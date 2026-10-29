@@ -73,6 +73,7 @@ def run_case(case, output, base_url, model, port):
     turns = agent_turns(case)
     record = {
         "episode_id": case["id"],
+        "live_fixture_version": 2,
         "family": case["family"],
         "turns": turns,
         "source_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip(),
