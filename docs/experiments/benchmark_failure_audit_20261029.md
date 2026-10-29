@@ -128,3 +128,31 @@ count it as a successful task or invent a final summary. The diagnostic now
 refreshes and labels its final score as an instantaneous snapshot, with
 continuous stability reported separately in `verification.jsonl`. Artifacts:
 `~/runs/emet/native-verification-cause-20261029/`.
+
+## Focused repair restart
+
+The authorized restart uses a new output root,
+`~/runs/emet/benchmark-repair-check-20261029/`, and isolated source `5a41747d`
+in `.worktrees/benchmark-repairs-20261029`: original `cd169673` plus just the
+two repairs above. No unrelated CHAT or capability-suite changes are included.
+`assignment.json` pins the original protocols, fixture and scoring inputs.
+
+The live two-object TAMP control starts first, using the original CLI, remote
+Qwen endpoint, fixture, goals and deliberate invalid-plan boundary. Its acceptance
+still requires both objects correctly placed and stable, valid tool contracts,
+proper failure stopping, and zero forbidden actuation. A successful first release
+alone is not successful completion of the two-object task.
+
+Then rerun exactly q104/q21/q38/q41/q47 with DynaMem, seed 0 and the original
+model, exploration and answer budgets. The existing matrix driver now accepts
+repeatable `--task-id` arguments, rejects unknown IDs, and freezes the selected
+population in a new manifest. Completion without the exception and answer
+correctness are reported separately. Keep the original failed rows; do not
+combine the five selected retries into an unbiased overall accuracy estimate.
+
+All heavy jobs remain serial on CPU 12 with single-thread libraries and the
+managed experiment lock. The EQA coordinator waits for the TAMP supervisor and
+yields to other GPU/RL work between cases. Retain the 20 GiB disk reserve; if it
+is reached, remaining assignments stay pending. Molmo remains paused for its
+execution-mode mismatch; S0 search needs its exact planner-command trace before
+claiming a repaired integrated search result. This is not a full sweep restart.

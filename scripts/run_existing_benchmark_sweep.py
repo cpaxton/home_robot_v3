@@ -209,6 +209,17 @@ def build_matrix(source, output, python, habitat):
     return tasks
 
 
+def select_tasks(tasks, requested):
+    """Declare a retry population without changing the original matrix or ledger."""
+    if not requested:
+        return tasks
+    selected = set(requested)
+    unknown = selected - {task["id"] for task in tasks}
+    if unknown:
+        raise ValueError(f"Unknown task IDs: {sorted(unknown)}")
+    return [task for task in tasks if task["id"] in selected]
+
+
 def read_outcome(task, rc):
     """Infrastructure completion and task success are different fields."""
     if rc:
@@ -252,12 +263,15 @@ def main():
     p.add_argument("--habitat", type=Path, required=True)
     p.add_argument("--max-hours", type=float, default=7)
     p.add_argument("--reserve-gib", type=float, default=20)
+    p.add_argument("--task-id", action="append", help="Run only these exact matrix IDs (repeatable; new manifest).")
     p.add_argument("--execute", action="store_true")
     args = p.parse_args()
     source, output = args.source.absolute(), args.output.absolute()
     revision = git(source, "rev-parse", "HEAD")
     assert_frozen_source(source, revision)
-    tasks = build_matrix(source, output, str(args.python.absolute()), str(args.habitat.absolute()))
+    tasks = select_tasks(
+        build_matrix(source, output, str(args.python.absolute()), str(args.habitat.absolute())), args.task_id
+    )
     output.mkdir(parents=True, exist_ok=True)
     manifest = {
         "schema_version": 1,
@@ -276,6 +290,7 @@ def main():
         },
         "seed": 0,
         "methods": METHODS,
+        "selected_task_ids": args.task_id,
         "scope": "Registered gate/slice refresh, not full upstream datasets or a multi-seed superiority claim",
         "deferred": {
             "robocasa": "Visible larger-object replacement unqualified; tiny-object stress kept separate",

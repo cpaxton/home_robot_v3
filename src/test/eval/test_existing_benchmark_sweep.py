@@ -47,3 +47,14 @@ def test_wrong_answer_is_completed_task_not_infrastructure_failure(tmp_path):
     metric.write_text(json.dumps({"correct": False}) + "\n")
     out = driver.read_outcome({"metric": str(metric), "family": "eqa"}, 0)
     assert out["complete"] is True and out["success"] is False and out["error"] is None
+
+
+def test_retry_selection_preserves_original_order_and_commands(tmp_path):
+    tasks = driver.build_matrix(SCRIPTS.parent, tmp_path, "python", "habitat")
+    requested = ["eqa-dynamem-q47-s0", "eqa-dynamem-q104-s0"]
+    selected = driver.select_tasks(tasks, requested)
+    assert selected == [task for task in tasks if task["id"] in requested]
+    assert len(selected) == 2
+    assert driver.select_tasks(tasks, None) is tasks
+    with pytest.raises(ValueError, match="Unknown task IDs"):
+        driver.select_tasks(tasks, ["eqa-dynamem-q999-s0"])
