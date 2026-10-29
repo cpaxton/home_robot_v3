@@ -374,3 +374,26 @@ and explicit static-scene assumptions. A fresh image cannot renew hidden map
 cells, and partial support observations must not silently become a complete
 fixture. Then run the first complete stationary observed transfer through the
 same public tools before held-out multi-step or exploration trials.
+
+## October 29 moving-mask / gripper checkpoint
+
+Implemented a separate shape-equivalent payload contract through public planning,
+retention and visual effects, preserving unknown material yaw. Whole-tool gripper
+volumes now use analytic intervals over unmeasured joints, anchored at motor-only
+rigid EE FK. Two native controls pass; all 175 sampled envelopes contain actual
+collision geometry, including 75 contact samples. These are conditional model
+checks, not certified global or hardware bounds; full-arm uncertainty remains.
+
+Moving RGBD association now follows whole current components within a declared
+motion envelope and latches ambiguous/lost identities. The four rendered-stage
+cases pass, including 24 cm translation/8 cm lift and explicit distractor/occlusion
+stops. Actual head-camera contact testing is still incomplete: the final
+registered RGBD repeat tracks 11 captures, then stops on insufficient geometry
+near the gripper as target visibility drops from 1349 to 513 pixels. Privileged
+control success does not turn that sensor failure into observed task acceptance.
+
+810 affected regression checks and 65 overlapping final focused checks pass.
+[Evidence, all attempts, figure and videos](../experiments/observed_moving_geometry_20261029.md)
+identify the remaining view/occlusion problem. Next qualify wrist/head view
+continuity, then assemble support/map/contact/full-arm policy in a concrete source.
+The first full observed transfer remains pending; do not skip to multi-step scores.

@@ -108,9 +108,43 @@ An opt-in simulator renderer co-samples images and motor feedback from one priva
 physics snapshot. A separate full-robot debug channel includes unmeasured passive
 joints and is rejected by observed effect admission. Motor-only rigid EE FK does
 not establish conservative fingertip geometry or hardware calibration.
+An explicit shape-equivalent evidence contract now lets experimental payload,
+retention and effect consumers handle declared primitive symmetry without
+inventing material yaw; generic unique-pose consumers still reject that evidence.
+Its error bounds are supplied independently, not inferred from fit residuals.
+Analytic passive-joint intervals condition whole-tool gripper envelopes on the
+eight motor channels and model assumptions. Two development contact controls
+contain all sampled collision volumes in 175 snapshots, including 75 snapshots
+with target contact; this is neither a hardware certificate nor 175 independent
+tasks. A moving RGBD association diagnostic passes two rendered translation/lift
+views and two explicit ambiguity/loss cases. Those fixtures use operator colour
+initialization, a complete cylinder prior and ideal rendered depth, rather than
+agent semantic grounding or observed enclosure construction.
+In a Stretch contact episode using separate calibrated RGB/depth optical frames
+and registered measured depth, tracking accepts 11 captures before stopping on
+insufficient geometry near the gripper as target visibility decreases.
+The privileged contact controller still completes; observed tracking and task
+acceptance remain separate (Figure~\ref{fig:observed_moving_geometry}).
 Capture identity/order does not establish
 cross-host clock synchronization or certify capture-after-motion. These guards
 do not enable observed manipulation or validate the full exploration--navigation--
 manipulation chain. Privileged simulator state/contact may support independent
 scoring and debugging; it is not a claim that equivalent sensors exist on
 hardware. Appendix~\ref{app:native_tamp} keeps these evidence tiers separate.
+
+\begin{figure}[ht]
+  \centering
+  \includegraphics[width=\linewidth]{figures/observed_moving_geometry_20261029.pdf}
+  \caption{Observed-input development diagnostics, not observed task success.
+  (a) Center error against an independent simulator scorer during 24\,cm stage
+  translation and 8\,cm lift, from two views with a declared cylinder prior and
+  ideal depth. (b) Conditional whole-gripper model envelopes contain all sampled
+  collision-geom corners in two native contact controls; no sampled joint-limit
+  overrun occurs. (c--d) Head RGBD initially supports an object candidate, then
+  stops near the approaching gripper. Visible target pixels fall from 1349 to
+  513 at loss. Simulator segmentation/poses/contacts are evaluator inputs only;
+  the demonstrated controller is privileged, and tracking loss remains latched.
+  Full observed source assembly, informative contact views and hardware error
+  qualification remain unvalidated.}
+  \label{fig:observed_moving_geometry}
+\end{figure}
