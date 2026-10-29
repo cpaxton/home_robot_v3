@@ -1,10 +1,24 @@
 # Living TODOs (small / near-term)
 
-- [ ] Bind the 12 controlled development interventions to actual robot episodes
-      through the existing shared agent; geometry snapshots and recorded-QA replay
-      are implemented, not active robot acceptance. Qualify official frame packs
+- [ ] Qualify all 12 controlled development interventions through the shared
+      agent. Full Stretch fixtures and production CHAT bindings now exist; live
+      action/evidence audit, learned localization and manipulation are not yet
+      accepted. The remote CHAT image keyword and per-user reset bugs have focused
+      regression fixes; retain the old and corrected live diagnostic artifacts.
+      Qualify official frame packs
       and evaluators for EXPRESS/AbstainEQA. Protocol/results:
       `docs/experiments/harness_capability_benchmark.md`.
+- [ ] Resolve cold-map turn feasibility in the new live case: both corrected
+      seen/unseen protocols finish and preserve camera/history, but target-directed
+      floor inspection returns `floor_target_unobservable` and yaw does not change.
+      Compare scripted broad downward inspection with targeted inspection before
+      changing planner clearance. Color correctness is not recall/navigation
+      acceptance. Audit: `paper/data/harness_live_diagnostic_20261029/`.
+- [ ] Complete the frozen-main existing-benchmark refresh across its declared
+      237 tasks; preserve errors/pending cases and resume across idle windows.
+      Gather source-linked figure inputs, audit selected success/failure traces,
+      and assess task quality/cost separately from tooling correctness.
+      `docs/experiments/benchmark_refresh_20261029.md`; no RL work is preempted.
 - [ ] Profile failed-search cost without answer overrides or target-specific rules:
       final S0 seed 1 misses the receptacle in both arms but candidate takes
       798.6 s versus control 287.2 s. Seed 2 succeeds faster (478.0 vs 790.4 s).

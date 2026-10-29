@@ -75,6 +75,77 @@ the existing agent, and evaluating active approach/recovery independently. Do
 not promote the synthetic planar probe to an implemented robot adapter. Official
 EXPRESS/AbstainEQA scoring still needs actual frame packs and evaluator wiring.
 
+## Live agent binding (2026-10-29)
+
+`scripts/run_harness_capability_agent.py` builds full Stretch fixtures for the
+12 authored cases and connects a live bridge to the production `run_agent_with_robot`
+CHAT loop. All 12 fixture compilation/intervention admission tests pass. The
+initial binding uses real RGB-D and measured wheel/head tools, remote Qwen, and
+geometry-only memory without learned proposals/segmentation. It therefore cannot
+qualify final object localization or manipulation. Scenario turns are recorded:
+the live search/act prototype visits a point 0.5 m forward, rather than replaying
+the synthetic snapshot camera jump. Do not treat these trajectories as matched.
+
+The evaluator sets only initial fixture/head conditions and the declared
+between-turn object relocation. Subsequent base motion uses ordinary wheel
+commands. Actual HTTP requests/responses retain image data and dialogue, while
+RGB-D/calibration and local/world base/head poses are saved independently.
+Physics snapshots and intervention coordinates stay scorer-side. Exit zero
+means protocol completion, not a successful task; `success` remains null until
+manual evidence/action scoring is qualified.
+
+This binding exposed two real CHAT evidence gaps: `OpenaiClient` silently ignored
+the image keyword, and the outer CHAT loop reset history at each user command.
+The first was reproduced with a failing test at the actual call boundary; the
+repairs now preserve exact image pixels and earlier user/image turns in the
+real loop. Existing HTTP-client history bounds remain 50 messages. These repairs
+are research-branch changes, absent from the frozen-main benchmark refresh.
+The surrounding CHAT/client/dispatch/dialogue tests pass.
+
+The first live attempt correctly refused commands because its physical audit
+path was missing. The corrected case uses `actuation.jsonl` before bridge startup;
+the refused run remains an infrastructure artifact. First corrected live job:
+`20261029_005049_ee39a4` also exposed competing evaluator/agent command owners.
+The bridge correctly refused the second owner. The loop now accepts an existing
+client and a between-turn input reader; the evaluator and agent share a single
+owner without weakening the lease protocol. The perception-disabled mode is
+explicit: merely disabling visual servo did not prevent mapper model loads.
+
+At `0a7142bf`, job `20261029_005852_5281e3` completed the first real turn protocol.
+The initial RGB was visually checked: green target on a brown box-shaped support.
+The final HTTP request retained all three earlier/current images. A 90-degree
+turn was rejected for 25 unknown footprint cells; actual floor inspection reduced
+that checked pose to zero unknown cells, but measured yaw did not change. The
+next instruction said **not to call more tools**, despite remaining rounds, so
+Qwen summarized its intent to retry rather than issuing the retry. It answered
+"brown" to the later color question. This is not accepted recall success: the
+motion was incomplete and the support made the singular box referent ambiguous.
+Keep the trace at `~/runs/emet/capability-live-recall-v3-20261029/`.
+
+`458fbaa8` removes the premature info-tool finalizer and permits further authorized
+tool calls within the existing budget. Round exhaustion and TAMP failure/unknown
+boundaries remain. An actual-loop test exercises sensing then motion; it would
+previously end after sensing. `f268d594` changes the support to a cylinder and
+declares live fixture version 2 before scoring a new pair. This is a development
+fixture repair, not a held-out improvement. New paired job `20261029_010733_da5fb2`
+uses `~/runs/emet/capability-live-pair-v4-20261029/`. Qualification still requires
+actual request, image, measured motion and final-answer inspection.
+
+The corrected pair is now manually inspected: both protocols complete; the seen
+case answers green and the unseen case abstains. **Neither requested turn is
+executed**. Both encounter unknown start-footprint cells, and targeted floor
+inspection returns `floor_target_unobservable`; measured yaw changes are below
+0.0001 degrees. The seen box remains visible at the end, so correct color is
+not evidence of recall after turning. These are 0/2 accepted complete tasks,
+with the safe refusals and all context preserved. Next isolate broad downward
+inspection versus targeted inspection through the same tools, with a scripted
+feasibility control, before changing movement rules or crediting recall.
+52 CHAT/client/dispatch/dialogue tests and 19 fixture/sweep/export checks pass.
+
+![Actual camera evidence, final answers, and absent physical turn](../../paper/figs/harness_live_evidence_and_motion.png)
+
+Audited inputs and reproduction: `paper/data/harness_live_diagnostic_20261029/`.
+
 ## Families and paired interventions
 
 | Family | Matched conditions | What it measures |

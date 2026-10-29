@@ -3,7 +3,9 @@
 **Post-merge study (2026-10-28):** [RL-priority experiment and paper plan](shared_agent_paper_update.md#post-merge-evidence-program-2026-10-28),
 [proposed controlled capability suite](harness_capability_benchmark.md).
 The current shared-harness development pilot is separate from historical
-controller results. Deeper GPU runs await a compute window; CPU analysis comes first.
+controller results. The [2026-10-29 frozen-main benchmark refresh](benchmark_refresh_20261029.md)
+now has serial idle-GPU admission and source-linked figure exports; its full matrix
+takes multiple windows. New live Stretch cases use the existing CHAT agent.
 
 **Status (2026-10-12):** [Main, open PRs, and paper evidence](../project_status.md)
 is the current inventory. The matrix below lists available harnesses and smokes;

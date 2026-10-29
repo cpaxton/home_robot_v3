@@ -1,0 +1,44 @@
+[
+  {
+    "episode_id": "cap-dev-01",
+    "source_sha": "f268d59442ae5b4f48b82d9f4215e04da4d24867",
+    "live_fixture_version": 2,
+    "protocol_complete": true,
+    "yaw_change_deg": -2.9041710469033396e-05,
+    "travel_m": 8.685123578989208e-08,
+    "final_model_message": "The box in the first view was green.",
+    "response_artifact": "/home/cpaxton/runs/emet/capability-live-pair-v4-20261029/cap-dev-01/model_requests/request-006/response.json",
+    "initial_rgb": "/home/cpaxton/runs/emet/capability-live-pair-v4-20261029/cap-dev-01/initial.png",
+    "final_rgb": "/home/cpaxton/runs/emet/capability-live-pair-v4-20261029/cap-dev-01/turn-3-after.png",
+    "task_success": null,
+    "input_sha256": {
+      "/home/cpaxton/runs/emet/capability-live-pair-v4-20261029/cap-dev-01/result.json": "5e221ebbd824f6963f84bf1b476555d729b32b5528ecdf86a031535b99346c24",
+      "/home/cpaxton/runs/emet/capability-live-pair-v4-20261029/cap-dev-01/measured.json": "1ebb22289064450c0e2ccd5c5e0dfd60a8d6dabe9eb95fedb1f48cb53bae6e7f",
+      "/home/cpaxton/runs/emet/capability-live-pair-v4-20261029/cap-dev-01/model_requests/request-006/response.json": "4badc646dc08b90e467d13eda1477c322ecdaadbf2eb3ea9e70f4c1e406efa3a",
+      "/home/cpaxton/runs/emet/capability-live-pair-v4-20261029/cap-dev-01/initial.png": "ed2febac70edfe48992d38a4ffe58df7f40a71b3375880180d18eecc866c070d",
+      "/home/cpaxton/runs/emet/capability-live-pair-v4-20261029/cap-dev-01/turn-3-after.png": "fa5709632665a64dae520192d248cb8afc23ad6fce3eca75f4ab31f03ce9cae4"
+    },
+    "note": "Protocol completion and correct color alone do not qualify observe-turn-recall"
+  },
+  {
+    "episode_id": "cap-dev-02",
+    "source_sha": "f268d59442ae5b4f48b82d9f4215e04da4d24867",
+    "live_fixture_version": 2,
+    "protocol_complete": true,
+    "yaw_change_deg": -3.1006665438971925e-05,
+    "travel_m": 9.51905319293523e-08,
+    "final_model_message": "I cannot determine the color of the box as it is not visible in the current view.",
+    "response_artifact": "/home/cpaxton/runs/emet/capability-live-pair-v4-20261029/cap-dev-02/model_requests/request-005/response.json",
+    "initial_rgb": "/home/cpaxton/runs/emet/capability-live-pair-v4-20261029/cap-dev-02/initial.png",
+    "final_rgb": "/home/cpaxton/runs/emet/capability-live-pair-v4-20261029/cap-dev-02/turn-3-after.png",
+    "task_success": null,
+    "input_sha256": {
+      "/home/cpaxton/runs/emet/capability-live-pair-v4-20261029/cap-dev-02/result.json": "4dbe6b7d3a7ca5bfd1e9387a0546b9ea965ab91969ab733d60ace1ab9c19c7a5",
+      "/home/cpaxton/runs/emet/capability-live-pair-v4-20261029/cap-dev-02/measured.json": "50d7dd952bfe597b5cb9ee8223f383c4bc6a438cc12ff6d9af72a6c2cd8048ce",
+      "/home/cpaxton/runs/emet/capability-live-pair-v4-20261029/cap-dev-02/model_requests/request-005/response.json": "8b51161c8482dfeabe14943fbc0cc766629b625e10bc177070619c005e1cc964",
+      "/home/cpaxton/runs/emet/capability-live-pair-v4-20261029/cap-dev-02/initial.png": "067ac94b7a4dbdaff19dc4e9bbeec04ac7fe1d8554cf35d895ec39e3acfd15ff",
+      "/home/cpaxton/runs/emet/capability-live-pair-v4-20261029/cap-dev-02/turn-3-after.png": "3c003a15bc706865bc838fa4f0be4b8729350b0ae18d366cead0d17f2e65c5f3"
+    },
+    "note": "Protocol completion and correct color alone do not qualify observe-turn-recall"
+  }
+]

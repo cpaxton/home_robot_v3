@@ -38,12 +38,14 @@ window limits admission; it does not shorten episode budgets or fabricate
 completion. This matrix takes multiple windows. Create `PAUSE` in the output
 directory to stop after the current episode. The default disk reserve is 20 GiB.
 Three consecutive infrastructure failures stop admission for diagnosis.
+Priority applies at episode boundaries; an in-flight case finishes its bounded
+budget before the next GPU owner proceeds.
 
 ```bash
 # Run this coordinator itself through emet jobs --no-gpu-exclusive --cpu-safe.
 PYTHONPATH=src .venv/bin/python scripts/run_existing_benchmark_sweep.py \
   --source /home/cpaxton/src/home_robot_v3/.worktrees/benchmark-main-20261029 \
-  --output /home/cpaxton/runs/emet/benchmark-refresh-20261029 \
+  --output /home/cpaxton/runs/emet/benchmark-refresh-audited-20261029 \
   --python /home/cpaxton/src/home_robot_v3/.venv/bin/python \
   --habitat /home/cpaxton/src/home_robot_v3/.venv-habitat/bin/emet-habitat \
   --max-hours 7 --execute
@@ -53,9 +55,39 @@ Omit `--execute` to materialize the matrix only. Repeating the same command
 resumes unattempted entries; attempted failures remain in the ledger. Source,
 driver, population and configuration changes are rejected on resume. Retries
 need a new declared run, not replacement of a bad row. Offline model caches
-and `--no-download` prevent accidental large downloads during the sweep.
+and SQA3D's `--no-download` prevent implicit dataset/Hub retrieval. Ultralytics
+URL downloads are separate from Hub offline mode; the first mapper startup
+downloaded its detector weights into the ignored model cache. The local detector,
+SAM and MobileCLIP files are now inventoried by SHA-256 in
+`runtime_inventory.json`, with both interpreter/package inventories retained.
 Missing SQA3D SENS assets are infrastructure gaps, not permission to silently
 switch to mesh rendering. No cloud judge is invoked.
+
+Coordinator `20261029_005139_419677` owns the corrected seven-hour window. Figure
+job `20261029_005158_013c91` waits for its supervisor PID `3405566` and exports
+`figures/summary.json`, `figure_inputs.csv`, and `completion_and_outcomes.png`.
+The original `benchmark-refresh-20261029` artifacts remain separate: native
+TAMP passed, then q2/q6/q12/q14/q15 scored F/T/F/F/T without infrastructure errors.
+Admission was paused to add required per-case physical actuation audit paths
+before room execution. No room task ran without its required audit. The amended
+driver has a new manifest/output directory; those early EQA rows are retained
+but not pooled into its score. The initial live setup rejection
+`physical_execution_requires_audit_path` is likewise retained as infrastructure,
+not a model failure.
+
+The new active-case work is on the research branch, separately from this frozen
+main runtime. It exposed remote CHAT camera/history and continuation bugs; those
+repairs must pass live acceptance and remain excluded from this sweep's source.
+The benchmark refresh measures the currently merged system, not those repairs.
+
+Supplemental existing live TAMP control `20261029_011736_217713` reuses
+`eval_native_chat_session.py` and the prior two-goal native fixture, including the
+deliberately invalid-plan stop boundary. Its separate assignment/protocol,
+actuation audit, CHAT logs and `summary.json` are under
+`tamp-live-control/`. This is remote Qwen with privileged stationary state and
+real simulator actuators, no cameras; it must remain separate from learned
+perception and from the 237 matrix assignments. It uses the experiment lock to
+avoid overlapping CPU-heavy simulations, though it does not need a local VLM.
 
 ## Evidence and figures
 
