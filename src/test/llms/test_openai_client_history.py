@@ -6,7 +6,12 @@
 
 from __future__ import annotations
 
+import base64
+from io import BytesIO
 from typing import Any
+
+import numpy as np
+from PIL import Image
 
 from emet.llms.openai_client import OpenaiClient
 
@@ -60,3 +65,21 @@ def test_openai_client_reset_context_clears_history(monkeypatch) -> None:
     comps = client._openai.chat.completions
     assert len(comps.calls[1]) == 2  # system + user only
     assert comps.calls[1][1]["content"] == "two"
+
+
+def test_chat_camera_keyword_reaches_http_payload_and_survives_followup(monkeypatch):
+    """Use the real CHAT call boundary, not a hand-assembled multimodal input."""
+    from emet.agent.loop import _call_llm
+
+    monkeypatch.setattr("emet.llms.openai_client.OpenAI", _FakeOpenAI)
+    client = OpenaiClient("sys", model="emet", base_url="http://127.0.0.1:9/v1")
+    rgb = np.full((4, 6, 3), [20, 180, 40], dtype=np.uint8)
+    _call_llm(client, "Observe this", [], False, image=rgb, reset_context=True)
+    _call_llm(client, "What color was it?", [], False, reset_context=False)
+    messages = client._openai.chat.completions.calls[-1]
+    content = messages[1]["content"]
+    assert isinstance(content, list)
+    assert content[0] == {"type": "text", "text": "Observe this"}
+    encoded = content[1]["image_url"]["url"].split(",", 1)[1]
+    decoded = np.asarray(Image.open(BytesIO(base64.b64decode(encoded))))
+    np.testing.assert_array_equal(decoded, rgb)

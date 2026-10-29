@@ -153,6 +153,7 @@ class OpenaiClient(AbstractLLMClient):
         tools: list | None = None,
         reset_context: bool = False,
         keep_history: bool | None = None,
+        image: np.ndarray | Image.Image | None = None,
         **_kwargs: Any,
     ):
         if verbose:
@@ -164,6 +165,8 @@ class OpenaiClient(AbstractLLMClient):
         if reset_context or not use_hist:
             self.reset()
 
+        if image is not None:
+            command = [command, image] if isinstance(command, str) else [*command, image]
         command = self._process_input(command, verbose=verbose)  # type:ignore
 
         if use_hist:

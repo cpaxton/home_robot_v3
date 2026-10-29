@@ -372,17 +372,29 @@ def _dispatch_tool_calls(
             gm = getattr(getattr(executor, "agent", None), "graph_memory", None)
             maybe_record_tool_attempt(gm, outcome, source="chat")
 
-        discovery_only = (name in TAMP_TOOLS and isinstance(outcome.payload.get('data'), dict)
-                          and outcome.payload['data'].get('discovery_only') is True)
+        discovery_only = (
+            name in TAMP_TOOLS
+            and isinstance(outcome.payload.get("data"), dict)
+            and outcome.payload["data"].get("discovery_only") is True
+        )
         if name in TAMP_TOOLS and (not outcome.ok or discovery_only):
             # Later calls were chosen before the model saw this boundary. A
             # discovery-only result also forbids continuing the precomputed batch.
-            remaining = [c.get("name", "") for c in tool_calls[call_index + 1:]]
+            remaining = [c.get("name", "") for c in tool_calls[call_index + 1 :]]
             if remaining:
-                stopped = tamp_response("dispatch", code="batch_stopped",
-                    data={**({'stopped_tool': name, 'stop_reason': 'discovery_only'} if discovery_only
-                             else {'failed_tool': name}), 'unattempted_tools': remaining},
-                    recovery='none' if discovery_only else outcome.payload.get("recovery") or "inspect")
+                stopped = tamp_response(
+                    "dispatch",
+                    code="batch_stopped",
+                    data={
+                        **(
+                            {"stopped_tool": name, "stop_reason": "discovery_only"}
+                            if discovery_only
+                            else {"failed_tool": name}
+                        ),
+                        "unattempted_tools": remaining,
+                    },
+                    recovery="none" if discovery_only else outcome.payload.get("recovery") or "inspect",
+                )
                 results.append("[dispatch] " + json.dumps(stopped))
             has_info = True
             break
@@ -633,8 +645,9 @@ def run_agent_with_robot(
         raise ValueError("native_task_config requires state-only simulation and no prebound session")
     if not 1 <= max_tool_rounds <= 32:
         raise ValueError("max_tool_rounds must be between 1 and 32")
-    if state_only_sim and (robot != "stretch" or memory_backend != "dynamem"
-                           or eqa or vl_include_camera or input_path or not use_llm):
+    if state_only_sim and (
+        robot != "stretch" or memory_backend != "dynamem" or eqa or vl_include_camera or input_path or not use_llm
+    ):
         raise ValueError("state_only_sim requires LLM CHAT, Stretch, dynamem, no EQA/camera input/checkpoint")
     _configure_agent_terminal_output()
     verbose_tools = bool(tool_debug) or _env_agent_tool_debug()
@@ -829,10 +842,13 @@ def run_agent_with_robot(
     if native_task_config is not None:
         from emet.controller.task.tamp.native_transfer import NativeTableTransferProvider
         from emet.controller.task.tamp.task_session import TaskSession
+
         try:
             if executor._manip_mode != "physical" or executor._tamp_inputs != "privileged":
                 raise ValueError("native_task_config requires physical mode with privileged inputs")
-            tamp_task_session = TaskSession(NativeTableTransferProvider(robot_client, native_task_config, diagnostic_state=tool_debug))
+            tamp_task_session = TaskSession(
+                NativeTableTransferProvider(robot_client, native_task_config, diagnostic_state=tool_debug)
+            )
         except Exception:
             robot_client.stop()
             raise
@@ -842,8 +858,9 @@ def run_agent_with_robot(
         "tamp_task_session": tamp_task_session,
         "memory_backend": voxel_memory_backend,
         "observed_tamp_provider": (
-            observed_tamp_provider if observed_tamp_provider is not None else
-            getattr(getattr(executor.agent, '_open_vocab_sg_processor', None), 'observed_tamp_provider', None)
+            observed_tamp_provider
+            if observed_tamp_provider is not None
+            else getattr(getattr(executor.agent, "_open_vocab_sg_processor", None), "observed_tamp_provider", None)
         ),
         "graph_memory": _gm,
         "graph_memory_backend": _graph_backend,
@@ -1207,6 +1224,7 @@ def run_agent_with_robot(
             print(file=sys.stdout)
         print("-" * 60, flush=True)
 
+    llm_session_started = False
     while ok:
         update_xyt()
 
@@ -1292,10 +1310,12 @@ def run_agent_with_robot(
                     openai_tools_param,
                     debug_llm,
                     image=cam_image,
-                    reset_context=not followup_round,
+                    # New user turns belong to the same robot session.
+                    reset_context=not llm_session_started,
                     progress_callback=_llm_progress if show_thinking_status else None,
                     robot=robot_client,
                 )
+                llm_session_started = True
 
                 if debug_llm:
                     print(colored(f"[DEBUG] Raw response ({elapsed:.2f}s):", "yellow"), raw_response[:500])
