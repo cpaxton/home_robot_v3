@@ -16,6 +16,9 @@ a contact-execution result, or a hardware sensor-availability claim.
 | Component | Responsibility | Rejects / limits |
 | --- | --- | --- |
 | `RigidRgbdTracker` | RGB feature correspondences, forward/backward optical flow, measured RGBD landmarks, RANSAC rigid fitting against a fixed reference | Lost masks/depth, repeated or insufficient texture, poor feature spread, inconsistent motion, replay, reference age >30 s; no global re-identification |
+| `MovingRgbdTracker` | Current whole measured appearance components and declared geometry/motion profile | Lost/ambiguous associations latch; diagnostic candidates, not calibrated global identity |
+| `ShapePoseEvidence` | Explicit primitive solid equivalence with external pose-error bounds | Unknown material yaw remains unknown; generic unique-pose consumers reject |
+| `GripperGeometryEnvelope` | Full tool subtree over unmeasured joint intervals, anchored at motor-derived rigid EE | Conditional model bounds; no passive-joint sensor claim or full-arm certificate |
 | `PayloadGeometryEvidence` | Complete conservative volume in an explicit tracked reference frame | No visible-point AABB promoted to a complete shape; geometry priors remain declared inputs |
 | `ObservedNativeCollisionChecker` | Robot-only FK, complete link/payload boxes, self collision and whole-volume known-free queries | Missing workspace, stale geometry, scene revisions, unresolved payload geometry |
 | `VisualEffectFrame` | One tracked pose with capture interval, error bounds, bracketed robot feedback, full calibrated gripper volumes | Receive time alone, matching joint endpoints alone, missing alignment bounds, changing calibration, excessive uncertainty |
@@ -24,10 +27,12 @@ a contact-execution result, or a hardware sensor-availability claim.
 
 The feature tracker supplies measured relative rigid motion from material features; it
 does not infer a canonical object yaw from a symmetric/untextured shape. Such
-objects return unknown in this implementation. Registration residuals are
+objects return unknown in the feature tracker. The separate shape-aware path
+below preserves their declared geometric symmetry. Registration residuals are
 diagnostics, not uncertainty estimates: position/orientation admission bounds
 must come from independent calibration. Automatic current-instance mask
-production and long-term identity recovery are not supplied here.
+production is experimental and bounded by colour/geometry continuity;
+long-term identity recovery and default live source assembly are not supplied.
 
 ## Provider assembly
 
@@ -196,7 +201,8 @@ nullspaces, center spread and the union of candidate model volumes. These are
 search diagnostics, **not calibrated confidence bounds or a complete posterior**.
 `require_unique` needs independently calibrated position/rotation bounds and
 rejects unresolved orientation. A symmetric model is therefore not silently
-converted to the unique rigid pose required by the existing native executor.
+converted to a unique rigid pose. The explicit `require_shape` path below is a
+separate contract for shape-aware native consumers.
 
 `check_geometry_comotion` compares all retained pose pairs against measured
 end-effector motion, accounting for declared shape symmetry. Lift checks also
@@ -254,3 +260,48 @@ configuration. The diagnostic's `--synchronized-robot-model` option exercises
 motor readouts and compares rigid EE FK against the debug channel in the evaluator
 only. See [sampling/encoder qualification evidence](../experiments/observed_encoder_sampling_20261029.md)
 for all attempts and the remaining first-transfer gate.
+
+## Moving masks, shape equivalence and gripper intervals
+
+`MovingRgbdTracker` accepts coherent RGBD/world points, a fresh grounded reference
+mask, an explicit geometry model and a declared velocity/gap profile. It does not
+accept commanded object transforms or simulator masks. Defaults are 0.25 m/s,
+1.5 s maximum gap, 5 mm association margin, 0.03 chromaticity distance and a
+0.75 s update budget. It uses interior pixels only to learn reference colours;
+current measured components remain whole. Every reachable appearance component
+competes, including small fragments. Multiple candidates, loss, nonobservable
+translation, stale/replayed captures, changed epoch and exhausted budgets latch
+loss. Reinitialize with genuinely fresh semantic evidence and a new tracker;
+do not retime old references. Returned candidates remain `execution_qualified=false`.
+This bounded colour/geometry association is not a general re-identification model.
+
+`GeometryFit.require_shape(calibration_id=..., position_error_m=...,
+rotation_error_rad=...)` can return `ShapePoseEvidence` for an explicit complete
+primitive prior when centers and observable axes agree within externally supplied
+bounds. Fit residuals do not supply those bounds. A cylinder preserves unknown
+axial yaw; a sphere has no material orientation; a box uses only its true discrete
+shape symmetries. Generic `read_object_pose` still rejects this as ambiguous.
+Only explicitly shape-aware payload/retention/effect consumers accept it. The
+payload must be `known_model_prior` and its convex geometry must enclose the
+declared shape's reference box. Visual support bounds concern that declared
+complete solid, enlarged by pose error; planning envelopes may be looser.
+This cannot certify task predicates involving a handle, label or material frame.
+
+Successful public plan/execute receipts include `payload_geometry_source` and
+`payload_pose_scope` (`unique_rigid_pose` or `declared_shape_equivalence`). They do
+not publish private model or calibration identifiers. Scene, geometry, calibration,
+shape model and error-bound changes still invalidate stored plans/evidence.
+
+`bound_stretch_gripper(model, estimate, ...)` uses the eight captured motors and
+rigid EE estimate with the complete tool subtree, including housing and D405.
+Unmeasured fingers/rubber use analytic full model-joint intervals; unlimited
+hinges cover a full turn. Supplied interval overrides require `calibration_id`.
+Declared EE position/angular errors enlarge all boxes; zero defaults are only an
+ideal model diagnostic, not a physical calibration. `robot_brackets(...)` checks
+the original capture, motor values, EE pose and model signature before supplying
+those volumes to visual effects. It does not establish clock/alignment error or
+qualify the assumptions. The source must do that independently. Model bounds and
+`execution_qualified=false` are explicit; no passive-joint truth becomes a sensor.
+Individual telescope-link uncertainty is still required for complete arm planning.
+
+See [rendered motion, contact audit, retained failures and videos](../experiments/observed_moving_geometry_20261029.md).

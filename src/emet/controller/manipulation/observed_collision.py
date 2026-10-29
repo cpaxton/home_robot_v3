@@ -15,8 +15,10 @@ from typing import Protocol
 
 import mujoco
 import numpy as np
+from scipy.spatial import ConvexHull, QhullError
 
 from emet.controller.manipulation.native_inputs import ObjectPoseEvidence, ObservationUnavailable
+from emet.controller.manipulation.shape_pose import ShapePoseEvidence, evidence_rotation_distance, shape_identity
 from emet.motion.placement_geometry import HeldObject, PlacementCollisionChecker, PlacementScene
 
 
@@ -33,7 +35,7 @@ class PayloadGeometryEvidence:
     reference_id: str
     revision: str
     vertices_reference: np.ndarray
-    pose: ObjectPoseEvidence
+    pose: ObjectPoseEvidence | ShapePoseEvidence
     construction: str
 
     def __post_init__(self):
@@ -43,16 +45,27 @@ class PayloadGeometryEvidence:
         if np.linalg.matrix_rank(vertices - vertices.mean(0), tol=1e-10) < 3:
             raise ValueError('invalid_payload_geometry_evidence')
         if (not self.object_ref or not self.reference_id or not self.revision
-                or not isinstance(self.pose, ObjectPoseEvidence)
+                or not isinstance(self.pose, (ObjectPoseEvidence, ShapePoseEvidence))
                 or self.construction not in {'known_model_prior', 'multiview_bound'}):
             raise ValueError('invalid_payload_geometry_evidence')
         vertices = np.frombuffer(vertices.tobytes(), dtype=vertices.dtype).reshape(-1, 3)
+        if isinstance(self.pose, ShapePoseEvidence):
+            if self.construction != 'known_model_prior':
+                raise ValueError('shape_pose_requires_complete_model_prior')
+            try:
+                planes = ConvexHull(vertices).equations
+            except QhullError as error:
+                raise ValueError('invalid_payload_shape_envelope') from error
+            corners = self.pose.model.vertices_reference
+            if np.any(corners @ planes[:, :3].T + planes[:, 3] > 1e-9):
+                raise ValueError('payload_does_not_enclose_declared_shape')
         object.__setattr__(self, 'vertices_reference', vertices)
 
     def require(self, object_ref, *, now=None):
         if object_ref != self.object_ref:
             raise ObservationUnavailable('payload_identity_mismatch')
-        return self.pose.require('observed', now=now)
+        return (self.pose.require_shape(now=now) if isinstance(self.pose, ShapePoseEvidence)
+                else self.pose.require('observed', now=now))
 
 
 class ObservedPayloadProvider(Protocol):
@@ -107,13 +120,38 @@ class ObservedNativeCollisionChecker(PlacementCollisionChecker):
                 or previous.reference_id != evidence.reference_id
                 or previous.revision != evidence.revision
                 or previous.construction != evidence.construction
+                or shape_identity(previous.pose) != shape_identity(evidence.pose)
                 or not np.array_equal(previous.vertices_reference, evidence.vertices_reference)):
             raise ObservationUnavailable('payload_geometry_changed')
         return evidence, pose
 
+    def payload_retention_residual(self, model, data, object_ref):
+        """Compare attached geometry, quotienting only certified primitive symmetry."""
+        if self.payload_transform is None or self._attachment_evidence is None:
+            raise ObservationUnavailable('payload_geometry_unknown')
+        evidence, pose = self._evidence(object_ref)
+        mujoco.mj_copyData(self._probe, model, data)
+        mujoco.mj_kinematics(model, self._probe)
+        ee = self._probe.body(self.ee_body)
+        inverse = ee.xmat.reshape(3, 3).T
+        position = inverse @ (pose[:3, 3]-ee.xpos)
+        rotation = inverse @ pose[:3, :3]
+        distance = float(np.linalg.norm(position-self.payload_transform[:3, 3]))
+        angle = evidence_rotation_distance(evidence.pose, self.payload_transform[:3, :3], rotation)
+        if isinstance(evidence.pose, ShapePoseEvidence):
+            before = self._attachment_evidence.pose
+            distance += before.position_error_m + evidence.pose.position_error_m
+            angle += before.rotation_error_rad + evidence.pose.rotation_error_rad
+        return distance, angle
+
     def observe_object(self, object_ref):
         evidence, _ = self._evidence(object_ref)
         return evidence.pose
+
+    def observed_geometry_pose(self, object_ref):
+        """Geometry representative for explicitly shape-aware native consumers."""
+        _, pose = self._evidence(object_ref)
+        return pose
 
     def set_payload(self, model, data, body, parent=None):
         """``body`` is an opaque observed handle here, never a MuJoCo body name."""

@@ -12,12 +12,15 @@ from types import SimpleNamespace
 import mujoco
 import numpy as np
 import pytest
+from scipy.spatial.transform import Rotation
 
 from emet.agent.tools import get_tools
+from emet.controller.manipulation.geometry_models import PrimitiveModel
 from emet.controller.manipulation.native_inputs import ObjectPoseEvidence, ObservationUnavailable
 from emet.controller.manipulation.observed_collision import ObservedNativeCollisionChecker, PayloadGeometryEvidence
 from emet.controller.manipulation.observed_effects import CaptureInterval, RobotPoseSample, VisualEffectFrame
 from emet.controller.manipulation.physical_pick_place import PhysicalPickPlaceExecutor
+from emet.controller.manipulation.shape_pose import ShapePoseEvidence
 from emet.controller.task.tamp.observed_adapter import ObservedNativeAdapter, ObservedNativeSnapshot, ObservedNativeTask
 from emet.motion.placement_geometry import PlacementScene, box_corners
 
@@ -42,7 +45,8 @@ def system(monkeypatch):
     data, feedback = mujoco.MjData(model), mujoco.MjData(model)
     calls = []
     state = SimpleNamespace(holding=False, drop=False, revision='scene:1', invalid=False,
-                            missing=False, collect_unknown=False, generation=0)
+                            missing=False, collect_unknown=False, generation=0, shape_model=None,
+                            shape_calibration='test-only', shape_tilt=0.)
     scene = PlacementScene([], source='observed_voxels', workspace=[[-1]*3, [1]*3], known_free=lambda bounds: True)
     vertices = box_corners([[-.02]*3, [.02]*3])
 
@@ -64,8 +68,15 @@ def system(monkeypatch):
         robot_pose()
         pose = np.eye(4)
         pose[:3, 3] = objects[obj]
+        if state.shape_model is None:
+            evidence = ObjectPoseEvidence(pose, t+.001, 'rgbd_tracking', obs_id)
+        else:
+            pose[:3, :3] = Rotation.from_euler('zy', [state.generation * .37,
+                state.shape_tilt if state.holding else 0.]).as_matrix()
+            evidence = ShapePoseEvidence(pose, t+.001, 'rgbd_tracking', obs_id, state.shape_model,
+                .0001, .0001, state.shape_calibration)
         payload = PayloadGeometryEvidence(obj, 'measured-reference', 'prior', vertices,
-            ObjectPoseEvidence(pose, t+.001, 'rgbd_tracking', obs_id), 'known_model_prior')
+            evidence, 'known_model_prior')
         frame = VisualEffectFrame(payload, CaptureInterval(obs_id, t, t+.0005, t+.001, 'clock'),
             RobotPoseSample.from_model(model, feedback, ee_body='ee', gripper_bodies=('ee',), received_monotonic=t-.001),
             RobotPoseSample.from_model(model, feedback, ee_body='ee', gripper_bodies=('ee',), received_monotonic=t+.002), .0001, .0001, .0001, .0001)
@@ -153,6 +164,34 @@ def test_registered_tools_plan_and_execute_with_visual_effects_and_no_simulator(
     assert system.adapter.plans == {}
 
 
+@pytest.mark.parametrize('kind,dimensions', [('cylinder', (.02, .02)), ('sphere', (.02,))])
+def test_shape_symmetric_evidence_executes_without_inventing_material_yaw(system, kind, dimensions):
+    system.state.shape_model = PrimitiveModel(kind, dimensions)
+    planned = plan(system)
+    assert planned['status'] == 'ok', planned
+    assert planned['data']['payload_pose_scope'] == 'declared_shape_equivalence'
+    result = json.loads(system.tools['execute_pick_place_plan'].func(plan_ref=planned['data']['plan_ref']))
+    assert result['status'] == 'ok', result
+    assert result['data']['completed_ops'] == ['grasp', 'place']
+    assert result['data']['payload_geometry_source'] == 'known_model_prior'
+
+
+def test_shape_symmetry_does_not_hide_axis_slip_or_changed_calibration(system):
+    system.state.shape_model = PrimitiveModel('cylinder', (.02, .02))
+    planned = plan(system)
+    assert planned['status'] == 'ok', planned
+    system.state.shape_calibration = 'replacement'
+    result = system.adapter.execute(planned['data']['plan_ref'])
+    assert result['status'] == 'error' and not result['data']['execution_started'], result
+    assert system.calls == []
+    planned = plan(system)
+    assert planned['status'] == 'ok', planned
+    system.state.shape_tilt = .4
+    result = system.adapter.execute(planned['data']['plan_ref'])
+    assert result['status'] == 'partial' and result['code'] == 'visual_lift_not_verified', result
+    assert result['data']['completed_ops'] == []
+
+
 def test_changed_scene_and_unknown_initial_evidence_are_no_actuation(system):
     planned = plan(system)
     assert planned['status'] == 'ok', planned
@@ -173,7 +212,9 @@ def test_missing_visual_effect_after_commands_is_partial_not_success(system):
     assert sum(c[0] == 'open' for c in system.calls) == 1  # No placement/release after unverified lift.
 
 
-def test_empty_grasp_never_reaches_placement(system):
+@pytest.mark.parametrize('shape', [None, PrimitiveModel('sphere', (.02,)), PrimitiveModel('cylinder', (.02, .02))])
+def test_empty_grasp_never_reaches_placement(system, shape):
+    system.state.shape_model = shape
     planned = plan(system)
     assert planned['status'] == 'ok', planned
     system.state.drop = True

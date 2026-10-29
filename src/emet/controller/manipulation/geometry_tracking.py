@@ -15,8 +15,9 @@ import numpy as np
 from scipy.optimize import least_squares
 from scipy.spatial.transform import Rotation
 
-from emet.controller.manipulation.geometry_models import immutable, rotations_equivalent
+from emet.controller.manipulation.geometry_models import PrimitiveModel, immutable, rotations_equivalent
 from emet.controller.manipulation.native_inputs import ObjectPoseEvidence, ObservationUnavailable
+from emet.controller.manipulation.shape_pose import ShapePoseEvidence, shape_rotation_distance
 
 
 @dataclass(frozen=True)
@@ -71,6 +72,47 @@ class GeometryFit:
         """Union of retained models; sampled candidates are NOT an uncertainty certificate."""
         boxes = np.array([self.model.world_bounds(p[:3, :3], p[:3, 3]) for p in self.poses])
         return np.array([boxes[:, 0].min(0), boxes[:, 1].max(0)])
+
+    def require_shape(self, *, calibration_id, position_error_m, rotation_error_rad, now=None):
+        """Admit only observable primitive geometry, retaining its shape symmetry."""
+        now = time.monotonic() if now is None else now
+        if (not isinstance(calibration_id, str) or not calibration_id
+                or position_error_m is None or rotation_error_rad is None
+                or not np.isfinite([position_error_m, rotation_error_rad]).all()
+                or not 0 < position_error_m <= .01 or not 0 < rotation_error_rad <= .05):
+            raise ObservationUnavailable('geometry_tracking_uncalibrated')
+        if not isinstance(self.model, PrimitiveModel):
+            raise ObservationUnavailable("declared_shape_model_required")
+        if not 0 <= now - self.received_monotonic <= 2.0:
+            raise ObservationUnavailable("object_observation_stale")
+        if self.search_boundary_hit or not self.translation_observable:
+            raise ObservationUnavailable("object_pose_ambiguous")
+        for space in self.nullspaces:
+            if self.model.symmetry == "all_rotations":
+                continue
+            if self.model.symmetry == "axial_unoriented" and (
+                not len(space) or np.max(np.linalg.norm(space[:, 3:5], axis=1)) < 0.05
+            ):
+                continue
+            if len(space):
+                raise ObservationUnavailable("object_pose_ambiguous")
+        first = self.poses[0]
+        if any(
+            np.linalg.norm(p[:3, 3] - first[:3, 3]) > position_error_m
+            or shape_rotation_distance(self.model, first[:3, :3], p[:3, :3]) > rotation_error_rad
+            for p in self.poses
+        ):
+            raise ObservationUnavailable("object_pose_ambiguous")
+        return ShapePoseEvidence(
+            first,
+            self.received_monotonic,
+            "rgbd_tracking",
+            self.observation_ids[-1],
+            self.model,
+            position_error_m,
+            rotation_error_rad,
+            calibration_id,
+        )
 
     def as_dict(self):
         return {

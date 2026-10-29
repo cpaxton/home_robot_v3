@@ -24,9 +24,9 @@ from emet.controller.manipulation.observed_effects import (
     ObservedVisualVerifier,
     VisualEffectFrame,
     evaluate_place,
-    rotation_distance,
 )
 from emet.controller.manipulation.physical_pick_place import PhysicalMotionResult, PhysicalPickPlaceExecutor
+from emet.controller.manipulation.shape_pose import ShapePoseEvidence, evidence_rotation_distance, shape_identity
 from emet.motion.placement_geometry import PlacementScene, bounds_array, box_corners
 
 from .api import failure_code, response
@@ -82,6 +82,7 @@ class _PayloadEnvelope:
         a, b = current.payload, initial.payload
         if ((a.object_ref, a.reference_id, a.revision, a.construction) != (b.object_ref, b.reference_id, b.revision, b.construction)
                 or a.object_ref != object_ref or not np.array_equal(a.vertices_reference, b.vertices_reference)
+                or shape_identity(a.pose) != shape_identity(b.pose)
                 or current.position_error_m > initial.position_error_m
                 or current.rotation_error_rad > initial.rotation_error_rad):
             raise ObservationUnavailable('payload_geometry_changed')
@@ -153,6 +154,13 @@ class ObservedNativeAdapter:
     def _data(**extra):
         return {'mode': 'physical', 'inputs': 'observed', 'assistance': [], 'base_motion': 'stationary',
                 'geometry_source': 'observed_voxels', 'collision_scope': 'sampled_arm_and_payload', **extra}
+
+    @staticmethod
+    def _payload_scope(snapshot):
+        payload = snapshot.frame.payload
+        return {'payload_geometry_source': payload.construction,
+                'payload_pose_scope': ('declared_shape_equivalence' if isinstance(payload.pose, ShapePoseEvidence)
+                                       else 'unique_rigid_pose')}
 
     def _failure(self, tool, reason, *, started=False, completed=(), phase='preflight'):
         return response(tool, code=failure_code(reason), status='partial' if started else 'error',
@@ -329,7 +337,8 @@ class ObservedNativeAdapter:
                         a, b = frames[-1].payload, current.payload
                         if ((a.reference_id, a.revision) != (b.reference_id, b.revision)
                                 or np.linalg.norm(a.pose.world_from_object[:3, 3] - b.pose.world_from_object[:3, 3]) > .005
-                                or rotation_distance(a.pose.world_from_object[:3, :3], b.pose.world_from_object[:3, :3]) > .02):
+                                or shape_identity(a.pose) != shape_identity(b.pose)
+                                or evidence_rotation_distance(a.pose, a.pose.world_from_object[:3, :3], b.pose.world_from_object[:3, :3]) > .02):
                             raise ObservationUnavailable('payload_geometry_changed')
                     return frames
 
@@ -342,7 +351,8 @@ class ObservedNativeAdapter:
                     self.plans.pop(next(iter(self.plans)))
                 self.plans[ref] = ObservedStoredPlan(task, initial, initial_joints, ex)
                 return response('plan_pick_place', data=self._data(plan_ref=ref, planned_ops=['grasp', 'place'],
-                    completed_ops=[], execution_started=False, planning_ik_calls=calls[0]))
+                    completed_ops=[], execution_started=False, planning_ik_calls=calls[0],
+                    **self._payload_scope(initial)))
             except (ObservationUnavailable, ValueError, RuntimeError, TimeoutError) as exc:
                 return self._failure('plan_pick_place', str(exc))
 
@@ -354,9 +364,10 @@ class ObservedNativeAdapter:
                 or initial.scene.geometry_digest != current.scene.geometry_digest
                 or not np.array_equal(initial.support_bounds, current.support_bounds)
                 or (a.object_ref, a.reference_id, a.revision) != (b.object_ref, b.reference_id, b.revision)
+                or shape_identity(a.pose) != shape_identity(b.pose)
                 or not np.array_equal(a.vertices_reference, b.vertices_reference)
                 or np.linalg.norm(a.pose.world_from_object[:3, 3] - b.pose.world_from_object[:3, 3]) > .005
-                or rotation_distance(a.pose.world_from_object[:3, :3], b.pose.world_from_object[:3, :3]) > .02):
+                or evidence_rotation_distance(a.pose, a.pose.world_from_object[:3, :3], b.pose.world_from_object[:3, :3]) > .02):
             raise ObservationUnavailable('scene_changed_replan')
 
     def execute(self, plan_ref):
@@ -397,7 +408,8 @@ class ObservedNativeAdapter:
                                              completed=completed, phase=result.phase)
                     completed.append(phase)
                 return response('execute_pick_place_plan', data=self._data(execution_started=started,
-                    completed_ops=completed, failed_stage=None, measurements=[e.as_dict() for e in self.effects]))
+                    completed_ops=completed, failed_stage=None, measurements=[e.as_dict() for e in self.effects],
+                    **self._payload_scope(plan.initial)))
             except TimeoutError:
                 reason = 'command_outcome_unknown' if started else 'observation_unavailable'
                 return self._failure('execute_pick_place_plan', reason, started=started,

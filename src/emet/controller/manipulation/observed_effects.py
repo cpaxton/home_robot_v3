@@ -17,6 +17,7 @@ import numpy as np
 
 from emet.controller.manipulation.native_inputs import ObjectPoseEvidence, ObservationUnavailable
 from emet.controller.manipulation.observed_collision import PayloadGeometryEvidence
+from emet.controller.manipulation.shape_pose import ShapePoseEvidence, evidence_rotation_distance, shape_identity
 from emet.motion.mujoco_collision import body_subtree
 from emet.motion.placement_geometry import bounds_array
 
@@ -137,10 +138,19 @@ class VisualEffectFrame:
             raise ObservationUnavailable('capture_motion_alignment_unknown')
         if self.position_error_m > .01 or self.rotation_error_rad > .05:
             raise ObservationUnavailable('object_pose_ambiguous')
+        if isinstance(self.payload.pose, ShapePoseEvidence) and (
+                self.position_error_m < self.payload.pose.position_error_m
+                or self.rotation_error_rad < self.payload.pose.rotation_error_rad):
+            raise ObservationUnavailable('object_pose_ambiguous')
         return pose, b.world_from_ee
 
     def bounds(self):
         pose = self.payload.pose.world_from_object
+        if isinstance(self.payload.pose, ShapePoseEvidence):
+            box = self.payload.pose.model.world_bounds(pose[:3, :3], pose[:3, 3])
+            radius = np.linalg.norm(self.payload.pose.model.half_extents)
+            margin = self.position_error_m + 2*radius*np.sin(min(np.pi, self.rotation_error_rad)/2)
+            return np.stack((box[0]-margin, box[1]+margin))
         vertices = self.payload.vertices_reference @ pose[:3, :3].T + pose[:3, 3]
         radius = np.linalg.norm(self.payload.vertices_reference, axis=1).max()
         margin = self.position_error_m + 2 * radius * np.sin(min(np.pi, self.rotation_error_rad) / 2)
@@ -194,6 +204,8 @@ def _frames(reference, frames, *, now, after, min_span_s):
         a, b = reference.payload, frame.payload
         if (a.object_ref, a.reference_id, a.revision, a.construction) != (b.object_ref, b.reference_id, b.revision, b.construction):
             raise ObservationUnavailable('payload_geometry_changed')
+        if shape_identity(a.pose) != shape_identity(b.pose):
+            raise ObservationUnavailable('payload_geometry_changed')
         if not np.array_equal(a.vertices_reference, b.vertices_reference):
             raise ObservationUnavailable('payload_geometry_changed')
         if frame.capture.observation_id in seen or frame.capture.earliest <= last:
@@ -222,13 +234,13 @@ def evaluate_lift(reference, frames, *, support_top_z, after, now=None):
             angular_error = (frame.rotation_error_rad + reference.rotation_error_rad
                              + frame.alignment_error_rad + reference.alignment_error_rad)
             if (np.linalg.norm(relative[:3, 3] - expected[:3, 3]) + error > .02
-                    or rotation_distance(relative[:3, :3], expected[:3, :3]) + angular_error > .1
+                    or evidence_rotation_distance(frame.payload.pose, relative[:3, :3], expected[:3, :3]) + angular_error > .1
                     or frame.bounds()[0, 2] <= support_top_z + .02
                     or ee[2, 3] - initial_ee[2, 3] < .04
                     or obj[2, 3] - initial[2, 3] - error < .04):
                 definite_failure = (
                     np.linalg.norm(relative[:3, 3] - expected[:3, 3]) - error > .02
-                    or rotation_distance(relative[:3, :3], expected[:3, :3]) - angular_error > .1
+                    or evidence_rotation_distance(frame.payload.pose, relative[:3, :3], expected[:3, :3]) - angular_error > .1
                     or frame.bounds()[1, 2] <= support_top_z + .02
                     or ee[2, 3] - initial_ee[2, 3] < .04
                     or obj[2, 3] - initial[2, 3] + error < .04)
@@ -263,7 +275,7 @@ def evaluate_place(reference, frames, *, support_bounds, after, now=None):
                     or box[0, 2] > support[1, 2] + .02
                     or np.linalg.norm(separation, axis=1).min() - frame.alignment_error_m < .01
                     or np.linalg.norm(obj[:3, 3] - first[:3, 3]) + error > .01
-                    or rotation_distance(obj[:3, :3], first[:3, :3]) + angular_error > .1):
+                    or evidence_rotation_distance(frame.payload.pose, obj[:3, :3], first[:3, :3]) + angular_error > .1):
                 return VisualEffectResult('violated', 'visual_placement_not_verified', ids)
         return VisualEffectResult('satisfied', 'visual_placement_verified', ids)
     except ObservationUnavailable as exc:

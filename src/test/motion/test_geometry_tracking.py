@@ -55,12 +55,21 @@ def test_textureless_full_geometry_recovers_translation_axis_but_not_yaw():
         result.require_unique(now=10.1, position_error_m=0.002, rotation_error_rad=0.02)
     with pytest.raises(ObservationUnavailable, match="uncalibrated"):
         result.require_unique(now=10.1)
+    shape = result.require_shape(now=10.1, calibration_id='synthetic-test-only',
+        position_error_m=.002, rotation_error_rad=.02)
+    assert shape.model.symmetry == 'axial_unoriented'
+    np.testing.assert_allclose(shape.require_shape(now=10.1)[:3, 3], center, atol=1e-4)
+    with pytest.raises(ObservationUnavailable, match='ambiguous'):
+        shape.require('observed', now=10.1)
 
 
 def test_partial_side_patch_does_not_invent_axial_translation_observability():
     result = fit(cylinder_points(partial=True) + [0.1, 0.2, 0.5])
     assert not result.translation_observable
     assert any(np.max(np.linalg.norm(space[:, :3], axis=1)) > 0.5 for space in result.nullspaces if len(space))
+    with pytest.raises(ObservationUnavailable, match='ambiguous'):
+        result.require_shape(now=10.1, calibration_id='synthetic-test-only',
+            position_error_m=.002, rotation_error_rad=.02)
 
 
 def test_bad_surface_and_work_budget_fail_without_fabricated_pose():

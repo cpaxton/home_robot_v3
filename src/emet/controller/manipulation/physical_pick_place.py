@@ -17,6 +17,7 @@ import mujoco
 import numpy as np
 
 from emet.controller.manipulation.native_inputs import ObservationUnavailable, read_object_pose
+from emet.controller.manipulation.observed_collision import ObservedNativeCollisionChecker
 from emet.motion.arm_rrt import plan_arm_joint_path
 from emet.motion.mujoco_arm_ik import joint_qpos_addrs, solve_pose_ik
 
@@ -69,6 +70,8 @@ class PhysicalPickPlaceExecutor:
                 raise ValueError("observed_object_provider_required")
             if getattr(collision, "geometry_source", None) != "observed_voxels":
                 raise ValueError("observed_collision_provider_required")
+            if isinstance(collision, ObservedNativeCollisionChecker) and object_pose_provider is not collision:
+                raise ValueError('observed_object_provider_mismatch')
         elif object_pose_provider is not None and object_pose_provider.input_mode != "privileged":
             raise ValueError("input_provider_mismatch")
         self.input_mode, self.object_pose_provider = input_mode, object_pose_provider
@@ -231,6 +234,10 @@ class PhysicalPickPlaceExecutor:
         return result.waypoints, None
 
     def _object_pose(self, object_ref):
+        # Native height checks need the geometry origin, not material yaw. The
+        # typed checker validates the complete prior and retains shape symmetry.
+        if self.input_mode == 'observed' and isinstance(self.collision, ObservedNativeCollisionChecker):
+            return self.collision.observed_geometry_pose(object_ref)
         if self.object_pose_provider is not None:
             return read_object_pose(self.object_pose_provider, object_ref, inputs=self.input_mode)
         # Explicit oracle evaluation/debug path only. Observed construction
@@ -251,16 +258,19 @@ class PhysicalPickPlaceExecutor:
             self.event(phase="payload_retention", accepted=False, reason="missing_payload_reference")
             return False
         try:
-            object_pose = self._object_pose(self.payload_body)
+            if self.input_mode == 'observed' and isinstance(self.collision, ObservedNativeCollisionChecker):
+                displacement, angle = self.collision.payload_retention_residual(self.model, self.data, self.payload_body)
+            else:
+                object_pose = self._object_pose(self.payload_body)
+                ee = self.data.body(self.ee_body)
+                rotation = ee.xmat.reshape(3, 3).T
+                position = rotation @ (object_pose[:3, 3] - ee.xpos)
+                relative_rotation = rotation @ object_pose[:3, :3]
+                angle = np.arccos(np.clip((np.sum(relative_rotation * expected[:3, :3]) - 1) / 2, -1, 1))
+                displacement = float(np.linalg.norm(position - expected[:3, 3]))
         except ObservationUnavailable as exc:
             self.event(phase="payload_retention", accepted=False, reason=str(exc))
             return False
-        ee = self.data.body(self.ee_body)
-        rotation = ee.xmat.reshape(3, 3).T
-        position = rotation @ (object_pose[:3, 3] - ee.xpos)
-        relative_rotation = rotation @ object_pose[:3, :3]
-        angle = np.arccos(np.clip((np.sum(relative_rotation * expected[:3, :3]) - 1) / 2, -1, 1))
-        displacement = float(np.linalg.norm(position - expected[:3, 3]))
         retained = bool(displacement <= 0.02 and angle <= 0.1)
         if not retained:
             self.event(
