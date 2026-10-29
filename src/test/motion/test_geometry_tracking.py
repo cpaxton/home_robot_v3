@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 from scipy.spatial.transform import Rotation
 
-from emet.controller.manipulation.geometry_models import MeasuredSurfaceModel, PrimitiveModel
+from emet.controller.manipulation.geometry_models import MeasuredSurfaceModel, PrimitiveModel, rotations_equivalent
 from emet.controller.manipulation.geometry_motion import check_geometry_comotion
 from emet.controller.manipulation.geometry_tracking import GeometryTracker, fit_geometry, fit_geometry_views
 from emet.controller.manipulation.native_inputs import ObservationUnavailable
@@ -220,3 +220,21 @@ def test_fresh_measured_motion_updates_geometry_and_epoch_change_stops_tracking(
             cylinder_points(), observation_id="third", received_monotonic=11.0, scene_epoch="changed", now=11.1
         )
     assert tracker.latest is None
+
+
+def test_search_removes_only_declared_symmetry_equivalent_starts():
+    result = fit(cylinder_points())
+    assert result.search_starts == 3
+    assert result.translation_observable and not result.orientation_observable
+    # A full turn about a cylinder axis preserves the declared solid; tilt does not.
+    identity = np.eye(3)
+    yaw = Rotation.from_euler("z", 0.7).as_matrix()
+    tilt = Rotation.from_euler("x", 0.7).as_matrix()
+    cylinder = PrimitiveModel("cylinder", (0.02, 0.04))
+    assert rotations_equivalent(cylinder, identity, yaw)
+    assert not rotations_equivalent(cylinder, identity, tilt)
+    box = PrimitiveModel("box", (0.02, 0.03, 0.04))
+    assert rotations_equivalent(box, identity, Rotation.from_euler("z", np.pi).as_matrix())
+    assert not rotations_equivalent(box, identity, Rotation.from_euler("z", np.pi / 2).as_matrix())
+    # An undeclared measured shape cannot inherit those primitive symmetries.
+    assert not rotations_equivalent(type("Model", (), {"symmetry": "undeclared"})(), identity, yaw)

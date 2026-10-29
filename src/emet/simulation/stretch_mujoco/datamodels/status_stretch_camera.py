@@ -40,6 +40,9 @@ class StatusStretchCameras:
     # Host monotonic time at renderer scene capture, not IPC/ZMQ publish time.
     capture_timestamps_ns: dict[str, int] | None = None
     capture_intervals_ns: dict[str, tuple[int, int]] | None = None
+    synchronized_robot_sample: dict | None = None
+    synchronized_motor_sample: dict | None = None
+    synchronized_camera_poses: dict | None = None
 
     def image_timing_for(self, camera: StretchCameras) -> dict | None:
         stamp = (self.capture_timestamps_ns or {}).get(camera.name)
@@ -60,7 +63,24 @@ class StatusStretchCameras:
         depth_interval = (self.capture_intervals_ns or {}).get(paired.name) if paired is not None else None
         if depth_interval is not None:
             result["depth_capture_interval_ns"] = list(depth_interval)
+        packet = self.synchronized_robot_sample
+        if (packet is not None and interval is not None and depth_interval is not None
+                and list(interval) == packet['interval_ns'] == list(depth_interval)):
+            result['source'] = 'renderer_synchronized_snapshot'
+            result['robot_sample'] = copy.deepcopy(packet)
+        motor = self.synchronized_motor_sample
+        if (motor is not None and interval is not None and depth_interval is not None
+                and list(interval) == motor['interval_ns'] == list(depth_interval)):
+            result['source'] = 'renderer_synchronized_snapshot'
+            result['motor_sample'] = copy.deepcopy(motor)
         return result
+
+    def captured_camera_pose(self, camera: StretchCameras):
+        timing = self.image_timing_for(camera)
+        if (timing is None or timing['source'] != 'renderer_synchronized_snapshot'
+                or self.synchronized_camera_poses is None):
+            return None
+        return np.array(self.synchronized_camera_poses[camera.name], dtype=float)
 
     def get_all(
         self, *, auto_rotate: bool = True, auto_correct_rgb=True, use_depth_color_map=False

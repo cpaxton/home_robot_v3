@@ -17,14 +17,18 @@ import subprocess
 import time
 from pathlib import Path
 
+import mujoco
 import numpy as np
 from PIL import Image
 
 from emet.agent.tools import get_tools
 from emet.config.sim_launch_config import load_sim_launch_config_from_path
+from emet.controller.manipulation.encoder_capture import read_local_sim_motor_capture
 from emet.controller.manipulation.geometry_models import PrimitiveModel
 from emet.controller.manipulation.geometry_tracking import GeometryTracker
 from emet.controller.manipulation.native_inputs import ObservationUnavailable
+from emet.controller.manipulation.sim_robot_capture import read_synchronized_robot_capture
+from emet.controller.manipulation.stretch_encoder_kinematics import estimate_stretch_ee_from_encoders
 from emet.controller.task.tamp.observed_capture import bind_observed_capture_source, capture_arrays
 from emet.controller.task.tamp.observed_discovery import RgbdTaskProvider
 from emet.eval.observed_readiness import assess_live_readiness, capture_metadata
@@ -38,6 +42,7 @@ from emet.mapping.scene_graph.open_vocab_scene_graph import ObjectObservation
 from emet.memory.surface_reacquisition import reacquire_surface
 from emet.memory.vlm_region_grounding import select_supported_region, select_vlm_region
 from emet.motion.observed_support import fit_observed_support, support_mask_from_seed
+from emet.robots.stretch import STRETCH_ARM_CHAIN
 
 
 def main():
@@ -49,6 +54,11 @@ def main():
     parser.add_argument("--query", default="red cylinder")
     parser.add_argument(
         "--geometry-model", type=Path, help="Explicit known-model debug prior JSON; does not enable execution."
+    )
+    parser.add_argument(
+        "--synchronized-robot-model",
+        type=Path,
+        help="Robot-only Stretch MJCF for simulator co-sampling checks; does not enable execution.",
     )
     parser.add_argument(
         "--support-query", default="", help="Optionally ground and measure a support patch; does not enable execution."
@@ -71,6 +81,11 @@ def main():
     os.environ["EMET_PHYSICAL_EXECUTION"] = "1"
     os.environ["EMET_PHYSICAL_AUDIT"] = str(out / "actuation.jsonl")
     model = None
+    robot_model = (
+        mujoco.MjModel.from_xml_path(str(args.synchronized_robot_model.resolve()))
+        if args.synchronized_robot_model
+        else None
+    )
     if args.geometry_model:
         spec = json.loads(args.geometry_model.read_text())
         if spec.get("schema_version") != 1 or spec.get("construction") != "known_model_prior":
@@ -83,6 +98,8 @@ def main():
         "task_success_assessed": False,
         "queries": [],
         "geometry_tracking": [],
+        "robot_alignment": [],
+        "motor_feedback": [],
         "geometry_input_tier": "known_model_prior" if model is not None else "not_configured",
         "geometry_model_sha256": hashlib.sha256(args.geometry_model.read_bytes()).hexdigest()
         if model is not None
@@ -237,6 +254,59 @@ def main():
                     result["geometry_tracking"].append(
                         {"index": index, "seconds": time.perf_counter() - geometry_started, **geometry}
                     )
+                if robot_model is not None:
+                    if geometry_tracker is None:
+                        current = client.get_observation()
+                    aligned = None
+                    try:
+                        aligned = read_synchronized_robot_capture(
+                            current,
+                            robot_model,
+                            ee_body=STRETCH_ARM_CHAIN.ee_body,
+                            gripper_bodies=STRETCH_ARM_CHAIN.gripper_bodies,
+                        )
+                        alignment = {
+                            "state": "passed",
+                            "source": aligned.source,
+                            "execution_qualified": aligned.execution_qualified,
+                            "observation_id": aligned.capture.observation_id,
+                            "capture_span_s": aligned.capture.latest - aligned.capture.earliest,
+                            "capture_age_s": time.monotonic() - aligned.capture.earliest,
+                            "alignment_error_m": aligned.alignment_error_m,
+                            "alignment_error_rad": aligned.alignment_error_rad,
+                            "scope": "ideal simulator shared sample, not hardware calibration",
+                            "world_from_ee": aligned.robot_after.world_from_ee.tolist(),
+                        }
+                    except (ObservationUnavailable, ValueError) as error:
+                        alignment = {"state": "unknown", "reason": str(error)}
+                    result["robot_alignment"].append({"index": index, **alignment})
+                    try:
+                        motors = read_local_sim_motor_capture(current)
+                        estimated = estimate_stretch_ee_from_encoders(current, robot_model)
+                        motor_feedback = {
+                            "state": "passed",
+                            "source": "simulator_stretch_motor_encoders",
+                            "observation_id": motors.capture.observation_id,
+                            "positions": motors.as_dict(),
+                            "units": motors.units,
+                            "world_from_ee_estimate": estimated.world_from_ee.tolist(),
+                            "inferred_joint_names": list(estimated.inferred_joint_names),
+                            "gripper_geometry_qualified": estimated.gripper_geometry_qualified,
+                            "execution_qualified": estimated.execution_qualified,
+                            "scope": "motor readouts only; no passive joints, EE or gripper-geometry qualification",
+                        }
+                        if aligned is not None:
+                            truth = aligned.robot_after.world_from_ee
+                            position_error = float(np.linalg.norm(truth[:3, 3] - estimated.world_from_ee[:3, 3]))
+                            rotation_delta = truth[:3, :3].T @ estimated.world_from_ee[:3, :3]
+                            angle_error = float(np.arccos(np.clip((np.trace(rotation_delta) - 1) / 2, -1, 1)))
+                            motor_feedback["debug_fk_error_m"] = position_error
+                            motor_feedback["debug_fk_error_rad"] = angle_error
+                            if position_error > 1e-6 or angle_error > 1e-6:
+                                motor_feedback.update(state="failed", reason="encoder_fk_calibration_mismatch")
+                    except (ObservationUnavailable, ValueError) as error:
+                        motor_feedback = {"state": "unknown", "reason": str(error)}
+                    result["motor_feedback"].append({"index": index, **motor_feedback})
                 save()
                 time.sleep(0.2)
             result["reacquisition_passed"] = all(
@@ -314,6 +384,11 @@ def main():
                     row["state"] == "candidate" for row in result["geometry_tracking"]
                 )
                 result["diagnostic_passed"] = bool(result["diagnostic_passed"] and result["geometry_diagnostic_passed"])
+            if robot_model is not None:
+                result["robot_alignment_passed"] = all(row["state"] == "passed" for row in result["robot_alignment"])
+                result["diagnostic_passed"] = bool(result["diagnostic_passed"] and result["robot_alignment_passed"])
+                result["motor_feedback_passed"] = all(row["state"] == "passed" for row in result["motor_feedback"])
+                result["diagnostic_passed"] = bool(result["diagnostic_passed"] and result["motor_feedback_passed"])
             save()
             return 0 if result["diagnostic_passed"] else 1
         finally:

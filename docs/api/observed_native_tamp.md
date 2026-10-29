@@ -215,3 +215,42 @@ is used for initial semantic selection only; geometry refreshes add no VLM calls
 
 See the [live geometry diagnostic and figure](../experiments/geometry_tracking_20261028.md)
 for both attempts and their distinct discovery/registration outcomes.
+
+### Synchronized simulator inputs and motor-only FK
+
+The opt-in `EMET_SIM_SYNCHRONIZED_RGBD=1` renderer copies a scene under the physics
+lock and renders all images from that private snapshot. Sampling bounds describe
+the copy, not later rendering/publication. Physics continues while rendering;
+this avoids freezing the live scene for a complete camera batch. Published camera
+poses describe those pixels rather than a later robot posture.
+
+Two channels are deliberately separate:
+
+- `motor_sample` contains eight actual motor-position readouts: lift, total arm
+  extension, wrist yaw/pitch/roll, gripper slider, head pan and head tilt. The
+  `actuator_length` calibration is validated against the Stretch transmission
+  model. It does not expose passive fingertip angles or individually measured
+  telescope lengths. `read_local_sim_motor_capture` rejects hardware/other-clock,
+  asynchronous, stale, missing and extra-channel packets.
+- `robot_sample` is **`simulator_robot_kinematics_debug`**. It contains robot-only
+  configuration, including passive joints, for independent diagnostics. It never
+  contains environment joint state. `RobotPoseSample` retains its source, and
+  `VisualEffectFrame.require` rejects this debug source with
+  `robot_feedback_unqualified`. A producer cannot use it to qualify observed
+  execution by simply supplying zero alignment bounds.
+
+`estimate_stretch_ee_from_encoders` consumes only `motor_sample` and the localized
+camera pose. It reconstructs the rigid grasp-frame FK without passive fingertip
+truth. Equal distribution of total extension preserves the collinear chain's EE
+pose; it does not measure the four individual link lengths. The estimator checks
+model/camera/transmission identity and rejects unmeasured joints on the EE/camera
+ancestry. Its output explicitly leaves gripper geometry and execution unqualified.
+Conservative link/fingertip volumes, physical calibration and sensor/localization
+error bounds still belong to the live source; motor FK alone does not supply them.
+
+`scripts/prepare_observed_stretch_fixture.py --output DIR` provisions the declared
+development scene, separate robot-only MJCF, source hashes and a JSON launch
+configuration. The diagnostic's `--synchronized-robot-model` option exercises
+motor readouts and compares rigid EE FK against the debug channel in the evaluator
+only. See [sampling/encoder qualification evidence](../experiments/observed_encoder_sampling_20261029.md)
+for all attempts and the remaining first-transfer gate.

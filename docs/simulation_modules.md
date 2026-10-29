@@ -160,3 +160,13 @@ The local clock identity permits explicit same-host simulation mapping through
 `stretch_mujoco/enums/stretch_cameras.py` supports the opt-in head image scale and
 self-occlusion controls documented in [environment variables](environment_variables.md).
 See [live source assembly evidence](experiments/observed_source_assembly_20261027.md).
+
+With `EMET_SIM_SYNCHRONIZED_RGBD=1`, `synchronized_capture.py` copies the physics
+state under that lock and renders a private sample while physics continues.
+Camera poses and eight Stretch motor readings describe the same original sample.
+A separate full-robot configuration channel is explicitly privileged kinematic
+debug truth, including unmeasured passive joints; observed effects reject it.
+The motor-only rigid EE estimator does not assume passive-angle sensors or
+qualify fingertip/individual-telescope collision geometry. The fixture preparation
+script emits separate robot-only/scene XML and a JSON launch/manifest pair; see
+[the encoder/sampling evidence and rerun instructions](experiments/observed_encoder_sampling_20261029.md).

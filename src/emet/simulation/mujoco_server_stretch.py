@@ -1209,7 +1209,9 @@ class MujocoZmqServer(BaseZmqServer):
         try:
             # ZMQ contract: camera_pose is MuJoCo world; gps/compass are episode-relative.
             # Frame contract: src/test/simulation/test_zmq_observation_frame_contract.py
-            head_cam_world = self._head_camera_opencv_world()
+            head_cam_world = cam_data.captured_camera_pose(StretchCameras.cam_d435i_rgb)
+            if head_cam_world is None:
+                head_cam_world = self._head_camera_opencv_world()
             ee_world = self.robot_sim.get_ee_pose()
         except (ConnectionError, ConnectionResetError, OSError):
             return None
@@ -1326,8 +1328,12 @@ class MujocoZmqServer(BaseZmqServer):
         if self._initial_xyt is None:
             return None
         try:
-            ee_pose_cam = self.robot_sim.get_link_pose("gripper_camera_color_optical_frame")
-            head_pose_cam = self._head_camera_opencv_world()
+            ee_pose_cam = cam_data.captured_camera_pose(StretchCameras.cam_d405_rgb)
+            if ee_pose_cam is None:
+                ee_pose_cam = self.robot_sim.get_link_pose("gripper_camera_color_optical_frame")
+            head_pose_cam = cam_data.captured_camera_pose(StretchCameras.cam_d435i_rgb)
+            if head_pose_cam is None:
+                head_pose_cam = self._head_camera_opencv_world()
             ee_pose_mat = self.robot_sim.get_ee_pose()
         except (ConnectionError, ConnectionResetError, OSError):
             return None

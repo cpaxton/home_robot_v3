@@ -15,7 +15,7 @@ import numpy as np
 from scipy.optimize import least_squares
 from scipy.spatial.transform import Rotation
 
-from emet.controller.manipulation.geometry_models import immutable
+from emet.controller.manipulation.geometry_models import immutable, rotations_equivalent
 from emet.controller.manipulation.native_inputs import ObjectPoseEvidence, ObservationUnavailable
 
 
@@ -30,6 +30,7 @@ class GeometryFit:
     received_monotonic: float
     evaluations: int
     search_boundary_hit: bool
+    search_starts: int = 0
 
     def __post_init__(self):
         for name in ("poses", "rms_m"):
@@ -90,6 +91,7 @@ class GeometryFit:
             "candidate_bounds": self.candidate_bounds().tolist(),
             "search_boundary_hit": self.search_boundary_hit,
             "evaluations": self.evaluations,
+            "search_starts": self.search_starts,
             "execution_qualified": False,
             "observability_scope": "numerical_local_diagnostic_not_calibrated_confidence",
         }
@@ -148,6 +150,17 @@ def fit_geometry(
     rotations = Rotation.create_group("O").as_rotvec()
     for vector in rotations:
         seeds.append(np.r_[center, vector])
+    unique = []
+    for seed in seeds:
+        rotation = Rotation.from_rotvec(seed[3:]).as_matrix()
+        if any(
+            np.allclose(old[:3], seed[:3], atol=1e-10, rtol=0)
+            and rotations_equivalent(model, Rotation.from_rotvec(old[3:]).as_matrix(), rotation)
+            for old in unique
+        ):
+            continue
+        unique.append(seed)
+    seeds = unique[:max_starts]
     candidates = []
     evaluations = 0
     boundary = False
@@ -161,7 +174,7 @@ def fit_geometry(
         rotation = Rotation.from_rotvec(parameters[3:]).as_matrix()
         return model.distance((data - parameters[:3]) @ rotation)
 
-    for seed in seeds[:max_starts]:
+    for seed in seeds:
         seed[:3] = np.clip(seed[:3], low + 1e-7, high - 1e-7)
         result = least_squares(
             residual,
@@ -227,6 +240,7 @@ def fit_geometry(
         received_monotonic,
         evaluations,
         boundary,
+        len(seeds),
     )
 
 

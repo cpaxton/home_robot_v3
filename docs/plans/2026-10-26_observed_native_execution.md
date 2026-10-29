@@ -4,13 +4,16 @@ Status: attachment, reference tracking, visual-effect checks and the explicitly
 injected native/task adapter are implemented and pass synthetic integration tests.
 The default RGBD provider remains read-only pending live source assembly and
 sensor/geometry qualification.
+October 29: synchronized simulator images/motors and motor-only rigid EE FK pass
+live development checks. Full observed transfers remain unqualified: symmetry,
+unmeasured gripper geometry and contact/occupancy integration are the next gates.
 Built after live-capture binding `ae924531`.
 First target: stationary Stretch, rigid opaque objects, observed tabletop supports,
 and the existing `scene_tasks` / primitive / multi-step JSON tools. Preserve the
 privileged control as an independent regression and evaluator. Add Sourccey only
 after passing the same gates. Do not start by adding more task-search baselines.
 
-## What exists, and the actual coupling to remove
+## Starting state on October 26, before the body-independent adapter
 
 - Live registered RGBD capture, bounded semantic-reference reassociation, capture
   ages and motion invalidation exist. Discovery produces visible positions and
@@ -340,3 +343,34 @@ Symmetric raw fits still cannot substitute for the native interface's unique
 pose. Independent calibration, encoder alignment, moving-instance segmentation,
 observed enclosure/contact policy and concrete source consumption remain before
 live observed task execution; no new task-success denominator is claimed.
+
+## October 29 sensor-input checkpoint
+
+Co-sampled simulator images now retain their actual camera pose and a separate
+normal eight-channel motor packet. Motor-only rigid EE FK matches the separate
+full-robot debug reference in 5/5 live development captures. Full-qpos debug
+contains passive finger/telescope coordinates and is explicitly rejected by
+observed effect admission; it cannot substitute for real robot sensors.
+
+One repeat rejected a frame after fitting exceeded the original two-second age
+gate. Deduplicating only exact declared shape-symmetry search starts resolved the
+latency issue without relaxing age/geometry checks. The successful fast repeat
+fit in 0.40–0.47 s. A JSON fixture/manifest generator makes the development scene
+and robot-only model reproducible from packaged assets.
+
+Final affected regression: 787 checks with zero failures/errors/skips. Each of two
+privileged calibration runs passed both native contact controls. The phased audit
+places the large 0.358 rad finger discrepancy at fixture initialization, while
+execution contact reaches 0.00827 rad coupling error and 0.11877 rad rubber angle.
+These are correlated debug measurements from development controls, not certified
+geometry bounds or new observed task successes. The paper still builds at 52 pages.
+See [all attempts, input tiers and remaining source work](../experiments/observed_encoder_sampling_20261029.md).
+
+Next implement the shape-symmetry payload contract, bound unmeasured gripper/link
+geometry from actual motor signals, associate moving masks independently of
+commanded motion, and assemble phase-specific contact/unknown
+space policy with persistent map/support evidence. Keep original evidence times
+and explicit static-scene assumptions. A fresh image cannot renew hidden map
+cells, and partial support observations must not silently become a complete
+fixture. Then run the first complete stationary observed transfer through the
+same public tools before held-out multi-step or exploration trials.

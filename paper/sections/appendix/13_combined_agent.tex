@@ -104,6 +104,10 @@ multi-view surfaces, retaining distinct pose candidates and unobservable shape
 symmetries. Surface-fit residuals are diagnostics, not calibrated pose-error
 bounds. Geometry co-motion checks therefore remain separate from temporally
 qualified execution evidence and do not add observed task successes.
+An opt-in simulator renderer co-samples images and motor feedback from one private
+physics snapshot. A separate full-robot debug channel includes unmeasured passive
+joints and is rejected by observed effect admission. Motor-only rigid EE FK does
+not establish conservative fingertip geometry or hardware calibration.
 Capture identity/order does not establish
 cross-host clock synchronization or certify capture-after-motion. These guards
 do not enable observed manipulation or validate the full exploration--navigation--

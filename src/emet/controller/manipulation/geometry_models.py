@@ -19,6 +19,24 @@ def immutable(value):
     return np.frombuffer(value.tobytes(), dtype=value.dtype).reshape(value.shape)
 
 
+def rotations_equivalent(model, a, b):
+    """Exact declared shape symmetry, for redundant SEARCH seeds only.
+
+    No undeclared measured-surface symmetry is inferred. This does not collapse
+    distinct centers, unobservable translations or physical object hypotheses.
+    """
+    if model.symmetry == "all_rotations":
+        return True
+    if model.symmetry == "axial_unoriented":
+        return np.allclose(np.outer(a[:, 2], a[:, 2]), np.outer(b[:, 2], b[:, 2]), atol=1e-10, rtol=0)
+    if model.symmetry == "finite_box":
+        change = np.abs(a.T @ b)
+        return np.allclose(change, np.rint(change), atol=1e-10, rtol=0) and np.allclose(
+            change @ model.half_extents, model.half_extents, atol=1e-10, rtol=0
+        )
+    return np.allclose(a, b, atol=1e-10, rtol=0)
+
+
 @dataclass(frozen=True)
 class PrimitiveModel:
     kind: str

@@ -31,7 +31,7 @@ def local_sim_capture_interval(timing, *, received_monotonic, observation_id):
     identity = local_monotonic_clock_id()
     if (not isinstance(timing, dict) or identity is None
             or timing.get('available') is not True or timing.get('clock_id') != identity or timing.get('clock_domain') != 'mujoco_render_monotonic'
-            or timing.get('source') != 'renderer_scene_capture'):
+            or timing.get('source') not in {'renderer_scene_capture', 'renderer_synchronized_snapshot'}):
         raise ObservationUnavailable('capture_clock_mapping_unavailable')
     intervals = [timing.get('capture_interval_ns'), timing.get('depth_capture_interval_ns')]
     for interval in intervals:

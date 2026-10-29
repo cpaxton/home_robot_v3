@@ -57,8 +57,11 @@ class RobotPoseSample:
     joints: np.ndarray
     received_monotonic: float
     gripper_bounds: np.ndarray | None = None
+    source: str = 'measured_joint_feedback'
 
     def __post_init__(self):
+        if self.source not in {'measured_joint_feedback', 'simulator_robot_kinematics_debug'}:
+            raise ValueError('invalid_robot_feedback_source')
         pose = rigid_copy(self.world_from_ee)
         joints = np.asarray(self.joints, float)
         if joints.ndim != 1 or not joints.size or not np.isfinite(joints).all() or not np.isfinite(self.received_monotonic):
@@ -73,7 +76,8 @@ class RobotPoseSample:
             object.__setattr__(self, 'gripper_bounds', np.frombuffer(boxes.tobytes(), dtype=boxes.dtype).reshape(boxes.shape))
 
     @classmethod
-    def from_model(cls, model, data, *, ee_body, gripper_bodies, received_monotonic):
+    def from_model(cls, model, data, *, ee_body, gripper_bodies, received_monotonic,
+                   source='measured_joint_feedback'):
         """Derive complete gripper volumes from calibrated robot FK, not contacts."""
         probe = mujoco.MjData(model)
         mujoco.mj_copyData(probe, model, data)
@@ -92,7 +96,7 @@ class RobotPoseSample:
         ee = probe.body(ee_body)
         pose = np.eye(4)
         pose[:3, :3], pose[:3, 3] = ee.xmat.reshape(3, 3), ee.xpos
-        return cls(pose, probe.qpos, received_monotonic, np.array(boxes))
+        return cls(pose, probe.qpos, received_monotonic, np.array(boxes), source)
 
 
 @dataclass(frozen=True)
@@ -124,6 +128,8 @@ class VisualEffectFrame:
                 or self.payload.pose.received_monotonic != self.capture.received_monotonic):
             raise ObservationUnavailable('capture_identity_mismatch')
         a, b = self.robot_before, self.robot_after
+        if a.source != 'measured_joint_feedback' or b.source != 'measured_joint_feedback':
+            raise ObservationUnavailable('robot_feedback_unqualified')
         if (not a.received_monotonic <= self.capture.earliest <= self.capture.latest <= b.received_monotonic <= now
                 or a.joints.shape != b.joints.shape or np.max(np.abs(a.joints - b.joints)) > .002
                 or np.linalg.norm(a.world_from_ee[:3, 3] - b.world_from_ee[:3, 3]) > .002
@@ -159,6 +165,7 @@ class VisualEffectResult:
             'visual_placement_verified', 'visual_placement_not_verified', 'visual_evidence_incomplete',
             'object_observation_stale', 'object_state_unknown', 'object_pose_ambiguous',
             'capture_motion_alignment_unknown', 'capture_identity_mismatch', 'capture_replayed',
+            'robot_feedback_unqualified',
             'capture_clock_changed', 'payload_identity_mismatch', 'payload_geometry_changed',
             'support_geometry_unknown', 'gripper_geometry_unknown', 'scene_revision_changed',
             'scene_changed_replan', 'observed_scene_unavailable',

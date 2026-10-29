@@ -122,3 +122,10 @@ def test_public_effect_receipt_redacts_private_provider_errors_and_capture_ids()
     assert 'private' not in json.dumps(public)
     assert public['observation_ids'][0].startswith('observation:')
     assert public == result.as_dict()
+
+
+def test_simulator_passive_joint_truth_cannot_qualify_observed_robot_feedback():
+    current = frame(10.)
+    debug = replace(current, robot_before=replace(current.robot_before, source='simulator_robot_kinematics_debug'))
+    with pytest.raises(RuntimeError, match='robot_feedback_unqualified'):
+        debug.require(now=10.1)
