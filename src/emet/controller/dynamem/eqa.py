@@ -219,7 +219,8 @@ def run_eqa_one_iter(self, question, max_movement_step: int = 5):
     obstacles, _ = self.voxel_map.get_2d_map()
     target_grid = self.voxel_map.xy_to_grid_coords((target_point[0], target_point[1]))
     if not obstacles[int(target_grid[0]), int(target_grid[1])]:
-        target_theta = self.space.sample_navigation(start_pose, self.planner, target_point)[-1]
+        sampled_pose = self.space.sample_navigation(start_pose, self.planner, target_point)
+        target_theta = None if sampled_pose is None else sampled_pose[-1]
         logger.debug("EQA navigate: target_theta=%s", target_theta)
     else:
         target_theta = None
