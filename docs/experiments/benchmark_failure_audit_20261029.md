@@ -156,3 +156,26 @@ yields to other GPU/RL work between cases. Retain the 20 GiB disk reserve; if it
 is reached, remaining assignments stay pending. Molmo remains paused for its
 execution-mode mismatch; S0 search needs its exact planner-command trace before
 claiming a repaired integrated search result. This is not a full sweep restart.
+
+### Restart results checked 2026-10-29
+
+Live control `20261029_155400_ad3c3c` **passes** on the isolated repaired source:
+Qwen calls scene discovery, task planning, and task execution; both transfers
+complete with `goal_verified=true`. Independent final scoring finds both whole
+object footprints inside their respective regions, supported and settled. All
+533 audited commands are free of forbidden actuation. The deliberate invalid
+plan is rejected, and the agent stops before the separately authorized task
+turn. The CLI exits zero. This qualifies this one privileged stationary task,
+not learned grounding, exploration, or general manipulation reliability.
+
+The first EQA retry window completes q104/q21/q38 without exceptions; q38 is
+correct and q104/q21 are wrong. Its coordinator then stops admission at the
+20 GiB reserve, retaining q41/q47 as pending. This is a disk-capacity stop,
+not another navigation exception or a completed five-question result.
+
+An offline `uv cache prune` removes unreachable package-cache objects, with no
+benchmark evidence, dataset, or model-cache deletion. Available disk rises to
+about 28 GB. Resume job `20261029_175505_ce82c1` uses the same manifest/source
+and skips the three completed entries; only q41/q47 remain to execute. The
+launch and cleanup record is `eqa_resume_launch.json` in the repair output root.
+Do not pool these failure-selected retries into an overall accuracy claim.
