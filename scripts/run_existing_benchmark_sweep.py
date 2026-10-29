@@ -332,7 +332,7 @@ def main():
         EMET_SIM_NAV_TELEPORT="0",
         EMET_MOLMOSPACES_NAV_TELEPORT="0",
         EMET_EQA_AGENTIC_DECISION_POLICY="model_final",
-        MOLMOSPACES_PYTHON=str(source / ".venv-molmospaces/bin/python"),
+        MOLMOSPACES_PYTHON=str(args.python.absolute().parents[2] / ".venv-molmospaces/bin/python"),
         LD_LIBRARY_PATH=str(args.habitat.absolute().parents[1] / "lib") + ":" + os.environ.get("LD_LIBRARY_PATH", ""),
     )
     # Insert native control early, then full primary harness, then baselines.
