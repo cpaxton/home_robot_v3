@@ -194,7 +194,6 @@ def test_status_discord_path_does_not_consume_pending_image():
 
 
 def test_scan_environment_returns_info_via_func():
-    from emet.agent.loop import _FAST_REPLY_TOOLS, _should_skip_llm_summarize
     from emet.agent.tools import get_tools
 
     calls: list[list[tuple[str, str]]] = []
@@ -207,9 +206,6 @@ def test_scan_environment_returns_info_via_func():
     scan = tools["scan_environment"]
     assert scan.returns_info is True
     assert scan.executor_commands is None
-    assert "scan_environment" in _FAST_REPLY_TOOLS
-    assert "go_home" not in _FAST_REPLY_TOOLS
-    assert "hand_over" not in _FAST_REPLY_TOOLS
 
     ok, results, has_info = _dispatch_tool_calls(
         [{"name": "scan_environment", "arguments": {}}],
@@ -219,14 +215,10 @@ def test_scan_environment_returns_info_via_func():
     assert ok and has_info
     assert calls == [[("rotate_in_place", "")]]
     assert any("scan" in r.lower() for r in results)
-    assert _should_skip_llm_summarize(
-        [{"name": "scan_environment", "arguments": {}}],
-        results,
-    )
 
 
 def test_dispatch_unknown_tool_returns_user_facing_info():
-    from emet.agent.loop import _dispatch_tool_calls, _format_fast_tool_reply, _should_skip_llm_summarize
+    from emet.agent.loop import _dispatch_tool_calls, _format_fast_tool_reply
 
     ok, results, has_info = _dispatch_tool_calls(
         [{"name": "move_forward", "arguments": {"meters": 0.5}}],
@@ -235,5 +227,4 @@ def test_dispatch_unknown_tool_returns_user_facing_info():
     )
     assert ok and has_info
     assert any("don't have a working" in r.lower() or "can't drive" in r.lower() for r in results)
-    assert _should_skip_llm_summarize([{"name": "move_forward"}], results)
     assert _format_fast_tool_reply(results)

@@ -78,28 +78,6 @@ DEFAULT_AGENT_LLM = "qwen35-4B"
 # Maximum follow-up LLM calls per user turn (prevents infinite loops)
 _MAX_TOOL_ROUNDS = 3
 
-# Info tools whose return text is already user-facing — skip a second VL summarize call.
-# Action-only executor tools (take_picture, take_ee_picture, go_home, …) must NOT be listed
-# here alone: they never set has_info, so the fast path cannot run.
-_FAST_REPLY_TOOLS = frozenset(
-    {
-        "describe_scene",
-        "send_image",
-        "list_scene_relations",
-        "navigation_diagnostics",
-        "send_map_snapshot",
-        "send_object_image",
-        "scan_environment",
-        "rotate_base",
-        "face_toward",
-        "move_forward",
-        "explore",
-        "take_picture",
-        "take_ee_picture",
-        "aim_arm_at",
-    }
-)
-
 
 def terminal_timestamp(now: datetime | None = None) -> str:
     """Local wall-clock stamp for agent TTY lines (not sent to Discord)."""
@@ -144,23 +122,6 @@ def _format_fast_tool_reply(results: list[str]) -> str | None:
     if not parts:
         return None
     return " ".join(parts)
-
-
-def _should_skip_llm_summarize(tool_calls: list[dict], results: list[str]) -> bool:
-    names = {str(tc.get("name") or "") for tc in tool_calls}
-    if not names:
-        return False
-    # Unavailable / stub refusals are already user-facing — relay without a second LLM call.
-    if results and all(
-        ("can't drive" in (r or "").lower())
-        or ("don't have a working" in (r or "").lower())
-        or ("tethered" in (r or "").lower() and "rotate-only" in (r or "").lower())
-        for r in results
-    ):
-        return _format_fast_tool_reply(results) is not None
-    if not names.issubset(_FAST_REPLY_TOOLS):
-        return False
-    return _format_fast_tool_reply(results) is not None
 
 
 def _env_agent_tool_debug() -> bool:
@@ -1401,17 +1362,6 @@ def run_agent_with_robot(
                     print(colored("[tool results combined]", "magenta"), result_text, sep="\n", flush=True)
 
                 if has_info:
-                    if _should_skip_llm_summarize(tool_calls, results):
-                        fast = _format_fast_tool_reply(results)
-                        if fast:
-                            print_terminal(f"{agent_name}: {fast}", color="blue")
-                            _send_to_discord(fast)
-                            chat_log.log("assistant", fast, fast_tool_reply=True)
-                            print_terminal(
-                                f"turn done in {timeit.default_timer() - turn_t0:.1f}s (fast tool reply)",
-                                color="cyan",
-                            )
-                            break
                     # Last round: do not continue into exhaustion with a silent turn —
                     # force a no-tool summarize or relay tool text.
                     continuation = tamp_followup(user_text, results)
@@ -1463,7 +1413,15 @@ def run_agent_with_robot(
                             color="cyan",
                         )
                         break
-                    current_input = continuation or followup
+                    current_input = continuation or (
+                        f"Original user request:\n{user_text}\n\n[Tool results]\n{result_text}\n\n"
+                        "Use these results to continue unfinished, authorized work. "
+                        "You may call another tool within the remaining round budget. "
+                        "Read rejection/recovery feedback before choosing a new action. "
+                        "If the task is complete, cannot proceed, or the tool requires stopping, "
+                        "return tool_calls [] and report the measured outcome. "
+                        "Do not claim an action happened or promise a retry without issuing it."
+                    )
                     if debug_llm or verbose_tools:
                         print(
                             colored("[→ LLM follow-up user message]", "magenta"),

@@ -45,8 +45,11 @@ Use "tool_calls": [] when no action is needed.
 Info tools return text (and sometimes photos) for a follow-up reply. When calling any of
 query_*, describe_scene, explore, scan_environment, rotate_base, face_toward, move_forward,
 navigation_diagnostics, send_map_snapshot, list_scene_relations, send_image, send_object_image,
-set "message" to "" on that first turn. After [Tool results], reply with tool_calls [] and a
-message based only on those results (do not invent objects from this prompt).
+set "message" to "" on that tool turn. After [Tool results], continue unfinished work
+using the feedback; call further tools when needed and authorized within the round budget.
+Use tool_calls [] for your final reply when finished, unable to proceed, or required to stop.
+Do not promise a retry without issuing it, or invent observations/actions from this prompt.
+Choose one next action at a time when later actions depend on its outcome.
 
 Action-only tools do not feed a tool-results summary (wave, nod_head, shake_head, avert_gaze,
 go_home, hand_over, quit). Prefer "message": "" — the turn ends after the action.
