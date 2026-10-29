@@ -6,6 +6,9 @@ The current shared-harness development pilot is separate from historical
 controller results. The [2026-10-29 frozen-main benchmark refresh](benchmark_refresh_20261029.md)
 now has serial idle-GPU admission and source-linked figure exports; its full matrix
 takes multiple windows. New live Stretch cases use the existing CHAT agent.
+The [refresh failure audit](benchmark_failure_audit_20261029.md) separates the
+DynaMem exception, Molmo execution-mode mismatch, and navigation/verification
+diagnostics from task-quality results.
 
 **Status (2026-10-12):** [Main, open PRs, and paper evidence](../project_status.md)
 is the current inventory. The matrix below lists available harnesses and smokes;

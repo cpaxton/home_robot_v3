@@ -1,5 +1,11 @@
 # Living TODOs (small / near-term)
 
+- [ ] Resolve refresh execution failures before another broad window: rerun the
+      five DynaMem missing-viewpoint exceptions on `6ae052fc`; qualify Molmo's
+      declared assisted/physical mode and fail fast on dead physics; isolate S0
+      tracking and native TAMP release clock/geometry conditions. Preserve the
+      original scores and manifests. Diagnosis:
+      `docs/experiments/benchmark_failure_audit_20261029.md`.
 - [ ] Qualify all 12 controlled development interventions through the shared
       agent. Full Stretch fixtures and production CHAT bindings now exist; live
       action/evidence audit, learned localization and manipulation are not yet

@@ -174,8 +174,11 @@ def main():
                         )
             finally:
                 os.chdir(previous)
-        scorer.step(2.0)
-        result = {"final_predicates": goal_predicates(scorer, protocol["goals"])}
+        scorer.refresh()
+        result = {
+            "final_predicates": goal_predicates(scorer, protocol["goals"]),
+            "scoring_scope": "Instantaneous final snapshot; continuous stability is reported by verification.jsonl",
+        }
         (output / "summary.json").write_text(json.dumps(result, indent=2))
         print(json.dumps(result), flush=True)
 
