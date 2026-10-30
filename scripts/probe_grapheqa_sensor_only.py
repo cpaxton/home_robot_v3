@@ -260,15 +260,16 @@ def capture(args):
     print(json.dumps(manifest), flush=True)
 
 
-def render_and_detect(scene, spawn, frames, labels, ids, vocabulary, inputs, manifest, detector_type):
+def habitat_sensor_config(scene):
+    """Construct only RGB-D sensors; do not request a semantic mesh or sensor."""
     import habitat_sim
     import magnum as mn
-    from habitat_sim.utils.common import quat_from_angle_axis
-    from PIL import Image
 
     config = habitat_sim.SimulatorConfiguration()
     config.scene_id = str(scene)
     config.enable_physics = False
+    config.load_semantic_mesh = False
+    config.use_semantic_textures = False
     sensors = []
     for uuid, kind in [("rgb", habitat_sim.SensorType.COLOR), ("depth", habitat_sim.SensorType.DEPTH)]:
         sensor = habitat_sim.CameraSensorSpec()
@@ -280,13 +281,21 @@ def render_and_detect(scene, spawn, frames, labels, ids, vocabulary, inputs, man
         sensors.append(sensor)
     agent_config = habitat_sim.agent.AgentConfiguration()
     agent_config.sensor_specifications = sensors
-    # No navmesh is loaded, no global bounds queried, and no translation planned.
+    # No route oracle or global bounds are requested; this probe only turns.
     agent_config.action_space = {
         "turn_left": habitat_sim.agent.ActionSpec("turn_left", habitat_sim.agent.ActuationSpec(amount=10.0))
     }
+    return habitat_sim.Configuration(config, [agent_config])
+
+
+def render_and_detect(scene, spawn, frames, labels, ids, vocabulary, inputs, manifest, detector_type):
+    import habitat_sim
+    from habitat_sim.utils.common import quat_from_angle_axis
+    from PIL import Image
+
     detector = detector_type(class_list=vocabulary, device="cuda", confidence_threshold=0.1)
     started = time.monotonic()
-    with habitat_sim.Simulator(habitat_sim.Configuration(config, [agent_config])) as sim:
+    with habitat_sim.Simulator(habitat_sensor_config(scene)) as sim:
         state = habitat_sim.AgentState()
         state.position = [spawn.x, spawn.y, spawn.z]
         state.rotation = quat_from_angle_axis(spawn.heading, np.array([0.0, 1.0, 0.0]))
@@ -300,7 +309,7 @@ def render_and_detect(scene, spawn, frames, labels, ids, vocabulary, inputs, man
             stamp = time.monotonic_ns()
             rgb = np.ascontiguousarray(raw["rgb"][..., :3], dtype=np.uint8)
             depth = np.asarray(raw["depth"], dtype=np.float32)
-            semantic, instances, _ = detector.predict_segmentation(rgb, draw_instance_predictions=False)
+            semantic, instances, _ = detector.predict(rgb, draw_instance_predictions=False)
             packet = {
                 "rgb": rgb,
                 "depth": depth,
