@@ -4,11 +4,17 @@
       gates pass in q2/q6; persistent native stream and controller feedback tests
       pass. The fixed q2/q6/q12 diagnostic remains zero correct with no model-selected
       motion: one text-JSON truncation, one uncertain empty plan, one confident
-      wrong answer. Keep the baseline opt-in; next compare identical uniform
-      history packets and inspect the planner contract. Match pose/motion contracts on the emet side before
+      wrong answer. Keep the baseline opt-in and inspect the planner contract.
+      Match pose/motion contracts on the emet side before
       claiming a paired active comparison. Preserve matched-history image-only
       controls as a separate gate. See
       `docs/experiments/grapheqa_active_qualification_20261030.md`.
+      The corrected four-independent-image replay completes all six replies
+      but remains 0/3 in each condition (`20261030_184519_a76b60`). Contact sheets
+      are human audits, not four full model images under a 512-pixel size cap.
+      Next qualify useful task-independent exploration and one real model-selected
+      movement. Preserve the model's final answer; do not add a forced-action or
+      answer-override policy to inflate acceptance.
 
 - [x] Fork GraphEQA for supplied model endpoints and paired frozen-context
       evaluation: https://github.com/cpaxton/graph_eqa/pull/1. Planner/room API
@@ -40,8 +46,9 @@
       `476e6c81` (ten fresh views, 20 object nodes and two agent nodes; no model
       requests). The model API fork and paired context runner are available at
       https://github.com/cpaxton/graph_eqa/pull/1; live model/context routing passes.
-      Next resolve the pose policy and connect observed-space frontier/execution
-      before one complete paired active episode. Report:
+      The sensor-only pose and measured execution gates now pass in two short
+      scene checks; match the same frame basis/body/budgets on the emet side and
+      resolve model planning before one complete paired active episode. Report:
       `docs/experiments/grapheqa_model_api_connection_20261030.md`.
       Native warnings remain; the April-2025 image is a dependency base, not
       current-source parity.

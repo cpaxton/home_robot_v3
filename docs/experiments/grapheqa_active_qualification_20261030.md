@@ -136,6 +136,57 @@ estimated local pose labels. q2's failed response is not excluded: its captured
 input remains valid. This tests context/controller inputs on a reference
 collector's trajectory; it is not a matched active-agent comparison.
 
+## Matched captured-history diagnostic
+
+The contact-sheet experiment (`20261030_183846_6bb2b3`) completed six valid
+replies but exposed an input-quality problem. Qwen resizes **each API image**
+to a maximum side of 512 pixels. A 2-by-2 sheet therefore gives each view only
+about 256 pixels in width and shrinks its drawn labels. Both conditions scored
+0/3; this is not a four-independent-image budget. Keep sheets for human audits.
+
+Fork `8eefc4e` now supports independently attached, text-labeled PNGs in both
+conditions and hashes every image. emet `82044b11` advertises the actual image
+resize caps. The repeated job `20261030_184519_a76b60` used the exact same four
+selected frames, question, model and 2,048-output-token cap:
+
+| Condition | Valid replies | Correct if stopped | Mean request wall time |
+| --- | ---: | ---: | ---: |
+| Four RGB images, no graph/tools | 3/3 | 0/3 | 2.57 s |
+| Same four RGB images + reference graph/controller | 3/3 | 0/3 | 10.85 s |
+
+Exact data-URL comparisons confirm four identical, ordered image attachments
+per pair. Prompt token counts are about 1,235 without the graph versus
+11,500–12,700 with it; the old sheet-only request was about 480. The server
+reports 512-pixel per-image preprocessing and int4 Qwen3-VL-8B. All six replies
+finish normally. No reference call proposes an action. This fixes a real
+evidence-delivery issue, but establishes neither answer improvement nor active
+planning acceptance. Timings exclude collecting the observations/building
+memory; they are not complete-agent runtime comparisons.
+
+Artifacts:
+
+- `/home/cpaxton/runs/emet/grapheqa-four-images-context-pair-20261030/`
+- `/home/cpaxton/runs/emet/grapheqa-uniform4-images-fixture-20261030/`
+- Human question/view panels:
+  `/home/cpaxton/runs/emet/grapheqa-uniform4-fixture-20261030/`
+- Floor-map PNG/PDF, arrays and replay script:
+  `/home/cpaxton/runs/emet/grapheqa-active-calibrated-pilot-20261030/floor-calibration-audit.*`.
+  This figure replays all seventeen startup captures: 0 reachable cells before
+  calibration versus 1,859 after. The earlier 1,894 count used fourteen captures;
+  do not mix the populations. Both comparisons hold their RGB-D inputs fixed.
+
+The source image selection is uniform, with the current capture pinned and no
+future observations. All three cases are retained, including q2's earlier
+format failure. The collector made no task-driven translation, so these are
+weak initial-scan trajectories. A task-independent observed-space collector
+and meaningful model-selected movement are prerequisites for broader claims.
+The graph condition also changes the reference prompt/response structure, so
+this is a complete context/controller comparison, not a causal graph ablation.
+
+Final regression verification: 129 emet mapping/navigation/model-server/history
+tests, one real Habitat sensor-config binding check, and 23 fork API/controller/
+multi-image protocol tests pass. No GPU job or owned model server remains.
+
 ## Next live gate and expansion
 
 From clean committed emet and fork checkouts, run the existing managed API check
@@ -151,10 +202,19 @@ frame is segmented online and integrated. Model decisions then select observed o
 or reachable frontiers. Motion and registration failures are returned as
 feedback, not interpreted as visual absence or used to replace an answer.
 
-After this one-case wiring gate, use the already selected q2/q6/q12 development
-population. Do not call an uncertain no-action response a navigation pass. Match
+The already selected q2/q6/q12 development population now exposes the remaining
+planner/input-coverage failures. Do not call an uncertain no-action response a navigation pass. Match
 pose/perception/motion budgets when connecting the emet side. A matched active
 emet comparison and matched-history image-only controls remain acceptance work;
 do not compare this new sensor-only row directly with historical supplied-pose,
 navmesh-assisted scores. Expand to the fixed twelve-question pilot only after
 both sides meet those contracts. No full sweep is needed at this stage.
+
+Priorities before expansion are: make the reference planning contract clear
+enough to exercise an actual chosen action (without forced answers or a private
+fallback policy); collect useful, task-independent trajectory coverage for the
+image-only controls; then connect the emet policy to the same estimated-pose,
+footprint and movement budgets. Include an explicit basis conversion from the
+historical Habitat X/Z client to the local right-handed Z-up sensor frame.
+The current external avatar has radius 0.1 m and height 1.5 m; sharing executor
+code alone does not establish matched physical settings with the emet client.

@@ -8,6 +8,12 @@ versus reproduction, and the closest memory/navigation/manipulation work.
 records the real Qwen API check, supplied-model runner, input restrictions and
 remaining active-execution gates. Frozen-context inference is not active EQA.
 
+**Active baseline qualification (2026-10-30):** [Sensor-only GraphEQA connection](grapheqa_active_qualification_20261030.md)
+records passing short movement gates, floor calibration and independent image
+attachments. Its three-case model diagnostic still fails active acceptance;
+the matched captured-history comparison is 0/3 in each condition. Keep these
+qualification results separate from the main shared-harness EQA benchmarks.
+
 **Post-merge study (2026-10-28):** [RL-priority experiment and paper plan](shared_agent_paper_update.md#post-merge-evidence-program-2026-10-28),
 [proposed controlled capability suite](harness_capability_benchmark.md).
 The current shared-harness development pilot is separate from historical
