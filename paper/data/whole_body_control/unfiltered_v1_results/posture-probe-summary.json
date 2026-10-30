@@ -1,0 +1,140 @@
+{
+  "scope": "Diagnostic crossed train postures and yaw signs; no held-out tuning or training.",
+  "teacher_passed": 6,
+  "cases": [
+    {
+      "id": "train:base:probe_yaw_left_-1",
+      "seed": 34000003,
+      "turn_rad": -0.04,
+      "mastered": true,
+      "tracking_and_settling": true,
+      "metrics": {
+        "peak_force_N": 0.4905000000000012,
+        "base_linear_jerk": 0.32692934224857095,
+        "base_yaw_jerk": 0.7986750941510398,
+        "joint_jerk": 0.599311807065499,
+        "hand_position_error_m": 0.0014211860521638683,
+        "hand_orientation_error_rad": 0.005198650158434171,
+        "base_error_m": 0.00030198886180266856,
+        "base_heading_error_rad": 0.00436511858380266,
+        "hold_drift_m": 0.0001346493455015968,
+        "settled_seconds": 3.899999999999994
+      },
+      "failures": [],
+      "initial_state_sha256": "a376ca784c2423b92782993e567c1006ed418e0528ec099cfe8d4306664e76f4"
+    },
+    {
+      "id": "train:base:probe_yaw_left_1",
+      "seed": 34000003,
+      "turn_rad": 0.04,
+      "mastered": false,
+      "tracking_and_settling": false,
+      "metrics": {
+        "peak_force_N": 0.49050000000000127,
+        "base_linear_jerk": 0.36284815040043983,
+        "base_yaw_jerk": 1.07610409121954,
+        "joint_jerk": 0.9565088175097249,
+        "hand_position_error_m": 0.01798327244135899,
+        "hand_orientation_error_rad": 0.05709493064185647,
+        "base_error_m": 0.001905506816036574,
+        "base_heading_error_rad": 0.057023925028157535,
+        "hold_drift_m": 0.0,
+        "settled_seconds": 0
+      },
+      "failures": [
+        "tracking_timeout",
+        "terminal_hold"
+      ],
+      "initial_state_sha256": "a376ca784c2423b92782993e567c1006ed418e0528ec099cfe8d4306664e76f4"
+    },
+    {
+      "id": "train:base:probe_yaw_right_-1",
+      "seed": 34000004,
+      "turn_rad": -0.04,
+      "mastered": true,
+      "tracking_and_settling": true,
+      "metrics": {
+        "peak_force_N": 0.49050000000000127,
+        "base_linear_jerk": 0.27452948625763285,
+        "base_yaw_jerk": 0.9545112933449194,
+        "joint_jerk": 0.7318649356049628,
+        "hand_position_error_m": 0.0007789981772766295,
+        "hand_orientation_error_rad": 0.003245037841295632,
+        "base_error_m": 0.0001720784182805312,
+        "base_heading_error_rad": 0.0016139108440762634,
+        "hold_drift_m": 0.00029161621003027146,
+        "settled_seconds": 6.499999999999985
+      },
+      "failures": [],
+      "initial_state_sha256": "621c2732092bf2390009b69bd4cc69e12d78a0659aac6f7598eb1b28be9feff3"
+    },
+    {
+      "id": "train:base:probe_yaw_right_1",
+      "seed": 34000004,
+      "turn_rad": 0.04,
+      "mastered": true,
+      "tracking_and_settling": true,
+      "metrics": {
+        "peak_force_N": 0.49050000000000127,
+        "base_linear_jerk": 0.36205152648305816,
+        "base_yaw_jerk": 0.9125179748938997,
+        "joint_jerk": 0.9620246666444461,
+        "hand_position_error_m": 0.0011041668023042614,
+        "hand_orientation_error_rad": 0.0041998594880199745,
+        "base_error_m": 0.0003056230685162107,
+        "base_heading_error_rad": 0.0031068171528600974,
+        "hold_drift_m": 0.0002617710339583598,
+        "settled_seconds": 4.899999999999991
+      },
+      "failures": [],
+      "initial_state_sha256": "621c2732092bf2390009b69bd4cc69e12d78a0659aac6f7598eb1b28be9feff3"
+    },
+    {
+      "id": "train:base:probe_hold_-1",
+      "seed": 34000000,
+      "turn_rad": -0.04,
+      "mastered": true,
+      "tracking_and_settling": true,
+      "metrics": {
+        "peak_force_N": 0.4905000000000012,
+        "base_linear_jerk": 0.382914058270262,
+        "base_yaw_jerk": 1.222120876300372,
+        "joint_jerk": 0.7279530474354692,
+        "hand_position_error_m": 0.0008665787840116771,
+        "hand_orientation_error_rad": 0.0035306038566339584,
+        "base_error_m": 0.00018744004872036244,
+        "base_heading_error_rad": 0.0021287867361908935,
+        "hold_drift_m": 0.0002475797990071097,
+        "settled_seconds": 5.799999999999987
+      },
+      "failures": [],
+      "initial_state_sha256": "8db54d96955e870cc475d24cbaf7c00aafe44ccdd1e7e233ce98cc98aa5b08ed"
+    },
+    {
+      "id": "train:base:probe_hold_1",
+      "seed": 34000000,
+      "turn_rad": 0.04,
+      "mastered": false,
+      "tracking_and_settling": false,
+      "metrics": {
+        "peak_force_N": 0.49050000000000127,
+        "base_linear_jerk": 0.31171018465757083,
+        "base_yaw_jerk": 0.38615097037603113,
+        "joint_jerk": 0.6037341679747826,
+        "hand_position_error_m": 0.008720628508830968,
+        "hand_orientation_error_rad": 0.027853106509995933,
+        "base_error_m": 0.0006048730191848351,
+        "base_heading_error_rad": 0.027707248950055746,
+        "hold_drift_m": 0.0,
+        "settled_seconds": 0
+      },
+      "failures": [
+        "tracking_timeout",
+        "terminal_hold"
+      ],
+      "initial_state_sha256": "8db54d96955e870cc475d24cbaf7c00aafe44ccdd1e7e233ce98cc98aa5b08ed"
+    }
+  ],
+  "weights_sha256": "8a81fb241e4cfb59e310bc50762d8bedaec96b66ac5f6259e494d7586bab966d",
+  "hardware_used": false
+}

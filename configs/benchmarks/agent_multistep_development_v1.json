@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "status": "development_inventory_after_pilot_not_heldout_acceptance",
+  "inputs": "privileged_simulator_ground_truth",
+  "execution": "independently_stepped_actuators_physics_paused_during_inference",
+  "learned_policy_evaluated": false,
+  "cases": [
+    {
+      "id": "stretch_two_object_regions",
+      "robot": "stretch",
+      "environment": "existing_native_stretch_table",
+      "placement_regions": "configs/eval/native_table_two_object_regions.json",
+      "initial_separation_m": 0.15,
+      "separation_axis": "y",
+      "object_goals_in_region_order": ["object2", "object1"],
+      "instruction": "Place both objects in their specified regions, in any feasible order.",
+      "task_generation": "existing_frozen_goal_fixture_agent_selects_tools_and_order"
+    },
+    {
+      "id": "mars_delivery_return",
+      "robot": "innate_mars",
+      "environment": "existing_mars_two_support_fixture",
+      "fixture_catalog": "configs/benchmarks/mars_public_tamp_whole_body_v2.json",
+      "fixture_id": "left:20g:0",
+      "instruction": "Transfer blue from source to destination, then return blue to source.",
+      "stages": [
+        {"object": "blue", "support": "destination"},
+        {"object": "blue", "support": "source"}
+      ],
+      "task_generation": "template_constrained_agent_instruction_and_declarative_program",
+      "reference_qualified": false
+    }
+  ],
+  "unimplemented": [
+    "normal_observation_grounding",
+    "physics_advancing_during_inference_in_this_runner",
+    "learned_actor_execution_on_identical_full_cases",
+    "mars_robocasa_or_molmospaces_full_scene_binding",
+    "articulation_and_navigation_household_cases"
+  ]
+}

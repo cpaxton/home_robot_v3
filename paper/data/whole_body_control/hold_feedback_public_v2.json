@@ -1,0 +1,163 @@
+{
+  "scope": "Actual public TAMP command replay, selected development cases, all failures retained",
+  "complete": true,
+  "candidate": {
+    "checkpoint": "logs/manipulation/hold-feedback-continued-v5/seed-64/step-12288",
+    "evidence": "logs/manipulation/hold-feedback-continued-v5/seed-64/checkpoint_evidence.json"
+  },
+  "episodes": [
+    {
+      "case": "left:20g:0",
+      "success": false,
+      "completed_stages": 0,
+      "policy_calls": 101,
+      "robot_failure": "tracking_timeout",
+      "stop_confirmed": true,
+      "failure_at": {
+        "stage": 0,
+        "tool": "execute_pick_place_plan",
+        "code": "tracking_timeout",
+        "category": "execution_or_verification"
+      },
+      "joint_certificate_residual_rad": 0.015818257679732106,
+      "hand_position_error_m": 0.001386717570564685,
+      "hand_orientation_error_rad": 0.004657445497158441,
+      "contact_metrics": {
+        "peak_contact_force": 0.4093831602519646,
+        "contact_impulse": 1.6769737956273678,
+        "contact": true,
+        "max_penetration": 0.00022735950566945412,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "min_wheel_load": [
+          4.011091213700087,
+          6.208056836731435,
+          0.5543020208297881
+        ]
+      },
+      "motion_metrics": {
+        "samples": 108,
+        "duration_s": 5.3499999999995165,
+        "hand_position_rms_m": 0.0015435292647083946,
+        "hand_position_max_m": 0.0018516743832152763,
+        "hand_rotation_rms_rad": 0.0024070410340827054,
+        "hand_rotation_max_rad": 0.004657445497158441,
+        "arm_speed_max_rad_s": 0.0037222245553141845,
+        "arm_velocity_command_error_rms_rad_s": 0.0008466183779985488,
+        "scope": "all recorded execution samples, including failed segments and stop transients; no smoothing",
+        "arm_acceleration_max_rad_s2": 0.0938397770994058,
+        "arm_jerk_rms_rad_s3": 0.5411920922724907,
+        "arm_jerk_max_rad_s3": 2.61311226417755
+      }
+    },
+    {
+      "case": "left:50g:0",
+      "success": false,
+      "completed_stages": 0,
+      "policy_calls": 101,
+      "robot_failure": "tracking_timeout",
+      "stop_confirmed": true,
+      "failure_at": {
+        "stage": 0,
+        "tool": "execute_pick_place_plan",
+        "code": "tracking_timeout",
+        "category": "execution_or_verification"
+      },
+      "joint_certificate_residual_rad": 0.01530152368845683,
+      "hand_position_error_m": 0.0014524280780937868,
+      "hand_orientation_error_rad": 0.005014824025791016,
+      "contact_metrics": {
+        "peak_contact_force": 0.864489449802613,
+        "contact_impulse": 3.4091407256772723,
+        "contact": true,
+        "max_penetration": 0.00020339246926105378,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "min_wheel_load": [
+          3.9561358003197693,
+          6.229050158694136,
+          0.4616330305308468
+        ]
+      },
+      "motion_metrics": {
+        "samples": 109,
+        "duration_s": 5.399999999999511,
+        "hand_position_rms_m": 0.001630073943389331,
+        "hand_position_max_m": 0.0019262837767674845,
+        "hand_rotation_rms_rad": 0.002652002737680967,
+        "hand_rotation_max_rad": 0.005021545041276118,
+        "arm_speed_max_rad_s": 0.004863665846816035,
+        "arm_velocity_command_error_rms_rad_s": 0.0009148719697594598,
+        "scope": "all recorded execution samples, including failed segments and stop transients; no smoothing",
+        "arm_acceleration_max_rad_s2": 0.09086907904180082,
+        "arm_jerk_rms_rad_s3": 0.6710902931386258,
+        "arm_jerk_max_rad_s3": 2.609857853515447
+      }
+    },
+    {
+      "case": "right:20g:0",
+      "success": false,
+      "completed_stages": 0,
+      "policy_calls": 101,
+      "robot_failure": "tracking_timeout",
+      "stop_confirmed": true,
+      "failure_at": {
+        "stage": 0,
+        "tool": "execute_pick_place_plan",
+        "code": "tracking_timeout",
+        "category": "execution_or_verification"
+      },
+      "joint_certificate_residual_rad": 0.015818257679732106,
+      "hand_position_error_m": 0.001386717570564685,
+      "hand_orientation_error_rad": 0.004657445497158441,
+      "contact_metrics": {
+        "peak_contact_force": 0.4093831602519646,
+        "contact_impulse": 1.6769737956273678,
+        "contact": true,
+        "max_penetration": 0.00022735950566945412,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "min_wheel_load": [
+          4.011091213700087,
+          6.208056836731435,
+          0.5543020208297881
+        ]
+      },
+      "motion_metrics": {
+        "samples": 108,
+        "duration_s": 5.3499999999995165,
+        "hand_position_rms_m": 0.0015435292647083946,
+        "hand_position_max_m": 0.0018516743832152763,
+        "hand_rotation_rms_rad": 0.0024070410340827054,
+        "hand_rotation_max_rad": 0.004657445497158441,
+        "arm_speed_max_rad_s": 0.0037222245553141845,
+        "arm_velocity_command_error_rms_rad_s": 0.0008466183779985488,
+        "scope": "all recorded execution samples, including failed segments and stop transients; no smoothing",
+        "arm_acceleration_max_rad_s2": 0.0938397770994058,
+        "arm_jerk_rms_rad_s3": 0.5411920922724907,
+        "arm_jerk_max_rad_s3": 2.61311226417755
+      }
+    }
+  ],
+  "successful_programs": 0,
+  "programs": 3,
+  "limitation": "First certified joint waypoint fails although hand-pose error is small; no stage or goal threshold changed.",
+  "full_report_archive": "paper/data/whole_body_control/hold_feedback_public_v2.json.gz",
+  "uncompressed_sha256": "394c0fc969292bdc94fbb9a2883bcc0e5d28516f9016218adb3a73b28f553643",
+  "safety_promoted": false
+}

@@ -1,0 +1,17 @@
+{
+  "complete": true,
+  "source_revision": "9e183ade",
+  "regression_tests": 831,
+  "steps_per_variant": 65536,
+  "variants": [
+    "curriculum",
+    "control"
+  ],
+  "archive_uncompressed_sha256": "aa7b70ab8e9d3f88fbc65a79cd7b99805bb8ab092d76680f0d7ba6a9667f3af0",
+  "local_full_trace_archive": "logs/eval/jerk-tracking-v20-20261027/report.json.gz",
+  "local_full_trace_compressed_sha256": "7de52ea81b8ae9a60279b4d13da192c1a4176f9642c6687d0616c9f80a57f29e",
+  "local_full_trace_uncompressed_sha256": "84a4916cc6b45da163338969846c02ecbc12562b6a9582f18f90f0f6b50bc0a5",
+  "local_trace_not_in_git": true,
+  "safety_promoted": false,
+  "hardware_used": false
+}

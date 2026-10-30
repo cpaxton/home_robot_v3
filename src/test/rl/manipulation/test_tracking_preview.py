@@ -315,6 +315,56 @@ def test_pose_schedule_runs_without_ik_or_joint_reference_hint_and_cannot_releas
 
 
 @pytest.mark.sim
+def test_retimed_reference_completion_and_hold_age_follow_announced_progress():
+    from emet.rl.manipulation.tracking import TaskPoseTrajectory
+
+    e = ManipulationEnv(
+        ManipulationConfig(
+            robot="innate_mars",
+            scenario="reach",
+            trajectory_preview=True,
+            tracking_reward=True,
+            action_mode="direct_velocity",
+            randomization_scale=0,
+            horizon=4,
+        )
+    )
+    try:
+        e.reset(seed=2100002)
+        c = e.control
+        base, hand = c.base_pose().copy(), c.ee_pose().copy()
+        goal = hand.copy()
+        goal[0] += 0.004
+        path = TaskPoseTrajectory(
+            [0, 1], [base, base], [hand, goal], [c.grip_reference] * 2, base_mask=[1, 1, 1]
+        )
+        e.set_task_trajectory(path)
+        c.set_trajectory_progress(0.25, rate=0)
+        for _ in range(40):
+            _, _, done, truncated, info = e.step(np.zeros(e.action_space.shape))
+            assert not done and not truncated
+        assert c.trajectory_elapsed() == pytest.approx(0.25)
+        assert not e._reference_complete()
+        assert e._reference_end_elapsed() == pytest.approx(-0.75)
+        assert info["settled_seconds"] == 0 and not info["is_success"]
+        e._configure_preview()
+        for offset in (-0.05, 0.2, 1.0):
+            assert c.preview_sampler(e.data.time + offset)[1][0] == pytest.approx(hand[0] + 0.001)
+
+        c.set_trajectory_progress(1, rate=0)
+        assert e._reference_end_elapsed() == pytest.approx(0)
+        for _ in range(5):
+            e.step(np.zeros(e.action_space.shape))
+            c.set_trajectory_progress(1, rate=0)
+        assert e._reference_complete()
+        assert e._reference_end_elapsed() == pytest.approx(0.25)
+        e.set_task_trajectory(path)
+        assert e._reference_end_elapsed() == pytest.approx(-1)
+    finally:
+        e.close()
+
+
+@pytest.mark.sim
 def test_gt_tamp_path_can_be_retimed_into_task_space_without_moving_the_robot():
     from emet.rl.manipulation.tamp_cases import plan_case, task_pose_trajectory
 

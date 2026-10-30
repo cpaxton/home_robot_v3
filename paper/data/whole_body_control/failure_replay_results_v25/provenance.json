@@ -1,0 +1,15 @@
+{
+  "scope": "Archive final negative PPO results and independent diagnostic interventions.",
+  "source_revision": "49a11690",
+  "portable_uncompressed_sha256": "f37777ca3b899c33dfbf9715df329f3f17c5777e66dbdef844e34c0a20ce259e",
+  "local_full_report": "logs/eval/failure-replay-v25-20261028/report.json.gz",
+  "local_full_report_compressed_sha256": "80d8b18bf52d423679b9d19089e0984e71dcb3d2cfe4e8a76cf96dead832befe",
+  "local_full_report_uncompressed_sha256": "534ba52bac39a1bd19a9ec54149514941b25a93e24d34e6c1f1d225159e7fd14",
+  "public_observation_traces_local_only": true,
+  "safety_promoted": false,
+  "portable_files_sha256": {
+    "archive_completed_v25_v29.py": "82e4ac8e345af9749b6df27853f2c11c0b07bdf83d2f400c5e841e3401d6f797",
+    "results.json.gz": "0810c828eb984f2de8f18e0e18a825dddad4d213b3a99e9032a284026a9a11cf",
+    "summary.json": "d477c3d7374e1d17d378faae079f3f4ed2863a6711c9c2a5105b197a9b141141"
+  }
+}

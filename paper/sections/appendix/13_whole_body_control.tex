@@ -79,6 +79,50 @@ reports are retained as observations, not authorization for training under the
 revised sources. The reported gate is per mass and conditional on admission,
 not a 95\% per-stratum or end-to-end success guarantee.
 
+\paragraph{Stage continuity and command-interface checks.}
+An explicit stage-rearming refactor retained the 298/300 carry result but reduced
+continuous pick/return-place success to 27/30: one retention loss and two tracking
+timeouts, all during placement. Development-selected ablations isolated loss of
+executor-authorized base compensation across the transition; restoring tracking
+trim alone did not recover all three cases. Explicitly authorizing compensation
+for verified free-space descent, while disabling it at support contact and on
+faults, restored 30/30 cases with unchanged contracts and zero unsafe-contact or
+wheel events. The subsequent immutable \texttt{b181db61} rerun completed 298/300
+carries and 30/30 continuous cases, with 367 fresh source-bound regression tests;
+the combined canonical readiness check passed for that snapshot. Both remaining
+100 g orientation retention failures are preserved. Complete evidence is archived
+in \texttt{qualification\_v6.json} and adjacent compressed reports; it does not
+qualify later public-tool or controller changes. A simulator command-protocol prototype also replayed four
+admitted TAMP arm paths, including loaded carry, using task-pose schedules and
+a measured-Jacobian teacher. This component result does not establish full
+public-tool, learned-policy, or hardware acceptance. Complete placement and
+component evidence is archived as \texttt{placement\_recovery\_v6} and
+\texttt{task\_pose\_command\_smoke} in the control data directory.
+
+The public Mars adapter now connects task discovery, private collision-checked
+planning and independently stepped physical execution on two distinct supports.
+A separate frozen thirty-case catalog spans two layouts, five seeds and three
+payload masses. All cases have reachable fixture witnesses. A selected 20 g
+transfer completed with 11.8 cm measured base displacement, 0.013 rad peak relative
+object rotation, 3.24 N peak contact load and stable support after release, without
+wheel-lift termination. Its roughly 100 s simulated execution used explicit
+geometric-path retiming and a bounded support-contact approach; it is not a
+fixed-deadline or full-catalog result. Heavier-payload retention remains open. A
+separate harness uses the normal agent prompt, parser and dispatcher, gated on
+oracle success and normal observed inputs. No actual observed-agent trial or
+hardware outcome is claimed from these interface tests.
+
+The subsequent complete public-tool run at \texttt{9dee06fc} improved from 4/30
+to 16/30 on that unchanged catalog: 10/10 at 20 g, 6/10 at 50 g, and 0/10 at
+100 g, with all thirty fixtures admitted and 588 source-bound regression tests
+passing. The remaining fourteen outcomes comprise six retention losses, five
+wheel-unloading stops, one base-drift stop and two planning failures. Successful
+tasks took a median 67.55 simulated seconds. Shorter base approaches and verified
+steady holds improved the baseline; heavier grasp/transport reliability remains
+unqualified. Full traces, failures and identities are archived in
+\texttt{public\_tamp\_v3.json} and its adjacent compressed report. These frozen
+benchmark results are not an untouched held-out generalization study.
+
 \paragraph{Qualification and learning.}
 The held-out protocol fixes 100 cases per payload mass, balanced across the five
 motion categories. It reports admission, success conditional on admission,
@@ -92,3 +136,206 @@ combined with smoothness, effort, contact, overshoot, and settled-motion costs;
 randomization increases only after validation. Hardware force calibration,
 full public-tool Mars task execution, and qualification of larger native
 objects remain outside the evidence reported here.
+
+An optional simulator research mixture reserves 70\% of resets for ordinary
+tracking, with 10\% pregrasp, 12\% carry, 5\% placement and 3\% disturbance.
+Loaded resets vary payload identity, mass, center of mass and object friction;
+closed-empty tracking trials distinguish a retention command from grasp success.
+A versioned observation suffix provides retention intent and gripper velocity.
+An advisory object-in-hand estimator learns from debounced bilateral-contact
+labels using encoder and command history, with a separate supervised optimizer
+and episode-disjoint audit samples. Its loss does not alter the PPO reward or
+share actor gradients. Contact occupancy does not certify force closure or
+future retention; probability calibration and no-regression task qualification
+remain required before using this estimate in execution decisions.
+
+Development composition tests preserve simulation state between transfers and
+compare scripted selection with a real model using the same public TAMP tools.
+A selected Stretch two-object regional task passes for both selectors. A Mars
+delivery-and-return task completes the first transfer but exhausts the return
+planner's budget for both selectors, exposing a post-placement composition gap
+that isolated tracking misses. These privileged, independently stepped pilots
+use reference controllers.
+
+A subsequent simulator execution backend connects a fixed learned checkpoint
+to these public tools without teacher fallback. Training-source/weight binding,
+reconstruction of the original training-model fingerprint, and a separate
+compiled robot/actuator/mesh/solver comparison admit an additional fixed support
+without disabling model checks. Three matched development cases span two
+layouts and 20/50\,g payloads. The reference completes delivery in all three,
+then fails return planning; the checkpoint completes zero deliveries, making
+14 actor calls per case before the unchanged fixed-base arm certificate stops
+approach drift. All three stops are measured and confirmed, with no wheel-lift
+or force-limit termination. These failures establish an exercised interface,
+not useful learned pick/place performance or compliant contact. Grounding,
+live asynchronous execution, broader household tasks and hardware remain open.
+
+A subsequent startup audit finds that these initial failures preceded the first
+arm command. An explicit idle actuator hold fixes that lifecycle error; the
+same checkpoint then reaches a commanded pregrasp target but still stops on
+base drift in all three cases, after 13/14/13 actor calls. In a selected
+stationary fixture, reference and zero-velocity controls keep hand position
+error below 0.5\,mm, while the checkpoint reaches approximately 15\,mm even
+after one second of zero-velocity history. Inherited carry-dominated statistics,
+unseen task-phase categories and missing stationary-base manipulation sampling
+motivate further training ablations. Geometric replanning still uses IK during
+public execution; policy inference itself does not.
+
+\paragraph{Hold-focused policy ablation.}
+Subsequent simulator pilots add stationary-base manipulation resets, physical
+pregrasp holds, categorical identity normalization and a six-DOF body-motion
+cost while retaining 70\% ordinary tracking resets. An optional learned
+feedback head computes bounded mean motion from a context-dependent gain matrix
+applied to current/future pose errors and measured velocities. Consequently its
+deterministic motion mean is zero when these signals are zero; this does not
+prove stability or convergence. A separate bounded gripper head retains release
+authority constraints. Tracking context/critic transfer explicitly reinitializes
+this head and the PPO optimizer. Five bounded runs add 24,576 PPO samples.
+
+The selected 12,288-sample feedback candidate holds hand position within
+1.17\,mm over ten seconds on five development pregrasp fixtures, with peak base
+displacement 1.70\,mm. None satisfies a continuous two-second six-DOF quiet hold.
+Nearby target residuals are 6.40--7.48\,mm after three seconds and
+3.81--6.08\,mm after six seconds; reachable 0.12\,rad wrist targets retain
+0.118--0.122\,rad error. One rotation trial stops on an inference deadline.
+The same candidate makes 101 actor calls on each of three public TAMP programs
+but completes no transfer: the first joint certificate rejects
+0.0153--0.0158\,rad residual despite 1.39--1.45\,mm hand error. This exposes
+an outstanding Cartesian-policy/joint-executor contract mismatch. The broader
+paired no-regression gate also fails. Raw traces, source/weight bindings and
+matched teacher results accompany \texttt{hold\_feedback\_*\_v2.json}; a fresh
+692-test regression receipt covers the implementation. No checkpoint or
+hardware capability is qualified by these development measurements.
+
+\paragraph{Feedback and execution-contract diagnosis.}
+Matched frozen pregrasp ablations identify an additional wheel velocity loop as
+a source of stationary chatter: reducing its gain from 2.0 to 0.5 produces
+5.85--6.00\,s continuous quiet in two six-second, fixed-weight trials, without
+changing robot geometry or solver parameters. A refined actor subsequently
+passes the two-second six-DOF quiet criterion in five stationary development
+fixtures. These results do not establish moving-goal or loaded-task safety.
+New training options align fixed-base episodes with the executor's
+1\,cm / 0.02\,rad drift boundary and add dense hand progress evaluated against
+the same active target at both ends of a transition, alongside fine pose,
+jerk, force and retention terms.
+
+An explicit simulator Cartesian arm mode consumes the complete FK schedule
+from a planned joint witness. It checks measured configurations, static support,
+retention and base drift each control cycle, then tests the original requested
+Cartesian endpoint rather than an arbitrary IK joint solution. A bounded final
+pose correction avoids adding IK and execution tolerances. These sampled checks
+are not a continuous collision certificate for the learned configuration path.
+The first three public development programs still fail pregrasp tracking in
+this mode, making 371/391/371 actor calls; the joint mode fails after 101 each.
+Later refinements and teacher comparisons are preserved with all failures in
+\texttt{hold\_cartesian\_validation\_v4.json}. No learned pick/place or hardware
+qualification follows from these interface and stationary-hold improvements.
+
+An additional 8,192-sample refinement yields 3.20/3.47\,mm nearby endpoint errors
+on two development fixtures, with 0.0455/0.0479\,rad angular residuals. Neither
+meets the stricter public arm contract. Learned public execution remains 0/3.
+An explicit analytic Cartesian teacher completes pregrasp, grasp and lift in a
+frozen 20\,g case, then exposes a terminal hold-transition unloading transient.
+Preserving the first safety cause avoids misreporting this as a timeout.
+Clearing transport compensation and waiting for measured quiet before position
+hold removes the detected unloading in this selected replay. Both tested
+analytic rotation metrics complete delivery with independently verified support,
+release and stability; both then exhaust the return planner budget. Maximum
+wheel gaps are 0.031--0.038\,mm under the unchanged 0.10\,mm unloading threshold,
+with peak reported contact force approximately 3.73\,N. These are repeated
+analytic controls on one physical case, not learned or population qualification.
+All original and repaired outcomes are retained in
+\texttt{cartesian\_pose\_oracle\_v5.json}.
+
+
+\paragraph{Precision refinement and reference progression.}
+A further 65,536 PPO samples reduce nearby position residuals to
+0.420/0.402\,mm on two development cases, while angular residuals of
+0.0245/0.0232\,rad still miss the 0.02\,rad contract. Two wrist probes avoid
+the earlier base-envelope abort but retain 0.0585/0.0539\,rad angular error.
+Actor-input auditing also identifies and repairs a Cartesian stage handoff that
+incorrectly retained the release phase. A binary reference-clock gate freezes
+at approximately 3.1\,mm intermediate lag; continuous lag scaling restores
+progress within the unchanged 10\,mm / 0.10\,rad tracking tube. The final
+3\,mm / 0.02\,rad endpoint and all physical limits remain unchanged.
+After both repairs, learned execution still completes no transfers in three
+public programs: two pregrasp timeouts and one tracking-envelope stop, all
+confirmed. A fresh analytic comparison completes delivery with the 0.15\,m/rad
+metric but hits a cycle deadline with 1.0\,m/rad; both outcomes are retained.
+These results separate integration defects from remaining learned tracking and
+runtime limitations. Full traces, negative paired comparisons and original
+training sources accompany \texttt{pose\_precision\_training\_v6},
+\texttt{pose\_precision\_validation\_v6} and \texttt{cartesian\_clock\_v7}.
+
+
+\paragraph{Continuation regression and broader validation.}
+Two further 16,384-sample pilots compare ordinary and goal-gated settling.
+Both retain stationary quiet but regress on moving goals relative to their
+initial checkpoint. Goal gating improves nearby error relative to ordinary
+continuation, yet all six public replays stop during pregrasp at the unchanged
+tracking bound. On identical recorded observations, a weights/normalization
+counterfactual audit finds larger command changes from updated weights than
+normalization alone; it does not establish counterfactual rollout success.
+The optimizer was restarted at five times the source run's final learning rate.
+A subsequent factorial diagnostic separates restart rate and fixed/adaptive
+normalization before changing the task distribution. Its validation includes
+ordinary base, hand and combined goals, retargets and bounded pushes alongside
+TAMP. Current retention-error running cost is corrected independently of
+peak-based safety evidence. Neither accurate stationary holds nor additional
+training alone establishes task qualification.
+
+
+\paragraph{Recovered continuation and reachable translations.}
+All four learning-rate/normalization pilots complete before a host reboot;
+checksummed numbered checkpoints and full negative evaluations survive.
+Fixed statistics with smaller updates preserve nearby position accuracy
+(0.29--0.39\,mm), but angular residuals remain 0.026--0.028\,rad and public
+execution remains unsuccessful. Correcting base-first action grouping in an
+offline audit leaves measured outcomes unchanged and attributes larger command
+changes to weights than normalization. A bounded additional curriculum samples
+angular-nullspace directions and verifies finite FK witnesses before ordinary
+collision/derivative admission. It adds 5--20\,mm translations with unchanged
+hand attitude, rather than relying only on random joint goals. On eight new
+translation development cases, the teacher achieves hand accuracy and settles
+at least once in every case but retains final settling in five. The original
+learned actor succeeds in one and trips the unchanged unloading guard in one.
+These are diagnostic gaps, not qualification or infeasibility labels. General
+base/hand/combined, retarget and push probes remain alongside TAMP in the next
+matched comparison; no runtime IK or safety-limit relaxation is introduced.
+
+\paragraph{Integrated agent delivery diagnostic.}
+The matched translation pilots subsequently complete 16,384 PPO steps each
+without improving public task success (0/3 programs per actor). A separate
+single-delivery development contract exercises the actual remote agent through
+scene discovery, planning and execution tools. Reference execution completes
+the delivery and independent quiet verification; the learned backend does not.
+Explicit offline arm-feedback scaling adds no PPO steps and allows two variants
+to reach grasp, exposing a lift-start payload/support collision that had been
+misreported as IK failure. Per-seed diagnostics now preserve successful IK
+followed by path rejection. An opt-in Cartesian lift rule permits separation
+from existing shallow static support contact (at most 2\,mm initial compression,
+no deepening); other collision and measured safety checks remain active.
+With this distinct contact contract, the two variants begin lifting but stop on
+orientation-tube and base-drift limits respectively. No transfer completes.
+These development failures motivate loaded-transition training and do not
+qualify either the controller or the new contact behavior for hardware.
+The final-source comparison passes 3/3 reference deliveries and 0/3 learned
+deliveries from matched initial physics; the first fixture uses actual agent
+selection for both backends, and the other two use scripted public-tool
+selection. All learned failures occur during lift and confirm a measured stop.
+
+\paragraph{Supported grasp-to-lift coverage.}
+Ordinary carry resets finish a teacher lift before policy handoff, while
+pregrasp episodes reach lift only after a successful learned approach. A new
+opt-in subtype therefore starts at physical supported closure and supplies a
+complete smooth lift/hold pose schedule. The proposed mixture assigns it 9\%
+of resets within the existing carry share, retaining 70\% tracking and the
+remaining manipulation tasks. Quiet closure, private path/support admission and
+measured collision checks precede and accompany rollout. Cylindrical payloads
+still slide/spin during teacher load transfer, including after closure and depth
+diagnostics; their failures remain open. The initial subtype therefore uses
+boxes, while other tasks retain their object mix. Eight box preflight cases
+admit, seven settle at least once, and five retain final success, with one
+retention loss and two settling failures. A 512-step PPO smoke test completes;
+these are runtime/distribution checks, not controller qualification or evidence
+that the subsequent matched training improves public task success.

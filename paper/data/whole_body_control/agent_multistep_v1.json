@@ -1,0 +1,61 @@
+{
+  "scope": "Privileged real-model multi-step development pilots; reference-controller execution, no hardware",
+  "model_id": "Qwen/Qwen3-VL-8B-Instruct",
+  "input_mode": "privileged",
+  "physics_during_inference": false,
+  "cases": [
+    {
+      "id": "stretch_two_object_regions",
+      "selector": "scripted_reference",
+      "successes": 1,
+      "attempts": 1,
+      "completed_transfers": 2,
+      "required_transfers": 2
+    },
+    {
+      "id": "stretch_two_object_regions",
+      "selector": "llm_privileged",
+      "successes": 1,
+      "attempts": 1,
+      "completed_transfers": 2,
+      "required_transfers": 2
+    },
+    {
+      "id": "mars_delivery_return",
+      "selector": "scripted_reference",
+      "successes": 0,
+      "attempts": 1,
+      "completed_transfers": 1,
+      "required_transfers": 2,
+      "failure": "return_planning:no_plan_within_budget"
+    },
+    {
+      "id": "mars_delivery_return",
+      "selector": "llm_privileged",
+      "successes": 0,
+      "attempts": 1,
+      "completed_transfers": 1,
+      "required_transfers": 2,
+      "failure": "return_planning:no_plan_within_budget"
+    }
+  ],
+  "mars_matched_initial_state": true,
+  "mars_matched_command_stream": true,
+  "learned_policy_preflight": {
+    "status": "blocked_before_actor_execution",
+    "reason": "manipulation model mismatch",
+    "policy_sha256": "f9214762c02bcb9db282e8bbbd578f92c5072a1dccb37f6b713fc92cec46feee",
+    "policy_fingerprint": "1e1110aaac94d6d32015c02262ef033f4810b8651e5780c88213beca94c2bb17",
+    "target_fixture_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+    "scope": "Compatibility diagnostic only; model-fingerprint check was not bypassed"
+  },
+  "learned_policy_evaluated": false,
+  "hardware_qualified": false,
+  "full_report_archive": "paper/data/whole_body_control/agent_multistep_v1.json.gz",
+  "uncompressed_sha256": "2229f63b967a54c6fb8257a0651c9d06967fa3ea3e59a1908020ea3dcf1357cf",
+  "pilot_source_snapshot": "paper/data/whole_body_control/agent_multistep_sources_v1.json.gz",
+  "pilot_source_archive_sha256": "740af5c0529c7a5073cf78fe2b6913171657ee6119ab085613ea552bb803354b",
+  "canonical_readiness_gate_changed": false,
+  "final_regression_tests": 606,
+  "final_regression_receipt": "paper/data/whole_body_control/mars-sequence-regressions.receipt.json"
+}

@@ -1,0 +1,22 @@
+{
+  "scope": "Focused retimed-reference completion and preview-clock regression; no policy training or performance qualification",
+  "reproduced_before_fix": "Reference at phase 0.25/1.0 reported complete after 2 s of physics time",
+  "tests": 32,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "xml_sha256": "6615ab4c0911ae3b2ac28348225365c4181b7c0b227485500564ce7bb6a68c15",
+  "test_targets": [
+    "src/test/rl/manipulation/test_tracking_preview.py",
+    "src/test/rl/manipulation/test_task_pose_command_runtime.py"
+  ],
+  "source_sha256": {
+    "src/emet/rl/manipulation/control.py": "635c045fa3723318b5287c732eff7767747862d181dee1f176a34e3b3e753236",
+    "src/emet/rl/manipulation/env.py": "16847d126bd01f92bbf74a28474f57a37fd1ea2c9f4aa0dcee987069cef763bb",
+    "src/test/rl/manipulation/test_tracking_preview.py": "eff8be777ddbf3aaf899a011c48387a8539b7dfcde8824f5e5b0dcf3e334f7e4"
+  },
+  "full_regression_receipt": "Historical 801-test receipt does not cover this source; require a fresh full gate before training",
+  "additional_ppo_steps": 0,
+  "hardware_used": false,
+  "safety_promoted": false
+}

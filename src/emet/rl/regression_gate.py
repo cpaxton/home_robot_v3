@@ -14,10 +14,16 @@ ROOT = Path(__file__).resolve().parents[3]
 REGRESSION_TARGETS = (
     "src/test/rl",
     "src/test/core",
+    "src/test/controller/task/tamp",
+    "src/test/eval/test_mars_tamp_agent_driver.py",
+    "src/test/eval/test_mars_tamp_control.py",
+    "src/test/eval/test_mars_tamp_sequences.py",
     "src/test/robots/test_mars_motion_boundary.py",
+    "src/test/robots/test_mars_control_session.py",
     "src/test/robots/test_head_capability.py",
     "src/test/scripts/test_train_mars_carry_when_ready.py",
     "src/test/scripts/test_trace_mars_carry.py",
+    "src/test/scripts/test_control_artifacts.py",
 )
 
 
@@ -40,6 +46,8 @@ def source_state(root):
     paths = (
         list((root / "src/emet/core").rglob("*.py"))
         + list((root / "src/emet_core/emet/core").rglob("*.py"))
+        + list((root / "src/emet/controller/task/tamp").rglob("*.py"))
+        + list((root / "src/emet/agent").rglob("*.py"))
         + test_files(root)
         + [
             root / "src/test/conftest.py",
@@ -47,7 +55,28 @@ def source_state(root):
             root / "uv.lock",
             root / "scripts/train_mars_carry_when_ready.py",
             root / "scripts/trace_mars_carry.py",
+            root / "scripts/check_generated_artifacts.py",
+            root / "scripts/control_artifacts.py",
             root / "scripts/sync_core_runtime.py",
+            root / "scripts/eval_manipulation_tamp_oracle.py",
+            root / "src/emet/eval/mars_tamp_control.py",
+            root / "src/emet/eval/mars_tamp_agent.py",
+            root / "src/emet/eval/mars_tamp_metrics.py",
+            root / "src/emet/eval/mars_tamp_sequences.py",
+            root / "src/emet/eval/mars_policy_audit.py",
+            root / "src/emet/eval/mars_hold_dynamics.py",
+            root / "configs/benchmarks/mars_public_tamp_whole_body_v2.json",
+            root / "configs/benchmarks/mars_agent_controller_v1.json",
+            root / "configs/benchmarks/mars_grasp_lift_curriculum_v1.json",
+            root / "configs/benchmarks/mars_jerk_tracking_curriculum_v1.json",
+            root / "configs/benchmarks/mars_tracking_mastery_v1.json",
+            root / "configs/benchmarks/mars_tracking_mastery_v2.json",
+            root / "configs/benchmarks/mars_tracking_mastery_unfiltered_v1.json",
+            root / "configs/benchmarks/mars_tracking_mastery_crossed_v1.json",
+            root / "configs/benchmarks/mars_tracking_mastery_turn_guard_v1.json",
+            root / "configs/benchmarks/mars_tracking_mastery_yaw_curriculum_v1.json",
+            root / "configs/benchmarks/mars_tracking_mastery_restoring_yaw_v1.json",
+            root / "configs/benchmarks/mars_tracking_mastery_hand_accuracy_v1.json",
         ]
     )
     for path in paths:

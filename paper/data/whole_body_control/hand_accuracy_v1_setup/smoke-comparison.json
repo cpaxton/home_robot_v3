@@ -1,0 +1,186 @@
+[
+  {
+    "id": "train:arm:pitch_up",
+    "code": "mastery_tracking_envelope",
+    "before_position_m": 0.010252676593465892,
+    "after_position_m": 0.010053421455476975,
+    "before_rotation_rad": 0.037623435356311234,
+    "after_rotation_rad": 0.03906257955911173,
+    "before_duration_s": 1.749999999999918,
+    "after_duration_s": 1.8999999999999015,
+    "before_peak_requested_joint_rate_rad_s": 0.00041278145508840677,
+    "after_peak_requested_joint_rate_rad_s": 0.015565259009599685,
+    "position_rmse_common_prefix_m": [
+      0.004794334618798183,
+      0.004332647309685359
+    ],
+    "orientation_rmse_common_prefix_rad": [
+      0.01756828294274099,
+      0.016588390483977773
+    ],
+    "common_prefix_seconds": 1.749999999999918,
+    "after_base_error_m": 4.042875105398294e-05,
+    "after_base_heading_rad": 0.0017983740926652805
+  },
+  {
+    "id": "train:arm:pitch_down",
+    "code": "mastery_tracking_envelope",
+    "before_position_m": 0.010477076778326327,
+    "after_position_m": 0.010019849942031424,
+    "before_rotation_rad": 0.03893855324838176,
+    "after_rotation_rad": 0.03585672557692736,
+    "before_duration_s": 1.6999999999999236,
+    "after_duration_s": 2.1499999999998742,
+    "before_peak_requested_joint_rate_rad_s": 0.0004889562958851456,
+    "after_peak_requested_joint_rate_rad_s": 0.01696248762309551,
+    "position_rmse_common_prefix_m": [
+      0.00496223369437233,
+      0.0039849600298523585
+    ],
+    "orientation_rmse_common_prefix_rad": [
+      0.018489932120878624,
+      0.014534867642901158
+    ],
+    "common_prefix_seconds": 1.6999999999999236,
+    "after_base_error_m": 0.000265730350641195,
+    "after_base_heading_rad": 0.0022110330903974376
+  },
+  {
+    "id": "train:arm:roll_left",
+    "code": "tracking_timeout",
+    "before_position_m": 0.0006326521283140119,
+    "after_position_m": 0.0036202619417823973,
+    "before_rotation_rad": 0.08014686636496639,
+    "after_rotation_rad": 0.04345950884210267,
+    "before_duration_s": 12.00000000000101,
+    "after_duration_s": 12.00000000000101,
+    "before_peak_requested_joint_rate_rad_s": 0.00048611346865072845,
+    "after_peak_requested_joint_rate_rad_s": 0.012221569195389748,
+    "position_rmse_common_prefix_m": [
+      0.0005431990198730058,
+      0.004996592544429521
+    ],
+    "orientation_rmse_common_prefix_rad": [
+      0.07382359390899403,
+      0.052601421993468137
+    ],
+    "common_prefix_seconds": 12.00000000000101,
+    "after_base_error_m": 0.00027750987396688384,
+    "after_base_heading_rad": 0.0034627253225066362
+  },
+  {
+    "id": "train:arm:roll_right",
+    "code": "tracking_timeout",
+    "before_position_m": 0.0006389722980465827,
+    "after_position_m": 0.007878641751626479,
+    "before_rotation_rad": 0.07998429413656809,
+    "after_rotation_rad": 0.07036125523310607,
+    "before_duration_s": 12.00000000000101,
+    "after_duration_s": 12.00000000000101,
+    "before_peak_requested_joint_rate_rad_s": 0.0004713703645393252,
+    "after_peak_requested_joint_rate_rad_s": 0.008578133583068847,
+    "position_rmse_common_prefix_m": [
+      0.000556950103888707,
+      0.005683619736553508
+    ],
+    "orientation_rmse_common_prefix_rad": [
+      0.07377991831057176,
+      0.0704311787375494
+    ],
+    "common_prefix_seconds": 12.00000000000101,
+    "after_base_error_m": 0.0001752955507034875,
+    "after_base_heading_rad": 0.006440034681442802
+  },
+  {
+    "id": "validation:arm:pitch_up",
+    "code": "mastery_tracking_envelope",
+    "before_position_m": 0.01055763424410829,
+    "after_position_m": 0.01023108182719006,
+    "before_rotation_rad": 0.03927926101993441,
+    "after_rotation_rad": 0.04071274420521358,
+    "before_duration_s": 1.649999999999929,
+    "after_duration_s": 1.6999999999999236,
+    "before_peak_requested_joint_rate_rad_s": 0.0004667046479880809,
+    "after_peak_requested_joint_rate_rad_s": 0.01700485087931156,
+    "position_rmse_common_prefix_m": [
+      0.0048647252898313615,
+      0.004563240687898675
+    ],
+    "orientation_rmse_common_prefix_rad": [
+      0.01805780379434918,
+      0.017882335886155554
+    ],
+    "common_prefix_seconds": 1.649999999999929,
+    "after_base_error_m": 6.191319807379125e-06,
+    "after_base_heading_rad": 0.0013167150223772454
+  },
+  {
+    "id": "validation:arm:pitch_down",
+    "code": "mastery_tracking_envelope",
+    "before_position_m": 0.010093947691911251,
+    "after_position_m": 0.010373391404607303,
+    "before_rotation_rad": 0.03808903249732109,
+    "after_rotation_rad": 0.04120051809960089,
+    "before_duration_s": 1.54999999999994,
+    "after_duration_s": 1.6999999999999236,
+    "before_peak_requested_joint_rate_rad_s": 0.0005358529044315218,
+    "after_peak_requested_joint_rate_rad_s": 0.016763604059815407,
+    "position_rmse_common_prefix_m": [
+      0.004690277533317922,
+      0.004220253194861293
+    ],
+    "orientation_rmse_common_prefix_rad": [
+      0.017728180423336546,
+      0.016571969023164976
+    ],
+    "common_prefix_seconds": 1.54999999999994,
+    "after_base_error_m": 3.840354656686215e-05,
+    "after_base_heading_rad": 0.0011692774450282187
+  },
+  {
+    "id": "validation:arm:roll_left",
+    "code": "tracking_timeout",
+    "before_position_m": 0.0005694372075564544,
+    "after_position_m": 0.005625920997684403,
+    "before_rotation_rad": 0.09188309146222884,
+    "after_rotation_rad": 0.06806568367068962,
+    "before_duration_s": 12.00000000000101,
+    "after_duration_s": 12.00000000000101,
+    "before_peak_requested_joint_rate_rad_s": 0.0006074606906622648,
+    "after_peak_requested_joint_rate_rad_s": 0.013288404420018196,
+    "position_rmse_common_prefix_m": [
+      0.0005219563388534943,
+      0.007224629753974961
+    ],
+    "orientation_rmse_common_prefix_rad": [
+      0.08480412088002871,
+      0.06873679204833866
+    ],
+    "common_prefix_seconds": 12.00000000000101,
+    "after_base_error_m": 3.320292052302633e-05,
+    "after_base_heading_rad": 0.003940435238248196
+  },
+  {
+    "id": "validation:arm:roll_right",
+    "code": "tracking_timeout",
+    "before_position_m": 0.0007115193845568484,
+    "after_position_m": 0.005576676992213999,
+    "before_rotation_rad": 0.09178594909184679,
+    "after_rotation_rad": 0.05466529860702273,
+    "before_duration_s": 12.00000000000101,
+    "after_duration_s": 12.00000000000101,
+    "before_peak_requested_joint_rate_rad_s": 0.0004967122455127537,
+    "after_peak_requested_joint_rate_rad_s": 0.007717574760317802,
+    "position_rmse_common_prefix_m": [
+      0.0006141992693436945,
+      0.00514479343215526
+    ],
+    "orientation_rmse_common_prefix_rad": [
+      0.08473597017208723,
+      0.06881555335799594
+    ],
+    "common_prefix_seconds": 12.00000000000101,
+    "after_base_error_m": 0.0002936377793005136,
+    "after_base_heading_rad": 0.007054939286941484
+  }
+]

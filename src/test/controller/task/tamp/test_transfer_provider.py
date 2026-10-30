@@ -167,8 +167,17 @@ def test_second_preflight_failure_preserves_step_number():
     assert result['data']['failed_phase'] == 'preflight'
 
 
-def test_debug_state_is_json_in_logs_but_not_public_motion_evidence(caplog):
+def test_debug_state_is_json_in_logs_but_not_public_motion_evidence(caplog, monkeypatch):
+    import logging
+
     import numpy as np
+    # Application logging initialized by other suites can stop propagation.
+    # Isolate this capture without changing production logger configuration.
+    logger = logging.getLogger("emet.controller.task.tamp.native_transfer")
+    monkeypatch.setattr(logger, "handlers", [caplog.handler])
+    monkeypatch.setattr(logger, "propagate", False)
+    monkeypatch.setattr(logger, "disabled", False)
+    caplog.set_level(logging.WARNING, logger=logger.name)
     domain, _ = native_probe_domain()
     domain.diagnostic_state = True
     domain.adapter.signature = 'a'*64

@@ -1,0 +1,31 @@
+{
+  "scope": "Freeze launch provenance and initialization, never weights or live qualification.",
+  "archive": "paper/data/whole_body_control/jerk_tracking_launch_v20/launch.json.gz",
+  "uncompressed_sha256": "159c8cb2b66a07c538b344fb5267c0865f90e01519a40035a23be6412e65a1f8",
+  "source_revision": "9e183ade6e78f49e19a652467cd974d80c1d14ff",
+  "regression_tests": 831,
+  "new_steps_per_variant": 65536,
+  "variants": [
+    "curriculum",
+    "control"
+  ],
+  "current_status": {
+    "phase": "training_and_validation",
+    "variant": "curriculum",
+    "directory": "logs/manipulation/mars-jerk-tracking-v20/curriculum",
+    "updated_utc": "2026-10-27T14:17:43.585673+00:00",
+    "safety_promoted": false
+  },
+  "progress_snapshot_utc": "2026-10-27T14:25:31.672036+00:00",
+  "curriculum_steps_at_snapshot": 16384,
+  "optimizer_updates_at_snapshot": 307.0,
+  "initial_actor_value_tensors_normalization_and_actions_equal": true,
+  "initial_transfer_added_ppo_steps": 0,
+  "prior_interrupted_startup_added_ppo_steps": 0,
+  "training_completed": false,
+  "new_policy_performance_qualified": false,
+  "canonical_carry_qualified": false,
+  "safety_promoted": false,
+  "hardware_used": false,
+  "local_progress_path": "logs/manipulation/mars-jerk-tracking-v20/status.json"
+}

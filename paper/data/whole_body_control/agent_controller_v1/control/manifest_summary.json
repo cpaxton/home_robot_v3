@@ -1,0 +1,8 @@
+{
+  "robot": "innate_mars",
+  "steps": 16384,
+  "weights_sha256": "74dc0f8fc351f0d67932c485f7587eb2a740680e5887bc02d0f8e85fe7b4c3af",
+  "fingerprint": "1e1110aaac94d6d32015c02262ef033f4810b8651e5780c88213beca94c2bb17",
+  "full_manifest_sha256": "cf6f616cb8cb7c9f2acd97aa4caf94a119e3c7b572825625d4b1be03edfd9733",
+  "full_manifest_source": "Exact manifest and normalization retained in checkpoint_evidence.json.gz"
+}

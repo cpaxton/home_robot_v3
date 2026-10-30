@@ -1,0 +1,19 @@
+{
+  "archive_complete.py": "80ae33564d8dd2aafcf431a4e4881cc62523762685f45242309d2b51a809bbbe",
+  "baseline-expanded.json.gz": "b518147c6cf28d13a23d39aa53527f1d8d95b7b18af87fc9ba18558aa9184370",
+  "checkpoint-cases.json.gz": "ec5308f4cc8cfe6d13899cc5f45c3cd166a0f6a651a2e864d217c4263c706c4d",
+  "complete.json": "357dbe6e3fe2c05f31bc6fbd522fbce6dc0e1556b55fce34bffa14777422dc16",
+  "final-evaluation.json.gz": "9fd7f3468535ab690102736fd16739de0d73ecb62c29b55df23f96f8b84eee29",
+  "final-expanded.json.gz": "c2558e6ccc0dff4762641b7500b1e37e6d3e61bf80d08350672a9f36b10827a0",
+  "final-manifest.json": "54f53a19812ecf2843e7284b78cc5eba84e4c99b5152681c1be5c2512f9743f5",
+  "final-summary.json": "68957ff0b49560e264a9ca6daa3e7a18f71ca4b15faeba1521323fc8351bfe28",
+  "initial-expanded.json.gz": "f4bf5f9e9aacfc2fa32c8b131c1abd24cd17b9a3379cc3b274408e1bbc24de14",
+  "learning-curves.svg": "40c4bda693a036c583ddf22ccce2714c22c0e4cc0dbe510924aacdd02f4fe877",
+  "metrics.jsonl.gz": "743fe8bf5d53ea534b7b241720f79ab96518715255c0625e8db9b5c04245b48a",
+  "results.json": "912e298a8a7bae8fc90a066c7ad228af7b4d0c54b8ada9e2c3e2467bccb8f961",
+  "run.json": "3f63d0ad4a753962e65b65f73b5279070ca458078f1a23f0893e0b89cc1cca45",
+  "step-49152-evaluation.json.gz": "57b9c0e93a984ae22c9a5096e92e81fe17c497599f26a6292749fdfdb96a43a0",
+  "step-49152-manifest.json": "f061448a5d1933f2b89c295cfa7ecc440686f63199e92c0878f9ed22f7a0e4bd",
+  "step-49152-summary.json": "4c26ac8fad724cb0145512ad8aa075c28a38b715d3570857dbfbcd18a9817a31",
+  "updates.jsonl.gz": "9d54879aa534a6728789f48b0f6ec1197ae9049295248e13ad349ad2502ccd18"
+}

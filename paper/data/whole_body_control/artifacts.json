@@ -1,0 +1,998 @@
+{
+  "format": "emet-external-control-artifacts-v1",
+  "storage": "local ignored logs/artifacts/whole_body_control; no binary traces in Git",
+  "source_revision": "98f166a83eba1b349eb4f4cae61e7eb7e183f4b8",
+  "relative_root": "logs/artifacts/whole_body_control",
+  "artifacts": [
+    {
+      "path": "paper/data/whole_body_control/agent_controller_v1/checked_bridge.json.gz",
+      "bytes": 6555999,
+      "sha256": "ce99985de60f1667bff13d7da6e571f837505d1cc9a63ffc38f434949c677ea3",
+      "local_path": "logs/artifacts/whole_body_control/agent_controller_v1/checked_bridge.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/agent_controller_v1/control/checkpoint_evidence.json.gz",
+      "bytes": 223546,
+      "sha256": "aefaf5425847c7ba5ac71baaf57e28d07576bf1b650d57663ef1725f0d9c754f",
+      "local_path": "logs/artifacts/whole_body_control/agent_controller_v1/control/checkpoint_evidence.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/agent_controller_v1/departure_gain3.json.gz",
+      "bytes": 8287904,
+      "sha256": "e442b132b650985ea9998c01e1ee25153e2206828fa3973d1539b51bbbcc33e2",
+      "local_path": "logs/artifacts/whole_body_control/agent_controller_v1/departure_gain3.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/agent_controller_v1/departure_gain4.json.gz",
+      "bytes": 6800784,
+      "sha256": "76c71f57a54b0d378a8fb27ed46fbe7618e17bd899074d22cd1350a917e5315e",
+      "local_path": "logs/artifacts/whole_body_control/agent_controller_v1/departure_gain4.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/agent_controller_v1/final_comparison.json.gz",
+      "bytes": 27125485,
+      "sha256": "9de1794bfa80b3ad8984004fdfbcd153be40444fe464b385ea042b00203d2be1",
+      "local_path": "logs/artifacts/whole_body_control/agent_controller_v1/final_comparison.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/agent_controller_v1/gain4.json.gz",
+      "bytes": 5736596,
+      "sha256": "0b890fbe1eb6c9ec3d8419c18be4dbb89ce267042781361be24610b0bf2d2e44",
+      "local_path": "logs/artifacts/whole_body_control/agent_controller_v1/gain4.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/agent_controller_v1/gain_1p0/checkpoint_evidence.json.gz",
+      "bytes": 60755,
+      "sha256": "d7d4dabf61d7d2c9dda36d51e3bd6103407bc9bc7a5c2fb9796f6435a50faffe",
+      "local_path": "logs/artifacts/whole_body_control/agent_controller_v1/gain_1p0/checkpoint_evidence.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/agent_controller_v1/gain_1p5/checkpoint_evidence.json.gz",
+      "bytes": 60755,
+      "sha256": "5ea1ee134579abbdf6ec2f0f027c8e61474427e83e3c269a0e92b1f6d3d604db",
+      "local_path": "logs/artifacts/whole_body_control/agent_controller_v1/gain_1p5/checkpoint_evidence.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/agent_controller_v1/gain_2p0/checkpoint_evidence.json.gz",
+      "bytes": 60761,
+      "sha256": "f6db94eb08fe27256f1a6d5f1c27d4cb4bd7c3e1a637380084a7b17aa66888d2",
+      "local_path": "logs/artifacts/whole_body_control/agent_controller_v1/gain_2p0/checkpoint_evidence.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/agent_controller_v1/gain_3p0/checkpoint_evidence.json.gz",
+      "bytes": 60758,
+      "sha256": "e1721bec684d17ff312bda045a21419b94edbc2dd3f79ea60706a1d85352863a",
+      "local_path": "logs/artifacts/whole_body_control/agent_controller_v1/gain_3p0/checkpoint_evidence.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/agent_controller_v1/gain_4p0/checkpoint_evidence.json.gz",
+      "bytes": 60760,
+      "sha256": "3ec736fb7542b1180315bf2b4cb5ca6096ec39cc5cf3a1134d8f3b86738af38c",
+      "local_path": "logs/artifacts/whole_body_control/agent_controller_v1/gain_4p0/checkpoint_evidence.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/agent_controller_v1/naive_bridge.json.gz",
+      "bytes": 3502661,
+      "sha256": "7b274073917e527127f8b19351b702d5e2c694b0e11ab73e52d8a466ca56f06b",
+      "local_path": "logs/artifacts/whole_body_control/agent_controller_v1/naive_bridge.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/agent_controller_v1/real_agent.json.gz",
+      "bytes": 8289853,
+      "sha256": "d9f6846089ee535083162551d5208a3e36975b3dd3d516884a53b489a0063ca0",
+      "local_path": "logs/artifacts/whole_body_control/agent_controller_v1/real_agent.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/agent_controller_v1/screen.json.gz",
+      "bytes": 30277510,
+      "sha256": "14a731c902055f4c444aac7b438fdf9fd3d8158dfcf98e4f9de33cffbc1c9ded",
+      "local_path": "logs/artifacts/whole_body_control/agent_controller_v1/screen.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/agent_multistep_sources_v1.json.gz",
+      "bytes": 482421,
+      "sha256": "740af5c0529c7a5073cf78fe2b6913171657ee6119ab085613ea552bb803354b",
+      "local_path": "logs/artifacts/whole_body_control/agent_multistep_sources_v1.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/agent_multistep_v1.json.gz",
+      "bytes": 1348777,
+      "sha256": "39ff65a6d23f710c74fbdd2d1416f217597747252da79baa453a72e02a6a6cd5",
+      "local_path": "logs/artifacts/whole_body_control/agent_multistep_v1.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/cartesian_clock_v7.json.gz",
+      "bytes": 3009507,
+      "sha256": "efb806bf4d790fb8096745e25ee68b623458f774beb1572e0a012350a5571857",
+      "local_path": "logs/artifacts/whole_body_control/cartesian_clock_v7.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/cartesian_phase_handoff_v6.json.gz",
+      "bytes": 4469957,
+      "sha256": "671fd795934a712944f37734abdf035e05e83ce4c68d2f77fd8b31029f77fcc1",
+      "local_path": "logs/artifacts/whole_body_control/cartesian_phase_handoff_v6.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/cartesian_pose_oracle_v5.json.gz",
+      "bytes": 4766273,
+      "sha256": "e98d1c60683f7059b0fa45215b18d4a1c2e7bb6939b37e2ea1ccc752acb49193",
+      "local_path": "logs/artifacts/whole_body_control/cartesian_pose_oracle_v5.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/continuation_reward_ablation_v1.json.gz",
+      "bytes": 17662856,
+      "sha256": "91eff033b6889f1ce7ce0cd4f7d65a02865c34928b09ce352d71c2bfc7935a92",
+      "local_path": "logs/artifacts/whole_body_control/continuation_reward_ablation_v1.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/crossed_posture_v1_results/baseline-expanded-report.json.gz",
+      "bytes": 3094031,
+      "sha256": "a047b4933b749c0ac95bdc2d8ab2da23a5d19b250f05e8d7b301f9f863029620",
+      "local_path": "logs/artifacts/whole_body_control/crossed_posture_v1_results/baseline-expanded-report.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/crossed_posture_v1_results/checkpoint-cases.json.gz",
+      "bytes": 7188,
+      "sha256": "76fd33409496d0d5b6446228b934680f8c8110d64ef53c6e74892e9fca977dda",
+      "local_path": "logs/artifacts/whole_body_control/crossed_posture_v1_results/checkpoint-cases.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/crossed_posture_v1_results/final-evaluation.json.gz",
+      "bytes": 1043695,
+      "sha256": "a33c99239280b4f50afbd8fe915f7cf3967eda17a15171761417b8d229efdee4",
+      "local_path": "logs/artifacts/whole_body_control/crossed_posture_v1_results/final-evaluation.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/crossed_posture_v1_results/final-expanded-report.json.gz",
+      "bytes": 3110632,
+      "sha256": "07de1096944802a5cd7b483277ccb3f1f933c613f0566186b63b784d9cdf8db7",
+      "local_path": "logs/artifacts/whole_body_control/crossed_posture_v1_results/final-expanded-report.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/crossed_posture_v1_results/metrics.jsonl.gz",
+      "bytes": 201747,
+      "sha256": "802cbe8d12c33786c36648cc8f1712e912379ba42336389c19392b0f5b157df7",
+      "local_path": "logs/artifacts/whole_body_control/crossed_posture_v1_results/metrics.jsonl.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/crossed_posture_v1_results/updates.jsonl.gz",
+      "bytes": 40892,
+      "sha256": "2c56aae80e96d0bb0df20bc4ca13b8e9d0f7452fc717e8e9ab3492ad87b633ee",
+      "local_path": "logs/artifacts/whole_body_control/crossed_posture_v1_results/updates.jsonl.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/crossed_posture_v1_setup/metrics-through-16384.jsonl.gz",
+      "bytes": 50718,
+      "sha256": "41709d59fee6ae1a9d7dcd72de50a94627c28e29ed7f034b8c3af118bcd1e442",
+      "local_path": "logs/artifacts/whole_body_control/crossed_posture_v1_setup/metrics-through-16384.jsonl.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/crossed_posture_v1_setup/step-16384-evaluation.json.gz",
+      "bytes": 1039775,
+      "sha256": "8d672bdbef3df173141483ab7526e1cea0128aa730ee3ee49171627ba4686a1d",
+      "local_path": "logs/artifacts/whole_body_control/crossed_posture_v1_setup/step-16384-evaluation.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/crossed_posture_v1_setup/teacher-report.json.gz",
+      "bytes": 2263746,
+      "sha256": "495e8bbc4b3aa0c53e0f6fe387cab4fe6c0f162891611b2221b30f55183f9b38",
+      "local_path": "logs/artifacts/whole_body_control/crossed_posture_v1_setup/teacher-report.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/failure_replay_development_v1/children-report.json.gz",
+      "bytes": 1657489,
+      "sha256": "65c246c27fc514c6216932f5b09ea5ace8b97ba6bdddb8da97a355326f2539ad",
+      "local_path": "logs/artifacts/whole_body_control/failure_replay_development_v1/children-report.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/failure_replay_development_v1/policy-report.json.gz",
+      "bytes": 1897551,
+      "sha256": "533dfef95fe77e49e2182969e8dcc9745fb3b6868aa490d347f09b64cbf2d98c",
+      "local_path": "logs/artifacts/whole_body_control/failure_replay_development_v1/policy-report.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/failure_replay_development_v1/teacher-report.json.gz",
+      "bytes": 1817897,
+      "sha256": "2cc62128326477aabefe6b2658a37e24bebbf18d04da7ab33170d9def0357c1f",
+      "local_path": "logs/artifacts/whole_body_control/failure_replay_development_v1/teacher-report.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/failure_replay_launch_v25/launch.json.gz",
+      "bytes": 65172,
+      "sha256": "faad5a315bce2689dca47c9917126f1eed631ad54e70d7150657ba0f8f1978a9",
+      "local_path": "logs/artifacts/whole_body_control/failure_replay_launch_v25/launch.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/failure_replay_results_v25/results.json.gz",
+      "bytes": 444237,
+      "sha256": "0810c828eb984f2de8f18e0e18a825dddad4d213b3a99e9032a284026a9a11cf",
+      "local_path": "logs/artifacts/whole_body_control/failure_replay_results_v25/results.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/filter_audit_unfiltered_v1/filter-step-response.json.gz",
+      "bytes": 22348,
+      "sha256": "e9f8a9d7f0e4f8e1ff4974356f22b481e7381a5bd83d4c1c2f87228159ff1af8",
+      "local_path": "logs/artifacts/whole_body_control/filter_audit_unfiltered_v1/filter-step-response.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/filter_audit_unfiltered_v1/filtered-checkpoint-cases.json.gz",
+      "bytes": 10054,
+      "sha256": "897e79bad3fbd81487a835236d7f7a474f2ed8457d1093a1b8d6275605b3693e",
+      "local_path": "logs/artifacts/whole_body_control/filter_audit_unfiltered_v1/filtered-checkpoint-cases.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/filter_audit_unfiltered_v1/filtered-final-evaluation.json.gz",
+      "bytes": 1004761,
+      "sha256": "2d4bf74227eb613c98e6b4dd367032a28fa8633491bdbd566f40c06a80ea31da",
+      "local_path": "logs/artifacts/whole_body_control/filter_audit_unfiltered_v1/filtered-final-evaluation.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/filter_audit_unfiltered_v1/filtered-metrics.jsonl.gz",
+      "bytes": 358108,
+      "sha256": "58d92458ff1bb36140bbf391d090251138c23357a85b968dc76b70a4c807cb1a",
+      "local_path": "logs/artifacts/whole_body_control/filter_audit_unfiltered_v1/filtered-metrics.jsonl.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/filter_audit_unfiltered_v1/filtered-updates.jsonl.gz",
+      "bytes": 80659,
+      "sha256": "67dc171562cb653cbf993fa216dc3fa7dafcb1abea0b4ee8635fe98596160d99",
+      "local_path": "logs/artifacts/whole_body_control/filter_audit_unfiltered_v1/filtered-updates.jsonl.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/filter_audit_unfiltered_v1/filtered_feedback0-policy.json.gz",
+      "bytes": 505275,
+      "sha256": "3df179ff5172ff46039cab75d911c35da341cdbb617114cd7bc3c49b6f4a412b",
+      "local_path": "logs/artifacts/whole_body_control/filter_audit_unfiltered_v1/filtered_feedback0-policy.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/filter_audit_unfiltered_v1/filtered_feedback0-teacher.json.gz",
+      "bytes": 376760,
+      "sha256": "483210c8c221fb35b9b61c75df480ad098c305d7dfc667e6e218db7602dcd8d0",
+      "local_path": "logs/artifacts/whole_body_control/filter_audit_unfiltered_v1/filtered_feedback0-teacher.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/filter_audit_unfiltered_v1/filtered_feedback05-policy.json.gz",
+      "bytes": 506060,
+      "sha256": "19c99168ea5d5c1861fdae59d41666b5c3168e9ca351ad0898791dd221fe5aa7",
+      "local_path": "logs/artifacts/whole_body_control/filter_audit_unfiltered_v1/filtered_feedback05-policy.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/filter_audit_unfiltered_v1/filtered_feedback05-teacher.json.gz",
+      "bytes": 376614,
+      "sha256": "1b24389b598e965bb9d8d7cf817fb86290534b1d095b7405674322f2fcb30397",
+      "local_path": "logs/artifacts/whole_body_control/filter_audit_unfiltered_v1/filtered_feedback05-teacher.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/filter_audit_unfiltered_v1/unfiltered-teacher-report.json.gz",
+      "bytes": 2383748,
+      "sha256": "1b659c1f1b9b7c79728a2a90292f384138ac3fd62804408fcbc097b958667d65",
+      "local_path": "logs/artifacts/whole_body_control/filter_audit_unfiltered_v1/unfiltered-teacher-report.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/filter_audit_unfiltered_v1/unfiltered_feedback0-policy.json.gz",
+      "bytes": 519206,
+      "sha256": "368246870dd9174416bcead1324ea9a30e3b1c7d8bf442b10df090fd67abbbfb",
+      "local_path": "logs/artifacts/whole_body_control/filter_audit_unfiltered_v1/unfiltered_feedback0-policy.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/filter_audit_unfiltered_v1/unfiltered_feedback0-teacher.json.gz",
+      "bytes": 377767,
+      "sha256": "80555ace49d5db6f513e511b1902b46f3e33b8d7f0edf65cbdf5ea9e004ca3ad",
+      "local_path": "logs/artifacts/whole_body_control/filter_audit_unfiltered_v1/unfiltered_feedback0-teacher.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/filter_audit_unfiltered_v1/unfiltered_feedback05-policy.json.gz",
+      "bytes": 515355,
+      "sha256": "2bfee84170452d026a4500502bdb562e90396f5ddb4ad3fd8712de98efdfdf5e",
+      "local_path": "logs/artifacts/whole_body_control/filter_audit_unfiltered_v1/unfiltered_feedback05-policy.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/filter_audit_unfiltered_v1/unfiltered_feedback05-teacher.json.gz",
+      "bytes": 381976,
+      "sha256": "430e9a76e5b0c9c83ab797609e25bb48655f35df2c44c7b8f583a84acc4d309e",
+      "local_path": "logs/artifacts/whole_body_control/filter_audit_unfiltered_v1/unfiltered_feedback05-teacher.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/general_continuation_training_v1.json.gz",
+      "bytes": 1591039,
+      "sha256": "735b4e3441c04bc01470fb9d9fd8e66b682c4db21458aace682c1df54935065f",
+      "local_path": "logs/artifacts/whole_body_control/general_continuation_training_v1.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/general_continuation_validation_v1.json.gz",
+      "bytes": 41273205,
+      "sha256": "b08a3ec33cb31085b9a2a31fc52f10d40d9259575557e6e40764e65d1d959f97",
+      "local_path": "logs/artifacts/whole_body_control/general_continuation_validation_v1.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/grasp_lift_initialization_v1/checkpoint_evidence.json.gz",
+      "bytes": 51316,
+      "sha256": "db88efa1160d552d3481821c4931c309e1f6f999a92995e730984d76beda1231",
+      "local_path": "logs/artifacts/whole_body_control/grasp_lift_initialization_v1/checkpoint_evidence.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/grasp_lift_learning_audits_v1/reports.json.gz",
+      "bytes": 3526668,
+      "sha256": "080ec49b9e32f7715d23799fa04112d3e7e3447c3ac24aba09262544d844b69e",
+      "local_path": "logs/artifacts/whole_body_control/grasp_lift_learning_audits_v1/reports.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/grasp_lift_preflight_v1.json.gz",
+      "bytes": 2150834,
+      "sha256": "5bd00607e400751d6e07c8894434aa1dd7a14fa9d791b5ae63e55e73c0c1da6b",
+      "local_path": "logs/artifacts/whole_body_control/grasp_lift_preflight_v1.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/grasp_lift_v15/drivers.json.gz",
+      "bytes": 15013,
+      "sha256": "ad9c1bbb659345bcff9da7d278772dbcfd7b47a74b1bdc49697a4d9c440d3b85",
+      "local_path": "logs/artifacts/whole_body_control/grasp_lift_v15/drivers.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/grasp_lift_v15/paired_replay.json.gz",
+      "bytes": 8952598,
+      "sha256": "d0ed655a4e304f016ff974ea1b1bf843499cc3869bb96f5b98f1fcca28f07503",
+      "local_path": "logs/artifacts/whole_body_control/grasp_lift_v15/paired_replay.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/grasp_lift_v15/paired_teacher.json.gz",
+      "bytes": 783896,
+      "sha256": "b743efd7bc523da25195fa3a7d4cd73b298e642cd0fb8864dfd7227fe74d476e",
+      "local_path": "logs/artifacts/whole_body_control/grasp_lift_v15/paired_teacher.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/grasp_lift_v15/reward_audit.json.gz",
+      "bytes": 117989,
+      "sha256": "456640304e04177872a54930f34f1f713ec94d24ac8a03fcededbc6198ed9583",
+      "local_path": "logs/artifacts/whole_body_control/grasp_lift_v15/reward_audit.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/grasp_lift_v15/training.json.gz",
+      "bytes": 968221,
+      "sha256": "d0c23a1be9b42fe8f5e7f62b564e195bd51cde265cc43d4d76f3220d206c4006",
+      "local_path": "logs/artifacts/whole_body_control/grasp_lift_v15/training.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/hold_cartesian_final_policy_v5.json.gz",
+      "bytes": 784345,
+      "sha256": "f262582146e2db39c9cf52677cde073b3592695bf6141f03ca9370be16af4a26",
+      "local_path": "logs/artifacts/whole_body_control/hold_cartesian_final_policy_v5.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/hold_cartesian_validation_v3.json.gz",
+      "bytes": 35250481,
+      "sha256": "a521ebf7a9bfb2f377f5a94046e555ecabf3b3ff94bb87168ef5d55b2f530d31",
+      "local_path": "logs/artifacts/whole_body_control/hold_cartesian_validation_v3.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/hold_cartesian_validation_v4.json.gz",
+      "bytes": 36317182,
+      "sha256": "94b639ed6ea20ed93bd28650cde5c54cbfaf03c05f549a03aae089f3c580e29d",
+      "local_path": "logs/artifacts/whole_body_control/hold_cartesian_validation_v4.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/hold_dynamics_v3.json.gz",
+      "bytes": 25116447,
+      "sha256": "c83724723a4f87b1d4005b8cf7a8b4ebacd725009551ae58ad0c9a903095b65d",
+      "local_path": "logs/artifacts/whole_body_control/hold_dynamics_v3.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/hold_feedback_public_v2.json.gz",
+      "bytes": 3385855,
+      "sha256": "8d14ed60beac1d0cec1e99ef25642de2e1de61846710b888e1c3d5bd7315bf3c",
+      "local_path": "logs/artifacts/whole_body_control/hold_feedback_public_v2.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/hold_feedback_training_v2.json.gz",
+      "bytes": 6464823,
+      "sha256": "2d92937b593c004c91d0b5735afb82ccc6105a5c2eaab1059a33dec051e5fedc",
+      "local_path": "logs/artifacts/whole_body_control/hold_feedback_training_v2.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/hold_feedback_validation_v2.json.gz",
+      "bytes": 25976635,
+      "sha256": "2a270ecb3c2b242282fee0aa84d2669cbedf4a6ea5601000995c518d48d47290",
+      "local_path": "logs/artifacts/whole_body_control/hold_feedback_validation_v2.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/hold_precision_training_v4.json.gz",
+      "bytes": 520954,
+      "sha256": "d9883d64cdda21fa4c5424e56ae493630a5272a9b0a10b654aec93aed9ec5b3f",
+      "local_path": "logs/artifacts/whole_body_control/hold_precision_training_v4.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/hold_repair_pilot_v1.json.gz",
+      "bytes": 5487871,
+      "sha256": "d57282ab1d8067a13e5ff7caec5e29959dad7edde3b83194befbc484fcf6eaba",
+      "local_path": "logs/artifacts/whole_body_control/hold_repair_pilot_v1.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/hold_rotation_training_v3.json.gz",
+      "bytes": 885542,
+      "sha256": "64eb689f8ee9004327d8806bbf98a0a986743ea14b72281a61f8392a555b9d62",
+      "local_path": "logs/artifacts/whole_body_control/hold_rotation_training_v3.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/jerk_tracking_launch_v20/initial_evidence.json.gz",
+      "bytes": 51545,
+      "sha256": "92b9e728598e3f67adac5277cebf4b8432b7fb6978fb3ff5d71513c078632ed1",
+      "local_path": "logs/artifacts/whole_body_control/jerk_tracking_launch_v20/initial_evidence.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/jerk_tracking_launch_v20/launch.json.gz",
+      "bytes": 281318,
+      "sha256": "631801fc7c3fed86bc0ebd4e23cc7d8b013ba9d7f79e61008bc26c0ed2da4666",
+      "local_path": "logs/artifacts/whole_body_control/jerk_tracking_launch_v20/launch.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/jerk_tracking_preflight_v1/drivers.json.gz",
+      "bytes": 2975,
+      "sha256": "8c89b234588b3a2cd24f165955418d5ab3d1625612008fcad3d2c4067b413d6d",
+      "local_path": "logs/artifacts/whole_body_control/jerk_tracking_preflight_v1/drivers.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/jerk_tracking_preflight_v1/report.json.gz",
+      "bytes": 2945868,
+      "sha256": "12b290df97c6429370bb2dced915c8b2880fcc6264271e0d13ea5e675ed93bf6",
+      "local_path": "logs/artifacts/whole_body_control/jerk_tracking_preflight_v1/report.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/jerk_tracking_preflight_v2/drivers.json.gz",
+      "bytes": 2975,
+      "sha256": "28cb33feed9a2f7e83ae3dc6e21ad598e394696b98f2747ae21809dfb0e7ee32",
+      "local_path": "logs/artifacts/whole_body_control/jerk_tracking_preflight_v2/drivers.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/jerk_tracking_preflight_v2/report.json.gz",
+      "bytes": 2945861,
+      "sha256": "163cc0eb6554dd3d843d8f9e29c460ffba1e5452de0fb6aaa13571e298cccc02",
+      "local_path": "logs/artifacts/whole_body_control/jerk_tracking_preflight_v2/report.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/jerk_tracking_results_v20/results.json.gz",
+      "bytes": 1371260,
+      "sha256": "876cf49b7d4db5b63d1e1756a795b1d988896b10264ff764cbe0755df7f8dc18",
+      "local_path": "logs/artifacts/whole_body_control/jerk_tracking_results_v20/results.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/lift_failure_diagnosis_v1/arm_gain.json.gz",
+      "bytes": 2507291,
+      "sha256": "27b8cc969311bfd688cbc73e47f6cd1301c2f167f35dd4798c74714329853bfa",
+      "local_path": "logs/artifacts/whole_body_control/lift_failure_diagnosis_v1/arm_gain.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/lift_failure_diagnosis_v1/channel_isolation.json.gz",
+      "bytes": 6795200,
+      "sha256": "43606307b6620534b39e6c14fef6c0e1d779fc90334a69294b40789239dd6259",
+      "local_path": "logs/artifacts/whole_body_control/lift_failure_diagnosis_v1/channel_isolation.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/lift_failure_diagnosis_v1/drivers.json.gz",
+      "bytes": 6638,
+      "sha256": "6f394431f72aa7d6a6e91ded9cf16c00365ecb857cc0e43df614763b42e476fd",
+      "local_path": "logs/artifacts/whole_body_control/lift_failure_diagnosis_v1/drivers.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/lift_failure_diagnosis_v1/input_audit.json.gz",
+      "bytes": 29718,
+      "sha256": "1b53f97125592608a528a87eb7e94fa72637cb023fca223e01315972f7364cc8",
+      "local_path": "logs/artifacts/whole_body_control/lift_failure_diagnosis_v1/input_audit.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/lift_failure_diagnosis_v1/reward_timing.json.gz",
+      "bytes": 76173,
+      "sha256": "82cef089863384dde6b2af0d4050bdabec858c2252e4d427156dfedd02845c1f",
+      "local_path": "logs/artifacts/whole_body_control/lift_failure_diagnosis_v1/reward_timing.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/mars_policy_startup_audit_v1.json.gz",
+      "bytes": 1100987,
+      "sha256": "a9028fdab794cdd151d031a44f365a332cbf3a87834d3a3811a16cfca8168491",
+      "local_path": "logs/artifacts/whole_body_control/mars_policy_startup_audit_v1.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/mastery_long_v1/response-probe.json.gz",
+      "bytes": 198111,
+      "sha256": "3819f6c1a04700c762f86cf8263c19f3905c291b356225a7014bdc42922a0ab8",
+      "local_path": "logs/artifacts/whole_body_control/mastery_long_v1/response-probe.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/mastery_long_v1/teacher-report.json.gz",
+      "bytes": 2132053,
+      "sha256": "abfbc37cfb978e07f6dc56fdf394a43198eb0becf6e57a687bf26b07edb5ba05",
+      "local_path": "logs/artifacts/whole_body_control/mastery_long_v1/teacher-report.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/mastery_long_v1_results/checkpoint-cases.json.gz",
+      "bytes": 18413,
+      "sha256": "313252d97a28b4e675ffa71ebfd3206bcc5b72089da081e6f7ac9fb78e4c7a27",
+      "local_path": "logs/artifacts/whole_body_control/mastery_long_v1_results/checkpoint-cases.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/mastery_long_v1_results/final-evaluation.json.gz",
+      "bytes": 936383,
+      "sha256": "c0696718a1f2925bd8d84fab36fc382eb8dd65e77c8e702dd6a6fcae96ab16e4",
+      "local_path": "logs/artifacts/whole_body_control/mastery_long_v1_results/final-evaluation.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/mastery_long_v1_results/metrics.jsonl.gz",
+      "bytes": 677307,
+      "sha256": "ef5d83d820a37f3626a04369e280928747ee06e4ef0e28fd5c513c69540ac8d2",
+      "local_path": "logs/artifacts/whole_body_control/mastery_long_v1_results/metrics.jsonl.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/mastery_long_v1_results/settling-replay.json.gz",
+      "bytes": 162262,
+      "sha256": "b120795c8ae148f39c32c5c53998476aaec97d2fb58a7f1ec0e41069e6bd076d",
+      "local_path": "logs/artifacts/whole_body_control/mastery_long_v1_results/settling-replay.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/mastery_long_v1_results/updates.jsonl.gz",
+      "bytes": 161823,
+      "sha256": "cc619241719c95debe267433d59c7235e1c02e98291f6109b14f9cac06937a8c",
+      "local_path": "logs/artifacts/whole_body_control/mastery_long_v1_results/updates.jsonl.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/mastery_v1_setup/base-pilot-seed90/last/evaluation.json.gz",
+      "bytes": 558323,
+      "sha256": "81457a9ede00a3c47f585f3705093ef51f74249b78c22064b6b3d61e386b41a2",
+      "local_path": "logs/artifacts/whole_body_control/mastery_v1_setup/base-pilot-seed90/last/evaluation.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/mastery_v1_setup/base-pilot-seed90/metrics.jsonl",
+      "bytes": 21146,
+      "sha256": "9811a0f8c9ca71af439a4e23c3ced0c589bc321875d2671f6494265767ff19fb",
+      "local_path": "logs/artifacts/whole_body_control/mastery_v1_setup/base-pilot-seed90/metrics.jsonl"
+    },
+    {
+      "path": "paper/data/whole_body_control/mastery_v1_setup/base-pilot-seed90/step-0/evaluation.json.gz",
+      "bytes": 362690,
+      "sha256": "27bdc5349da9a84418a4e9ab03fda890ae7927cc752731868934515b073776b7",
+      "local_path": "logs/artifacts/whole_body_control/mastery_v1_setup/base-pilot-seed90/step-0/evaluation.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/mastery_v1_setup/base-pilot-seed90/step-8192/evaluation.json.gz",
+      "bytes": 506991,
+      "sha256": "f6b7116606fda7a907f1c974c24803d96f1c7e746cc0e9c6bcb8832f76002ea0",
+      "local_path": "logs/artifacts/whole_body_control/mastery_v1_setup/base-pilot-seed90/step-8192/evaluation.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/mastery_v1_setup/source-report.json.gz",
+      "bytes": 1376341,
+      "sha256": "29b99cd0f2c04bae08b1f56c907fe306c2dab8e3ae8611991005fb50e4e57125",
+      "local_path": "logs/artifacts/whole_body_control/mastery_v1_setup/source-report.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/mastery_v1_setup/teacher-report.json.gz",
+      "bytes": 1654459,
+      "sha256": "0ba9c63734da1a0a90aad5f52647d5e7a20e107dde927c9510411a84f0a6c9e6",
+      "local_path": "logs/artifacts/whole_body_control/mastery_v1_setup/teacher-report.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/placement_recovery_v6_full.json.gz",
+      "bytes": 285709,
+      "sha256": "10d40a5e2d443afe052f47bf918900cce80d5ce16ff0e890898eb3cc03d88a55",
+      "local_path": "logs/artifacts/whole_body_control/placement_recovery_v6_full.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/policy_diagnosis_20261028/v21_unmatched-report.json.gz",
+      "bytes": 2351236,
+      "sha256": "e705b171580c2234e1a3430307bb99db28fa57b21a82f31ad5668ba2c03e3cb8",
+      "local_path": "logs/artifacts/whole_body_control/policy_diagnosis_20261028/v21_unmatched-report.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/policy_diagnosis_20261028/v22_matched-report.json.gz",
+      "bytes": 2361864,
+      "sha256": "8779fc5f4578d7c2bee6f82decc7e416f1ac9065dfa6b834c34c953da72fcadd",
+      "local_path": "logs/artifacts/whole_body_control/policy_diagnosis_20261028/v22_matched-report.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/policy_diagnosis_20261028/v23_endpoint-report.json.gz",
+      "bytes": 612280,
+      "sha256": "5e43c822321ba5854d38a00cd6c0595f3976d9c9577fb872315bf380f0fe8b8d",
+      "local_path": "logs/artifacts/whole_body_control/policy_diagnosis_20261028/v23_endpoint-report.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/pose_precision_training_v6.json.gz",
+      "bytes": 1564923,
+      "sha256": "2c3bbad19bd585e3a24a8f1e26a470eb1e216935505c705798aa7e5fa3d938cb",
+      "local_path": "logs/artifacts/whole_body_control/pose_precision_training_v6.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/pose_precision_validation_v6.json.gz",
+      "bytes": 21946229,
+      "sha256": "229e7ce3f85880da984fdc058f888fa1397c6bf72d232165161414b725aa41ea",
+      "local_path": "logs/artifacts/whole_body_control/pose_precision_validation_v6.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/pose_translation_curriculum_v1.json.gz",
+      "bytes": 168530,
+      "sha256": "66446e7cbd9f006a3d70e139b96b6136e16c11beb4c76aaa40e4d62283610f8d",
+      "local_path": "logs/artifacts/whole_body_control/pose_translation_curriculum_v1.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/pose_translation_training_v12.json.gz",
+      "bytes": 1330534,
+      "sha256": "2947c76e28f881299fa14b073af6b98853f7f6be3a9fef96739470c0c608294a",
+      "local_path": "logs/artifacts/whole_body_control/pose_translation_training_v12.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/pose_translation_validation_v12.json.gz",
+      "bytes": 25384381,
+      "sha256": "49a6bdd0b0fe69aa95a369531dbef38ad1f85217b324e30951fd5a6d741e7608",
+      "local_path": "logs/artifacts/whole_body_control/pose_translation_validation_v12.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/pr224_runtime_review_v1.json.gz",
+      "bytes": 617124,
+      "sha256": "6d7e70e018a71017457371b6830c1c63709913d3a8bb4fd7751f7805d1da1d54",
+      "local_path": "logs/artifacts/whole_body_control/pr224_runtime_review_v1.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/public_tamp_development_v1.json.gz",
+      "bytes": 11633947,
+      "sha256": "200a5572b68c1f927450eb97c6ac95046ff9eee3938d1e816998864b79a8ae2c",
+      "local_path": "logs/artifacts/whole_body_control/public_tamp_development_v1.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/public_tamp_idle_hold_v1.json.gz",
+      "bytes": 2190433,
+      "sha256": "5f11a4976b0b1af34048c99df76003ebce4fb316a84a565f2f4380e44fd51a7e",
+      "local_path": "logs/artifacts/whole_body_control/public_tamp_idle_hold_v1.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/public_tamp_v1_fixture_rejection.json.gz",
+      "bytes": 44791,
+      "sha256": "9a6cddee4e992b253d060ec88d1ad36a7a76b8112284912c980989e3b3487237",
+      "local_path": "logs/artifacts/whole_body_control/public_tamp_v1_fixture_rejection.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/public_tamp_v2.json.gz",
+      "bytes": 17390675,
+      "sha256": "b0c0baad119c889287112b9b4ca05fc136c45e3e3a0e78ac6be6e3b790dae797",
+      "local_path": "logs/artifacts/whole_body_control/public_tamp_v2.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/public_tamp_v3.json.gz",
+      "bytes": 13243267,
+      "sha256": "0c812096285e7820c274253abd98afa12f93217279e43747eb740ce7f37da0c3",
+      "local_path": "logs/artifacts/whole_body_control/public_tamp_v3.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/qualification_v4_carry.json.gz",
+      "bytes": 1482899,
+      "sha256": "b9a772520a6fb519d2750c894dc1e6e1f0d08bdfa8e5d70f20c37f48bfe2c71e",
+      "local_path": "logs/artifacts/whole_body_control/qualification_v4_carry.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/qualification_v4_pick_place.json.gz",
+      "bytes": 287269,
+      "sha256": "c37001abccff1321cf81bbc72c1ce9d897eb8e2e6d012fd6877827d29c139a60",
+      "local_path": "logs/artifacts/whole_body_control/qualification_v4_pick_place.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/qualification_v5_carry.json.gz",
+      "bytes": 1482953,
+      "sha256": "bc255308565d58978085e531ab4942d2fdcc794bf2d1d5ce9a2c42c3686bfc3e",
+      "local_path": "logs/artifacts/whole_body_control/qualification_v5_carry.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/qualification_v5_pick_place.json.gz",
+      "bytes": 286724,
+      "sha256": "bbf9249ddf7aa54808d7f8cc34344301b6f87ddbd192b7e99e8a9016dcace26d",
+      "local_path": "logs/artifacts/whole_body_control/qualification_v5_pick_place.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/qualification_v6_carry.json.gz",
+      "bytes": 1483063,
+      "sha256": "179a5332015341fcd7c12f036517cf5de4fa6cde899e79dddad53da2e6f9428f",
+      "local_path": "logs/artifacts/whole_body_control/qualification_v6_carry.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/qualification_v6_pick_place.json.gz",
+      "bytes": 285709,
+      "sha256": "10d40a5e2d443afe052f47bf918900cce80d5ce16ff0e890898eb3cc03d88a55",
+      "local_path": "logs/artifacts/whole_body_control/qualification_v6_pick_place.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/recovered_v11/adaptive_restart/checkpoint_evidence.json.gz",
+      "bytes": 142016,
+      "sha256": "e6f4cc3e8e8dd49df666ada4c57689a9ecca2261af8b1a9726f82a36b20cc24d",
+      "local_path": "logs/artifacts/whole_body_control/recovered_v11/adaptive_restart/checkpoint_evidence.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/recovered_v11/adaptive_small/checkpoint_evidence.json.gz",
+      "bytes": 142084,
+      "sha256": "303b8d779f81d4feec44068d9a294d2dc1edd26675ec70b0c6e3a6d4feeb2767",
+      "local_path": "logs/artifacts/whole_body_control/recovered_v11/adaptive_small/checkpoint_evidence.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/recovered_v11/baseline/checkpoint_evidence.json.gz",
+      "bytes": 385301,
+      "sha256": "5120e774921e21ed794e7bc90022c5ee9201ce022aea3b78d8b169a011a9a6a7",
+      "local_path": "logs/artifacts/whole_body_control/recovered_v11/baseline/checkpoint_evidence.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/recovered_v11/frozen_restart/checkpoint_evidence.json.gz",
+      "bytes": 141789,
+      "sha256": "1dac0730c1b55e3418c5bef605688d2927bbe5292e5674f590c2dfbb6071a864",
+      "local_path": "logs/artifacts/whole_body_control/recovered_v11/frozen_restart/checkpoint_evidence.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/recovered_v11/frozen_small/checkpoint_evidence.json.gz",
+      "bytes": 141791,
+      "sha256": "d51ce1667b137cf00dd88d529eff4ddeace9f63576bc0829d89a794fdb019225",
+      "local_path": "logs/artifacts/whole_body_control/recovered_v11/frozen_small/checkpoint_evidence.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/restoring_yaw_v1_results/baseline-expanded.json.gz",
+      "bytes": 5061413,
+      "sha256": "b518147c6cf28d13a23d39aa53527f1d8d95b7b18af87fc9ba18558aa9184370",
+      "local_path": "logs/artifacts/whole_body_control/restoring_yaw_v1_results/baseline-expanded.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/restoring_yaw_v1_results/checkpoint-cases.json.gz",
+      "bytes": 6794,
+      "sha256": "ec5308f4cc8cfe6d13899cc5f45c3cd166a0f6a651a2e864d217c4263c706c4d",
+      "local_path": "logs/artifacts/whole_body_control/restoring_yaw_v1_results/checkpoint-cases.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/restoring_yaw_v1_results/final-evaluation.json.gz",
+      "bytes": 1045106,
+      "sha256": "9fd7f3468535ab690102736fd16739de0d73ecb62c29b55df23f96f8b84eee29",
+      "local_path": "logs/artifacts/whole_body_control/restoring_yaw_v1_results/final-evaluation.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/restoring_yaw_v1_results/final-expanded.json.gz",
+      "bytes": 5261749,
+      "sha256": "c2558e6ccc0dff4762641b7500b1e37e6d3e61bf80d08350672a9f36b10827a0",
+      "local_path": "logs/artifacts/whole_body_control/restoring_yaw_v1_results/final-expanded.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/restoring_yaw_v1_results/initial-expanded.json.gz",
+      "bytes": 5259291,
+      "sha256": "f4bf5f9e9aacfc2fa32c8b131c1abd24cd17b9a3379cc3b274408e1bbc24de14",
+      "local_path": "logs/artifacts/whole_body_control/restoring_yaw_v1_results/initial-expanded.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/restoring_yaw_v1_results/metrics.jsonl.gz",
+      "bytes": 208269,
+      "sha256": "743fe8bf5d53ea534b7b241720f79ab96518715255c0625e8db9b5c04245b48a",
+      "local_path": "logs/artifacts/whole_body_control/restoring_yaw_v1_results/metrics.jsonl.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/restoring_yaw_v1_results/step-49152-evaluation.json.gz",
+      "bytes": 1043122,
+      "sha256": "57b9c0e93a984ae22c9a5096e92e81fe17c497599f26a6292749fdfdb96a43a0",
+      "local_path": "logs/artifacts/whole_body_control/restoring_yaw_v1_results/step-49152-evaluation.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/restoring_yaw_v1_results/updates.jsonl.gz",
+      "bytes": 40747,
+      "sha256": "9d54879aa534a6728789f48b0f6ec1197ae9049295248e13ad349ad2502ccd18",
+      "local_path": "logs/artifacts/whole_body_control/restoring_yaw_v1_results/updates.jsonl.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/restoring_yaw_v1_setup/baseline-report.json.gz",
+      "bytes": 5061413,
+      "sha256": "b518147c6cf28d13a23d39aa53527f1d8d95b7b18af87fc9ba18558aa9184370",
+      "local_path": "logs/artifacts/whole_body_control/restoring_yaw_v1_setup/baseline-report.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/restoring_yaw_v1_setup/checkpoint-cases-through-32768.json.gz",
+      "bytes": 4471,
+      "sha256": "210e8f59878265742062af8e8bad39c96b597b5013a820f942d53243cdd19024",
+      "local_path": "logs/artifacts/whole_body_control/restoring_yaw_v1_setup/checkpoint-cases-through-32768.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/restoring_yaw_v1_setup/initial-admission-evaluation.json.gz",
+      "bytes": 5259291,
+      "sha256": "f4bf5f9e9aacfc2fa32c8b131c1abd24cd17b9a3379cc3b274408e1bbc24de14",
+      "local_path": "logs/artifacts/whole_body_control/restoring_yaw_v1_setup/initial-admission-evaluation.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/restoring_yaw_v1_setup/initial-evaluation.json.gz",
+      "bytes": 1045428,
+      "sha256": "b89572dcc61fef939a4291fb52383bf0ea491f09496c48a8493c7c4e4af4c07c",
+      "local_path": "logs/artifacts/whole_body_control/restoring_yaw_v1_setup/initial-evaluation.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/restoring_yaw_v1_setup/metrics.jsonl-through-32768.gz",
+      "bytes": 104039,
+      "sha256": "b3aca9a04bf974f330d66d415bc66e119d0053bb0a8ea509522e3b61aaf10f82",
+      "local_path": "logs/artifacts/whole_body_control/restoring_yaw_v1_setup/metrics.jsonl-through-32768.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/restoring_yaw_v1_setup/step-16384-evaluation.json.gz",
+      "bytes": 1044984,
+      "sha256": "2c61528b2002900794c3637f31349ce472e4551baff1120e717850ab0e1ac0da",
+      "local_path": "logs/artifacts/whole_body_control/restoring_yaw_v1_setup/step-16384-evaluation.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/restoring_yaw_v1_setup/step-32768-evaluation.json.gz",
+      "bytes": 1045333,
+      "sha256": "53f72ab3b9597af48575955fbd97d5049b0520e95575803dd8a45df62327b7ff",
+      "local_path": "logs/artifacts/whole_body_control/restoring_yaw_v1_setup/step-32768-evaluation.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/restoring_yaw_v1_setup/teacher-report.json.gz",
+      "bytes": 3883175,
+      "sha256": "3aec0e6615409cfe06ec1abd0cd8aa514a7be4ef3944c94b43611cb22a63ed4f",
+      "local_path": "logs/artifacts/whole_body_control/restoring_yaw_v1_setup/teacher-report.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/restoring_yaw_v1_setup/updates.jsonl-through-32768.gz",
+      "bytes": 20684,
+      "sha256": "b33c30fdbcc4cd17f8bd74573ebf76342101ce2896845ffa562e6e921f55dca0",
+      "local_path": "logs/artifacts/whole_body_control/restoring_yaw_v1_setup/updates.jsonl-through-32768.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/retention_training_balanced_v2.json.gz",
+      "bytes": 320924,
+      "sha256": "56a61369298e6b017d8fbf451cee0a0e1f8d1cae86bde7e2be4860232bb547c8",
+      "local_path": "logs/artifacts/whole_body_control/retention_training_balanced_v2.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/retention_training_gripper_v3.json.gz",
+      "bytes": 358332,
+      "sha256": "1b2616a43d0d97fadc48eb9f2eaa7a0906f2885ef5aa483942dfe93755ce3ba6",
+      "local_path": "logs/artifacts/whole_body_control/retention_training_gripper_v3.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/retention_training_smoke_v1.json.gz",
+      "bytes": 289702,
+      "sha256": "20112395401ff94f23a4185bd780ee1627187beac820f9b6354258568018fbf4",
+      "local_path": "logs/artifacts/whole_body_control/retention_training_smoke_v1.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/tamp_agent_idle_hold_v1.json.gz",
+      "bytes": 36083,
+      "sha256": "54e97820bf5017df305aac30ca90fa07aee15e9f7c554b6c7729689e3881003e",
+      "local_path": "logs/artifacts/whole_body_control/tamp_agent_idle_hold_v1.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/tamp_policy_agent_v1.json.gz",
+      "bytes": 33668,
+      "sha256": "195ceecfe620ff6070ff6473c50b566391392b02d21794a5be25a924e745bf41",
+      "local_path": "logs/artifacts/whole_body_control/tamp_policy_agent_v1.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/tamp_policy_development_v1.json.gz",
+      "bytes": 2169175,
+      "sha256": "8ddec8d82b47311b5c845be81c7477ac2500e6920349b723459aa801928f8272",
+      "local_path": "logs/artifacts/whole_body_control/tamp_policy_development_v1.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/task_pose_command_smoke.json.gz",
+      "bytes": 102412,
+      "sha256": "9e6ba8d61764387d2e8c94f721bacf1ad14e5d7a5ce6566581ff8367f9ce0879",
+      "local_path": "logs/artifacts/whole_body_control/task_pose_command_smoke.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/tracking_and_teacher_diagnosis_v26_v29/base_v26-report.json.gz",
+      "bytes": 3002929,
+      "sha256": "725fc925b41e46c3fd7c5e1761cb3c825c566b2c74f9c0f05f842e1f75e24777",
+      "local_path": "logs/artifacts/whole_body_control/tracking_and_teacher_diagnosis_v26_v29/base_v26-report.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/tracking_and_teacher_diagnosis_v26_v29/grip_and_retime_v28-report.json.gz",
+      "bytes": 437352,
+      "sha256": "28af822f0788b4dbb6fa2dd05458e206839ba77f9a04a270ebdd4593256c7df8",
+      "local_path": "logs/artifacts/whole_body_control/tracking_and_teacher_diagnosis_v26_v29/grip_and_retime_v28-report.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/tracking_and_teacher_diagnosis_v26_v29/retiming_bounds_v27-report.json.gz",
+      "bytes": 77437,
+      "sha256": "ebe3fd4c4674ec013937098af017b17b18ab64ad0ee1583e3572540d598a2398",
+      "local_path": "logs/artifacts/whole_body_control/tracking_and_teacher_diagnosis_v26_v29/retiming_bounds_v27-report.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/tracking_and_teacher_diagnosis_v26_v29/uniform_retime_v29-report.json.gz",
+      "bytes": 895030,
+      "sha256": "8deb7740fe8461abebed540a6db6adeb8e216bd94361b1ef06278dc35d6ffd36",
+      "local_path": "logs/artifacts/whole_body_control/tracking_and_teacher_diagnosis_v26_v29/uniform_retime_v29-report.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/turning_jerk_v2_setup/frozen-actor-report.json.gz",
+      "bytes": 998992,
+      "sha256": "12de2a493d3d5b97be2ea33d224fea82146a695e50db0340de0d648dfebea7c7",
+      "local_path": "logs/artifacts/whole_body_control/turning_jerk_v2_setup/frozen-actor-report.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/turning_jerk_v2_setup/refinement-step16384-evaluation.json.gz",
+      "bytes": 1002472,
+      "sha256": "a8395b395e794e4de89a748385b6daecf09cd111e8e039f3cf3e5ddd91493804",
+      "local_path": "logs/artifacts/whole_body_control/turning_jerk_v2_setup/refinement-step16384-evaluation.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/turning_jerk_v2_setup/teacher-report.json.gz",
+      "bytes": 2296344,
+      "sha256": "f2944257f9f722116b082eefd61155bd5a70ced0f354ee02350804c613962423",
+      "local_path": "logs/artifacts/whole_body_control/turning_jerk_v2_setup/teacher-report.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/unfiltered_v1_results/checkpoint-cases.json.gz",
+      "bytes": 8504,
+      "sha256": "1a4a9de4a6027aa5c35c43be3156a0861194d307805de3b3f4231f719cae269c",
+      "local_path": "logs/artifacts/whole_body_control/unfiltered_v1_results/checkpoint-cases.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/unfiltered_v1_results/final-evaluation.json.gz",
+      "bytes": 1034475,
+      "sha256": "27066af1737c9fde1adc6332c2190bb9208f15f6f8f98f68f92f1ac353fecc77",
+      "local_path": "logs/artifacts/whole_body_control/unfiltered_v1_results/final-evaluation.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/unfiltered_v1_results/metrics.jsonl.gz",
+      "bytes": 187952,
+      "sha256": "3a69c8cda9c755bfbf8f721284e60f1488aaffaaac65be419a18a11884fcfd04",
+      "local_path": "logs/artifacts/whole_body_control/unfiltered_v1_results/metrics.jsonl.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/unfiltered_v1_results/posture-probe-policy.json.gz",
+      "bytes": 652133,
+      "sha256": "92b0f5940e76672129dc2ce65d15cd64d743dab01fd4cb1a27073af60852eb29",
+      "local_path": "logs/artifacts/whole_body_control/unfiltered_v1_results/posture-probe-policy.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/unfiltered_v1_results/posture-probe-teacher.json.gz",
+      "bytes": 494393,
+      "sha256": "3dd651c24e71a938679bdacb30a31e6b59d2df09c1e6ad6c337f98458712628f",
+      "local_path": "logs/artifacts/whole_body_control/unfiltered_v1_results/posture-probe-teacher.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/unfiltered_v1_results/updates.jsonl.gz",
+      "bytes": 40685,
+      "sha256": "b9e09228fdf408720320c5d7872d81bd4a43536b6fbfc7ee49c85e0da41037e3",
+      "local_path": "logs/artifacts/whole_body_control/unfiltered_v1_results/updates.jsonl.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/yaw_sign_guard_v1/guarded-canonical-report.json.gz",
+      "bytes": 982624,
+      "sha256": "5e9a47203ede6e15ddf9226d46761f31ad4155d3895e6b0c9fbe9912e2e37b34",
+      "local_path": "logs/artifacts/whole_body_control/yaw_sign_guard_v1/guarded-canonical-report.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/yaw_sign_guard_v1/guarded-feedback.json.gz",
+      "bytes": 4794522,
+      "sha256": "67fc357d931d9ac2d6b876c5c6dbc6ca74a9ec473c4636abcb51cc9c1e43d278",
+      "local_path": "logs/artifacts/whole_body_control/yaw_sign_guard_v1/guarded-feedback.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/yaw_sign_guard_v1/guarded-policy.json.gz",
+      "bytes": 3026568,
+      "sha256": "f77d191e434e57dc95f9aacf7b0dfe05f048d79f611eb429a044d0d05112f617",
+      "local_path": "logs/artifacts/whole_body_control/yaw_sign_guard_v1/guarded-policy.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/yaw_sign_guard_v1/guarded-teacher.json.gz",
+      "bytes": 2434238,
+      "sha256": "daa221dc2950aefc2608cd161733a46b499a2cff90d72a5c59857903923f72e3",
+      "local_path": "logs/artifacts/whole_body_control/yaw_sign_guard_v1/guarded-teacher.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/yaw_sign_guard_v1/teacher-admission.json.gz",
+      "bytes": 3882597,
+      "sha256": "0432236631a8b0233a670ac2efcce517a5611b555e53121c60d32b79f23cdf4d",
+      "local_path": "logs/artifacts/whole_body_control/yaw_sign_guard_v1/teacher-admission.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/yaw_sign_guard_v1/unguarded-feedback.json.gz",
+      "bytes": 5028266,
+      "sha256": "757a842b3ea5613e8ea7af5b738e61fcf305ed735a939b77854f2a0699b085bc",
+      "local_path": "logs/artifacts/whole_body_control/yaw_sign_guard_v1/unguarded-feedback.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/yaw_sign_guard_v1/unguarded-policy.json.gz",
+      "bytes": 3166921,
+      "sha256": "11fbf003d140a7aa578c760ab888b5421d339cfc04df6a7d16e674b8b7c56d5f",
+      "local_path": "logs/artifacts/whole_body_control/yaw_sign_guard_v1/unguarded-policy.json.gz"
+    },
+    {
+      "path": "paper/data/whole_body_control/yaw_sign_guard_v1/unguarded-teacher.json.gz",
+      "bytes": 2434260,
+      "sha256": "6d49ccbc9c72a0b09ab9135c507c9673a3facf0853f3473bf0fe165562177ba8",
+      "local_path": "logs/artifacts/whole_body_control/yaw_sign_guard_v1/unguarded-teacher.json.gz"
+    }
+  ]
+}

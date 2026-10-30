@@ -1,0 +1,82 @@
+{
+  "version": "mars-hold-training-feedback-v6",
+  "scope": "Simulator-only matched reward ablation: gate settling incentives on reaching the strict pose contract; no promotion",
+  "seed": 64,
+  "steps": 16384,
+  "architecture": "mlp",
+  "selection_case": "left:20g:0",
+  "evaluation_cases": [
+    "left:20g:1",
+    "right:20g:2"
+  ],
+  "nearby_joint_delta": [
+    0,
+    -0.05,
+    0,
+    0,
+    0
+  ],
+  "initializers": {
+    "tracking_feedback": "logs/manipulation/tamp-pose-precision-v9/seed-64/step-65536"
+  },
+  "environment": {
+    "robot": "innate_mars",
+    "scenario": "mixed",
+    "horizon": 6,
+    "action_mode": "direct_velocity",
+    "trajectory_preview": true,
+    "tracking_reward": true,
+    "tracking_precision": 4,
+    "endpoint_motion_weight": 0.25,
+    "body_motion_weight": 0.25,
+    "categorical_features_unscaled": true,
+    "retention_context": true,
+    "scenario_weights": [
+      0.7,
+      0.1,
+      0.12,
+      0.05,
+      0.03
+    ],
+    "reach_hold_probability": 0.2,
+    "hold_pregrasp_fixture": true,
+    "fixed_base_probability": 0.75,
+    "fixed_base_xy_tolerance": 0.005,
+    "base_xy_tolerance": 0.05,
+    "hand_position_tolerance": 0.003,
+    "hand_orientation_tolerance": 0.02,
+    "empty_grasp_probability": 0.2,
+    "carry_hold_probability": 0.25,
+    "balanced_grasp_setup": true,
+    "support_half_width": 0.04,
+    "contact_cone": "elliptic",
+    "contact_impratio": 3,
+    "randomization_scale": 0.05,
+    "target_scale": 0.25,
+    "initial_heading_range": 0,
+    "retarget_probability": 0,
+    "reach_push_probability": 0,
+    "certify_reach_paths": true,
+    "dynamic_references": true,
+    "payload_mass_range_kg": [
+      0.02,
+      0.1
+    ],
+    "payload_com_randomization_m": 0.002,
+    "feedback_policy": true,
+    "wheel_feedback_gain": 0.5,
+    "whole_body_settling": true,
+    "feedback_orientation_scale": 0.15,
+    "reach_local_probability": 0.3,
+    "fixed_base_contract": true,
+    "pose_progress_weight": 1.0,
+    "goal_gated_settling": true
+  },
+  "learning_rate": 5e-05,
+  "exploration_std": 0.05,
+  "normalization_prior_count": 1024,
+  "safety_promoted": false,
+  "initializer_selection_source": "paper/data/whole_body_control/pose_precision_training_v6.json",
+  "eval_every": 4096,
+  "final_learning_rate": 1e-05
+}

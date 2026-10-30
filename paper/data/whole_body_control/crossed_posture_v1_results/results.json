@@ -1,0 +1,66 @@
+{
+  "steps": 65536,
+  "seed": 90,
+  "controller_tests": 887,
+  "canonical_full_mastery": [
+    5,
+    3,
+    4,
+    6,
+    6
+  ],
+  "canonical_tracking_and_holding": [
+    9,
+    9,
+    9,
+    9,
+    9
+  ],
+  "canonical_paired_smoothness": [
+    6,
+    3,
+    4,
+    6,
+    7
+  ],
+  "canonical_common_filtered_smoothness": [
+    3,
+    2,
+    3,
+    3,
+    4
+  ],
+  "checkpoint_safety_flags": {
+    "wheel_lift": 0,
+    "unsafe_contact": 0,
+    "invalid_physics": 0
+  },
+  "expanded": {
+    "baseline": {
+      "full_mastery": 14,
+      "tracking_and_holding": 27,
+      "paired_smoothness": 16,
+      "cases": 30,
+      "safety_flags": {
+        "wheel_lift": 0,
+        "unsafe_contact": 0,
+        "invalid_physics": 0
+      }
+    },
+    "final": {
+      "full_mastery": 16,
+      "tracking_and_holding": 27,
+      "paired_smoothness": 19,
+      "cases": 30,
+      "safety_flags": {
+        "wheel_lift": 0,
+        "unsafe_contact": 0,
+        "invalid_physics": 0
+      }
+    }
+  },
+  "hardware_used": false,
+  "safety_promoted": false,
+  "further_training_launched": false,
+  "runtime_revision": "f1c8d127"
+}

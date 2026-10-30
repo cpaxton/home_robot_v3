@@ -1,0 +1,13 @@
+{
+  "upstream_revision": "9e10601a124992068762528806f02c56ebc76f55",
+  "scope": "Local source audit and proposed patch; not applied to upstream or deployed to Herman",
+  "before_sha256": {
+    "ros2_ws/src/maurice_bot/maurice_arm/maurice_arm/arm_control.cpp": "033a96d672474ecf847cc625c6ee98c00fbf13bbe6e4988691e64e23974ce7f3",
+    "ros2_ws/src/maurice_bot/maurice_arm/maurice_arm/arm.cpp": "da5fdd9f1109b4917d2f02fdd9ef87f49c92a45f70502bb7e2dfbdf556422a26",
+    "ros2_ws/src/maurice_bot/maurice_arm/maurice_arm/robot.cpp": "784978d36fce72c1492a1128333a78a419f7989fb665ab47c7b6dca09916cae0",
+    "ros2_ws/src/maurice_bot/maurice_arm/include/maurice_arm/robot.hpp": "627ca46161ffc19d19dd7c0e234fffef9d4ac88064794ce2115299ce6f744867",
+    "ros2_ws/src/maurice_bot/maurice_arm/CMakeLists.txt": "03e1505ae9841dd9651db93e479a2dc4215f158b7549649eed2e90272ece0d9a"
+  },
+  "patch_sha256": "62cabcf90ce97321c020440b39f27609853b0764ba76c64075c845c3c6ef7fe5",
+  "package": "ros2_ws/src/maurice_bot/maurice_arm"
+}
