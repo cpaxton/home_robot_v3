@@ -61,6 +61,9 @@ class SensorOnlyHabitat:
         }
         config.sim_cfg.allow_sliding = False
         self.sim = habitat_sim.Simulator(config)
+        if not self.sim.pathfinder.is_loaded:
+            self.sim.close()
+            raise RuntimeError("Renderer collision filter is unavailable; refusing unchecked base motion")
         state = habitat_sim.AgentState()
         state.position = [spawn.x, spawn.y, spawn.z]
         state.rotation = quat_from_angle_axis(spawn.heading, np.array([0.0, 1.0, 0.0]))
@@ -107,6 +110,9 @@ class SensorOnlyHabitat:
             raise ValueError("Head motion exceeds the declared inspection envelope")
         guess = np.linalg.inv(predicted) @ self.last["camera_pose"]
         return self._capture(self.sim.step(action), guess)
+
+    def capture(self):
+        return self._capture(self.sim.get_sensor_observations(), None)
 
     def close(self):
         self.sim.close()

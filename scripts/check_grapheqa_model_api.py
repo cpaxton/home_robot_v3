@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 # Copyright (c) Chris Paxton 2026
 # Licensed under the Apache License, Version 2.0 (see LICENSE).
-"""Run a small GraphEQA context pair through an owned local emet VLM server.
+"""Run GraphEQA qualification through an owned local emet VLM server.
 
-Use emet jobs --gpu-exclusive. This checks real model-API interoperability; it
-does not execute navigation or turn frozen-context answers into episode scores.
+Use emet jobs --gpu-exclusive. Default mode checks frozen-context API pairing;
+--active-question-ids qualifies sensor-only reference interaction separately.
 """
 
 import argparse
@@ -36,12 +36,14 @@ def run(args):
     with socket.socket() as check:
         check.bind(("127.0.0.1", args.port))
     args.output.mkdir(parents=True, exist_ok=False)
+    active_ids = getattr(args, "active_question_ids", None)
     manifest = {
-        "mode": "live_model_api_frozen_context_pair",
+        "mode": "live_active_reference_qualification" if active_ids else "live_model_api_frozen_context_pair",
         "status": "running",
         "source_commit": revision,
         "fork_commit": fork_revision,
-        "cases_sha256": hashlib.sha256(args.cases.read_bytes()).hexdigest(),
+        "cases_sha256": hashlib.sha256(args.cases.read_bytes()).hexdigest() if args.cases else None,
+        "active_question_ids": active_ids,
         "driver_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
     }
     path = args.output / "interop.json"
@@ -118,7 +120,31 @@ def run(args):
             ]
             if args.answers:
                 command += ["--answers", str(args.answers)]
-            result = subprocess.run(command, cwd=args.fork, env=env, check=False, timeout=600)
+            if active_ids:
+                habitat = Path("/home/cpaxton/src/home_robot_v3/.venv-habitat")
+                command = [
+                    str(habitat / "bin/python"),
+                    str(root / "scripts/run_grapheqa_active.py"),
+                    "--fork",
+                    str(args.fork),
+                    "--model-config",
+                    str(profile),
+                    "--output",
+                    str(args.output / "active"),
+                    "--max-decisions",
+                    str(args.max_decisions),
+                    "--question-ids",
+                    *map(str, active_ids),
+                ]
+                env.update(PYTHONPATH=str(root / "src"), LD_LIBRARY_PATH=str(habitat / "lib"))
+            result = subprocess.run(
+                command,
+                cwd=root if active_ids else args.fork,
+                env=env,
+                check=False,
+                timeout=1800 if active_ids else 600,
+                pass_fds=(9,),
+            )
             manifest.update(status="passed" if result.returncode == 0 else "failed", returncode=result.returncode)
         except Exception as exc:
             manifest.update(status="failed", error=f"{type(exc).__name__}: {exc}")
@@ -139,7 +165,10 @@ def run(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--fork", required=True, type=Path)
-    parser.add_argument("--cases", required=True, type=Path)
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--cases", type=Path)
+    mode.add_argument("--active-question-ids", nargs="+", type=int)
+    parser.add_argument("--max-decisions", type=int, default=4)
     parser.add_argument("--answers", type=Path)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--port", type=int, default=18653)
