@@ -15,6 +15,7 @@ import shutil
 import subprocess
 import sys
 import time
+from collections import Counter
 from pathlib import Path
 
 import numpy as np
@@ -67,8 +68,9 @@ def native_worker(args):
         )
     )
     paths = sorted(args.inputs.glob("frame-*.npz"))
-    if not paths:
-        raise ValueError("No sensor packets")
+    cadence = yaml.safe_load(native_configs[2].read_text())["num_poses_per_update"]
+    if len(paths) < cadence:
+        raise ValueError(f"Need at least {cadence} fresh frames for the native graph-update cadence")
     with np.load(paths[0], allow_pickle=False) as first:
         validate_packet(first, num_labels=labels["total_semantic_labels"])
         height, width = first["depth"].shape
@@ -103,12 +105,22 @@ def native_worker(args):
             pose = packet["camera_pose"]
             quaternion = np.roll(Rotation.from_matrix(pose[:3, :3]).as_quat(), 1)
             started = time.monotonic()
-            accepted = pipeline.step(
+            updated = pipeline.step(
                 stamp, pose[:3, 3].copy(), quaternion, packet["depth"], packet["learned_labels"], packet["rgb"]
             )
-            receipts.append({"frame": path.name, "accepted": bool(accepted), "wall_s": time.monotonic() - started})
-            if not accepted:
-                raise RuntimeError(f"Hydra rejected {path.name}")
+            expected_update = (len(receipts) + 1) % cadence == 0
+            receipts.append(
+                {
+                    "frame": path.name,
+                    "graph_updated": bool(updated),
+                    "expected_graph_update": expected_update,
+                    "wall_s": time.monotonic() - started,
+                }
+            )
+            # Native step returns false between scheduled graph updates, even
+            # though it integrates those RGB-D frames into the reconstruction.
+            if bool(updated) != expected_update:
+                raise RuntimeError(f"Unexpected native update receipt for {path.name}: {receipts[-1]}")
     pipeline.save()
     graph_path = args.output / "graph.json"
     pipeline.graph.save(str(graph_path), False)
@@ -118,6 +130,7 @@ def native_worker(args):
         "frames": receipts,
         "graph_nodes": len(graph["nodes"]),
         "graph_edges": len(graph["edges"]),
+        "nodes_by_layer": dict(Counter(str(node["layer"]) for node in graph["nodes"])),
         "mesh_vertices": int(pipeline.graph.mesh.get_vertices().shape[1]),
         "hydra_commit": subprocess.check_output(
             ["git", "-C", "/catkin_ws/src/hydra", "rev-parse", "HEAD"], text=True
@@ -332,7 +345,7 @@ def main():
     host.add_argument("--upstream", required=True, type=Path)
     host.add_argument("--output", required=True, type=Path)
     host.add_argument("--question-id", type=int, default=2)
-    host.add_argument("--frames", type=int, choices=range(1, 37), default=3)
+    host.add_argument("--frames", type=int, choices=range(1, 37), default=5)
     worker = sub.add_parser("native-worker")
     worker.add_argument("--inputs", required=True, type=Path)
     worker.add_argument("--labels", required=True, type=Path)

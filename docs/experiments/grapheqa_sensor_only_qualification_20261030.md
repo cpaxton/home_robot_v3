@@ -28,7 +28,7 @@ do not relabel those results as a fully sensor-only navigation comparison.
 ## Minimal mapper qualification
 
 `scripts/probe_grapheqa_sensor_only.py` renders the initial view for explicit
-HM-EQA question ID 2, then makes two 10-degree left turns. Question 2 is the
+HM-EQA question ID 2, then makes four 10-degree left turns. Question 2 is the
 first existing development ID, chosen before seeing probe results. The question
 row is used only to select the renderer's scene and prescribed spawn.
 
@@ -50,6 +50,10 @@ dependency image and reference label-space revision are pinned. The manifest
 records model/source/config hashes, fresh-packet hashes and native receipts.
 Input/schema failures, detector errors, rejected frames, empty graphs and
 container failures stop the probe rather than substituting semantic ground truth.
+The cached native reconstruction integrates every input, but emits a graph
+update only every fifth pose. Its `step()` returns false on the intervening
+inputs; receipts distinguish that scheduled behavior from a failed full update.
+The probe preserves this cadence rather than changing it to force a pass.
 
 Example, from a clean committed checkout with cached local weights:
 
