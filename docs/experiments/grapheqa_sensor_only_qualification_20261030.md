@@ -72,17 +72,55 @@ The cached dependency image is
 `sha256:1cab965fa1815e43854248d62bbf910454b12c791584df95111f3b87d0fabde3`.
 Hydra source inside it is `af6f2c234f46651734b1adbaed3404543b42592b`.
 The native import emits duplicate `asl`/`stdout` registration messages. Actual
-frame integration and graph serialization, not import success, are the next gate.
+frame integration and graph serialization, not import success, define the gate.
+
+## Completed mapper check
+
+Managed job `20261030_091313_bd06a0` passed at source
+`55ab995e18524b87abb8b8583f1be37a909e580e`.
+Artifacts: `/home/cpaxton/runs/emet/grapheqa-sensor-probe-20261030-r5/`.
+
+- Five newly rendered RGB-D frames, five online YOLOE calls and one scheduled
+  native graph update; no model answer or EQA score was produced.
+- Serialized graph: **96 nodes / 318 edges**: 16 object-layer nodes (including
+  ceiling), 78 places, one room and one building. Mesh: 3,162 vertices.
+- Capture/perception took 2.54 seconds including 1.30 seconds of detector
+  initialization. Native `step()` calls summed to 0.17 seconds. These exclude
+  native process startup/save and managed-job admission; they are stage timings,
+  not an end-to-end runtime comparison.
+- All 29 targeted tests passed, including actual Habitat sensor configuration
+  inspection. The runtime has semantic mesh loading and semantic textures
+  explicitly disabled as well as no semantic sensor. The container mounts only
+  the learned sensor packets and vocabulary; no simulator scene assets or
+  annotation/enrichment files are available to its mapper.
+- `audit.png` / `audit.svg` show the first/final RGB views, an online mask overlay
+  and the native object boxes in the local frame. Manual inspection found
+  plausible floor/sofa/table/plant support and category errors in the learned
+  masks. Neither the masks nor the graph were scored against ground truth.
+
+The earlier four attempts remain recorded: a sensor-vector API mismatch, an
+incorrect detector method name, mistaking scheduled partial integration for
+rejection, and isolated output-directory permissions. These are probe setup
+failures, not benchmark episodes; none triggered a ground-truth fallback.
+
+Native duplicate-registration messages and a partial-mesh/pose-graph connection
+warning still appear. They did not prevent this graph update and serialization.
+A stationary, one-update check does not qualify repeated updates, translation,
+pose-graph connectivity, navigation, or the complete upstream agent.
 
 ## Gates before an active comparison
 
-1. Complete the mapper probe and inspect rendered RGB, predicted masks and the
-   resulting graph. A mapper pass is not an answer or navigation success.
+1. **Mapper gate passed.** Preserve the successful input/output evidence, then
+   check repeated graph updates and translation with estimated pose. A mapper
+   pass is not an answer or navigation success.
 2. Retain the reference's graph/context/action/stopping flow while substituting
    only learned perception, question-derived text and the fixed comparison VLM.
    Keep the gold answer exclusively in the scorer; save actual model requests.
-3. Use the same observed-map planner/executor, calibrated sensors and declared
-   pose-estimation source for both methods. Derive bounds/frontiers from observed
+3. Use the same learned detector/global vocabulary, observed-map planner/executor,
+   calibrated sensors and declared pose-estimation source for both methods.
+   Our existing CLI has `--no-habitat-perfect-nav`, but this alone does not replace
+   the simulator pose source or prove all privileged accesses are excluded.
+   Derive bounds/frontiers from observed
    space or a fixed local workspace, never whole-scene geometry. A simulator may
    enforce physical collisions internally; its route oracle is not an agent tool.
 4. Freeze explicit episode IDs before running, without inspecting semantic asset

@@ -208,6 +208,10 @@ runner's semantics flag also changes episode selection and leaves enrichment
 and navmesh dependencies in place. The strict learned-perception qualification,
 input boundary, and remaining active-comparison gates are recorded in
 [the sensor-only audit](grapheqa_sensor_only_qualification_20261030.md).
+The follow-up native mapper probe passed with five newly rendered RGB-D frames,
+online YOLOE masks, local command odometry, 16 object-layer nodes and a serialized
+mesh. This clears graph construction only; a complete active episode and matched
+sensor-only execution remain unqualified. Do not count it as an EQA result.
 
 ## Task coverage and paper claims
 

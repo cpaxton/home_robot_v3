@@ -11,14 +11,15 @@
       NavMCP's trajectory-evidence/interface comparison and release dependencies.
       Do not relabel internal `static_graph` or a reduced tool list as a faithful
       upstream system; keep models, segmentation inputs and task populations clear.
-      GraphEQA's cached Habitat container passes Hydra/Spark DSG/Habitat imports
-      on 2026-10-30; next check graph construction, rendering, source/config pins
-      and one complete episode. Native duplicate-registration messages remain
-      unqualified; the April-2025 image is a dependency base, not current-source parity.
+      GraphEQA's cached Habitat container passes native learned RGB-D graph
+      construction on 2026-10-30 (five fresh views, 16 object-layer nodes).
+      Next qualify repeated updates/translation and one complete active episode.
+      Native warnings remain; the April-2025 image is a dependency base, not
+      current-source parity.
 - [ ] Qualify GraphEQA with **no privileged scene inputs**: freshly inferred
       segmentation, explicit episode IDs, no annotation enrichment, semantic
       masks/IDs, global scene bounds or navmesh route oracle. First run the
-      isolated learned RGB-D -> native Hydra probe; then match observed-map
+      isolated learned RGB-D -> native Hydra probe (passed at `55ab995e`); then match observed-map
       navigation and pose estimation across the active agents. Historical
       semantics-off rows still have navmesh assistance. Protocol and command:
       `docs/experiments/grapheqa_sensor_only_qualification_20261030.md`.
