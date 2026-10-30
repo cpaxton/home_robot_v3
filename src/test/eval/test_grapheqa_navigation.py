@@ -6,7 +6,12 @@ from types import SimpleNamespace
 import numpy as np
 import torch
 
-from emet.eval.grapheqa_navigation import ObservedSpaceNavigation, base_xyt, predicted_camera_pose
+from emet.eval.grapheqa_navigation import (
+    HabitatMotionExecutor,
+    ObservedSpaceNavigation,
+    base_xyt,
+    predicted_camera_pose,
+)
 from emet.eval.grapheqa_sensor import command_camera_pose
 from emet.robots.footprint import CircularFootprint
 
@@ -53,3 +58,23 @@ def test_observed_space_plan_rejects_unobserved_goal_without_sweeping():
     free = np.ones((20, 20), dtype=bool)
     nav._navigable = lambda: (free, free)
     assert nav.plan([100, 100, 0], object_target=False) == ([], "no_valid_goals")
+
+
+def test_rotation_intent_survives_small_measured_xy_drift():
+    class Sensor:
+        def __init__(self):
+            self.last = {"camera_pose": command_camera_pose(yaw_deg=0, tilt_deg=-30, sensor_height=1.5)}
+            self.actions = []
+
+        def step(self, action, amount):
+            self.actions.append(action)
+            pose = predicted_camera_pose(self.last["camera_pose"], action, amount)
+            pose[0, 3] = 0.021  # Within the shared route's position tolerance.
+            self.last = {"camera_pose": pose, "collided": False}
+            return self.last
+
+    sensor = Sensor()
+    navigation = SimpleNamespace(space=SimpleNamespace(is_valid=lambda pose: True), update=lambda frame: None)
+    executor = HabitatMotionExecutor(sensor, navigation)
+    assert executor.move_base_to([0, 0, np.pi / 2], blocking=True, world_frame=True, timeout=10)
+    assert sensor.actions and set(sensor.actions) == {"turn_left"}

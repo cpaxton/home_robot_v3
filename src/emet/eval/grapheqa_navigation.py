@@ -259,6 +259,7 @@ class HabitatMotionExecutor:
             raise ValueError("This adapter requires blocking local-world XYT goals")
         deadline = time.monotonic() + timeout
         goal = np.asarray(goal, dtype=float)
+        rotation_only = np.linalg.norm(goal[:2] - base_xyt(self.sensor.last["camera_pose"])[:2]) <= 0.025
         reason = "primitive_budget_exhausted"
         for _ in range(80):
             if self.sensor.last["camera_pose"] is None:
@@ -267,9 +268,12 @@ class HabitatMotionExecutor:
             current = base_xyt(self.sensor.last["camera_pose"])
             delta = goal[:2] - current[:2]
             distance = np.linalg.norm(delta)
-            heading = np.arctan2(delta[1], delta[0]) if distance > 0.02 else goal[2]
+            if rotation_only and distance > 0.025:
+                reason = "rotation_position_drift"
+                break
+            heading = np.arctan2(delta[1], delta[0]) if not rotation_only and distance > 0.025 else goal[2]
             yaw = np.arctan2(np.sin(heading - current[2]), np.cos(heading - current[2]))
-            if distance <= 0.02 and abs(yaw) <= np.deg2rad(2):
+            if distance <= 0.025 and abs(yaw) <= np.deg2rad(2):
                 self._command_receipt = {"result": {"reason": "ok"}}
                 return True
             if time.monotonic() >= deadline:
@@ -280,8 +284,9 @@ class HabitatMotionExecutor:
             else:
                 action, amount = "move_forward", min(0.1, distance)
             predicted = base_xyt(predicted_camera_pose(self.sensor.last["camera_pose"], action, amount))
-            valid, reason = validate_navigation_sweep(self.navigation.space, current, [predicted])
+            valid, rejection = validate_navigation_sweep(self.navigation.space, current, [predicted])
             if not valid:
+                reason = rejection
                 break
             frame = self.sensor.step(action, amount)
             self.primitive_count += 1
