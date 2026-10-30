@@ -62,6 +62,18 @@ def test_observed_space_plan_rejects_unobserved_goal_without_sweeping():
     assert nav.plan([100, 100, 0], object_target=False) == ([], "no_valid_goals")
 
 
+def test_frontier_arrival_preserves_travel_heading_instead_of_resetting_to_world_zero():
+    nav = object.__new__(ObservedSpaceNavigation)
+    nav.pose = np.zeros(3)
+    nav.map = SimpleNamespace(grid_origin=torch.tensor([10.0, 10.0, 0.0]))
+    nav.space = SimpleNamespace(is_valid=lambda pose: True)
+    free = np.ones((20, 20), dtype=bool)
+    nav._navigable = lambda: (free, free)
+    route, reason = nav.plan([0, 0.2, 0], object_target=False)
+    assert reason == "ok" and route
+    assert route[-1][2] == pytest.approx(np.pi / 2)
+
+
 def test_rotation_intent_survives_small_measured_xy_drift():
     class Sensor:
         def __init__(self):

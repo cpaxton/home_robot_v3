@@ -287,7 +287,10 @@ class ObservedSpaceNavigation:
             chunk = differential_drive_waypoints(current, np.r_[xy, heading])
             route.extend(chunk)
             current = np.asarray(chunk[-1])
-        final_heading = np.arctan2(target[1] - current[1], target[0] - current[0])
+        # A frontier goal coincides with the endpoint: atan2(0, 0) would turn
+        # every arrival back toward local +X. Retain the incoming travel yaw;
+        # objects instead retain a distinct standoff target to face.
+        final_heading = np.arctan2(target[1] - current[1], target[0] - current[0]) if object_target else current[2]
         route.extend(differential_drive_waypoints(current, np.r_[current[:2], final_heading]))
         valid, reason = validate_navigation_sweep(self.space, self.pose, route)
         return (route, "ok") if valid else ([], reason)
