@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import base64
+import time
 from io import BytesIO
 from typing import Any
 
@@ -68,6 +69,7 @@ class OpenaiVLLMClient(AbstractVLLMClient):
         self.jpeg_quality = int(jpeg_quality)
         self.device = device
         self._openai = OpenAI(api_key=self.api_key, base_url=self.base_url)
+        self.last_call_metrics: dict[str, float | int | bool] | None = None
 
     @property
     def canonical_model_key(self) -> str:
@@ -130,13 +132,17 @@ class OpenaiVLLMClient(AbstractVLLMClient):
         image: Any | None = None,
         assistant_prefill: str | None = None,
     ) -> str:
+        started = time.perf_counter()
+        self.last_call_metrics = None
         if reset_context:
             self.reset()
         sys_text = system_prompt if system_prompt is not None else (self.system_prompt or None)
         messages: list[dict[str, Any]] = self.get_history()
         if sys_text and not any(message.get("role") == "system" for message in messages):
             messages.append({"role": "system", "content": sys_text})
-        messages.append({"role": "user", "content": self._content_blocks(user_content, image)})
+        user_blocks = self._content_blocks(user_content, image)
+        n_images = sum(block.get("type") == "image_url" for block in user_blocks)
+        messages.append({"role": "user", "content": user_blocks})
         history = list(messages)
         prefill = (assistant_prefill or "").strip()
         if prefill:
@@ -146,13 +152,29 @@ class OpenaiVLLMClient(AbstractVLLMClient):
             messages.append({"role": "assistant", "content": prefill})
         mt = int(max_new_tokens if max_new_tokens is not None else self.max_tokens)
         if verbose:
-            n_img = sum(1 for b in messages[-1]["content"] if isinstance(b, dict) and b.get("type") == "image_url")
-            print(f"OpenaiVLLMClient model={self.model} base_url={self.base_url} images={n_img} max_tokens={mt}")
-        completion = self._openai.chat.completions.create(
-            model=self.model,
-            messages=messages,
-            max_tokens=mt,
-        )
+            print(f"OpenaiVLLMClient model={self.model} base_url={self.base_url} images={n_images} max_tokens={mt}")
+        encoded = time.perf_counter()
+        completed = False
+        try:
+            completion = self._openai.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                max_tokens=mt,
+            )
+            completed = True
+        finally:
+            finished = time.perf_counter()
+            # Client-side wall times only: request_s includes server queueing,
+            # image prefill, decoding, SDK retries and transport. It is not a
+            # measurement of server compute or time to first token. Latest call
+            # only; callers collecting concurrent traces need per-call clients.
+            self.last_call_metrics = {
+                "encode_s": encoded - started,
+                "request_s": finished - encoded,
+                "total_s": finished - started,
+                "image_count": n_images,
+                "completed": completed,
+            }
         text = completion.choices[0].message.content or ""
         self.conversation_history = history + [{"role": "assistant", "content": text}]
         self._iterations += 1

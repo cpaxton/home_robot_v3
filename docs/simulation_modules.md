@@ -148,3 +148,35 @@ uv run emet test src/test/config/test_robosuite_load_utils.py \
   src/test/config/test_robocasa_assets_check.py \
   src/test/config/test_molmospaces_spawn_metadata.py -q
 ```
+
+### Observed manipulation camera evidence
+
+`stretch_mujoco/mujoco_server_camera_manager.py` and
+`stretch_mujoco/datamodels/status_stretch_camera.py` preserve each renderer's
+acquisition interval while holding the shared physics/render lock. RGB metadata
+also identifies its separate depth interval; publication does not renew either.
+The local clock identity permits explicit same-host simulation mapping through
+`controller/manipulation/capture_clock.py`, not a hardware synchronization claim.
+`stretch_mujoco/enums/stretch_cameras.py` supports the opt-in head image scale and
+self-occlusion controls documented in [environment variables](environment_variables.md).
+See [live source assembly evidence](experiments/observed_source_assembly_20261027.md).
+
+With `EMET_SIM_SYNCHRONIZED_RGBD=1`, `synchronized_capture.py` copies the physics
+state under that lock and renders a private sample while physics continues.
+Camera poses and eight Stretch motor readings describe the same original sample.
+A separate full-robot configuration channel is explicitly privileged kinematic
+debug truth, including unmeasured passive joints; observed effects reject it.
+The motor-only rigid EE estimator does not assume passive-angle sensors or
+qualify fingertip/individual-telescope collision geometry. The fixture preparation
+script emits separate robot-only/scene XML and a JSON launch/manifest pair; see
+[the encoder/sampling evidence and rerun instructions](experiments/observed_encoder_sampling_20261029.md).
+
+Simulated head and wrist intrinsics use their rendered pinhole FOV, dimensions
+and pixel-center convention. In particular, `mujoco_server_stretch.py` publishes
+480×270 wrist `ee_K`, matching the camera manager, rather than using physical
+focal calibration or 1280×720 sensor metadata. Actual-model tests compare both
+with MuJoCo's GL frustum. Physical camera settings are unchanged. The paired
+`scripts/eval_stretch_multiview_masks.py --output DIR` diagnostic renders head and
+wrist from one private physics snapshot and runs independent RGBD tracking during
+the privileged native control. It uses CPU OSMesa via `emet jobs`, no VLM. See
+[tracking profiles, attempts and limits](experiments/observed_handoff_20261030.md).

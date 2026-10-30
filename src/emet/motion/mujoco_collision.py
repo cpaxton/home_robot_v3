@@ -91,6 +91,14 @@ class MujocoSceneCollisionChecker:
             transform[:3, 3] = ee.xmat.reshape(3, 3).T @ (obj.xpos - ee.xpos)
             self.payload_transform = transform
 
+    def capture_payload(self):
+        """Save all attachment state before hypothetical planning."""
+        return (self.payload_body, self.payload_parent,
+                None if self.payload_transform is None else self.payload_transform.copy())
+
+    def restore_payload(self, state):
+        self.payload_body, self.payload_parent, self.payload_transform = state
+
     def configuration_collides(self, model, data) -> bool:
         mujoco.mj_kinematics(model, data)
         watched = set(self.robot_ids)

@@ -280,7 +280,7 @@ def test_failed_placement_replan_reason_survives_transport_adapter():
     from emet.controller.manipulation.physical_pick_place import PhysicalMotionResult, PhysicalPickPlaceExecutor
 
     executor = SimpleNamespace(
-        payload_body="load", place_paths=[[], [], []], place_targets=[[], [], []],
+        input_mode="privileged", payload_body="load", place_paths=[[], [], []], place_targets=[[], [], []],
         transport=lambda: PhysicalMotionResult(False, "no_place_witness_within_budget", "transport"),
     )
     result = PhysicalPickPlaceExecutor.place_only(executor, "support", object_gt_body="load")
@@ -465,7 +465,7 @@ def test_contact_closure_needs_settled_motor_and_advancing_feedback(monkeypatch,
         joint_names=["yaw"],
         collision=MujocoSceneCollisionChecker(m, robot_body="robot"),
         synchronize=sync,
-        command_joints=lambda q: True,
+        command_joints=lambda q: True, use_sim_time=True,
     )
     result = executor._close_gripper_until_still(timeout_s=1.0)
     assert result.success == expected
@@ -590,7 +590,8 @@ def test_grasp_alternatives_replan_all_phases_before_any_gripper_command():
     d = mujoco.MjData(m)
     calls = []
     checker = SimpleNamespace(payload_body=None, payload_parent=None, payload_transform=None,
-                              set_payload=lambda *args: None)
+                              set_payload=lambda *args: None, capture_payload=lambda: None,
+                              restore_payload=lambda state: None)
     robot = SimpleNamespace(open_gripper=lambda **kw: calls.append('open') or False)
     executor = PhysicalPickPlaceExecutor(robot, input_mode="privileged", model=m, data=d, ee_body='ee', joint_names=['yaw'],
                                          collision=checker, synchronize=lambda data: None, command_joints=lambda q: True)

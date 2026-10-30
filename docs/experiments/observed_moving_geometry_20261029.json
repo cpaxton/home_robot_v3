@@ -1,0 +1,2024 @@
+{
+  "schema_version": 1,
+  "source_base": "0433e00f63cd4b609741d9768c1d9ea0f3ca4d87",
+  "scope": "Development component diagnostics; not frozen held-out robot tasks",
+  "observed_task_success_assessed": false,
+  "execution_qualified": false,
+  "runtime_input_tiers": {
+    "tracking": "RGBD, camera calibration, declared primitive prior, operator appearance initialization, original capture times",
+    "gripper": "eight motor measurements, camera localization, robot geometry, explicit passive-joint intervals",
+    "controller": "privileged native control; separate from tracker"
+  },
+  "attempts": [
+    {
+      "job_id": "20261029_123142_6b9bcb",
+      "raw_directory": ".tamp-runs/moving-gripper-20261029/moving-v1",
+      "note": "Failed: silhouette colours contaminated appearance reference.",
+      "summary": {
+        "schema_version": 1,
+        "scope": "rendered stage sensor diagnostics, not observed robot task success",
+        "initialization": "operator-declared red appearance; no VLM or GT segmentation",
+        "execution_qualified": false,
+        "cases": [
+          {
+            "case": "front-lift",
+            "passed": false,
+            "frames": 13,
+            "candidate_frames": 1,
+            "expected_candidate_frames": 13,
+            "max_center_error_m": 9.823885580139102e-05,
+            "rejection_codes": [
+              "moving_mask_ambiguous",
+              "moving_tracking_lost_reinitialize"
+            ]
+          },
+          {
+            "case": "opposite-lift",
+            "passed": false,
+            "frames": 13,
+            "candidate_frames": 2,
+            "expected_candidate_frames": 13,
+            "max_center_error_m": 0.00010136754117006906,
+            "rejection_codes": [
+              "moving_mask_ambiguous",
+              "moving_tracking_lost_reinitialize"
+            ]
+          },
+          {
+            "case": "distractor-stop",
+            "passed": false,
+            "frames": 13,
+            "candidate_frames": 1,
+            "expected_candidate_frames": 8,
+            "max_center_error_m": 9.823885580139102e-05,
+            "rejection_codes": [
+              "moving_mask_ambiguous",
+              "moving_tracking_lost_reinitialize"
+            ]
+          },
+          {
+            "case": "occlusion-stop",
+            "passed": false,
+            "frames": 13,
+            "candidate_frames": 1,
+            "expected_candidate_frames": 8,
+            "max_center_error_m": 9.823885580139102e-05,
+            "rejection_codes": [
+              "moving_mask_ambiguous",
+              "moving_tracking_lost_reinitialize"
+            ]
+          }
+        ]
+      },
+      "capture_rows": {
+        "distractor-stop": [
+          {
+            "index": 0,
+            "state": "candidate",
+            "capture_start": 237504.895860487,
+            "received_monotonic": 237504.943828684,
+            "mask_pixels": 1082,
+            "processing_s": 0.07618496401119046,
+            "scorer_center_error_m": 9.823885580139102e-05,
+            "scorer_mask_iou": 0.944153577661431,
+            "scorer_axis_error_rad": 0.00016711026411280535
+          },
+          {
+            "index": 1,
+            "state": "unknown",
+            "reason": "moving_mask_ambiguous",
+            "capture_start": 237505.277775837,
+            "received_monotonic": 237505.290728775
+          },
+          {
+            "index": 2,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 237505.580200527,
+            "received_monotonic": 237505.593072734
+          },
+          {
+            "index": 3,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 237505.816809449,
+            "received_monotonic": 237505.82973871
+          },
+          {
+            "index": 4,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 237506.053653142,
+            "received_monotonic": 237506.068195194
+          },
+          {
+            "index": 5,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 237506.292483106,
+            "received_monotonic": 237506.305640644
+          },
+          {
+            "index": 6,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 237506.530415166,
+            "received_monotonic": 237506.542752217
+          },
+          {
+            "index": 7,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 237506.767179245,
+            "received_monotonic": 237506.783223423
+          },
+          {
+            "index": 8,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 237507.038130524,
+            "received_monotonic": 237507.056294133
+          },
+          {
+            "index": 9,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 237507.307367092,
+            "received_monotonic": 237507.326233113
+          },
+          {
+            "index": 10,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 237507.558499005,
+            "received_monotonic": 237507.574303896
+          },
+          {
+            "index": 11,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 237507.811019333,
+            "received_monotonic": 237507.824032945
+          },
+          {
+            "index": 12,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 237508.065034077,
+            "received_monotonic": 237508.080770022
+          }
+        ],
+        "front-lift": [
+          {
+            "index": 0,
+            "state": "candidate",
+            "capture_start": 237497.725698069,
+            "received_monotonic": 237497.812298306,
+            "mask_pixels": 1082,
+            "processing_s": 0.07596390799153596,
+            "scorer_center_error_m": 9.823885580139102e-05,
+            "scorer_mask_iou": 0.944153577661431,
+            "scorer_axis_error_rad": 0.00016711026411280535
+          },
+          {
+            "index": 1,
+            "state": "unknown",
+            "reason": "moving_mask_ambiguous",
+            "capture_start": 237498.19447256,
+            "received_monotonic": 237498.20713524
+          },
+          {
+            "index": 2,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 237498.505551356,
+            "received_monotonic": 237498.517946784
+          },
+          {
+            "index": 3,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 237498.75105438,
+            "received_monotonic": 237498.763948997
+          },
+          {
+            "index": 4,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 237498.988882366,
+            "received_monotonic": 237499.002519111
+          },
+          {
+            "index": 5,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 237499.239521388,
+            "received_monotonic": 237499.254386701
+          },
+          {
+            "index": 6,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 237499.47930264,
+            "received_monotonic": 237499.499324155
+          },
+          {
+            "index": 7,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 237499.736872967,
+            "received_monotonic": 237499.754753427
+          },
+          {
+            "index": 8,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 237499.99831184,
+            "received_monotonic": 237500.0132086
+          },
+          {
+            "index": 9,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 237500.256577353,
+            "received_monotonic": 237500.269387121
+          },
+          {
+            "index": 10,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 237500.509257718,
+            "received_monotonic": 237500.525100296
+          },
+          {
+            "index": 11,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 237500.757502269,
+            "received_monotonic": 237500.770185869
+          },
+          {
+            "index": 12,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 237500.999271722,
+            "received_monotonic": 237501.01499044
+          }
+        ],
+        "occlusion-stop": [
+          {
+            "index": 0,
+            "state": "candidate",
+            "capture_start": 237508.362948987,
+            "received_monotonic": 237508.409797124,
+            "mask_pixels": 1082,
+            "processing_s": 0.07583752399659716,
+            "scorer_center_error_m": 9.823885580139102e-05,
+            "scorer_mask_iou": 0.944153577661431,
+            "scorer_axis_error_rad": 0.00016711026411280535
+          },
+          {
+            "index": 1,
+            "state": "unknown",
+            "reason": "moving_mask_ambiguous",
+            "capture_start": 237508.738076458,
+            "received_monotonic": 237508.751180785
+          },
+          {
+            "index": 2,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 237509.038598881,
+            "received_monotonic": 237509.052155558
+          },
+          {
+            "index": 3,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 237509.276994077,
+            "received_monotonic": 237509.289608022
+          },
+          {
+            "index": 4,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 237509.513913661,
+            "received_monotonic": 237509.528932448
+          },
+          {
+            "index": 5,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 237509.758980211,
+            "received_monotonic": 237509.77501524
+          },
+          {
+            "index": 6,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 237510.005884314,
+            "received_monotonic": 237510.022760653
+          },
+          {
+            "index": 7,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 237510.248787719,
+            "received_monotonic": 237510.261964239
+          },
+          {
+            "index": 8,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 237510.510670687,
+            "received_monotonic": 237510.526834148
+          },
+          {
+            "index": 9,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 237510.780169454,
+            "received_monotonic": 237510.795376428
+          },
+          {
+            "index": 10,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 237511.027611247,
+            "received_monotonic": 237511.042525864
+          },
+          {
+            "index": 11,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 237511.282921852,
+            "received_monotonic": 237511.297932552
+          },
+          {
+            "index": 12,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 237511.534226621,
+            "received_monotonic": 237511.550280809
+          }
+        ],
+        "opposite-lift": [
+          {
+            "index": 0,
+            "state": "candidate",
+            "capture_start": 237501.355461965,
+            "received_monotonic": 237501.417356609,
+            "mask_pixels": 1356,
+            "processing_s": 0.035706788999959826,
+            "scorer_center_error_m": 9.546629995460378e-05,
+            "scorer_mask_iou": 0.9637526652452025,
+            "scorer_axis_error_rad": 0.00025793268203821946
+          },
+          {
+            "index": 1,
+            "state": "candidate",
+            "capture_start": 237501.694968326,
+            "received_monotonic": 237501.713811896,
+            "mask_pixels": 1370,
+            "processing_s": 0.10615330201108009,
+            "scorer_center_error_m": 0.00010136754117006906,
+            "scorer_mask_iou": 0.986321094312455,
+            "scorer_axis_error_rad": 0.0003271443975216801
+          },
+          {
+            "index": 2,
+            "state": "unknown",
+            "reason": "moving_mask_ambiguous",
+            "capture_start": 237502.051908636,
+            "received_monotonic": 237502.070343345
+          },
+          {
+            "index": 3,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 237502.368690789,
+            "received_monotonic": 237502.386132186
+          },
+          {
+            "index": 4,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 237502.616298128,
+            "received_monotonic": 237502.634925422
+          },
+          {
+            "index": 5,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 237502.868791203,
+            "received_monotonic": 237502.882426993
+          },
+          {
+            "index": 6,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 237503.10418809,
+            "received_monotonic": 237503.122911615
+          },
+          {
+            "index": 7,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 237503.354734485,
+            "received_monotonic": 237503.370014882
+          },
+          {
+            "index": 8,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 237503.614672584,
+            "received_monotonic": 237503.63271047
+          },
+          {
+            "index": 9,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 237503.877831271,
+            "received_monotonic": 237503.891536362
+          },
+          {
+            "index": 10,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 237504.113671358,
+            "received_monotonic": 237504.127181798
+          },
+          {
+            "index": 11,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 237504.348200849,
+            "received_monotonic": 237504.362079237
+          },
+          {
+            "index": 12,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 237504.584328306,
+            "received_monotonic": 237504.601362053
+          }
+        ]
+      }
+    },
+    {
+      "job_id": "20261029_123339_887f73",
+      "raw_directory": ".tamp-runs/moving-gripper-20261029/moving-v2",
+      "note": "Interior colour reference; all four cases pass. Chroma tolerance 0.10.",
+      "summary": {
+        "schema_version": 1,
+        "scope": "rendered stage sensor diagnostics, not observed robot task success",
+        "initialization": "operator-declared red appearance; no VLM or GT segmentation",
+        "execution_qualified": false,
+        "cases": [
+          {
+            "case": "front-lift",
+            "passed": true,
+            "frames": 13,
+            "candidate_frames": 13,
+            "expected_candidate_frames": 13,
+            "max_center_error_m": 0.0001239879078578767,
+            "rejection_codes": []
+          },
+          {
+            "case": "opposite-lift",
+            "passed": true,
+            "frames": 13,
+            "candidate_frames": 13,
+            "expected_candidate_frames": 13,
+            "max_center_error_m": 0.00010554903739781132,
+            "rejection_codes": []
+          },
+          {
+            "case": "distractor-stop",
+            "passed": true,
+            "frames": 13,
+            "candidate_frames": 8,
+            "expected_candidate_frames": 8,
+            "max_center_error_m": 0.0001239879078578767,
+            "rejection_codes": [
+              "moving_mask_ambiguous",
+              "moving_tracking_lost_reinitialize"
+            ]
+          },
+          {
+            "case": "occlusion-stop",
+            "passed": true,
+            "frames": 13,
+            "candidate_frames": 8,
+            "expected_candidate_frames": 8,
+            "max_center_error_m": 0.0001239879078578767,
+            "rejection_codes": [
+              "moving_mask_lost",
+              "moving_tracking_lost_reinitialize"
+            ]
+          }
+        ]
+      },
+      "capture_rows": {
+        "distractor-stop": [
+          {
+            "index": 0,
+            "state": "candidate",
+            "capture_start": 237623.774734355,
+            "received_monotonic": 237623.821204154,
+            "mask_pixels": 1082,
+            "processing_s": 0.07443065301049501,
+            "scorer_center_error_m": 9.823885580139102e-05,
+            "scorer_mask_iou": 0.944153577661431,
+            "scorer_axis_error_rad": 0.00016711026411280535
+          },
+          {
+            "index": 1,
+            "state": "candidate",
+            "capture_start": 237624.142343546,
+            "received_monotonic": 237624.155366152,
+            "mask_pixels": 1142,
+            "processing_s": 0.1386917849886231,
+            "scorer_center_error_m": 0.00011192466145029849,
+            "scorer_mask_iou": 0.9637130801687763,
+            "scorer_axis_error_rad": 0.000407215899839783
+          },
+          {
+            "index": 2,
+            "state": "candidate",
+            "capture_start": 237624.51999635,
+            "received_monotonic": 237624.532200328,
+            "mask_pixels": 1166,
+            "processing_s": 0.12745584099320695,
+            "scorer_center_error_m": 9.766731804611889e-05,
+            "scorer_mask_iou": 0.9533932951757972,
+            "scorer_axis_error_rad": 0.0005085694060046079
+          },
+          {
+            "index": 3,
+            "state": "candidate",
+            "capture_start": 237624.884398457,
+            "received_monotonic": 237624.899151667,
+            "mask_pixels": 1192,
+            "processing_s": 0.10713440598919988,
+            "scorer_center_error_m": 0.0001239879078578767,
+            "scorer_mask_iou": 0.9452815226011102,
+            "scorer_axis_error_rad": 0.0002653525089652961
+          },
+          {
+            "index": 4,
+            "state": "candidate",
+            "capture_start": 237625.231113104,
+            "received_monotonic": 237625.247079842,
+            "mask_pixels": 1239,
+            "processing_s": 0.1440417029953096,
+            "scorer_center_error_m": 0.00012150985930489303,
+            "scorer_mask_iou": 0.9619565217391305,
+            "scorer_axis_error_rad": 0.0004272356644479985
+          },
+          {
+            "index": 5,
+            "state": "candidate",
+            "capture_start": 237625.618809641,
+            "received_monotonic": 237625.631219355,
+            "mask_pixels": 1271,
+            "processing_s": 0.10537163901608437,
+            "scorer_center_error_m": 9.955529396601438e-05,
+            "scorer_mask_iou": 0.9717125382262997,
+            "scorer_axis_error_rad": 0.0002469876468779343
+          },
+          {
+            "index": 6,
+            "state": "candidate",
+            "capture_start": 237625.968109527,
+            "received_monotonic": 237625.980493391,
+            "mask_pixels": 1329,
+            "processing_s": 0.1450047859980259,
+            "scorer_center_error_m": 0.00010090875461464001,
+            "scorer_mask_iou": 0.9793662490788504,
+            "scorer_axis_error_rad": 0.00015433587806474965
+          },
+          {
+            "index": 7,
+            "state": "candidate",
+            "capture_start": 237626.350564949,
+            "received_monotonic": 237626.362914372,
+            "mask_pixels": 1358,
+            "processing_s": 0.1390940870041959,
+            "scorer_center_error_m": 9.60119552519129e-05,
+            "scorer_mask_iou": 0.9797979797979798,
+            "scorer_axis_error_rad": 0.0003759330149799547
+          },
+          {
+            "index": 8,
+            "state": "unknown",
+            "reason": "moving_mask_ambiguous",
+            "capture_start": 237626.745276339,
+            "received_monotonic": 237626.757854012
+          },
+          {
+            "index": 9,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 237627.064582187,
+            "received_monotonic": 237627.076942507
+          },
+          {
+            "index": 10,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 237627.305692608,
+            "received_monotonic": 237627.320803431
+          },
+          {
+            "index": 11,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 237627.547479697,
+            "received_monotonic": 237627.56029647
+          },
+          {
+            "index": 12,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 237627.786033306,
+            "received_monotonic": 237627.803598323
+          }
+        ],
+        "front-lift": [
+          {
+            "index": 0,
+            "state": "candidate",
+            "capture_start": 237614.10330751,
+            "received_monotonic": 237614.154638529,
+            "mask_pixels": 1082,
+            "processing_s": 0.07553470501443371,
+            "scorer_center_error_m": 9.823885580139102e-05,
+            "scorer_mask_iou": 0.944153577661431,
+            "scorer_axis_error_rad": 0.00016711026411280535
+          },
+          {
+            "index": 1,
+            "state": "candidate",
+            "capture_start": 237614.499253303,
+            "received_monotonic": 237614.511933491,
+            "mask_pixels": 1142,
+            "processing_s": 0.13844247799715959,
+            "scorer_center_error_m": 0.00011192466145029849,
+            "scorer_mask_iou": 0.9637130801687763,
+            "scorer_axis_error_rad": 0.000407215899839783
+          },
+          {
+            "index": 2,
+            "state": "candidate",
+            "capture_start": 237614.878208085,
+            "received_monotonic": 237614.893773129,
+            "mask_pixels": 1166,
+            "processing_s": 0.12723009000183083,
+            "scorer_center_error_m": 9.766731804611889e-05,
+            "scorer_mask_iou": 0.9533932951757972,
+            "scorer_axis_error_rad": 0.0005085694060046079
+          },
+          {
+            "index": 3,
+            "state": "candidate",
+            "capture_start": 237615.249306009,
+            "received_monotonic": 237615.262221521,
+            "mask_pixels": 1192,
+            "processing_s": 0.11159749497892335,
+            "scorer_center_error_m": 0.0001239879078578767,
+            "scorer_mask_iou": 0.9452815226011102,
+            "scorer_axis_error_rad": 0.0002653525089652961
+          },
+          {
+            "index": 4,
+            "state": "candidate",
+            "capture_start": 237615.613400182,
+            "received_monotonic": 237615.626065001,
+            "mask_pixels": 1239,
+            "processing_s": 0.14542350400006399,
+            "scorer_center_error_m": 0.00012150985930489303,
+            "scorer_mask_iou": 0.9619565217391305,
+            "scorer_axis_error_rad": 0.0004272356644479985
+          },
+          {
+            "index": 5,
+            "state": "candidate",
+            "capture_start": 237615.997529912,
+            "received_monotonic": 237616.010071341,
+            "mask_pixels": 1271,
+            "processing_s": 0.10582045299815945,
+            "scorer_center_error_m": 9.955529396601438e-05,
+            "scorer_mask_iou": 0.9717125382262997,
+            "scorer_axis_error_rad": 0.0002469876468779343
+          },
+          {
+            "index": 6,
+            "state": "candidate",
+            "capture_start": 237616.341510664,
+            "received_monotonic": 237616.357164358,
+            "mask_pixels": 1329,
+            "processing_s": 0.14738824201049283,
+            "scorer_center_error_m": 0.00010090875461464001,
+            "scorer_mask_iou": 0.9793662490788504,
+            "scorer_axis_error_rad": 0.00015433587806474965
+          },
+          {
+            "index": 7,
+            "state": "candidate",
+            "capture_start": 237616.743821658,
+            "received_monotonic": 237616.759460987,
+            "mask_pixels": 1358,
+            "processing_s": 0.14149568602442741,
+            "scorer_center_error_m": 9.60119552519129e-05,
+            "scorer_mask_iou": 0.9797979797979798,
+            "scorer_axis_error_rad": 0.0003759330149799547
+          },
+          {
+            "index": 8,
+            "state": "candidate",
+            "capture_start": 237617.151596446,
+            "received_monotonic": 237617.165238076,
+            "mask_pixels": 1401,
+            "processing_s": 0.15233573300065473,
+            "scorer_center_error_m": 9.871396071347363e-05,
+            "scorer_mask_iou": 0.9749478079331941,
+            "scorer_axis_error_rad": 0.00018126826785082865
+          },
+          {
+            "index": 9,
+            "state": "candidate",
+            "capture_start": 237617.565610742,
+            "received_monotonic": 237617.578542327,
+            "mask_pixels": 1442,
+            "processing_s": 0.10713105401373468,
+            "scorer_center_error_m": 9.377163984455297e-05,
+            "scorer_mask_iou": 0.9723533378287256,
+            "scorer_axis_error_rad": 0.000496345761824171
+          },
+          {
+            "index": 10,
+            "state": "candidate",
+            "capture_start": 237617.913338092,
+            "received_monotonic": 237617.925742311,
+            "mask_pixels": 1488,
+            "processing_s": 0.1396769860002678,
+            "scorer_center_error_m": 0.00010420858422265666,
+            "scorer_mask_iou": 0.96875,
+            "scorer_axis_error_rad": 0.0004409758110916511
+          },
+          {
+            "index": 11,
+            "state": "candidate",
+            "capture_start": 237618.291686922,
+            "received_monotonic": 237618.30463407,
+            "mask_pixels": 1527,
+            "processing_s": 0.1421733630122617,
+            "scorer_center_error_m": 9.602148230637581e-05,
+            "scorer_mask_iou": 0.967680608365019,
+            "scorer_axis_error_rad": 0.00017966176947797403
+          },
+          {
+            "index": 12,
+            "state": "candidate",
+            "capture_start": 237618.671891264,
+            "received_monotonic": 237618.684447501,
+            "mask_pixels": 1569,
+            "processing_s": 0.10450534400297329,
+            "scorer_center_error_m": 9.599216755716993e-05,
+            "scorer_mask_iou": 0.9727216367017979,
+            "scorer_axis_error_rad": 0.0002256711432725825
+          }
+        ],
+        "occlusion-stop": [
+          {
+            "index": 0,
+            "state": "candidate",
+            "capture_start": 237628.092299028,
+            "received_monotonic": 237628.139275829,
+            "mask_pixels": 1082,
+            "processing_s": 0.07578518200898543,
+            "scorer_center_error_m": 9.823885580139102e-05,
+            "scorer_mask_iou": 0.944153577661431,
+            "scorer_axis_error_rad": 0.00016711026411280535
+          },
+          {
+            "index": 1,
+            "state": "candidate",
+            "capture_start": 237628.461566319,
+            "received_monotonic": 237628.474069827,
+            "mask_pixels": 1142,
+            "processing_s": 0.13748420198680833,
+            "scorer_center_error_m": 0.00011192466145029849,
+            "scorer_mask_iou": 0.9637130801687763,
+            "scorer_axis_error_rad": 0.000407215899839783
+          },
+          {
+            "index": 2,
+            "state": "candidate",
+            "capture_start": 237628.837643991,
+            "received_monotonic": 237628.850104581,
+            "mask_pixels": 1166,
+            "processing_s": 0.12721910999971442,
+            "scorer_center_error_m": 9.766731804611889e-05,
+            "scorer_mask_iou": 0.9533932951757972,
+            "scorer_axis_error_rad": 0.0005085694060046079
+          },
+          {
+            "index": 3,
+            "state": "candidate",
+            "capture_start": 237629.204282915,
+            "received_monotonic": 237629.217497526,
+            "mask_pixels": 1192,
+            "processing_s": 0.1058393869898282,
+            "scorer_center_error_m": 0.0001239879078578767,
+            "scorer_mask_iou": 0.9452815226011102,
+            "scorer_axis_error_rad": 0.0002653525089652961
+          },
+          {
+            "index": 4,
+            "state": "candidate",
+            "capture_start": 237629.552138297,
+            "received_monotonic": 237629.564305084,
+            "mask_pixels": 1239,
+            "processing_s": 0.14500484499149024,
+            "scorer_center_error_m": 0.00012150985930489303,
+            "scorer_mask_iou": 0.9619565217391305,
+            "scorer_axis_error_rad": 0.0004272356644479985
+          },
+          {
+            "index": 5,
+            "state": "candidate",
+            "capture_start": 237629.934569666,
+            "received_monotonic": 237629.946984517,
+            "mask_pixels": 1271,
+            "processing_s": 0.10625662200618535,
+            "scorer_center_error_m": 9.955529396601438e-05,
+            "scorer_mask_iou": 0.9717125382262997,
+            "scorer_axis_error_rad": 0.0002469876468779343
+          },
+          {
+            "index": 6,
+            "state": "candidate",
+            "capture_start": 237630.27895559,
+            "received_monotonic": 237630.29424172,
+            "mask_pixels": 1329,
+            "processing_s": 0.146179689996643,
+            "scorer_center_error_m": 0.00010090875461464001,
+            "scorer_mask_iou": 0.9793662490788504,
+            "scorer_axis_error_rad": 0.00015433587806474965
+          },
+          {
+            "index": 7,
+            "state": "candidate",
+            "capture_start": 237630.666162166,
+            "received_monotonic": 237630.682292042,
+            "mask_pixels": 1358,
+            "processing_s": 0.14018080898677,
+            "scorer_center_error_m": 9.60119552519129e-05,
+            "scorer_mask_iou": 0.9797979797979798,
+            "scorer_axis_error_rad": 0.0003759330149799547
+          },
+          {
+            "index": 8,
+            "state": "unknown",
+            "reason": "moving_mask_lost",
+            "capture_start": 237631.074216064,
+            "received_monotonic": 237631.086507564
+          },
+          {
+            "index": 9,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 237631.380768151,
+            "received_monotonic": 237631.393252536
+          },
+          {
+            "index": 10,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 237631.626124309,
+            "received_monotonic": 237631.639050464
+          },
+          {
+            "index": 11,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 237631.871940027,
+            "received_monotonic": 237631.884456172
+          },
+          {
+            "index": 12,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 237632.126856733,
+            "received_monotonic": 237632.13983406
+          }
+        ],
+        "opposite-lift": [
+          {
+            "index": 0,
+            "state": "candidate",
+            "capture_start": 237619.075365315,
+            "received_monotonic": 237619.129462496,
+            "mask_pixels": 1356,
+            "processing_s": 0.03518570601590909,
+            "scorer_center_error_m": 9.546629995460378e-05,
+            "scorer_mask_iou": 0.9637526652452025,
+            "scorer_axis_error_rad": 0.00025793268203821946
+          },
+          {
+            "index": 1,
+            "state": "candidate",
+            "capture_start": 237619.406526045,
+            "received_monotonic": 237619.42154216,
+            "mask_pixels": 1348,
+            "processing_s": 0.10952814100892283,
+            "scorer_center_error_m": 9.714562599657735e-05,
+            "scorer_mask_iou": 0.9704823614110871,
+            "scorer_axis_error_rad": 0.00015747041874786507
+          },
+          {
+            "index": 2,
+            "state": "candidate",
+            "capture_start": 237619.766974798,
+            "received_monotonic": 237619.782388706,
+            "mask_pixels": 1321,
+            "processing_s": 0.13578758999938145,
+            "scorer_center_error_m": 9.823928999911212e-05,
+            "scorer_mask_iou": 0.9677655677655678,
+            "scorer_axis_error_rad": 0.00029421758113582126
+          },
+          {
+            "index": 3,
+            "state": "candidate",
+            "capture_start": 237620.141584423,
+            "received_monotonic": 237620.154962828,
+            "mask_pixels": 1311,
+            "processing_s": 0.11177604101249017,
+            "scorer_center_error_m": 9.216367933781889e-05,
+            "scorer_mask_iou": 0.9857142857142858,
+            "scorer_axis_error_rad": 0.00017897387480901835
+          },
+          {
+            "index": 4,
+            "state": "candidate",
+            "capture_start": 237620.492757708,
+            "received_monotonic": 237620.507353932,
+            "mask_pixels": 1306,
+            "processing_s": 0.14973738000844605,
+            "scorer_center_error_m": 0.00010058332918574309,
+            "scorer_mask_iou": 0.9812171299774606,
+            "scorer_axis_error_rad": 0.00019406731416679815
+          },
+          {
+            "index": 5,
+            "state": "candidate",
+            "capture_start": 237620.881064231,
+            "received_monotonic": 237620.894507235,
+            "mask_pixels": 1269,
+            "processing_s": 0.1098209870106075,
+            "scorer_center_error_m": 0.00010142509134175954,
+            "scorer_mask_iou": 0.9701834862385321,
+            "scorer_axis_error_rad": 4.1415710117728274e-05
+          },
+          {
+            "index": 6,
+            "state": "candidate",
+            "capture_start": 237621.229376201,
+            "received_monotonic": 237621.24252164,
+            "mask_pixels": 1268,
+            "processing_s": 0.11057614898891188,
+            "scorer_center_error_m": 9.943968328701132e-05,
+            "scorer_mask_iou": 0.9694189602446484,
+            "scorer_axis_error_rad": 0.0003450246170045485
+          },
+          {
+            "index": 7,
+            "state": "candidate",
+            "capture_start": 237621.576825552,
+            "received_monotonic": 237621.590125914,
+            "mask_pixels": 1236,
+            "processing_s": 0.10376930999336764,
+            "scorer_center_error_m": 0.00010346421008198581,
+            "scorer_mask_iou": 0.955177743431221,
+            "scorer_axis_error_rad": 0.0002890495071511856
+          },
+          {
+            "index": 8,
+            "state": "candidate",
+            "capture_start": 237621.931694805,
+            "received_monotonic": 237621.945248307,
+            "mask_pixels": 1230,
+            "processing_s": 0.10915442201076075,
+            "scorer_center_error_m": 0.00010358496424411178,
+            "scorer_mask_iou": 0.9639498432601881,
+            "scorer_axis_error_rad": 0.0003330926612380751
+          },
+          {
+            "index": 9,
+            "state": "candidate",
+            "capture_start": 237622.29286904,
+            "received_monotonic": 237622.306149424,
+            "mask_pixels": 1221,
+            "processing_s": 0.10722905598231591,
+            "scorer_center_error_m": 9.780051040821844e-05,
+            "scorer_mask_iou": 0.9636937647987371,
+            "scorer_axis_error_rad": 0.00040931007911556335
+          },
+          {
+            "index": 10,
+            "state": "candidate",
+            "capture_start": 237622.638288323,
+            "received_monotonic": 237622.651160392,
+            "mask_pixels": 1210,
+            "processing_s": 0.11606415300047956,
+            "scorer_center_error_m": 0.00010330858246493258,
+            "scorer_mask_iou": 0.9641434262948207,
+            "scorer_axis_error_rad": 0.0002985033701054965
+          },
+          {
+            "index": 11,
+            "state": "candidate",
+            "capture_start": 237622.994489134,
+            "received_monotonic": 237623.008764247,
+            "mask_pixels": 1191,
+            "processing_s": 0.10448855202412233,
+            "scorer_center_error_m": 0.00010554903739781132,
+            "scorer_mask_iou": 0.9698697068403909,
+            "scorer_axis_error_rad": 0.000402305067060027
+          },
+          {
+            "index": 12,
+            "state": "candidate",
+            "capture_start": 237623.336420738,
+            "received_monotonic": 237623.34966828,
+            "mask_pixels": 1163,
+            "processing_s": 0.14642134099267423,
+            "scorer_center_error_m": 0.00010142818712968237,
+            "scorer_mask_iou": 0.9635459817729909,
+            "scorer_axis_error_rad": 0.0003633814554835907
+          }
+        ]
+      }
+    },
+    {
+      "job_id": "20261029_124204_c6225b",
+      "raw_directory": ".tamp-runs/moving-gripper-20261029/moving-v3",
+      "note": "Final colour profile 0.03; same four cases, no threshold or motion-bound relaxation.",
+      "summary": {
+        "schema_version": 1,
+        "scope": "rendered stage sensor diagnostics, not observed robot task success",
+        "initialization": "operator-declared red appearance; no VLM or GT segmentation",
+        "execution_qualified": false,
+        "cases": [
+          {
+            "case": "front-lift",
+            "passed": true,
+            "frames": 13,
+            "candidate_frames": 13,
+            "expected_candidate_frames": 13,
+            "max_center_error_m": 0.00012130449831025393,
+            "rejection_codes": []
+          },
+          {
+            "case": "opposite-lift",
+            "passed": true,
+            "frames": 13,
+            "candidate_frames": 13,
+            "expected_candidate_frames": 13,
+            "max_center_error_m": 0.00010988180172900996,
+            "rejection_codes": []
+          },
+          {
+            "case": "distractor-stop",
+            "passed": true,
+            "frames": 13,
+            "candidate_frames": 8,
+            "expected_candidate_frames": 8,
+            "max_center_error_m": 0.00012130449831025393,
+            "rejection_codes": [
+              "moving_mask_ambiguous",
+              "moving_tracking_lost_reinitialize"
+            ]
+          },
+          {
+            "case": "occlusion-stop",
+            "passed": true,
+            "frames": 13,
+            "candidate_frames": 8,
+            "expected_candidate_frames": 8,
+            "max_center_error_m": 0.00012130449831025393,
+            "rejection_codes": [
+              "moving_mask_lost",
+              "moving_tracking_lost_reinitialize"
+            ]
+          }
+        ]
+      },
+      "capture_rows": {
+        "distractor-stop": [
+          {
+            "index": 0,
+            "state": "candidate",
+            "capture_start": 238129.083473003,
+            "received_monotonic": 238129.132387725,
+            "mask_pixels": 1082,
+            "processing_s": 0.07548591197701171,
+            "scorer_center_error_m": 9.823885580139102e-05,
+            "scorer_mask_iou": 0.944153577661431,
+            "scorer_axis_error_rad": 0.00016711026411280535
+          },
+          {
+            "index": 1,
+            "state": "candidate",
+            "capture_start": 238129.461457561,
+            "received_monotonic": 238129.473869255,
+            "mask_pixels": 1135,
+            "processing_s": 0.1105981609725859,
+            "scorer_center_error_m": 0.00010779146975310332,
+            "scorer_mask_iou": 0.9578059071729957,
+            "scorer_axis_error_rad": 0.00025712783516365905
+          },
+          {
+            "index": 2,
+            "state": "candidate",
+            "capture_start": 238129.813629472,
+            "received_monotonic": 238129.829096174,
+            "mask_pixels": 1159,
+            "processing_s": 0.1116380549792666,
+            "scorer_center_error_m": 9.637652553336234e-05,
+            "scorer_mask_iou": 0.9476696647587899,
+            "scorer_axis_error_rad": 0.00033260432032113573
+          },
+          {
+            "index": 3,
+            "state": "candidate",
+            "capture_start": 238130.172448191,
+            "received_monotonic": 238130.185421021,
+            "mask_pixels": 1182,
+            "processing_s": 0.10719850499299355,
+            "scorer_center_error_m": 0.00012130449831025393,
+            "scorer_mask_iou": 0.9373513084853291,
+            "scorer_axis_error_rad": 0.00019159024078045983
+          },
+          {
+            "index": 4,
+            "state": "candidate",
+            "capture_start": 238130.518404383,
+            "received_monotonic": 238130.53147053,
+            "mask_pixels": 1225,
+            "processing_s": 0.1471685039869044,
+            "scorer_center_error_m": 0.00011767751085991816,
+            "scorer_mask_iou": 0.9510869565217391,
+            "scorer_axis_error_rad": 0.00022238209743875333
+          },
+          {
+            "index": 5,
+            "state": "candidate",
+            "capture_start": 238130.909865674,
+            "received_monotonic": 238130.923270838,
+            "mask_pixels": 1257,
+            "processing_s": 0.14228276201174594,
+            "scorer_center_error_m": 0.00010475816256527135,
+            "scorer_mask_iou": 0.9610091743119266,
+            "scorer_axis_error_rad": 0.00017442184811663464
+          },
+          {
+            "index": 6,
+            "state": "candidate",
+            "capture_start": 238131.298754772,
+            "received_monotonic": 238131.313640864,
+            "mask_pixels": 1319,
+            "processing_s": 0.10494616700452752,
+            "scorer_center_error_m": 0.00010013734236156356,
+            "scorer_mask_iou": 0.971997052321297,
+            "scorer_axis_error_rad": 0.00012955420222295614
+          },
+          {
+            "index": 7,
+            "state": "candidate",
+            "capture_start": 238131.647032377,
+            "received_monotonic": 238131.659725553,
+            "mask_pixels": 1349,
+            "processing_s": 0.139399350999156,
+            "scorer_center_error_m": 9.244208259253311e-05,
+            "scorer_mask_iou": 0.9733044733044733,
+            "scorer_axis_error_rad": 0.00032060489262121647
+          },
+          {
+            "index": 8,
+            "state": "unknown",
+            "reason": "moving_mask_ambiguous",
+            "capture_start": 238132.049785738,
+            "received_monotonic": 238132.062552316
+          },
+          {
+            "index": 9,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 238132.374536692,
+            "received_monotonic": 238132.387422871
+          },
+          {
+            "index": 10,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 238132.613965853,
+            "received_monotonic": 238132.627249857
+          },
+          {
+            "index": 11,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 238132.852472583,
+            "received_monotonic": 238132.867405675
+          },
+          {
+            "index": 12,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 238133.09547499,
+            "received_monotonic": 238133.109017559
+          }
+        ],
+        "front-lift": [
+          {
+            "index": 0,
+            "state": "candidate",
+            "capture_start": 238119.272866641,
+            "received_monotonic": 238119.331453277,
+            "mask_pixels": 1082,
+            "processing_s": 0.07466436401591636,
+            "scorer_center_error_m": 9.823885580139102e-05,
+            "scorer_mask_iou": 0.944153577661431,
+            "scorer_axis_error_rad": 0.00016711026411280535
+          },
+          {
+            "index": 1,
+            "state": "candidate",
+            "capture_start": 238119.674456126,
+            "received_monotonic": 238119.687476973,
+            "mask_pixels": 1135,
+            "processing_s": 0.10796088699134998,
+            "scorer_center_error_m": 0.00010779146975310332,
+            "scorer_mask_iou": 0.9578059071729957,
+            "scorer_axis_error_rad": 0.00025712783516365905
+          },
+          {
+            "index": 2,
+            "state": "candidate",
+            "capture_start": 238120.025742949,
+            "received_monotonic": 238120.041801587,
+            "mask_pixels": 1159,
+            "processing_s": 0.11212110199267045,
+            "scorer_center_error_m": 9.637652553336234e-05,
+            "scorer_mask_iou": 0.9476696647587899,
+            "scorer_axis_error_rad": 0.00033260432032113573
+          },
+          {
+            "index": 3,
+            "state": "candidate",
+            "capture_start": 238120.393083384,
+            "received_monotonic": 238120.405602262,
+            "mask_pixels": 1182,
+            "processing_s": 0.10870828901533969,
+            "scorer_center_error_m": 0.00012130449831025393,
+            "scorer_mask_iou": 0.9373513084853291,
+            "scorer_axis_error_rad": 0.00019159024078045983
+          },
+          {
+            "index": 4,
+            "state": "candidate",
+            "capture_start": 238120.740597673,
+            "received_monotonic": 238120.754377894,
+            "mask_pixels": 1225,
+            "processing_s": 0.14236434001941234,
+            "scorer_center_error_m": 0.00011767751085991816,
+            "scorer_mask_iou": 0.9510869565217391,
+            "scorer_axis_error_rad": 0.00022238209743875333
+          },
+          {
+            "index": 5,
+            "state": "candidate",
+            "capture_start": 238121.131523182,
+            "received_monotonic": 238121.14864822,
+            "mask_pixels": 1257,
+            "processing_s": 0.14423493400681764,
+            "scorer_center_error_m": 0.00010475816256527135,
+            "scorer_mask_iou": 0.9610091743119266,
+            "scorer_axis_error_rad": 0.00017442184811663464
+          },
+          {
+            "index": 6,
+            "state": "candidate",
+            "capture_start": 238121.519855957,
+            "received_monotonic": 238121.532607652,
+            "mask_pixels": 1319,
+            "processing_s": 0.10582315700594336,
+            "scorer_center_error_m": 0.00010013734236156356,
+            "scorer_mask_iou": 0.971997052321297,
+            "scorer_axis_error_rad": 0.00012955420222295614
+          },
+          {
+            "index": 7,
+            "state": "candidate",
+            "capture_start": 238121.874599359,
+            "received_monotonic": 238121.886994778,
+            "mask_pixels": 1349,
+            "processing_s": 0.13861161199747585,
+            "scorer_center_error_m": 9.244208259253311e-05,
+            "scorer_mask_iou": 0.9733044733044733,
+            "scorer_axis_error_rad": 0.00032060489262121647
+          },
+          {
+            "index": 8,
+            "state": "candidate",
+            "capture_start": 238122.272475673,
+            "received_monotonic": 238122.285239145,
+            "mask_pixels": 1391,
+            "processing_s": 0.13859263597987592,
+            "scorer_center_error_m": 9.540818815780851e-05,
+            "scorer_mask_iou": 0.9679888656924147,
+            "scorer_axis_error_rad": 3.613089750943637e-05
+          },
+          {
+            "index": 9,
+            "state": "candidate",
+            "capture_start": 238122.667605602,
+            "received_monotonic": 238122.68303732,
+            "mask_pixels": 1433,
+            "processing_s": 0.122244033991592,
+            "scorer_center_error_m": 9.521392588894366e-05,
+            "scorer_mask_iou": 0.9662845583277141,
+            "scorer_axis_error_rad": 0.00028216994189627726
+          },
+          {
+            "index": 10,
+            "state": "candidate",
+            "capture_start": 238123.038642954,
+            "received_monotonic": 238123.054166087,
+            "mask_pixels": 1479,
+            "processing_s": 0.110726288985461,
+            "scorer_center_error_m": 9.808725910571082e-05,
+            "scorer_mask_iou": 0.962890625,
+            "scorer_axis_error_rad": 0.00012029439056412047
+          },
+          {
+            "index": 11,
+            "state": "candidate",
+            "capture_start": 238123.398765118,
+            "received_monotonic": 238123.412182396,
+            "mask_pixels": 1514,
+            "processing_s": 0.10611062200041488,
+            "scorer_center_error_m": 9.869233734508959e-05,
+            "scorer_mask_iou": 0.9594423320659062,
+            "scorer_axis_error_rad": 7.781288785872046e-05
+          },
+          {
+            "index": 12,
+            "state": "candidate",
+            "capture_start": 238123.745187747,
+            "received_monotonic": 238123.76398251,
+            "mask_pixels": 1554,
+            "processing_s": 0.13542783801676705,
+            "scorer_center_error_m": 9.76549195674282e-05,
+            "scorer_mask_iou": 0.9634221946683199,
+            "scorer_axis_error_rad": 0.00013638684615849926
+          }
+        ],
+        "occlusion-stop": [
+          {
+            "index": 0,
+            "state": "candidate",
+            "capture_start": 238133.392253334,
+            "received_monotonic": 238133.440653763,
+            "mask_pixels": 1082,
+            "processing_s": 0.0748867700167466,
+            "scorer_center_error_m": 9.823885580139102e-05,
+            "scorer_mask_iou": 0.944153577661431,
+            "scorer_axis_error_rad": 0.00016711026411280535
+          },
+          {
+            "index": 1,
+            "state": "candidate",
+            "capture_start": 238133.773201993,
+            "received_monotonic": 238133.789429252,
+            "mask_pixels": 1135,
+            "processing_s": 0.10980603098869324,
+            "scorer_center_error_m": 0.00010779146975310332,
+            "scorer_mask_iou": 0.9578059071729957,
+            "scorer_axis_error_rad": 0.00025712783516365905
+          },
+          {
+            "index": 2,
+            "state": "candidate",
+            "capture_start": 238134.13213519,
+            "received_monotonic": 238134.146013664,
+            "mask_pixels": 1159,
+            "processing_s": 0.1224985139851924,
+            "scorer_center_error_m": 9.637652553336234e-05,
+            "scorer_mask_iou": 0.9476696647587899,
+            "scorer_axis_error_rad": 0.00033260432032113573
+          },
+          {
+            "index": 3,
+            "state": "candidate",
+            "capture_start": 238134.495945157,
+            "received_monotonic": 238134.50886759,
+            "mask_pixels": 1182,
+            "processing_s": 0.10811687199748121,
+            "scorer_center_error_m": 0.00012130449831025393,
+            "scorer_mask_iou": 0.9373513084853291,
+            "scorer_axis_error_rad": 0.00019159024078045983
+          },
+          {
+            "index": 4,
+            "state": "candidate",
+            "capture_start": 238134.841774983,
+            "received_monotonic": 238134.858645516,
+            "mask_pixels": 1225,
+            "processing_s": 0.14431388198863715,
+            "scorer_center_error_m": 0.00011767751085991816,
+            "scorer_mask_iou": 0.9510869565217391,
+            "scorer_axis_error_rad": 0.00022238209743875333
+          },
+          {
+            "index": 5,
+            "state": "candidate",
+            "capture_start": 238135.232798966,
+            "received_monotonic": 238135.245410661,
+            "mask_pixels": 1257,
+            "processing_s": 0.14516079498571344,
+            "scorer_center_error_m": 0.00010475816256527135,
+            "scorer_mask_iou": 0.9610091743119266,
+            "scorer_axis_error_rad": 0.00017442184811663464
+          },
+          {
+            "index": 6,
+            "state": "candidate",
+            "capture_start": 238135.622621944,
+            "received_monotonic": 238135.635464821,
+            "mask_pixels": 1319,
+            "processing_s": 0.10808815702330321,
+            "scorer_center_error_m": 0.00010013734236156356,
+            "scorer_mask_iou": 0.971997052321297,
+            "scorer_axis_error_rad": 0.00012955420222295614
+          },
+          {
+            "index": 7,
+            "state": "candidate",
+            "capture_start": 238135.970943741,
+            "received_monotonic": 238135.984526218,
+            "mask_pixels": 1349,
+            "processing_s": 0.1356037160148844,
+            "scorer_center_error_m": 9.244208259253311e-05,
+            "scorer_mask_iou": 0.9733044733044733,
+            "scorer_axis_error_rad": 0.00032060489262121647
+          },
+          {
+            "index": 8,
+            "state": "unknown",
+            "reason": "moving_mask_lost",
+            "capture_start": 238136.37412217,
+            "received_monotonic": 238136.389904954
+          },
+          {
+            "index": 9,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 238136.691074143,
+            "received_monotonic": 238136.706157112
+          },
+          {
+            "index": 10,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 238136.942382301,
+            "received_monotonic": 238136.956416111
+          },
+          {
+            "index": 11,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 238137.19078431,
+            "received_monotonic": 238137.205615137
+          },
+          {
+            "index": 12,
+            "state": "unknown",
+            "reason": "moving_tracking_lost_reinitialize",
+            "capture_start": 238137.439368986,
+            "received_monotonic": 238137.45213559
+          }
+        ],
+        "opposite-lift": [
+          {
+            "index": 0,
+            "state": "candidate",
+            "capture_start": 238124.203999258,
+            "received_monotonic": 238124.255424857,
+            "mask_pixels": 1356,
+            "processing_s": 0.03493052499834448,
+            "scorer_center_error_m": 9.546629995460378e-05,
+            "scorer_mask_iou": 0.9637526652452025,
+            "scorer_axis_error_rad": 0.00025793268203821946
+          },
+          {
+            "index": 1,
+            "state": "candidate",
+            "capture_start": 238124.534124269,
+            "received_monotonic": 238124.548930603,
+            "mask_pixels": 1332,
+            "processing_s": 0.11911221500486135,
+            "scorer_center_error_m": 9.223360005636818e-05,
+            "scorer_mask_iou": 0.958963282937365,
+            "scorer_axis_error_rad": 0.00015792847078526962
+          },
+          {
+            "index": 2,
+            "state": "candidate",
+            "capture_start": 238124.897099793,
+            "received_monotonic": 238124.911461545,
+            "mask_pixels": 1314,
+            "processing_s": 0.10790112300310284,
+            "scorer_center_error_m": 9.347684946112157e-05,
+            "scorer_mask_iou": 0.9626373626373627,
+            "scorer_axis_error_rad": 0.00048275250141598434
+          },
+          {
+            "index": 3,
+            "state": "candidate",
+            "capture_start": 238125.244785357,
+            "received_monotonic": 238125.259735141,
+            "mask_pixels": 1302,
+            "processing_s": 0.14518710898119025,
+            "scorer_center_error_m": 9.700694945198937e-05,
+            "scorer_mask_iou": 0.9789473684210527,
+            "scorer_axis_error_rad": 7.932618153283269e-05
+          },
+          {
+            "index": 4,
+            "state": "candidate",
+            "capture_start": 238125.634296717,
+            "received_monotonic": 238125.651860096,
+            "mask_pixels": 1300,
+            "processing_s": 0.14539005199912935,
+            "scorer_center_error_m": 9.429353748380273e-05,
+            "scorer_mask_iou": 0.976709241172051,
+            "scorer_axis_error_rad": 0.0004978717991262302
+          },
+          {
+            "index": 5,
+            "state": "candidate",
+            "capture_start": 238126.029620793,
+            "received_monotonic": 238126.046846724,
+            "mask_pixels": 1257,
+            "processing_s": 0.10900269099511206,
+            "scorer_center_error_m": 0.00010506112097360196,
+            "scorer_mask_iou": 0.9610091743119266,
+            "scorer_axis_error_rad": 0.0001805339767856686
+          },
+          {
+            "index": 6,
+            "state": "candidate",
+            "capture_start": 238126.383114517,
+            "received_monotonic": 238126.397736455,
+            "mask_pixels": 1260,
+            "processing_s": 0.13978262300952338,
+            "scorer_center_error_m": 0.00010658821180122896,
+            "scorer_mask_iou": 0.963302752293578,
+            "scorer_axis_error_rad": 0.00011663856779635253
+          },
+          {
+            "index": 7,
+            "state": "candidate",
+            "capture_start": 238126.763140703,
+            "received_monotonic": 238126.780880727,
+            "mask_pixels": 1228,
+            "processing_s": 0.15705333702499047,
+            "scorer_center_error_m": 0.00010988180172900996,
+            "scorer_mask_iou": 0.9489953632148377,
+            "scorer_axis_error_rad": 0.0006630803126458513
+          },
+          {
+            "index": 8,
+            "state": "candidate",
+            "capture_start": 238127.185850708,
+            "received_monotonic": 238127.199779001,
+            "mask_pixels": 1222,
+            "processing_s": 0.11027018597815186,
+            "scorer_center_error_m": 9.56055217998788e-05,
+            "scorer_mask_iou": 0.957680250783699,
+            "scorer_axis_error_rad": 0.00029200015212344144
+          },
+          {
+            "index": 9,
+            "state": "candidate",
+            "capture_start": 238127.553186114,
+            "received_monotonic": 238127.567699308,
+            "mask_pixels": 1209,
+            "processing_s": 0.10824322901316918,
+            "scorer_center_error_m": 0.00010125090926419979,
+            "scorer_mask_iou": 0.9542225730071034,
+            "scorer_axis_error_rad": 0.0002697398070036483
+          },
+          {
+            "index": 10,
+            "state": "candidate",
+            "capture_start": 238127.903100185,
+            "received_monotonic": 238127.916918967,
+            "mask_pixels": 1197,
+            "processing_s": 0.14737905701622367,
+            "scorer_center_error_m": 9.768322229716292e-05,
+            "scorer_mask_iou": 0.9537848605577689,
+            "scorer_axis_error_rad": 0.00017870872749313634
+          },
+          {
+            "index": 11,
+            "state": "candidate",
+            "capture_start": 238128.290146377,
+            "received_monotonic": 238128.304564068,
+            "mask_pixels": 1180,
+            "processing_s": 0.10712294699624181,
+            "scorer_center_error_m": 0.00010019147972547967,
+            "scorer_mask_iou": 0.9609120521172638,
+            "scorer_axis_error_rad": 0.0003156110460132291
+          },
+          {
+            "index": 12,
+            "state": "candidate",
+            "capture_start": 238128.642841294,
+            "received_monotonic": 238128.656312531,
+            "mask_pixels": 1157,
+            "processing_s": 0.13494836699101143,
+            "scorer_center_error_m": 0.00010191200450592101,
+            "scorer_mask_iou": 0.9585749792874897,
+            "scorer_axis_error_rad": 0.0002383070775395946
+          }
+        ]
+      }
+    },
+    {
+      "job_id": "20261029_123144_4fa419",
+      "raw_directory": ".tamp-runs/moving-gripper-20261029/contact-v1",
+      "note": "Two native contact controls; motor-conditioned full gripper envelopes vs independent scene geometry.",
+      "summary": {
+        "scope": "privileged simulator calibration/debug only; not observed task acceptance or certified uncertainty",
+        "counts": "physics samples within two development control episodes, not independent trials",
+        "cases": [
+          {
+            "object": "object1",
+            "control_passed": true,
+            "audit": {
+              "initialization:target_contact": {
+                "samples": 0,
+                "max_finger_coupling_error_rad": 0.0,
+                "max_telescope_split_error_m": 0.0,
+                "max_rubber_joint_angle_rad": 0.0,
+                "peak_context": {}
+              },
+              "initialization:no_target_contact": {
+                "samples": 1000,
+                "max_finger_coupling_error_rad": 0.3581580276087507,
+                "max_telescope_split_error_m": 0.0007216732361318926,
+                "max_rubber_joint_angle_rad": 0.005213911341251205,
+                "peak_context": {
+                  "max_finger_coupling_error_rad": {
+                    "sim_time": 0.002,
+                    "last_command": {
+                      "fixture_settling": true
+                    }
+                  },
+                  "max_telescope_split_error_m": {
+                    "sim_time": 0.04600000000000003,
+                    "last_command": {
+                      "fixture_settling": true
+                    }
+                  },
+                  "max_rubber_joint_angle_rad": {
+                    "sim_time": 0.004,
+                    "last_command": {
+                      "fixture_settling": true
+                    }
+                  }
+                }
+              },
+              "execution:target_contact": {
+                "samples": 4758,
+                "max_finger_coupling_error_rad": 0.00826849039088776,
+                "max_telescope_split_error_m": 0.00030990668351104506,
+                "max_rubber_joint_angle_rad": 0.11061634873723789,
+                "peak_context": {
+                  "max_finger_coupling_error_rad": {
+                    "sim_time": 6.4059999999995165,
+                    "last_command": {
+                      "sim_time": 6.349999999999523,
+                      "gripper": "close"
+                    }
+                  },
+                  "max_telescope_split_error_m": {
+                    "sim_time": 6.411999999999516,
+                    "last_command": {
+                      "sim_time": 6.349999999999523,
+                      "gripper": "close"
+                    }
+                  },
+                  "max_rubber_joint_angle_rad": {
+                    "sim_time": 6.945999999999457,
+                    "last_command": {
+                      "sim_time": 6.349999999999523,
+                      "gripper": "close"
+                    }
+                  }
+                }
+              },
+              "execution:no_target_contact": {
+                "samples": 5167,
+                "max_finger_coupling_error_rad": 0.006219429134352528,
+                "max_telescope_split_error_m": 0.00023997156299680744,
+                "max_rubber_joint_angle_rad": 0.012072507237133167,
+                "peak_context": {
+                  "max_finger_coupling_error_rad": {
+                    "sim_time": 6.365999999999521,
+                    "last_command": {
+                      "sim_time": 6.349999999999523,
+                      "gripper": "close"
+                    }
+                  },
+                  "max_telescope_split_error_m": {
+                    "sim_time": 6.385999999999519,
+                    "last_command": {
+                      "sim_time": 6.349999999999523,
+                      "gripper": "close"
+                    }
+                  },
+                  "max_rubber_joint_angle_rad": {
+                    "sim_time": 15.910000000001983,
+                    "last_command": {
+                      "sim_time": 15.90000000000198,
+                      "gripper": "open"
+                    }
+                  }
+                }
+              }
+            },
+            "gripper_envelope": {
+              "samples": 88,
+              "contact_samples": 38,
+              "max_corner_escape_m": 0.0,
+              "samples_outside_declared_intervals": 0,
+              "scope": "sampled containment only; not certified hardware bounds"
+            }
+          },
+          {
+            "object": "object2",
+            "control_passed": true,
+            "audit": {
+              "initialization:target_contact": {
+                "samples": 0,
+                "max_finger_coupling_error_rad": 0.0,
+                "max_telescope_split_error_m": 0.0,
+                "max_rubber_joint_angle_rad": 0.0,
+                "peak_context": {}
+              },
+              "initialization:no_target_contact": {
+                "samples": 1000,
+                "max_finger_coupling_error_rad": 0.3581580276087507,
+                "max_telescope_split_error_m": 0.0007216732361318926,
+                "max_rubber_joint_angle_rad": 0.005213911341251205,
+                "peak_context": {
+                  "max_finger_coupling_error_rad": {
+                    "sim_time": 0.002,
+                    "last_command": {
+                      "fixture_settling": true
+                    }
+                  },
+                  "max_telescope_split_error_m": {
+                    "sim_time": 0.04600000000000003,
+                    "last_command": {
+                      "fixture_settling": true
+                    }
+                  },
+                  "max_rubber_joint_angle_rad": {
+                    "sim_time": 0.004,
+                    "last_command": {
+                      "fixture_settling": true
+                    }
+                  }
+                }
+              },
+              "execution:target_contact": {
+                "samples": 4657,
+                "max_finger_coupling_error_rad": 0.007669994564331113,
+                "max_telescope_split_error_m": 0.00032268096559625453,
+                "max_rubber_joint_angle_rad": 0.11876868461122637,
+                "peak_context": {
+                  "max_finger_coupling_error_rad": {
+                    "sim_time": 6.403999999999517,
+                    "last_command": {
+                      "sim_time": 6.349999999999523,
+                      "gripper": "close"
+                    }
+                  },
+                  "max_telescope_split_error_m": {
+                    "sim_time": 6.411999999999516,
+                    "last_command": {
+                      "sim_time": 6.349999999999523,
+                      "gripper": "close"
+                    }
+                  },
+                  "max_rubber_joint_angle_rad": {
+                    "sim_time": 7.01199999999945,
+                    "last_command": {
+                      "sim_time": 6.949999999999457,
+                      "arm": [
+                        0,
+                        0.6332530020850545,
+                        0.25129612518756217,
+                        0.004079289816116915,
+                        -0.7848695030528554,
+                        0.0057832997561080395
+                      ],
+                      "head": [
+                        -8.707268996233816e-06,
+                        -0.00916642966843581
+                      ]
+                    }
+                  }
+                }
+              },
+              "execution:no_target_contact": {
+                "samples": 5168,
+                "max_finger_coupling_error_rad": 0.006219387340254845,
+                "max_telescope_split_error_m": 0.00024003489622909796,
+                "max_rubber_joint_angle_rad": 0.03153361034577647,
+                "peak_context": {
+                  "max_finger_coupling_error_rad": {
+                    "sim_time": 6.365999999999521,
+                    "last_command": {
+                      "sim_time": 6.349999999999523,
+                      "gripper": "close"
+                    }
+                  },
+                  "max_telescope_split_error_m": {
+                    "sim_time": 6.385999999999519,
+                    "last_command": {
+                      "sim_time": 6.349999999999523,
+                      "gripper": "close"
+                    }
+                  },
+                  "max_rubber_joint_angle_rad": {
+                    "sim_time": 15.708000000001915,
+                    "last_command": {
+                      "sim_time": 15.700000000001912,
+                      "gripper": "open"
+                    }
+                  }
+                }
+              }
+            },
+            "gripper_envelope": {
+              "samples": 87,
+              "contact_samples": 37,
+              "max_corner_escape_m": 0.0,
+              "samples_outside_declared_intervals": 0,
+              "scope": "sampled containment only; not certified hardware bounds"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "job_id": "20261029_123636_6ad76b",
+      "raw_directory": ".tamp-runs/moving-gripper-20261029/head-contact-v1",
+      "note": "Privileged control passes; raw operator mask mixes silhouette RGB with table depth; 0/80 candidates.",
+      "summary": {
+        "scope": "observed sensor diagnostics during a privileged native contact control",
+        "observed_task_success_assessed": false,
+        "execution_qualified": false,
+        "privileged_control_passed": true,
+        "frames": 80,
+        "candidate_frames": 0,
+        "rejection_codes": [
+          "geometry_tracking_no_match",
+          "moving_tracking_lost_reinitialize"
+        ]
+      },
+      "first_unknown": {
+        "index": 0,
+        "sim_time": 2.999999999999891,
+        "state": "unknown",
+        "reason": "geometry_tracking_no_match",
+        "scorer_visible_pixels": 1173
+      },
+      "initial_scorer_visible_pixels": 1173,
+      "candidate_center_error_max_m": null,
+      "candidate_processing_range_s": [
+        null,
+        null
+      ]
+    },
+    {
+      "job_id": "20261029_124203_74681c",
+      "raw_directory": ".tamp-runs/moving-gripper-20261029/head-contact-v2",
+      "note": "Operator seed uses one-pixel interior; final 0.03 chroma profile. 12/80 candidates, then latched loss. Privileged control passes.",
+      "summary": {
+        "scope": "observed sensor diagnostics during a privileged native contact control",
+        "observed_task_success_assessed": false,
+        "execution_qualified": false,
+        "privileged_control_passed": true,
+        "frames": 80,
+        "candidate_frames": 12,
+        "rejection_codes": [
+          "moving_mask_ambiguous",
+          "moving_tracking_lost_reinitialize"
+        ]
+      },
+      "first_unknown": {
+        "index": 12,
+        "sim_time": 5.773999999999586,
+        "state": "unknown",
+        "reason": "moving_mask_ambiguous",
+        "scorer_visible_pixels": 390
+      },
+      "initial_scorer_visible_pixels": 1173,
+      "candidate_center_error_max_m": 0.0002474178420428819,
+      "candidate_processing_range_s": [
+        0.07444338701316155,
+        0.22736279098899104
+      ]
+    },
+    {
+      "job_id": "20261029_125129_2715ce",
+      "raw_directory": ".tamp-runs/moving-gripper-20261029/head-contact-v3",
+      "note": "Final protocol: separate head RGB/depth optical frames, production FOV calibration, registered measured depth with holes preserved. In-process native contact controller, not ZMQ/CHAT.",
+      "summary": {
+        "scope": "observed sensor diagnostics during a privileged native contact control",
+        "observed_task_success_assessed": false,
+        "execution_qualified": false,
+        "camera_geometry": "separate calibrated RGB/depth optical frames; measured depth registration, holes unfilled",
+        "privileged_control_passed": true,
+        "frames": 80,
+        "candidate_frames": 11,
+        "rejection_codes": [
+          "moving_geometry_ambiguous",
+          "moving_tracking_lost_reinitialize"
+        ]
+      },
+      "first_unknown": {
+        "index": 11,
+        "sim_time": 5.521999999999614,
+        "state": "unknown",
+        "reason": "moving_geometry_ambiguous",
+        "scorer_visible_pixels": 513
+      },
+      "initial_scorer_visible_pixels": 1349,
+      "candidate_center_error_max_m": 0.0002738048368687461,
+      "candidate_processing_range_s": [
+        0.052758181001991034,
+        0.2155180029803887
+      ]
+    }
+  ],
+  "validation": {
+    "broad": {
+      "job_id": "20261029_123638_26e81c",
+      "tests": 810,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 154.042
+    },
+    "final_focused": {
+      "job_id": null,
+      "tests": 65,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 8.853
+    }
+  },
+  "validation_note": "810-check broad regression precedes final motor-record binding, strict colour profile and two extra shape-drop variants; 65-check follow-up covers changed components. Counts overlap.",
+  "final_working_source_sha256": {
+    "scripts/eval_moving_rgbd_geometry.py": "ff3fbb11aa836a8649cef10bb6f1589a0e020dc0d9011ea9ca76871c3dc93a00",
+    "scripts/eval_stretch_encoder_geometry.py": "35ba79c179b6ecbc8410d63b6ef994a12d9e1d5ec6ea15e300a407dfc9ca6ef9",
+    "scripts/eval_stretch_moving_masks.py": "6eae62f3c665f5abfbe5172a328c7702d25d46548113458ad12ea5f868af5317",
+    "scripts/plot_moving_geometry.py": "6a4067d0b1a2de4b1190edc0675afa67e70fcdaf5cca3a0c4426b58b2ce2e9d0",
+    "src/emet/controller/manipulation/moving_rgbd_tracking.py": "b8ff8ecf47546d5efe95340c5bace35e918a4232b0f187868749d4adc3b21e7f",
+    "src/emet/controller/manipulation/shape_pose.py": "60e39f262726938ad47aa57217231eaf6bb8a27c6b8983c8f9d0fddab97d225f",
+    "src/emet/controller/manipulation/gripper_geometry.py": "c73129a8d1a51b132f3a58eba7ff0e62a3b08977ea89266643d7c511ffa2750e",
+    "src/emet/controller/manipulation/interval_geometry.py": "7dc264fb9dfff35733d387a093255f4a6410e3d47241e025fa0827df79311fda",
+    "src/emet/controller/manipulation/geometry_tracking.py": "fc15223bbe1c1e3f850631f5bc39d955635b7a3dd0195130807d33196f2d6818",
+    "src/emet/controller/manipulation/observed_collision.py": "a8e8f28bede55a33a0dffdfad77da45ba277e69f704956c6eae4fd8245e61f27",
+    "src/emet/controller/manipulation/observed_effects.py": "fc90b30cd3091afbcc1d43024c4a46c29a6d755292ddbc05bf94335961a93b0c",
+    "src/emet/controller/manipulation/physical_pick_place.py": "ec8ea8b9c63ab4b63b8c7e62a14e6d2bca2015f91ecf03e77cd7711a4a111607",
+    "src/emet/controller/task/tamp/observed_adapter.py": "04197462d82ad1e727a1513365a6b7522e92204df5e40c44f738a674006a77f1"
+  },
+  "source_note": "Jobs ran from the development working tree. These hashes identify final source, not retrospective per-attempt frozen implementations.",
+  "paper": {
+    "pages": 53,
+    "build": "./paper/build.sh",
+    "undefined_references_or_citations": false
+  }
+}

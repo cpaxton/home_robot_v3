@@ -1,0 +1,4935 @@
+{
+  "scope": "Development diagnostics with evolving working-tree code; not a frozen benchmark or observed execution acceptance",
+  "base_source_sha": "6c0d1a20",
+  "attempts": [
+    {
+      "label": "harness",
+      "job_id": "20261025_091101_d32dbb",
+      "notes": "callable-wrapper bug; zero remote calls",
+      "raw_result": {
+        "scope": "MuJoCo RGBD surface reacquisition; not native manipulation or full run-agent acceptance",
+        "query": "red cylinder",
+        "vlm_calls": [],
+        "frames": [],
+        "initialization": {
+          "source": "vlm_region",
+          "purpose": "object",
+          "prompt": "Locate the visible object 'red cylinder' in the image. Return a bounding box around the visible target; coordinates are integers normalized to 0..1000 in x,y order. Abstain if the object is absent or ambiguous in this image. Return JSON {\"verified\":true,\"box\":[x_min,y_min,x_max,y_max],\"reason\":\"...\"} or {\"verified\":false,\"reason\":\"...\"}. Do not predict a 3D position or surface point.",
+          "system_prompt": "Ground a robot target in the provided image. Do not invent missing visual evidence.",
+          "raw": "",
+          "image_order": [
+            "rgb_file"
+          ],
+          "valid": false,
+          "strategy": "depth_candidates",
+          "reason": "VLM abstained or returned invalid output"
+        },
+        "passed": false
+      }
+    },
+    {
+      "label": "airborne_reference",
+      "job_id": "20261025_091213_3cca68",
+      "notes": "reference captured before settling",
+      "raw_result": {
+        "scope": "MuJoCo RGBD surface reacquisition; not native manipulation or full run-agent acceptance",
+        "query": "red cylinder",
+        "vlm_calls": [
+          {
+            "encode_s": 0.0006209239945746958,
+            "request_s": 8.533615018997807,
+            "total_s": 8.534235942992382,
+            "image_count": 1,
+            "completed": true
+          },
+          {
+            "encode_s": 0.002193948021158576,
+            "request_s": 8.47252372498042,
+            "total_s": 8.474717673001578,
+            "image_count": 4,
+            "completed": true
+          }
+        ],
+        "frames": [
+          {
+            "index": 0,
+            "ok": false,
+            "reason": "surface_not_reacquired",
+            "reacquire_s": 0.00448674798826687
+          },
+          {
+            "index": 1,
+            "ok": false,
+            "reason": "surface_not_reacquired",
+            "reacquire_s": 0.004558066983008757
+          },
+          {
+            "index": 2,
+            "ok": false,
+            "reason": "surface_not_reacquired",
+            "reacquire_s": 0.006658149999566376
+          },
+          {
+            "index": 3,
+            "ok": false,
+            "reason": "surface_not_reacquired",
+            "reacquire_s": 0.0044496939808595926
+          },
+          {
+            "index": 4,
+            "ok": false,
+            "reason": "surface_not_reacquired",
+            "reacquire_s": 0.007564964995253831
+          },
+          {
+            "index": 5,
+            "ok": false,
+            "reason": "surface_not_reacquired",
+            "reacquire_s": 0.007637798989890143
+          },
+          {
+            "index": 6,
+            "ok": false,
+            "reason": "surface_not_reacquired",
+            "reacquire_s": 0.006244566000532359
+          },
+          {
+            "index": 7,
+            "ok": false,
+            "reason": "surface_not_reacquired",
+            "reacquire_s": 0.0045993060048203915
+          },
+          {
+            "index": 8,
+            "ok": false,
+            "reason": "surface_not_reacquired",
+            "reacquire_s": 0.014417265017982572
+          },
+          {
+            "index": 9,
+            "ok": false,
+            "reason": "surface_not_reacquired",
+            "reacquire_s": 0.0044417729950509965
+          }
+        ],
+        "physics_during_inference": true,
+        "sim_time_after_initialization": 8.699999999999575,
+        "initialization": {
+          "source": "vlm_region",
+          "purpose": "object",
+          "prompt": "Locate the visible object 'red cylinder' in the image. Return a bounding box around the visible target; coordinates are integers normalized to 0..1000 in x,y order. Abstain if the object is absent or ambiguous in this image. Return JSON {\"verified\":true,\"box\":[x_min,y_min,x_max,y_max],\"reason\":\"...\"} or {\"verified\":false,\"reason\":\"...\"}. Do not predict a 3D position or surface point.",
+          "system_prompt": "Ground a robot target in the provided image. Do not invent missing visual evidence.",
+          "raw": "```json\n{\n  \"verified\": true,\n  \"box\": [478, 547, 521, 600],\n  \"reason\": \"The image contains a small red cylinder located centrally on a brown surface. The bounding box is normalized to 0..1000 and tightly encloses the visible red cylinder.\"\n}\n```",
+          "image_order": [
+            "rgb_file"
+          ],
+          "valid": true,
+          "strategy": "depth_candidates",
+          "search_region": {
+            "box": [
+              428,
+              497,
+              571,
+              650
+            ],
+            "padding": 50
+          },
+          "surface_candidates": [
+            {
+              "id": 0,
+              "bbox_xyxy": [
+                102,
+                159,
+                138,
+                208
+              ],
+              "mask_bits": "///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////+H////4A////wAf///gAP///gAP///gAP///gAP///gAP///gAP///gAP///gAf///gAf///gAf///gAf///gAf///gAf///gAf///gAf///gAf///gAf///gAf///gAf///gAf///gAf///wA////8D///////////////////A=",
+              "points": 1465
+            },
+            {
+              "id": 1,
+              "bbox_xyxy": [
+                121,
+                179,
+                134,
+                188
+              ],
+              "mask_bits": "BwD+H/n/7/+//f/H/B+A",
+              "points": 83
+            },
+            {
+              "id": 2,
+              "bbox_xyxy": [
+                121,
+                185,
+                134,
+                205
+              ],
+              "mask_bits": "AAwAeAf///9/+//f/v/3/7/9/+//f/v/3/7/8/+f+D8A",
+              "points": 204
+            }
+          ],
+          "surface_selection": {
+            "prompt": "Select a measured surface of 'red cylinder'. Image 1 is the original reference, NOT a candidate. Every subsequent image is ONE candidate, labeled with its ID. Image 2 is candidate 0, image 3 is candidate 1, and so on. All candidate images use the same enlarged context crop. In each candidate panel, ONLY pixels on the measured surface are retained; pixels outside that candidate have been replaced with black. Black background is not evidence. These unlabelled geometry proposals may include table, wall, occluders, or mixed objects. Select only a region whose bright pixels belong to the requested object, not its support furniture. A partial visible object surface is sufficient. If a region mixes target and other objects, or the target is ambiguous, abstain. Available IDs: [0, 1, 2]. Return JSON {\"selected_id\":integer or null,\"target_unambiguous\":true or false,\"reason\":\"...\"}.",
+            "system_prompt": "Choose a visually supported surface, not an object location guess. Reply with JSON only.",
+            "raw": "{\"selected_id\":2,\"target_unambiguous\":true,\"reason\":\"Candidate 2 shows a clear, partial view of the red cylinder's side surface, matching the object in the reference image. The other candidates either show an incorrect shape (Candidate 0) or only a top view (Candidate 1) which is insufficient for identifying the cylinder's surface.\"}",
+            "image_order": [
+              "rgb_file",
+              "surface_candidate_0_rgb_file",
+              "surface_candidate_1_rgb_file",
+              "surface_candidate_2_rgb_file"
+            ],
+            "presentation": "isolated"
+          },
+          "selected_id": 2,
+          "proposal_source": "rgbd_components"
+        },
+        "missing_depth_rejected": "surface_not_reacquired",
+        "passed": false,
+        "vlm_query_count": 2
+      }
+    },
+    {
+      "label": "airborne_diagnostic",
+      "job_id": "20261025_091424_84cc01",
+      "notes": "measured 8cm initial object fall",
+      "raw_result": {
+        "scope": "MuJoCo RGBD surface reacquisition; not native manipulation or full run-agent acceptance",
+        "query": "red cylinder",
+        "vlm_calls": [
+          {
+            "encode_s": 0.0009083389886654913,
+            "request_s": 8.526304489001632,
+            "total_s": 8.527212827990297,
+            "image_count": 1,
+            "completed": true
+          },
+          {
+            "encode_s": 0.0022504039807245135,
+            "request_s": 8.48071456499747,
+            "total_s": 8.482964968978195,
+            "image_count": 4,
+            "completed": true
+          }
+        ],
+        "frames": [
+          {
+            "index": 0,
+            "ok": false,
+            "reason": "surface_not_reacquired",
+            "reacquire_s": 0.004763289005495608,
+            "diagnostics": {
+              "candidates": [
+                {
+                  "id": 0,
+                  "pixels": 1041,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 1,
+                  "pixels": 81,
+                  "center": [
+                    -0.020980935736885226,
+                    -0.6990657091247514,
+                    0.5599119121585047
+                  ],
+                  "rejected": "appearance_change"
+                },
+                {
+                  "id": 2,
+                  "pixels": 40,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 3,
+                  "pixels": 38,
+                  "rejected": "search_boundary"
+                }
+              ],
+              "near_pixels": 143,
+              "reference_center": [
+                -0.019900562765383233,
+                -0.682471963088727,
+                0.6015915705524124
+              ]
+            }
+          },
+          {
+            "index": 1,
+            "ok": false,
+            "reason": "surface_not_reacquired",
+            "reacquire_s": 0.004945670982124284,
+            "diagnostics": {
+              "candidates": [
+                {
+                  "id": 0,
+                  "pixels": 1041,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 1,
+                  "pixels": 81,
+                  "center": [
+                    -0.020980937710212616,
+                    -0.6990657090849226,
+                    0.5599118916324597
+                  ],
+                  "rejected": "appearance_change"
+                },
+                {
+                  "id": 2,
+                  "pixels": 40,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 3,
+                  "pixels": 38,
+                  "rejected": "search_boundary"
+                }
+              ],
+              "near_pixels": 143,
+              "reference_center": [
+                -0.019900562765383233,
+                -0.682471963088727,
+                0.6015915705524124
+              ]
+            }
+          },
+          {
+            "index": 2,
+            "ok": false,
+            "reason": "surface_not_reacquired",
+            "reacquire_s": 0.004905728012090549,
+            "diagnostics": {
+              "candidates": [
+                {
+                  "id": 0,
+                  "pixels": 1041,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 1,
+                  "pixels": 81,
+                  "center": [
+                    -0.020980939683599455,
+                    -0.6990657090451039,
+                    0.5599119463776125
+                  ],
+                  "rejected": "appearance_change"
+                },
+                {
+                  "id": 2,
+                  "pixels": 40,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 3,
+                  "pixels": 38,
+                  "rejected": "search_boundary"
+                }
+              ],
+              "near_pixels": 143,
+              "reference_center": [
+                -0.019900562765383233,
+                -0.682471963088727,
+                0.6015915705524124
+              ]
+            }
+          }
+        ],
+        "physics_during_inference": true,
+        "sim_time_after_initialization": 10.080000000000036,
+        "initialization": {
+          "source": "vlm_region",
+          "purpose": "object",
+          "prompt": "Locate the visible object 'red cylinder' in the image. Return a bounding box around the visible target; coordinates are integers normalized to 0..1000 in x,y order. Abstain if the object is absent or ambiguous in this image. Return JSON {\"verified\":true,\"box\":[x_min,y_min,x_max,y_max],\"reason\":\"...\"} or {\"verified\":false,\"reason\":\"...\"}. Do not predict a 3D position or surface point.",
+          "system_prompt": "Ground a robot target in the provided image. Do not invent missing visual evidence.",
+          "raw": "```json\n{\n  \"verified\": true,\n  \"box\": [478, 547, 521, 600],\n  \"reason\": \"The image contains a small red cylinder located centrally on a brown surface. The bounding box is normalized to 0..1000 and tightly encloses the visible red cylinder.\"\n}\n```",
+          "image_order": [
+            "rgb_file"
+          ],
+          "valid": true,
+          "strategy": "depth_candidates",
+          "search_region": {
+            "box": [
+              428,
+              497,
+              571,
+              650
+            ],
+            "padding": 50
+          },
+          "surface_candidates": [
+            {
+              "id": 0,
+              "bbox_xyxy": [
+                102,
+                159,
+                138,
+                208
+              ],
+              "mask_bits": "///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////+H////4A////wAf///gAP///gAP///gAP///gAP///gAP///gAP///gAP///gAf///gAf///gAf///gAf///gAf///gAf///gAf///gAf///gAf///gAf///gAf///gAf///gAf///gAf///wA////8D///////////////////A=",
+              "points": 1465
+            },
+            {
+              "id": 1,
+              "bbox_xyxy": [
+                121,
+                179,
+                134,
+                188
+              ],
+              "mask_bits": "BwD+H/n/7/+//f/H/B+A",
+              "points": 83
+            },
+            {
+              "id": 2,
+              "bbox_xyxy": [
+                121,
+                185,
+                134,
+                205
+              ],
+              "mask_bits": "AAwAeAf///9/+//f/v/3/7/9/+//f/v/3/7/8/+f+D8A",
+              "points": 204
+            }
+          ],
+          "surface_selection": {
+            "prompt": "Select a measured surface of 'red cylinder'. Image 1 is the original reference, NOT a candidate. Every subsequent image is ONE candidate, labeled with its ID. Image 2 is candidate 0, image 3 is candidate 1, and so on. All candidate images use the same enlarged context crop. In each candidate panel, ONLY pixels on the measured surface are retained; pixels outside that candidate have been replaced with black. Black background is not evidence. These unlabelled geometry proposals may include table, wall, occluders, or mixed objects. Select only a region whose bright pixels belong to the requested object, not its support furniture. A partial visible object surface is sufficient. If a region mixes target and other objects, or the target is ambiguous, abstain. Available IDs: [0, 1, 2]. Return JSON {\"selected_id\":integer or null,\"target_unambiguous\":true or false,\"reason\":\"...\"}.",
+            "system_prompt": "Choose a visually supported surface, not an object location guess. Reply with JSON only.",
+            "raw": "{\"selected_id\":2,\"target_unambiguous\":true,\"reason\":\"Candidate 2 shows a clear, partial view of the red cylinder's side surface, matching the object in the reference image. The other candidates either show an incorrect shape (Candidate 0) or only a top view (Candidate 1) which is insufficient for identifying the cylinder's surface.\"}",
+            "image_order": [
+              "rgb_file",
+              "surface_candidate_0_rgb_file",
+              "surface_candidate_1_rgb_file",
+              "surface_candidate_2_rgb_file"
+            ],
+            "presentation": "isolated"
+          },
+          "selected_id": 2,
+          "proposal_source": "rgbd_components"
+        },
+        "missing_depth_rejected": "surface_not_reacquired",
+        "passed": false,
+        "vlm_query_count": 2
+      }
+    },
+    {
+      "label": "settled_mixed_surface",
+      "job_id": "20261025_091543_a33294",
+      "notes": "local color/depth joins object to table",
+      "raw_result": {
+        "scope": "MuJoCo RGBD surface reacquisition; not native manipulation or full run-agent acceptance",
+        "query": "red cylinder",
+        "vlm_calls": [
+          {
+            "encode_s": 0.0009947140060830861,
+            "request_s": 7.3249206469918136,
+            "total_s": 7.325915360997897,
+            "image_count": 1,
+            "completed": true
+          },
+          {
+            "encode_s": 0.001756363024469465,
+            "request_s": 7.218067623995012,
+            "total_s": 7.219823987019481,
+            "image_count": 6,
+            "completed": true
+          }
+        ],
+        "frames": [
+          {
+            "index": 0,
+            "ok": false,
+            "reason": "surface_not_reacquired",
+            "reacquire_s": 0.0066466680145822465,
+            "diagnostics": {
+              "candidates": [
+                {
+                  "id": 0,
+                  "pixels": 8414,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 1,
+                  "pixels": 81,
+                  "center": [
+                    -0.02098130938624855,
+                    -0.6990656252557664,
+                    0.5599120157243852
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 2,
+                  "pixels": 139,
+                  "center": [
+                    0.01575596044481274,
+                    -0.4854130167728996,
+                    0.7152637709288551
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 3,
+                  "pixels": 149,
+                  "center": [
+                    -0.03629570493765125,
+                    -0.48746194923384983,
+                    0.7151483428706272
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 4,
+                  "pixels": 245,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 5,
+                  "pixels": 110,
+                  "rejected": "search_boundary"
+                }
+              ],
+              "near_pixels": 4254,
+              "reference_center": [
+                0.03409858610358246,
+                -0.7887995683051787,
+                0.4800000079879015
+              ]
+            }
+          },
+          {
+            "index": 1,
+            "ok": false,
+            "reason": "surface_not_reacquired",
+            "reacquire_s": 0.006361039006151259,
+            "diagnostics": {
+              "candidates": [
+                {
+                  "id": 0,
+                  "pixels": 8414,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 1,
+                  "pixels": 81,
+                  "center": [
+                    -0.020981316771890666,
+                    -0.6990656252164449,
+                    0.5599120491606792
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 2,
+                  "pixels": 139,
+                  "center": [
+                    0.015755912431312236,
+                    -0.48541051716822115,
+                    0.7152669898374909
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 3,
+                  "pixels": 149,
+                  "center": [
+                    -0.03629522424708329,
+                    -0.487459529687096,
+                    0.7151512713172731
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 4,
+                  "pixels": 245,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 5,
+                  "pixels": 110,
+                  "rejected": "search_boundary"
+                }
+              ],
+              "near_pixels": 4254,
+              "reference_center": [
+                0.03409858610358246,
+                -0.7887995683051787,
+                0.4800000079879015
+              ]
+            }
+          },
+          {
+            "index": 2,
+            "ok": false,
+            "reason": "surface_not_reacquired",
+            "reacquire_s": 0.0063645550108049065,
+            "diagnostics": {
+              "candidates": [
+                {
+                  "id": 0,
+                  "pixels": 8414,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 1,
+                  "pixels": 81,
+                  "center": [
+                    -0.020981316043260815,
+                    -0.6990656251771264,
+                    0.5599119804504664
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 2,
+                  "pixels": 139,
+                  "center": [
+                    0.01575586081095544,
+                    -0.48540805487389654,
+                    0.7152701126593016
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 3,
+                  "pixels": 149,
+                  "center": [
+                    -0.03629473430191652,
+                    -0.4874570356968111,
+                    0.7151543949936954
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 4,
+                  "pixels": 245,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 5,
+                  "pixels": 110,
+                  "rejected": "search_boundary"
+                }
+              ],
+              "near_pixels": 4254,
+              "reference_center": [
+                0.03409858610358246,
+                -0.7887995683051787,
+                0.4800000079879015
+              ]
+            }
+          },
+          {
+            "index": 3,
+            "ok": false,
+            "reason": "surface_not_reacquired",
+            "reacquire_s": 0.006235136999748647,
+            "diagnostics": {
+              "candidates": [
+                {
+                  "id": 0,
+                  "pixels": 8414,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 1,
+                  "pixels": 81,
+                  "center": [
+                    -0.020981327486082797,
+                    -0.6990656654712568,
+                    0.5599119738613079
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 2,
+                  "pixels": 139,
+                  "center": [
+                    0.015755810392888977,
+                    -0.48540562988992564,
+                    0.7152731874376997
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 3,
+                  "pixels": 149,
+                  "center": [
+                    -0.03629425361124609,
+                    -0.4874546905936032,
+                    0.7151574210552294
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 4,
+                  "pixels": 245,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 5,
+                  "pixels": 110,
+                  "rejected": "search_boundary"
+                }
+              ],
+              "near_pixels": 4254,
+              "reference_center": [
+                0.03409858610358246,
+                -0.7887995683051787,
+                0.4800000079879015
+              ]
+            }
+          },
+          {
+            "index": 4,
+            "ok": false,
+            "reason": "surface_not_reacquired",
+            "reacquire_s": 0.0065387520007789135,
+            "diagnostics": {
+              "candidates": [
+                {
+                  "id": 0,
+                  "pixels": 8414,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 1,
+                  "pixels": 81,
+                  "center": [
+                    -0.02098132675748477,
+                    -0.6990656250985009,
+                    0.5599119551247078
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 2,
+                  "pixels": 140,
+                  "center": [
+                    0.015792226616630198,
+                    -0.48536051438572303,
+                    0.7152507748658403
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 3,
+                  "pixels": 149,
+                  "center": [
+                    -0.036293779090223646,
+                    -0.4874522338250977,
+                    0.7151604959242057
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 4,
+                  "pixels": 245,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 5,
+                  "pixels": 110,
+                  "rejected": "search_boundary"
+                }
+              ],
+              "near_pixels": 4254,
+              "reference_center": [
+                0.03409858610358246,
+                -0.7887995683051787,
+                0.4800000079879015
+              ]
+            }
+          },
+          {
+            "index": 5,
+            "ok": false,
+            "reason": "surface_not_reacquired",
+            "reacquire_s": 0.006261136993998662,
+            "diagnostics": {
+              "candidates": [
+                {
+                  "id": 0,
+                  "pixels": 8414,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 1,
+                  "pixels": 81,
+                  "center": [
+                    -0.02098133279081225,
+                    -0.699065665392637,
+                    0.5599120038775716
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 2,
+                  "pixels": 142,
+                  "center": [
+                    0.01586950054859542,
+                    -0.48544505032090735,
+                    0.7152152984446691
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 3,
+                  "pixels": 146,
+                  "center": [
+                    -0.03614143710157958,
+                    -0.48714710759180974,
+                    0.7152305382915645
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 4,
+                  "pixels": 245,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 5,
+                  "pixels": 110,
+                  "rejected": "search_boundary"
+                }
+              ],
+              "near_pixels": 4254,
+              "reference_center": [
+                0.03409858610358246,
+                -0.7887995683051787,
+                0.4800000079879015
+              ]
+            }
+          },
+          {
+            "index": 6,
+            "ok": false,
+            "reason": "surface_not_reacquired",
+            "reacquire_s": 0.006324490997940302,
+            "diagnostics": {
+              "candidates": [
+                {
+                  "id": 0,
+                  "pixels": 8414,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 1,
+                  "pixels": 81,
+                  "center": [
+                    -0.020981336119391448,
+                    -0.6990656250198859,
+                    0.5599119815863396
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 2,
+                  "pixels": 142,
+                  "center": [
+                    0.015869441335844482,
+                    -0.4854435599025274,
+                    0.7152183392260183
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 3,
+                  "pixels": 147,
+                  "center": [
+                    -0.036185900183826065,
+                    -0.48696468425218253,
+                    0.7152138400025915
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 4,
+                  "pixels": 245,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 5,
+                  "pixels": 110,
+                  "rejected": "search_boundary"
+                }
+              ],
+              "near_pixels": 4254,
+              "reference_center": [
+                0.03409858610358246,
+                -0.7887995683051787,
+                0.4800000079879015
+              ]
+            }
+          },
+          {
+            "index": 7,
+            "ok": false,
+            "reason": "surface_not_reacquired",
+            "reacquire_s": 0.006223999022040516,
+            "diagnostics": {
+              "candidates": [
+                {
+                  "id": 0,
+                  "pixels": 8414,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 1,
+                  "pixels": 81,
+                  "center": [
+                    -0.020981342152751242,
+                    -0.6990656653140298,
+                    0.5599119897955886
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 2,
+                  "pixels": 142,
+                  "center": [
+                    0.015869380910520536,
+                    -0.4854420694841512,
+                    0.7152214518370659
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 3,
+                  "pixels": 148,
+                  "center": [
+                    -0.03623906876260846,
+                    -0.4868748097517055,
+                    0.7151933523002445
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 4,
+                  "pixels": 245,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 5,
+                  "pixels": 110,
+                  "rejected": "search_boundary"
+                }
+              ],
+              "near_pixels": 4254,
+              "reference_center": [
+                0.03409858610358246,
+                -0.7887995683051787,
+                0.4800000079879015
+              ]
+            }
+          },
+          {
+            "index": 8,
+            "ok": false,
+            "reason": "surface_not_reacquired",
+            "reacquire_s": 0.006211481988430023,
+            "diagnostics": {
+              "candidates": [
+                {
+                  "id": 0,
+                  "pixels": 8414,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 1,
+                  "pixels": 81,
+                  "center": [
+                    -0.020981349538509227,
+                    -0.6990656652747309,
+                    0.5599119975727193
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 2,
+                  "pixels": 142,
+                  "center": [
+                    0.015869324115224584,
+                    -0.4854406530778145,
+                    0.71522458839148
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 3,
+                  "pixels": 148,
+                  "center": [
+                    -0.03623878792616943,
+                    -0.48687380071564446,
+                    0.715196414615479
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 4,
+                  "pixels": 245,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 5,
+                  "pixels": 110,
+                  "rejected": "search_boundary"
+                }
+              ],
+              "near_pixels": 4254,
+              "reference_center": [
+                0.03409858610358246,
+                -0.7887995683051787,
+                0.4800000079879015
+              ]
+            }
+          },
+          {
+            "index": 9,
+            "ok": false,
+            "reason": "surface_not_reacquired",
+            "reacquire_s": 0.006369195994921029,
+            "diagnostics": {
+              "candidates": [
+                {
+                  "id": 0,
+                  "pixels": 8414,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 1,
+                  "pixels": 81,
+                  "center": [
+                    -0.020981350162367927,
+                    -0.6990656249019891,
+                    0.5599119802081874
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 2,
+                  "pixels": 142,
+                  "center": [
+                    0.015869264897349033,
+                    -0.48543919960459603,
+                    0.7152276770591598
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 3,
+                  "pixels": 147,
+                  "center": [
+                    -0.036185650836644045,
+                    -0.48678324374072895,
+                    0.7152238578921863
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 4,
+                  "pixels": 245,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 5,
+                  "pixels": 110,
+                  "rejected": "search_boundary"
+                }
+              ],
+              "near_pixels": 4254,
+              "reference_center": [
+                0.03409858610358246,
+                -0.7887995683051787,
+                0.4800000079879015
+              ]
+            }
+          }
+        ],
+        "settle_seconds": 3.0,
+        "reference_sim_time": 2.999999999999891,
+        "physics_during_inference": true,
+        "sim_time_after_initialization": 11.700000000000577,
+        "initialization": {
+          "source": "vlm_region",
+          "purpose": "object",
+          "prompt": "Locate the visible object 'red cylinder' in the image. Return a bounding box around the visible target; coordinates are integers normalized to 0..1000 in x,y order. Abstain if the object is absent or ambiguous in this image. Return JSON {\"verified\":true,\"box\":[x_min,y_min,x_max,y_max],\"reason\":\"...\"} or {\"verified\":false,\"reason\":\"...\"}. Do not predict a 3D position or surface point.",
+          "system_prompt": "Ground a robot target in the provided image. Do not invent missing visual evidence.",
+          "raw": "```json\n{\n  \"verified\": true,\n  \"box\": [450, 583, 550, 675],\n  \"reason\": \"The red cylinder is clearly visible as a distinct red object positioned on top of a blue structure in the center of the image.\"\n}\n```",
+          "image_order": [
+            "rgb_file"
+          ],
+          "valid": true,
+          "strategy": "depth_candidates",
+          "search_region": {
+            "box": [
+              400,
+              533,
+              600,
+              725
+            ],
+            "padding": 50
+          },
+          "surface_candidates": [
+            {
+              "id": 0,
+              "bbox_xyxy": [
+                96,
+                170,
+                144,
+                232
+              ],
+              "mask_bits": "/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////wH//////gB//////gA//////AA//////AA//////AA//////gA//////wB//////8H////////////////////////////////////////////////////////////////////////////+P//P///8P//H///8P/+D///4H/+D///4H/+D//+IH/+D//+AD/8A//8AD/8A//8AD/8A//8AD/8A//8AD/8A//+AD/4A//+AB/4A///AAAAA///AAAAA///AAAAA///AAAAA///AAAAA",
+              "points": 2540
+            },
+            {
+              "id": 1,
+              "bbox_xyxy": [
+                126,
+                196,
+                138,
+                205
+              ],
+              "mask_bits": "D4P8f+////f/f+P8D4A=",
+              "points": 81
+            },
+            {
+              "id": 2,
+              "bbox_xyxy": [
+                112,
+                214,
+                124,
+                232
+              ],
+              "mask_bits": "AcA8A8B+B+Z+f///////f/ffP/P3H3H7HgPA",
+              "points": 142
+            },
+            {
+              "id": 3,
+              "bbox_xyxy": [
+                135,
+                214,
+                144,
+                230
+              ],
+              "mask_bits": "GA4Ph8Ph8f7+fz+fX4/n4+GA",
+              "points": 86
+            },
+            {
+              "id": 4,
+              "bbox_xyxy": [
+                126,
+                227,
+                138,
+                232
+              ],
+              "mask_bits": "/4/4/4///+A=",
+              "points": 50
+            }
+          ],
+          "surface_selection": {
+            "prompt": "Select a measured surface of 'red cylinder'. Image 1 is the original reference, NOT a candidate. Every subsequent image is ONE candidate, labeled with its ID. Image 2 is candidate 0, image 3 is candidate 1, and so on. All candidate images use the same enlarged context crop. In each candidate panel, ONLY pixels on the measured surface are retained; pixels outside that candidate have been replaced with black. Black background is not evidence. These unlabelled geometry proposals may include table, wall, occluders, or mixed objects. Select only a region whose bright pixels belong to the requested object, not its support furniture. A partial visible object surface is sufficient. If a region mixes target and other objects, or the target is ambiguous, abstain. Available IDs: [0, 1, 2, 3, 4]. Return JSON {\"selected_id\":integer or null,\"target_unambiguous\":true or false,\"reason\":\"...\"}.",
+            "system_prompt": "Choose a visually supported surface, not an object location guess. Reply with JSON only.",
+            "raw": "{\"selected_id\":0,\"target_unambiguous\":true,\"reason\":\"Candidate 0 shows a red cylinder with a distinct cylindrical shape and color, matching the target object. Other candidates show non-cylindrical or non-red shapes, making Candidate 0 the only unambiguous match.\"}",
+            "image_order": [
+              "rgb_file",
+              "surface_candidate_0_rgb_file",
+              "surface_candidate_1_rgb_file",
+              "surface_candidate_2_rgb_file",
+              "surface_candidate_3_rgb_file",
+              "surface_candidate_4_rgb_file"
+            ],
+            "presentation": "isolated"
+          },
+          "selected_id": 0,
+          "proposal_source": "rgbd_components"
+        },
+        "missing_depth_rejected": "surface_not_reacquired",
+        "passed": false,
+        "vlm_query_count": 2
+      }
+    },
+    {
+      "label": "normal_split_cylinder",
+      "job_id": "20261025_092100_55e2ab",
+      "notes": "settled home posture; normal-split initialization",
+      "raw_result": {
+        "scope": "MuJoCo RGBD surface reacquisition; not native manipulation or full run-agent acceptance",
+        "query": "red cylinder",
+        "vlm_calls": [
+          {
+            "encode_s": 0.0009155810112133622,
+            "request_s": 7.350565064989496,
+            "total_s": 7.351480646000709,
+            "image_count": 1,
+            "completed": true
+          },
+          {
+            "encode_s": 0.0026258119905833155,
+            "request_s": 6.179263888014248,
+            "total_s": 6.181889700004831,
+            "image_count": 7,
+            "completed": true
+          }
+        ],
+        "frames": [
+          {
+            "index": 0,
+            "ok": true,
+            "pixels": 175,
+            "position": [
+              -0.019181364022135772,
+              -0.682773197015762,
+              0.5209819821572804
+            ],
+            "received_monotonic": 235204.903539578,
+            "observation_age_s": 0.0785786219930742,
+            "reacquire_s": 0.009565679007209837,
+            "diagnostics": {
+              "candidates": [
+                {
+                  "id": 0,
+                  "pixels": 1542,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 1,
+                  "pixels": 61,
+                  "center": [
+                    -0.02098650175505092,
+                    -0.6989387714785658,
+                    0.5599120039527309
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 2,
+                  "pixels": 175,
+                  "center": [
+                    -0.019181364022135772,
+                    -0.682773197015762,
+                    0.5209819821572804
+                  ],
+                  "current_support": 1.0,
+                  "reference_support": 1.0
+                },
+                {
+                  "id": 3,
+                  "pixels": 58,
+                  "center": [
+                    -0.03351370008383333,
+                    -0.4908127455285797,
+                    0.7158602347532357
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 4,
+                  "pixels": 60,
+                  "center": [
+                    0.013297213605238625,
+                    -0.48949232911900026,
+                    0.7155063292470962
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 5,
+                  "pixels": 77,
+                  "rejected": "search_boundary"
+                }
+              ],
+              "near_pixels": 493,
+              "reference_center": [
+                -0.019257826595175755,
+                -0.6828193873826642,
+                0.5207271997044511
+              ]
+            }
+          },
+          {
+            "index": 1,
+            "ok": true,
+            "pixels": 175,
+            "position": [
+              -0.019181357423646312,
+              -0.6827734263146535,
+              0.5209852584314769
+            ],
+            "received_monotonic": 235205.114601497,
+            "observation_age_s": 0.06902941898442805,
+            "reacquire_s": 0.00918942698626779,
+            "diagnostics": {
+              "candidates": [
+                {
+                  "id": 0,
+                  "pixels": 1542,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 1,
+                  "pixels": 61,
+                  "center": [
+                    -0.0209865050526849,
+                    -0.6989387714563063,
+                    0.5599120039527282
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 2,
+                  "pixels": 175,
+                  "center": [
+                    -0.019181357423646312,
+                    -0.6827734263146535,
+                    0.5209852584314769
+                  ],
+                  "current_support": 1.0,
+                  "reference_support": 1.0
+                },
+                {
+                  "id": 3,
+                  "pixels": 58,
+                  "center": [
+                    -0.033513521220005754,
+                    -0.49081150705327686,
+                    0.7158626057702377
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 4,
+                  "pixels": 60,
+                  "center": [
+                    0.013297161106989383,
+                    -0.4894907338488004,
+                    0.7155084622207244
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 5,
+                  "pixels": 77,
+                  "rejected": "search_boundary"
+                }
+              ],
+              "near_pixels": 493,
+              "reference_center": [
+                -0.019257826595175755,
+                -0.6828193873826642,
+                0.5207271997044511
+              ]
+            }
+          },
+          {
+            "index": 2,
+            "ok": true,
+            "pixels": 175,
+            "position": [
+              -0.01918136440201167,
+              -0.682773273305213,
+              0.5209852584314746
+            ],
+            "received_monotonic": 235205.319952948,
+            "observation_age_s": 0.07505225401837379,
+            "reacquire_s": 0.009211272990796715,
+            "diagnostics": {
+              "candidates": [
+                {
+                  "id": 0,
+                  "pixels": 1542,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 1,
+                  "pixels": 61,
+                  "center": [
+                    -0.020986508350367368,
+                    -0.6989388520868673,
+                    0.5599120692689696
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 2,
+                  "pixels": 175,
+                  "center": [
+                    -0.01918136440201167,
+                    -0.682773273305213,
+                    0.5209852584314746
+                  ],
+                  "current_support": 1.0,
+                  "reference_support": 1.0
+                },
+                {
+                  "id": 3,
+                  "pixels": 58,
+                  "center": [
+                    -0.033513339453807314,
+                    -0.4908101563870217,
+                    0.7158649765498011
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 4,
+                  "pixels": 60,
+                  "center": [
+                    0.013297107614620107,
+                    -0.4894890634420823,
+                    0.7155104751742462
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 5,
+                  "pixels": 77,
+                  "rejected": "search_boundary"
+                }
+              ],
+              "near_pixels": 493,
+              "reference_center": [
+                -0.019257826595175755,
+                -0.6828193873826642,
+                0.5207271997044511
+              ]
+            }
+          },
+          {
+            "index": 3,
+            "ok": true,
+            "pixels": 175,
+            "position": [
+              -0.019181366443400495,
+              -0.6827733496807838,
+              0.5209844739714529
+            ],
+            "received_monotonic": 235205.530436713,
+            "observation_age_s": 0.07624642600421794,
+            "reacquire_s": 0.00923967600101605,
+            "diagnostics": {
+              "candidates": [
+                {
+                  "id": 0,
+                  "pixels": 1542,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 1,
+                  "pixels": 61,
+                  "center": [
+                    -0.020986514363127512,
+                    -0.6989388520646248,
+                    0.5599119975729454
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 2,
+                  "pixels": 175,
+                  "center": [
+                    -0.019181366443400495,
+                    -0.6827733496807838,
+                    0.5209844739714529
+                  ],
+                  "current_support": 1.0,
+                  "reference_support": 1.0
+                },
+                {
+                  "id": 3,
+                  "pixels": 58,
+                  "center": [
+                    -0.033513162068210985,
+                    -0.4908088430748372,
+                    0.7158672998593405
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 4,
+                  "pixels": 60,
+                  "center": [
+                    0.013297055617256782,
+                    -0.4894874869037851,
+                    0.7155125360888072
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 5,
+                  "pixels": 77,
+                  "rejected": "search_boundary"
+                }
+              ],
+              "near_pixels": 493,
+              "reference_center": [
+                -0.019257826595175755,
+                -0.6828193873826642,
+                0.5207271997044511
+              ]
+            }
+          },
+          {
+            "index": 4,
+            "ok": true,
+            "pixels": 175,
+            "position": [
+              -0.019181372187601544,
+              -0.6827732731330265,
+              0.5209856737338326
+            ],
+            "received_monotonic": 235205.734733306,
+            "observation_age_s": 0.07468287899973802,
+            "reacquire_s": 0.009622240992030129,
+            "diagnostics": {
+              "candidates": [
+                {
+                  "id": 0,
+                  "pixels": 1542,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 1,
+                  "pixels": 61,
+                  "center": [
+                    -0.020986517660904223,
+                    -0.6989388520423909,
+                    0.5599120923827307
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 2,
+                  "pixels": 175,
+                  "center": [
+                    -0.019181372187601544,
+                    -0.6827732731330265,
+                    0.5209856737338326
+                  ],
+                  "current_support": 1.0,
+                  "reference_support": 1.0
+                },
+                {
+                  "id": 3,
+                  "pixels": 58,
+                  "center": [
+                    -0.033512989027184394,
+                    -0.49080756724549673,
+                    0.7158695742742203
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 4,
+                  "pixels": 60,
+                  "center": [
+                    0.01329700162137456,
+                    -0.48948583529863615,
+                    0.7155145972383858
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 5,
+                  "pixels": 77,
+                  "rejected": "search_boundary"
+                }
+              ],
+              "near_pixels": 493,
+              "reference_center": [
+                -0.019257826595175755,
+                -0.6828193873826642,
+                0.5207271997044511
+              ]
+            }
+          },
+          {
+            "index": 5,
+            "ok": true,
+            "pixels": 175,
+            "position": [
+              -0.019181382868872852,
+              -0.6827732730469465,
+              0.5209837818008428
+            ],
+            "received_monotonic": 235205.9284631,
+            "observation_age_s": 0.06909128499682993,
+            "reacquire_s": 0.009184166992781684,
+            "diagnostics": {
+              "candidates": [
+                {
+                  "id": 0,
+                  "pixels": 1542,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 1,
+                  "pixels": 61,
+                  "center": [
+                    -0.020986523673758677,
+                    -0.6989387713673553,
+                    0.5599120267790781
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 2,
+                  "pixels": 175,
+                  "center": [
+                    -0.019181382868872852,
+                    -0.6827732730469465,
+                    0.5209837818008428
+                  ],
+                  "current_support": 1.0,
+                  "reference_support": 1.0
+                },
+                {
+                  "id": 3,
+                  "pixels": 58,
+                  "center": [
+                    -0.033512810163389015,
+                    -0.4908061976446901,
+                    0.7158719693823947
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 4,
+                  "pixels": 60,
+                  "center": [
+                    0.013296950625811935,
+                    -0.4894842774922425,
+                    0.7155165863288987
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 5,
+                  "pixels": 77,
+                  "rejected": "search_boundary"
+                }
+              ],
+              "near_pixels": 493,
+              "reference_center": [
+                -0.019257826595175755,
+                -0.6828193873826642,
+                0.5207271997044511
+              ]
+            }
+          },
+          {
+            "index": 6,
+            "ok": true,
+            "pixels": 175,
+            "position": [
+              -0.019181382441882344,
+              -0.6827735023458755,
+              0.5209862736150197
+            ],
+            "received_monotonic": 235206.11423714,
+            "observation_age_s": 0.06956845000968315,
+            "reacquire_s": 0.009144891984760761,
+            "diagnostics": {
+              "candidates": [
+                {
+                  "id": 0,
+                  "pixels": 1542,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 1,
+                  "pixels": 61,
+                  "center": [
+                    -0.02098652561411155,
+                    -0.6989388519979498,
+                    0.5599120003182493
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 2,
+                  "pixels": 175,
+                  "center": [
+                    -0.019181382441882344,
+                    -0.6827735023458755,
+                    0.5209862736150197
+                  ],
+                  "current_support": 1.0,
+                  "reference_support": 1.0
+                },
+                {
+                  "id": 3,
+                  "pixels": 58,
+                  "center": [
+                    -0.033512635662179054,
+                    -0.4908049218153659,
+                    0.7158742681258845
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 4,
+                  "pixels": 60,
+                  "center": [
+                    0.013296899129323669,
+                    -0.4894827196858575,
+                    0.7155185751843912
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 5,
+                  "pixels": 77,
+                  "rejected": "search_boundary"
+                }
+              ],
+              "near_pixels": 493,
+              "reference_center": [
+                -0.019257826595175755,
+                -0.6828193873826642,
+                0.5207271997044511
+              ]
+            }
+          },
+          {
+            "index": 7,
+            "ok": true,
+            "pixels": 175,
+            "position": [
+              -0.019181395591755433,
+              -0.682773349336473,
+              0.5209821205913844
+            ],
+            "received_monotonic": 235206.307599498,
+            "observation_age_s": 0.07373059302335605,
+            "reacquire_s": 0.009614120004698634,
+            "diagnostics": {
+              "candidates": [
+                {
+                  "id": 0,
+                  "pixels": 1542,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 1,
+                  "pixels": 61,
+                  "center": [
+                    -0.02098653434208832,
+                    -0.698938771322929,
+                    0.5599120039527135
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 2,
+                  "pixels": 175,
+                  "center": [
+                    -0.019181395591755433,
+                    -0.682773349336473,
+                    0.5209821205913844
+                  ],
+                  "current_support": 1.0,
+                  "reference_support": 1.0
+                },
+                {
+                  "id": 3,
+                  "pixels": 58,
+                  "center": [
+                    -0.033512455374230435,
+                    -0.49080357114915185,
+                    0.7158766150517162
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 4,
+                  "pixels": 60,
+                  "center": [
+                    0.01329684663614518,
+                    -0.48948106808073844,
+                    0.7155206842950093
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 5,
+                  "pixels": 77,
+                  "rejected": "search_boundary"
+                }
+              ],
+              "near_pixels": 493,
+              "reference_center": [
+                -0.019257826595175755,
+                -0.6828193873826642,
+                0.5207271997044511
+              ]
+            }
+          },
+          {
+            "index": 8,
+            "ok": true,
+            "pixels": 175,
+            "position": [
+              -0.01918139022782307,
+              -0.6827733492504131,
+              0.5209853507208746
+            ],
+            "received_monotonic": 235206.503521801,
+            "observation_age_s": 0.07908148498972878,
+            "reacquire_s": 0.009608535998268053,
+            "diagnostics": {
+              "candidates": [
+                {
+                  "id": 0,
+                  "pixels": 1542,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 1,
+                  "pixels": 61,
+                  "center": [
+                    -0.020986536282530367,
+                    -0.6989387713007278,
+                    0.5599120039527115
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 2,
+                  "pixels": 175,
+                  "center": [
+                    -0.01918139022782307,
+                    -0.6827733492504131,
+                    0.5209853507208746
+                  ],
+                  "current_support": 1.0,
+                  "reference_support": 1.0
+                },
+                {
+                  "id": 3,
+                  "pixels": 58,
+                  "center": [
+                    -0.03351228083700074,
+                    -0.4908024263166082,
+                    0.715878890178914
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 4,
+                  "pixels": 60,
+                  "center": [
+                    0.013296792642789811,
+                    -0.48947939767408,
+                    0.7155227931706091
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 5,
+                  "pixels": 77,
+                  "rejected": "search_boundary"
+                }
+              ],
+              "near_pixels": 493,
+              "reference_center": [
+                -0.019257826595175755,
+                -0.6828193873826642,
+                0.5207271997044511
+              ]
+            }
+          },
+          {
+            "index": 9,
+            "ok": true,
+            "pixels": 175,
+            "position": [
+              -0.019181393503727922,
+              -0.6827732727026942,
+              0.5209853507208693
+            ],
+            "received_monotonic": 235206.706756278,
+            "observation_age_s": 0.07256431999849156,
+            "reacquire_s": 0.009277781995479017,
+            "diagnostics": {
+              "candidates": [
+                {
+                  "id": 0,
+                  "pixels": 1542,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 1,
+                  "pixels": 61,
+                  "center": [
+                    -0.02098654093804774,
+                    -0.6989389325841597,
+                    0.5599120038778038
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 2,
+                  "pixels": 175,
+                  "center": [
+                    -0.019181393503727922,
+                    -0.6827732727026942,
+                    0.5209853507208693
+                  ],
+                  "current_support": 1.0,
+                  "reference_support": 1.0
+                },
+                {
+                  "id": 3,
+                  "pixels": 58,
+                  "center": [
+                    -0.033512104875610606,
+                    -0.4908010944562151,
+                    0.7158812368673044
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 4,
+                  "pixels": 60,
+                  "center": [
+                    0.013296741644606699,
+                    -0.4894778212055096,
+                    0.7155248302221571
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 5,
+                  "pixels": 77,
+                  "rejected": "search_boundary"
+                }
+              ],
+              "near_pixels": 493,
+              "reference_center": [
+                -0.019257826595175755,
+                -0.6828193873826642,
+                0.5207271997044511
+              ]
+            }
+          }
+        ],
+        "settle_seconds": 3.0,
+        "reference_sim_time": 2.999999999999891,
+        "physics_during_inference": true,
+        "sim_time_after_initialization": 10.360000000000129,
+        "initialization": {
+          "source": "vlm_region",
+          "purpose": "object",
+          "prompt": "Locate the visible object 'red cylinder' in the image. Return a bounding box around the visible target; coordinates are integers normalized to 0..1000 in x,y order. Abstain if the object is absent or ambiguous in this image. Return JSON {\"verified\":true,\"box\":[x_min,y_min,x_max,y_max],\"reason\":\"...\"} or {\"verified\":false,\"reason\":\"...\"}. Do not predict a 3D position or surface point.",
+          "system_prompt": "Ground a robot target in the provided image. Do not invent missing visual evidence.",
+          "raw": "```json\n{\n  \"verified\": true,\n  \"box\": [450, 583, 550, 675],\n  \"reason\": \"The red cylinder is clearly visible as a distinct red object positioned on top of a blue structure in the center of the image.\"\n}\n```",
+          "image_order": [
+            "rgb_file"
+          ],
+          "valid": true,
+          "strategy": "depth_candidates",
+          "search_region": {
+            "box": [
+              400,
+              533,
+              600,
+              725
+            ],
+            "padding": 50
+          },
+          "surface_candidates": [
+            {
+              "id": 0,
+              "bbox_xyxy": [
+                96,
+                170,
+                144,
+                232
+              ],
+              "mask_bits": "/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////4H//////wB//////gA//////AAf////+AAf////+AAf////+AAf////+AAf////+AAf////+AAf////+AAf////+AAf////+AAf////+AAf////+AAf////+AA/////+AA/////+AA////+OAAP///8GAAH///4GAAD///4GAAB///wDAAB//+ADgAA//8ADwAA//8AB/4A//4AB/4A//4AB/4A//4AB/4A//8AB/4A//8AB/wA//+AAAAA//+AAAAA//+AAAAA///AAAAA///AAAAA//+AAAAA",
+              "points": 2257
+            },
+            {
+              "id": 1,
+              "bbox_xyxy": [
+                127,
+                197,
+                137,
+                204
+              ],
+              "mask_bits": "Px//////3/P4",
+              "points": 61
+            },
+            {
+              "id": 2,
+              "bbox_xyxy": [
+                126,
+                202,
+                138,
+                220
+              ],
+              "mask_bits": "gAwB8H///////////////////+/+/8/8f8H4",
+              "points": 176
+            },
+            {
+              "id": 3,
+              "bbox_xyxy": [
+                117,
+                214,
+                124,
+                229
+              ],
+              "mask_bits": "IODDx48/fnz48OHhw4A=",
+              "points": 57
+            },
+            {
+              "id": 4,
+              "bbox_xyxy": [
+                136,
+                214,
+                142,
+                229
+              ],
+              "mask_bits": "EGPPPPffffe8844A",
+              "points": 57
+            },
+            {
+              "id": 5,
+              "bbox_xyxy": [
+                127,
+                228,
+                137,
+                232
+              ],
+              "mask_bits": "/j+P8/8=",
+              "points": 32
+            }
+          ],
+          "surface_selection": {
+            "prompt": "Select a measured surface of 'red cylinder'. Image 1 is the original reference, NOT a candidate. Every subsequent image is ONE candidate, labeled with its ID. Image 2 is candidate 0, image 3 is candidate 1, and so on. All candidate images use the same enlarged context crop. In each candidate panel, ONLY pixels on the measured surface are retained; pixels outside that candidate have been replaced with black. Black background is not evidence. These unlabelled geometry proposals may include table, wall, occluders, or mixed objects. Select only a region whose bright pixels belong to the requested object, not its support furniture. A partial visible object surface is sufficient. If a region mixes target and other objects, or the target is ambiguous, abstain. Available IDs: [0, 1, 2, 3, 4, 5]. Return JSON {\"selected_id\":integer or null,\"target_unambiguous\":true or false,\"reason\":\"...\"}.",
+            "system_prompt": "Choose a visually supported surface, not an object location guess. Reply with JSON only.",
+            "raw": "{\"selected_id\":2,\"target_unambiguous\":true,\"reason\":\"Candidate 2 shows a distinct red cylindrical shape, matching the 'red cylinder' target. Other candidates show non-matching shapes or colors, making this selection unambiguous.\"}",
+            "image_order": [
+              "rgb_file",
+              "surface_candidate_0_rgb_file",
+              "surface_candidate_1_rgb_file",
+              "surface_candidate_2_rgb_file",
+              "surface_candidate_3_rgb_file",
+              "surface_candidate_4_rgb_file",
+              "surface_candidate_5_rgb_file"
+            ],
+            "presentation": "isolated"
+          },
+          "selected_id": 2,
+          "proposal_source": "rgbd_components"
+        },
+        "missing_depth_rejected": "surface_not_reacquired",
+        "passed": true,
+        "vlm_query_count": 2
+      }
+    },
+    {
+      "label": "normal_split_cube_obstructed",
+      "job_id": "20261025_092234_962518",
+      "notes": "home posture occludes target; candidate overflow",
+      "raw_result": {
+        "scope": "MuJoCo RGBD surface reacquisition; not native manipulation or full run-agent acceptance",
+        "query": "blue cube",
+        "vlm_calls": [
+          {
+            "encode_s": 0.0007343289908021688,
+            "request_s": 8.006643651024206,
+            "total_s": 8.007377980015008,
+            "image_count": 1,
+            "completed": true
+          },
+          {
+            "encode_s": 0.0017528919852338731,
+            "request_s": 8.789524393010652,
+            "total_s": 8.791277284995886,
+            "image_count": 7,
+            "completed": true
+          }
+        ],
+        "frames": [
+          {
+            "index": 0,
+            "ok": false,
+            "reason": "too many surface candidates; another view or segmentation is needed",
+            "reacquire_s": 0.006879405991639942,
+            "diagnostics": {
+              "candidates": [],
+              "near_pixels": 182,
+              "reference_center": [
+                -0.015149184286310506,
+                -0.5734470869969277,
+                0.5598922105498962
+              ]
+            }
+          },
+          {
+            "index": 1,
+            "ok": false,
+            "reason": "too many surface candidates; another view or segmentation is needed",
+            "reacquire_s": 0.006633882992900908,
+            "diagnostics": {
+              "candidates": [],
+              "near_pixels": 182,
+              "reference_center": [
+                -0.015149184286310506,
+                -0.5734470869969277,
+                0.5598922105498962
+              ]
+            }
+          },
+          {
+            "index": 2,
+            "ok": false,
+            "reason": "too many surface candidates; another view or segmentation is needed",
+            "reacquire_s": 0.006840365007519722,
+            "diagnostics": {
+              "candidates": [],
+              "near_pixels": 182,
+              "reference_center": [
+                -0.015149184286310506,
+                -0.5734470869969277,
+                0.5598922105498962
+              ]
+            }
+          },
+          {
+            "index": 3,
+            "ok": false,
+            "reason": "too many surface candidates; another view or segmentation is needed",
+            "reacquire_s": 0.006719800992868841,
+            "diagnostics": {
+              "candidates": [],
+              "near_pixels": 182,
+              "reference_center": [
+                -0.015149184286310506,
+                -0.5734470869969277,
+                0.5598922105498962
+              ]
+            }
+          },
+          {
+            "index": 4,
+            "ok": false,
+            "reason": "too many surface candidates; another view or segmentation is needed",
+            "reacquire_s": 0.00676534598460421,
+            "diagnostics": {
+              "candidates": [],
+              "near_pixels": 182,
+              "reference_center": [
+                -0.015149184286310506,
+                -0.5734470869969277,
+                0.5598922105498962
+              ]
+            }
+          },
+          {
+            "index": 5,
+            "ok": false,
+            "reason": "too many surface candidates; another view or segmentation is needed",
+            "reacquire_s": 0.006775624002330005,
+            "diagnostics": {
+              "candidates": [],
+              "near_pixels": 182,
+              "reference_center": [
+                -0.015149184286310506,
+                -0.5734470869969277,
+                0.5598922105498962
+              ]
+            }
+          },
+          {
+            "index": 6,
+            "ok": false,
+            "reason": "too many surface candidates; another view or segmentation is needed",
+            "reacquire_s": 0.006620742991799489,
+            "diagnostics": {
+              "candidates": [],
+              "near_pixels": 182,
+              "reference_center": [
+                -0.015149184286310506,
+                -0.5734470869969277,
+                0.5598922105498962
+              ]
+            }
+          },
+          {
+            "index": 7,
+            "ok": false,
+            "reason": "too many surface candidates; another view or segmentation is needed",
+            "reacquire_s": 0.007268068991834298,
+            "diagnostics": {
+              "candidates": [],
+              "near_pixels": 182,
+              "reference_center": [
+                -0.015149184286310506,
+                -0.5734470869969277,
+                0.5598922105498962
+              ]
+            }
+          },
+          {
+            "index": 8,
+            "ok": false,
+            "reason": "too many surface candidates; another view or segmentation is needed",
+            "reacquire_s": 0.007056103000650182,
+            "diagnostics": {
+              "candidates": [],
+              "near_pixels": 182,
+              "reference_center": [
+                -0.015149184286310506,
+                -0.5734470869969277,
+                0.5598922105498962
+              ]
+            }
+          },
+          {
+            "index": 9,
+            "ok": false,
+            "reason": "too many surface candidates; another view or segmentation is needed",
+            "reacquire_s": 0.007099879992892966,
+            "diagnostics": {
+              "candidates": [],
+              "near_pixels": 182,
+              "reference_center": [
+                -0.015149184286310506,
+                -0.5734470869969277,
+                0.5598922105498962
+              ]
+            }
+          }
+        ],
+        "settle_seconds": 3.0,
+        "reference_sim_time": 2.999999999999891,
+        "physics_during_inference": true,
+        "sim_time_after_initialization": 11.580000000000537,
+        "initialization": {
+          "source": "vlm_region",
+          "purpose": "object",
+          "prompt": "Locate the visible object 'blue cube' in the image. Return a bounding box around the visible target; coordinates are integers normalized to 0..1000 in x,y order. Abstain if the object is absent or ambiguous in this image. Return JSON {\"verified\":true,\"box\":[x_min,y_min,x_max,y_max],\"reason\":\"...\"} or {\"verified\":false,\"reason\":\"...\"}. Do not predict a 3D position or surface point.",
+          "system_prompt": "Ground a robot target in the provided image. Do not invent missing visual evidence.",
+          "raw": "{\n  \"verified\": true,\n  \"box\": [437, 583, 562, 683],\n  \"reason\": \"The blue cube is visible in the center of the image, positioned on top of a black object. It is a distinct blue rectangular shape, clearly identifiable as the target object.\"\n}",
+          "image_order": [
+            "rgb_file"
+          ],
+          "valid": true,
+          "strategy": "depth_candidates",
+          "search_region": {
+            "box": [
+              387,
+              533,
+              612,
+              733
+            ],
+            "padding": 50
+          },
+          "surface_candidates": [
+            {
+              "id": 0,
+              "bbox_xyxy": [
+                92,
+                170,
+                147,
+                235
+              ],
+              "mask_bits": "///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////wP///////wB///////wAf//////wAH//////wAD//////4AB//////8AA//////+AAf//////AAP//////gAH//////wAD//////4AB//////8AA//////+AAf//////AAP//////gAP//////wAH//////4AD/////8cAAf////8GAAH////8DAAB////+BgAAf///+AYAAL///4AOAAAf//4AHgAAP//8AB/4AH//8AA/8AD//+AAf+AB///AAP/AA///wAH/gAf//4AD/gAP//+AAAAAH///AAAAAD///gAAAAB///4AAAAA///8AAAAAf//8AAAAAP//+AAAAAH///AAAAAD///gAAAAA",
+              "points": 2711
+            },
+            {
+              "id": 1,
+              "bbox_xyxy": [
+                127,
+                197,
+                137,
+                204
+              ],
+              "mask_bits": "Px//////3/P4",
+              "points": 61
+            },
+            {
+              "id": 2,
+              "bbox_xyxy": [
+                126,
+                202,
+                138,
+                220
+              ],
+              "mask_bits": "gAwB8H///////////////////+/+/8/8f8H4",
+              "points": 176
+            },
+            {
+              "id": 3,
+              "bbox_xyxy": [
+                117,
+                214,
+                124,
+                229
+              ],
+              "mask_bits": "IODDx48/fnz48OHhw4A=",
+              "points": 57
+            },
+            {
+              "id": 4,
+              "bbox_xyxy": [
+                136,
+                214,
+                142,
+                229
+              ],
+              "mask_bits": "EGPPPPffffe8844A",
+              "points": 57
+            },
+            {
+              "id": 5,
+              "bbox_xyxy": [
+                126,
+                228,
+                137,
+                235
+              ],
+              "mask_bits": "fw/h/j///f8/4A==",
+              "points": 60
+            }
+          ],
+          "surface_selection": {
+            "prompt": "Select a measured surface of 'blue cube'. Image 1 is the original reference, NOT a candidate. Every subsequent image is ONE candidate, labeled with its ID. Image 2 is candidate 0, image 3 is candidate 1, and so on. All candidate images use the same enlarged context crop. In each candidate panel, ONLY pixels on the measured surface are retained; pixels outside that candidate have been replaced with black. Black background is not evidence. These unlabelled geometry proposals may include table, wall, occluders, or mixed objects. Select only a region whose bright pixels belong to the requested object, not its support furniture. A partial visible object surface is sufficient. If a region mixes target and other objects, or the target is ambiguous, abstain. Available IDs: [0, 1, 2, 3, 4, 5]. Return JSON {\"selected_id\":integer or null,\"target_unambiguous\":true or false,\"reason\":\"...\"}.",
+            "system_prompt": "Choose a visually supported surface, not an object location guess. Reply with JSON only.",
+            "raw": "{\"selected_id\":5,\"target_unambiguous\":true,\"reason\":\"Candidate 5 shows a distinct blue rectangular shape consistent with the visible surface of the blue cube in the reference image. Other candidates show non-matching shapes or colors (e.g., red, gray, or black), making Candidate 5 the only unambiguous match for the blue cube's surface.\"}",
+            "image_order": [
+              "rgb_file",
+              "surface_candidate_0_rgb_file",
+              "surface_candidate_1_rgb_file",
+              "surface_candidate_2_rgb_file",
+              "surface_candidate_3_rgb_file",
+              "surface_candidate_4_rgb_file",
+              "surface_candidate_5_rgb_file"
+            ],
+            "presentation": "isolated"
+          },
+          "selected_id": 5,
+          "proposal_source": "rgbd_components"
+        },
+        "missing_depth_rejected": "surface_not_reacquired",
+        "passed": false,
+        "vlm_query_count": 2
+      }
+    },
+    {
+      "label": "normal_split_cube_stowed",
+      "job_id": "20261025_092557_8e0f8d",
+      "notes": "arm physically stowed before reference",
+      "raw_result": {
+        "scope": "MuJoCo RGBD surface reacquisition; not native manipulation or full run-agent acceptance",
+        "query": "blue cube",
+        "vlm_calls": [
+          {
+            "encode_s": 0.0008957240206655115,
+            "request_s": 8.05472785999882,
+            "total_s": 8.055623584019486,
+            "image_count": 1,
+            "completed": true
+          },
+          {
+            "encode_s": 0.0016332310042344034,
+            "request_s": 7.224888314987766,
+            "total_s": 7.226521545992,
+            "image_count": 7,
+            "completed": true
+          }
+        ],
+        "frames": [
+          {
+            "index": 0,
+            "ok": true,
+            "pixels": 247,
+            "position": [
+              -0.020305570142481688,
+              -0.546551102080892,
+              0.5598921602793967
+            ],
+            "received_monotonic": 235503.91184332,
+            "observation_age_s": 0.06776792198070325,
+            "reacquire_s": 0.008559000998502597,
+            "diagnostics": {
+              "candidates": [
+                {
+                  "id": 0,
+                  "pixels": 1102,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 1,
+                  "pixels": 37,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 2,
+                  "pixels": 38,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 3,
+                  "pixels": 247,
+                  "center": [
+                    -0.020305570142481688,
+                    -0.546551102080892,
+                    0.5598921602793967
+                  ],
+                  "current_support": 1.0,
+                  "reference_support": 1.0
+                },
+                {
+                  "id": 4,
+                  "pixels": 182,
+                  "rejected": "search_boundary"
+                }
+              ],
+              "near_pixels": 374,
+              "reference_center": [
+                -0.020101939332941784,
+                -0.5482584597509719,
+                0.5598921143358122
+              ]
+            }
+          },
+          {
+            "index": 1,
+            "ok": true,
+            "pixels": 247,
+            "position": [
+              -0.020305573314957304,
+              -0.5465511020361152,
+              0.5598921611289595
+            ],
+            "received_monotonic": 235504.088603249,
+            "observation_age_s": 0.06807756799389608,
+            "reacquire_s": 0.008752092020586133,
+            "diagnostics": {
+              "candidates": [
+                {
+                  "id": 0,
+                  "pixels": 1102,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 1,
+                  "pixels": 37,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 2,
+                  "pixels": 38,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 3,
+                  "pixels": 247,
+                  "center": [
+                    -0.020305573314957304,
+                    -0.5465511020361152,
+                    0.5598921611289595
+                  ],
+                  "current_support": 1.0,
+                  "reference_support": 1.0
+                },
+                {
+                  "id": 4,
+                  "pixels": 182,
+                  "rejected": "search_boundary"
+                }
+              ],
+              "near_pixels": 374,
+              "reference_center": [
+                -0.020101939332941784,
+                -0.5482584597509719,
+                0.5598921143358122
+              ]
+            }
+          },
+          {
+            "index": 2,
+            "ok": true,
+            "pixels": 247,
+            "position": [
+              -0.020305576487446866,
+              -0.5465511019913382,
+              0.5598921760618061
+            ],
+            "received_monotonic": 235504.266274183,
+            "observation_age_s": 0.06769139898824506,
+            "reacquire_s": 0.008649992989376187,
+            "diagnostics": {
+              "candidates": [
+                {
+                  "id": 0,
+                  "pixels": 1102,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 1,
+                  "pixels": 37,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 2,
+                  "pixels": 38,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 3,
+                  "pixels": 247,
+                  "center": [
+                    -0.020305576487446866,
+                    -0.5465511019913382,
+                    0.5598921760618061
+                  ],
+                  "current_support": 1.0,
+                  "reference_support": 1.0
+                },
+                {
+                  "id": 4,
+                  "pixels": 182,
+                  "rejected": "search_boundary"
+                }
+              ],
+              "near_pixels": 374,
+              "reference_center": [
+                -0.020101939332941784,
+                -0.5482584597509719,
+                0.5598921143358122
+              ]
+            }
+          },
+          {
+            "index": 3,
+            "ok": true,
+            "pixels": 247,
+            "position": [
+              -0.02030557965994998,
+              -0.5465511019465621,
+              0.5598921760618194
+            ],
+            "received_monotonic": 235504.434092441,
+            "observation_age_s": 0.0686726730200462,
+            "reacquire_s": 0.0084782830090262,
+            "diagnostics": {
+              "candidates": [
+                {
+                  "id": 0,
+                  "pixels": 1102,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 1,
+                  "pixels": 37,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 2,
+                  "pixels": 38,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 3,
+                  "pixels": 247,
+                  "center": [
+                    -0.02030557965994998,
+                    -0.5465511019465621,
+                    0.5598921760618194
+                  ],
+                  "current_support": 1.0,
+                  "reference_support": 1.0
+                },
+                {
+                  "id": 4,
+                  "pixels": 182,
+                  "rejected": "search_boundary"
+                }
+              ],
+              "near_pixels": 374,
+              "reference_center": [
+                -0.020101939332941784,
+                -0.5482584597509719,
+                0.5598921143358122
+              ]
+            }
+          },
+          {
+            "index": 4,
+            "ok": true,
+            "pixels": 247,
+            "position": [
+              -0.02030558283246574,
+              -0.546551101901788,
+              0.5598921760618314
+            ],
+            "received_monotonic": 235504.624389545,
+            "observation_age_s": 0.06996089799213223,
+            "reacquire_s": 0.008941631007473916,
+            "diagnostics": {
+              "candidates": [
+                {
+                  "id": 0,
+                  "pixels": 1102,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 1,
+                  "pixels": 37,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 2,
+                  "pixels": 38,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 3,
+                  "pixels": 247,
+                  "center": [
+                    -0.02030558283246574,
+                    -0.546551101901788,
+                    0.5598921760618314
+                  ],
+                  "current_support": 1.0,
+                  "reference_support": 1.0
+                },
+                {
+                  "id": 4,
+                  "pixels": 182,
+                  "rejected": "search_boundary"
+                }
+              ],
+              "near_pixels": 374,
+              "reference_center": [
+                -0.020101939332941784,
+                -0.5482584597509719,
+                0.5598921143358122
+              ]
+            }
+          },
+          {
+            "index": 5,
+            "ok": true,
+            "pixels": 247,
+            "position": [
+              -0.02030558600499436,
+              -0.5465511018570135,
+              0.5598921729760516
+            ],
+            "received_monotonic": 235504.80650762,
+            "observation_age_s": 0.07022347100428306,
+            "reacquire_s": 0.009013834001962095,
+            "diagnostics": {
+              "candidates": [
+                {
+                  "id": 0,
+                  "pixels": 1102,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 1,
+                  "pixels": 37,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 2,
+                  "pixels": 38,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 3,
+                  "pixels": 247,
+                  "center": [
+                    -0.02030558600499436,
+                    -0.5465511018570135,
+                    0.5598921729760516
+                  ],
+                  "current_support": 1.0,
+                  "reference_support": 1.0
+                },
+                {
+                  "id": 4,
+                  "pixels": 182,
+                  "rejected": "search_boundary"
+                }
+              ],
+              "near_pixels": 374,
+              "reference_center": [
+                -0.020101939332941784,
+                -0.5482584597509719,
+                0.5598921143358122
+              ]
+            }
+          },
+          {
+            "index": 6,
+            "ok": true,
+            "pixels": 247,
+            "position": [
+              -0.020305589177535405,
+              -0.5465511018122396,
+              0.5598921686779297
+            ],
+            "received_monotonic": 235504.993580026,
+            "observation_age_s": 0.06757410601130687,
+            "reacquire_s": 0.008449723973171785,
+            "diagnostics": {
+              "candidates": [
+                {
+                  "id": 0,
+                  "pixels": 1102,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 1,
+                  "pixels": 37,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 2,
+                  "pixels": 38,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 3,
+                  "pixels": 247,
+                  "center": [
+                    -0.020305589177535405,
+                    -0.5465511018122396,
+                    0.5598921686779297
+                  ],
+                  "current_support": 1.0,
+                  "reference_support": 1.0
+                },
+                {
+                  "id": 4,
+                  "pixels": 182,
+                  "rejected": "search_boundary"
+                }
+              ],
+              "near_pixels": 374,
+              "reference_center": [
+                -0.020101939332941784,
+                -0.5482584597509719,
+                0.5598921143358122
+              ]
+            }
+          },
+          {
+            "index": 7,
+            "ok": true,
+            "pixels": 247,
+            "position": [
+              -0.020305592350088816,
+              -0.5465511017674684,
+              0.5598921701453816
+            ],
+            "received_monotonic": 235505.179321244,
+            "observation_age_s": 0.06922174300416373,
+            "reacquire_s": 0.008453387999907136,
+            "diagnostics": {
+              "candidates": [
+                {
+                  "id": 0,
+                  "pixels": 1102,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 1,
+                  "pixels": 37,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 2,
+                  "pixels": 38,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 3,
+                  "pixels": 247,
+                  "center": [
+                    -0.020305592350088816,
+                    -0.5465511017674684,
+                    0.5598921701453816
+                  ],
+                  "current_support": 1.0,
+                  "reference_support": 1.0
+                },
+                {
+                  "id": 4,
+                  "pixels": 182,
+                  "rejected": "search_boundary"
+                }
+              ],
+              "near_pixels": 374,
+              "reference_center": [
+                -0.020101939332941784,
+                -0.5482584597509719,
+                0.5598921143358122
+              ]
+            }
+          },
+          {
+            "index": 8,
+            "ok": true,
+            "pixels": 247,
+            "position": [
+              -0.0203055955226549,
+              -0.546551101722696,
+              0.5598921701453949
+            ],
+            "received_monotonic": 235505.349162385,
+            "observation_age_s": 0.06768905598437414,
+            "reacquire_s": 0.00857692101271823,
+            "diagnostics": {
+              "candidates": [
+                {
+                  "id": 0,
+                  "pixels": 1102,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 1,
+                  "pixels": 37,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 2,
+                  "pixels": 38,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 3,
+                  "pixels": 247,
+                  "center": [
+                    -0.0203055955226549,
+                    -0.546551101722696,
+                    0.5598921701453949
+                  ],
+                  "current_support": 1.0,
+                  "reference_support": 1.0
+                },
+                {
+                  "id": 4,
+                  "pixels": 182,
+                  "rejected": "search_boundary"
+                }
+              ],
+              "near_pixels": 374,
+              "reference_center": [
+                -0.020101939332941784,
+                -0.5482584597509719,
+                0.5598921143358122
+              ]
+            }
+          },
+          {
+            "index": 9,
+            "ok": true,
+            "pixels": 247,
+            "position": [
+              -0.020305598695232713,
+              -0.5465511016779263,
+              0.5598921703911781
+            ],
+            "received_monotonic": 235505.516885624,
+            "observation_age_s": 0.06825004998245277,
+            "reacquire_s": 0.008629097981611267,
+            "diagnostics": {
+              "candidates": [
+                {
+                  "id": 0,
+                  "pixels": 1102,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 1,
+                  "pixels": 37,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 2,
+                  "pixels": 38,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 3,
+                  "pixels": 247,
+                  "center": [
+                    -0.020305598695232713,
+                    -0.5465511016779263,
+                    0.5598921703911781
+                  ],
+                  "current_support": 1.0,
+                  "reference_support": 1.0
+                },
+                {
+                  "id": 4,
+                  "pixels": 182,
+                  "rejected": "search_boundary"
+                }
+              ],
+              "near_pixels": 374,
+              "reference_center": [
+                -0.020101939332941784,
+                -0.5482584597509719,
+                0.5598921143358122
+              ]
+            }
+          }
+        ],
+        "initial_posture": "stow",
+        "settle_seconds": 3.0,
+        "reference_sim_time": 2.999999999999891,
+        "physics_during_inference": true,
+        "sim_time_after_initialization": 10.78000000000027,
+        "initialization": {
+          "source": "vlm_region",
+          "purpose": "object",
+          "prompt": "Locate the visible object 'blue cube' in the image. Return a bounding box around the visible target; coordinates are integers normalized to 0..1000 in x,y order. Abstain if the object is absent or ambiguous in this image. Return JSON {\"verified\":true,\"box\":[x_min,y_min,x_max,y_max],\"reason\":\"...\"} or {\"verified\":false,\"reason\":\"...\"}. Do not predict a 3D position or surface point.",
+          "system_prompt": "Ground a robot target in the provided image. Do not invent missing visual evidence.",
+          "raw": "```json\n{\n  \"verified\": true,\n  \"box\": [450, 625, 500, 750],\n  \"reason\": \"The blue cube is visible in the image, located on the brown surface, directly below the red cylinder. Its color and shape are clearly identifiable as a cube.\"\n}\n```",
+          "image_order": [
+            "rgb_file"
+          ],
+          "valid": true,
+          "strategy": "depth_candidates",
+          "search_region": {
+            "box": [
+              400,
+              575,
+              550,
+              800
+            ],
+            "padding": 50
+          },
+          "surface_candidates": [
+            {
+              "id": 0,
+              "bbox_xyxy": [
+                96,
+                184,
+                132,
+                256
+              ],
+              "mask_bits": "//////////////////////////////////////////////////////////////////////4P////gD////AB///+AA///+AA///8AA///8AA///8AA///8AA///8AA///8AA///8AB///8AB///8AB///8AB///8AB///8AB///8AB///8AB///8AB///8AB///+AB///+AB////AD////gH////////////////////////////////////////AA///+AA///+AA///+AA///+AA///+AA///+AA///+AA///+AA///+AA///+AA///+AA///+AA///+AA///+AA///+AA///+AA///+AA///+AA///+AA///+AA///+AA///+AA///+AA///+AA///+AA///+AA///+AA///+AA///+AA",
+              "points": 1896
+            },
+            {
+              "id": 1,
+              "bbox_xyxy": [
+                120,
+                197,
+                130,
+                205
+              ],
+              "mask_bits": "Hx/3//9/3/P4fA==",
+              "points": 63
+            },
+            {
+              "id": 2,
+              "bbox_xyxy": [
+                119,
+                202,
+                131,
+                220
+              ],
+              "mask_bits": "gAwB4D////////////////////f///f+P+H8",
+              "points": 178
+            },
+            {
+              "id": 3,
+              "bbox_xyxy": [
+                119,
+                227,
+                120,
+                256
+              ],
+              "mask_bits": "////+A==",
+              "points": 29
+            },
+            {
+              "id": 4,
+              "bbox_xyxy": [
+                121,
+                228,
+                132,
+                250
+              ],
+              "mask_bits": "////////////////////////////////////////wA==",
+              "points": 242
+            },
+            {
+              "id": 5,
+              "bbox_xyxy": [
+                121,
+                251,
+                132,
+                256
+              ],
+              "mask_bits": "/////////g==",
+              "points": 55
+            }
+          ],
+          "surface_selection": {
+            "prompt": "Select a measured surface of 'blue cube'. Image 1 is the original reference, NOT a candidate. Every subsequent image is ONE candidate, labeled with its ID. Image 2 is candidate 0, image 3 is candidate 1, and so on. All candidate images use the same enlarged context crop. In each candidate panel, ONLY pixels on the measured surface are retained; pixels outside that candidate have been replaced with black. Black background is not evidence. These unlabelled geometry proposals may include table, wall, occluders, or mixed objects. Select only a region whose bright pixels belong to the requested object, not its support furniture. A partial visible object surface is sufficient. If a region mixes target and other objects, or the target is ambiguous, abstain. Available IDs: [0, 1, 2, 3, 4, 5]. Return JSON {\"selected_id\":integer or null,\"target_unambiguous\":true or false,\"reason\":\"...\"}.",
+            "system_prompt": "Choose a visually supported surface, not an object location guess. Reply with JSON only.",
+            "raw": "{\"selected_id\":4,\"target_unambiguous\":true,\"reason\":\"Candidate 4 shows a blue rectangular region that matches the visible surface of the blue cube from the reference image. The shape and color are consistent with the target object, and it is not mixed with other objects or ambiguous.\"}",
+            "image_order": [
+              "rgb_file",
+              "surface_candidate_0_rgb_file",
+              "surface_candidate_1_rgb_file",
+              "surface_candidate_2_rgb_file",
+              "surface_candidate_3_rgb_file",
+              "surface_candidate_4_rgb_file",
+              "surface_candidate_5_rgb_file"
+            ],
+            "presentation": "isolated"
+          },
+          "selected_id": 4,
+          "proposal_source": "rgbd_components"
+        },
+        "missing_depth_rejected": "surface_not_reacquired",
+        "passed": true,
+        "vlm_query_count": 2
+      }
+    }
+  ],
+  "offline_replays": {
+    "support-only-replay.json": {
+      "scope": "offline replay of saved captures; no new freshness or live execution claim",
+      "audit": {
+        "source": "external_mask_proposals",
+        "valid": true,
+        "strategy": "depth_candidates",
+        "purpose": "object",
+        "surface_candidates": [
+          {
+            "id": 0,
+            "bbox_xyxy": [
+              96,
+              170,
+              144,
+              232
+            ],
+            "mask_bits": "/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////wH//////gB//////gA//////AA//////AA//////AA//////gA//////wB//////8H////////////////////////////////////////////////////////////////////////////+P//P///8P//H///8P/+D///4H/+D///4H/+D//+IH/+D//+AD/8A//8AD/8A//8AD/8A//8AD/8A//8AD/8A//+AD/4A//+AB/4A///AAAAA///AAAAA///AAAAA///AAAAA///AAAAA",
+            "points": 2540
+          },
+          {
+            "id": 1,
+            "bbox_xyxy": [
+              126,
+              196,
+              138,
+              205
+            ],
+            "mask_bits": "D4P8f+////f/f+P8D4A=",
+            "points": 81
+          },
+          {
+            "id": 2,
+            "bbox_xyxy": [
+              112,
+              214,
+              124,
+              232
+            ],
+            "mask_bits": "AcA8A8B+B+Z+f///////f/ffP/P3H3H7HgPA",
+            "points": 142
+          },
+          {
+            "id": 3,
+            "bbox_xyxy": [
+              135,
+              214,
+              144,
+              230
+            ],
+            "mask_bits": "GA4Ph8Ph8f7+fz+fX4/n4+GA",
+            "points": 86
+          },
+          {
+            "id": 4,
+            "bbox_xyxy": [
+              126,
+              227,
+              138,
+              232
+            ],
+            "mask_bits": "/4/4/4///+A=",
+            "points": 50
+          }
+        ],
+        "surface_selection": {
+          "prompt": "Which measured surface shows 'red cylinder'? Each image is one numbered candidate. Only measured pixels are visible; black pixels are missing data, not object appearance. Judge only the visible pixels, not an imagined nearby object. A partial surface is sufficient only when its own appearance supports the requested identity and attributes. If it shows support furniture, another object, mixed surfaces, or insufficient identity cues, abstain. Return {\"selected_id\":integer or null,\"target_unambiguous\":boolean,\"reason\":\"short explanation\"}.",
+          "system_prompt": "Inspect visual evidence carefully. Return JSON only.",
+          "raw": "{\"selected_id\":0,\"target_unambiguous\":true,\"reason\":\"Candidate 0 shows a red cylindrical object with a black top, matching the description 'red cylinder'. Other candidates show insufficient or incorrect features.\"}",
+          "image_order": [
+            "surface_candidate_0_rgb_file",
+            "surface_candidate_1_rgb_file",
+            "surface_candidate_2_rgb_file",
+            "surface_candidate_3_rgb_file",
+            "surface_candidate_4_rgb_file"
+          ],
+          "presentation": "support_only"
+        },
+        "selected_id": 0,
+        "proposal_source": "external_masks"
+      },
+      "vlm_calls": [
+        {
+          "encode_s": 0.00350099999923259,
+          "request_s": 5.297209569020197,
+          "total_s": 5.300710569019429,
+          "image_count": 5,
+          "completed": true
+        }
+      ],
+      "frames": [
+        {
+          "index": 0,
+          "ok": false,
+          "reason": "surface_not_reacquired",
+          "diagnostics": {
+            "candidates": [
+              {
+                "id": 0,
+                "pixels": 8414,
+                "rejected": "search_boundary"
+              },
+              {
+                "id": 1,
+                "pixels": 81,
+                "center": [
+                  -0.02098130938624855,
+                  -0.6990656252557664,
+                  0.5599120157243852
+                ],
+                "rejected": "size_change"
+              },
+              {
+                "id": 2,
+                "pixels": 139,
+                "center": [
+                  0.01575596044481274,
+                  -0.4854130167728996,
+                  0.7152637709288551
+                ],
+                "rejected": "size_change"
+              },
+              {
+                "id": 3,
+                "pixels": 149,
+                "center": [
+                  -0.03629570493765125,
+                  -0.48746194923384983,
+                  0.7151483428706272
+                ],
+                "rejected": "size_change"
+              },
+              {
+                "id": 4,
+                "pixels": 245,
+                "rejected": "search_boundary"
+              },
+              {
+                "id": 5,
+                "pixels": 110,
+                "rejected": "search_boundary"
+              }
+            ],
+            "near_pixels": 4254,
+            "reference_center": [
+              0.03409858610358246,
+              -0.7887995683051787,
+              0.4800000079879015
+            ]
+          }
+        },
+        {
+          "index": 1,
+          "ok": false,
+          "reason": "surface_not_reacquired",
+          "diagnostics": {
+            "candidates": [
+              {
+                "id": 0,
+                "pixels": 8414,
+                "rejected": "search_boundary"
+              },
+              {
+                "id": 1,
+                "pixels": 81,
+                "center": [
+                  -0.020981316771890666,
+                  -0.6990656252164449,
+                  0.5599120491606792
+                ],
+                "rejected": "size_change"
+              },
+              {
+                "id": 2,
+                "pixels": 139,
+                "center": [
+                  0.015755912431312236,
+                  -0.48541051716822115,
+                  0.7152669898374909
+                ],
+                "rejected": "size_change"
+              },
+              {
+                "id": 3,
+                "pixels": 149,
+                "center": [
+                  -0.03629522424708329,
+                  -0.487459529687096,
+                  0.7151512713172731
+                ],
+                "rejected": "size_change"
+              },
+              {
+                "id": 4,
+                "pixels": 245,
+                "rejected": "search_boundary"
+              },
+              {
+                "id": 5,
+                "pixels": 110,
+                "rejected": "search_boundary"
+              }
+            ],
+            "near_pixels": 4254,
+            "reference_center": [
+              0.03409858610358246,
+              -0.7887995683051787,
+              0.4800000079879015
+            ]
+          }
+        },
+        {
+          "index": 2,
+          "ok": false,
+          "reason": "surface_not_reacquired",
+          "diagnostics": {
+            "candidates": [
+              {
+                "id": 0,
+                "pixels": 8414,
+                "rejected": "search_boundary"
+              },
+              {
+                "id": 1,
+                "pixels": 81,
+                "center": [
+                  -0.020981316043260815,
+                  -0.6990656251771264,
+                  0.5599119804504664
+                ],
+                "rejected": "size_change"
+              },
+              {
+                "id": 2,
+                "pixels": 139,
+                "center": [
+                  0.01575586081095544,
+                  -0.48540805487389654,
+                  0.7152701126593016
+                ],
+                "rejected": "size_change"
+              },
+              {
+                "id": 3,
+                "pixels": 149,
+                "center": [
+                  -0.03629473430191652,
+                  -0.4874570356968111,
+                  0.7151543949936954
+                ],
+                "rejected": "size_change"
+              },
+              {
+                "id": 4,
+                "pixels": 245,
+                "rejected": "search_boundary"
+              },
+              {
+                "id": 5,
+                "pixels": 110,
+                "rejected": "search_boundary"
+              }
+            ],
+            "near_pixels": 4254,
+            "reference_center": [
+              0.03409858610358246,
+              -0.7887995683051787,
+              0.4800000079879015
+            ]
+          }
+        },
+        {
+          "index": 3,
+          "ok": false,
+          "reason": "surface_not_reacquired",
+          "diagnostics": {
+            "candidates": [
+              {
+                "id": 0,
+                "pixels": 8414,
+                "rejected": "search_boundary"
+              },
+              {
+                "id": 1,
+                "pixels": 81,
+                "center": [
+                  -0.020981327486082797,
+                  -0.6990656654712568,
+                  0.5599119738613079
+                ],
+                "rejected": "size_change"
+              },
+              {
+                "id": 2,
+                "pixels": 139,
+                "center": [
+                  0.015755810392888977,
+                  -0.48540562988992564,
+                  0.7152731874376997
+                ],
+                "rejected": "size_change"
+              },
+              {
+                "id": 3,
+                "pixels": 149,
+                "center": [
+                  -0.03629425361124609,
+                  -0.4874546905936032,
+                  0.7151574210552294
+                ],
+                "rejected": "size_change"
+              },
+              {
+                "id": 4,
+                "pixels": 245,
+                "rejected": "search_boundary"
+              },
+              {
+                "id": 5,
+                "pixels": 110,
+                "rejected": "search_boundary"
+              }
+            ],
+            "near_pixels": 4254,
+            "reference_center": [
+              0.03409858610358246,
+              -0.7887995683051787,
+              0.4800000079879015
+            ]
+          }
+        },
+        {
+          "index": 4,
+          "ok": false,
+          "reason": "surface_not_reacquired",
+          "diagnostics": {
+            "candidates": [
+              {
+                "id": 0,
+                "pixels": 8414,
+                "rejected": "search_boundary"
+              },
+              {
+                "id": 1,
+                "pixels": 81,
+                "center": [
+                  -0.02098132675748477,
+                  -0.6990656250985009,
+                  0.5599119551247078
+                ],
+                "rejected": "size_change"
+              },
+              {
+                "id": 2,
+                "pixels": 140,
+                "center": [
+                  0.015792226616630198,
+                  -0.48536051438572303,
+                  0.7152507748658403
+                ],
+                "rejected": "size_change"
+              },
+              {
+                "id": 3,
+                "pixels": 149,
+                "center": [
+                  -0.036293779090223646,
+                  -0.4874522338250977,
+                  0.7151604959242057
+                ],
+                "rejected": "size_change"
+              },
+              {
+                "id": 4,
+                "pixels": 245,
+                "rejected": "search_boundary"
+              },
+              {
+                "id": 5,
+                "pixels": 110,
+                "rejected": "search_boundary"
+              }
+            ],
+            "near_pixels": 4254,
+            "reference_center": [
+              0.03409858610358246,
+              -0.7887995683051787,
+              0.4800000079879015
+            ]
+          }
+        },
+        {
+          "index": 5,
+          "ok": false,
+          "reason": "surface_not_reacquired",
+          "diagnostics": {
+            "candidates": [
+              {
+                "id": 0,
+                "pixels": 8414,
+                "rejected": "search_boundary"
+              },
+              {
+                "id": 1,
+                "pixels": 81,
+                "center": [
+                  -0.02098133279081225,
+                  -0.699065665392637,
+                  0.5599120038775716
+                ],
+                "rejected": "size_change"
+              },
+              {
+                "id": 2,
+                "pixels": 142,
+                "center": [
+                  0.01586950054859542,
+                  -0.48544505032090735,
+                  0.7152152984446691
+                ],
+                "rejected": "size_change"
+              },
+              {
+                "id": 3,
+                "pixels": 146,
+                "center": [
+                  -0.03614143710157958,
+                  -0.48714710759180974,
+                  0.7152305382915645
+                ],
+                "rejected": "size_change"
+              },
+              {
+                "id": 4,
+                "pixels": 245,
+                "rejected": "search_boundary"
+              },
+              {
+                "id": 5,
+                "pixels": 110,
+                "rejected": "search_boundary"
+              }
+            ],
+            "near_pixels": 4254,
+            "reference_center": [
+              0.03409858610358246,
+              -0.7887995683051787,
+              0.4800000079879015
+            ]
+          }
+        },
+        {
+          "index": 6,
+          "ok": false,
+          "reason": "surface_not_reacquired",
+          "diagnostics": {
+            "candidates": [
+              {
+                "id": 0,
+                "pixels": 8414,
+                "rejected": "search_boundary"
+              },
+              {
+                "id": 1,
+                "pixels": 81,
+                "center": [
+                  -0.020981336119391448,
+                  -0.6990656250198859,
+                  0.5599119815863396
+                ],
+                "rejected": "size_change"
+              },
+              {
+                "id": 2,
+                "pixels": 142,
+                "center": [
+                  0.015869441335844482,
+                  -0.4854435599025274,
+                  0.7152183392260183
+                ],
+                "rejected": "size_change"
+              },
+              {
+                "id": 3,
+                "pixels": 147,
+                "center": [
+                  -0.036185900183826065,
+                  -0.48696468425218253,
+                  0.7152138400025915
+                ],
+                "rejected": "size_change"
+              },
+              {
+                "id": 4,
+                "pixels": 245,
+                "rejected": "search_boundary"
+              },
+              {
+                "id": 5,
+                "pixels": 110,
+                "rejected": "search_boundary"
+              }
+            ],
+            "near_pixels": 4254,
+            "reference_center": [
+              0.03409858610358246,
+              -0.7887995683051787,
+              0.4800000079879015
+            ]
+          }
+        },
+        {
+          "index": 7,
+          "ok": false,
+          "reason": "surface_not_reacquired",
+          "diagnostics": {
+            "candidates": [
+              {
+                "id": 0,
+                "pixels": 8414,
+                "rejected": "search_boundary"
+              },
+              {
+                "id": 1,
+                "pixels": 81,
+                "center": [
+                  -0.020981342152751242,
+                  -0.6990656653140298,
+                  0.5599119897955886
+                ],
+                "rejected": "size_change"
+              },
+              {
+                "id": 2,
+                "pixels": 142,
+                "center": [
+                  0.015869380910520536,
+                  -0.4854420694841512,
+                  0.7152214518370659
+                ],
+                "rejected": "size_change"
+              },
+              {
+                "id": 3,
+                "pixels": 148,
+                "center": [
+                  -0.03623906876260846,
+                  -0.4868748097517055,
+                  0.7151933523002445
+                ],
+                "rejected": "size_change"
+              },
+              {
+                "id": 4,
+                "pixels": 245,
+                "rejected": "search_boundary"
+              },
+              {
+                "id": 5,
+                "pixels": 110,
+                "rejected": "search_boundary"
+              }
+            ],
+            "near_pixels": 4254,
+            "reference_center": [
+              0.03409858610358246,
+              -0.7887995683051787,
+              0.4800000079879015
+            ]
+          }
+        },
+        {
+          "index": 8,
+          "ok": false,
+          "reason": "surface_not_reacquired",
+          "diagnostics": {
+            "candidates": [
+              {
+                "id": 0,
+                "pixels": 8414,
+                "rejected": "search_boundary"
+              },
+              {
+                "id": 1,
+                "pixels": 81,
+                "center": [
+                  -0.020981349538509227,
+                  -0.6990656652747309,
+                  0.5599119975727193
+                ],
+                "rejected": "size_change"
+              },
+              {
+                "id": 2,
+                "pixels": 142,
+                "center": [
+                  0.015869324115224584,
+                  -0.4854406530778145,
+                  0.71522458839148
+                ],
+                "rejected": "size_change"
+              },
+              {
+                "id": 3,
+                "pixels": 148,
+                "center": [
+                  -0.03623878792616943,
+                  -0.48687380071564446,
+                  0.715196414615479
+                ],
+                "rejected": "size_change"
+              },
+              {
+                "id": 4,
+                "pixels": 245,
+                "rejected": "search_boundary"
+              },
+              {
+                "id": 5,
+                "pixels": 110,
+                "rejected": "search_boundary"
+              }
+            ],
+            "near_pixels": 4254,
+            "reference_center": [
+              0.03409858610358246,
+              -0.7887995683051787,
+              0.4800000079879015
+            ]
+          }
+        },
+        {
+          "index": 9,
+          "ok": false,
+          "reason": "surface_not_reacquired",
+          "diagnostics": {
+            "candidates": [
+              {
+                "id": 0,
+                "pixels": 8414,
+                "rejected": "search_boundary"
+              },
+              {
+                "id": 1,
+                "pixels": 81,
+                "center": [
+                  -0.020981350162367927,
+                  -0.6990656249019891,
+                  0.5599119802081874
+                ],
+                "rejected": "size_change"
+              },
+              {
+                "id": 2,
+                "pixels": 142,
+                "center": [
+                  0.015869264897349033,
+                  -0.48543919960459603,
+                  0.7152276770591598
+                ],
+                "rejected": "size_change"
+              },
+              {
+                "id": 3,
+                "pixels": 147,
+                "center": [
+                  -0.036185650836644045,
+                  -0.48678324374072895,
+                  0.7152238578921863
+                ],
+                "rejected": "size_change"
+              },
+              {
+                "id": 4,
+                "pixels": 245,
+                "rejected": "search_boundary"
+              },
+              {
+                "id": 5,
+                "pixels": 110,
+                "rejected": "search_boundary"
+              }
+            ],
+            "near_pixels": 4254,
+            "reference_center": [
+              0.03409858610358246,
+              -0.7887995683051787,
+              0.4800000079879015
+            ]
+          }
+        }
+      ],
+      "pixels": 2540,
+      "red_pixels": 183
+    },
+    "scaled-context-replay.json": {
+      "scope": "offline association replay, no new captures or freshness claims",
+      "results": {
+        "normals": [
+          {
+            "index": 0,
+            "ok": true,
+            "pixels": 175,
+            "diagnostics": {
+              "candidates": [
+                {
+                  "id": 0,
+                  "pixels": 1228,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 1,
+                  "pixels": 61,
+                  "center": [
+                    -0.02098650175505092,
+                    -0.6989387714785658,
+                    0.5599120039527309
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 2,
+                  "pixels": 175,
+                  "center": [
+                    -0.019181364022135772,
+                    -0.682773197015762,
+                    0.5209819821572804
+                  ],
+                  "current_support": 1.0,
+                  "reference_support": 1.0
+                },
+                {
+                  "id": 3,
+                  "pixels": 58,
+                  "center": [
+                    -0.03351370008383333,
+                    -0.4908127455285797,
+                    0.7158602347532357
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 4,
+                  "pixels": 60,
+                  "center": [
+                    0.013297213605238625,
+                    -0.48949232911900026,
+                    0.7155063292470962
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 5,
+                  "pixels": 62,
+                  "rejected": "search_boundary"
+                }
+              ],
+              "near_pixels": 493,
+              "reference_center": [
+                -0.019257826595175755,
+                -0.6828193873826642,
+                0.5207271997044511
+              ]
+            }
+          },
+          {
+            "index": 1,
+            "ok": true,
+            "pixels": 175,
+            "diagnostics": {
+              "candidates": [
+                {
+                  "id": 0,
+                  "pixels": 1228,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 1,
+                  "pixels": 61,
+                  "center": [
+                    -0.0209865050526849,
+                    -0.6989387714563063,
+                    0.5599120039527282
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 2,
+                  "pixels": 175,
+                  "center": [
+                    -0.019181357423646312,
+                    -0.6827734263146535,
+                    0.5209852584314769
+                  ],
+                  "current_support": 1.0,
+                  "reference_support": 1.0
+                },
+                {
+                  "id": 3,
+                  "pixels": 58,
+                  "center": [
+                    -0.033513521220005754,
+                    -0.49081150705327686,
+                    0.7158626057702377
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 4,
+                  "pixels": 60,
+                  "center": [
+                    0.013297161106989383,
+                    -0.4894907338488004,
+                    0.7155084622207244
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 5,
+                  "pixels": 62,
+                  "rejected": "search_boundary"
+                }
+              ],
+              "near_pixels": 493,
+              "reference_center": [
+                -0.019257826595175755,
+                -0.6828193873826642,
+                0.5207271997044511
+              ]
+            }
+          },
+          {
+            "index": 2,
+            "ok": true,
+            "pixels": 175,
+            "diagnostics": {
+              "candidates": [
+                {
+                  "id": 0,
+                  "pixels": 1228,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 1,
+                  "pixels": 61,
+                  "center": [
+                    -0.020986508350367368,
+                    -0.6989388520868673,
+                    0.5599120692689696
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 2,
+                  "pixels": 175,
+                  "center": [
+                    -0.01918136440201167,
+                    -0.682773273305213,
+                    0.5209852584314746
+                  ],
+                  "current_support": 1.0,
+                  "reference_support": 1.0
+                },
+                {
+                  "id": 3,
+                  "pixels": 58,
+                  "center": [
+                    -0.033513339453807314,
+                    -0.4908101563870217,
+                    0.7158649765498011
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 4,
+                  "pixels": 60,
+                  "center": [
+                    0.013297107614620107,
+                    -0.4894890634420823,
+                    0.7155104751742462
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 5,
+                  "pixels": 62,
+                  "rejected": "search_boundary"
+                }
+              ],
+              "near_pixels": 493,
+              "reference_center": [
+                -0.019257826595175755,
+                -0.6828193873826642,
+                0.5207271997044511
+              ]
+            }
+          },
+          {
+            "index": 3,
+            "ok": true,
+            "pixels": 175,
+            "diagnostics": {
+              "candidates": [
+                {
+                  "id": 0,
+                  "pixels": 1228,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 1,
+                  "pixels": 61,
+                  "center": [
+                    -0.020986514363127512,
+                    -0.6989388520646248,
+                    0.5599119975729454
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 2,
+                  "pixels": 175,
+                  "center": [
+                    -0.019181366443400495,
+                    -0.6827733496807838,
+                    0.5209844739714529
+                  ],
+                  "current_support": 1.0,
+                  "reference_support": 1.0
+                },
+                {
+                  "id": 3,
+                  "pixels": 58,
+                  "center": [
+                    -0.033513162068210985,
+                    -0.4908088430748372,
+                    0.7158672998593405
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 4,
+                  "pixels": 60,
+                  "center": [
+                    0.013297055617256782,
+                    -0.4894874869037851,
+                    0.7155125360888072
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 5,
+                  "pixels": 62,
+                  "rejected": "search_boundary"
+                }
+              ],
+              "near_pixels": 493,
+              "reference_center": [
+                -0.019257826595175755,
+                -0.6828193873826642,
+                0.5207271997044511
+              ]
+            }
+          },
+          {
+            "index": 4,
+            "ok": true,
+            "pixels": 175,
+            "diagnostics": {
+              "candidates": [
+                {
+                  "id": 0,
+                  "pixels": 1228,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 1,
+                  "pixels": 61,
+                  "center": [
+                    -0.020986517660904223,
+                    -0.6989388520423909,
+                    0.5599120923827307
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 2,
+                  "pixels": 175,
+                  "center": [
+                    -0.019181372187601544,
+                    -0.6827732731330265,
+                    0.5209856737338326
+                  ],
+                  "current_support": 1.0,
+                  "reference_support": 1.0
+                },
+                {
+                  "id": 3,
+                  "pixels": 58,
+                  "center": [
+                    -0.033512989027184394,
+                    -0.49080756724549673,
+                    0.7158695742742203
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 4,
+                  "pixels": 60,
+                  "center": [
+                    0.01329700162137456,
+                    -0.48948583529863615,
+                    0.7155145972383858
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 5,
+                  "pixels": 62,
+                  "rejected": "search_boundary"
+                }
+              ],
+              "near_pixels": 493,
+              "reference_center": [
+                -0.019257826595175755,
+                -0.6828193873826642,
+                0.5207271997044511
+              ]
+            }
+          },
+          {
+            "index": 5,
+            "ok": true,
+            "pixels": 175,
+            "diagnostics": {
+              "candidates": [
+                {
+                  "id": 0,
+                  "pixels": 1228,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 1,
+                  "pixels": 61,
+                  "center": [
+                    -0.020986523673758677,
+                    -0.6989387713673553,
+                    0.5599120267790781
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 2,
+                  "pixels": 175,
+                  "center": [
+                    -0.019181382868872852,
+                    -0.6827732730469465,
+                    0.5209837818008428
+                  ],
+                  "current_support": 1.0,
+                  "reference_support": 1.0
+                },
+                {
+                  "id": 3,
+                  "pixels": 58,
+                  "center": [
+                    -0.033512810163389015,
+                    -0.4908061976446901,
+                    0.7158719693823947
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 4,
+                  "pixels": 60,
+                  "center": [
+                    0.013296950625811935,
+                    -0.4894842774922425,
+                    0.7155165863288987
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 5,
+                  "pixels": 62,
+                  "rejected": "search_boundary"
+                }
+              ],
+              "near_pixels": 493,
+              "reference_center": [
+                -0.019257826595175755,
+                -0.6828193873826642,
+                0.5207271997044511
+              ]
+            }
+          },
+          {
+            "index": 6,
+            "ok": true,
+            "pixels": 175,
+            "diagnostics": {
+              "candidates": [
+                {
+                  "id": 0,
+                  "pixels": 1228,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 1,
+                  "pixels": 61,
+                  "center": [
+                    -0.02098652561411155,
+                    -0.6989388519979498,
+                    0.5599120003182493
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 2,
+                  "pixels": 175,
+                  "center": [
+                    -0.019181382441882344,
+                    -0.6827735023458755,
+                    0.5209862736150197
+                  ],
+                  "current_support": 1.0,
+                  "reference_support": 1.0
+                },
+                {
+                  "id": 3,
+                  "pixels": 58,
+                  "center": [
+                    -0.033512635662179054,
+                    -0.4908049218153659,
+                    0.7158742681258845
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 4,
+                  "pixels": 60,
+                  "center": [
+                    0.013296899129323669,
+                    -0.4894827196858575,
+                    0.7155185751843912
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 5,
+                  "pixels": 62,
+                  "rejected": "search_boundary"
+                }
+              ],
+              "near_pixels": 493,
+              "reference_center": [
+                -0.019257826595175755,
+                -0.6828193873826642,
+                0.5207271997044511
+              ]
+            }
+          },
+          {
+            "index": 7,
+            "ok": true,
+            "pixels": 175,
+            "diagnostics": {
+              "candidates": [
+                {
+                  "id": 0,
+                  "pixels": 1228,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 1,
+                  "pixels": 61,
+                  "center": [
+                    -0.02098653434208832,
+                    -0.698938771322929,
+                    0.5599120039527135
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 2,
+                  "pixels": 175,
+                  "center": [
+                    -0.019181395591755433,
+                    -0.682773349336473,
+                    0.5209821205913844
+                  ],
+                  "current_support": 1.0,
+                  "reference_support": 1.0
+                },
+                {
+                  "id": 3,
+                  "pixels": 58,
+                  "center": [
+                    -0.033512455374230435,
+                    -0.49080357114915185,
+                    0.7158766150517162
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 4,
+                  "pixels": 60,
+                  "center": [
+                    0.01329684663614518,
+                    -0.48948106808073844,
+                    0.7155206842950093
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 5,
+                  "pixels": 62,
+                  "rejected": "search_boundary"
+                }
+              ],
+              "near_pixels": 493,
+              "reference_center": [
+                -0.019257826595175755,
+                -0.6828193873826642,
+                0.5207271997044511
+              ]
+            }
+          },
+          {
+            "index": 8,
+            "ok": true,
+            "pixels": 175,
+            "diagnostics": {
+              "candidates": [
+                {
+                  "id": 0,
+                  "pixels": 1228,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 1,
+                  "pixels": 61,
+                  "center": [
+                    -0.020986536282530367,
+                    -0.6989387713007278,
+                    0.5599120039527115
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 2,
+                  "pixels": 175,
+                  "center": [
+                    -0.01918139022782307,
+                    -0.6827733492504131,
+                    0.5209853507208746
+                  ],
+                  "current_support": 1.0,
+                  "reference_support": 1.0
+                },
+                {
+                  "id": 3,
+                  "pixels": 58,
+                  "center": [
+                    -0.03351228083700074,
+                    -0.4908024263166082,
+                    0.715878890178914
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 4,
+                  "pixels": 60,
+                  "center": [
+                    0.013296792642789811,
+                    -0.48947939767408,
+                    0.7155227931706091
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 5,
+                  "pixels": 62,
+                  "rejected": "search_boundary"
+                }
+              ],
+              "near_pixels": 493,
+              "reference_center": [
+                -0.019257826595175755,
+                -0.6828193873826642,
+                0.5207271997044511
+              ]
+            }
+          },
+          {
+            "index": 9,
+            "ok": true,
+            "pixels": 175,
+            "diagnostics": {
+              "candidates": [
+                {
+                  "id": 0,
+                  "pixels": 1228,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 1,
+                  "pixels": 61,
+                  "center": [
+                    -0.02098654093804774,
+                    -0.6989389325841597,
+                    0.5599120038778038
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 2,
+                  "pixels": 175,
+                  "center": [
+                    -0.019181393503727922,
+                    -0.6827732727026942,
+                    0.5209853507208693
+                  ],
+                  "current_support": 1.0,
+                  "reference_support": 1.0
+                },
+                {
+                  "id": 3,
+                  "pixels": 58,
+                  "center": [
+                    -0.033512104875610606,
+                    -0.4908010944562151,
+                    0.7158812368673044
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 4,
+                  "pixels": 60,
+                  "center": [
+                    0.013296741644606699,
+                    -0.4894778212055096,
+                    0.7155248302221571
+                  ],
+                  "rejected": "size_change"
+                },
+                {
+                  "id": 5,
+                  "pixels": 62,
+                  "rejected": "search_boundary"
+                }
+              ],
+              "near_pixels": 493,
+              "reference_center": [
+                -0.019257826595175755,
+                -0.6828193873826642,
+                0.5207271997044511
+              ]
+            }
+          }
+        ],
+        "blue": [
+          {
+            "index": 0,
+            "ok": false,
+            "reason": "surface_not_reacquired",
+            "diagnostics": {
+              "candidates": [
+                {
+                  "id": 0,
+                  "pixels": 38,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 1,
+                  "pixels": 25,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 2,
+                  "pixels": 174,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 3,
+                  "pixels": 42,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 4,
+                  "pixels": 34,
+                  "rejected": "search_boundary"
+                }
+              ],
+              "near_pixels": 182,
+              "reference_center": [
+                -0.015149184286310506,
+                -0.5734470869969277,
+                0.5598922105498962
+              ]
+            }
+          },
+          {
+            "index": 1,
+            "ok": false,
+            "reason": "surface_not_reacquired",
+            "diagnostics": {
+              "candidates": [
+                {
+                  "id": 0,
+                  "pixels": 38,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 1,
+                  "pixels": 25,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 2,
+                  "pixels": 174,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 3,
+                  "pixels": 42,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 4,
+                  "pixels": 34,
+                  "rejected": "search_boundary"
+                }
+              ],
+              "near_pixels": 182,
+              "reference_center": [
+                -0.015149184286310506,
+                -0.5734470869969277,
+                0.5598922105498962
+              ]
+            }
+          },
+          {
+            "index": 2,
+            "ok": false,
+            "reason": "surface_not_reacquired",
+            "diagnostics": {
+              "candidates": [
+                {
+                  "id": 0,
+                  "pixels": 38,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 1,
+                  "pixels": 25,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 2,
+                  "pixels": 174,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 3,
+                  "pixels": 42,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 4,
+                  "pixels": 34,
+                  "rejected": "search_boundary"
+                }
+              ],
+              "near_pixels": 182,
+              "reference_center": [
+                -0.015149184286310506,
+                -0.5734470869969277,
+                0.5598922105498962
+              ]
+            }
+          },
+          {
+            "index": 3,
+            "ok": false,
+            "reason": "surface_not_reacquired",
+            "diagnostics": {
+              "candidates": [
+                {
+                  "id": 0,
+                  "pixels": 38,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 1,
+                  "pixels": 25,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 2,
+                  "pixels": 174,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 3,
+                  "pixels": 42,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 4,
+                  "pixels": 34,
+                  "rejected": "search_boundary"
+                }
+              ],
+              "near_pixels": 182,
+              "reference_center": [
+                -0.015149184286310506,
+                -0.5734470869969277,
+                0.5598922105498962
+              ]
+            }
+          },
+          {
+            "index": 4,
+            "ok": false,
+            "reason": "surface_not_reacquired",
+            "diagnostics": {
+              "candidates": [
+                {
+                  "id": 0,
+                  "pixels": 38,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 1,
+                  "pixels": 25,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 2,
+                  "pixels": 174,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 3,
+                  "pixels": 44,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 4,
+                  "pixels": 34,
+                  "rejected": "search_boundary"
+                }
+              ],
+              "near_pixels": 182,
+              "reference_center": [
+                -0.015149184286310506,
+                -0.5734470869969277,
+                0.5598922105498962
+              ]
+            }
+          },
+          {
+            "index": 5,
+            "ok": false,
+            "reason": "surface_not_reacquired",
+            "diagnostics": {
+              "candidates": [
+                {
+                  "id": 0,
+                  "pixels": 38,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 1,
+                  "pixels": 25,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 2,
+                  "pixels": 174,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 3,
+                  "pixels": 44,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 4,
+                  "pixels": 34,
+                  "rejected": "search_boundary"
+                }
+              ],
+              "near_pixels": 182,
+              "reference_center": [
+                -0.015149184286310506,
+                -0.5734470869969277,
+                0.5598922105498962
+              ]
+            }
+          },
+          {
+            "index": 6,
+            "ok": false,
+            "reason": "surface_not_reacquired",
+            "diagnostics": {
+              "candidates": [
+                {
+                  "id": 0,
+                  "pixels": 38,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 1,
+                  "pixels": 25,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 2,
+                  "pixels": 174,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 3,
+                  "pixels": 44,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 4,
+                  "pixels": 34,
+                  "rejected": "search_boundary"
+                }
+              ],
+              "near_pixels": 182,
+              "reference_center": [
+                -0.015149184286310506,
+                -0.5734470869969277,
+                0.5598922105498962
+              ]
+            }
+          },
+          {
+            "index": 7,
+            "ok": false,
+            "reason": "surface_not_reacquired",
+            "diagnostics": {
+              "candidates": [
+                {
+                  "id": 0,
+                  "pixels": 38,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 1,
+                  "pixels": 25,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 2,
+                  "pixels": 174,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 3,
+                  "pixels": 44,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 4,
+                  "pixels": 34,
+                  "rejected": "search_boundary"
+                }
+              ],
+              "near_pixels": 182,
+              "reference_center": [
+                -0.015149184286310506,
+                -0.5734470869969277,
+                0.5598922105498962
+              ]
+            }
+          },
+          {
+            "index": 8,
+            "ok": false,
+            "reason": "surface_not_reacquired",
+            "diagnostics": {
+              "candidates": [
+                {
+                  "id": 0,
+                  "pixels": 38,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 1,
+                  "pixels": 25,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 2,
+                  "pixels": 174,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 3,
+                  "pixels": 44,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 4,
+                  "pixels": 34,
+                  "rejected": "search_boundary"
+                }
+              ],
+              "near_pixels": 182,
+              "reference_center": [
+                -0.015149184286310506,
+                -0.5734470869969277,
+                0.5598922105498962
+              ]
+            }
+          },
+          {
+            "index": 9,
+            "ok": false,
+            "reason": "surface_not_reacquired",
+            "diagnostics": {
+              "candidates": [
+                {
+                  "id": 0,
+                  "pixels": 38,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 1,
+                  "pixels": 25,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 2,
+                  "pixels": 174,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 3,
+                  "pixels": 44,
+                  "rejected": "search_boundary"
+                },
+                {
+                  "id": 4,
+                  "pixels": 34,
+                  "rejected": "search_boundary"
+                }
+              ],
+              "near_pixels": 182,
+              "reference_center": [
+                -0.015149184286310506,
+                -0.5734470869969277,
+                0.5598922105498962
+              ]
+            }
+          }
+        ]
+      }
+    }
+  },
+  "offline_replay_notes": {
+    "support-only-replay.json": "job20261025_091737_bf6361; one additional semantic call on saved candidates; presentation alone did not fix mixed geometry",
+    "scaled-context-replay.json": "CPU-only saved-data test, no VLM calls; proposed scaled ROI did not resolve cube rejection and was not adopted"
+  },
+  "native_control": {
+    "job_id": "20261025_091237_dc8365",
+    "scope": "actual run-agent CLI, live stationary Stretch, privileged geometry; separate from observed diagnostics",
+    "summary": {
+      "task_passed": true,
+      "agent_integration": {
+        "tamp_calls": 3,
+        "outcome_counts": {
+          "ok": 3,
+          "error": 0,
+          "partial": 0,
+          "invalid": 0
+        },
+        "code_counts": {
+          "ok": 3
+        },
+        "result_contracts_valid": true,
+        "failure_stop_compliant": null,
+        "failure_cases": 0,
+        "discovery_only_cases": 0,
+        "stop_boundary_cases": 0,
+        "failure_boundaries": [],
+        "unassessed": [
+          "task_interpretation",
+          "goal_coverage",
+          "physical_recovery",
+          "observed_grounding",
+          "navigation",
+          "exploration"
+        ]
+      },
+      "cli_exit_code": 0,
+      "failure_boundaries": [],
+      "requested_rejection_observed": null,
+      "final_predicates": {
+        "object2": {
+          "in_region": true,
+          "supported": true,
+          "settled": true,
+          "satisfied": true,
+          "bounds_xy": [
+            [
+              -0.03898534341687632,
+              -0.8192496561753317
+            ],
+            [
+              0.0011146186491933358,
+              -0.7791501393609597
+            ]
+          ]
+        },
+        "object1": {
+          "in_region": true,
+          "supported": true,
+          "settled": true,
+          "satisfied": true,
+          "bounds_xy": [
+            [
+              -0.03994580952341665,
+              -0.7181269482754622
+            ],
+            [
+              0.0005317168467423097,
+              -0.6378892571994559
+            ]
+          ]
+        }
+      },
+      "tool_outcomes": [
+        {
+          "schema_version": 1,
+          "tool": "scene_tasks",
+          "status": "ok",
+          "code": "ok",
+          "message": "ok",
+          "data": {
+            "planning_scope": "task_skeleton",
+            "motion_refinement": "per_step",
+            "inputs": "privileged",
+            "task_planning_available": true,
+            "objects": [
+              "blue cube",
+              "red cylinder"
+            ],
+            "regions": [
+              "cube goal",
+              "cylinder goal"
+            ],
+            "locations": [
+              {
+                "object_name": "blue cube",
+                "region": "outside"
+              },
+              {
+                "object_name": "red cylinder",
+                "region": "cube goal"
+              }
+            ],
+            "free_regions": [
+              "cylinder goal"
+            ],
+            "instruction_forms": [
+              "move OBJECT to REGION; move OBJECT to REGION",
+              "swap OBJECT and OBJECT"
+            ]
+          },
+          "recovery": "none"
+        },
+        {
+          "schema_version": 1,
+          "tool": "plan_task",
+          "status": "ok",
+          "code": "ok",
+          "message": "ok",
+          "data": {
+            "plan_ref": "task_plan_83ef907d25ad4ff4a149dcc30feca06a",
+            "steps": 2,
+            "strategy": "beam",
+            "execution_started": false,
+            "planning_scope": "task_skeleton",
+            "motion_refinement": "per_step"
+          },
+          "recovery": "none"
+        },
+        {
+          "schema_version": 1,
+          "tool": "execute_task_plan",
+          "status": "ok",
+          "code": "ok",
+          "message": "ok",
+          "data": {
+            "execution_started": true,
+            "completed_steps": 2,
+            "goal_verified": true
+          },
+          "recovery": "none"
+        }
+      ],
+      "audit_commands": 507,
+      "forbidden_commands": 0,
+      "passed": true
+    }
+  },
+  "validation": {
+    "tests": 122,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "junit_sha256": "d29fe2a3053aa3fea0b4d80ce7cde572eb840b0580aa97eecd3d8032b027e165"
+  },
+  "final_code_hashes": {
+    "scripts/eval_observed_reacquisition.py": "1b474cd7dccc5ba2b1e2c38eb13dedd2531d724f19e2e5036dff7b026c52f8bc",
+    "src/emet/memory/surface_reacquisition.py": "144bd283f594ea8c742f9b1f0aac87efeab2dd410c0d1a4bf27003cde03f7493",
+    "src/emet/memory/surface_candidates.py": "4936b47af8b77804f6d3844f9eb893d355d1c8f34c7a345eeb3faa534e9c151b",
+    "src/emet/memory/vlm_region_grounding.py": "192ff2a52efd7fc4e73ed56d54d8ea3c3d808da7d2a867982068c03f0b0aa031",
+    "src/emet/llms/openai_vllm_client.py": "2ef69086d2e248ac7cde12ad94f05b70e1469eeca851c56908afb99fa4e358e4",
+    "src/emet/controller/task/tamp/observed_frames.py": "3274ed3341ce083bae33a88ebc85ad6387195671c015b09c608cf9e343b266f8",
+    "src/emet/controller/task/tamp/observed_discovery.py": "94c220e22cccf08f2e0e1a3172b4c58f86d8416309b14289e0884bb99167d059"
+  }
+}

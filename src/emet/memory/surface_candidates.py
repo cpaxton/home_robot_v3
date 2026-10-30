@@ -16,7 +16,49 @@ class SurfaceCandidateOverflow(ValueError):
     """Proposal geometry exceeds the bounded semantic selection budget."""
 
 
-def _connected_surfaces(depth, valid, colors=None):
+def _local_surface_normals(world, rgb=None):
+    """Fit image-to-world tangents over measured 5x5 neighbourhoods.
+
+    Millimetre depth quantization makes adjacent-pixel derivatives unstable at
+    high resolution. This estimates proposal normals without altering depths,
+    filling holes, or connecting distant/appearance-incompatible surfaces.
+    """
+    h, w = world.shape[:2]
+    padded = np.pad(world, ((2, 2), (2, 2), (0, 0)), constant_values=np.nan)
+    colors = None if rgb is None else np.asarray(rgb, float)
+    color_pad = None if colors is None else np.pad(colors, ((2, 2), (2, 2), (0, 0)), constant_values=np.nan)
+    n, sx, sy, sxx, syy, sxy = [np.zeros((h, w)) for _ in range(6)]
+    total, tx, ty = [np.zeros((h, w, 3)) for _ in range(3)]
+    for y in range(-2, 3):
+        for x in range(-2, 3):
+            points = padded[2+y:2+y+h, 2+x:2+x+w]
+            valid = np.isfinite(points).all(-1) & np.isfinite(world).all(-1)
+            valid &= np.linalg.norm(points-world, axis=-1) <= .03
+            if colors is not None:
+                valid &= np.max(np.abs(color_pad[2+y:2+y+h, 2+x:2+x+w]-colors), axis=-1) <= 35
+            values = np.where(valid[..., None], points, 0.)
+            n += valid
+            sx += valid*x
+            sy += valid*y
+            sxx += valid*x*x
+            syy += valid*y*y
+            sxy += valid*x*y
+            total += values
+            tx += x*values
+            ty += y*values
+    safe = np.maximum(n, 1)
+    xx, yy, xy = sxx-sx*sx/safe, syy-sy*sy/safe, sxy-sx*sy/safe
+    a, b = tx-total*(sx/safe)[..., None], ty-total*(sy/safe)[..., None]
+    determinant = xx*yy-xy*xy
+    divisor = np.where(determinant > 1e-6, determinant, np.nan)[..., None]
+    dx, dy = (a*yy[..., None]-b*xy[..., None])/divisor, (b*xx[..., None]-a*xy[..., None])/divisor
+    normals = np.cross(dx, dy)
+    lengths = np.linalg.norm(normals, axis=-1, keepdims=True)
+    return np.divide(normals, lengths, out=np.full_like(normals, np.nan),
+                     where=(lengths > 1e-10) & (n[..., None] >= 6))
+
+
+def _connected_surfaces(depth, valid, colors=None, normals=None):
     """Measured adjacency, shared by RGB-D and external-mask proposals."""
     indices = np.arange(depth.size).reshape(depth.shape)
     rows, cols = [], []
@@ -24,6 +66,17 @@ def _connected_surfaces(depth, valid, colors=None):
         compatible = valid[a] & valid[b] & (np.abs(depth[a] - depth[b]) <= 0.08)
         if colors is not None:
             compatible &= np.max(np.abs(colors[a] - colors[b]), axis=-1) <= 35
+        if normals is not None:
+            compatible &= np.isfinite(normals[a]).all(axis=-1) & np.isfinite(normals[b]).all(axis=-1)
+            cosine = np.cos(np.deg2rad(30.0))
+            compatible &= np.sum(normals[a] * normals[b], axis=-1) >= cosine
+            # A locally smooth chain can turn an upright object surface into
+            # its horizontal support. Preserve a world-up orientation boundary
+            # even when each individual normal change is small. These remain
+            # geometry proposals, not object identities or support certificates.
+            horizontal_a = np.abs(normals[a][..., 2]) >= cosine
+            horizontal_b = np.abs(normals[b][..., 2]) >= cosine
+            compatible &= horizontal_a == horizontal_b
         rows.append(indices[a][compatible])
         cols.append(indices[b][compatible])
     rows, cols = np.concatenate(rows), np.concatenate(cols)
@@ -35,11 +88,13 @@ def _connected_surfaces(depth, valid, colors=None):
         yield valid & (components == index)
 
 
-def surface_candidates(depth, box, *, min_depth, max_depth, rgb=None, proposal_masks=None):
+def surface_candidates(depth, box, *, min_depth, max_depth, rgb=None, proposal_masks=None, world_xyz=None):
     """Split a VLM search box into measured depth layers and connected components.
 
     Optional class-agnostic masks constrain candidates but still split at depth
-    discontinuities. Touching/coplanar objects need not separate. Overflow fails
+    discontinuities. Optional calibrated world XYZ also splits at measured
+    normal changes of 30 degrees; invalid/degenerate normals cannot connect
+    surfaces. Touching/coplanar objects still need not separate. Overflow fails
     closed instead of silently discarding a possibly relevant small surface.
     """
     depth = np.asarray(depth)
@@ -52,6 +107,17 @@ def surface_candidates(depth, box, *, min_depth, max_depth, rgb=None, proposal_m
     x1, y1 = np.ceil(np.array(box[2:]) * [w, h] / 1000).astype(int)
     if x0 >= x1 or y0 >= y1:
         raise ValueError("empty search box")
+    normals = None
+    if world_xyz is not None:
+        world_xyz = np.asarray(world_xyz, dtype=float)
+        if world_xyz.shape != (*depth.shape, 3) or min(depth.shape) < 3:
+            raise ValueError("surface normals require aligned world XYZ")
+        if rgb is not None and (np.shape(rgb) != (*depth.shape, 3) or np.asarray(rgb).dtype != np.uint8):
+            raise ValueError("RGB must be uint8 and aligned with depth")
+        # Include a halo for the local fit, then keep only the requested ROI.
+        xa, ya, xb, yb = max(0, x0-2), max(0, y0-2), min(w, x1+2), min(h, y1+2)
+        normals = _local_surface_normals(world_xyz[ya:yb, xa:xb],
+            None if rgb is None else rgb[ya:yb, xa:xb])[y0-ya:y1-ya, x0-xa:x1-xa]
     roi = depth[y0:y1, x0:x1]
     valid = np.isfinite(roi) & (roi > min_depth) & (roi < max_depth)
     if not valid.any():
@@ -62,7 +128,9 @@ def surface_candidates(depth, box, *, min_depth, max_depth, rgb=None, proposal_m
             raise ValueError("RGB must be uint8 and aligned with depth")
         colors = rgb[y0:y1, x0:x1].astype(float)
         # Class-agnostic appearance boundary: no category/color vocabulary.
-        masks = _connected_surfaces(roi, valid, colors)
+        masks = _connected_surfaces(roi, valid, colors, normals)
+    elif proposal_masks is None and normals is not None:
+        masks = _connected_surfaces(roi, valid, normals=normals)
     elif proposal_masks is None:
         # Split only at measured gaps, not an assumed foreground or object depth.
         values = np.unique(roi[valid])
@@ -76,7 +144,7 @@ def surface_candidates(depth, box, *, min_depth, max_depth, rgb=None, proposal_m
             if mask.dtype != bool or mask.shape != depth.shape:
                 raise ValueError("proposal masks must be boolean and aligned with depth")
             external_masks.append(mask[y0:y1, x0:x1] & valid)
-        masks = (surface for mask in external_masks for surface in _connected_surfaces(roi, mask))
+        masks = (surface for mask in external_masks for surface in _connected_surfaces(roi, mask, normals=normals))
     regions = []
     for mask in masks:
         components, count = label(mask)

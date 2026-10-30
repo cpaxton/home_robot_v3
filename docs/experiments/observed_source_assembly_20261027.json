@@ -1,0 +1,281 @@
+{
+  "scope": "live source assembly development; not manipulation/agent task acceptance",
+  "attempts": [
+    {
+      "job_id": "20261027_192940_da1f5f",
+      "source_base": "a22842a27cff903e8df87b73b0bc28a3511121be",
+      "vlm_calls": 1,
+      "queries": 0,
+      "reacquisition_passed": false,
+      "initialization_failure": "candidate_overflow",
+      "execution_readiness": null,
+      "request_seconds": []
+    },
+    {
+      "job_id": "20261027_193446_5399b1",
+      "source_base": "a22842a27cff903e8df87b73b0bc28a3511121be",
+      "vlm_calls": 2,
+      "queries": 5,
+      "reacquisition_passed": true,
+      "initialization_failure": null,
+      "execution_readiness": {
+        "scope": "live assembly prerequisite audit, not a manipulation or agent benchmark",
+        "qualification": "not_qualified",
+        "task_success_assessed": false,
+        "execution_source_installed": false,
+        "gates": {
+          "live_rgbd": {
+            "state": "passed",
+            "receive_age_s": 0.0355134330020519,
+            "valid_depth_fraction": 0.854874213836478,
+            "capture": {
+              "received_monotonic": 90179.112936573,
+              "image_timing": {
+                "head_cam_left": {
+                  "timestamp_ns": 90178775317210,
+                  "clock_domain": "mujoco_render_monotonic",
+                  "source": "renderer_scene_capture",
+                  "available": true
+                }
+              }
+            }
+          },
+          "surface_refresh": {
+            "state": "passed",
+            "passed": 5,
+            "attempted": 5
+          },
+          "reference_features": {
+            "state": "unknown",
+            "reason": "rigid_tracking_insufficient"
+          },
+          "depth_workspace": {
+            "state": "passed",
+            "cells": {
+              "unknown": 7151,
+              "free": 6635,
+              "occupied": 38
+            },
+            "scope": "depth carving only; not target/robot-separated execution geometry"
+          },
+          "capture_encoder_alignment": {
+            "state": "not_configured",
+            "reason": "stream timestamps do not supply qualified CaptureInterval or alignment bounds"
+          },
+          "complete_payload_geometry": {
+            "state": "not_configured",
+            "reason": "partial visible surface is not a complete shape prior"
+          },
+          "robot_target_occupancy_provenance": {
+            "state": "not_configured"
+          },
+          "support_grounding": {
+            "state": "not_configured",
+            "reason": "single object seed, no support seed"
+          },
+          "visual_manipulation_effects": {
+            "state": "not_assessed",
+            "reason": "no manipulation attempted"
+          },
+          "default_execution_boundary": {
+            "state": "passed",
+            "planning_code": "observed_scene_unavailable",
+            "execution_code": "observed_scene_unavailable"
+          }
+        },
+        "audit_unchanged_during_admission_checks": true
+      },
+      "request_seconds": [
+        0.4687261779909022,
+        0.5277403179934481,
+        0.623343675993965,
+        0.6279552440100815,
+        0.5410777580109425
+      ]
+    },
+    {
+      "job_id": "20261027_194209_a0cd30",
+      "source_base": "a22842a27cff903e8df87b73b0bc28a3511121be",
+      "vlm_calls": 2,
+      "queries": 5,
+      "reacquisition_passed": true,
+      "initialization_failure": null,
+      "execution_readiness": {
+        "scope": "live assembly prerequisite audit, not a manipulation or agent benchmark",
+        "qualification": "not_qualified",
+        "task_success_assessed": false,
+        "execution_source_installed": false,
+        "gates": {
+          "live_rgbd": {
+            "state": "passed",
+            "receive_age_s": 0.051944298000307754,
+            "valid_depth_fraction": 0.8548815841194969,
+            "capture": {
+              "received_monotonic": 90615.23143916,
+              "image_timing": {
+                "head_cam_left": {
+                  "timestamp_ns": 90614631374008,
+                  "clock_domain": "mujoco_render_monotonic",
+                  "clock_id": "9ed7ad0ab6b46f8515c340b2a9aea25444d800b3082017888a7fc4fcd4df3105",
+                  "source": "renderer_scene_capture",
+                  "available": true,
+                  "capture_interval_ns": [
+                    90614631374008,
+                    90614761133335
+                  ],
+                  "depth_capture_interval_ns": [
+                    90614815786537,
+                    90614834870286
+                  ]
+                }
+              }
+            }
+          },
+          "surface_refresh": {
+            "state": "passed",
+            "passed": 5,
+            "attempted": 5
+          },
+          "reference_features": {
+            "state": "unknown",
+            "reason": "rigid_tracking_insufficient"
+          },
+          "depth_workspace": {
+            "state": "passed",
+            "cells": {
+              "unknown": 7151,
+              "free": 6635,
+              "occupied": 38
+            },
+            "scope": "depth carving only; not target/robot-separated execution geometry"
+          },
+          "capture_clock_mapping": {
+            "state": "passed",
+            "scope": "local simulator RGB+depth interval union only",
+            "acquisition_span_s": 0.203496278001694
+          },
+          "capture_encoder_alignment": {
+            "state": "not_configured",
+            "reason": "stream timestamps do not supply qualified CaptureInterval or alignment bounds"
+          },
+          "complete_payload_geometry": {
+            "state": "not_configured",
+            "reason": "partial visible surface is not a complete shape prior"
+          },
+          "robot_target_occupancy_provenance": {
+            "state": "partial",
+            "occupied_before": 38,
+            "occupied_after_target_exclusion": 28,
+            "target_cells_retained_unknown": 10,
+            "free_cells_added": 0,
+            "scope": "measured target/background endpoint attribution only; robot solid-volume and contact policies remain absent"
+          },
+          "support_grounding": {
+            "state": "not_configured",
+            "reason": "single object seed, no support seed"
+          },
+          "visual_manipulation_effects": {
+            "state": "not_assessed",
+            "reason": "no manipulation attempted"
+          },
+          "default_execution_boundary": {
+            "state": "passed",
+            "planning_code": "observed_scene_unavailable",
+            "execution_code": "observed_scene_unavailable"
+          }
+        },
+        "audit_unchanged_during_admission_checks": true
+      },
+      "request_seconds": [
+        0.6355408240051474,
+        0.4965342490031617,
+        0.5267187569988891,
+        0.4741291079990333,
+        0.5292216249945341
+      ]
+    }
+  ],
+  "regression": {
+    "name": "pytest",
+    "errors": "0",
+    "failures": "0",
+    "skipped": "0",
+    "tests": "682",
+    "time": "147.212",
+    "timestamp": "2026-10-27T19:42:39.559926-04:00",
+    "hostname": "olympia"
+  },
+  "regression_job": "20261027_194238_786ec5",
+  "geometry_reanalysis": {
+    "scope": "offline provenance reanalysis of saved live frames; receive freshness not qualified by replay",
+    "mask_pixels": 800,
+    "interior_pixels": 357,
+    "landmarks": 5,
+    "captures": [
+      {
+        "capture": "capture-0.npz",
+        "provenance": {
+          "state": "partial",
+          "occupied_before": 38,
+          "occupied_after_target_exclusion": 28,
+          "target_cells_retained_unknown": 10,
+          "free_cells_added": 0,
+          "scope": "measured target/background endpoint attribution only; robot solid-volume and contact policies remain absent"
+        }
+      },
+      {
+        "capture": "capture-1.npz",
+        "provenance": {
+          "state": "partial",
+          "occupied_before": 38,
+          "occupied_after_target_exclusion": 28,
+          "target_cells_retained_unknown": 10,
+          "free_cells_added": 0,
+          "scope": "measured target/background endpoint attribution only; robot solid-volume and contact policies remain absent"
+        }
+      },
+      {
+        "capture": "capture-2.npz",
+        "provenance": {
+          "state": "partial",
+          "occupied_before": 38,
+          "occupied_after_target_exclusion": 28,
+          "target_cells_retained_unknown": 10,
+          "free_cells_added": 0,
+          "scope": "measured target/background endpoint attribution only; robot solid-volume and contact policies remain absent"
+        }
+      },
+      {
+        "capture": "capture-3.npz",
+        "provenance": {
+          "state": "partial",
+          "occupied_before": 38,
+          "occupied_after_target_exclusion": 28,
+          "target_cells_retained_unknown": 10,
+          "free_cells_added": 0,
+          "scope": "measured target/background endpoint attribution only; robot solid-volume and contact policies remain absent"
+        }
+      },
+      {
+        "capture": "capture-4.npz",
+        "provenance": {
+          "state": "partial",
+          "occupied_before": 38,
+          "occupied_after_target_exclusion": 28,
+          "target_cells_retained_unknown": 10,
+          "free_cells_added": 0,
+          "scope": "measured target/background endpoint attribution only; robot solid-volume and contact policies remain absent"
+        }
+      }
+    ]
+  },
+  "source_sha256": {
+    "src/emet/controller/manipulation/capture_clock.py": "a70e589acbc243f53302a8862f1130af819e4226a2b268bc5b46874c9f58f3e2",
+    "src/emet/memory/surface_candidates.py": "163d82bef079e22595afda0b31baeb3e7a9aaa93994c12de4780b48c9e1140fc",
+    "src/emet/motion/observed_workspace.py": "35ad6e7a6be6a734da9c0c0246c941552cf70015cfd18f61ded75dc6d0a08ce4",
+    "src/emet/eval/observed_readiness.py": "43a754d2133c827025150899d67c8f1434b65241978a7a2701b8c21c0a1969b9",
+    "src/emet/simulation/stretch_mujoco/mujoco_server_camera_manager.py": "dd1456ef28c22b9a3b1df238af899b98276b783d0f5577a86fa1437b8a9d9a66",
+    "src/emet/simulation/stretch_mujoco/datamodels/status_stretch_camera.py": "10c16a6682080c8f389ad2e583f4a31b76a56341abec13867508aa73993cab4b",
+    "src/emet/simulation/stretch_mujoco/enums/stretch_cameras.py": "03843d48c3a4eed57089a5bae80f3d2c6650f3ec7f4337128963f0d0931d6c1b"
+  }
+}

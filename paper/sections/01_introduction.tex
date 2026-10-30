@@ -16,7 +16,7 @@ Scene-graph nodes are therefore \textbf{grounded in the DynaMem substrate}: ever
 Navigation, exploration, and EQA read from the same evidence trail because they are fed by one update pipeline, not two independent memories.
 
 This grounding makes \textbf{disappearance} a first-class signal.
-When the robot revisits a region and voxels that previously supported an object are no longer updated---or no fresh observation reinforces that hypothesis---the system can conclude the object is \emph{no longer observed} and retire it from the graph.
+When the robot revisits a region and voxels that previously supported an object are no longer updated---or no fresh observation reinforces that hypothesis---the system marks the hypothesis as stale and can retire it from the graph. Missing fresh support does not prove physical absence or free space.
 Dynagraph adds explicit \textbf{graph lifecycle} rules on top of this substrate: spatial merge of duplicate detections across viewpoints, and staleness-based pruning of nodes whose \texttt{last\_seen} step falls behind the controller clock.
 The graph stays compact and aligned with what the voxel map currently supports, rather than accumulating stale object hypotheses indefinitely.
 
@@ -28,12 +28,12 @@ The graph stays compact and aligned with what the voxel map currently supports, 
   \item \textbf{Dynagraph graph lifecycle}: merge and staleness on top of GraphEQA (\texttt{dynagraph\_merge\_xy\_m}, \texttt{dynagraph\_staleness\_horizon}).
   \item \textbf{Agentic EQA loop}: optional tool-calling controller on the same Dynagraph memory---retrieve a small set of place evidence cards, navigate / explore (including VLM frontier picks), cheap detector proposals, VLM assess for answerability, then submit---compared to the classic GraphEQA planning loop (Section~\ref{sec:eqa_loops}; Appendix~\ref{app:agentic_tools}).
   \item \textbf{Open-source implementation} in \texttt{emet} (\texttt{emet run dynagraph}), building on \texttt{GraphEQAController} and \texttt{SparseVoxelMap}.
-  \item \textbf{Benchmark harnesses}: Habitat HM-EQA / OpenEQA (separate branch); SQA3D situated open QA on ScanNet replay (\texttt{emet sqa3d}); OVMM-inspired find-phase localization on Emet sim and Habitat HM3D proxy (\texttt{eval\_ovmm\_find\_phases}).
-  \item \textbf{Extended MuJoCo evaluation} on Robocasa and MolmoSpaces across Stretch, Galaxea R1, and optional registry robots.
+  \item \textbf{Benchmark harnesses}: Habitat HM-EQA (operational) and planned OpenEQA support; SQA3D situated open QA on ScanNet replay (\texttt{emet sqa3d}); OVMM-inspired find-phase localization on Emet sim and Habitat HM3D proxy (\texttt{eval\_ovmm\_find\_phases}).
+  \item \textbf{MuJoCo integration harnesses and scoped diagnostics} on Robocasa/MolmoSpaces and stationary Stretch manipulation; expanded multi-robot and household acceptance remains pending.
 \end{itemize}
 
 \subsection{Limitations (draft)}
 
-Habitat HM-EQA harnessing is operational on branch \texttt{feature/eval-diagnostics-smoke}; full 113-question numbers and sim-scale tables are still being collected.
+The historical August 113-question HM-EQA evaluation is complete (Section~\ref{sec:hmeqa_results}); it does not validate the current shared-agent stack. Frozen current-stack comparisons, OpenEQA support, and sim-scale tables remain pending.
 Our graph builder differs from Hydra-based 3DSG pipelines used in the original GraphEQA stack; we compare on EQA outcomes, not intermediate graph topology.
 Real-home manipulation trials at OK-Robot or DREAM scale are left to future work.
