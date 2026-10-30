@@ -76,6 +76,7 @@ def source_state(root):
             root / "configs/benchmarks/mars_tracking_mastery_turn_guard_v1.json",
             root / "configs/benchmarks/mars_tracking_mastery_yaw_curriculum_v1.json",
             root / "configs/benchmarks/mars_tracking_mastery_restoring_yaw_v1.json",
+            root / "configs/benchmarks/mars_tracking_mastery_hand_accuracy_v1.json",
         ]
     )
     for path in paths:

@@ -95,6 +95,26 @@ def load_suite(path=SUITE):
         raise ValueError("expected disjoint 13-case train/validation partitions")
     if not np.isfinite(suite["reference"]["loaded_time_scale"]) or suite["reference"]["loaded_time_scale"] < 1:
         raise ValueError("loaded references may only slow down")
+    scales = suite.get("arm_training_scales")
+    if scales is not None and (
+        suite["format"] != "mars-tracking-mastery-v2"
+        or not isinstance(scales, list)
+        or not scales
+        or any(type(x) not in (int, float) or not np.isfinite(x) or not 0 < x <= 1 for x in scales)
+        or scales != sorted(set(scales))
+        or scales[-1] != 1
+    ):
+        raise ValueError("arm training scales require ordered unique positive amplitudes through 1")
+    weights = suite.get("training_stage_weights")
+    if weights is not None and (
+        not isinstance(weights, dict)
+        or not weights
+        or any(
+            k not in STAGES or type(v) not in (int, float) or not np.isfinite(v) or v <= 0 for k, v in weights.items()
+        )
+        or not np.isclose(sum(weights.values()), 1, rtol=0, atol=1e-8)
+    ):
+        raise ValueError("training stage weights must be positive probabilities over known stages")
     return suite
 
 
@@ -142,7 +162,53 @@ def select_cases(suite, stages, split, *, population="canonical"):
                                 "turn_rad": float(np.copysign(magnitude, primitive["turn_rad"])),
                             }
                         )
+    if population != "canonical":
+        for case in suite["cases"]:
+            if case["stage"] == "arm" and case["split"] == "train":
+                for scale in suite.get("arm_training_scales", []):
+                    if scale != 1:
+                        cases.append(
+                            {
+                                **case,
+                                "id": case["id"] + f"@amplitude:{scale:g}",
+                                "arm_delta": (np.asarray(case["arm_delta"]) * scale).tolist(),
+                            }
+                        )
     return [c for c in cases if c["stage"] in stages and (split == "all" or c["split"] == split)]
+
+
+class TrainingCaseSampler:
+    """Stage probabilities are independent of family size; cycle every case within a stage.
+
+    Without explicit weights preserve the original shuffled full-case cycles.
+    This object only selects reset metadata; nothing is added to actor inputs.
+    """
+
+    def __init__(self, cases, weights=None, seed=0):
+        self.cases, self.weights = cases, weights
+        if not cases:
+            raise ValueError("nonempty training cases required")
+        self.groups = {stage: [i for i, c in enumerate(cases) if c["stage"] == stage] for stage in STAGES}
+        self.groups = {stage: rows for stage, rows in self.groups.items() if rows}
+        if weights is not None and not set(self.groups).issubset(weights):
+            raise ValueError("training stage weights must cover every selected stage")
+        self.probabilities = None if weights is None else np.asarray([weights[s] for s in self.groups], dtype=float)
+        if self.probabilities is not None:
+            if not np.isfinite(self.probabilities).all() or np.any(self.probabilities <= 0):
+                raise ValueError("positive finite stage weights required")
+            self.probabilities /= self.probabilities.sum()
+        self.reset(seed)
+
+    def reset(self, seed):
+        self.rng = np.random.default_rng(seed)
+        self.orders = {}
+
+    def next(self):
+        stage = "all" if self.weights is None else str(self.rng.choice(list(self.groups), p=self.probabilities))
+        if not self.orders.get(stage):
+            indices = range(len(self.cases)) if stage == "all" else self.groups[stage]
+            self.orders[stage] = list(self.rng.permutation(indices))
+        return self.cases[self.orders[stage].pop()]
 
 
 def slow_path(path, factor):
@@ -219,8 +285,9 @@ class MasteryEnv(ManipulationEnv):
     def __init__(self, suite=None, *, stages=("base",), split="train", population="canonical"):
         self.suite = load_suite() if suite is None else suite
         self.cases = select_cases(self.suite, stages, split, population=population)
-        self.case_rng = np.random.default_rng(0)
-        self.order = []
+        self.sampler = TrainingCaseSampler(
+            self.cases, self.suite.get("training_stage_weights") if population == "training" else None
+        )
         self.mastery_case = self.mastery_reference = self.mastery_checker = None
         self.mastery_scratch = None
         self.mastery_admission = None
@@ -229,16 +296,13 @@ class MasteryEnv(ManipulationEnv):
 
     def reset(self, *, seed=None, options=None):
         if seed is not None:
-            self.case_rng = np.random.default_rng(seed)
-            self.order = []
+            self.sampler.reset(seed)
         if options:
             if set(options) != {"case_id"} or options["case_id"] not in {c["id"] for c in self.cases}:
                 raise ValueError("only a selected mastery case ID is a reset option")
             case = next(c for c in self.cases if c["id"] == options["case_id"])
         else:
-            if not self.order:
-                self.order = list(self.case_rng.permutation(len(self.cases)))
-            case = self.cases[self.order.pop()]
+            case = self.sampler.next()
         self.mastery_case = case
         self.mastery_reference = self.mastery_checker = None
         self.mastery_scratch = None
@@ -444,6 +508,7 @@ def summarize(report):
 
 def evaluate_suite(suite, *, stages=STAGES, policy=None, teacher_report=None, population="canonical"):
     from emet.rl.manipulation.command_runtime import task_pose_teacher_action
+    from emet.rl.manipulation.hand_audit import hand_tracking_diagnostics
 
     report = {
         "format": "mars-mastery-report-v1",
@@ -496,6 +561,7 @@ def evaluate_suite(suite, *, stages=STAGES, policy=None, teacher_report=None, po
                             "base_error_m": info["base_goal_error"],
                             "base_heading_error_rad": info["base_heading_error_rad"],
                             "settled_seconds": info["settled_seconds"],
+                            "hand_control": hand_tracking_diagnostics(env.control) if env.control.hand_mask else None,
                         }
                     )
                     if done or truncated:

@@ -14,8 +14,6 @@ from typing import Any
 
 from termcolor import colored
 
-from emet.audio import AudioRecorder
-from emet.audio.speech_to_text import WhisperSpeechToText
 from emet.llms import AbstractLLMClient, AbstractPromptBuilder
 
 
@@ -37,6 +35,10 @@ class LLMChatWrapper:
         self.silence_limit = silence_limit
 
         if self.voice:
+            # Text/compute-only hosts do not need microphone or Whisper packages.
+            from emet.audio import AudioRecorder
+            from emet.audio.speech_to_text import WhisperSpeechToText
+
             # Load the tokenizer and model
             self.audio_recorder = AudioRecorder()
             self.whisper = WhisperSpeechToText()

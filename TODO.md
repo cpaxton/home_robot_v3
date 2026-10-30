@@ -58,6 +58,13 @@ Strike through or move to a PR when done.
 
 Accepted plan: [Mars controller integration](docs/plans/mars_controller_integration.md).
 
+- [ ] Complete the bounded [hand-accuracy pilot](docs/plans/mars_hand_accuracy.md):
+      teacher baseline 66/66, latest base-trained actor 0/8 arm cases with near-zero
+      arm requests. Use stage-balanced arm/base resets, smaller reachable arm
+      amplitudes and native hand-gated base credit, preserving canonical gates.
+      Measure requested versus actual hand/joint motion before adding loaded
+      hold/lift and replaying the public learned-controller pick/place programs.
+
 - [x] Externalize generated control archives/streams into ignored, checksummed
       storage with a retrieval catalog and a regression guard against force-add.
       Preserve original artifacts and branch history before publishing cleanup.

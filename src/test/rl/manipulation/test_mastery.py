@@ -10,6 +10,99 @@ from emet.rl.manipulation.dynamic_trajectory import ArmTrajectory, segment
 from emet.rl.manipulation.mastery import MasteryEnv, load_suite, select_cases, slow_path, validate_preflight
 
 
+def hand_suite():
+    from pathlib import Path
+
+    return load_suite(
+        Path(__file__).resolve().parents[4] / "configs/benchmarks/mars_tracking_mastery_hand_accuracy_v1.json"
+    )
+
+
+def test_hand_distribution_keeps_frozen_contract_and_validation_out_of_small_amplitudes():
+    suite = hand_suite()
+    frozen = load_suite()
+    assert suite["config"]["hand_gated_base_reward"] is True
+    for key in ("cases", "reference", "gate"):
+        assert suite[key] == frozen[key]
+    canonical = select_cases(suite, ["base", "arm"], "all")
+    expanded = select_cases(suite, ["base", "arm"], "train", population="training")
+    assert len([c for c in expanded if c["stage"] == "base"]) == 45
+    arm = [c for c in expanded if c["stage"] == "arm"]
+    assert len(arm) == 12
+    assert {c["reset_seed"] for c in expanded}.isdisjoint(
+        c["reset_seed"] for c in canonical if c["split"] == "validation"
+    )
+    assert all(c["split"] == "train" for c in arm)
+    assert len(select_cases(suite, ["base", "arm"], "all", population="admission")) == 66
+    assert select_cases(suite, ["arm"], "validation", population="admission") == select_cases(
+        frozen, ["arm"], "validation"
+    )
+
+
+def test_stage_sampler_weights_are_independent_of_case_count_and_seeded():
+    from collections import Counter
+
+    from emet.rl.manipulation.mastery import TrainingCaseSampler
+
+    suite = hand_suite()
+    cases = select_cases(suite, ["base", "arm"], "train", population="training")
+    sampler = TrainingCaseSampler(cases, suite["training_stage_weights"], seed=19)
+    chosen = [sampler.next() for _ in range(10000)]
+    counts = Counter(c["stage"] for c in chosen)
+    assert 0.73 < counts["arm"] / len(chosen) < 0.77
+    for stage, size in (("base", 45), ("arm", 12)):
+        first_cycle = [c["id"] for c in chosen if c["stage"] == stage][:size]
+        assert len(set(first_cycle)) == size
+    sampler.reset(19)
+    assert [sampler.next() for _ in range(100)] == chosen[:100]
+    with pytest.raises(ValueError, match="cover every selected stage"):
+        TrainingCaseSampler(select_cases(suite, ["loaded"], "train"), suite["training_stage_weights"])
+
+
+@pytest.mark.parametrize(
+    "key,value",
+    [
+        ("arm_training_scales", [0, 1]),
+        ("arm_training_scales", [0.5]),
+        ("arm_training_scales", [True, 1]),
+        ("training_stage_weights", {"arm": float("nan")}),
+        ("training_stage_weights", {"task": 1}),
+        ("training_stage_weights", {"arm": -1, "base": 2}),
+    ],
+)
+def test_hand_sampling_rejects_invalid_recipe(tmp_path, key, value):
+    import json
+
+    suite = hand_suite()
+    suite[key] = value
+    path = tmp_path / "suite.json"
+    path.write_text(json.dumps(suite))
+    with pytest.raises(ValueError):
+        load_suite(path)
+
+
+@pytest.mark.sim
+def test_hand_velocity_audit_reads_measured_jacobian_without_mutating_control():
+    from emet.rl.manipulation.hand_audit import hand_tracking_diagnostics
+
+    env = MasteryEnv(hand_suite(), stages=["arm"], split="train")
+    try:
+        _, info = env.reset(options={"case_id": "train:arm:pitch_up"})
+        assert not info["initialization_failed"]
+        env.control.velocity[:] = 0.01
+        before = [env.data.qpos.copy(), env.data.qvel.copy(), env.data.ctrl.copy(), env.control.target.copy()]
+        report = hand_tracking_diagnostics(env.control)
+        for current, previous in zip(
+            [env.data.qpos, env.data.qvel, env.data.ctrl, env.control.target], before, strict=True
+        ):
+            np.testing.assert_array_equal(current, previous)
+        np.testing.assert_array_equal(report["slewed_joint_velocity_rad_s"], np.full(5, 0.01))
+        assert np.isfinite(list(report["predicted_arm_linear_velocity_world_m_s"])).all()
+        assert abs(report["measured_speed_toward_current_goal_m_s"]) < 0.01
+    finally:
+        env.close()
+
+
 def crossed_suite():
     from pathlib import Path
 
