@@ -179,6 +179,7 @@ def capture(args):
         "perception": {
             "provider": "yoloe-v8l-seg",
             "checkpoint_sha256": sha256(checkpoint),
+            "text_encoder_sha256": sha256(Path.cwd() / "mobileclip_blt.ts"),
             "vocabulary_sha256": sha256(labels_path),
             "confidence": 0.1,
         },
@@ -261,6 +262,7 @@ def capture(args):
 
 def render_and_detect(scene, spawn, frames, labels, ids, vocabulary, inputs, manifest, detector_type):
     import habitat_sim
+    import magnum as mn
     from habitat_sim.utils.common import quat_from_angle_axis
     from PIL import Image
 
@@ -272,8 +274,8 @@ def render_and_detect(scene, spawn, frames, labels, ids, vocabulary, inputs, man
         sensor = habitat_sim.CameraSensorSpec()
         sensor.uuid, sensor.sensor_type = uuid, kind
         sensor.resolution = [480, 640]
-        sensor.position = [0, 1.5, 0]
-        sensor.orientation = [float(np.deg2rad(-30)), 0, 0]
+        sensor.position = mn.Vector3(0, 1.5, 0)
+        sensor.orientation = mn.Vector3(float(np.deg2rad(-30)), 0, 0)
         sensor.hfov = 120.0
         sensors.append(sensor)
     agent_config = habitat_sim.agent.AgentConfiguration()
