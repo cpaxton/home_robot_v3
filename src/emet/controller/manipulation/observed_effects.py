@@ -26,6 +26,15 @@ def rotation_distance(a, b):
     return float(np.arccos(np.clip((np.sum(a * b) - 1) / 2, -1, 1)))
 
 
+def pose_uncertainty_margin(radius, position_error_m, rotation_error_rad):
+    """Enclose bounded rigid pose error; angles at least pi allow any rotation.
+
+    Callers validate their nonnegative radius and independently supplied error
+    bounds. This is a geometric margin, not a calibration or fit-confidence model.
+    """
+    return position_error_m + 2 * radius * np.sin(min(np.pi, rotation_error_rad) / 2)
+
+
 def rigid_copy(value):
     # Reuse the pose contract's rigid-transform validation and immutable backing.
     return ObjectPoseEvidence(value, 0., 'rgbd_tracking', 'validation').world_from_object
@@ -149,12 +158,12 @@ class VisualEffectFrame:
         if isinstance(self.payload.pose, ShapePoseEvidence):
             box = self.payload.pose.model.world_bounds(pose[:3, :3], pose[:3, 3])
             radius = np.linalg.norm(self.payload.pose.model.half_extents)
-            margin = self.position_error_m + 2*radius*np.sin(min(np.pi, self.rotation_error_rad)/2)
-            return np.stack((box[0]-margin, box[1]+margin))
-        vertices = self.payload.vertices_reference @ pose[:3, :3].T + pose[:3, 3]
-        radius = np.linalg.norm(self.payload.vertices_reference, axis=1).max()
-        margin = self.position_error_m + 2 * radius * np.sin(min(np.pi, self.rotation_error_rad) / 2)
-        return np.stack((vertices.min(0) - margin, vertices.max(0) + margin))
+        else:
+            vertices = self.payload.vertices_reference @ pose[:3, :3].T + pose[:3, 3]
+            radius = np.linalg.norm(self.payload.vertices_reference, axis=1).max()
+            box = np.stack((vertices.min(0), vertices.max(0)))
+        margin = pose_uncertainty_margin(radius, self.position_error_m, self.rotation_error_rad)
+        return np.stack((box[0] - margin, box[1] + margin))
 
 
 @dataclass(frozen=True)

@@ -397,3 +397,33 @@ control success does not turn that sensor failure into observed task acceptance.
 identify the remaining view/occlusion problem. Next qualify wrist/head view
 continuity, then assemble support/map/contact/full-arm policy in a concrete source.
 The first full observed transfer remains pending; do not skip to multi-step scores.
+
+## PR #226 review: independent self-occupancy blocker
+
+The review identifies a planning failure before the observed transfer milestone,
+independent of the head-mask visibility problem. Robot surfaces occupy their own
+depth map; their interiors and shadows remain unknown. The current checker
+requires every whole robot-geom AABB to be free and therefore rejects the initial
+configuration. A MuJoCo ray/depth regression now reproduces `invalid_start`, both
+before and after perfect self-endpoint exclusion. Synthetic adapter/swap tests
+use an externally supplied all-free predicate and validate the interface only.
+
+Keep the PR scoped to an explicit integration foundation. The working live arm
+executor remains blocked until a separate source/query policy can establish:
+
+1. Calibrated robot ownership tied to the same capture/motor pose, retaining mixed
+   obstacle cells and original evidence times. An outer geometry envelope is not
+   proof that all enclosed space belongs exclusively to robot material.
+2. Distinct robot-interior and environment-free evidence. Unobserved space behind
+   a robot and hollow/empty regions inside its AABB must not become free. Use
+   AABBs as broad-phase bounds, with a conservative material-volume query where
+   self ownership matters; exempting an entire outer box is not sufficient.
+3. Actor/phase-specific robot, payload and support queries, with any mechanical,
+   clearance or static-scene assumptions explicit. Changing the contact phase
+   must not authorize arbitrary unknown swept volumes or erase nearby obstacles.
+4. Tests with self-occlusion, a nearby obstacle, mixed ownership and movement into
+   an unseen region, followed by the actual stationary observed transfer.
+
+More informative wrist/head views remain needed for tracked payload evidence,
+but do not substitute for this self-occupancy policy. The checker deliberately
+continues to reject raw self-occluding maps; no unsafe carve or bypass is added.

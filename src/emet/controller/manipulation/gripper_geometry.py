@@ -11,7 +11,7 @@ import numpy as np
 from emet.controller.manipulation.interval_geometry import subtree_geometry_intervals
 from emet.controller.manipulation.native_inputs import ObservationUnavailable
 from emet.controller.manipulation.native_scene import model_signature
-from emet.controller.manipulation.observed_effects import RobotPoseSample
+from emet.controller.manipulation.observed_effects import RobotPoseSample, pose_uncertainty_margin
 from emet.motion.mujoco_collision import body_subtree
 from emet.robots.stretch import STRETCH_ARM_CHAIN
 from emet.simulation.synchronized_capture import robot_kinematic_signature
@@ -160,7 +160,7 @@ def bound_stretch_gripper(
     # Angular error is around the measured EE origin, including housing offset.
     farthest = np.max(np.abs(boxes - estimate.world_from_ee[:3, 3]), axis=1)
     radius = np.linalg.norm(farthest, axis=-1).max()
-    margin = position_error_m + 2 * radius * np.sin(rotation_error_rad / 2)
+    margin = pose_uncertainty_margin(radius, position_error_m, rotation_error_rad)
     boxes[:, 0] -= margin
     boxes[:, 1] += margin
     return GripperGeometryEnvelope(

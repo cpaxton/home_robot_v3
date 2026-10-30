@@ -304,6 +304,29 @@ def test_timeout_before_first_command_stays_no_actuation(system):
     assert system.calls == [] and 'private' not in json.dumps(result)
 
 
+@pytest.mark.parametrize('command_name', ['open_gripper', 'close_gripper', 'joints'])
+@pytest.mark.parametrize('sent', [False, True])
+def test_transport_entry_timeout_cannot_prove_no_actuation(system, command_name, sent):
+    planned = plan(system)
+    assert planned['status'] == 'ok', planned
+    executor = system.adapter.plans[planned['data']['plan_ref']].executor
+    owner, name = (executor, 'command_joints') if command_name == 'joints' else (system.adapter.robot, command_name)
+    original = getattr(owner, name)
+    entered = []
+    def timeout(*args, **kwargs):
+        entered.append(True)
+        if sent:
+            original(*args, **kwargs)
+        raise TimeoutError('private transport detail')
+    setattr(owner, name, timeout)
+    result = system.adapter.execute(planned['data']['plan_ref'])
+    assert entered and result['status'] == 'partial' and result['code'] == 'command_outcome_unknown', result
+    assert result['data']['execution_started'] and result['data']['completed_ops'] == []
+    assert 'private' not in json.dumps(result)
+    if command_name == 'open_gripper':
+        assert bool(system.calls) == sent
+
+
 def test_region_refiner_must_put_full_payload_inside_requested_region(system):
     planned = system.adapter.plan(object_name='block', receptacle_name='counter',
                                   placement_region=[[.1, -.005], [.12, .005]])

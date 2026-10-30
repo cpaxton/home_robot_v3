@@ -83,6 +83,12 @@ class ObservedNativeCollisionChecker(PlacementCollisionChecker):
     for every sampled configuration, including the executor's dense revalidation.
     The known-free callback must cover entire query volumes, including calibrated
     robot space. It must not equate absent occupied points with observed free space.
+
+    A raw self-occluding depth map cannot satisfy this contract for the robot's
+    starting volume: self surfaces are occupied and their interiors are unknown.
+    Removing robot-labelled endpoints leaves unknown cells, not certified free
+    space. This checker does not implement a robot-interior/contact occupancy
+    policy; supplied synthetic free-space fixtures exercise only the adapter seam.
     """
     geometry_source = 'observed_voxels'
     input_mode = 'observed'

@@ -24,6 +24,7 @@ from emet.controller.manipulation.observed_effects import (
     ObservedVisualVerifier,
     VisualEffectFrame,
     evaluate_place,
+    pose_uncertainty_margin,
 )
 from emet.controller.manipulation.physical_pick_place import PhysicalMotionResult, PhysicalPickPlaceExecutor
 from emet.controller.manipulation.shape_pose import ShapePoseEvidence, evidence_rotation_distance, shape_identity
@@ -74,7 +75,7 @@ class _PayloadEnvelope:
         frame = initial.frame
         vertices = frame.payload.vertices_reference
         radius = np.linalg.norm(vertices, axis=1).max()
-        margin = frame.position_error_m + 2 * radius * np.sin(frame.rotation_error_rad / 2)
+        margin = pose_uncertainty_margin(radius, frame.position_error_m, frame.rotation_error_rad)
         self.vertices = box_corners([vertices.min(0)-margin, vertices.max(0)+margin])
 
     def observe_payload(self, object_ref):
@@ -90,7 +91,12 @@ class _PayloadEnvelope:
 
 
 class _CommandBoundary:
-    """Only the gripper interfaces used by PhysicalPickPlaceExecutor are exposed."""
+    """Mark possible dispatch before entering transport, not confirmed actuation.
+
+    An exception can follow a successful send with a lost acknowledgement. Only
+    failures before this boundary can assert no command; return-time marking
+    would turn some possible physical progress into a false no-actuation receipt.
+    """
     def __init__(self, robot, mark):
         self.robot, self.mark = robot, mark
 
@@ -385,6 +391,7 @@ class ObservedNativeAdapter:
                 started = True
 
             def command(q):
+                # Same possible-dispatch boundary as the gripper transport.
                 mark()
                 return original_command(q)
 

@@ -209,6 +209,49 @@ def test_registered_depth_workspace_drives_native_collision_queries():
                                   collision=checker, planner='linear').success
 
 
+def test_self_occluding_robot_returns_cannot_certify_its_starting_volume_free():
+    robot_xml = '''<body name="robot" pos="0 0 .5">
+      <joint name="x" type="slide" axis="1 0 0" range="0 .3"/>
+      <geom type="box" size=".08 .08 .06"/>
+      <body name="ee" pos=".1 0 0"><geom size=".015"/></body></body>'''
+    model = mujoco.MjModel.from_xml_string('<mujoco><worldbody>'+robot_xml+'</worldbody></mujoco>')
+    sensor_model = mujoco.MjModel.from_xml_string('<mujoco><worldbody>'+robot_xml+
+        '<geom name="wall" type="box" pos="0 0 1.4" size=".5 .5 .02"/></worldbody></mujoco>')
+    data, sensor_data = mujoco.MjData(model), mujoco.MjData(sensor_model)
+    mujoco.mj_forward(model, data)
+    mujoco.mj_forward(sensor_model, sensor_data)
+    k = np.array([[50., 0., 10.], [0., 50., 10.], [0., 0., 1.]])
+    depth, points, labels = np.zeros((21, 21)), [], []
+    for y, x in np.ndindex(depth.shape):
+        ray = np.array([(x-10)/50, (y-10)/50, 1.])
+        ray /= np.linalg.norm(ray)
+        hit = np.full(1, -1, dtype=np.int32)
+        distance = mujoco.mj_ray(sensor_model, sensor_data, np.zeros(3), ray, None, True, -1, hit)
+        assert distance > 0
+        depth[y, x] = distance*ray[2]
+        points.append(distance*ray)
+        # Oracle labels here test the strongest endpoint-removal case. No runtime
+        # provider is claimed; even perfect self segmentation cannot make it free.
+        labels.append('background' if hit[0] == sensor_model.geom('wall').id else 'robot')
+    grid = ObservedWorkspace.from_depth(depth, k, np.eye(4),
+        workspace=[[-.3, -.3, .1], [.5, .3, 1.5]], resolution=.05, depth_margin_m=.005)
+    cleaned = grid.partition(np.array(points), np.array(labels)).excluding(('robot',))
+    assert np.any(grid.cells == 2) and np.sum(cleaned.cells == 2) < np.sum(grid.cells == 2)
+    assert np.any(cleaned.cells == 2)  # Wall evidence survives self removal.
+    interior = np.floor((np.array([0., 0., .5])-grid.origin)/grid.resolution).astype(int)
+    assert grid.cells[tuple(interior)] == cleaned.cells[tuple(interior)] == 0
+    provider = SimpleNamespace(input_mode='observed', observe_payload=lambda _: None)
+    for workspace in (grid, cleaned):
+        checker = ObservedNativeCollisionChecker(model, robot_body='robot', ee_body='ee',
+            scene=workspace.placement_scene(), payload_provider=provider, scene_revision='capture',
+            current_revision=lambda: 'capture', received_monotonic=10., clock=lambda: 10., margin_m=0)
+        assert checker.configuration_collides(model, data)
+        assert checker.last_reason == 'robot_scene_collision'
+        result = plan_arm_joint_path(model, data, joint_names=['x'], q_start=[0], q_goal=[.05],
+            collision=checker, planner='linear')
+        assert not result.success and result.reason == 'invalid_start'
+
+
 def test_missing_geometry_during_grasp_preflight_returns_before_commands():
     model, data, checker, provider, *_ = rig()
     provider.observe_payload = lambda _: None

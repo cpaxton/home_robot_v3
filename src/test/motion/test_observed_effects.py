@@ -4,6 +4,7 @@ from dataclasses import replace
 
 import numpy as np
 import pytest
+from scipy.spatial.transform import Rotation
 
 from emet.controller.manipulation.native_inputs import ObjectPoseEvidence
 from emet.controller.manipulation.observed_collision import PayloadGeometryEvidence
@@ -13,8 +14,25 @@ from emet.controller.manipulation.observed_effects import (
     VisualEffectFrame,
     evaluate_lift,
     evaluate_place,
+    pose_uncertainty_margin,
 )
 from emet.motion.placement_geometry import box_corners
+
+
+@pytest.mark.parametrize('angle', [0., .03, np.pi/2, np.pi, 2*np.pi])
+def test_pose_margin_encloses_rigid_motion_and_saturates_at_full_rotation(angle):
+    points = box_corners([[-.02, -.03, -.04], [.02, .03, .04]])
+    radius, error = np.linalg.norm(points, axis=1).max(), .004
+    margin = pose_uncertainty_margin(radius, error, angle)
+    rng = np.random.default_rng(226)
+    for _ in range(30):
+        axis = rng.normal(size=3)
+        axis /= np.linalg.norm(axis)
+        rotation = Rotation.from_rotvec(axis*min(np.pi, angle)).as_matrix()
+        moved = points @ rotation.T + axis*error
+        assert np.all(np.linalg.norm(moved-points, axis=1) <= margin+1e-12)
+    if angle >= np.pi:
+        assert margin == pytest.approx(error+2*radius)
 
 
 def frame(t, *, obj=(0, 0, .03), ee=(0, 0, .03), capture_id=None):

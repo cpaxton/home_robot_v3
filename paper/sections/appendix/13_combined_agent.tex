@@ -99,6 +99,12 @@ tracking, declared conservative geometry and temporally bounded visual effects
 through the same primitive and task tools. Robot-only integration tests, including
 a buffered swap, use synthetic feedback and do not qualify live sensor-driven
 execution; the default discovery provider does not instantiate this adapter.
+The synthetic adapter/swap fixture supplies an all-free predicate. It does not
+validate arm planning from a self-occluding depth map: the current checker requires
+whole robot-geom AABBs to be known free, while self surfaces are occupied and
+their interiors/shadows remain unknown. Even perfect self-endpoint removal leaves
+unknown cells. Robot ownership and phase-specific contact/unknown-space admission
+remain an independent planning blocker, beyond payload tracking visibility.
 An experimental geometry tracker also fits declared primitive priors or measured
 multi-view surfaces, retaining distinct pose candidates and unobservable shape
 symmetries. Surface-fit residuals are diagnostics, not calibrated pose-error

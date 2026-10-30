@@ -244,6 +244,9 @@ class MujocoZmqServer(BaseZmqServer):
         from emet.simulation.depth_registration import rendered_camera_intrinsics
 
         settings = StretchCameras.cam_d435i_rgb.initial_camera_settings
+        # Simulator pinhole projection uses fovy, not the physical camera's
+        # 304.24/304.07 px focal calibration (312.6107 px at 424x240, fovy=42).
+        # Registration and the published rotated K must use this same geometry.
         raw_k = rendered_camera_intrinsics(settings.field_of_view_vertical_in_degrees, settings.width, settings.height)
         # Images rotate clockwise into the head optical convention.
         self.head_K = np.array([[raw_k[1, 1], 0, settings.height - 1 - raw_k[1, 2]],

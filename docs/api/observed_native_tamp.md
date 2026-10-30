@@ -11,6 +11,17 @@ live RGBD source is not assembled or qualified by default. The usual RGBD
 `scene_tasks` provider remains read-only. This is not an observed-task benchmark,
 a contact-execution result, or a hardware sensor-availability claim.
 
+**Independent planning blocker:** a self-occluding head-camera depth map marks
+robot surfaces occupied and their interiors/occlusions unknown. The current
+collision checker requires every robot-geom AABB to be known free, so that raw
+map rejects the starting arm state. Even perfect robot endpoint segmentation
+leaves unknown cells; it does not certify free robot space. No self-occupancy
+or phase-specific robot/target/support-contact policy is implemented here.
+The adapter is an integration seam, not a working depth-only arm executor.
+Its synthetic transfer/swap fixture supplies `known_free=lambda _: True` to test
+tool orchestration. This is not evidence that a real self-occluding map admits
+those paths. This planning blocker is separate from moving-mask visibility loss.
+
 ## Components
 
 | Component | Responsibility | Rejects / limits |
@@ -67,6 +78,14 @@ Scene refresh uses original capture receive times. New captures do not excuse a
 changed scene during a path. Controller/gripper calls mark the actuation boundary;
 pre-command observation failures remain `execution_started=false`, while failures
 after a possible command return `partial`. Plans are single-use.
+
+`execution_started=true` means **possible dispatch/progress**, not confirmed
+actuation. The adapter marks entry into joint/gripper transport before calling
+it. An ordinary `TimeoutError` cannot distinguish failure before send from send
+followed by lost acknowledgement, so it returns `command_outcome_unknown` once
+that boundary was entered. Only failures before transport entry can assert
+no actuation under the current transport contract. Marking after a return would
+incorrectly classify some sent commands as no-actuation failures.
 
 `VisualEffectFrame` explicitly requires conservative `alignment_error_m` and
 `alignment_error_rad` from qualified camera/encoder clock and motion bounds.
@@ -149,6 +168,25 @@ For simulator view qualification, `EMET_STRETCH_HEAD_CAMERA_SCALE=2` renders
 preserve existing controls. Proposal normals use a local measured-plane fit to
 tolerate millimetre depth quantization at finer pixel pitch; depths/holes and
 tracking thresholds are unchanged.
+
+### Simulator head-camera calibration change in #226
+
+The simulated head intrinsics now match MuJoCo's pinhole render frustum rather
+than copying the physical SE3-3044 focal calibration. At 424×240 and 42° vertical
+FOV, the renderer uses `fx=fy=312.6107` px, versus the former physical values
+`304.24/304.07` px (about 2.75%/2.81%). At 848×480 the render focal length doubles.
+Pixel centers use `(width-1)/2`, `(height-1)/2`, then the server rotates the matrix
+clockwise with the image. Hardware calibration settings are unchanged.
+
+This intentionally changes simulator unprojection and downstream metric geometry;
+it is not a numerically identical camera refactor. Do not silently rescore or
+compare historical metric results across the change without recording the source
+version and rerunning the relevant experiment. Registration uses the same raw
+render intrinsics before the published image rotation. The actual-model regression
+checks the camera-creation settings, MuJoCo GL frustum, registration K, constructor
+`head_K`, projected rays, baseline offset and unfilled registration holes at both
+resolutions, without opening a GPU context. Wrist-camera calibration is a separate
+qualification gate.
 
 Simulator images now retain separate RGB/depth acquisition intervals under the
 physics/render lock. `local_sim_capture_interval` maps their union only when the
