@@ -28,6 +28,8 @@ those paths. This planning blocker is separate from moving-mask visibility loss.
 | --- | --- | --- |
 | `RigidRgbdTracker` | RGB feature correspondences, forward/backward optical flow, measured RGBD landmarks, RANSAC rigid fitting against a fixed reference | Lost masks/depth, repeated or insufficient texture, poor feature spread, inconsistent motion, replay, reference age >30 s; no global re-identification |
 | `MovingRgbdTracker` | Current whole measured appearance components and declared geometry/motion profile | Lost/ambiguous associations latch; diagnostic candidates, not calibrated global identity |
+| `MultiViewRgbdTracker` | Continuous head/wrist association within one source-synchronized capture; explicit complete-prior fragment and lighting profiles | Cached/misaligned views, global loss, competing or incompatible geometry; ideal shared-snapshot diagnostic, not hardware timing qualification |
+| `ObservedBackground` | Historical environment/free-space evidence after provenance exclusion, with original per-cell capture ages | Unknown self interiors stay unknown; contradictions require source invalidation; longer validity needs an explicit bounded static-scene assumption |
 | `ShapePoseEvidence` | Explicit primitive solid equivalence with external pose-error bounds | Unknown material yaw remains unknown; generic unique-pose consumers reject |
 | `GripperGeometryEnvelope` | Full tool subtree over unmeasured joint intervals, anchored at motor-derived rigid EE | Conditional model bounds; no passive-joint sensor claim or full-arm certificate |
 | `PayloadGeometryEvidence` | Complete conservative volume in an explicit tracked reference frame | No visible-point AABB promoted to a complete shape; geometry priors remain declared inputs |
@@ -44,6 +46,20 @@ diagnostics, not uncertainty estimates: position/orientation admission bounds
 must come from independent calibration. Automatic current-instance mask
 production is experimental and bounded by colour/geometry continuity;
 long-term identity recovery and default live source assembly are not supplied.
+
+The multi-view diagnostic defaults to strict single-component association.
+`component_policy="complete_prior_union"` explicitly permits fitting the whole
+union of reachable fragments against a declared primitive; it never selects a
+subset by fit quality. `allow_clipped_views=True` retains measured boundary
+points but still requires pose observability. `appearance_model="neutral_specular"`
+is an opt-in saturated-colour lighting profile; default `"chromaticity"` behavior
+is unchanged. It removes neutral highlights rather than relaxing geometry or
+motion admission. These declarations are recorded with each diagnostic result.
+The [head/wrist contact repeat](../experiments/observed_handoff_20261030.md)
+retains one track through all 81 captures while privileged native control
+completes. This qualifies neither the live collision source nor hardware error
+bounds. Different real camera exposures require independently bounded alignment;
+the development producer uses one frozen simulator snapshot.
 
 ## Provider assembly
 
@@ -162,6 +178,19 @@ never free. Unattributed occupied cells stay background. This is the first targe
 endpoint provenance consumer; it does not supply a full robot solid-volume or
 phase-specific contact policy.
 
+`ObservedBackground.from_capture(...)` and `.update(...)` retain measured free
+cells when exclusively robot/target-owned endpoints occlude them later. Each cell
+keeps its original acquisition time until a new ray observes it. Exclusion never
+creates free evidence. Mixed robot/background cells remain occupied. A free/occupied
+contradiction rejects the update; the owning source must discard the map and
+invalidate plans. `placement_scene()` supplies the existing native checker with
+a whole-volume free predicate that checks per-cell age on every query. Without a
+`StaticBackgroundAssumption`, evidence expires after at most two seconds. An
+explicit assumption names the scene epoch and a validity interval of at most
+300 seconds; it extends validity, never capture timestamps. It requires an actual
+prior scan and does not establish one from robot geometry. This is a tested query
+component, not an assembled live background provider or a contact exception.
+
 For simulator view qualification, `EMET_STRETCH_HEAD_CAMERA_SCALE=2` renders
 848×480 raw head samples with matching intrinsics/registration.
 `EMET_SIM_HEAD_RENDER_ROBOT=1` keeps robot self-occlusion. Both are opt-in to
@@ -185,8 +214,15 @@ version and rerunning the relevant experiment. Registration uses the same raw
 render intrinsics before the published image rotation. The actual-model regression
 checks the camera-creation settings, MuJoCo GL frustum, registration K, constructor
 `head_K`, projected rays, baseline offset and unfilled registration holes at both
-resolutions, without opening a GPU context. Wrist-camera calibration is a separate
-qualification gate.
+resolutions, without opening a GPU context.
+
+The wrist stream now uses the same render-derived convention: its 480×270
+frame and 58° vertical FOV determine the focal length and pixel centers. Both the
+server's `ee_K` and camera manager use rendered dimensions, rather than mixing
+physical-camera focal calibration with 1280×720 sensor metadata. The actual-model
+test compares these matrices with MuJoCo's GL frustum. This changes simulated
+wrist unprojection; hardware calibration settings are unchanged. Sensor noise,
+range limits and hardware timing/pose-error bounds remain unqualified.
 
 Simulator images now retain separate RGB/depth acquisition intervals under the
 physics/render lock. `local_sim_capture_interval` maps their union only when the

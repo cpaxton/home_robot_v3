@@ -18,7 +18,7 @@ import mujoco
 import mujoco._enums
 import numpy as np
 
-from emet.simulation.stretch_mujoco import utils
+from emet.simulation.depth_registration import rendered_camera_intrinsics
 from emet.simulation.stretch_mujoco.datamodels.status_stretch_camera import StatusStretchCameras
 from emet.simulation.stretch_mujoco.enums.stretch_cameras import StretchCameras
 from emet.simulation.stretch_mujoco.utils import FpsCounter, switch_to_glfw_renderer
@@ -299,17 +299,9 @@ class MujocoServerCameraManagerSync:
         Get camera parameters
         """
         cam = self.mujoco_server.mjmodel.camera(camera.camera_name_in_mjcf)
-        d = {
-            "f": self.mujoco_server.mjmodel.cam_intrinsic[cam.id][:2],
-            "p": self.mujoco_server.mjmodel.cam_intrinsic[cam.id][2:],
-            "res": self.mujoco_server.mjmodel.cam_resolution[cam.id],
-        }
-        camera_k = utils.compute_K(
-            camera.initial_camera_settings.field_of_view_vertical_in_degrees,
-            d["res"][0],
-            d["res"][1],
-        )
-        return camera_k
+        settings = camera.initial_camera_settings
+        return rendered_camera_intrinsics(self.mujoco_server.mjmodel.cam_fovy[cam.id],
+            settings.width, settings.height)
 
     def set_camera_params(self, camera: StretchCameras) -> None:
         """

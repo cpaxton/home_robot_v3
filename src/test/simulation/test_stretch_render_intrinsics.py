@@ -22,7 +22,12 @@ def test_actual_stretch_registration_and_published_k_match_render_projection(mon
     model = mujoco.MjModel.from_xml_path(str(get_mujoco_models_path() / "stretch.xml"))
     manager = MujocoServerCameraManagerSync.__new__(MujocoServerCameraManagerSync)
     manager.mujoco_server = SimpleNamespace(mjmodel=model)
-    for camera in (StretchCameras.cam_d435i_rgb, StretchCameras.cam_d435i_depth):
+    for camera in (
+        StretchCameras.cam_d435i_rgb,
+        StretchCameras.cam_d435i_depth,
+        StretchCameras.cam_d405_rgb,
+        StretchCameras.cam_d405_depth,
+    ):
         manager.set_camera_params(camera)
     settings = StretchCameras.cam_d435i_rgb.initial_camera_settings
     cid = model.camera("d435i_camera_rgb").id
@@ -49,6 +54,7 @@ def test_actual_stretch_registration_and_published_k_match_render_projection(mon
         [[raw_k[1, 1], 0.0, settings.height - 1 - raw_k[1, 2]], [0.0, raw_k[0, 0], raw_k[0, 2]], [0.0, 0.0, 1.0]]
     )
     np.testing.assert_allclose(server.head_K, expected, atol=1e-10)
+    np.testing.assert_allclose(manager.get_camera_params(StretchCameras.cam_d435i_rgb), raw_k)
     # Independently ask MuJoCo for the actual GL camera frustum (no GL context).
     data, scene = mujoco.MjData(model), mujoco.MjvScene(model, maxgeom=2000)
     mujoco.mj_forward(model, data)
@@ -75,3 +81,18 @@ def test_actual_stretch_registration_and_published_k_match_render_projection(mon
     forward = -data.cam_xmat[cid].reshape(3, 3)[:, 2]
     axial_offset = forward @ (data.cam_xpos[depth_id] - data.cam_xpos[cid])
     np.testing.assert_allclose(imagery.cam_d435i_depth[valid], 1.25 + axial_offset, atol=2e-7)
+    # Wrist frames use the actual 480x270 render, not the 1280x720 sensor
+    # metadata or the physical 242.56/242.34 focal calibration.
+    wrist = StretchCameras.cam_d405_rgb
+    wk = manager.get_camera_params(wrist)
+    np.testing.assert_allclose(server.ee_K, wk)
+    camera.fixedcamid = model.camera(wrist.camera_name_in_mjcf).id
+    mujoco.mjv_updateScene(model, data, mujoco.MjvOption(), None, camera, mujoco.mjtCatBit.mjCAT_ALL, scene)
+    frustum = scene.camera[0]
+    expected_focal = (
+        wrist.initial_camera_settings.height * frustum.frustum_near / (frustum.frustum_top - frustum.frustum_bottom)
+    )
+    np.testing.assert_allclose(wk[[0, 1], [0, 1]], expected_focal, atol=1e-4)
+    np.testing.assert_array_equal(
+        wk[:2, 2], [(wrist.initial_camera_settings.width - 1) / 2, (wrist.initial_camera_settings.height - 1) / 2]
+    )

@@ -142,19 +142,25 @@ class ObservedWorkspace:
         owners['background'] = np.union1d(owners.get('background', []), missing).astype(int)
         return ObservedOccupancyPartition(self, tuple((name, tuple(map(int, values))) for name, values in sorted(owners.items())))
 
-    def known_free(self, bounds):
-        """Require every cell intersecting the closed query volume to be free."""
+    def query_region(self, bounds):
+        """Slices for all cells touching a closed query, or None outside the grid."""
         lo, hi = bounds_array(bounds)
         upper = self.origin + np.array(self.cells.shape) * self.resolution
         if np.any(lo < self.origin) or np.any(hi > upper):
-            return False
+            return None
         # Include both neighbours at an exact internal boundary. This errs toward
         # rejecting paths touching an unknown/occupied cell rather than skipping it.
         low = np.ceil((lo - self.origin) / self.resolution).astype(int) - 1
         high = np.floor((hi - self.origin) / self.resolution).astype(int)
         low, high = np.maximum(low, 0), np.minimum(high, np.array(self.cells.shape) - 1)
-        region = self.cells[tuple(slice(a, b + 1) for a, b in zip(low, high, strict=True))]
-        return bool(region.size and np.all(region == 1))
+        if np.any(low > high):
+            return None  # Floating-point boundary arithmetic may yield no cells.
+        return tuple(slice(a, b+1) for a, b in zip(low, high, strict=True))
+
+    def known_free(self, bounds):
+        """Require every cell intersecting the closed query volume to be free."""
+        region = self.query_region(bounds)
+        return region is not None and bool(np.all(self.cells[region] == 1))
 
     def placement_scene(self):
         ids = np.argwhere(self.cells == 2)

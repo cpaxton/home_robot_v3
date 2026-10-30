@@ -170,3 +170,13 @@ The motor-only rigid EE estimator does not assume passive-angle sensors or
 qualify fingertip/individual-telescope collision geometry. The fixture preparation
 script emits separate robot-only/scene XML and a JSON launch/manifest pair; see
 [the encoder/sampling evidence and rerun instructions](experiments/observed_encoder_sampling_20261029.md).
+
+Simulated head and wrist intrinsics use their rendered pinhole FOV, dimensions
+and pixel-center convention. In particular, `mujoco_server_stretch.py` publishes
+480×270 wrist `ee_K`, matching the camera manager, rather than using physical
+focal calibration or 1280×720 sensor metadata. Actual-model tests compare both
+with MuJoCo's GL frustum. Physical camera settings are unchanged. The paired
+`scripts/eval_stretch_multiview_masks.py --output DIR` diagnostic renders head and
+wrist from one private physics snapshot and runs independent RGBD tracking during
+the privileged native control. It uses CPU OSMesa via `emet jobs`, no VLM. See
+[tracking profiles, attempts and limits](experiments/observed_handoff_20261030.md).

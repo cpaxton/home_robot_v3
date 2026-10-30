@@ -47,6 +47,14 @@ def test_snapshot_keeps_sensor_holes_and_projection_clipping_unknown():
     assert not grid.known_free([[-.2, -.2, .2], [.2, .2, .6]])
 
 
+def test_closed_upper_float_boundary_never_accepts_an_empty_region_as_free():
+    grid = ObservedWorkspace(np.zeros(3), .1, np.zeros((3, 3, 3), np.uint8))
+    # 3 * .1 divided by .1 can round above 3; an empty cell slice must never
+    # satisfy all-free by vacuous truth. No unknown boundary is certified here.
+    upper = grid.origin + np.array(grid.cells.shape) * grid.resolution
+    assert not grid.known_free([upper, upper])
+
+
 def test_foreground_pixel_prevents_background_free_space_carving():
     depth = np.full((21, 21), 1.)
     depth[10, 10] = .3

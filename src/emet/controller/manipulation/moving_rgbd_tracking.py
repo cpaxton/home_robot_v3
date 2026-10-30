@@ -38,6 +38,21 @@ def _chroma(rgb):
     return values / np.maximum(values.sum(axis=-1, keepdims=True), 1.0)
 
 
+def _neutral_specular(rgb):
+    """Remove a neutral additive highlight, then normalize diffuse intensity.
+
+    This declared lighting model is suitable only for saturated coloured targets.
+    It is not invariant to arbitrary illuminants, material changes or clipping.
+    """
+    values = np.asarray(rgb, float)
+    return _chroma(values - values.min(axis=-1, keepdims=True))
+
+
+def _saturated(rgb):
+    values = np.asarray(rgb, float)
+    return np.ptp(values, axis=-1) >= 0.2 * np.maximum(values.max(axis=-1), 1.0)
+
+
 def _components(appearance, world, *, edge_m, max_pixels):
     """Whole measured components. Two-pixel links bridge holes without filling them."""
     count = int(appearance.sum())
@@ -74,6 +89,7 @@ class MovingMaskFit:
     reference_id: str
     max_displacement_m: float
     processing_s: float
+    appearance_model: str = "chromaticity"
     execution_qualified: bool = False
 
     def __post_init__(self):
@@ -86,6 +102,7 @@ class MovingMaskFit:
             "reference_id": self.reference_id,
             "max_displacement_m": self.max_displacement_m,
             "processing_s": self.processing_s,
+            "appearance_model": self.appearance_model,
             "association_scope": "bounded_continuity_candidate_not_global_reidentification",
             "execution_qualified": False,
         }
@@ -96,8 +113,11 @@ class MovingRgbdTracker:
 
     The caller declares a motion bound and supplies coherent current world points.
     All appearance components intersecting the reachable volume compete, including
-    fragments too small to fit. Multiple candidates stop before fitting. Geometry
-    never trims a mixed component into an apparent object.
+    fragments too small to fit. The default single-view profile stops on multiple
+    candidates before fitting. The explicit multi-view complete-prior profile
+    may validate their entire union. Geometry never trims a mixed component into
+    an apparent object. Neutral-specular appearance is separately opt-in and
+    requires saturated colour; default chromaticity behavior is unchanged.
     """
 
     def __init__(
@@ -120,6 +140,7 @@ class MovingRgbdTracker:
         max_pixels=100000,
         max_update_s=0.75,
         max_evaluations=6000,
+        appearance_model="chromaticity",
         clock=time.monotonic,
     ):
         if (
@@ -137,12 +158,15 @@ class MovingRgbdTracker:
             or max_update_s <= 0
             or type(max_pixels) is not int
             or max_pixels < 25
+            or appearance_model not in {"chromaticity", "neutral_specular"}
         ):
             raise ValueError("invalid_moving_tracking_profile")
         self.model, self.object_ref, self.scene_epoch, self.clock = model, object_ref, scene_epoch, clock
         self.speed, self.gap, self.margin = max_speed_m_s, max_gap_s, association_margin_m
         self.chroma_distance, self.edge_m, self.max_pixels = chroma_distance, max_edge_m, max_pixels
         self.max_update_s, self.max_evaluations = max_update_s, max_evaluations
+        self.appearance_model = appearance_model
+        self._colour_features = _neutral_specular if appearance_model == "neutral_specular" else _chroma
         self.reference_id = "moving_reference:" + uuid.uuid4().hex
         self.latest = None
         self._seen = {observation_id}
@@ -168,9 +192,11 @@ class MovingRgbdTracker:
         if interior.sum() < 25:
             raise ObservationUnavailable("moving_reference_appearance_unavailable")
         colors = rgb[interior]
-        if np.median(colors.sum(axis=-1)) < 60:
+        if np.median(colors.sum(axis=-1)) < 60 or (
+            appearance_model == "neutral_specular" and not _saturated(colors).all()
+        ):
             raise ObservationUnavailable("moving_reference_appearance_unavailable")
-        chroma = _chroma(colors)
+        chroma = self._colour_features(colors)
         self._appearance = cKDTree(chroma[np.linspace(0, len(chroma) - 1, min(256, len(chroma))).astype(int)])
         self._min_brightness = max(30.0, float(np.median(colors.sum(axis=-1)) * 0.25))
         started = time.perf_counter()
@@ -184,7 +210,9 @@ class MovingRgbdTracker:
         )
         self._require_fit(fit)
         self._require_time(received_monotonic)
-        self.latest = MovingMaskFit(fit, mask, self.reference_id, 0.0, time.perf_counter() - started)
+        self.latest = MovingMaskFit(
+            fit, mask, self.reference_id, 0.0, time.perf_counter() - started, self.appearance_model
+        )
 
     def _require_time(self, received):
         now = self.clock()
@@ -199,6 +227,38 @@ class MovingRgbdTracker:
             or np.max(np.ptp(fit.poses[:, :3, 3], axis=0)) > 0.005
         ):
             raise ObservationUnavailable("moving_geometry_ambiguous")
+
+    def _candidate_mask(
+        self, rgb, depth, world, *, centers, displacement, allow_image_boundary=False, merge_reachable=False
+    ):
+        """Associate a whole component without asserting full pose observability."""
+        rgb, depth, world = _arrays(rgb, depth, world)
+        valid = np.isfinite(depth) & (depth > 0) & np.isfinite(world).all(-1)
+        appearance = valid & (rgb.sum(axis=-1) >= self._min_brightness)
+        if self.appearance_model == "neutral_specular":
+            appearance &= _saturated(rgb)
+        ys, xs = np.where(appearance)
+        distances = self._appearance.query(self._colour_features(rgb[ys, xs]))[0]
+        appearance[ys, xs] &= distances <= self.chroma_distance
+        parts = _components(appearance, world, edge_m=self.edge_m, max_pixels=self.max_pixels)
+        radius = float(np.linalg.norm(self.model.half_extents))
+        reachable = []
+        for pixels in parts:
+            points = world.reshape(-1, 3)[pixels]
+            if np.any(cKDTree(centers).query(points)[0] <= radius + displacement):
+                reachable.append(pixels)
+        if not reachable or (len(reachable) != 1 and not merge_reachable):
+            raise ObservationUnavailable("moving_mask_ambiguous" if reachable else "moving_mask_lost")
+        mask = np.zeros(depth.shape, bool)
+        # An explicit complete-prior profile may fit ALL reachable fragments as
+        # one solid. Never select a subset by fit quality or discard tiny parts:
+        # unrelated returns must invalidate the union during geometry validation.
+        mask.flat[np.concatenate(reachable)] = True
+        if not allow_image_boundary and (mask[0].any() or mask[-1].any() or mask[:, 0].any() or mask[:, -1].any()):
+            raise ObservationUnavailable("moving_mask_image_boundary")
+        if mask.sum() < 25:
+            raise ObservationUnavailable("moving_mask_insufficient")
+        return mask
 
     def update(self, rgb, depth, world, *, observation_id, received_monotonic, scene_epoch):
         previous, self.latest = self.latest, None
@@ -218,28 +278,9 @@ class MovingRgbdTracker:
         self._seen.add(observation_id)
         self._received = received_monotonic
         rgb, depth, world = _arrays(rgb, depth, world)
-        valid = np.isfinite(depth) & (depth > 0) & np.isfinite(world).all(-1)
-        appearance = valid & (rgb.sum(axis=-1) >= self._min_brightness)
-        ys, xs = np.where(appearance)
-        distances = self._appearance.query(_chroma(rgb[ys, xs]))[0]
-        appearance[ys, xs] &= distances <= self.chroma_distance
-        parts = _components(appearance, world, edge_m=self.edge_m, max_pixels=self.max_pixels)
         centers = previous.fit.poses[:, :3, 3]
-        radius = float(np.linalg.norm(self.model.half_extents))
         displacement = self.speed * dt + self.margin
-        reachable = []
-        for pixels in parts:
-            points = world.reshape(-1, 3)[pixels]
-            if np.any(cKDTree(centers).query(points)[0] <= radius + displacement):
-                reachable.append(pixels)
-        if len(reachable) != 1:
-            raise ObservationUnavailable("moving_mask_ambiguous" if reachable else "moving_mask_lost")
-        mask = np.zeros(depth.shape, bool)
-        mask.flat[reachable[0]] = True
-        if mask[0].any() or mask[-1].any() or mask[:, 0].any() or mask[:, -1].any():
-            raise ObservationUnavailable("moving_mask_image_boundary")
-        if mask.sum() < 25:
-            raise ObservationUnavailable("moving_mask_insufficient")
+        mask = self._candidate_mask(rgb, depth, world, centers=centers, displacement=displacement)
         fit = fit_geometry(
             world[mask],
             self.model,
@@ -256,5 +297,5 @@ class MovingRgbdTracker:
         elapsed = time.perf_counter() - started
         if elapsed > self.max_update_s:
             raise ObservationUnavailable("moving_tracking_time_budget_exhausted")
-        self.latest = MovingMaskFit(fit, mask, self.reference_id, displacement, elapsed)
+        self.latest = MovingMaskFit(fit, mask, self.reference_id, displacement, elapsed, self.appearance_model)
         return self.latest

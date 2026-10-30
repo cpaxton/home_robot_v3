@@ -131,6 +131,17 @@ and registered measured depth, tracking accepts 11 captures before stopping on
 insufficient geometry near the gripper as target visibility decreases.
 The privileged contact controller still completes; observed tracking and task
 acceptance remain separate (Figure~\ref{fig:observed_moving_geometry}).
+In a subsequent development repeat, synchronized head/wrist views preserve one
+geometry track for all 81 captures through native contact pick/place, release
+and retreat (maximum center error 1.251\,mm against independent simulator truth).
+The head reference hands off to the wrist without reinitialization. Explicit
+complete-prior fragment union and neutral-highlight colour handling preserve
+measured cap/side geometry; incompatible or unobservable geometry still rejects.
+These are correlated captures from one ideal rendered fixture with operator
+initialization and privileged task planning/control, not 81 independent tasks
+or an observed execution success. Historical background queries now preserve
+original per-cell evidence times, with explicit bounded static-scene assumptions;
+this does not resolve full-arm, self-occupancy or phase-specific contact admission.
 Capture identity/order does not establish
 cross-host clock synchronization or certify capture-after-motion. These guards
 do not enable observed manipulation or validate the full exploration--navigation--

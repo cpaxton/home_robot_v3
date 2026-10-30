@@ -427,3 +427,24 @@ executor remains blocked until a separate source/query policy can establish:
 More informative wrist/head views remain needed for tracked payload evidence,
 but do not substitute for this self-occupancy policy. The checker deliberately
 continues to reject raw self-occluding maps; no unsafe carve or bypass is added.
+
+## October 30: head/wrist visibility and historical background
+
+The native contact development repeat now completes with one continuous RGBD
+track over 81/81 captures, including release and retreat. Head-to-wrist handoff,
+whole-fragment union under a declared complete-shape prior and opt-in neutral
+highlight handling resolve the fixture's visibility failures. Wrist intrinsics
+now match the actual rendered dimensions/FOV; physical calibration is unchanged.
+Negative tests retain ambiguity/loss, incompatible geometry and replay stops.
+
+`ObservedBackground` supplies original per-cell age and explicit static-scene
+validity to native free-space queries. A prior depth scan can support a short path
+through later self-occlusion; expiry and unseen-volume motion still reject. No
+robot AABB is declared free. This is query plumbing, not a qualified live scan,
+robot-interior policy, support certificate or phase-specific contact exception.
+
+Next assemble those policies in the actual observed source, with full-arm and
+camera/encoder uncertainty, then run the stationary public-tool transfer. The
+default source remains read-only and full observed task acceptance remains open.
+Keep this separate from the privileged control, diagnostic candidates and any RL
+training work. [Attempts, protocols and video](../experiments/observed_handoff_20261030.md).

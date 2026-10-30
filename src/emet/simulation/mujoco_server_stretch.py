@@ -252,20 +252,10 @@ class MujocoZmqServer(BaseZmqServer):
         self.head_K = np.array([[raw_k[1, 1], 0, settings.height - 1 - raw_k[1, 2]],
                                 [0, raw_k[0, 0], raw_k[0, 2]], [0, 0, 1]])
 
-        # Get the intrinsic parameters of the d405 rgb camera
-        (
-            fx,
-            _,
-            cx,
-            _,
-            fy,
-            cy,
-            _,
-            _,
-            _,
-        ) = StretchCameras.cam_d405_rgb.initial_camera_settings.get_intrinsic_params_k()
-        # No need to rotate the ee camera matrix as it is not rotated
-        self.ee_K = np.array([[fx, 0, cx], [0, fy, cy], [0, 0, 1]])
+        # The wrist stream is unrotated but still uses rendered pinhole geometry,
+        # not physical-camera focal calibration or the full sensor resolution.
+        wrist = StretchCameras.cam_d405_rgb.initial_camera_settings
+        self.ee_K = rendered_camera_intrinsics(wrist.field_of_view_vertical_in_degrees, wrist.width, wrist.height)
 
         self.simulation_rate = simulation_rate
         self.objects_info = objects_info

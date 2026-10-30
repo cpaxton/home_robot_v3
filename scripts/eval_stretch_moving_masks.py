@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Copyright (c) Chris Paxton 2026
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
-"""Observe a privileged native Stretch contact transfer through its head RGBD.
+"""Observe a privileged native Stretch contact transfer through calibrated RGBD.
 
 Task control/scoring stays privileged. A separate tracker gets measured camera
 pixels, capture times and the declared cylinder prior, never object poses/masks.
@@ -34,6 +34,7 @@ from emet.visualization.manip_video import overlay_manip_frame
 class CameraContactRobot(contact.ContactRobot):
     output = None
     instances = []
+    view = "head"
 
     def __init__(self, model, object_body, **kwargs):
         self.renderer, self.tracker, self.rows, self.frames = None, None, [], []
@@ -44,13 +45,21 @@ class CameraContactRobot(contact.ContactRobot):
         self.data.ctrl[model.actuator("head_pan").id] = -1.57
         self.data.ctrl[model.actuator("head_tilt").id] = -0.7
         self.step(1.0)
-        model.vis.global_.offwidth = max(model.vis.global_.offwidth, 848)
-        for camera in (StretchCameras.cam_d435i_rgb, StretchCameras.cam_d435i_depth):
+        self.rgb_camera, self.depth_camera = (
+            (StretchCameras.cam_d435i_rgb, StretchCameras.cam_d435i_depth)
+            if self.view == "head"
+            else (StretchCameras.cam_d405_rgb, StretchCameras.cam_d405_depth)
+        )
+        settings = self.rgb_camera.initial_camera_settings
+        self.width, self.height = (848, 480) if self.view == "head" else (settings.width, settings.height)
+        model.vis.global_.offwidth = max(model.vis.global_.offwidth, self.width)
+        model.vis.global_.offheight = max(model.vis.global_.offheight, self.height)
+        for camera in (self.rgb_camera, self.depth_camera):
             camera_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, camera.camera_name_in_mjcf)
             model.cam_fovy[camera_id] = camera.initial_camera_settings.field_of_view_vertical_in_degrees
         self.target_geom_id = int(model.body(object_body).geomadr[0])
         self.target_body = object_body  # Independent scorer only.
-        self.renderer = mujoco.Renderer(model, height=480, width=848)
+        self.renderer = mujoco.Renderer(model, height=self.height, width=self.width)
         self.instances.append(self)
         self.observe()
 
@@ -69,13 +78,13 @@ class CameraContactRobot(contact.ContactRobot):
             self.model,
             self.data,
             self.renderer,
-            camera="d435i_camera_rgb",
+            camera=self.rgb_camera.camera_name_in_mjcf,
             target_geom_id=self.target_geom_id,
-            depth_camera="d435i_camera_depth",
+            depth_camera=self.depth_camera.camera_name_in_mjcf,
         )
         self.last_capture = start
         index, mask = len(self.rows), np.zeros(depth.shape, bool)
-        obs_id = f"head:{index}:{start}"
+        obs_id = f"{self.view}:{index}:{start}"
         row = {
             "index": index,
             "capture_start": start,
@@ -136,10 +145,11 @@ class CameraContactRobot(contact.ContactRobot):
         )
         colored = rgb.copy()
         colored[mask] = (0.45 * colored[mask] + 0.55 * np.array([40, 255, 70])).astype(np.uint8)
+        presentation = [np.rot90(p, -1) for p in (rgb, colored)] if self.view == "head" else [rgb, colored]
         panel = overlay_manip_frame(
-            np.concatenate([np.rot90(rgb, -1), np.rot90(colored, -1)], axis=1),
+            np.concatenate(presentation, axis=1),
             overlay_style="border",
-            title="Stretch native contact | raw head RGB / observed mask candidate",
+            title=f"Stretch native contact | raw {self.view} RGB / observed mask candidate",
             action="track moving payload" if row["state"] == "candidate" else "STOP: observed identity unknown",
             goal="separate privileged control from observed sensor qualification",
             detail=f"sim t={self.data.time:.2f}: " + row.get("reason", "candidate; no material yaw"),
@@ -154,9 +164,16 @@ class CameraContactRobot(contact.ContactRobot):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument(
+        "--camera",
+        choices=("head", "wrist"),
+        default="head",
+        help="Registered RGB/depth optical pair for the independent tracker diagnostic.",
+    )
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
     CameraContactRobot.output = args.output
+    CameraContactRobot.view = args.camera
     previous = contact.ContactRobot
     try:
         contact.ContactRobot = CameraContactRobot
@@ -172,6 +189,7 @@ def main():
         "scope": "observed sensor diagnostics during a privileged native contact control",
         "observed_task_success_assessed": False,
         "execution_qualified": False,
+        "camera": args.camera,
         "camera_geometry": "separate calibrated RGB/depth optical frames; measured depth registration, holes unfilled",
         "privileged_control_passed": result["passed"],
         "frames": len(robot.rows),
