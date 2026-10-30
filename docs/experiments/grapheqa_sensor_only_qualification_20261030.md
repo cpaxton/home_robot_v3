@@ -28,7 +28,7 @@ do not relabel those results as a fully sensor-only navigation comparison.
 ## Minimal mapper qualification
 
 `scripts/probe_grapheqa_sensor_only.py` renders the initial view for explicit
-HM-EQA question ID 2, then makes four 10-degree left turns. Question 2 is the
+HM-EQA question ID 2, then makes nine 10-degree left turns. Question 2 is the
 first existing development ID, chosen before seeing probe results. The question
 row is used only to select the renderer's scene and prescribed spawn.
 
@@ -45,7 +45,8 @@ under translation, collision or real-world drift.
 
 The native process has no GPU, network, question files, simulator scene assets,
 or annotation directories mounted. It receives only those packets, a static
-vocabulary, the two small driver/contract files and its output directory. Its
+vocabulary, the two small driver/contract files, the pinned reference Python
+library and its output directory. Its
 dependency image and reference label-space revision are pinned. The manifest
 records model/source/config hashes, fresh-packet hashes and native receipts.
 Input/schema failures, detector errors, rejected frames, empty graphs and
@@ -54,6 +55,10 @@ The cached native reconstruction integrates every input, but emits a graph
 update only every fifth pose. Its `step()` returns false on the intervening
 inputs; receipts distinguish that scheduled behavior from a failed full update.
 The probe preserves this cadence rather than changing it to force a pass.
+The default ten-frame run checks two graph updates and the reference's current
+agent-state interface. Image ranking and room inference are disabled for this
+offline state check; no model is called. A five-frame run remains a mapper-only
+check and does not qualify the agent-state handoff.
 
 Example, from a clean committed checkout with cached local weights:
 
@@ -108,11 +113,36 @@ warning still appear. They did not prevent this graph update and serialization.
 A stationary, one-update check does not qualify repeated updates, translation,
 pose-graph connectivity, navigation, or the complete upstream agent.
 
+## Follow-up: repeated updates and reference state
+
+Managed job `20261030_120249_a02bf2` passed at source `476e6c81`.
+Artifacts: `/home/cpaxton/runs/emet/grapheqa-state-handoff-20261030/`.
+Ten newly rendered views and online detector calls exercised **two** scheduled
+graph updates. The graph contained 20 object nodes, two agent nodes, 123 places,
+one room and one building (147 total). Its mesh contained 4,526 vertices.
+
+The cached odometry tracker records the first pose on its first frontend update,
+then emits agent nodes on its second update. Thus the earlier five-frame result
+could not exercise the reference's current-state path, despite reconstructing
+objects successfully. No tracker/config override or simulator pose was needed.
+
+The pinned `SceneGraphSim.update()` and `get_current_semantic_state_str()` now
+consume the native graph successfully. The resulting filtered graph and current
+agent state are saved in `native/reference_state.json`; image ranking and room
+inference were disabled solely for this offline state check. No Qwen request,
+answer, exploration action or task success was produced. All 29 targeted tests
+remain passing.
+
+The native mesh/pose-graph warning remains. Translation, model input formatting,
+question-conditioned image ranking, room inference, response/action decoding and
+observed-space execution are still separate gates. In particular, successful
+graph-to-state conversion is not qualification of the model's complete context.
+
 ## Gates before an active comparison
 
-1. **Mapper gate passed.** Preserve the successful input/output evidence, then
-   check repeated graph updates and translation with estimated pose. A mapper
-   pass is not an answer or navigation success.
+1. **Mapper, repeated-update and reference-state gates passed.** Preserve the
+   successful input/output evidence, then check translation with estimated pose.
+   These checks are not answer or navigation successes.
 2. Retain the reference's graph/context/action/stopping flow while substituting
    only learned perception, question-derived text and the fixed comparison VLM.
    Keep the gold answer exclusively in the scorer; save actual model requests.

@@ -13,7 +13,10 @@
       upstream system; keep models, segmentation inputs and task populations clear.
       GraphEQA's cached Habitat container passes native learned RGB-D graph
       construction on 2026-10-30 (five fresh views, 16 object-layer nodes).
-      Next qualify repeated updates/translation and one complete active episode.
+      Repeated updates and the reference agent-state handoff also pass at
+      `476e6c81` (ten fresh views, 20 object nodes and two agent nodes; no model
+      requests). Next qualify model/context routing, translation and one complete
+      active episode.
       Native warnings remain; the April-2025 image is a dependency base, not
       current-source parity.
 - [ ] Qualify GraphEQA with **no privileged scene inputs**: freshly inferred
