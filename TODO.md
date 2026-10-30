@@ -11,6 +11,10 @@
       NavMCP's trajectory-evidence/interface comparison and release dependencies.
       Do not relabel internal `static_graph` or a reduced tool list as a faithful
       upstream system; keep models, segmentation inputs and task populations clear.
+      GraphEQA's cached Habitat container passes Hydra/Spark DSG/Habitat imports
+      on 2026-10-30; next check graph construction, rendering, source/config pins
+      and one complete episode. Native duplicate-registration messages remain
+      unqualified; the April-2025 image is a dependency base, not current-source parity.
 
 - [ ] Resolve refresh execution failures before another broad window: rerun the
       five DynaMem missing-viewpoint exceptions on `6ae052fc`; qualify Molmo's

@@ -174,6 +174,34 @@ Use the released question IDs and poses, not an equally sized prefix. In
 particular, the reference paper's 113-question HM3D A-EQA subset is not our
 historical first-113 HM-EQA slice. [Dataset definitions](https://arxiv.org/html/2412.14480v2).
 
+### Hydra feasibility checked 2026-10-30
+
+The [upstream installation](https://github.com/SaumyaSaxena/graph_eqa)
+provides a Habitat container with the GraphEQA Hydra fork, ROS Noetic/catkin,
+Spark DSG and Python bindings. This is the scene-graph mapper, distinct from
+our `hydra-core` configuration dependency. Its native instructions target Ubuntu
+20.04; the current host uses Ubuntu 22.04 and has ROS 2 Humble.
+
+The upstream image `blakerbuchanan/grapheqa_for_habitat:0.0.1` is already cached
+locally. Immutable local image ID:
+`sha256:1cab965fa1815e43854248d62bbf910454b12c791584df95111f3b87d0fabde3`.
+In a read-only, network-disabled, CPU-12 container with no GPU access, sourcing
+ROS and the catkin workspace permits successful imports of `hydra_python`,
+`spark_dsg` and `habitat_sim`. The environment reports Python 3.10.17 and
+Habitat-Sim 0.3.3. Native imports also emit duplicate formatter/logger registration
+errors (`asl`, `stdout`) despite returning exit zero; graph construction needs a
+separate check before accepting this runtime.
+
+The cached image dates from April 2025. Use it as a dependency base, pin the
+actual GraphEQA/Hydra source revisions and reconcile current configs rather than
+assuming it contains the updated paper's implementation. The local upstream
+checkout `/home/cpaxton/src/graph_eqa` is at `bfa8f86` and has an editor swap file;
+leave it untouched and prepare any runner changes in an isolated checkout.
+Next gates are posed RGB-D -> Hydra graph, Habitat rendering on existing semantic
+assets, model-adapter validation and one complete upstream episode. No image
+pull, source build, GPU experiment, or host ROS/environment modification was
+performed for this preflight.
+
 ## Task coverage and paper claims
 
 [EXPRESS-Bench / Fine-EQA](https://openaccess.thecvf.com/content/ICCV2025/html/Jiang_Beyond_the_Destination_A_Novel_Benchmark_for_Exploration-Aware_Embodied_Question_ICCV_2025_paper.html)
