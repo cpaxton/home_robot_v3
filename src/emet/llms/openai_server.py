@@ -451,6 +451,8 @@ class LLMServeState:
                 self.load_error = f"Generation timed out; restart this model server: {exc}"
                 raise
         dt = time.perf_counter() - t0
+        receipt = getattr(self.client, "last_generation_metadata", None) or {}
+        usage = receipt.get("usage")
         return {
             "id": f"chatcmpl-{uuid.uuid4().hex[:24]}",
             "object": "chat.completion",
@@ -460,12 +462,12 @@ class LLMServeState:
                 {
                     "index": 0,
                     "message": {"role": "assistant", "content": text},
-                    "finish_reason": "stop",
+                    "finish_reason": receipt.get("finish_reason", "stop"),
                 }
             ],
-            # These clients return text rather than token counters. Unknown
-            # usage must not masquerade as measured zero-cost inference.
-            "usage": None,
+            # Backends without token counters remain unknown, rather than
+            # masquerading as measured zero-cost inference.
+            "usage": usage,
             "emet": {
                 "latency_s": round(dt, 3),
                 "device": self.device,
@@ -473,7 +475,9 @@ class LLMServeState:
                 "multimodal": self.multimodal,
                 "hf_model_id": hf_model_id,
                 "quantization": getattr(self.client, "_quantization", None),
-                "usage_available": False,
+                "usage_available": usage is not None,
+                "finish_reason_verified": receipt.get("finish_reason_verified", False),
+                "stop_reason": receipt.get("stop_reason"),
             },
         }
 

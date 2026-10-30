@@ -6,10 +6,11 @@
 
 from unittest.mock import MagicMock, patch
 
+import pytest
 import torch
 
 from emet.llms.prefix_kv_cache import PrefixKVCache
-from emet.llms.qwen3_vl_client import Qwen3VLClient
+from emet.llms.qwen3_vl_client import Qwen3VLClient, generation_metadata
 
 
 def _make_client(*, cache_system_prefix: bool = True) -> Qwen3VLClient:
@@ -25,6 +26,7 @@ def _make_client(*, cache_system_prefix: bool = True) -> Qwen3VLClient:
     client._TEMPLATE_KWARGS = {}
     client.processor = MagicMock()
     client.model = MagicMock()
+    client.model.generation_config.eos_token_id = 99
     _p = torch.nn.Parameter(torch.zeros(1))
     client.model.parameters = MagicMock(return_value=iter([_p]))
     # Re-create iterator on each call so _model_device() can be invoked repeatedly.
@@ -101,6 +103,18 @@ def test_generate_multimodal_reset_false_does_not_duplicate_system(_mock_dbg):
     roles = [m["role"] for m in client.conversation_history if isinstance(m, dict)]
     assert roles.count("system") == 1
     assert roles[-2:] == ["user", "assistant"]
+    assert client.last_generation_metadata["usage"] == {"prompt_tokens": 3, "completion_tokens": 1, "total_tokens": 4}
+    assert client.last_generation_metadata["finish_reason"] == "stop"
+
+
+@pytest.mark.parametrize("tokens,expected", [([1, 2, 3], "length"), ([1, 2, 99], "stop"), ([1, 99], "stop")])
+def test_decode_receipt_distinguishes_budget_exhaustion_from_eos(tokens, expected):
+    receipt = generation_metadata(
+        prompt_tokens=5, new_token_ids=torch.tensor(tokens), max_new_tokens=3, eos_token_id=[98, 99]
+    )
+    assert receipt["finish_reason"] == expected
+    assert receipt["finish_reason_verified"] is True
+    assert receipt["usage"]["total_tokens"] == 5 + len(tokens)
 
 
 @patch("emet.llms.qwen3_vl_client.env_agent_model_debug", return_value=False)

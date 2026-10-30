@@ -128,6 +128,25 @@ def test_server_reports_loaded_identity_and_unknown_usage():
     assert result["emet"]["usage_available"] is False
 
 
+def test_server_forwards_measured_token_usage_and_truncation(monkeypatch):
+    state = _ready_state()
+
+    def generate(client, *_args, **_kwargs):
+        client.last_generation_metadata = {
+            "usage": {"prompt_tokens": 20, "completion_tokens": 8, "total_tokens": 28},
+            "finish_reason": "length",
+            "finish_reason_verified": True,
+            "stop_reason": "max_new_tokens",
+        }
+        return "partial response"
+
+    monkeypatch.setattr("emet.llms.openai_server.generate_chat", generate)
+    result = state.complete({"messages": [{"role": "user", "content": "hi"}]})
+    assert result["choices"][0]["finish_reason"] == "length"
+    assert result["usage"]["total_tokens"] == 28
+    assert result["emet"]["finish_reason_verified"] is True
+
+
 @pytest.mark.parametrize(
     "settings",
     [
