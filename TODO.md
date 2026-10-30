@@ -6,6 +6,9 @@
       active-tool agent and semantic-voxel/graph/tool ablations on the EQA/OVMM
       pilot. Preserve the common physical executor and collision checks. Plan:
       `docs/experiments/shared_agent_literature_review_20261029.md`.
+      A live current-image vs reference-graph API pair now completes on Qwen8B
+      int4 (`cede090f`, fork `21b6876`); both answers are uncertain. This is one
+      frozen-context wiring check, not matched-history or active acceptance.
 - [ ] Audit runnable 3D-Mem and zero-shot ToolEQA baselines; separately qualify
       a GraphEQA controller adaptation and an upstream reproduction. Review
       NavMCP's trajectory-evidence/interface comparison and release dependencies.
@@ -15,8 +18,11 @@
       construction on 2026-10-30 (five fresh views, 16 object-layer nodes).
       Repeated updates and the reference agent-state handoff also pass at
       `476e6c81` (ten fresh views, 20 object nodes and two agent nodes; no model
-      requests). Next qualify model/context routing, translation and one complete
-      active episode.
+      requests). The model API fork and paired context runner are available at
+      https://github.com/cpaxton/graph_eqa/pull/1; live model/context routing passes.
+      Next resolve the pose policy and connect observed-space frontier/execution
+      before one complete paired active episode. Report:
+      `docs/experiments/grapheqa_model_api_connection_20261030.md`.
       Native warnings remain; the April-2025 image is a dependency base, not
       current-source parity.
 - [ ] Qualify GraphEQA with **no privileged scene inputs**: freshly inferred

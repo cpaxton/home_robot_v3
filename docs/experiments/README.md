@@ -4,6 +4,10 @@
 covers images-only/retrieval controls, minimal active tools, GraphEQA adaptation
 versus reproduction, and the closest memory/navigation/manipulation work.
 
+**Model API connection (2026-10-30):** [GraphEQA fork and paired context smoke](grapheqa_model_api_connection_20261030.md)
+records the real Qwen API check, supplied-model runner, input restrictions and
+remaining active-execution gates. Frozen-context inference is not active EQA.
+
 **Post-merge study (2026-10-28):** [RL-priority experiment and paper plan](shared_agent_paper_update.md#post-merge-evidence-program-2026-10-28),
 [proposed controlled capability suite](harness_capability_benchmark.md).
 The current shared-harness development pilot is separate from historical
