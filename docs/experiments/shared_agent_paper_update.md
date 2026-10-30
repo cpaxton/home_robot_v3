@@ -1,5 +1,12 @@
 # Shared-agent paper update and figure plan
 
+The [2026-10-29 literature review and baseline design](shared_agent_literature_review_20261029.md)
+adds model-only image context, retrieval and minimal active-tool controls to the
+evaluation plan. GraphEQA controller adaptation and upstream reproduction are
+separate rows; internal static-versus-lazy comparisons do not establish the
+value of the harness itself. The related-work section and bibliography now
+include the closest visual-memory and tool-using agents.
+
 ## Post-merge evidence program (2026-10-28)
 
 The shared harness landed as #225, main `cd169673`. Its runtime matches final

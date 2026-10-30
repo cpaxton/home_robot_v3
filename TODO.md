@@ -1,5 +1,17 @@
 # Living TODOs (small / near-term)
 
+- [ ] Qualify a genuine model-only baseline: identical frozen RGB trajectories,
+      current/uniform/retrieved/selected context, no graph or interactive tools,
+      matched image/token budgets and one frozen backbone. Then run a minimal
+      active-tool agent and semantic-voxel/graph/tool ablations on the EQA/OVMM
+      pilot. Preserve the common physical executor and collision checks. Plan:
+      `docs/experiments/shared_agent_literature_review_20261029.md`.
+- [ ] Audit runnable 3D-Mem and zero-shot ToolEQA baselines; separately qualify
+      a GraphEQA controller adaptation and an upstream reproduction. Review
+      NavMCP's trajectory-evidence/interface comparison and release dependencies.
+      Do not relabel internal `static_graph` or a reduced tool list as a faithful
+      upstream system; keep models, segmentation inputs and task populations clear.
+
 - [ ] Resolve refresh execution failures before another broad window: rerun the
       five DynaMem missing-viewpoint exceptions on `6ae052fc`; qualify Molmo's
       declared assisted/physical mode and fail fast on dead physics; isolate S0

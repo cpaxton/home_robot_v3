@@ -1,5 +1,9 @@
 # Paper experiments — master index
 
+**Baseline design (2026-10-29):** [Shared-agent literature review and baseline matrix](shared_agent_literature_review_20261029.md)
+covers images-only/retrieval controls, minimal active tools, GraphEQA adaptation
+versus reproduction, and the closest memory/navigation/manipulation work.
+
 **Post-merge study (2026-10-28):** [RL-priority experiment and paper plan](shared_agent_paper_update.md#post-merge-evidence-program-2026-10-28),
 [proposed controlled capability suite](harness_capability_benchmark.md).
 The current shared-harness development pilot is separate from historical
