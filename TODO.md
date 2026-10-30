@@ -1,9 +1,11 @@
 # Living TODOs (small / near-term)
 
 - [ ] Finish sensor-only active GraphEQA acceptance: short measured navigation
-      gate passes (`eaeb5276`, q2); persistent native stream and controller
-      feedback tests pass. Run the supplied-model one-case connection, then the
-      fixed q2/q6/q12 pilot. Match pose/motion contracts on the emet side before
+      gates pass in q2/q6; persistent native stream and controller feedback tests
+      pass. The fixed q2/q6/q12 diagnostic remains zero correct with no model-selected
+      motion: one text-JSON truncation, one uncertain empty plan, one confident
+      wrong answer. Keep the baseline opt-in; next compare identical uniform
+      history packets and inspect the planner contract. Match pose/motion contracts on the emet side before
       claiming a paired active comparison. Preserve matched-history image-only
       controls as a separate gate. See
       `docs/experiments/grapheqa_active_qualification_20261030.md`.

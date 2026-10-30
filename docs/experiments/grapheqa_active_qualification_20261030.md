@@ -104,6 +104,38 @@ floor measurements in the map. The next matched development check repeats all
 three IDs with startup floor calibration and this view restoration. It is not
 a larger benchmark sweep or a claim of improved accuracy.
 
+The repaired q6 movement gate passed in job `20261030_182901_8536b6`, source
+`a2d60b98`: about 2.0 mm estimated translation endpoint residual; subsequent
+90-degree turn yaw residual 0.02 degrees and XY residual 10.5 mm. Unknown goals
+remain rejected. Its measured floor reference was -0.12413 m from 288 underfoot
+returns with a 0.54 mm 5th-to-95th percentile height spread.
+
+Repeating q2/q6/q12 at `a2d60b98` / fork `d710567` in job
+`20261030_183114_980e2f` did **not** establish an active baseline:
+
+| Case | Outcome |
+| --- | --- |
+| q2 | Planner reply repeats an invented frontier list and reaches the 2,048-token cap; retained formatting failure |
+| q6 | Eight reachable frontiers now available; Qwen still emits an uncertain empty plan and wrong C |
+| q12 | Confident wrong C, interpreting missing bedside-table labels as absence |
+
+All three remain in the planned denominator: zero correct, two completed wrong
+answers and one formatting failure. No model-selected motion occurred. The
+mechanical repairs stand, but there is no accuracy-improvement claim. Local
+text-mode JSON validation fails closed; partial answers are not extracted.
+
+A static audit also found that the new frontier adapter would use atan2(0, 0)
+at a coincident frontier endpoint, turning every completed route toward local
++X. It now preserves incoming travel yaw, with a unit regression. None of these
+model runs exercised that latent path, so it does not explain their failures.
+
+The next frozen-input diagnostic uses the same four uniformly spaced RGB
+captures in both image-only and reference-graph conditions. Captures are limited
+to the assessment timestamp, include the current frame, and carry sequence and
+estimated local pose labels. q2's failed response is not excluded: its captured
+input remains valid. This tests context/controller inputs on a reference
+collector's trajectory; it is not a matched active-agent comparison.
+
 ## Next live gate and expansion
 
 From clean committed emet and fork checkouts, run the existing managed API check

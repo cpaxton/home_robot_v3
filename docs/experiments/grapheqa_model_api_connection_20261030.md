@@ -108,14 +108,15 @@ or model calls in the isolated Spark DSG runtime.
 
 ## Remaining active-evaluation gates
 
-1. Resolve the pose-input policy: matched benchmark RGB-D/pose on both sides,
-   excluding semantic/object/map ground truth, or estimated odometry without
-   simulator pose. The latter requires separate localization qualification.
-   No choice is inferred from elapsed time; active motion has not been launched.
-2. Connect observed-space frontier generation and common safe execution to the
-   reference controller. Its current frozen context has no frontier actions;
-   both live calls proposed no motion. API acceptance does not qualify target
-   arrival, floor coverage, collision handling or closed-loop evidence collection.
+1. The strict sensor-only path now uses measured local RGB-D odometry rather
+   than simulator pose. Short movement gates pass in q2 and q6. Match that pose
+   contract on the emet side before claiming an active paired comparison.
+2. Persistent native graph/frontier generation and shared measured execution
+   are connected. The first live three-case diagnostic still executes no
+   model-selected motion. Separate model planning/formatting failures from
+   verified low-level movement; do not call API acceptance task acceptance.
+   The [active qualification report](grapheqa_active_qualification_20261030.md)
+   records the current evidence and retained failures.
 3. Freeze a small paired active population and budgets across emet and the
    learned-perception GraphEQA adaptation. Preserve the model's decision and
    actual context; do not add answer-locking or task-specific recovery rules.
