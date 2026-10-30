@@ -81,8 +81,11 @@ The frozen image is frame 9; the graph retains the earlier views. Thus this is a
 condition executes a target. This is connection validation, not active EQA or
 navigation acceptance, and not evidence of superior answers.
 
-The scorer-only label is B: the image-only guess happens to be correct, while the
-graph guess is wrong. Both are uncertain. The current image visibly contains
+The dataset/scorer label is C (Gray): both the image-only B and graph A are wrong.
+An earlier version of this report incorrectly called the image-only guess correct;
+the saved scorer output and its pinned answer-file hash already recorded C and
+both failures. This corrects the write-up without changing historical artifacts.
+Both replies are uncertain. The current image visibly contains
 window blinds, a plant and wooden flooring, with no visible rug. The learned
 graph includes an unverified `shower cabin` label; its estimated center projects
 near the upper window/curtain region in the current view (approximately pixel
