@@ -15,6 +15,13 @@
       on 2026-10-30; next check graph construction, rendering, source/config pins
       and one complete episode. Native duplicate-registration messages remain
       unqualified; the April-2025 image is a dependency base, not current-source parity.
+- [ ] Qualify GraphEQA with **no privileged scene inputs**: freshly inferred
+      segmentation, explicit episode IDs, no annotation enrichment, semantic
+      masks/IDs, global scene bounds or navmesh route oracle. First run the
+      isolated learned RGB-D -> native Hydra probe; then match observed-map
+      navigation and pose estimation across the active agents. Historical
+      semantics-off rows still have navmesh assistance. Protocol and command:
+      `docs/experiments/grapheqa_sensor_only_qualification_20261030.md`.
 
 - [ ] Resolve refresh execution failures before another broad window: rerun the
       five DynaMem missing-viewpoint exceptions on `6ae052fc`; qualify Molmo's

@@ -202,6 +202,13 @@ assets, model-adapter validation and one complete upstream episode. No image
 pull, source build, GPU experiment, or host ROS/environment modification was
 performed for this preflight.
 
+The follow-up comparison must exclude privileged scene inputs on both sides,
+including route-oracle access, not just semantic ground truth. The reference
+runner's semantics flag also changes episode selection and leaves enrichment
+and navmesh dependencies in place. The strict learned-perception qualification,
+input boundary, and remaining active-comparison gates are recorded in
+[the sensor-only audit](grapheqa_sensor_only_qualification_20261030.md).
+
 ## Task coverage and paper claims
 
 [EXPRESS-Bench / Fine-EQA](https://openaccess.thecvf.com/content/ICCV2025/html/Jiang_Beyond_the_Destination_A_Novel_Benchmark_for_Exploration-Aware_Embodied_Question_ICCV_2025_paper.html)
