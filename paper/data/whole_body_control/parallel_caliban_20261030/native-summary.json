@@ -36,6 +36,24 @@
         "seconds": 5.548378852196038,
         "checkpoint_exported": false
       }
+    },
+    {
+      "num_envs": 8,
+      "backend": "spawn-subproc",
+      "setup_seconds": 6.8908421359956264,
+      "rollout_seconds": 5.3046481013298035,
+      "steps": 1024,
+      "control_steps_per_second": 193.03825257386953,
+      "fingerprint": "1e1110aaac94d6d32015c02262ef033f4810b8651e5780c88213beca94c2bb17",
+      "terminal_codes": {
+        "mastery_tracking_envelope": 3
+      },
+      "ppo_smoke": {
+        "steps": 512,
+        "updates": 2,
+        "seconds": 8.833037744276226,
+        "checkpoint_exported": false
+      }
     }
   ],
   "scope": "zero-action rollout throughput plus unsaved tiny PPO smoke; no tracking-success claim"

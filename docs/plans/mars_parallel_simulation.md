@@ -17,7 +17,7 @@ Teacher preflight and fresh regression receipts remain mandatory. Generate them
 in the training host's environment: library versions are part of source identity.
 The default remains one environment. On the unstable workstation keep one physics
 worker on CPU14, CUDA disabled, and at most one test worker on CPU15. Caliban's
-initial bounded smoke uses four CPU workers; increase only after measuring memory,
+bounded smoke tests use four and eight CPU workers; increase only after measuring memory,
 temperature, throughput and the effects on its existing inference service.
 
 ```bash

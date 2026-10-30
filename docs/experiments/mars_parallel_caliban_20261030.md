@@ -21,10 +21,12 @@ environment does not change the running VLM installation or services.
 | ---: | ---: | ---: | --- |
 | 1 | 31.7 | 128 steps / 4.04 s | 64 steps, 2 updates / 3.46 s |
 | 4 | 104.9 | 512 steps / 4.88 s | 256 steps, 2 updates / 5.55 s |
+| 8 | 193.0 | 1,024 steps / 5.30 s | 512 steps, 2 updates / 8.83 s |
 
-This is a **3.31x** aggregate native-rollout speedup. Initialization is excluded
-(3.54/6.45 s). Zero-action rollouts intentionally do not track moving goals; one
-four-worker episode ended with `mastery_tracking_envelope`. This is not a policy
+This is a **3.31x / 6.09x** aggregate native-rollout speedup for four/eight workers.
+Initialization is excluded (3.54/6.45/6.89 s). Zero-action rollouts intentionally
+do not track moving goals; one episode with four workers and three with eight
+ended with `mastery_tracking_envelope`. This is not a policy
 success evaluation. Tiny PPO updates finish with finite parameters; no actor is
 saved and no teacher/regression gate is bypassed for a production launch.
 
@@ -74,7 +76,7 @@ summaries are in Git. Full model/reference/results are in ignored persistent
 Root storage was nearly full, so no training data was written there.
 
 Follow the [parallel simulation plan](../plans/mars_parallel_simulation.md): use
-the native four-worker path after fresh host-specific gates, measure a bounded
+the native four/eight-worker path after fresh host-specific gates, measure a bounded
 jerk-focused run against the same 50 cases, and develop GPU parity/batched
 observations/rewards separately. Latest existing policy remains 50/50 base
 tracking/holding and 34/50 full mastery; 16 jerk misses remain. These setup
