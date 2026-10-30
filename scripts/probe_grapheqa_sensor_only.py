@@ -40,6 +40,50 @@ def write_json(path, value):
     path.write_text(json.dumps(value, indent=2) + "\n")
 
 
+def reference_state_check(pipeline, output):
+    """Exercise the pinned reference's graph->controller state handoff offline.
+
+    Image ranking and room inference are deliberately outside this state check:
+    it makes no model requests, and cannot qualify the planner's model context.
+    """
+    from graph_eqa.scene_graph.scene_graph_sim import SceneGraphSim
+    from omegaconf import OmegaConf
+
+    cfg = OmegaConf.create(
+        {
+            "scene_graph_sim": {
+                "enrich_rooms": False,
+                "save_image": False,
+                "include_regions": False,
+                "no_scene_graph": False,
+                "enrich_frontiers": True,
+                "key_frame_selection": {
+                    "choose_final_image": True,
+                    "use_clip_for_images": False,
+                    "use_siglip_for_images": False,
+                },
+            }
+        }
+    )
+    scene = SceneGraphSim(cfg, output, pipeline, device="cpu", enrich_object_labels="")
+    scene.update()
+    state = scene.get_current_semantic_state_str()
+    context = {
+        "status": "passed_reference_agent_state",
+        "agent_state": state,
+        "scene_graph": json.loads(scene.scene_graph_str),
+        "deviations": ["state check only: image ranking and room inference disabled"],
+        "model_requests": 0,
+    }
+    write_json(output / "reference_state.json", context)
+    return {
+        "status": context["status"],
+        "agent_state": state,
+        "filtered_nodes": len(scene.filtered_netx_graph.nodes),
+        "model_requests": 0,
+    }
+
+
 def native_worker(args):
     import hydra_python as hydra
     from hydra_python._hydra_bindings import PythonConfig
@@ -122,7 +166,11 @@ def native_worker(args):
             # though it integrates those RGB-D frames into the reconstruction.
             if bool(updated) != expected_update:
                 raise RuntimeError(f"Unexpected native update receipt for {path.name}: {receipts[-1]}")
-    pipeline.save()
+    reference_state = None
+    if len(paths) >= 2 * cadence:
+        # PoseGraphFromOdom emits the first agent nodes on the SECOND frontend
+        # update. A five-pose reconstruction alone cannot exercise this handoff.
+        reference_state = reference_state_check(pipeline, args.output)
     graph_path = args.output / "graph.json"
     pipeline.graph.save(str(graph_path), False)
     graph = json.loads(graph_path.read_text())
@@ -132,6 +180,9 @@ def native_worker(args):
         "graph_nodes": len(graph["nodes"]),
         "graph_edges": len(graph["edges"]),
         "nodes_by_layer": dict(Counter(str(node["layer"]) for node in graph["nodes"])),
+        "object_nodes": sum(node["attributes"]["type"] == "ObjectNodeAttributes" for node in graph["nodes"]),
+        "agent_nodes": sum(node["attributes"]["type"] == "AgentNodeAttributes" for node in graph["nodes"]),
+        "reference_state": reference_state,
         "mesh_vertices": int(pipeline.graph.mesh.get_vertices().shape[1]),
         "hydra_commit": subprocess.check_output(
             ["git", "-C", "/catkin_ws/src/hydra", "rev-parse", "HEAD"], text=True
@@ -140,6 +191,7 @@ def native_worker(args):
     }
     if not result["graph_nodes"] or not result["mesh_vertices"]:
         raise RuntimeError(f"Empty native reconstruction: {result}")
+    pipeline.save()
     write_json(args.output / "result.json", result)
     print(json.dumps(result), flush=True)
 
@@ -157,6 +209,7 @@ def capture(args):
     root = Path(__file__).resolve().parents[1]
     revision = subprocess.check_output(["git", "-C", str(root), "rev-parse", "HEAD"], text=True).strip()
     assert_frozen_source(root, revision)
+    assert_frozen_source(args.upstream, UPSTREAM_REV)
     if shutil.disk_usage(args.output.parent).free < 20 * 1024**3:
         raise RuntimeError("Keep the shared 20 GiB disk reserve")
     labels_path = args.upstream / LABEL_PATH
@@ -245,11 +298,18 @@ def capture(args):
             "OPENBLAS_NUM_THREADS=1",
             "-e",
             "MPLCONFIGDIR=/tmp/matplotlib",
+            "-e",
+            "PYTHONPATH=/reference",
+            "-e",
+            "OPENAI_API_KEY=offline-unused",
+            "-e",
+            "OPENAI_BASE_URL=http://127.0.0.1:9/v1",
         ]
         for source, target, readonly in [
             (Path(__file__).resolve(), "/work/probe.py", True),
             (root / "src/emet/eval/grapheqa_sensor.py", "/work/grapheqa_sensor.py", True),
             (labels_path, "/work/labels.yaml", True),
+            (args.upstream / "graph_eqa", "/reference/graph_eqa", True),
             (inputs, "/inputs", True),
             (native, "/output", False),
         ]:
@@ -353,7 +413,7 @@ def main():
     host.add_argument("--upstream", required=True, type=Path)
     host.add_argument("--output", required=True, type=Path)
     host.add_argument("--question-id", type=int, default=2)
-    host.add_argument("--frames", type=int, choices=range(1, 37), default=5)
+    host.add_argument("--frames", type=int, choices=range(1, 37), default=10)
     worker = sub.add_parser("native-worker")
     worker.add_argument("--inputs", required=True, type=Path)
     worker.add_argument("--labels", required=True, type=Path)
