@@ -54,6 +54,13 @@ Preset: `configs/benchmarks/mars_tracking_mastery_hand_accuracy_v1.json`.
 - No repeated seeds, automatic extension, validation-selected checkpoint,
   loaded-stage advancement or hardware promotion.
 
+A separate 8,192-step CPU14 single-worker functional check uses the same seed,
+learning rate, noise and 16,384-step penalty warmup, with evaluations only at
+zero/final. It checks whether arm requests begin learning while Caliban's gate
+runs. Its smaller aggregate rollout and incomplete penalty ramp make it a
+diagnostic, not the eight-worker result or a checkpoint-selection procedure.
+The planned parallel run still starts from the preserved base actor.
+
 ## Intermediate tests and measurements
 
 1. Preserve current-source baseline teacher/actor reports on base, arm, coupled

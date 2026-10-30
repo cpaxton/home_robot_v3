@@ -46,6 +46,14 @@ host Torch is at
 Use `warp` instead of `native` for the separate GPU probe environment. Setup
 requires a fresh target; it refuses to overwrite another environment.
 
+For the full controller/TAMP regression gate, also run
+`scripts/setup_mars_parallel_test_env.sh ISOLATED_NATIVE_ENV` and provide the
+repository's tests, configs, mirrored runtime, robot assets and category TSV.
+The minimal rollout environment alone cannot collect these integration suites.
+ARM Open3D 0.20 is available here where 0.19 is not; Arrow 19 preserves NumPy
+1.26 compatibility. Fresh host-specific tests are mandatory. Text-only LLM
+imports now defer microphone/Whisper dependencies until voice is requested.
+
 The tested work area is `/dev/shm/cpaxton-mars-parallel-20261030`, with native
 environment `/dev/shm/cpaxton-mars-rl-env` and GPU environment
 `/dev/shm/cpaxton-mars-warp-current`. Local persistent reports live under
