@@ -40,6 +40,37 @@ def predicted_camera_pose(camera_pose, action, amount=None):
     return pose
 
 
+def stationary_floor_reference(frame, *, support_radius_m=0.1):
+    """Measure one flat surface under a declared safe, stationary spawn.
+
+    This is startup calibration for the Habitat body-frame height convention,
+    not a travelling ground estimator. It must not be used to erase a newly
+    encountered drop. Ambiguous, sloped or insufficient support is rejected.
+    """
+    depth, k, pose = frame["depth"], frame["camera_K"], frame["camera_pose"]
+    if pose is None:
+        raise ValueError("Floor calibration requires accepted camera odometry")
+    v, u = np.mgrid[0 : depth.shape[0] : 2, 0 : depth.shape[1] : 2]
+    z = depth[v, u]
+    valid = np.isfinite(z) & (z > 0.1) & (z < 6)
+    xyz = np.stack(((u - k[0, 2]) * z / k[0, 0], (v - k[1, 2]) * z / k[1, 1], z), axis=-1)
+    xyz = xyz @ pose[:3, :3].T + pose[:3, 3]
+    within = valid & (np.linalg.norm(xyz[..., :2] - pose[:2, 3], axis=-1) <= support_radius_m)
+    points = xyz[within]
+    if len(points) < 64 or np.ptp(points[:, :2], axis=0).min() < 0.05:
+        raise ValueError("Insufficient measured floor under the stationary footprint")
+    low, high = np.percentile(points[:, 2], [5, 95])
+    reference = float(np.median(points[:, 2]))
+    if abs(reference) > 0.2 or high - low > 0.02:
+        raise ValueError("Ambiguous or out-of-range stationary floor calibration")
+    return {
+        "reference_z_m": reference,
+        "support_points": len(points),
+        "height_spread_m": float(high - low),
+        "timestamp_ns": int(frame["timestamp_ns"]),
+    }
+
+
 class SensorOnlyHabitat:
     """Minimal renderer boundary: prescribed spawn in, registered RGB-D out."""
 
@@ -153,6 +184,22 @@ class ObservedSpaceNavigation:
             dilate_obstacle_size=0,
         )
         self.pose = None
+        self.floor_calibration = None
+
+    def calibrate_stationary_floor(self, frame):
+        import torch
+
+        if self.floor_calibration is not None:
+            raise RuntimeError("Startup floor calibration is fixed for the entire episode")
+        if self.pose is None or np.linalg.norm(self.pose[:2]) > 0.025:
+            raise RuntimeError("Floor calibration requires the original stationary spawn")
+        self.floor_calibration = stationary_floor_reference(frame)
+        self.map.parameters["floor_evidence"]["reference_z_m"] = self.floor_calibration["reference_z_m"]
+        # Invalidate only the 2D projection, retaining the measured 3D cloud.
+        self.map._map2d = None
+        obstacles, explored = self.map.get_navigation_map()
+        self.map._physical_map2d = (obstacles, explored | torch.tensor(self.support))
+        return dict(self.floor_calibration)
 
     def update(self, frame):
         import torch

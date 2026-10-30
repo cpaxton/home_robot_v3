@@ -140,6 +140,14 @@ def run(args):
                 frame = sensor.step(action)
                 nav.update(frame)
                 ingest(frame)
+            row["floor_calibration"] = nav.calibrate_stationary_floor(sensor.last)
+            # Retain the measured floor, then restore the task-facing view.
+            # A navigation inspection must not silently become the sole image
+            # used to answer a distant-object question.
+            for _ in range(3):
+                frame = sensor.step("look_up")
+                nav.update(frame)
+                ingest(frame)
             executor = HabitatMotionExecutor(sensor, nav, ingest)
 
             def observe():

@@ -72,6 +72,11 @@ def run(args):
             frame = sensor.step("look_down")
             save(frame)
             nav.update(frame)
+        result["floor_calibration"] = nav.calibrate_stationary_floor(sensor.last)
+        for _ in range(3):
+            frame = sensor.step("look_up")
+            save(frame)
+            nav.update(frame)
         frontiers = nav.frontiers()
         result["frontiers"] = frontiers
         np.savez_compressed(

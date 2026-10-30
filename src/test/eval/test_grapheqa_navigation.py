@@ -4,6 +4,7 @@
 from types import SimpleNamespace
 
 import numpy as np
+import pytest
 import torch
 
 from emet.eval.grapheqa_navigation import (
@@ -11,6 +12,7 @@ from emet.eval.grapheqa_navigation import (
     ObservedSpaceNavigation,
     base_xyt,
     predicted_camera_pose,
+    stationary_floor_reference,
 )
 from emet.eval.grapheqa_sensor import command_camera_pose
 from emet.robots.footprint import CircularFootprint
@@ -78,3 +80,47 @@ def test_rotation_intent_survives_small_measured_xy_drift():
     executor = HabitatMotionExecutor(sensor, navigation)
     assert executor.move_base_to([0, 0, np.pi / 2], blocking=True, world_frame=True, timeout=10)
     assert sensor.actions and set(sensor.actions) == {"turn_left"}
+
+
+def floor_frame(height):
+    k = np.array([[185.0, 0, 320], [0, 185.0, 240], [0, 0, 1]])
+    pose = command_camera_pose(yaw_deg=0, tilt_deg=-45, sensor_height=1.5)
+    v, u = np.mgrid[:480, :640]
+    rays = np.stack(((u - 320) / 185, (v - 240) / 185, np.ones_like(u)), axis=-1) @ pose[:3, :3].T
+    depth = (height - 1.5) / np.minimum(rays[..., 2], -1e-9)
+    depth[(rays[..., 2] >= 0) | (depth > 6)] = 0
+    return {"depth": depth.astype(np.float32), "camera_K": k, "camera_pose": pose, "timestamp_ns": 1}
+
+
+def test_stationary_measured_floor_reference_preserves_subsequent_drop_hazards():
+    from emet.mapping.voxel.floor_evidence import floor_evidence
+
+    measured = stationary_floor_reference(floor_frame(-0.125))
+    assert measured["reference_z_m"] == pytest.approx(-0.125, abs=1e-6)
+    layers = floor_evidence(
+        [[0, 0, -0.125], [0.2, 0, -0.25]], (40, 40), 0.05, [20, 20], reference_z_m=measured["reference_z_m"]
+    )
+    assert layers.observed[20, 20] and layers.drops[24, 20]
+
+
+def test_floor_calibration_rejects_missing_and_mixed_underfoot_returns():
+    missing = floor_frame(-0.125)
+    missing["depth"][:] = 0
+    with pytest.raises(ValueError, match="Insufficient"):
+        stationary_floor_reference(missing)
+    mixed = floor_frame(-0.125)
+    mixed["depth"][:, 320:] = floor_frame(0)["depth"][:, 320:]
+    with pytest.raises(ValueError, match="Ambiguous"):
+        stationary_floor_reference(mixed)
+
+
+def test_floor_reference_cannot_be_recalibrated_after_leaving_spawn():
+    nav = object.__new__(ObservedSpaceNavigation)
+    nav.floor_calibration = None
+    nav.pose = np.array([1, 0, 0])
+    with pytest.raises(RuntimeError, match="original stationary"):
+        nav.calibrate_stationary_floor(floor_frame(0))
+    nav.pose = np.zeros(3)
+    nav.floor_calibration = {"reference_z_m": 0}
+    with pytest.raises(RuntimeError, match="fixed for the entire episode"):
+        nav.calibrate_stationary_floor(floor_frame(0))

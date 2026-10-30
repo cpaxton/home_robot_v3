@@ -74,6 +74,36 @@ Validation: 63 targeted emet tests and 21 fork API/controller/protocol tests pas
 The upstream native simulation tests require its isolated Hydra runtime and are
 not included in the host-only count.
 
+## First model-driven diagnostic
+
+At emet `983e409c` / fork `c94c480`, jobs `20261030_181600_a659c7` and
+`20261030_181913_6d9bd7` completed q2/q6/q12 without infrastructure errors. All
+three answers were wrong. q2/q6 returned no action and low confidence; q12
+stopped confidently. No model-selected motion was executed. This does not pass
+active-agent acceptance despite successful HTTP/graph plumbing.
+
+The saved context exposes distinct causes:
+
+- q2 has eight reachable frontiers, but Qwen chooses no action while admitting
+  that the rug is not visible. This is a planning failure, not a missing tool.
+- q6 has no reachable frontier because the fixed zero-height assumption labels
+  measured floor near -0.125 m as a drop. Replaying **identical RGB-D** with a
+  floor reference measured under the stationary occupied footprint restores
+  1,894 reachable cells and eight frontiers. Calibration is startup-only; mixed
+  height/insufficient returns are rejected, and subsequent drops remain hazards.
+  It does not query scene geometry or move the prescribed spawn. Real robots
+  require independent support/mount calibration; this convention repair is
+  confined to the external Habitat adapter.
+- q12 treats the lack of a bedside-table label as proof of absence. The current
+  view shows a sofa/doorway, not a complete bedroom survey. The model's confident
+  answer is retained as wrong; no harness rule replaces it.
+
+The first adapter also left the head down after floor inspection. The repaired
+acquisition now restores the task-facing tilt before assessment, retaining
+floor measurements in the map. The next matched development check repeats all
+three IDs with startup floor calibration and this view restoration. It is not
+a larger benchmark sweep or a claim of improved accuracy.
+
 ## Next live gate and expansion
 
 From clean committed emet and fork checkouts, run the existing managed API check
@@ -83,8 +113,9 @@ It owns the local Qwen8B int4 server and starts the Habitat child in
 thread counts at one, caches offline and the 20 GiB free-space reserve.
 
 The initial acquisition sequence is fixed: current frame, nine five-degree
-left turns and three five-degree downward head steps. Every RGB-D frame is
-segmented online and integrated. Model decisions then select observed objects
+left turns, three five-degree downward head steps, stationary measured floor
+calibration, and three upward steps restoring the task-facing tilt. Every RGB-D
+frame is segmented online and integrated. Model decisions then select observed objects
 or reachable frontiers. Motion and registration failures are returned as
 feedback, not interpreted as visual absence or used to replace an answer.
 
