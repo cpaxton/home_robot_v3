@@ -1,5 +1,15 @@
 # Living TODOs (small / near-term)
 
+- [x] Fork GraphEQA for supplied model endpoints and paired frozen-context
+      evaluation: https://github.com/cpaxton/graph_eqa/pull/1. Planner/room API
+      routing, instance IDs, scorer isolation and complete request traces are
+      tested; the real Qwen8B int4 current-image/graph pair returns valid replies.
+      Active navigation and matched-history acceptance remain open below.
+- [ ] Extract the model-server contract repairs into a focused PR against current
+      main: loaded-model identity, complete dialogue, unsupported-setting errors,
+      decode receipts and declared native/text tool capabilities. They are tested
+      on `feat/harness-evidence-study`; do not treat main's older server as qualified.
+
 - [ ] Qualify a genuine model-only baseline: identical frozen RGB trajectories,
       current/uniform/retrieved/selected context, no graph or interactive tools,
       matched image/token budgets and one frozen backbone. Then run a minimal

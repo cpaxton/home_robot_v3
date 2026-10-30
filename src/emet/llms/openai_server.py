@@ -551,6 +551,15 @@ def _make_handler(state: LLMServeState) -> type[BaseHTTPRequestHandler]:
                                 "object": "model",
                                 "created": int(time.time()),
                                 "owned_by": "emet",
+                                "aliases": sorted(
+                                    {
+                                        state.model_id,
+                                        state.llm_key,
+                                        getattr(state.client, "_resolved_hf_model_id", None),
+                                    }
+                                    - {None}
+                                ),
+                                "capabilities": {"native_tools": False, "response_formats": ["text"]},
                                 "emet": {
                                     "hf_model_id": getattr(state.client, "_resolved_hf_model_id", None),
                                     "quantization": getattr(state.client, "_quantization", None),

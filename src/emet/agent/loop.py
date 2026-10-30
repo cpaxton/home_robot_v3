@@ -959,7 +959,7 @@ def run_agent_with_robot(
                             )
                     except Exception as warm_err:
                         logger.warning("VL prefix cache warm failed: %s", warm_err)
-            if isinstance(llm_client, OpenaiClient):
+            if isinstance(llm_client, OpenaiClient) and llm_client.supports_native_tools:
                 openai_tools_param = [t.schema() for t in tools]
         except Exception as e:
             logger.warning("LLM failed to load (%s):", llm, e)

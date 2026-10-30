@@ -291,6 +291,7 @@ def test_http_chat_completions_roundtrip() -> None:
     state.client = _FakePipeClient()
     state.ready = True
     state.model_id = "fake"
+    state.client._resolved_hf_model_id = "fixture/actual-weights"
     handler = _make_handler(state)
     httpd = ThreadingHTTPServer(("127.0.0.1", 0), handler)
     port = httpd.server_address[1]
@@ -311,6 +312,18 @@ def test_http_chat_completions_roundtrip() -> None:
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=5) as resp:
             health = json.loads(resp.read().decode())
         assert health["ready"] is True
+        from emet.llms.openai_client import OpenaiClient
+
+        client = OpenaiClient(
+            "Prompt-based JSON tool schemas",
+            model="fixture/actual-weights",
+            base_url=f"http://127.0.0.1:{port}/v1",
+            api_key="unused",
+        )
+        assert client.supports_native_tools is False
+        assert client("hi") == "ok"
+        with pytest.raises(ValueError, match="prompt-based tool protocol"):
+            client("inspect", tools=[{"type": "function", "function": {"name": "inspect"}}])
     finally:
         httpd.shutdown()
 

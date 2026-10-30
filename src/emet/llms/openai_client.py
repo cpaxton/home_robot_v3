@@ -86,6 +86,30 @@ class OpenaiClient(AbstractLLMClient):
         if self.base_url:
             client_kwargs["base_url"] = self.base_url
         self._openai = OpenAI(**client_kwargs)
+        self._native_tools_supported: bool | None = None
+
+    @property
+    def supports_native_tools(self) -> bool:
+        """Honor explicit provider capabilities; undeclared APIs keep normal OpenAI tools."""
+        if self._native_tools_supported is None:
+            self._native_tools_supported = True
+            if self.base_url:
+                try:
+                    models = self._openai.with_options(timeout=5, max_retries=0).models.list()
+                    for model in models.data:
+                        capabilities = getattr(model, "capabilities", None) or {}
+                        identifiers = {model.id}
+                        aliases = getattr(model, "aliases", None)
+                        if isinstance(aliases, list):
+                            identifiers.update(alias for alias in aliases if isinstance(alias, str))
+                        if self.model in identifiers and isinstance(capabilities.get("native_tools"), bool):
+                            self._native_tools_supported = capabilities["native_tools"]
+                            break
+                except Exception:
+                    # Discovery is optional for third-party APIs. Do not infer
+                    # missing capabilities or change the requested model.
+                    self._native_tools_supported = None
+        return True if self._native_tools_supported is None else self._native_tools_supported
 
     def _trim_history(self) -> None:
         hist = self.conversation_history
@@ -156,6 +180,8 @@ class OpenaiClient(AbstractLLMClient):
         image: np.ndarray | Image.Image | None = None,
         **_kwargs: Any,
     ):
+        if tools and not self.supports_native_tools:
+            raise ValueError("Provider declares no native tool calls; use the prompt-based tool protocol")
         if verbose:
             print(f"{self.system_prompt=}")
             if self.base_url:

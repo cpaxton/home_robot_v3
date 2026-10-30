@@ -7,13 +7,81 @@
 from __future__ import annotations
 
 import base64
+import json
 from io import BytesIO
 from typing import Any
 
 import numpy as np
+import pytest
 from PIL import Image
 
 from emet.llms.openai_client import OpenaiClient
+
+
+@pytest.mark.parametrize("native_tools", [False, True, None])
+def test_declared_provider_tool_protocol_is_honored_without_discarding_arguments(monkeypatch, native_tools):
+    import httpx
+    from openai import OpenAI
+
+    calls = []
+
+    def handle(request):
+        if request.method == "GET":
+            return httpx.Response(
+                200,
+                json={
+                    "object": "list",
+                    "data": [
+                        {
+                            "id": "provided",
+                            "object": "model",
+                            "created": 1,
+                            "owned_by": "fixture",
+                            "capabilities": {"native_tools": native_tools},
+                        }
+                    ],
+                },
+            )
+        body = json.loads(request.content)
+        calls.append(body)
+        return httpx.Response(
+            200,
+            json={
+                "id": "fixture",
+                "object": "chat.completion",
+                "created": 1,
+                "model": "provided",
+                "choices": [
+                    {
+                        "index": 0,
+                        "finish_reason": "stop",
+                        "message": {"role": "assistant", "content": '{"tool_calls":[],"message":"done"}'},
+                    }
+                ],
+            },
+        )
+
+    sdk = OpenAI(
+        base_url="http://fixture/v1",
+        api_key="unused",
+        max_retries=0,
+        http_client=httpx.Client(transport=httpx.MockTransport(handle)),
+    )
+    monkeypatch.setattr("emet.llms.openai_client.OpenAI", lambda **_: sdk)
+    client = OpenaiClient("Tool schemas and text-JSON protocol", model="provided", base_url="http://fixture/v1")
+    tools = [{"type": "function", "function": {"name": "inspect", "parameters": {"type": "object"}}}]
+    if native_tools is False:
+        assert not client.supports_native_tools
+        with pytest.raises(ValueError, match="prompt-based tool protocol"):
+            client("inspect", tools=tools)
+        assert not calls
+        assert client.get_history() == []
+        client("inspect with the prompt tool schema", tools=None)
+        assert "tools" not in calls[0]
+    else:
+        assert client.supports_native_tools
+        client("inspect", tools=tools)
+        assert calls[0]["tools"] == tools
 
 
 class _FakeCompletions:

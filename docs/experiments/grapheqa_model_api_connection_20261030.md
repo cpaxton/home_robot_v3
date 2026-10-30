@@ -44,6 +44,10 @@ model comparisons. Source commits `d4422b0a` and `cede090f` repair them:
   `temperature`, `seed` or provider-enforced JSON modes it does not implement.
 - Preserve all leading schema/policy/question system messages and prior
   assistant turns when adapting to the HF vision dialogue contract.
+- Advertise the supported tool protocol. CHAT reads the declared capability
+  before selecting native API schemas; text-JSON providers retain the existing
+  prompt-based tools. Explicit unsupported tool arguments are rejected rather
+  than silently discarded, including before mutating client history.
 - Mark a timed-out model handle unavailable before another dispatch, because a
   backend worker may still own CUDA resources.
 - Forward measured Qwen token counts and EOS/token-limit receipts. Other
@@ -98,7 +102,8 @@ extraction, budget increase or model substitution was used to turn it into a pas
 Validation: 16 CPU tests in the fork cover provider modes, duplicate target
 labels, identical evidence across different supplied model endpoints, scorer
 isolation and retained errors. The emet server/Qwen/history regression set has
-37 passing tests. The native graph/context export also runs without credentials
+40 passing server/client/Qwen tests, plus the CHAT call-boundary regressions.
+The native graph/context export also runs without credentials
 or model calls in the isolated Spark DSG runtime.
 
 ## Remaining active-evaluation gates
