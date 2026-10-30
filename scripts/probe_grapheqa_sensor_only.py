@@ -11,6 +11,7 @@ The native-worker subcommand runs in a CPU-only, network-isolated container.
 import argparse
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -200,6 +201,8 @@ def capture(args):
         "pose_source": "in_place_turn_command_odometry_initial_local_origin",
         "motion": "stationary_then_10_degree_left_turns",
         "semantic_sensor": False,
+        "semantic_mesh": False,
+        "semantic_textures": False,
         "navmesh_routing": False,
         "simulator_pose_input": False,
         "answer_input": False,
@@ -220,6 +223,10 @@ def capture(args):
             "--read-only",
             "--cap-drop",
             "ALL",
+            # The cached Python lives under /root (0700). Keep that UID inside
+            # the capability-free container, but write with the host group.
+            "--user",
+            f"0:{os.getgid()}",
             "--security-opt",
             "no-new-privileges",
             "--pids-limit",
@@ -255,7 +262,7 @@ def capture(args):
                 "/bin/bash",
                 NATIVE_IMAGE,
                 "-c",
-                "source /opt/ros/noetic/setup.bash; source /catkin_ws/devel/setup.bash; "
+                "umask 0002; source /opt/ros/noetic/setup.bash; source /catkin_ws/devel/setup.bash; "
                 "exec /root/miniforge3/envs/grapheqa/bin/python /work/probe.py "
                 "native-worker --inputs /inputs --labels /work/labels.yaml --output /output",
             ]
@@ -306,8 +313,9 @@ def render_and_detect(scene, spawn, frames, labels, ids, vocabulary, inputs, man
     from habitat_sim.utils.common import quat_from_angle_axis
     from PIL import Image
 
-    detector = detector_type(class_list=vocabulary, device="cuda", confidence_threshold=0.1)
     started = time.monotonic()
+    detector = detector_type(class_list=vocabulary, device="cuda", confidence_threshold=0.1)
+    manifest["perception_init_wall_s"] = time.monotonic() - started
     with habitat_sim.Simulator(habitat_sensor_config(scene)) as sim:
         state = habitat_sim.AgentState()
         state.position = [spawn.x, spawn.y, spawn.z]
