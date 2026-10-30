@@ -1,0 +1,573 @@
+{
+  "scope": "Completed paired 16384-step goal-gated settling ablation; both regress from starting checkpoint on moving targets; no qualification",
+  "new_ppo_steps": 32768,
+  "training_complete": true,
+  "evaluation_complete": true,
+  "matched_initial_physics": true,
+  "variants": {
+    "control": {
+      "checkpoint": "logs/manipulation/tamp-goal-gated-precision-v10/control/seed-64/step-16384",
+      "pose_rows": [
+        {
+          "case_id": "left:20g:1",
+          "kind": "hold",
+          "failure": null,
+          "hand_error_at_end_m": 0.00016313158348771448,
+          "orientation_error_at_end_rad": 0.0015198764370596698,
+          "tamp_endpoint_pass": true,
+          "tamp_quiet_metrics": {
+            "samples": 120,
+            "position_tolerance_m": 0.003,
+            "orientation_tolerance_rad": 0.02,
+            "quiet_pose_fraction": 1.0,
+            "longest_quiet_pose_dwell_s": 6.0,
+            "two_second_quiet_pose_hold": true,
+            "base_velocity_rms": [
+              0.0010565693391938178,
+              6.5451424230062076e-06,
+              2.676437315149871e-05,
+              9.58401565435855e-05,
+              0.0020044802045182347,
+              0.0002601962035636799
+            ],
+            "base_velocity_abs_max": [
+              0.002597597660496831,
+              3.315093636047095e-05,
+              0.00011077428644057363,
+              0.0006263824179768562,
+              0.007686528842896223,
+              0.00124741334002465
+            ],
+            "angular_stop_violation_fraction": 0.0,
+            "linear_stop_violation_fraction": 0.0,
+            "arm_velocity_rms": [
+              0.00012578174786987954,
+              0.0003864880223895243,
+              0.00035072813836360065,
+              0.0002501071256754119,
+              0.0002611959016401017
+            ],
+            "scope": "Raw pre-step measurements; unchanged arm/all-six-base quiet and hand-pose bounds"
+          }
+        },
+        {
+          "case_id": "left:20g:1",
+          "kind": "nearby",
+          "failure": null,
+          "hand_error_at_end_m": 0.0019774471959743013,
+          "orientation_error_at_end_rad": 0.039646433926708226,
+          "tamp_endpoint_pass": false,
+          "tamp_quiet_metrics": {
+            "samples": 120,
+            "position_tolerance_m": 0.003,
+            "orientation_tolerance_rad": 0.02,
+            "quiet_pose_fraction": 0.0,
+            "longest_quiet_pose_dwell_s": 0.0,
+            "two_second_quiet_pose_hold": false,
+            "base_velocity_rms": [
+              0.002127051189447906,
+              7.336392771056934e-05,
+              8.635648502568406e-05,
+              0.0005051758908729361,
+              0.0036119340042283696,
+              0.0018124601734733309
+            ],
+            "base_velocity_abs_max": [
+              0.00900974404066801,
+              0.00019484861695673317,
+              0.0004497487680055201,
+              0.0020157659891992807,
+              0.021576525643467903,
+              0.0037790718488395214
+            ],
+            "angular_stop_violation_fraction": 0.008333333333333333,
+            "linear_stop_violation_fraction": 0.025,
+            "arm_velocity_rms": [
+              0.0010531280378705582,
+              0.002080588673075852,
+              0.004727827040339813,
+              0.005219939046313079,
+              0.007942366562678783
+            ],
+            "scope": "Raw pre-step measurements; unchanged arm/all-six-base quiet and hand-pose bounds"
+          }
+        },
+        {
+          "case_id": "left:20g:1",
+          "kind": "rotation",
+          "failure": null,
+          "hand_error_at_end_m": 0.004038998459380183,
+          "orientation_error_at_end_rad": 0.10823123878561332,
+          "tamp_endpoint_pass": false,
+          "tamp_quiet_metrics": {
+            "samples": 120,
+            "position_tolerance_m": 0.003,
+            "orientation_tolerance_rad": 0.02,
+            "quiet_pose_fraction": 0.0,
+            "longest_quiet_pose_dwell_s": 0.0,
+            "two_second_quiet_pose_hold": false,
+            "base_velocity_rms": [
+              0.0010363357472597445,
+              3.953769040654352e-05,
+              5.5798796823606267e-05,
+              0.00026799984308682506,
+              0.0017573325714706292,
+              0.0005513135435621007
+            ],
+            "base_velocity_abs_max": [
+              0.003737551160156727,
+              9.373084321850911e-05,
+              0.00011077428644057363,
+              0.0007795288693159819,
+              0.005012106150388718,
+              0.0021826631855219603
+            ],
+            "angular_stop_violation_fraction": 0.0,
+            "linear_stop_violation_fraction": 0.0,
+            "arm_velocity_rms": [
+              0.0008121142377840487,
+              0.0007926915293133266,
+              0.004241966542043986,
+              0.003565470965911032,
+              0.002663934364548093
+            ],
+            "scope": "Raw pre-step measurements; unchanged arm/all-six-base quiet and hand-pose bounds"
+          }
+        },
+        {
+          "case_id": "right:20g:2",
+          "kind": "hold",
+          "failure": null,
+          "hand_error_at_end_m": 8.63250546093604e-05,
+          "orientation_error_at_end_rad": 0.0020875325683109075,
+          "tamp_endpoint_pass": true,
+          "tamp_quiet_metrics": {
+            "samples": 120,
+            "position_tolerance_m": 0.003,
+            "orientation_tolerance_rad": 0.02,
+            "quiet_pose_fraction": 0.9916666666666667,
+            "longest_quiet_pose_dwell_s": 5.8500000000000005,
+            "two_second_quiet_pose_hold": true,
+            "base_velocity_rms": [
+              0.001495530466443701,
+              1.2219202240398635e-05,
+              3.459260761318065e-05,
+              0.00013549574816302726,
+              0.0027237742113615003,
+              0.0004548647182531715
+            ],
+            "base_velocity_abs_max": [
+              0.007170200347900391,
+              7.217311940621585e-05,
+              0.00016743227024562657,
+              0.0008732827263884246,
+              0.010312470607459545,
+              0.002495241817086935
+            ],
+            "angular_stop_violation_fraction": 0.0,
+            "linear_stop_violation_fraction": 0.008333333333333333,
+            "arm_velocity_rms": [
+              0.0001397802284558435,
+              0.00043533433236638735,
+              0.00035141341948099835,
+              0.00018018894526321372,
+              0.00045727961530134617
+            ],
+            "scope": "Raw pre-step measurements; unchanged arm/all-six-base quiet and hand-pose bounds"
+          }
+        },
+        {
+          "case_id": "right:20g:2",
+          "kind": "nearby",
+          "failure": null,
+          "hand_error_at_end_m": 0.0019402490831647203,
+          "orientation_error_at_end_rad": 0.038048611671575805,
+          "tamp_endpoint_pass": false,
+          "tamp_quiet_metrics": {
+            "samples": 120,
+            "position_tolerance_m": 0.003,
+            "orientation_tolerance_rad": 0.02,
+            "quiet_pose_fraction": 0.0,
+            "longest_quiet_pose_dwell_s": 0.0,
+            "two_second_quiet_pose_hold": false,
+            "base_velocity_rms": [
+              0.003281884245003458,
+              7.12174677842325e-05,
+              6.300164627166462e-05,
+              0.000508020642292031,
+              0.003854667217141199,
+              0.002724004623773239
+            ],
+            "base_velocity_abs_max": [
+              0.021741801872849464,
+              0.00018870031635742635,
+              0.0003487398207653314,
+              0.0020469995215535164,
+              0.015524502843618393,
+              0.021648257970809937
+            ],
+            "angular_stop_violation_fraction": 0.008333333333333333,
+            "linear_stop_violation_fraction": 0.025,
+            "arm_velocity_rms": [
+              0.000933486700895659,
+              0.0021471107141205446,
+              0.0045266903132386615,
+              0.005238368229439688,
+              0.007689797529725948
+            ],
+            "scope": "Raw pre-step measurements; unchanged arm/all-six-base quiet and hand-pose bounds"
+          }
+        },
+        {
+          "case_id": "right:20g:2",
+          "kind": "rotation",
+          "failure": null,
+          "hand_error_at_end_m": 0.0036973093826163576,
+          "orientation_error_at_end_rad": 0.10442138808299736,
+          "tamp_endpoint_pass": false,
+          "tamp_quiet_metrics": {
+            "samples": 120,
+            "position_tolerance_m": 0.003,
+            "orientation_tolerance_rad": 0.02,
+            "quiet_pose_fraction": 0.0,
+            "longest_quiet_pose_dwell_s": 0.0,
+            "two_second_quiet_pose_hold": false,
+            "base_velocity_rms": [
+              0.001390374244898624,
+              4.266707789654496e-05,
+              4.8910878142534035e-05,
+              0.00030088763131558635,
+              0.002040371455468307,
+              0.0007873976087251327
+            ],
+            "base_velocity_abs_max": [
+              0.007353875320404768,
+              8.26768737169914e-05,
+              7.86387172411196e-05,
+              0.001053964369930327,
+              0.010312470607459545,
+              0.0026293140836060047
+            ],
+            "angular_stop_violation_fraction": 0.0,
+            "linear_stop_violation_fraction": 0.008333333333333333,
+            "arm_velocity_rms": [
+              0.00042581869585066215,
+              0.0006451703755527049,
+              0.00386868283770227,
+              0.003456581093443523,
+              0.002992631182487508
+            ],
+            "scope": "Raw pre-step measurements; unchanged arm/all-six-base quiet and hand-pose bounds"
+          }
+        }
+      ],
+      "programs": [
+        {
+          "case": "left:20g:0",
+          "completed_stages": 0,
+          "policy_calls": 159,
+          "failure": "cartesian_path_tracking_envelope",
+          "stop_confirmed": true
+        },
+        {
+          "case": "left:50g:0",
+          "completed_stages": 0,
+          "policy_calls": 166,
+          "failure": "cartesian_path_tracking_envelope",
+          "stop_confirmed": true
+        },
+        {
+          "case": "right:20g:0",
+          "completed_stages": 0,
+          "policy_calls": 159,
+          "failure": "cartesian_path_tracking_envelope",
+          "stop_confirmed": true
+        }
+      ]
+    },
+    "goal_gated": {
+      "checkpoint": "logs/manipulation/tamp-goal-gated-precision-v10/goal_gated/seed-64/step-16384",
+      "pose_rows": [
+        {
+          "case_id": "left:20g:1",
+          "kind": "hold",
+          "failure": null,
+          "hand_error_at_end_m": 0.00017350279398210236,
+          "orientation_error_at_end_rad": 0.0011982601528078985,
+          "tamp_endpoint_pass": true,
+          "tamp_quiet_metrics": {
+            "samples": 120,
+            "position_tolerance_m": 0.003,
+            "orientation_tolerance_rad": 0.02,
+            "quiet_pose_fraction": 1.0,
+            "longest_quiet_pose_dwell_s": 6.0,
+            "two_second_quiet_pose_hold": true,
+            "base_velocity_rms": [
+              0.001015312246112322,
+              6.724649900511706e-06,
+              2.6116785401931668e-05,
+              9.148079818572937e-05,
+              0.001943620756170096,
+              0.00025444828812773055
+            ],
+            "base_velocity_abs_max": [
+              0.0027130760718137026,
+              3.315093636047095e-05,
+              0.00011077428644057363,
+              0.0006258151261135936,
+              0.00763898529112339,
+              0.0011787075782194734
+            ],
+            "angular_stop_violation_fraction": 0.0,
+            "linear_stop_violation_fraction": 0.0,
+            "arm_velocity_rms": [
+              0.00010654863321971314,
+              0.00037378173667701144,
+              0.0003287411701317872,
+              0.00030939876549297,
+              0.0002307962831462609
+            ],
+            "scope": "Raw pre-step measurements; unchanged arm/all-six-base quiet and hand-pose bounds"
+          }
+        },
+        {
+          "case_id": "left:20g:1",
+          "kind": "nearby",
+          "failure": null,
+          "hand_error_at_end_m": 0.0011273720426083873,
+          "orientation_error_at_end_rad": 0.02420561492083955,
+          "tamp_endpoint_pass": false,
+          "tamp_quiet_metrics": {
+            "samples": 120,
+            "position_tolerance_m": 0.003,
+            "orientation_tolerance_rad": 0.02,
+            "quiet_pose_fraction": 0.0,
+            "longest_quiet_pose_dwell_s": 0.0,
+            "two_second_quiet_pose_hold": false,
+            "base_velocity_rms": [
+              0.002835696312509567,
+              5.831129181858066e-05,
+              6.653567951466272e-05,
+              0.00037838624852206564,
+              0.004160325724171965,
+              0.0015477793617084982
+            ],
+            "base_velocity_abs_max": [
+              0.011313896626234055,
+              0.00016122814849950373,
+              0.00027746387058869004,
+              0.0013834135606884956,
+              0.01612953655421734,
+              0.00296419276855886
+            ],
+            "angular_stop_violation_fraction": 0.0,
+            "linear_stop_violation_fraction": 0.075,
+            "arm_velocity_rms": [
+              0.0011960703948388296,
+              0.0028628417802770132,
+              0.004418754441767448,
+              0.005974501163522834,
+              0.006478690518151716
+            ],
+            "scope": "Raw pre-step measurements; unchanged arm/all-six-base quiet and hand-pose bounds"
+          }
+        },
+        {
+          "case_id": "left:20g:1",
+          "kind": "rotation",
+          "failure": null,
+          "hand_error_at_end_m": 0.0026687555795981677,
+          "orientation_error_at_end_rad": 0.08034981229650134,
+          "tamp_endpoint_pass": false,
+          "tamp_quiet_metrics": {
+            "samples": 120,
+            "position_tolerance_m": 0.003,
+            "orientation_tolerance_rad": 0.02,
+            "quiet_pose_fraction": 0.0,
+            "longest_quiet_pose_dwell_s": 0.0,
+            "two_second_quiet_pose_hold": false,
+            "base_velocity_rms": [
+              0.001763555281165723,
+              7.507277311906724e-05,
+              5.561836768615845e-05,
+              0.00045180476640499436,
+              0.00288646310988108,
+              0.001342482309940338
+            ],
+            "base_velocity_abs_max": [
+              0.006738278549164534,
+              0.00011137269757455215,
+              0.000180540926521644,
+              0.0011913998750969768,
+              0.007553578354418278,
+              0.00569232227280736
+            ],
+            "angular_stop_violation_fraction": 0.0,
+            "linear_stop_violation_fraction": 0.008333333333333333,
+            "arm_velocity_rms": [
+              0.002543391865237191,
+              0.005081916210454024,
+              0.005693888627696739,
+              0.0010547641811507753,
+              0.005614840977674648
+            ],
+            "scope": "Raw pre-step measurements; unchanged arm/all-six-base quiet and hand-pose bounds"
+          }
+        },
+        {
+          "case_id": "right:20g:2",
+          "kind": "hold",
+          "failure": null,
+          "hand_error_at_end_m": 6.598462063508514e-05,
+          "orientation_error_at_end_rad": 0.001624616449434662,
+          "tamp_endpoint_pass": true,
+          "tamp_quiet_metrics": {
+            "samples": 120,
+            "position_tolerance_m": 0.003,
+            "orientation_tolerance_rad": 0.02,
+            "quiet_pose_fraction": 0.9916666666666667,
+            "longest_quiet_pose_dwell_s": 5.8500000000000005,
+            "two_second_quiet_pose_hold": true,
+            "base_velocity_rms": [
+              0.0015316816281385958,
+              9.58857130667753e-06,
+              3.5827894345020426e-05,
+              0.00010662665499038263,
+              0.0026677317833030075,
+              0.0003464756484891695
+            ],
+            "base_velocity_abs_max": [
+              0.0072491844184696674,
+              3.503974949126132e-05,
+              0.0001837871823227033,
+              0.0006153940921649337,
+              0.010312470607459545,
+              0.0014294697903096676
+            ],
+            "angular_stop_violation_fraction": 0.0,
+            "linear_stop_violation_fraction": 0.008333333333333333,
+            "arm_velocity_rms": [
+              0.0001233554289037412,
+              0.0004495117472320519,
+              0.00035020702484766684,
+              0.00016395477223108041,
+              0.0004778873675343704
+            ],
+            "scope": "Raw pre-step measurements; unchanged arm/all-six-base quiet and hand-pose bounds"
+          }
+        },
+        {
+          "case_id": "right:20g:2",
+          "kind": "nearby",
+          "failure": null,
+          "hand_error_at_end_m": 0.0011750192384895493,
+          "orientation_error_at_end_rad": 0.022722637994393984,
+          "tamp_endpoint_pass": false,
+          "tamp_quiet_metrics": {
+            "samples": 120,
+            "position_tolerance_m": 0.003,
+            "orientation_tolerance_rad": 0.02,
+            "quiet_pose_fraction": 0.0,
+            "longest_quiet_pose_dwell_s": 0.0,
+            "two_second_quiet_pose_hold": false,
+            "base_velocity_rms": [
+              0.002908113910070938,
+              5.471538598545613e-05,
+              9.326262413207305e-05,
+              0.00043734099334240734,
+              0.004186608605891731,
+              0.0015029476894110288
+            ],
+            "base_velocity_abs_max": [
+              0.014531348831951618,
+              0.0001652780920267105,
+              0.0005047226441092789,
+              0.002313624368980527,
+              0.03199702501296997,
+              0.0030800888780504465
+            ],
+            "angular_stop_violation_fraction": 0.008333333333333333,
+            "linear_stop_violation_fraction": 0.058333333333333334,
+            "arm_velocity_rms": [
+              0.001252640890738779,
+              0.00290417675183412,
+              0.004331339831001782,
+              0.005977753032993869,
+              0.006105275197055133
+            ],
+            "scope": "Raw pre-step measurements; unchanged arm/all-six-base quiet and hand-pose bounds"
+          }
+        },
+        {
+          "case_id": "right:20g:2",
+          "kind": "rotation",
+          "failure": null,
+          "hand_error_at_end_m": 0.0024938395095416882,
+          "orientation_error_at_end_rad": 0.07627554608890046,
+          "tamp_endpoint_pass": false,
+          "tamp_quiet_metrics": {
+            "samples": 120,
+            "position_tolerance_m": 0.003,
+            "orientation_tolerance_rad": 0.02,
+            "quiet_pose_fraction": 0.0,
+            "longest_quiet_pose_dwell_s": 0.0,
+            "two_second_quiet_pose_hold": false,
+            "base_velocity_rms": [
+              0.001523925416421565,
+              8.016220913432282e-05,
+              4.982238632595535e-05,
+              0.0004984326565304471,
+              0.0022658761052650436,
+              0.0011533266281970312
+            ],
+            "base_velocity_abs_max": [
+              0.006420104298740625,
+              0.0001451664138585329,
+              0.00016435692668892443,
+              0.0015356375370174646,
+              0.010312470607459545,
+              0.0029657986015081406
+            ],
+            "angular_stop_violation_fraction": 0.0,
+            "linear_stop_violation_fraction": 0.008333333333333333,
+            "arm_velocity_rms": [
+              0.002710755471486449,
+              0.004901972107753053,
+              0.005516059348142615,
+              0.0012235312407265465,
+              0.006199781545125146
+            ],
+            "scope": "Raw pre-step measurements; unchanged arm/all-six-base quiet and hand-pose bounds"
+          }
+        }
+      ],
+      "programs": [
+        {
+          "case": "left:20g:0",
+          "completed_stages": 0,
+          "policy_calls": 177,
+          "failure": "cartesian_path_tracking_envelope",
+          "stop_confirmed": true
+        },
+        {
+          "case": "left:50g:0",
+          "completed_stages": 0,
+          "policy_calls": 196,
+          "failure": "cartesian_path_tracking_envelope",
+          "stop_confirmed": true
+        },
+        {
+          "case": "right:20g:0",
+          "completed_stages": 0,
+          "policy_calls": 177,
+          "failure": "cartesian_path_tracking_envelope",
+          "stop_confirmed": true
+        }
+      ]
+    }
+  },
+  "safety_promoted": false,
+  "starting_checkpoint": "logs/manipulation/tamp-pose-precision-v9/seed-64/step-65536",
+  "full_report_archive": "paper/data/whole_body_control/continuation_reward_ablation_v1.json.gz",
+  "uncompressed_sha256": "ad71a542f207fe5afb1857f98c181473cadfcf39e658bc72706b90512f83630a"
+}

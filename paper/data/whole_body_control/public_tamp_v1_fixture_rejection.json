@@ -1,0 +1,14 @@
+{
+  "scope": "canonical v2 fixture rejection after experimental final-wheel-slew change; no task executions occurred",
+  "complete": true,
+  "cases": 30,
+  "admitted": 0,
+  "successes": 0,
+  "failure_stages": {
+    "fixture:frozen_fixture_changed": 30
+  },
+  "public_oracle_ready": false,
+  "hardware_qualified": false,
+  "report_archive": "paper/data/whole_body_control/public_tamp_v1_fixture_rejection.json.gz",
+  "uncompressed_sha256": "9490a254ff0fd45ca8e9ba87dcc2685473fe71a572a6f4bfdd95cdf8d72a169a"
+}

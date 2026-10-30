@@ -1,0 +1,24 @@
+{
+  "controller_tests": 908,
+  "cases": 50,
+  "teacher_passed": 50,
+  "training_cases": 45,
+  "initial_structural_intervention_not_learning": true,
+  "matched_initial_states_and_references": true,
+  "baseline_full_mastery": 23,
+  "baseline_tracking_and_holding": 40,
+  "initial_full_mastery": 33,
+  "initial_tracking_and_holding": 50,
+  "canonical_initial_mastery": 5,
+  "canonical_initial_tracking": 10,
+  "checkpoint_safety_flags": {
+    "wheel_lift": 0,
+    "unsafe_contact": 0,
+    "invalid_physics": 0
+  },
+  "steps_planned": 65536,
+  "seed": 90,
+  "training_started": true,
+  "hardware_used": false,
+  "safety_promoted": false
+}

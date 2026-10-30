@@ -1,0 +1,141 @@
+{
+  "complete": true,
+  "controller": "22f8223e891c8da9019050d537f6d960c0dc9c55a1c259d6cf6441ab6c97f54b",
+  "groups": {
+    "base/train": {
+      "cases": 5,
+      "admitted": 5,
+      "mastered": 1,
+      "tracking_and_settling_passed": 1,
+      "smoothness_passed": 4,
+      "failure_reasons": {
+        "mastery_tracking_envelope": 2,
+        "terminal_hold": 4,
+        "tracking_timeout": 2,
+        "smoothness/joint_jerk": 1
+      },
+      "codes": {
+        "ok": 1,
+        "mastery_tracking_envelope": 2,
+        "tracking_timeout": 2
+      },
+      "all_pass": false
+    },
+    "base/validation": {
+      "cases": 5,
+      "admitted": 5,
+      "mastered": 0,
+      "tracking_and_settling_passed": 1,
+      "smoothness_passed": 3,
+      "failure_reasons": {
+        "smoothness/base_linear_jerk": 1,
+        "mastery_tracking_envelope": 2,
+        "terminal_hold": 4,
+        "tracking_timeout": 2,
+        "smoothness/joint_jerk": 1
+      },
+      "codes": {
+        "ok": 1,
+        "mastery_tracking_envelope": 2,
+        "tracking_timeout": 2
+      },
+      "all_pass": false
+    },
+    "arm/train": {
+      "cases": 4,
+      "admitted": 4,
+      "mastered": 0,
+      "tracking_and_settling_passed": 4,
+      "smoothness_passed": 0,
+      "failure_reasons": {
+        "smoothness/base_linear_jerk": 4
+      },
+      "codes": {
+        "ok": 4
+      },
+      "all_pass": false
+    },
+    "arm/validation": {
+      "cases": 4,
+      "admitted": 4,
+      "mastered": 0,
+      "tracking_and_settling_passed": 1,
+      "smoothness_passed": 0,
+      "failure_reasons": {
+        "tracking_timeout": 3,
+        "terminal_hold": 3,
+        "smoothness/base_linear_jerk": 4
+      },
+      "codes": {
+        "tracking_timeout": 3,
+        "ok": 1
+      },
+      "all_pass": false
+    },
+    "coupled/train": {
+      "cases": 2,
+      "admitted": 2,
+      "mastered": 0,
+      "tracking_and_settling_passed": 0,
+      "smoothness_passed": 2,
+      "failure_reasons": {
+        "mastery_tracking_envelope": 1,
+        "terminal_hold": 2,
+        "tracking_timeout": 1
+      },
+      "codes": {
+        "mastery_tracking_envelope": 1,
+        "tracking_timeout": 1
+      },
+      "all_pass": false
+    },
+    "coupled/validation": {
+      "cases": 2,
+      "admitted": 2,
+      "mastered": 0,
+      "tracking_and_settling_passed": 0,
+      "smoothness_passed": 2,
+      "failure_reasons": {
+        "mastery_tracking_envelope": 2,
+        "terminal_hold": 2
+      },
+      "codes": {
+        "mastery_tracking_envelope": 2
+      },
+      "all_pass": false
+    },
+    "loaded/train": {
+      "cases": 2,
+      "admitted": 2,
+      "mastered": 0,
+      "tracking_and_settling_passed": 0,
+      "smoothness_passed": 1,
+      "failure_reasons": {
+        "mastery_tracking_envelope": 2,
+        "terminal_hold": 2,
+        "smoothness/base_yaw_jerk": 1
+      },
+      "codes": {
+        "mastery_tracking_envelope": 2
+      },
+      "all_pass": false
+    },
+    "loaded/validation": {
+      "cases": 2,
+      "admitted": 2,
+      "mastered": 0,
+      "tracking_and_settling_passed": 0,
+      "smoothness_passed": 2,
+      "failure_reasons": {
+        "mastery_tracking_envelope": 2,
+        "terminal_hold": 2
+      },
+      "codes": {
+        "mastery_tracking_envelope": 2
+      },
+      "all_pass": false
+    }
+  },
+  "all_pass": false,
+  "safety_promoted": false
+}

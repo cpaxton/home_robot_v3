@@ -1,0 +1,54 @@
+{
+  "operation": "zero_ppo_training_transfer",
+  "additional_ppo_steps": 0,
+  "all_policy_and_value_state_tensors_identical": true,
+  "normalization_mean_variance_identical": true,
+  "recorded_action_equivalence": [
+    {
+      "file": "validation.json",
+      "seed": 200000,
+      "maximum_action_difference": 0.0
+    },
+    {
+      "file": "grasp-lift-validation.json",
+      "seed": 3100000,
+      "maximum_action_difference": 0.0
+    }
+  ],
+  "transfer": {
+    "original_manifest_sha256": "aca585c91c20e034693b2ea06be7b5fbe8f93b624da8b06f5fc94703f44c7e1a",
+    "details": {
+      "source_weights_sha256": "20ce2ed2e31f1f215e0294b8c8cd12de51deab492161a1ce2d73ec6ade637eb2",
+      "source_fingerprint": "1e1110aaac94d6d32015c02262ef033f4810b8651e5780c88213beca94c2bb17",
+      "target_fingerprint": "1e1110aaac94d6d32015c02262ef033f4810b8651e5780c88213beca94c2bb17",
+      "contact_solver_changes": {},
+      "control_contract_changes": {},
+      "source_manifest_sha256": "aca585c91c20e034693b2ea06be7b5fbe8f93b624da8b06f5fc94703f44c7e1a",
+      "optimizer_restored": false,
+      "feedback_mean_head_reinitialized": false,
+      "feedback_orientation_scale_change": null,
+      "wheel_feedback_gain_change": {
+        "from": 0.5,
+        "to": 0.5
+      },
+      "normalization_prior_count": 1024,
+      "categorical_features_unscaled": true,
+      "runtime_admitted": false,
+      "safety_promoted": false
+    },
+    "additional_ppo_steps": 0
+  },
+  "original_checkpoint": "logs/manipulation/agent-hand-gain-v13/gain-3p0",
+  "initial_checkpoint": "logs/manipulation/mars-grasp-lift-v15-initial",
+  "current_source_admission": {
+    "format": "mars-tamp-policy-admission-v1",
+    "robot_sha256": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+    "weights_sha256": "c0f657c34427f96a563896f5265b7d70e6447168c5b6e69a85725c542e7d4c0f",
+    "training_fingerprint": "1e1110aaac94d6d32015c02262ef033f4810b8651e5780c88213beca94c2bb17",
+    "training_evidence_sha256": "d78b84482ba2100de13c90add952f14e428e4e35d1a150fdf841d710f18ba7cd",
+    "simulation_only": true,
+    "safety_promoted": false
+  },
+  "original_runtime_admission": "refused: training robot sources or runtime changed; original bundle unchanged",
+  "safety_promoted": false
+}

@@ -230,3 +230,8 @@ piper_tts/
 
 # Bytecode dirs: after any `!` negations (e.g. Flask instance/ exception for emet.mapping.instance) so __pycache__ stays ignored.
 **/__pycache__/
+
+# Generated compressed experiment traces belong in ignored logs/artifact storage.
+# Keep after paper/data negations so they cannot accidentally re-include traces.
+*.gz
+/paper/data/whole_body_control/**/*.jsonl

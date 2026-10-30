@@ -1,0 +1,42 @@
+{
+  "format": "emet-mars-native-parallel-probe-v1",
+  "hardware_used": false,
+  "training_qualified": false,
+  "runs": [
+    {
+      "num_envs": 1,
+      "backend": "dummy",
+      "setup_seconds": 3.5403077518567443,
+      "rollout_seconds": 4.041406991891563,
+      "steps": 128,
+      "control_steps_per_second": 31.672138009562396,
+      "fingerprint": "1e1110aaac94d6d32015c02262ef033f4810b8651e5780c88213beca94c2bb17",
+      "terminal_codes": {},
+      "ppo_smoke": {
+        "steps": 64,
+        "updates": 2,
+        "seconds": 3.4622288001701236,
+        "checkpoint_exported": false
+      }
+    },
+    {
+      "num_envs": 4,
+      "backend": "spawn-subproc",
+      "setup_seconds": 6.449202541261911,
+      "rollout_seconds": 4.880556450225413,
+      "steps": 512,
+      "control_steps_per_second": 104.90607069535132,
+      "fingerprint": "1e1110aaac94d6d32015c02262ef033f4810b8651e5780c88213beca94c2bb17",
+      "terminal_codes": {
+        "mastery_tracking_envelope": 1
+      },
+      "ppo_smoke": {
+        "steps": 256,
+        "updates": 2,
+        "seconds": 5.548378852196038,
+        "checkpoint_exported": false
+      }
+    }
+  ],
+  "scope": "zero-action rollout throughput plus unsaved tiny PPO smoke; no tracking-success claim"
+}

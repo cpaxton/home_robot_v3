@@ -1,0 +1,17 @@
+{
+  "scope": "Bounded pure-PPO trajectory tracking refinement, no task decisions added to the actor.",
+  "source_revision": "49a1169065bb5529f29d9c01e3caea1e09e352fa",
+  "regression_tests": 841,
+  "target_steps": 16384,
+  "snapshot_steps": 12800,
+  "training_completed": false,
+  "safety_promoted": false,
+  "hardware_used": false,
+  "uncompressed_sha256": "bf9b5778c6ce22981dc0c3feb3bb2cef8b4960298aec069f8e717eb4601c7ad3",
+  "local_status": "logs/manipulation/mars-failure-replay-v25/status.json",
+  "initial_mean_actor_and_critic_preserved": true,
+  "optimizer_restored": false,
+  "new_exploration_std": 0.05,
+  "wheel_slew_dynamics_preserving": false,
+  "prior_launcher_failure_added_ppo_steps": 0
+}

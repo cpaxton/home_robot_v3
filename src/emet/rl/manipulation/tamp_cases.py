@@ -67,7 +67,7 @@ def plan_case(env, target):
     }
 
 
-def task_pose_trajectory(env, case):
+def task_pose_trajectory(env, case, *, jerk_limited=False):
     """Convert an admitted TAMP arm path into timed task-frame commands.
 
     FK and retiming happen once on scratch data. Executing the resulting
@@ -88,6 +88,17 @@ def task_pose_trajectory(env, case):
     ]
     fk = TaskFrameFK(env.model, env.data, env.control)
     base = env.control.base_pose().copy()
+    if jerk_limited:
+        from emet.rl.manipulation.jerk_pose_reference import FKPoseReference
+        from emet.rl.manipulation.jerk_reference import compile_joint_path
+
+        path, certificate = compile_joint_path(
+            waypoints,
+            np.asarray(env.profile.speed) * 0.35,
+            np.asarray(env.profile.acceleration) * 0.35,
+            2 * np.asarray(env.profile.acceleration),
+        )
+        return FKPoseReference(fk, base, path, env.control.grip_reference, certificate)
     times, hands = [0.0], [fk(base, waypoints[0])]
     elapsed = 0.0
     for q, goal in zip(waypoints[:-1], waypoints[1:], strict=True):
@@ -229,7 +240,74 @@ def execute_case(env, case, policy=None, *, hold_base=False):
         physical_pick_place.time = previous_time
 
 
-def generate(*, episodes=10, seed=600000, execute=False, policy=None, robot="stretch", emit_pose_trajectories=False):
+def execute_pose_case(env, case, policy=None):
+    """Replay one admitted GT path through public command identity/receipts.
+
+    Component coverage only: it does not discover a task, grasp an object, or
+    establish end-to-end public-tool acceptance. No deadline or goal relaxation.
+    """
+    import threading
+
+    from emet.core.command_client import close_command_session, command_receipt
+    from emet.rl.manipulation.command_runtime import TaskPoseCommandRuntime, send_task_pose_trajectory
+
+    trajectory = task_pose_trajectory(env, case)
+    server = TaskPoseCommandRuntime(env, policy=policy)
+    client = SimpleNamespace(_act_lock=threading.Lock(), _iter=0, _state=server.command_message({}))
+
+    def send(action):
+        server.dispatch_command(action)
+        client._state = server.command_message({})
+
+    client.send_message = send
+    action = send_task_pose_trajectory(client, trajectory, motion_timeout_s=env.config.horizon)
+    receipt = None
+    trace = []
+    try:
+        for _ in range(int(np.ceil(env.config.horizon / env.profile.dt)) + 1):
+            server.advance()
+            client._state = server.command_message({})
+            receipt = command_receipt(client, action)
+            trace.append(
+                {
+                    "time": float(env.data.time),
+                    "base": env.control.base_pose().tolist(),
+                    "hand": env.control.ee_pose().tolist(),
+                    "status": receipt["status"],
+                }
+            )
+            if receipt["status"] in {"succeeded", "failed", "cancelled", "rejected"}:
+                break
+    finally:
+        close_command_session(client)
+    result = receipt.get("result", {}) if receipt else {}
+    return {
+        "execution_interface": "task_pose_command_protocol",
+        "execution_verified": bool(receipt and receipt["status"] == "succeeded" and result.get("stop_confirmed")),
+        "command_receipt": receipt,
+        "trace": trace,
+        "controller_failure": None
+        if receipt and receipt["status"] == "succeeded"
+        else result.get("failure", result.get("code", "command_incomplete")),
+        "contact_metrics": env.monitor.metrics(),
+        "task_pose_trajectory": trajectory.record(),
+    }
+
+
+def generate(
+    *,
+    episodes=10,
+    seed=600000,
+    execute=False,
+    policy=None,
+    robot="stretch",
+    emit_pose_trajectories=False,
+    execution_interface="direct",
+):
+    if execution_interface not in {"direct", "command"}:
+        raise ValueError("unknown execution interface")
+    if execution_interface == "command" and policy is not None and policy.action_mode != "direct_velocity":
+        raise ValueError("pose commands require a direct-velocity policy")
     if episodes < 1:
         raise ValueError("positive episode count required")
     if robot not in {"stretch", "innate_mars"}:
@@ -240,14 +318,19 @@ def generate(*, episodes=10, seed=600000, execute=False, policy=None, robot="str
             ManipulationConfig(
                 robot=robot,
                 scenario=scenario,
-                action_mode=policy.action_mode if policy else "residual",
+                action_mode=policy.action_mode
+                if policy
+                else "direct_velocity"
+                if execution_interface == "command"
+                else "residual",
                 hand_position_tolerance=policy.manifest.get("environment", {}).get("hand_position_tolerance", 0.015)
                 if policy
                 else 0.015,
                 hand_orientation_tolerance=policy.manifest.get("environment", {}).get("hand_orientation_tolerance", 0.1)
                 if policy
                 else 0.1,
-                trajectory_preview=policy is not None and "preview" in policy.normalization,
+                trajectory_preview=execution_interface == "command"
+                or (policy is not None and "preview" in policy.normalization),
                 tracking_reward=policy is not None
                 and policy.manifest.get("environment", {}).get("tracking_reward", False),
             )
@@ -267,7 +350,11 @@ def generate(*, episodes=10, seed=600000, execute=False, policy=None, robot="str
                 if emit_pose_trajectories and row["planning_error"] is None:
                     row["task_pose_trajectory"] = task_pose_trajectory(env, row).record()
                 if execute and row["planning_error"] is None:
-                    row.update(execute_case(env, row, policy))
+                    row.update(
+                        execute_pose_case(env, row, policy)
+                        if execution_interface == "command"
+                        else execute_case(env, row, policy)
+                    )
                 rows.append(row)
         finally:
             env.close()
@@ -288,6 +375,7 @@ if __name__ == "__main__":
     parser.add_argument("--seed", type=int, default=600000)
     parser.add_argument("--execute", action="store_true")
     parser.add_argument("--emit-pose-trajectories", action="store_true")
+    parser.add_argument("--execution-interface", choices=["direct", "command"], default="direct")
     parser.add_argument("--robot", choices=["stretch", "innate_mars"], default="stretch")
     parser.add_argument("--policy", type=Path)
     parser.add_argument("--output", type=Path, required=True)
@@ -304,6 +392,7 @@ if __name__ == "__main__":
         policy=policy,
         robot=args.robot,
         emit_pose_trajectories=args.emit_pose_trajectories,
+        execution_interface=args.execution_interface,
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2) + "\n")

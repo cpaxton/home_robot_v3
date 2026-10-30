@@ -1,0 +1,40 @@
+{
+  "complete": true,
+  "controller": "e98f8d5ca1a1560c8725b54bc0b93ce350ed0036ae990da524f6f4bdec62d658",
+  "groups": {
+    "base/train": {
+      "cases": 5,
+      "admitted": 5,
+      "mastered": 4,
+      "tracking_and_settling_passed": 4,
+      "smoothness_passed": 5,
+      "failure_reasons": {
+        "tracking_timeout": 1,
+        "terminal_hold": 1
+      },
+      "codes": {
+        "ok": 4,
+        "tracking_timeout": 1
+      },
+      "all_pass": false
+    },
+    "base/validation": {
+      "cases": 5,
+      "admitted": 5,
+      "mastered": 4,
+      "tracking_and_settling_passed": 4,
+      "smoothness_passed": 5,
+      "failure_reasons": {
+        "tracking_timeout": 1,
+        "terminal_hold": 1
+      },
+      "codes": {
+        "ok": 4,
+        "tracking_timeout": 1
+      },
+      "all_pass": false
+    }
+  },
+  "all_pass": false,
+  "safety_promoted": false
+}
