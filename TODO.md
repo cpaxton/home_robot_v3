@@ -1,5 +1,13 @@
 # Living TODOs (small / near-term)
 
+- [ ] Finish sensor-only active GraphEQA acceptance: short measured navigation
+      gate passes (`eaeb5276`, q2); persistent native stream and controller
+      feedback tests pass. Run the supplied-model one-case connection, then the
+      fixed q2/q6/q12 pilot. Match pose/motion contracts on the emet side before
+      claiming a paired active comparison. Preserve matched-history image-only
+      controls as a separate gate. See
+      `docs/experiments/grapheqa_active_qualification_20261030.md`.
+
 - [x] Fork GraphEQA for supplied model endpoints and paired frozen-context
       evaluation: https://github.com/cpaxton/graph_eqa/pull/1. Planner/room API
       routing, instance IDs, scorer isolation and complete request traces are
