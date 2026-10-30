@@ -160,7 +160,7 @@ def _openai_messages_to_multimodal(
     messages: list[dict[str, Any]],
 ) -> tuple[str | None, list[Any]]:
     """Extract system prompt and ordered user multimodal parts (str | ndarray)."""
-    system: str | None = None
+    systems: list[str] = []
     user_parts: list[Any] = []
     for msg in messages:
         if not isinstance(msg, dict):
@@ -172,9 +172,11 @@ def _openai_messages_to_multimodal(
         if role == "system":
             if isinstance(content, list):
                 texts = [str(b.get("text") or "") for b in content if isinstance(b, dict) and b.get("type") == "text"]
-                system = "\n".join(t for t in texts if t) or system
+                if any(texts):
+                    systems.append("\n".join(t for t in texts if t))
             else:
-                system = str(content) if not system else system
+                if str(content):
+                    systems.append(str(content))
             continue
         if role != "user":
             # Prior assistant turns are ignored for stateless VL serve (reset each call).
@@ -204,7 +206,7 @@ def _openai_messages_to_multimodal(
                 if not url:
                     raise ValueError("image_url block missing url")
                 user_parts.append(decode_data_url_image(str(url)))
-    return system, user_parts
+    return "\n\n".join(systems) or None, user_parts
 
 
 def generate_chat(
@@ -232,11 +234,22 @@ def generate_chat(
                 role = message.get("role")
                 if role == "user":
                     _, content = _openai_messages_to_multimodal([message])
-                elif role in {"system", "assistant"}:
+                elif role == "system":
+                    content = _openai_messages_to_chat([message])[0]["content"]
+                elif role == "assistant":
                     content = message.get("content", "")
                 else:
                     raise ValueError(f"Unsupported vision dialogue role: {role}")
                 dialogue.append({"role": role, "content": content})
+            # OpenAI-compatible callers may send several leading system turns
+            # (e.g. schema, policy and question). HF vision templates require a
+            # single initial system turn; retain every instruction in order.
+            leading = 0
+            while leading < len(dialogue) and dialogue[leading]["role"] == "system":
+                leading += 1
+            if leading > 1:
+                system = "\n\n".join(message["content"] for message in dialogue[:leading])
+                dialogue = [{"role": "system", "content": system}] + dialogue[leading:]
             prefill = None
             if dialogue and dialogue[-1]["role"] == "assistant":
                 prefill = dialogue.pop()["content"]
@@ -389,21 +402,60 @@ class LLMServeState:
     def complete(self, body: dict[str, Any]) -> dict[str, Any]:
         if not self.ready or self.client is None:
             raise RuntimeError(self.load_error or "model not loaded")
+        hf_model_id = getattr(self.client, "_resolved_hf_model_id", None)
+        model = body.get("model") or self.model_id
+        if model not in {self.model_id, self.llm_key, hf_model_id}:
+            raise ValueError(f"Requested model {model!r} is not loaded; use {self.model_id!r} from /v1/models")
+        unsupported = set(body) - {
+            "model",
+            "messages",
+            "max_tokens",
+            "max_completion_tokens",
+            "stream",
+            "response_format",
+        }
+        if unsupported:
+            raise ValueError(
+                f"Unsupported request settings: {sorted(unsupported)}; no generation settings were applied"
+            )
+        if body.get("stream"):
+            raise ValueError("Streaming is not supported")
+        response_format = body.get("response_format") or {"type": "text"}
+        if not isinstance(response_format, dict) or response_format.get("type") != "text":
+            raise ValueError(
+                "This server supports text responses only; use response_mode=text with local JSON validation"
+            )
         messages = body.get("messages")
         if not isinstance(messages, list):
             raise ValueError("messages must be a list")
-        max_tokens = body.get("max_tokens") or body.get("max_completion_tokens")
+        if (
+            body.get("max_tokens") is not None
+            and body.get("max_completion_tokens") is not None
+            and body["max_tokens"] != body["max_completion_tokens"]
+        ):
+            raise ValueError("max_tokens and max_completion_tokens disagree")
+        max_tokens = body.get("max_tokens")
+        if max_tokens is None:
+            max_tokens = body.get("max_completion_tokens")
         mt = int(max_tokens) if max_tokens is not None else self.max_tokens
+        if mt <= 0:
+            raise ValueError("Token limit must be positive")
         t0 = time.perf_counter()
         with self._lock:
-            text = generate_chat(self.client, messages, max_tokens=mt)
+            try:
+                text = generate_chat(self.client, messages, max_tokens=mt)
+            except TimeoutError as exc:
+                # A timed-out backend worker may still own CUDA resources. Do
+                # not dispatch another generation into that same model handle.
+                self.ready = False
+                self.load_error = f"Generation timed out; restart this model server: {exc}"
+                raise
         dt = time.perf_counter() - t0
-        model = str(body.get("model") or self.model_id)
         return {
             "id": f"chatcmpl-{uuid.uuid4().hex[:24]}",
             "object": "chat.completion",
             "created": int(time.time()),
-            "model": model,
+            "model": self.model_id,
             "choices": [
                 {
                     "index": 0,
@@ -411,16 +463,17 @@ class LLMServeState:
                     "finish_reason": "stop",
                 }
             ],
-            "usage": {
-                "prompt_tokens": 0,
-                "completion_tokens": 0,
-                "total_tokens": 0,
-            },
+            # These clients return text rather than token counters. Unknown
+            # usage must not masquerade as measured zero-cost inference.
+            "usage": None,
             "emet": {
                 "latency_s": round(dt, 3),
                 "device": self.device,
                 "llm_key": self.llm_key,
                 "multimodal": self.multimodal,
+                "hf_model_id": hf_model_id,
+                "quantization": getattr(self.client, "_quantization", None),
+                "usage_available": False,
             },
         }
 
@@ -494,6 +547,11 @@ def _make_handler(state: LLMServeState) -> type[BaseHTTPRequestHandler]:
                                 "object": "model",
                                 "created": int(time.time()),
                                 "owned_by": "emet",
+                                "emet": {
+                                    "hf_model_id": getattr(state.client, "_resolved_hf_model_id", None),
+                                    "quantization": getattr(state.client, "_quantization", None),
+                                    "response_modes": ["text"],
+                                },
                             }
                         ],
                     },
@@ -513,6 +571,8 @@ def _make_handler(state: LLMServeState) -> type[BaseHTTPRequestHandler]:
                 body = self._read_json()
                 result = state.complete(body)
                 self._send(200, result)
+            except ValueError as exc:
+                self._send(400, {"error": {"message": str(exc), "type": "invalid_request_error"}})
             except Exception as exc:
                 logger.error(f"chat.completions failed: {exc}")
                 self._send(

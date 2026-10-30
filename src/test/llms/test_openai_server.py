@@ -110,6 +110,96 @@ def test_generate_chat_via_pipe() -> None:
     assert out == "ok"
 
 
+def _ready_state():
+    state = LLMServeState(llm_key="served-alias", device="cpu", max_tokens=16)
+    state.client = _FakePipeClient()
+    state.client._resolved_hf_model_id = "test/actual-weights"
+    state.client._quantization = "int4"
+    state.ready = True
+    return state
+
+
+def test_server_reports_loaded_identity_and_unknown_usage():
+    result = _ready_state().complete({"model": "test/actual-weights", "messages": [{"role": "user", "content": "hi"}]})
+    assert result["model"] == "served-alias"
+    assert result["emet"]["hf_model_id"] == "test/actual-weights"
+    assert result["emet"]["quantization"] == "int4"
+    assert result["usage"] is None
+    assert result["emet"]["usage_available"] is False
+
+
+@pytest.mark.parametrize(
+    "settings",
+    [
+        {"model": "some-other-weights"},
+        {"temperature": 0.0},
+        {"seed": 42},
+        {"top_p": 0.9},
+        {"response_format": {"type": "json_schema"}},
+        {"response_format": {"type": "json_object"}},
+        {"stream": True},
+        {"max_tokens": 0},
+        {"max_tokens": 4, "max_completion_tokens": 8},
+    ],
+)
+def test_server_rejects_unapplied_settings_before_inference(settings):
+    state = _ready_state()
+    state.client.pipe = lambda *_a, **_k: pytest.fail("Rejected request reached inference")
+    with pytest.raises(ValueError):
+        state.complete({"messages": [{"role": "user", "content": "hi"}], **settings})
+
+
+def test_generation_timeout_requires_restart_before_another_dispatch(monkeypatch):
+    state = _ready_state()
+
+    def timeout(*_args, **_kwargs):
+        raise TimeoutError("backend worker is still running")
+
+    monkeypatch.setattr("emet.llms.openai_server.generate_chat", timeout)
+    with pytest.raises(TimeoutError):
+        state.complete({"messages": [{"role": "user", "content": "hi"}]})
+    assert not state.ready
+    with pytest.raises(RuntimeError, match="restart this model server"):
+        state.complete({"messages": [{"role": "user", "content": "again"}]})
+
+
+def test_multiple_system_prompts_and_assistant_history_reach_vlm():
+    from emet.llms.base import AbstractVLLMClient
+
+    class Vision(AbstractVLLMClient):
+        def __init__(self):
+            super().__init__("", None)
+            self.recorded = None
+
+        def _conversation_user_content(self, content):
+            return content
+
+        def generate_multimodal(self, content, **kwargs):
+            self.recorded = (self.get_history(), content, kwargs)
+            return "ok"
+
+    client = Vision()
+    messages = [
+        {"role": "system", "content": "return JSON"},
+        {"role": "system", "content": "planning policy"},
+        {"role": "system", "content": "QUESTION: which cup?"},
+        {"role": "user", "content": "earlier view"},
+        {"role": "assistant", "content": "inspect object_2"},
+        {"role": "user", "content": "measured arrival"},
+    ]
+    assert generate_chat(client, messages, max_tokens=8) == "ok"
+    history, content, kwargs = client.recorded
+    assert history == [
+        {"role": "system", "content": "return JSON\n\nplanning policy\n\nQUESTION: which cup?"},
+        {"role": "user", "content": ["earlier view"]},
+        {"role": "assistant", "content": "inspect object_2"},
+    ]
+    assert content == ["measured arrival"]
+    assert kwargs["max_new_tokens"] == 8
+    system, _ = _openai_messages_to_multimodal(messages)
+    assert system == "return JSON\n\nplanning policy\n\nQUESTION: which cup?"
+
+
 def test_decode_data_url_and_multimodal_route() -> None:
     import base64
     from io import BytesIO
