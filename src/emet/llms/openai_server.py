@@ -564,6 +564,8 @@ def _make_handler(state: LLMServeState) -> type[BaseHTTPRequestHandler]:
                                     "hf_model_id": getattr(state.client, "_resolved_hf_model_id", None),
                                     "quantization": getattr(state.client, "_quantization", None),
                                     "response_modes": ["text"],
+                                    "image_max_side": getattr(state.client, "image_max_side", None),
+                                    "image_max_pixels": getattr(state.client, "image_max_pixels", None),
                                 },
                             }
                         ],

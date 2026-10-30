@@ -63,6 +63,19 @@ def test_explicit_dialogue_encodes_prior_images_without_losing_assistant_turns()
     assert client.get_history() == []
 
 
+def test_separate_evidence_images_keep_their_own_preprocessing_budget():
+    import numpy as np
+
+    client = _make_client()
+    client.image_max_side, client.image_max_pixels = 512, 0
+    images = [np.full((480, 640, 3), index * 60, dtype=np.uint8) for index in range(4)]
+    encoded = client._process_input(["CURRENT and three historical views", *images])
+    processed = [part["image"] for part in encoded if part["type"] == "image"]
+    assert len(processed) == 4
+    assert all(image.size == (512, 384) for image in processed)
+    assert [np.array(image)[0, 0, 0] for image in processed] == [0, 60, 120, 180]
+
+
 def test_prefix_ids_align():
     client = _make_client()
     full = torch.tensor([[1, 2, 3, 4, 5]])
