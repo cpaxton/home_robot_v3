@@ -48,6 +48,11 @@ def run(args):
 
     def save(frame):
         Image.fromarray(frame["rgb"]).save(args.output / f"frame-{frame['sequence']:04d}.png")
+        if frame["camera_pose"] is not None:
+            np.savez_compressed(
+                args.output / f"frame-{frame['sequence']:04d}.npz",
+                **{key: frame[key] for key in ("rgb", "depth", "camera_K", "camera_pose", "timestamp_ns")},
+            )
         row = {key: frame[key] for key in ("sequence", "timestamp_ns", "collided", "odometry")}
         with (args.output / "frames.jsonl").open("a") as stream:
             stream.write(json.dumps(row) + "\n")

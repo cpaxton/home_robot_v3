@@ -121,7 +121,7 @@ class ObservedSpaceNavigation:
         from emet.robots.footprint import CircularFootprint
 
         self.map = SparseVoxelMap(
-            resolution=0.04,
+            resolution=0.01,
             grid_size=(256, 256),
             grid_resolution=0.05,
             min_depth=0.1,
