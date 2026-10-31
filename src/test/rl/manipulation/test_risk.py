@@ -50,6 +50,9 @@ def test_risk_abstains_on_missing_safety_evidence_and_different_models(tmp_path)
     assert result["probabilities"]["wheel_lift"] is None
     assert result["safety_certificate"] is False
     assert result["probabilities"]["success"] > 0.5
+    assert "success" not in result["unavailable_heads"]
+    assert "unsafe_contact" in result["unavailable_heads"]
+    assert "insufficient" in result["unavailable_heads"]["wheel_lift"]
     assert policy.predict([10, 100], **kwargs)["reason"] == "out_of_distribution"
     assert policy.predict([0.8, 0.64], **{**kwargs, "controller_id": "new"})["status"] == "unknown"
     assert policy.predict([0.8, 0.64], **{**kwargs, "geometry_valid": False})["status"] == "geometry_rejected"

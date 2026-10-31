@@ -1,0 +1,72 @@
+{
+  "scope": "Development experiments, no promotion; models stay local.",
+  "new_feedback_ppo_steps": 16384,
+  "all_hold_repair_ppo_steps_including_v1": 24576,
+  "selected_checkpoint": "logs/manipulation/hold-feedback-continued-v5/seed-64/step-12288",
+  "selected_weights_sha256": "74db9cce239f9316faaf7874d4a6e61eefd4464db963f3c85bf802ca3367495a",
+  "validation": {
+    "validation": {
+      "episodes": 5,
+      "success_by_category": {
+        "carry": 1.0,
+        "disturbance": 0.0,
+        "place": 0.0,
+        "pregrasp": 0.0,
+        "reach": 0.0
+      }
+    },
+    "teacher-validation": {
+      "episodes": 5,
+      "success_by_category": {
+        "carry": 1.0,
+        "disturbance": 0.0,
+        "place": 0.0,
+        "pregrasp": 0.0,
+        "reach": 0.0
+      }
+    },
+    "curriculum-validation": {
+      "episodes": 5,
+      "success_by_category": {
+        "carry": 0.0,
+        "disturbance": 1.0,
+        "place": 0.0,
+        "pregrasp": 0.0,
+        "reach": 0.0
+      }
+    }
+  },
+  "paired_comparison": {
+    "eligible": false,
+    "reasons": [
+      "innate_mars:disturbance:240000: retention_lost not false",
+      "disturbance: ee_position_error_p95 worse or unsupported",
+      "disturbance: ee_orientation_error_p95 worse or unsupported",
+      "disturbance: base_contract_violation_p95 worse or unsupported",
+      "disturbance: contact_impulse_p95 worse or unsupported",
+      "place: ee_position_error_p95 worse or unsupported",
+      "place: ee_orientation_error_p95 worse or unsupported",
+      "place: contact_impulse_p95 worse or unsupported",
+      "pregrasp: joint_error_mean worse or unsupported",
+      "pregrasp: ee_position_error_p95 worse or unsupported",
+      "pregrasp: ee_orientation_error_p95 worse or unsupported",
+      "carry: joint_error_mean worse or unsupported",
+      "carry: ee_position_error_p95 worse or unsupported",
+      "carry: ee_orientation_error_p95 worse or unsupported",
+      "carry: contact_impulse_p95 worse or unsupported",
+      "reach: joint_error_mean worse or unsupported",
+      "reach: ee_position_error_p95 worse or unsupported",
+      "reach: ee_orientation_error_p95 worse or unsupported",
+      "reach: peak_measured_jerk_p95 worse or unsupported",
+      "reach: peak_measured_jerk_max worse or unsupported"
+    ],
+    "paired_success_count": 1,
+    "teacher_paired_time": 1.7000000000005677,
+    "policy_paired_time": 3.500000000001169
+  },
+  "regression_tests": 692,
+  "regression_receipt": "paper/data/whole_body_control/feedback-final-regressions-20261025.receipt.json",
+  "full_report_archive": "paper/data/whole_body_control/hold_feedback_training_v2.json.gz",
+  "uncompressed_sha256": "5bcd89ccad3c82786f23f077d1b78b82745d32de5d5e6ac33636ea682d3799d9",
+  "safety_promoted": false
+}

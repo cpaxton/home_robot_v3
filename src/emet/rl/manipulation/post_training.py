@@ -21,6 +21,13 @@ from emet.rl.manipulation.risk import fit_risk
 from emet.rl.manipulation.tamp_cases import generate
 
 
+def oracle_runner_command():
+    """Run the packaged file in a fresh process before importing native modules."""
+    from emet.rl.manipulation import oracle_runner
+
+    return [sys.executable, str(Path(oracle_runner.__file__).resolve())]
+
+
 def curriculum_gates(teacher, learned):
     if set(teacher) != set(SCENARIOS) or set(learned) != set(SCENARIOS):
         return ["missing/unknown scenario categories"]
@@ -121,12 +128,10 @@ def main():
         write("tamp-teacher.json", tamp_teacher)
         write("tamp-learned.json", tamp_learned)
         status("oracle_public_tool_execution")
-        script = Path(__file__).resolve().parents[4] / "scripts/eval_manipulation_tamp_oracle.py"
         with (args.output / "oracle.log").open("w") as log:
             completed = subprocess.run(
                 [
-                    sys.executable,
-                    str(script),
+                    *oracle_runner_command(),
                     "--native-root",
                     str(args.native_root),
                     "--output",

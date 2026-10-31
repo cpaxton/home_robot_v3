@@ -1,0 +1,46 @@
+{
+  "complete": true,
+  "controller": "0df050e487f1bad02b7323b595f3fb282e2c558d8bb1a1622046ce08abc34224",
+  "groups": {
+    "base/train": {
+      "cases": 5,
+      "admitted": 5,
+      "mastered": 1,
+      "tracking_and_settling_passed": 1,
+      "smoothness_passed": 4,
+      "failure_reasons": {
+        "mastery_tracking_envelope": 2,
+        "terminal_hold": 4,
+        "tracking_timeout": 2,
+        "smoothness/joint_jerk": 1
+      },
+      "codes": {
+        "ok": 1,
+        "mastery_tracking_envelope": 2,
+        "tracking_timeout": 2
+      },
+      "all_pass": false
+    },
+    "base/validation": {
+      "cases": 5,
+      "admitted": 5,
+      "mastered": 1,
+      "tracking_and_settling_passed": 1,
+      "smoothness_passed": 4,
+      "failure_reasons": {
+        "mastery_tracking_envelope": 2,
+        "terminal_hold": 4,
+        "tracking_timeout": 2,
+        "smoothness/joint_jerk": 1
+      },
+      "codes": {
+        "ok": 1,
+        "mastery_tracking_envelope": 2,
+        "tracking_timeout": 2
+      },
+      "all_pass": false
+    }
+  },
+  "all_pass": false,
+  "safety_promoted": false
+}

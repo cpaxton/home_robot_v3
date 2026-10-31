@@ -1,0 +1,77 @@
+{
+  "new_ppo_steps": 65536,
+  "this_iteration_ppo_steps": 91136,
+  "complete": {
+    "steps": 65536,
+    "promoted": false
+  },
+  "candidate": "logs/manipulation/tamp-pose-precision-v9/seed-64/step-65536",
+  "weights_sha256": "b9cebfa1ff427044796c92a8b360b0a1a2d48b52cec965f064e2976cb2f3f3df",
+  "validation": {
+    "validation": {
+      "episodes": 5,
+      "success_by_category": {
+        "carry": 1.0,
+        "disturbance": 0.0,
+        "place": 0.0,
+        "pregrasp": 0.0,
+        "reach": 0.0
+      }
+    },
+    "teacher-validation": {
+      "episodes": 5,
+      "success_by_category": {
+        "carry": 1.0,
+        "disturbance": 0.0,
+        "place": 0.0,
+        "pregrasp": 0.0,
+        "reach": 1.0
+      }
+    },
+    "curriculum-validation": {
+      "episodes": 5,
+      "success_by_category": {
+        "carry": 0.0,
+        "disturbance": 1.0,
+        "place": 0.0,
+        "pregrasp": 0.0,
+        "reach": 0.0
+      }
+    }
+  },
+  "paired_comparison": {
+    "eligible": false,
+    "reasons": [
+      "innate_mars:disturbance:240000: retention_lost not false",
+      "innate_mars:reach:200000: lost teacher success",
+      "reach: lower success",
+      "reach: ee_position_error_p95 worse or unsupported",
+      "reach: ee_orientation_error_p95 worse or unsupported",
+      "reach: contact_impulse_p95 worse or unsupported",
+      "reach: peak_measured_jerk_p95 worse or unsupported",
+      "reach: peak_measured_jerk_max worse or unsupported",
+      "disturbance: ee_orientation_error_p95 worse or unsupported",
+      "disturbance: peak_contact_force_p95 worse or unsupported",
+      "disturbance: peak_contact_force_max worse or unsupported",
+      "disturbance: peak_measured_jerk_p95 worse or unsupported",
+      "disturbance: peak_measured_jerk_max worse or unsupported",
+      "place: base_contract_violation_p95 worse or unsupported",
+      "place: contact_impulse_p95 worse or unsupported",
+      "pregrasp: joint_error_mean worse or unsupported",
+      "pregrasp: ee_position_error_p95 worse or unsupported",
+      "pregrasp: ee_orientation_error_p95 worse or unsupported",
+      "pregrasp: contact_impulse_p95 worse or unsupported",
+      "carry: joint_error_mean worse or unsupported",
+      "carry: ee_position_error_p95 worse or unsupported",
+      "carry: ee_orientation_error_p95 worse or unsupported",
+      "carry: contact_impulse_p95 worse or unsupported"
+    ],
+    "paired_success_count": 1,
+    "teacher_paired_time": 1.8500000000006178,
+    "policy_paired_time": 4.800000000001603
+  },
+  "source_note": "Actual original training sources retained. Later Cartesian phase/clock corrections are separately bound in replay manifests.",
+  "full_report_archive": "paper/data/whole_body_control/pose_precision_training_v6.json.gz",
+  "uncompressed_sha256": "45f8bf02a153679807f468e72d004c963603f1034485efb49ea606677a434a42",
+  "safety_promoted": false
+}

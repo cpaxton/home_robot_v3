@@ -1,0 +1,2912 @@
+{
+  "format": "emet-regression-v1",
+  "source_state": {
+    "control/assets/robot/docking_station.xml": "3e00fc48583e27dd18c5c6e2471979b1e47b2b973b85c4ed4dc0a67411562ccf",
+    "control/assets/robot/innate_mars/NOTICE.md": "1e1d8e600976d8fc3b7f4f2eb6559eb91e5d8598610df138acc1731dbc346fa5",
+    "control/assets/robot/innate_mars/innate_mars.xml": "8535ccdaddbe696ba2ee5e7b556205a020a9d866860a05df16d558940eb58985",
+    "control/assets/robot/innate_mars/innate_mars_visual_extras.xml": "4a52fbf5d07b6242115d5f185f83bd81070aa27ee26a4d90473a8781294ddfa4",
+    "control/assets/robot/innate_mars/meshes/base.STL": "e725a419bbe85a9346a0187aff6b9c1fd3bcf9cf6cc1f1c4164777134b31f5ca",
+    "control/assets/robot/innate_mars/meshes/head.STL": "3852748e253644f9e9d710e92d11a15fee06cc9eeb4ed0d595eeedfebc03bd55",
+    "control/assets/robot/innate_mars/meshes/link1.STL": "9eb892e67efe447e802009cbbeaf46c30c86d46c08563858c9d26f1cee286587",
+    "control/assets/robot/innate_mars/meshes/link2.STL": "d8fe401af1ee98323ff128eeaab64945533ccf6e5a836ae1252fb571b6d70182",
+    "control/assets/robot/innate_mars/meshes/link3.STL": "71956e0cd0b868c46200af5e1b0a5191207fc056e0878fbba9dffbdd023add40",
+    "control/assets/robot/innate_mars/meshes/link4.STL": "2f1c87f188ddd71479f30d2e20c488b3d7eb30b4d19d4aec572e70d4c0529fae",
+    "control/assets/robot/innate_mars/meshes/link5.STL": "e668681a8f62060382c73f11630a1a752b11332012791886b1e21bfceeff54d0",
+    "control/assets/robot/innate_mars/meshes/link61.STL": "b57b1b055e3d0bb8eda43ae23604219a1155c01f4fcecfea6d3560494280e40e",
+    "control/assets/robot/innate_mars/meshes/link62.STL": "44df6c24e9af8cc1bc5a0feb179d23c7039c590e45dff7e5a388363f79b5f0ba",
+    "control/assets/robot/innate_mars/molmospaces_spawn.json": "fffc446085228f4f1a1783fedabbf7d5050f2c8f496e70c5adbe223a5659ed9d",
+    "control/assets/robot/innate_mars/reference/arm.srdf": "72f67c20b8e090b09be9ac3688a88b06d09360d1ae43f9fecb9b9780d0cb8aa3",
+    "control/assets/robot/innate_mars/reference/chassis_support.json": "05b58956b294505f045b4a916f6a3b40e1199c64384ef61c7f63cd42fe64a7b4",
+    "control/assets/robot/innate_mars/reference/maurice.urdf": "3e1dadfa4e3e10085691962dfa06e3fb2e9508663f7631829c17307e4f077b41",
+    "control/assets/robot/innate_mars/reference/provenance.json": "fa9763d7d18b5d06b33287d11b6527cbf153950f5e6d62a14c9769855ddac75a",
+    "control/assets/robot/innate_mars/t_2ki2q578.xml": "74fc54315db8bd0e0a1080c09262e4fab59eacb0c2877ad3c50ae3bd7a5f10b7",
+    "control/assets/robot/scene_environment.xml": "a4391e7ad761aa79c5ccde265bf20b6ea6d90336a63383d634bc91f3f5c5d68c",
+    "control/assets/robot/stretch.xml": "f84efccb18a5aaf4378f76654341140a45a6640e2457c49f0aa100a2d721a63c",
+    "control/controller/manipulation/__init__.py": "3867df5eff56c05d380f3c8ea1e1aefff4d70e387e64fafd911ef43f633bc929",
+    "control/controller/manipulation/closer_look.py": "069bd1f6c09a01b0a1daff6287045466044138210489ef93d6f4ed2d967d6f46",
+    "control/controller/manipulation/dynamem_manipulation/dynamem_manipulation.py": "0c8b1d97d35e648264026f46a21621a9ec28b06f2dccae850cd888979bee3ab4",
+    "control/controller/manipulation/dynamem_manipulation/grasper_utils.py": "6062ad09da372f767620d383121654bb70c1c57bec837dd4411a87c2cfd97089",
+    "control/controller/manipulation/dynamem_manipulation/image_publisher.py": "ddd19d4e32e20df45e122b4dbc32667ed6541414b4f82f4a87dfc9be99d434b1",
+    "control/controller/manipulation/dynamem_manipulation/place.py": "e86e33a3b3cd4477f15e09934962997bd1844f7f0a4e547e86701226fcf06df2",
+    "control/controller/manipulation/kinematic_pick_place.py": "d1e31f505047f1c87b3f790d993d763ffc5c16b1ed8092d917b87049935aff36",
+    "control/controller/manipulation/native_inputs.py": "e304662f3635ac8776005864fca64fa2c23c744c3d704fd9ad5020cafc62a56f",
+    "control/controller/manipulation/native_scene.py": "404fc7cfdd96adce6b16ed4bb843e118a6fa2b03ebdfaf1c8f62b710d6d77af5",
+    "control/controller/manipulation/physical_pick_place.py": "7e99e506f70eb7e17366f1699dc5433c1f1ea3eba4e4443c59d10d0a78ec4e0a",
+    "control/eval/physical_tamp.py": "deff19474bb165a33ca09ec63e7aa0708a5ecd0c79ed20faf64333c43b41fa4f",
+    "control/motion/__init__.py": "627228d1da4ec1fcf495127dd8a17cdfc154a10d3d9170eddcaace6e6b0088f0",
+    "control/motion/aabb_arm_collision.py": "d3d3190387717f7ecb78d3abced63a566763f56a1098450bce9db935ccdafecb",
+    "control/motion/agent_mcts.py": "7f7a7eef6e4e38e2e9e7eb5c090e300c4706178133360a376b293e1b3f4995fb",
+    "control/motion/algo/__init__.py": "239164c88ebd81c494b1bd0e67254edea795c9364a57792051bcca2ec63d00d6",
+    "control/motion/algo/a_star.py": "3c39ae9d57c44c1b05e1dadc6e6c46adf08e22d0590559806349b4936a4c9e63",
+    "control/motion/algo/node.py": "f0f0b02a487e08c8578c310ade0aabde16e235d719cf32dc6d0f13c0fa30e593",
+    "control/motion/algo/rrt.py": "23287d5010ea9eb87dd6a08859bc05b1dd6c06b8febf0ef15b5b4de77e202eb1",
+    "control/motion/algo/rrt_connect.py": "84390b19d04b6f17086c318a929f7abe730195f063c1789e2b1c2d138805b0ed",
+    "control/motion/algo/shortcut.py": "009b98197f26fe6467c632d6b816b01c24aff465a8e68f353fc399f8a78484f0",
+    "control/motion/algo/simplify.py": "1e10dd32d285f3d6ff3f0bb88910faed93aff623b66b48a5e84d5b8d1694df07",
+    "control/motion/arm_manip_profile.py": "2fb08fef144c87f991c906b33a1196ca3f16eb9dd358c56e1d63bdcc1fb12684",
+    "control/motion/arm_rrt.py": "bee9d28b4754f39d7aa977621bd80600e12657ac5caf3c532f57a0fb7d626131",
+    "control/motion/base/__init__.py": "5f16e1eb851328923b2994601c9672dbdcb622dd32fcd72e3effd225f5621d94",
+    "control/motion/base/base.py": "e0cc759cd4328b6859d7d6c70412fdbd4f747b8d8cca8c9a7419e94e095a42b0",
+    "control/motion/base/ik_solver_base.py": "28bc9d5dc51097587ef7d9cdd39e8161601120b5c66d75c5ca4380ed67b6f6dd",
+    "control/motion/base/space.py": "23f499f52c93df19400f486bc94b8a2d3e8e4422f2176b923e68e85c28230bfa",
+    "control/motion/base_goal_rank.py": "5084824c95765725e2025391bdfa0280b559cb61e0957e53731caa31b24fba75",
+    "control/motion/constants.py": "e79e7bab1e91ec5e33f42bb5450594eaa9820511aa34aef24f77c2b3a13a5bd4",
+    "control/motion/control/__init__.py": "824c822b380186ad14996ee4f1e53c57cebe11f2c08022a3d5bcd4bc861fcd7f",
+    "control/motion/control/feedback/__init__.py": "824c822b380186ad14996ee4f1e53c57cebe11f2c08022a3d5bcd4bc861fcd7f",
+    "control/motion/control/feedback/velocity_controllers.py": "f9711b8f12ec5b7ca1c41e1332fdbb948e003001885af5d406833d9d3d0c75c2",
+    "control/motion/control/goto_controller.py": "e95b871b4cb6bdbe3eafa1be40ba3e03734507d7304966f5e3d6a93774eb7f40",
+    "control/motion/control/traj_following_controller.py": "6ba470d045457e16da6377052e1ad6854f2bb92d2d6a22181eecfabf42c0dacc",
+    "control/motion/conversions.py": "b6307baa7cc391fe978d0547cb2dd0255a0652a38d4369908770cb935af9d901",
+    "control/motion/frontier_goals.py": "ea2fc1dd96a66ea9bbd02052feaf172c0c561a9a19a59b21fa5949b7330aa4a5",
+    "control/motion/grid_coordinates.py": "c2ae78a5555a2135edc57b655db423b3959f28447b05676d8d21c20bb876065f",
+    "control/motion/kinematics.py": "9f679bbbe8d98ef61975a6e6888956cc83eac7a88cb5242c853a57b5ca8aadd3",
+    "control/motion/mujoco_arm_ik.py": "313e0e09d7a8281fca608ab4bcff507f8fb633c01590b04ac738550b2df76b0f",
+    "control/motion/mujoco_collision.py": "c0dbeffe9dd232e5c78dd134851b451a6eb5a99ce67d0e09f8563931eeef4fdf",
+    "control/motion/navigation_sweep.py": "2a553a4c9631a28fd776b02e609d398be5097a9654d8913fe3c481ba42a702bb",
+    "control/motion/pinocchio_ik_solver.py": "f776d1f74b674215e74ae4076f87dfee914a8ef97e901c6129c7d3f675bbf29a",
+    "control/motion/placement.py": "9184873daa769c92c84d3b14009f4e4d600ada5847c807e182d7982e5816477e",
+    "control/motion/placement_geometry.py": "83dc90e667e4f81e602c247b5edb945c2923f4937aab31a8db1345eb25627487",
+    "control/motion/placement_replay.py": "06ff34147484b567509e7ab0541f3d2897a51adbb3367f87185ce93ec82e6aeb",
+    "control/motion/placement_surfaces.py": "98600279efd68451ec091fa34b64fc3d95a215b5ffd399a1da15906f999bf75f",
+    "control/motion/robot.py": "4e1926d18a5483b078a46ed9179476a84fe62a3d80f89ea2ad454d85f8398346",
+    "control/motion/simple_ik.py": "af9c4c9a2feb2c66c2a89d8d4331a8f3d6d40bb1bb70ded81dc9cd8d1d7c3b3e",
+    "control/motion/simple_ik_equations_numba.py": "f79e3130d18a1e899f90bcbcdec13b2e2f93c27e20feef389f6a478c1ba484cb",
+    "control/motion/utils/__init__.py": "3867df5eff56c05d380f3c8ea1e1aefff4d70e387e64fafd911ef43f633bc929",
+    "control/motion/utils/geometry.py": "cf20d151542f162c645e3ac8469563a4e6b2d51e534fec574b2ba592fcf1c952",
+    "control/motion/utils/simple_env.py": "3592c7229e3f220e619d3ff23612677855062201f54884fa1ae94988b0eb406d",
+    "control/motion/viewpoint_selection.py": "012f7fb23a751887ff68eea409a8f92e793e5565e62aea0bb765e44f8892db15",
+    "control/motion/voxel_arm_collision.py": "4cb99647badbe66785581f33f6d5b9c76704c06bd2cddc5c1a143403d6867ad0",
+    "control/rl/__init__.py": "fd8747eb2e1726ca596569f9154471d9cb7282c555236fe2d38ed2af4021b735",
+    "control/rl/__main__.py": "1fa6f2731c91b3691e168ee8c090b9dc9719b09299af133763fc50aca5383d4e",
+    "control/rl/arm.py": "5931a057a5c1d86ad811ca8fa59dc00dd812a4796ce7232f9a64bb9462dad38f",
+    "control/rl/audit.py": "f3f9c4de94b10621f20f6a2f67f0369cd1839753ac1891684ee3857e932f2e21",
+    "control/rl/base.py": "fc14e81f6881737e4eee8970317feea7fa9f8280f86fafe5a1210ddb9838ad51",
+    "control/rl/bootstrap.py": "9cf0b903247b94b724f753288c3ae7a3ae115de40b88de4fe0cce5c31716209c",
+    "control/rl/contact.py": "7258b978a81f9f7a941efcaf5f8b05609abeb2ba516662bf0c33cb2a5d497039",
+    "control/rl/control.py": "f2a0bfcaac71b03762e6060dfb1818d3a13086ee18dbd97082ae3284d572166e",
+    "control/rl/coverage.py": "258e5f9735beb3d2768f0658c7d59f1671901a8132ba6574a29c478566ddc189",
+    "control/rl/critic.py": "6a82b9d405fef8dfb903b6225e22c30629bc99e330a9d4b81636ae8e2f13d191",
+    "control/rl/env.py": "bcd6231ef2f59be80f09155069cf78237a46f9add2a807ed44c6e6d8bdea281d",
+    "control/rl/manipulation/__init__.py": "b1d021af151c366fb3569bf9dff91bd26a911b81a9d61fab8da49721a9242cea",
+    "control/rl/manipulation/__main__.py": "a68477564b4dc4c580c9676be6f01cc174fd545443dba0fe61e2770eaebcdfd2",
+    "control/rl/manipulation/base_benchmark.py": "470333af478bedb851c9f8e9eaaf8d4376a2c51d6b8344588074da3efa59feed",
+    "control/rl/manipulation/carry_benchmark.py": "e33e3858667d61260f5aa2da3712c371bec1839c276a3f626c96f36b3897e09d",
+    "control/rl/manipulation/carry_training.py": "21b9180134176d8a85c9095ad72c7ac917d69030a44ec5a65c4c635b35347633",
+    "control/rl/manipulation/command_runtime.py": "4121671a7e75b57c40e7224781e973552052c1ab08f137c2a8af1996acec71ab",
+    "control/rl/manipulation/control.py": "bed07f6df044c5aa31ffe9bf9a530aa8ff8a9568ff4c61af997c10b37bdc7593",
+    "control/rl/manipulation/dynamic_trajectory.py": "e41e1f1ee80849f4d049db02427d63a1181ce8e2382b96b364b02078a326b4fc",
+    "control/rl/manipulation/env.py": "f5f3b048908ff4b3a6d706809ed77265dedf2dc133b2a4c2406a8cef14f93b86",
+    "control/rl/manipulation/evaluation.py": "c559cac3a03217efecd16466dddab6b6d3e9ae27243a0f38574926db8c84ffa9",
+    "control/rl/manipulation/fixtures.py": "baaae9df99435b2713c46299c3610bae319a581496b7dda6da7d801028659503",
+    "control/rl/manipulation/grasp_setup.py": "9db8f39bba30bcb3e5f863081a5b18dc331dd7a3ef3a5274a5a8354e7f5f8f4c",
+    "control/rl/manipulation/held_object.py": "9875fef7a8de43859945b0466b86327429611a9b36dc5d3a55a5a2a3d3967aef",
+    "control/rl/manipulation/hold_audit.py": "9711458c42eb5883cbf522dc6b9abb0d7e08f3f6d626db240dff732b8f832cab",
+    "control/rl/manipulation/imitation.py": "eb301820f1a3692f8c8865ae6ec66dd98a17ca18d14be97461a93ddf1e8a59bf",
+    "control/rl/manipulation/integrated.py": "13c8df2bdd7940b5d3957d4bd23977b7698fea23ec60ea7aa035f36507980ca9",
+    "control/rl/manipulation/models.py": "9ba165454f91e4a165510a61b7c9b6c07c26ddc12265590ab3ae4901d2c08b24",
+    "control/rl/manipulation/observation_layout.py": "97f590810821599609a1d1068641f9ab0040e0fb0b7bfa328fb29f3803ba39bb",
+    "control/rl/manipulation/oracle.py": "09fb2d61194e6b143531c79e46cf49c033d7d6e365ccfa15ae81931fee0c5603",
+    "control/rl/manipulation/payload_assets.py": "5b1f0eb2efbd9af135894443c6d39bf1ab5419097531d70f5e6e8e31c8bb10cd",
+    "control/rl/manipulation/policy.py": "1d1e5bf3f3633eb7ea0dc2f01df197e8d8a4a4e71258b96a54910d636f66c3d2",
+    "control/rl/manipulation/pose_value.py": "beda169d04e729262d7f6a4e6c36d64dd5fc5c450e78dfa813702793bbee87cb",
+    "control/rl/manipulation/post_training.py": "472b86da36378d1654b1d1bd1f63a8f656c4220b31760b37a0a1e895f849c97d",
+    "control/rl/manipulation/profiles.py": "911acb00c84f16634e3413b992d3ae1900ec991507c94f8b8e91f7760e148b86",
+    "control/rl/manipulation/retention_training.py": "fdf4d376636d52aef6becf4c68b16ffa72b1e05e806e48e30c3eba3a918100b0",
+    "control/rl/manipulation/reward_audit.py": "a2be3c3852dc71c8618aa6c62c9310ad2dabed9c9fb7ad440310fd217b5e47de",
+    "control/rl/manipulation/risk.py": "5cf5485d750f1717b8a3e632cab50d3f0cd31076ef884d2b442266cf3e014f42",
+    "control/rl/manipulation/safety.py": "a1933653d66bb3daae2835e965398df427358ab5469d104f4c5a08a60aa7d4b8",
+    "control/rl/manipulation/support_audit.py": "6fd349215bb683c6d4818355a892d2db2ce7a968c4b24490a7a9bd6b878c7d04",
+    "control/rl/manipulation/tamp_benchmark.py": "869b7ce09ce9ce638c73cf8c0d0d4e28da59ed9f1ecfb6b8492df1304489329c",
+    "control/rl/manipulation/tamp_cases.py": "fa768562ab89ed05925242fcda1a5882a1da5b240f8bb5bbd86b0d8b3d2fbc5d",
+    "control/rl/manipulation/tracking.py": "b83bfb970a3c4dc94b7f09e4a1e87d0071c0b74ca7cf2b6ba64ab755fc5ac241",
+    "control/rl/manipulation/tracking_audit.py": "6d78cb1258e444e244d555016a3bec3e76a53871221b480d536be546674c6d0a",
+    "control/rl/model.py": "a4a1354b3867f03b092d9158ff1bc7fa7ec83586ca7abd37a8ff053e53891453",
+    "control/rl/networks.py": "c58e59cf89945af1341eff23383c14293dfe4ed79029afde5037fbe454e4ec99",
+    "control/rl/policy.py": "ddd1e6ba0fdffc8dd5821618f36f7d9aff8cd4c5c47dc3625d2cecb6bf2d0406",
+    "control/rl/pose_targets.py": "a2d1a970ea2ea52ad8b0f6a2c99d88c86fc921dafbe4386d08b71c95cdd56d43",
+    "control/rl/profile.py": "9e02df85eb4f122e4ac1cf033c4caa36b9d5be2c854d0f99ca33d46510f09577",
+    "control/rl/reference.py": "213f1c3b882e339bc0361fe7c621347e77b443a30d66a2a415e8edc751b2fde6",
+    "control/rl/refit.py": "f2f4d58abed823727dc49e0829b2c17f5154ef07293dd7c1dae7da04325dc8e2",
+    "control/rl/regression_gate.py": "f92e2378e589e5cf0c8f3e0ff578fea5924b448ac9867d80a7a9673f5dd8ba8b",
+    "control/rl/residual.py": "5a04900c56b419e4fefa6bd4380ea315e0ecd6281f40291892d87de65afc78ff",
+    "control/rl/robustness.py": "f864a9f3298dc2df038ca3515a445db7860b286d48de49c9cb04cc8554fdab51",
+    "control/rl/server.py": "cf69d1a87d32c39a1b44310476108ef5a33590bd6a1da29c6476c67eb2a1678e",
+    "control/rl/test_drive.py": "e80d132eab78b3a9b146934843fbd827fdf8b8fee5e983cf63bfff7e39077b47",
+    "control/rl/training.py": "4af1015abc0a488fc379a9087e0e2c12d42585a3c43cd0a4df408b1df7e0e338",
+    "control/rl/trajectories.py": "31545e53a2bd2bb9773fde0cab715ace31922e18f3316d52fcc3c09352e9588c",
+    "control/rl/transformer.py": "b7aa84a64c3f0dd76b6a647af23617c3a38c4e2bec76500d62e0c861fd610dbc",
+    "control/rl/waypoints.py": "bf7be5ebc76301d46da3e642177e1cfb600844decee98ae22620bb9bb29b77bf",
+    "control/robots/__init__.py": "bcd3da62da771c642ac3c3ee353fae6a14c956f37e6a88e7bae5b624c1e4e5cb",
+    "control/robots/base.py": "92b6b2fd557e52a5f0638d01012b80319cc731648274287876548f40589176be",
+    "control/robots/footprint.py": "5466857b9e23237f9821ed74b3fdf85911b65d8fe03a43731024e0e172a83de2",
+    "control/robots/franka_fr3/__init__.py": "c74675d245bba7653609cf95ddc0fa8993a7657f6b588dc78d6966967940a2ba",
+    "control/robots/galaxea_r1/__init__.py": "06b752161e15cf7b2d40d54908734c4c46d3b2a697c33634fa010f1b8a8a9215",
+    "control/robots/galaxea_r1/sim_stationary.py": "4345966232c33e2851724e905143ba5e0299d0a54818fa5c02e5e3d3e0fef8e5",
+    "control/robots/head_capability.py": "76ab8f959b7a4ff3c23cc9cb5ce5555d86166d471b50320fd85daffb6d877b11",
+    "control/robots/innate_mars/__init__.py": "7960ef65b89e60fc6f960a5a41e7e9a32d4686ea31830c7c30548ed6b181a6ec",
+    "control/robots/innate_mars/chassis.py": "ee9373ef44fc5de88e27d4985311f7f92a27fd3e21363058cefd438f91aa80bf",
+    "control/robots/innate_mars/control_session.py": "5870f6b3f11c8cfdb6ed047a71030e61f632046a38a3bb85fb6ab56715525fff",
+    "control/robots/innate_mars/dummy_client.py": "332d4710a82ce3b3cff91974582e99793e64fd136d58f3a965a4f1ebcd45c246",
+    "control/robots/innate_mars/emote_backend.py": "a830f20675cf59943417340c44eee49c7c2d99f0e3605a1d203af5079d598104",
+    "control/robots/innate_mars/head_kinematics.py": "6eaefab297668d799854931568ccccfb70c5037af5374a10886b91fab2c852ef",
+    "control/robots/innate_mars/motion_boundary.py": "aefe8821a761c0463ba6bc5a64d8a8733aa8d4c4ded2d329fb4ebe72a1979fb9",
+    "control/robots/innate_mars/ros_client.py": "95699538778c00f61ff09c6555493fa2d6c319c0d3976256c82be5f32e9043ee",
+    "control/robots/mobile_aloha/__init__.py": "788d13d6917cad4bdd3ae251da03e23e27bca578836a993f03a30ed769d950f0",
+    "control/robots/nori/__init__.py": "13e0964f820493d8313a96b31e25d0c953d379bf8c915cef26b8ccfb8192dce8",
+    "control/robots/rby1/__init__.py": "79840a21ccffc380355eac2ad089ff7963801b9b034812cd96702e94eea4e34e",
+    "control/robots/sourccey/__init__.py": "7fae96deca59c5fcbc13f4beaf9cac2f143082c6672515aad5656ec44d4262e5",
+    "control/robots/sourccey/emote_backend.py": "aed8810f56a3a782f49bb03be70f432ba655058ad0537552d3bd4cc7e5d79859",
+    "control/robots/spec_robot_model.py": "f88f76a8c80e82bfa84ea60197cd1c1d039a1ed3df79e8c94128d590aec934be",
+    "control/robots/stretch/__init__.py": "ffa2e2b7085bfd9aef6fc02b1837fd6790eca1bcd05f96db1cd3fda0b1230e3c",
+    "control/robots/stretch/sim_stationary.py": "a8f1ef1cc1ade25a4d7403da23d30ad86f740d11363fb66e785eb4a2ac3f9451",
+    "control/robots/xlerobot/__init__.py": "fb060854305ed3df44a6090963699691c396fd17a73f9bdb034ebd1a408ca12f",
+    "control/robots/yor/__init__.py": "3720dfb788c7bfb4d7786107aa9590e788c4ca763db69fb3dc6bf1a6339473a6",
+    "control/simulation/sim_object_placements.py": "fe8c0b11c31e9731021a9a943a2fd150c08369bd69cf3f21ce6e945f94e17586",
+    "control/utils/assets.py": "384085ced638f51a5208565d723577b31eced4188f641132825124605bfb65df",
+    "control/utils/logger.py": "f4a7e195cfd54d0146a1900c59b8790a2a7204b2cc043cd1de924cae32397877",
+    "control/@runtime": "549fb212e22c858dfb74c184b72642f056b184c6472eae95fcf74fa39e09276e",
+    "control/@canonical_suite": "5c7c8fd285f9c1fbad294b5887ed74c5d09ae400afb4fe1ae7427307462c5da2",
+    "control/@canonical_regressions": "f3143e2ab37cec866d1d8defbd6ce65dda90dfe8c9e66a5ec9362e741b9fb457",
+    "src/emet/core/abstract_perception.py": "a398c4da0e0128905504ac28aaaff7f6cb985ef68f8c1fd10e4bfc8cdb7e68d0",
+    "src/emet/core/interfaces.py": "0dfa6363ab029b5ed8762556d926065ff98dd59e01773a897ab0d4cc3ca9c12b",
+    "src/emet/core/parameters.py": "c11ab56fb329021337c8a7e3bc1cf9ad5d7b18cf94977c5b79dbb77da787c88b",
+    "src/emet/core/command_client.py": "104b585284ef1ddd81d0de924e8333870e6851c2a88a48d48baa57a78a632d05",
+    "src/emet/core/client.py": "17645fa84c23e0e278f5373d8d43484d019cbf61ebcbb5cc4bfa2995b6654214",
+    "src/emet/core/status.py": "7f1d75d2906958661e349a5473da5fedafd53af3b0732c34db2ff9375c3e2a6c",
+    "src/emet/core/server.py": "ebeda64ea453485d4cfbc465bc9dae518ee5c7fae1fb2b59cae94ed2fe087c50",
+    "src/emet/core/comms.py": "ba9becc3e014bd4a62dc1cf5e9586f7d449ea4b7ed83c104c8457ea8af466026",
+    "src/emet/core/command_tracker.py": "ab436d7c57195654427b7a60e0aa732d7f86ff514ac2d6ff78ff711858fc85f6",
+    "src/emet/core/evaluator.py": "9c0ec2dcab8c8bb33c7e291e2b41ead9fe7eae56af043a3fd545d7d7c1720311",
+    "src/emet/core/zmq_server_env.py": "b3b96d8597cb611b96cfc3ca6bcc5c6990eeaf2d681c691d66f908d963caac93",
+    "src/emet/core/navigation_result.py": "b384e180372d754e7158c404fba7961536b6a49bbaa48b51a15d751e154e25c0",
+    "src/emet/core/__init__.py": "db8b5fd86b7add5abce89b4ff0b9c3cb41723e9dda4ee8bb10cbeeb74d6acbfe",
+    "src/emet/core/task.py": "2fcfa9128868ca8ee8f02b9c30ea423f7afe6cd65ad96ab59ee021f1ceabb17b",
+    "src/emet/core/command_runtime.py": "b4e6b131b51d9c0c8b9264f1b9e0c91e6e46d49bdaf4a857c8d9008b8a62a615",
+    "src/emet/core/reactive_runtime.py": "4ba45aed2b48304b2a3d3d2c9923303df7209321929325c60862c3a7ade108c7",
+    "src/emet/core/robot.py": "8305f5faa5276aeb3bcd9be8f7aab51dd1bd64e6c4e80e85e3d4a348a1a8eba5",
+    "src/emet/core/zmq_protocol.py": "1a5cdf25918a5eab8b91b329ec8ed0cbbdd3029395f147cedf431c63939e3bbd",
+    "src/emet/core/zmq_obs_codec.py": "35b7d518eeb09839d491381315f1d1f6b6170d456e09ecdd0fb21477c57fd008",
+    "src/emet_core/emet/core/abstract_perception.py": "a398c4da0e0128905504ac28aaaff7f6cb985ef68f8c1fd10e4bfc8cdb7e68d0",
+    "src/emet_core/emet/core/interfaces.py": "63a6ed7eba6cda34c6f8dc6548cb792dce74c90bb84acdfd1fc82f721c52a0ed",
+    "src/emet_core/emet/core/parameters.py": "865e7310dfaf432c7661e49bb5fd7701e58bb13d4a50b0a8576cb62435375746",
+    "src/emet_core/emet/core/command_client.py": "104b585284ef1ddd81d0de924e8333870e6851c2a88a48d48baa57a78a632d05",
+    "src/emet_core/emet/core/client.py": "17645fa84c23e0e278f5373d8d43484d019cbf61ebcbb5cc4bfa2995b6654214",
+    "src/emet_core/emet/core/h264_zmq.py": "446cb248caca9c65b833e38e599dae23102dacbfefa6c8b078213d6234f4155b",
+    "src/emet_core/emet/core/status.py": "7f1d75d2906958661e349a5473da5fedafd53af3b0732c34db2ff9375c3e2a6c",
+    "src/emet_core/emet/core/server.py": "ebeda64ea453485d4cfbc465bc9dae518ee5c7fae1fb2b59cae94ed2fe087c50",
+    "src/emet_core/emet/core/comms.py": "fa41b9f8419065e1ab0dfcbcaed5600c0eeb041a41462460b15e40fc47c08b5c",
+    "src/emet_core/emet/core/command_tracker.py": "ab436d7c57195654427b7a60e0aa732d7f86ff514ac2d6ff78ff711858fc85f6",
+    "src/emet_core/emet/core/evaluator.py": "9c0ec2dcab8c8bb33c7e291e2b41ead9fe7eae56af043a3fd545d7d7c1720311",
+    "src/emet_core/emet/core/zmq_server_env.py": "b3b96d8597cb611b96cfc3ca6bcc5c6990eeaf2d681c691d66f908d963caac93",
+    "src/emet_core/emet/core/navigation_result.py": "b384e180372d754e7158c404fba7961536b6a49bbaa48b51a15d751e154e25c0",
+    "src/emet_core/emet/core/__init__.py": "db8b5fd86b7add5abce89b4ff0b9c3cb41723e9dda4ee8bb10cbeeb74d6acbfe",
+    "src/emet_core/emet/core/task.py": "2fcfa9128868ca8ee8f02b9c30ea423f7afe6cd65ad96ab59ee021f1ceabb17b",
+    "src/emet_core/emet/core/command_runtime.py": "b4e6b131b51d9c0c8b9264f1b9e0c91e6e46d49bdaf4a857c8d9008b8a62a615",
+    "src/emet_core/emet/core/reactive_runtime.py": "4ba45aed2b48304b2a3d3d2c9923303df7209321929325c60862c3a7ade108c7",
+    "src/emet_core/emet/core/robot.py": "deacd0fdac02231daf56461b9f183207ec78a159b2574cc713c6f3badb0aa412",
+    "src/emet_core/emet/core/zmq_protocol.py": "8fa7226257de53d22102565e0e6d593770a701325fd85df28d69b685487a1911",
+    "src/emet_core/emet/core/zmq_obs_codec.py": "35b7d518eeb09839d491381315f1d1f6b6170d456e09ecdd0fb21477c57fd008",
+    "src/emet/controller/task/tamp/mars_native_adapter.py": "a22195a2ab41f96a184204c12badf8c55bffedb8a4ec18d069dc17e01a59d227",
+    "src/emet/controller/task/tamp/task_session.py": "89769391ea5593b6996344b7860d2dca6d6e0e4ae998d8907796f30940948487",
+    "src/emet/controller/task/tamp/grasp_frames.py": "a24bf66c4c30ddaf8533c33ad3af33d487229b95b4097bc5c6d764ce0aad9bd3",
+    "src/emet/controller/task/tamp/task_contracts.py": "2aefe3567da05118f7f3867a5471171ee08954c4c8d51b9240662524c78fba00",
+    "src/emet/controller/task/tamp/smoke_grasps.py": "385fe383cda4e9b2721f3412ab30176155e278df3194e05c54256405c98bd1a9",
+    "src/emet/controller/task/tamp/task_mcts.py": "7c596aa5f55ebb37f10627dac510c657f8e54d33c8ba5b2d04671ef5e1ecd63e",
+    "src/emet/controller/task/tamp/agent_bridge.py": "9812304ec6070ebf9e1babc80c08e18a798d102ac902731c6c961363ab342d6e",
+    "src/emet/controller/task/tamp/task_budget.py": "9ef9edfc57f64fd3c2551d8eba7d9a4b71f26d2e75d50cdb211436078a8039d2",
+    "src/emet/controller/task/tamp/task_planning.py": "e3cc486fb5e66999b3fac18309d26fb90e6f016919c0c42af5c7aa1683374064",
+    "src/emet/controller/task/tamp/native_adapter.py": "8da6170a7e704b8162a3e4f414131625f5b73739a525e3745802de672f2ff957",
+    "src/emet/controller/task/tamp/api.py": "b90842b86acb18c9a3a9b5696dc3372a23b9890b7ae1e8bbdec73494a20717e8",
+    "src/emet/controller/task/tamp/observed_discovery.py": "e1a1f8efc24a2400c7ad14072b974154b36d3280bdbe187cfded1c31425db3b1",
+    "src/emet/controller/task/tamp/__init__.py": "cebb23f1d48fd8837d5919b061d9dc44e63c72fa902e23b089ecd394361572e4",
+    "src/emet/controller/task/tamp/clutter_chain.py": "032043f497c889214c8f8ed1594599c3de43279b6ed79bf761c26c41768a07cb",
+    "src/emet/controller/task/tamp/transfer_provider.py": "5e146e12022542301528d0605344326b9001e1173475a757bf627ca662a0678d",
+    "src/emet/controller/task/tamp/mars_sim_robot.py": "d5969bc9c406a0d964f386699407dd96762a8e192b10b9726622d5817e5091bb",
+    "src/emet/controller/task/tamp/native_transfer.py": "ecae56920e0007c112b0f13f5a13c3cea1e4962a2ea5deab57b3e0716047ca07",
+    "src/emet/controller/task/tamp/task_search.py": "c91022abea6a62351f6acfb5b51013addb6d8e4a446da98de4d719d5f17818ec",
+    "src/emet/controller/task/tamp/articulation.py": "199cb09762862963b1501ab800019047224960e2eb8e47fc74d5732a37a25fac",
+    "src/emet/controller/task/tamp/mars_transport.py": "5c3f87079805525e17d55f92f680a3141744831998ca0ed33813587c0ba77955",
+    "src/emet/agent/loop.py": "af955eefcdc21ef6dd78cc14dba5b00384cddc146bbae467f56690aecca4ae5c",
+    "src/emet/agent/env_flags.py": "1e2c3c5ad84010f410755677593eebf3a4ed9c3befb15ef2f60cc7e211ce239e",
+    "src/emet/agent/model_debug.py": "c805fd2a2bf594b51b1682df3994cf4e757bb616dcdf31c754d26f60b7aa0576",
+    "src/emet/agent/__init__.py": "3566877ce835d23b54475ad795bb527bf2e8662ad2500ef8291da9710e0a2e01",
+    "src/emet/agent/camera_debug.py": "e6449bd45a0bfe5c29c737e300c2a24ea0dbc0155bcbcadb7273cfdcb94b14b9",
+    "src/emet/agent/face_toward.py": "f4d8467dc8c25728b6bc67758c610570f0e4efa65ae70a6efdd4e458b23a5cc1",
+    "src/emet/agent/thinking_status.py": "c1df5e75d60dc4433de88a843e5acc25c3af7260a8cff5171ec849c14c38aea3",
+    "src/emet/agent/tool_outcome.py": "be99c23a67fbaa18dda1a9f4dbd74087f98789472ff5f3b14752e70a563a7a25",
+    "src/emet/agent/prompt.py": "56843fda71344ba1713d7a7a15b602db860a507b03cd7b76740cab48d6cc5d92",
+    "src/emet/agent/tamp_session.py": "e06144b45e11c47e3ee0bd8db233e9af94c9ce471560ba1292db38f974adbb30",
+    "src/emet/agent/tools.py": "47611f27b1b2a3e7a43a3409664c78c3280dbea87e676c84d5b6772d612ed4af",
+    "src/emet/agent/skills/modes.py": "390d3fd1ea25a2234344fedc85204d1b86ef48bf11f8810e126e487fb6c05a26",
+    "src/emet/agent/skills/specs.py": "47c7281cccf055613adad4abe63be05207f14074efa869844c991dc3061a60a4",
+    "src/emet/agent/skills/__init__.py": "4829dc99ae31b2545fe35591af6768395469c46445e8aee8627fb22fd2456a23",
+    "src/emet/agent/skills/registry.py": "82550d8af12b790bd4f784a705b3be3e92132482d3d9a06956a074c5e0a6982d",
+    "src/emet/agent/skills/eqa.py": "df314a72cd79d35ce9860445971f68f02fce53a21151eed9a51de165ec8318d0",
+    "src/test/controller/task/tamp/test_agent_bridge.py": "74fed2114ced55b741f4b97e535f0a0253b7b76e479ca04eaac00a413e655197",
+    "src/test/controller/task/tamp/test_api_contract.py": "d94dfd3f48487a535c43674a24e096ead4bc177652b07053e91f4d09ab74ec45",
+    "src/test/controller/task/tamp/test_articulation.py": "247dd888b3aa8e1f22f5fb74aaf10c74f0397944f15039e81fb31aa081cd2f96",
+    "src/test/controller/task/tamp/test_clutter_recovery.py": "80e17f658692db99d24d4b648d91d2c754a574ee01fb6f99c332bbb33b391705",
+    "src/test/controller/task/tamp/test_grasp_sequence.py": "6bac2b822a657deb420a019e6de7bf626ba651d344b26e89c882af6a53012277",
+    "src/test/controller/task/tamp/test_mars_native_adapter.py": "35cba7ec7c731b9c087c9d9d55891ec3586aab9f58e9ddb393a8799365c57feb",
+    "src/test/controller/task/tamp/test_native_adapter.py": "0d69e53d3d3a7a36c59d490eb013aa163bfaf4b138e9b7a21fdd8c8a794aba73",
+    "src/test/controller/task/tamp/test_placement_evidence.py": "f697e9860c9cbeea2b57c93ef60d3240dbebfa86123484cd918b5599c9d1a65d",
+    "src/test/controller/task/tamp/test_transfer_provider.py": "48995e65da4bade2f336916060319291c0f114dc91cdbe141bf6c1daecaef434",
+    "src/test/core/test_arrival_monitor.py": "07085c030efb065a7f349a40a98f54dfeb3bdbed0c01d8294fe47d7f14a15cc3",
+    "src/test/core/test_command_runtime.py": "f07cdfb1e60e652dc150910862b38b008ed49315bb2193d9bfa0f6d082ecf95a",
+    "src/test/core/test_command_tracker.py": "0411b34dddcbd74fccb7ab6c041faac4fdfbf7c1ac297c54cf253951ab7977de",
+    "src/test/core/test_image_timing.py": "d77f4ce4680277cc4c532c32b0b81350ae0e594998512c60f48b1d769cfee5c2",
+    "src/test/core/test_navigation_retries.py": "7bb60ea9be595804abab4e3975663d14e8118dc305e17032148ef6f9a40086dd",
+    "src/test/core/test_parameters_setdefault.py": "ec403b5027f1b818e55bc1d5f8ae70285f20c05191557bc001e7b7d7150587eb",
+    "src/test/core/test_reactive_runtime.py": "4cade6f75b9be0526e649928c0dd6c3aea5e5a4a4cfe61690615a2a02d4b7077",
+    "src/test/core/test_runtime_package_parity.py": "e037b4ac2d486444a2697d7a1ef713ff2bba7bb7f968c2af01daeaa99f2d188a",
+    "src/test/core/test_task.py": "839702e81f9a679c38b13537bf8603fd0347a3f3746648b2809cba41efe2bb02",
+    "src/test/core/test_zmq_ground_truth_action.py": "14f44a9bac0d4eb85f1d975ea768c155bff2b51cffd1cd692849fe1e5707cb0b",
+    "src/test/core/test_zmq_obs_codec.py": "2a9be7394bb117bc5271803086dd12cb5ff1181f7622a8e4f7efe4dcb35b93af",
+    "src/test/core/test_zmq_protocol.py": "cba9c94b3c19738bb8496deb5eab4a69a53a22fafbd9671db697678a217b7c68",
+    "src/test/core/test_zmq_runtime_parity.py": "edf48ed05672f356800e99d40937ad0b8292c0af2b8afab70ed5a31b99e6e7d8",
+    "src/test/core/test_zmq_session_metadata.py": "7e97d5271a91ccfe2d09b70f1e64f32a3be21ee6228924f1b4ef0fdaf5f3b10d",
+    "src/test/eval/test_mars_tamp_agent_driver.py": "d514aba46f87f6a5e3de124bc4c378a493c21acbe5725b8c649a910e4280cccf",
+    "src/test/eval/test_mars_tamp_control.py": "08371f055349f076ff2ea5d7808dd5c81b4651ff17aad8b20f8ae00999398abf",
+    "src/test/eval/test_mars_tamp_sequences.py": "3ed4d8b175d5312de24e5b9636328ec48c5142f7d4bae542d0fbf465798c0281",
+    "src/test/rl/manipulation/test_acceptance.py": "16a5abf3d5ba5f06bdacff4bc4be6b877149a5e4b25df842482eabd59e5b300c",
+    "src/test/rl/manipulation/test_base_benchmark.py": "3cfce7b7a364e706c18f7845ac615e1d547cf94800d1b48af77f78515b5e313d",
+    "src/test/rl/manipulation/test_carry_training.py": "750d8afc2b4084f4cd7a9c213e75bd1a2d8e13e7a74350c08e0635e7fd8f7eaf",
+    "src/test/rl/manipulation/test_contract.py": "43e98f9328a3ea3b03f7cc6cadfae0530cd6df5facc88ab9c7c4d7a5a4e8f15b",
+    "src/test/rl/manipulation/test_curriculum.py": "137dc43d1a97b105737ddfd7e0ee3b2e5019db0a0fe8a182c9800c1287381dbf",
+    "src/test/rl/manipulation/test_direct_control.py": "e51d0e3290f273386852fef1cf9e4662c0854c792db4e82590819709d11adccf",
+    "src/test/rl/manipulation/test_dynamic_trajectory.py": "d0cac9bc52d0528190cc29b79d2c88874e6647e7b1e7a4f0c54da9e9cf6d1cd0",
+    "src/test/rl/manipulation/test_grasp_setup.py": "040c43714779b5abab358aae11a3d0f71b75131cdf152beeb4e76f419de74a8b",
+    "src/test/rl/manipulation/test_integrated.py": "1cd0a7f70ab72c8e1c82762368702d1a45f4d2447edc7f3fb7c8cafa1dceccb5",
+    "src/test/rl/manipulation/test_mars_chassis.py": "4215bffc62c2f3cae0902cb1c031fcc50d8ea7d5fc06cb1df628173d1bf8d46b",
+    "src/test/rl/manipulation/test_oracle.py": "efa37cdaa7747daee74105bc55593e177973b6670a9a48a4a24b998d201b417c",
+    "src/test/rl/manipulation/test_payload_assets.py": "c8db3d5154e36842281c7a373d93b28b6457f4de154928893e1eefd743bc5cca",
+    "src/test/rl/manipulation/test_pose_value.py": "e1948fa8bfe01591031b3939b4940d7a4af59ae2b4903af215e50d086ebadae2",
+    "src/test/rl/manipulation/test_retention_training.py": "9f69b2b3af81b46fdbe37c0163313c9057ad48e4624c6d7780c38326f7ec0e08",
+    "src/test/rl/manipulation/test_reward.py": "492297e1b6b8e8227293298ceb17ad8db848f2cdaee76b60a44b7f1b3b91ddf2",
+    "src/test/rl/manipulation/test_reward_audit.py": "56d405d6b337023aaca560a166046d894c8af5fad04912c391eaf8c901eb8d8a",
+    "src/test/rl/manipulation/test_risk.py": "9c7fee03c26f283d73e98c9af613bd4c0da1fc0926cd07c7eadf4dff2a53cdde",
+    "src/test/rl/manipulation/test_runtime_review.py": "45c629ad90411289126d6ec3e0b364cdbe09908b5c07a567cb1e633a6c4a186b",
+    "src/test/rl/manipulation/test_task_pose_command_runtime.py": "930e4fccb616f4b974b757884693a3926b2744a0bc081d2bcd0aa98fe37c83bb",
+    "src/test/rl/manipulation/test_tracking_preview.py": "d0a4ccc461907746700690cd27dccdb4a4bfceb2c57e3f77c50a58b350901d45",
+    "src/test/rl/manipulation/test_training_options.py": "e6fc7284677986dcdddf8d22ae4d72fe0feafb95c9cecd048ff0f55f2ae1a780",
+    "src/test/rl/test_arm_curriculum.py": "12e4befdcd52db3e132109b57ba8678bdc8dfe324c34cc12b0ea9f9824413ad1",
+    "src/test/rl/test_base_control.py": "01fc8d1363c108101e7124a185d6f2f58b4975fcc0a285c86ea9f3d4f3763d6b",
+    "src/test/rl/test_contact_force.py": "51a876fca4fbbda26dfd3b9c6ecc213e5439faa8f52c20d4d863d435cd4e6b34",
+    "src/test/rl/test_history_control.py": "46944c70db5841995d7a346d1b8b3ca54672223891c3e1fd43c62900fe8b9474",
+    "src/test/rl/test_mars_env.py": "30eb6a0f5e288029b8d5e87bb8af0665c822ebea7c28eac45676d04230b5293c",
+    "src/test/rl/test_model_reference.py": "7c25a862aad779a4257cc471561af1c0a251a99b0a666991839a06cd705eb337",
+    "src/test/rl/test_policy_bundle.py": "93149f65d43ccf5d032efd39b72046940a14eaff9e8285b94c0789c3ce48fe5d",
+    "src/test/rl/test_pose_targets.py": "a1261cc6c4b6b03f6fd1489c213146cfa8cae7912f8e7d2e100ee3fc5a8a44e3",
+    "src/test/rl/test_recovery_scenarios.py": "8d321eac115e5a31565f9e62f14dd34e27d0ab91cc46344f2c0423d2933e4c1d",
+    "src/test/rl/test_regression_gate.py": "02afb60f31dea93c5f6a7950414e868e2c13f105f52f03a37aecad8315a8c3ab",
+    "src/test/rl/test_serve_cli.py": "3fa59d2e7ed1f183f4c17bdbd48d05c9a6b195fa790af84c53b3de440a787ac2",
+    "src/test/rl/test_server_integration.py": "214d4b8f3479aefe2d87ac0cfcfc48f4643c4e9fab148aeb1c5088cac7c98d18",
+    "src/test/rl/test_test_drive.py": "7e71a690943b93fd1308057b9ed9839164396b3183b2d8427350c93115807f18",
+    "src/test/rl/test_training.py": "63aa4e5029a98e11e026cadb81b21837762580e94e27b846a534e2354a1567cb",
+    "src/test/rl/test_zmq_reactive.py": "b046608bfcb703c54a37464a57b5a58c3a11785953d0c14c0b375946f89416ce",
+    "src/test/robots/test_head_capability.py": "498331c95484c5b567256647eb82c7850c89adcbd9912847b6821bf545f667ab",
+    "src/test/robots/test_mars_control_session.py": "695976eb44cbc3c406301d454ddb5e076ac3241d686a4fc5dc88d1edff77b061",
+    "src/test/robots/test_mars_motion_boundary.py": "b10edce02be9de3d9150fa67c93082fc5cf080a78854c91044a1fb84d877011b",
+    "src/test/scripts/test_trace_mars_carry.py": "f98f0bdbbac9f5a4243c5eef66c00a5be81ea95eec9337a8c22312fab3fb04d3",
+    "src/test/scripts/test_train_mars_carry_when_ready.py": "a59fba81dfb2bbf06404c11f25584e643d5c3a1e89c624d8ec337dbca2d79dd4",
+    "src/test/conftest.py": "52ea72bc022386245c97b6d04bc882a07b9f004f02147f10e5482e1c065aba0a",
+    "pyproject.toml": "879f220dd332d7a1ea21b216fff1bc852c2b3aeb63881924f5a9f14842d2e507",
+    "uv.lock": "553bd64dd6032ee033ce5e25595d67b58efdda8c714851d90d7c32a3fe497f32",
+    "scripts/train_mars_carry_when_ready.py": "5b52fcec4c065f3ed9925c2d3ee257a5af234799f6d58f2ea2a8766bdea58dc7",
+    "scripts/trace_mars_carry.py": "cb077828294689b7c9a8dc51afa8eeb42894c3284954eb185c579c6190e9b245",
+    "scripts/sync_core_runtime.py": "5ce321e8a75b50e25bff7647a9f291aef09e225496dd6dadffd68f512b7f7e3b",
+    "src/emet/eval/mars_tamp_control.py": "4dc3d8781c061b58d1d48b50f309ccdf69e24655136bc2c18383df6ff03c1559",
+    "src/emet/eval/mars_tamp_agent.py": "bfff999feec429a9530a5503e3dcb50873d37967dad76f885de689ba9379f36e",
+    "src/emet/eval/mars_tamp_metrics.py": "4bad6ea274f534905e78e9e723d8ba056f9aa4dd9865dc62bf16f9263f4a4045",
+    "src/emet/eval/mars_tamp_sequences.py": "2a4b1b69052ad27d2308c2ff050cb53ba456f355be25dc6715eaa65ed10fb764",
+    "configs/benchmarks/mars_public_tamp_whole_body_v2.json": "5b638c6d748a343a646e733ab9bfe7a25a05b55f35d3bb4c23f4a4cc0d3567e7"
+  },
+  "targets": [
+    "src/test/rl",
+    "src/test/core",
+    "src/test/controller/task/tamp",
+    "src/test/eval/test_mars_tamp_agent_driver.py",
+    "src/test/eval/test_mars_tamp_control.py",
+    "src/test/eval/test_mars_tamp_sequences.py",
+    "src/test/robots/test_mars_motion_boundary.py",
+    "src/test/robots/test_mars_control_session.py",
+    "src/test/robots/test_head_capability.py",
+    "src/test/scripts/test_train_mars_carry_when_ready.py",
+    "src/test/scripts/test_trace_mars_carry.py"
+  ],
+  "test_ids": [
+    [
+      "src.test.controller.task.tamp.test_agent_bridge",
+      "test_bridge_grounds_auto_approach_selection"
+    ],
+    [
+      "src.test.controller.task.tamp.test_agent_bridge",
+      "test_explicit_stale_grounding_is_not_remapped_to_another_object"
+    ],
+    [
+      "src.test.controller.task.tamp.test_agent_bridge",
+      "test_hardware_session_does_not_enter_sim_tamp_path"
+    ],
+    [
+      "src.test.controller.task.tamp.test_agent_bridge",
+      "test_scene_task_refs_are_stable_until_session_changes"
+    ],
+    [
+      "src.test.controller.task.tamp.test_agent_bridge",
+      "test_scene_task_refs_resolve_mesh_child_to_live_parent"
+    ],
+    [
+      "src.test.controller.task.tamp.test_agent_bridge",
+      "test_semantic_plan_build_keeps_grounding_inside_adapter"
+    ],
+    [
+      "src.test.controller.task.tamp.test_agent_bridge",
+      "test_stored_plan_revalidates_pose_and_is_one_shot"
+    ],
+    [
+      "src.test.controller.task.tamp.test_agent_bridge",
+      "test_task_plan_reports_partial_execution_failure"
+    ],
+    [
+      "src.test.controller.task.tamp.test_api_contract",
+      "test_all_tools_return_json_on_missing_state_and_bad_arguments"
+    ],
+    [
+      "src.test.controller.task.tamp.test_api_contract",
+      "test_change_between_planning_and_storage_refuses_handle[boot]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_api_contract",
+      "test_change_between_planning_and_storage_refuses_handle[capability]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_api_contract",
+      "test_change_between_planning_and_storage_refuses_handle[nan]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_api_contract",
+      "test_change_between_planning_and_storage_refuses_handle[position]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_api_contract",
+      "test_change_between_planning_and_storage_refuses_handle[rotation]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_api_contract",
+      "test_handles_never_recycle_across_sessions_or_contexts"
+    ],
+    [
+      "src.test.controller.task.tamp.test_api_contract",
+      "test_kinematic_bridge_tries_collision_and_ik_alternatives"
+    ],
+    [
+      "src.test.controller.task.tamp.test_api_contract",
+      "test_mcts_and_approach_grounding_share_supplied_placements"
+    ],
+    [
+      "src.test.controller.task.tamp.test_api_contract",
+      "test_mcts_grounding_failure_preserves_only_known_public_code[no_plan_within_budget:candidates=3-no_plan_within_budget]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_api_contract",
+      "test_mcts_grounding_failure_preserves_only_known_public_code[no_plan_within_budget:last_grounding=no_reachable_grasp-no_reachable_grasp]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_api_contract",
+      "test_mcts_grounding_failure_preserves_only_known_public_code[no_plan_within_budget:last_grounding=private_body_id-no_plan_within_budget]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_api_contract",
+      "test_missing_pose_or_server_identity_cannot_be_stored"
+    ],
+    [
+      "src.test.controller.task.tamp.test_api_contract",
+      "test_nonfinite_measurement_is_null_and_exception_is_private"
+    ],
+    [
+      "src.test.controller.task.tamp.test_api_contract",
+      "test_place_does_not_hide_failed_submotions[approach]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_api_contract",
+      "test_place_does_not_hide_failed_submotions[attachment_changed]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_api_contract",
+      "test_place_does_not_hide_failed_submotions[invalidated]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_api_contract",
+      "test_place_does_not_hide_failed_submotions[missing_body_pose]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_api_contract",
+      "test_place_does_not_hide_failed_submotions[missing_receptacle]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_api_contract",
+      "test_place_does_not_hide_failed_submotions[move_exception]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_api_contract",
+      "test_place_does_not_hide_failed_submotions[no_path]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_api_contract",
+      "test_place_does_not_hide_failed_submotions[place]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_api_contract",
+      "test_place_does_not_hide_failed_submotions[preplace]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_api_contract",
+      "test_place_does_not_hide_failed_submotions[release]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_api_contract",
+      "test_place_does_not_hide_failed_submotions[retract]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_api_contract",
+      "test_place_does_not_hide_failed_submotions[runtime]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_api_contract",
+      "test_place_does_not_hide_failed_submotions[state_refresh]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_api_contract",
+      "test_place_does_not_hide_failed_submotions[state_search]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_api_contract",
+      "test_place_does_not_hide_failed_submotions[success]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_api_contract",
+      "test_place_does_not_hide_failed_submotions[timeout]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_api_contract",
+      "test_place_exception_cannot_inherit_grasp_evidence"
+    ],
+    [
+      "src.test.controller.task.tamp.test_api_contract",
+      "test_planner_uses_captured_inputs_and_rejects_change_during_grounding"
+    ],
+    [
+      "src.test.controller.task.tamp.test_api_contract",
+      "test_public_plan_execute_and_partial_evidence[False]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_api_contract",
+      "test_public_plan_execute_and_partial_evidence[True]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_api_contract",
+      "test_snapshot_copies_are_independent_and_quaternion_sign_is_equivalent"
+    ],
+    [
+      "src.test.controller.task.tamp.test_api_contract",
+      "test_stale_joint_observation_cannot_pass_arrival"
+    ],
+    [
+      "src.test.controller.task.tamp.test_api_contract",
+      "test_stale_or_unsafe_plan_is_consumed_without_motion[blocked-approach_changed_replan]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_api_contract",
+      "test_stale_or_unsafe_plan_is_consumed_without_motion[boot-scene_changed_replan]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_api_contract",
+      "test_stale_or_unsafe_plan_is_consumed_without_motion[capability-kinematic_capability_missing]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_api_contract",
+      "test_stale_or_unsafe_plan_is_consumed_without_motion[malformed-approach_validation_failed]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_api_contract",
+      "test_stale_or_unsafe_plan_is_consumed_without_motion[nan-invalid_plan]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_api_contract",
+      "test_stale_or_unsafe_plan_is_consumed_without_motion[query_error-approach_validation_failed]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_api_contract",
+      "test_stale_or_unsafe_plan_is_consumed_without_motion[rotation-scene_changed_replan]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_api_contract",
+      "test_stale_or_unsafe_plan_is_consumed_without_motion[translation-scene_changed_replan]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_api_contract",
+      "test_unavailable_base_validation_rejects_build_and_consumes_plan[absent]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_api_contract",
+      "test_unavailable_base_validation_rejects_build_and_consumes_plan[false]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_api_contract",
+      "test_unavailable_base_validation_rejects_build_and_consumes_plan[no_client]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_api_contract",
+      "test_unavailable_base_validation_rejects_build_and_consumes_plan[nonboolean]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_api_contract",
+      "test_unsupported_adapter_does_not_ignore_placement_region"
+    ],
+    [
+      "src.test.controller.task.tamp.test_articulation",
+      "test_ambiguous_fixtures_unsupported_and_robot_excluded[<joint type=\"hinge\" limited=\"false\"/>]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_articulation",
+      "test_ambiguous_fixtures_unsupported_and_robot_excluded[<joint type=\"hinge\" range=\"-1 1\"/>]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_articulation",
+      "test_ambiguous_fixtures_unsupported_and_robot_excluded[<joint type=\"hinge\" range=\"0 1\"/><joint type=\"slide\" range=\"0 1\"/>]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_articulation",
+      "test_ambiguous_fixtures_unsupported_and_robot_excluded[<joint type=\"hinge\" range=\"0 1\"/>]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_articulation",
+      "test_articulation_jitter_publishes_measured_state_without_rescan"
+    ],
+    [
+      "src.test.controller.task.tamp.test_articulation",
+      "test_articulation_refresh_does_not_rescan_unaffected_scene"
+    ],
+    [
+      "src.test.controller.task.tamp.test_articulation",
+      "test_closed_access_and_revision_reject_stored_snapshot_before_motion"
+    ],
+    [
+      "src.test.controller.task.tamp.test_articulation",
+      "test_metadata_refresh_does_not_change_live_dynamics"
+    ],
+    [
+      "src.test.controller.task.tamp.test_articulation",
+      "test_real_server_open_close_refreshes_geometry_and_invalidates_plans"
+    ],
+    [
+      "src.test.controller.task.tamp.test_articulation",
+      "test_rejects_before_actuation[capability-articulation_unsupported]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_articulation",
+      "test_rejects_before_actuation[hardware-not_simulation]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_articulation",
+      "test_rejects_before_actuation[physical-articulation_unsupported]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_articulation",
+      "test_rejects_before_actuation[stale-scene_changed_replan]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_articulation",
+      "test_rejects_before_actuation[unknown-unknown_task_ref]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_articulation",
+      "test_stale_receipt_cannot_verify_and_uncertain_command_invalidates_plan"
+    ],
+    [
+      "src.test.controller.task.tamp.test_articulation",
+      "test_stretch_measured_snapshot_open_close_and_geometry"
+    ],
+    [
+      "src.test.controller.task.tamp.test_articulation",
+      "test_stretch_missing_snapshot_never_uses_xml_defaults_as_measurement"
+    ],
+    [
+      "src.test.controller.task.tamp.test_articulation",
+      "test_stretch_receipt_without_new_measured_state_does_not_verify"
+    ],
+    [
+      "src.test.controller.task.tamp.test_articulation",
+      "test_unsupported_joint_movement_still_refreshes_collision_geometry"
+    ],
+    [
+      "src.test.controller.task.tamp.test_clutter_recovery",
+      "test_uncertain_execution_stops_chain_and_navigation[grasp]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_clutter_recovery",
+      "test_uncertain_execution_stops_chain_and_navigation[place]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_clutter_recovery",
+      "test_uncertain_execution_stops_chain_and_navigation[verification]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_grasp_sequence",
+      "test_execution_tolerance_rejects_old_five_centimeter_endpoint_error"
+    ],
+    [
+      "src.test.controller.task.tamp.test_grasp_sequence",
+      "test_lift_is_checked_even_with_reachable_side_pregrasp"
+    ],
+    [
+      "src.test.controller.task.tamp.test_grasp_sequence",
+      "test_reachable_grasp_with_unreachable_pregrasp_is_rejected"
+    ],
+    [
+      "src.test.controller.task.tamp.test_mars_native_adapter",
+      "test_clock_context_excludes_concurrent_sessions_and_restores_modules"
+    ],
+    [
+      "src.test.controller.task.tamp.test_mars_native_adapter",
+      "test_explicit_model_required_and_observed_mode_cannot_read_gt"
+    ],
+    [
+      "src.test.controller.task.tamp.test_mars_native_adapter",
+      "test_fabricated_driver_success_cannot_pass_physical_score"
+    ],
+    [
+      "src.test.controller.task.tamp.test_mars_native_adapter",
+      "test_frozen_fixture_change_rejected_before_commands"
+    ],
+    [
+      "src.test.controller.task.tamp.test_mars_native_adapter",
+      "test_joint_commands_do_not_acquire_world_pose_counter_rotation"
+    ],
+    [
+      "src.test.controller.task.tamp.test_mars_native_adapter",
+      "test_joint_reference_preview_uses_measured_world_frame_after_base_tilt"
+    ],
+    [
+      "src.test.controller.task.tamp.test_mars_native_adapter",
+      "test_loaded_gripper_cannot_open_or_probe_outside_place"
+    ],
+    [
+      "src.test.controller.task.tamp.test_mars_native_adapter",
+      "test_public_discovery_routes_mars_and_preserves_live_state"
+    ],
+    [
+      "src.test.controller.task.tamp.test_mars_native_adapter",
+      "test_public_tools_complete_frozen_20g_transfer_with_supported_release"
+    ],
+    [
+      "src.test.controller.task.tamp.test_mars_native_adapter",
+      "test_scene_geometry_change_invalidates_cached_handles"
+    ],
+    [
+      "src.test.controller.task.tamp.test_mars_native_adapter",
+      "test_soft_stop_opening_certifies_both_jaws_without_clamping_live_state"
+    ],
+    [
+      "src.test.controller.task.tamp.test_mars_native_adapter",
+      "test_task_selector_and_partial_execution_do_not_reuse_plan"
+    ],
+    [
+      "src.test.controller.task.tamp.test_mars_native_adapter",
+      "test_transport_turns_about_axle_without_lateral_wheel_motion"
+    ],
+    [
+      "src.test.controller.task.tamp.test_native_adapter",
+      "test_changed_scene_consumes_native_plan_before_any_motion"
+    ],
+    [
+      "src.test.controller.task.tamp.test_native_adapter",
+      "test_command_ack_timeout_preserves_partial_execution_and_consumes_plan[grasp]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_native_adapter",
+      "test_command_ack_timeout_preserves_partial_execution_and_consumes_plan[place]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_native_adapter",
+      "test_conflicting_task_selectors_rejected_before_planning[names0]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_native_adapter",
+      "test_conflicting_task_selectors_rejected_before_planning[names1]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_native_adapter",
+      "test_failed_placement_resumes_grasp_search"
+    ],
+    [
+      "src.test.controller.task.tamp.test_native_adapter",
+      "test_invalid_placement_region_never_actuates[bad]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_native_adapter",
+      "test_invalid_placement_region_never_actuates[region0]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_native_adapter",
+      "test_invalid_placement_region_never_actuates[region1]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_native_adapter",
+      "test_invalid_placement_region_never_actuates[region2]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_native_adapter",
+      "test_invalid_placement_region_never_actuates[region3]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_native_adapter",
+      "test_matching_selectors_keep_identity_through_execution"
+    ],
+    [
+      "src.test.controller.task.tamp.test_native_adapter",
+      "test_model_binding_allows_free_initial_pose_but_not_geometry"
+    ],
+    [
+      "src.test.controller.task.tamp.test_native_adapter",
+      "test_native_arm_acknowledgement_leaves_arrival_to_measured_executor"
+    ],
+    [
+      "src.test.controller.task.tamp.test_native_adapter",
+      "test_native_model_mismatch_rejects_before_actuation"
+    ],
+    [
+      "src.test.controller.task.tamp.test_native_adapter",
+      "test_native_plan_is_read_only_and_has_explicit_provenance"
+    ],
+    [
+      "src.test.controller.task.tamp.test_native_adapter",
+      "test_native_transfer_grounding_is_measured_and_private"
+    ],
+    [
+      "src.test.controller.task.tamp.test_native_adapter",
+      "test_native_transfer_rejects_unsettled_snapshot"
+    ],
+    [
+      "src.test.controller.task.tamp.test_native_adapter",
+      "test_observed_mode_never_reads_privileged_metadata"
+    ],
+    [
+      "src.test.controller.task.tamp.test_native_adapter",
+      "test_old_capture_cannot_be_refreshed_by_republishing"
+    ],
+    [
+      "src.test.controller.task.tamp.test_native_adapter",
+      "test_partial_progress_reports_execution_started_even_before_next_stage"
+    ],
+    [
+      "src.test.controller.task.tamp.test_native_adapter",
+      "test_pinch_calibration_uses_pad_centers_and_preserves_measured_state"
+    ],
+    [
+      "src.test.controller.task.tamp.test_native_adapter",
+      "test_region_constrains_goal_and_is_copied_into_plan"
+    ],
+    [
+      "src.test.controller.task.tamp.test_native_adapter",
+      "test_region_outside_support_is_refused"
+    ],
+    [
+      "src.test.controller.task.tamp.test_native_adapter",
+      "test_rejection_evidence_keeps_collision_when_later_ik_fails"
+    ],
+    [
+      "src.test.controller.task.tamp.test_native_adapter",
+      "test_release_verification_requires_correct_height_and_settled_rotation[None-True]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_native_adapter",
+      "test_release_verification_requires_correct_height_and_settled_rotation[height-False]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_native_adapter",
+      "test_release_verification_requires_correct_height_and_settled_rotation[region-False]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_native_adapter",
+      "test_release_verification_requires_correct_height_and_settled_rotation[spinning-False]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_native_adapter",
+      "test_shared_ik_budget_restores_private_state_and_never_actuates"
+    ],
+    [
+      "src.test.controller.task.tamp.test_native_adapter",
+      "test_unknown_native_task_requests_rediscovery"
+    ],
+    [
+      "src.test.controller.task.tamp.test_placement_evidence",
+      "test_failed_place_retains_current_operation_release_evidence[not_attempted]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_placement_evidence",
+      "test_failed_place_retains_current_operation_release_evidence[returned]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_placement_evidence",
+      "test_failed_place_retains_current_operation_release_evidence[unknown]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_placement_evidence",
+      "test_placement_failure_code_survives_wrapping[no_collision_free_placement]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_placement_evidence",
+      "test_placement_failure_code_survives_wrapping[placement_geometry_unavailable]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_placement_evidence",
+      "test_placement_failure_code_survives_wrapping[placement_invalidated]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_placement_evidence",
+      "test_placement_failure_code_survives_wrapping[release_execution_error]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_placement_evidence",
+      "test_private_search_details_are_not_public"
+    ],
+    [
+      "src.test.controller.task.tamp.test_transfer_provider",
+      "test_actionable_provider_failures_preserve_code_and_progress[False-ambiguous_region_occupancy]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_transfer_provider",
+      "test_actionable_provider_failures_preserve_code_and_progress[False-native_execution_unavailable]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_transfer_provider",
+      "test_actionable_provider_failures_preserve_code_and_progress[False-object_not_lifted]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_transfer_provider",
+      "test_actionable_provider_failures_preserve_code_and_progress[False-task_object_not_settled_on_support]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_transfer_provider",
+      "test_actionable_provider_failures_preserve_code_and_progress[True-ambiguous_region_occupancy]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_transfer_provider",
+      "test_actionable_provider_failures_preserve_code_and_progress[True-native_execution_unavailable]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_transfer_provider",
+      "test_actionable_provider_failures_preserve_code_and_progress[True-object_not_lifted]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_transfer_provider",
+      "test_actionable_provider_failures_preserve_code_and_progress[True-task_object_not_settled_on_support]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_transfer_provider",
+      "test_bad_goals_do_not_execute[do whatever]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_transfer_provider",
+      "test_bad_goals_do_not_execute[move alpha to buffer; move beta to buffer]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_transfer_provider",
+      "test_bad_goals_do_not_execute[move alpha to missing]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_transfer_provider",
+      "test_bad_goals_do_not_execute[move alpha to right; move alpha to buffer]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_transfer_provider",
+      "test_bad_goals_do_not_execute[swap alpha and missing]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_transfer_provider",
+      "test_claimed_success_without_measured_effect_stops"
+    ],
+    [
+      "src.test.controller.task.tamp.test_transfer_provider",
+      "test_debug_state_is_json_in_logs_but_not_public_motion_evidence"
+    ],
+    [
+      "src.test.controller.task.tamp.test_transfer_provider",
+      "test_explicit_move_cannot_relocate_unrequested_object"
+    ],
+    [
+      "src.test.controller.task.tamp.test_transfer_provider",
+      "test_failed_native_probe_consumes_calls_and_restores_primitive_cap"
+    ],
+    [
+      "src.test.controller.task.tamp.test_transfer_provider",
+      "test_grounded_swap_through_production_tools[beam]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_transfer_provider",
+      "test_grounded_swap_through_production_tools[mcts]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_transfer_provider",
+      "test_last_preflight_ik_call_cannot_claim_execution_started[False]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_transfer_provider",
+      "test_last_preflight_ik_call_cannot_claim_execution_started[True]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_transfer_provider",
+      "test_native_executor_timeout_is_not_misreported_as_preflight"
+    ],
+    [
+      "src.test.controller.task.tamp.test_transfer_provider",
+      "test_native_first_move_failure_selects_another_causal_sequence_without_commands"
+    ],
+    [
+      "src.test.controller.task.tamp.test_transfer_provider",
+      "test_native_planning_errors_are_no_actuation_and_preserve_prior_progress[False-invalid_handle]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_transfer_provider",
+      "test_native_planning_errors_are_no_actuation_and_preserve_prior_progress[False-malformed_result]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_transfer_provider",
+      "test_native_planning_errors_are_no_actuation_and_preserve_prior_progress[False-missing_handle]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_transfer_provider",
+      "test_native_planning_errors_are_no_actuation_and_preserve_prior_progress[False-timeout]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_transfer_provider",
+      "test_native_planning_errors_are_no_actuation_and_preserve_prior_progress[True-invalid_handle]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_transfer_provider",
+      "test_native_planning_errors_are_no_actuation_and_preserve_prior_progress[True-malformed_result]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_transfer_provider",
+      "test_native_planning_errors_are_no_actuation_and_preserve_prior_progress[True-missing_handle]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_transfer_provider",
+      "test_native_planning_errors_are_no_actuation_and_preserve_prior_progress[True-timeout]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_transfer_provider",
+      "test_native_probes_share_remaining_ik_cap"
+    ],
+    [
+      "src.test.controller.task.tamp.test_transfer_provider",
+      "test_native_transfer_preserves_adapter_failure_code"
+    ],
+    [
+      "src.test.controller.task.tamp.test_transfer_provider",
+      "test_no_buffer_is_an_explicit_search_failure"
+    ],
+    [
+      "src.test.controller.task.tamp.test_transfer_provider",
+      "test_observation_errors_are_public_codes_through_json_tools[joint_observation_stale-stale_observation-plan_task]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_transfer_provider",
+      "test_observation_errors_are_public_codes_through_json_tools[joint_observation_stale-stale_observation-scene_tasks]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_transfer_provider",
+      "test_observation_errors_are_public_codes_through_json_tools[object_state_unknown-observation_unavailable-plan_task]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_transfer_provider",
+      "test_observation_errors_are_public_codes_through_json_tools[object_state_unknown-observation_unavailable-scene_tasks]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_transfer_provider",
+      "test_privileged_observation_cannot_enter_observed_provider"
+    ],
+    [
+      "src.test.controller.task.tamp.test_transfer_provider",
+      "test_provider_exception_details_never_escape[compile_goal]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_transfer_provider",
+      "test_provider_exception_details_never_escape[discover]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_transfer_provider",
+      "test_provider_exception_details_never_escape[execute]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_transfer_provider",
+      "test_provider_exception_details_never_escape[search]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_transfer_provider",
+      "test_provider_exception_details_never_escape[snapshot]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_transfer_provider",
+      "test_provider_internal_preflight_failure_is_no_actuation[budget-feasible]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_transfer_provider",
+      "test_provider_internal_preflight_failure_is_no_actuation[budget-snapshot]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_transfer_provider",
+      "test_provider_internal_preflight_failure_is_no_actuation[task_object_not_settled_on_support-feasible]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_transfer_provider",
+      "test_provider_internal_preflight_failure_is_no_actuation[task_object_not_settled_on_support-snapshot]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_transfer_provider",
+      "test_receipt_rejects_unknown_private_codes"
+    ],
+    [
+      "src.test.controller.task.tamp.test_transfer_provider",
+      "test_refinement_failure_preserves_actual_progress[False]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_transfer_provider",
+      "test_refinement_failure_preserves_actual_progress[True]"
+    ],
+    [
+      "src.test.controller.task.tamp.test_transfer_provider",
+      "test_scene_change_during_planning_returns_replan_without_storing_handle"
+    ],
+    [
+      "src.test.controller.task.tamp.test_transfer_provider",
+      "test_second_preflight_failure_preserves_step_number"
+    ],
+    [
+      "src.test.controller.task.tamp.test_transfer_provider",
+      "test_semantic_failure_after_progress_stops_and_preserves_first_transfer"
+    ],
+    [
+      "src.test.controller.task.tamp.test_transfer_provider",
+      "test_unknown_transfer_exception_remains_conservative"
+    ],
+    [
+      "src.test.core.test_arrival_monitor",
+      "test_boundary_noise_resets_settling_without_failure"
+    ],
+    [
+      "src.test.core.test_arrival_monitor",
+      "test_corrections_bounded_and_only_requested_when_stopped"
+    ],
+    [
+      "src.test.core.test_arrival_monitor",
+      "test_duplicate_poses_go_stale"
+    ],
+    [
+      "src.test.core.test_arrival_monitor",
+      "test_invalid_pose_does_not_refresh_freshness[None]"
+    ],
+    [
+      "src.test.core.test_arrival_monitor",
+      "test_invalid_pose_does_not_refresh_freshness[pose0]"
+    ],
+    [
+      "src.test.core.test_arrival_monitor",
+      "test_invalid_pose_does_not_refresh_freshness[pose1]"
+    ],
+    [
+      "src.test.core.test_arrival_monitor",
+      "test_manipulation_policy_requires_tighter_measured_arrival"
+    ],
+    [
+      "src.test.core.test_arrival_monitor",
+      "test_moving_inside_tolerance_is_not_success"
+    ],
+    [
+      "src.test.core.test_arrival_monitor",
+      "test_requires_three_distinct_samples_and_settling"
+    ],
+    [
+      "src.test.core.test_arrival_monitor",
+      "test_slow_simulation_gets_a_measured_time_progress_window"
+    ],
+    [
+      "src.test.core.test_arrival_monitor",
+      "test_slow_simulation_still_rejects_a_real_stall"
+    ],
+    [
+      "src.test.core.test_arrival_monitor",
+      "test_stalled_motion_has_fresh_telemetry_but_no_progress"
+    ],
+    [
+      "src.test.core.test_command_runtime",
+      "test_async_at_goal_cannot_accept_stale_telemetry[generic]"
+    ],
+    [
+      "src.test.core.test_command_runtime",
+      "test_async_at_goal_cannot_accept_stale_telemetry[stretch]"
+    ],
+    [
+      "src.test.core.test_command_runtime",
+      "test_busy_rejection_keeps_original_cancellation_target"
+    ],
+    [
+      "src.test.core.test_command_runtime",
+      "test_command_counter_is_independent_of_telemetry_counter"
+    ],
+    [
+      "src.test.core.test_command_runtime",
+      "test_corrections_preserve_episode_frame"
+    ],
+    [
+      "src.test.core.test_command_runtime",
+      "test_deadline_cancels_and_unconfirmed_stop_locks_navigation[False]"
+    ],
+    [
+      "src.test.core.test_command_runtime",
+      "test_deadline_cancels_and_unconfirmed_stop_locks_navigation[True]"
+    ],
+    [
+      "src.test.core.test_command_runtime",
+      "test_end_to_end_identity_busy_measured_completion_and_release"
+    ],
+    [
+      "src.test.core.test_command_runtime",
+      "test_failure_preserves_measured_error_and_frozen_goal"
+    ],
+    [
+      "src.test.core.test_command_runtime",
+      "test_malformed_input_cannot_crash_or_start_motion[None]"
+    ],
+    [
+      "src.test.core.test_command_runtime",
+      "test_malformed_input_cannot_crash_or_start_motion[action1]"
+    ],
+    [
+      "src.test.core.test_command_runtime",
+      "test_malformed_input_cannot_crash_or_start_motion[action2]"
+    ],
+    [
+      "src.test.core.test_command_runtime",
+      "test_malformed_input_cannot_crash_or_start_motion[action3]"
+    ],
+    [
+      "src.test.core.test_command_runtime",
+      "test_malformed_input_cannot_crash_or_start_motion[action4]"
+    ],
+    [
+      "src.test.core.test_command_runtime",
+      "test_old_bridge_or_restart_never_sends_motion"
+    ],
+    [
+      "src.test.core.test_command_runtime",
+      "test_policy_correction_keeps_identity_absolute_goal_and_deadline"
+    ],
+    [
+      "src.test.core.test_command_runtime",
+      "test_policy_rejected_before_client_sends_motion"
+    ],
+    [
+      "src.test.core.test_command_runtime",
+      "test_slow_receipt_publication_does_not_block_dispatch_or_mix_revisions"
+    ],
+    [
+      "src.test.core.test_command_tracker",
+      "test_active_receipt_survives_eviction_and_snapshots_are_copies"
+    ],
+    [
+      "src.test.core.test_command_tracker",
+      "test_busy_cancellation_and_deadline"
+    ],
+    [
+      "src.test.core.test_command_tracker",
+      "test_conflict_restart_and_eviction_never_reexecute"
+    ],
+    [
+      "src.test.core.test_command_tracker",
+      "test_invalid_deadline_does_not_claim_session[-1]"
+    ],
+    [
+      "src.test.core.test_command_tracker",
+      "test_invalid_deadline_does_not_claim_session[0]"
+    ],
+    [
+      "src.test.core.test_command_tracker",
+      "test_invalid_deadline_does_not_claim_session[inf]"
+    ],
+    [
+      "src.test.core.test_command_tracker",
+      "test_invalid_deadline_does_not_claim_session[nan]"
+    ],
+    [
+      "src.test.core.test_command_tracker",
+      "test_retries_dispatch_once_and_return_latest_receipt"
+    ],
+    [
+      "src.test.core.test_image_timing",
+      "test_legacy_image_does_not_inherit_timestamp"
+    ],
+    [
+      "src.test.core.test_image_timing",
+      "test_merge_timing_follows_pixels_not_newer_metadata"
+    ],
+    [
+      "src.test.core.test_image_timing",
+      "test_snapshot_keeps_capture_stamp_on_republication_and_copies_pixels"
+    ],
+    [
+      "src.test.core.test_navigation_retries",
+      "test_acknowledgement_wait_is_bounded[generic]"
+    ],
+    [
+      "src.test.core.test_navigation_retries",
+      "test_acknowledgement_wait_is_bounded[stretch]"
+    ],
+    [
+      "src.test.core.test_navigation_retries",
+      "test_repeated_relative_navigation_dispatches_once"
+    ],
+    [
+      "src.test.core.test_navigation_retries",
+      "test_retry_keeps_same_identity[generic]"
+    ],
+    [
+      "src.test.core.test_navigation_retries",
+      "test_retry_keeps_same_identity[stretch]"
+    ],
+    [
+      "src.test.core.test_navigation_retries",
+      "test_stretch_late_image_cannot_regress_acknowledgement"
+    ],
+    [
+      "src.test.core.test_parameters_setdefault",
+      "test_parameters_setdefault_inserts_missing_top_level"
+    ],
+    [
+      "src.test.core.test_parameters_setdefault",
+      "test_parameters_setdefault_rejects_slash_key"
+    ],
+    [
+      "src.test.core.test_reactive_runtime",
+      "test_confirmed_session_handoff_clears_reactive_handle"
+    ],
+    [
+      "src.test.core.test_reactive_runtime",
+      "test_expiry_and_unconfirmed_stop_retain_ownership"
+    ],
+    [
+      "src.test.core.test_reactive_runtime",
+      "test_legacy_peer_rejected_before_motion"
+    ],
+    [
+      "src.test.core.test_reactive_runtime",
+      "test_other_owner_wrong_target_and_mixed_payload_cannot_update"
+    ],
+    [
+      "src.test.core.test_reactive_runtime",
+      "test_shutdown_does_not_cleanup_navigation_or_release_when_reactive_stop_is_unconfirmed"
+    ],
+    [
+      "src.test.core.test_reactive_runtime",
+      "test_success_requires_stop_and_shutdown_cancels_active_goal"
+    ],
+    [
+      "src.test.core.test_reactive_runtime",
+      "test_updates_preserve_identity_deadline_and_retry_deduplication"
+    ],
+    [
+      "src.test.core.test_runtime_package_parity",
+      "test_robot_package_carries_identical_command_runtime"
+    ],
+    [
+      "src.test.core.test_task",
+      "test_task"
+    ],
+    [
+      "src.test.core.test_zmq_ground_truth_action",
+      "test_build_mujoco_ground_truth_action_shape"
+    ],
+    [
+      "src.test.core.test_zmq_obs_codec",
+      "test_decode_zmq_obs_depth_inplace_jp2_and_idempotent"
+    ],
+    [
+      "src.test.core.test_zmq_obs_codec",
+      "test_decode_zmq_obs_images_inplace_accepts_slim_canonical_only"
+    ],
+    [
+      "src.test.core.test_zmq_obs_codec",
+      "test_decode_zmq_obs_images_inplace_decodes_depth_without_rgb"
+    ],
+    [
+      "src.test.core.test_zmq_obs_codec",
+      "test_expand_zmq_obs_image_aliases_fills_legacy_from_canonical"
+    ],
+    [
+      "src.test.core.test_zmq_obs_codec",
+      "test_full_obs_has_wire_images_false_without_jpeg_keys"
+    ],
+    [
+      "src.test.core.test_zmq_obs_codec",
+      "test_get_observation_from_zmq_dict_accepts_slim_head_cam_left_only"
+    ],
+    [
+      "src.test.core.test_zmq_obs_codec",
+      "test_merge_servo_images_into_full_obs_fills_metadata_only_obs"
+    ],
+    [
+      "src.test.core.test_zmq_obs_codec",
+      "test_slim_zmq_obs_applies_images_and_lidar"
+    ],
+    [
+      "src.test.core.test_zmq_obs_codec",
+      "test_slim_zmq_obs_images_drops_duplicate_legacy_keys"
+    ],
+    [
+      "src.test.core.test_zmq_obs_codec",
+      "test_slim_zmq_obs_lidar_casts_to_float32"
+    ],
+    [
+      "src.test.core.test_zmq_protocol",
+      "test_is_stretch_family"
+    ],
+    [
+      "src.test.core.test_zmq_protocol",
+      "test_motion_wait_timeout_scale_absent_and_invalid"
+    ],
+    [
+      "src.test.core.test_zmq_protocol",
+      "test_motion_wait_timeout_scale_fast_and_slow"
+    ],
+    [
+      "src.test.core.test_zmq_protocol",
+      "test_normalize_robot_id"
+    ],
+    [
+      "src.test.core.test_zmq_protocol",
+      "test_read_emet_robot_id"
+    ],
+    [
+      "src.test.core.test_zmq_protocol",
+      "test_read_sim_to_real_ratio"
+    ],
+    [
+      "src.test.core.test_zmq_protocol",
+      "test_robot_ids_match"
+    ],
+    [
+      "src.test.core.test_zmq_runtime_parity",
+      "test_deployed_runtime_parity[core/zmq_obs_codec.py]"
+    ],
+    [
+      "src.test.core.test_zmq_runtime_parity",
+      "test_deployed_runtime_parity[core/zmq_server_env.py]"
+    ],
+    [
+      "src.test.core.test_zmq_runtime_parity",
+      "test_deployed_runtime_parity[utils/compression.py]"
+    ],
+    [
+      "src.test.core.test_zmq_runtime_parity",
+      "test_experimental_video_disabled_by_default"
+    ],
+    [
+      "src.test.core.test_zmq_runtime_parity",
+      "test_invalid_float_falls_back[-inf]"
+    ],
+    [
+      "src.test.core.test_zmq_runtime_parity",
+      "test_invalid_float_falls_back[abc]"
+    ],
+    [
+      "src.test.core.test_zmq_runtime_parity",
+      "test_invalid_float_falls_back[inf]"
+    ],
+    [
+      "src.test.core.test_zmq_runtime_parity",
+      "test_invalid_float_falls_back[nan]"
+    ],
+    [
+      "src.test.core.test_zmq_runtime_parity",
+      "test_invalid_port_falls_back[0]"
+    ],
+    [
+      "src.test.core.test_zmq_runtime_parity",
+      "test_invalid_port_falls_back[2.5]"
+    ],
+    [
+      "src.test.core.test_zmq_runtime_parity",
+      "test_invalid_port_falls_back[65536]"
+    ],
+    [
+      "src.test.core.test_zmq_runtime_parity",
+      "test_invalid_port_falls_back[abc]"
+    ],
+    [
+      "src.test.core.test_zmq_runtime_parity",
+      "test_invalid_port_falls_back[nan]"
+    ],
+    [
+      "src.test.core.test_zmq_session_metadata",
+      "test_emet_session_cache_update_prefers_higher_step"
+    ],
+    [
+      "src.test.core.test_zmq_session_metadata",
+      "test_emet_session_manipulation_supported"
+    ],
+    [
+      "src.test.core.test_zmq_session_metadata",
+      "test_emet_session_schema_version"
+    ],
+    [
+      "src.test.core.test_zmq_session_metadata",
+      "test_read_emet_robot_id_from_message_or_session"
+    ],
+    [
+      "src.test.core.test_zmq_session_metadata",
+      "test_read_emet_session_requires_dict"
+    ],
+    [
+      "src.test.eval.test_mars_tamp_agent_driver",
+      "test_agent_uses_real_parser_dispatcher_and_stops_after_partial_execution"
+    ],
+    [
+      "src.test.eval.test_mars_tamp_agent_driver",
+      "test_invalid_multiaction_reply_never_dispatches"
+    ],
+    [
+      "src.test.eval.test_mars_tamp_agent_driver",
+      "test_missing_observed_provider_blocks_before_model_call_without_gt_fallback"
+    ],
+    [
+      "src.test.eval.test_mars_tamp_control",
+      "test_catalog_has_all_mass_layout_seed_identities_and_accepted_witnesses"
+    ],
+    [
+      "src.test.eval.test_mars_tamp_control",
+      "test_incomplete_stale_or_mislabeled_evidence_rejected[agent]"
+    ],
+    [
+      "src.test.eval.test_mars_tamp_control",
+      "test_incomplete_stale_or_mislabeled_evidence_rejected[duplicate]"
+    ],
+    [
+      "src.test.eval.test_mars_tamp_control",
+      "test_incomplete_stale_or_mislabeled_evidence_rejected[fixture]"
+    ],
+    [
+      "src.test.eval.test_mars_tamp_control",
+      "test_incomplete_stale_or_mislabeled_evidence_rejected[missing]"
+    ],
+    [
+      "src.test.eval.test_mars_tamp_control",
+      "test_incomplete_stale_or_mislabeled_evidence_rejected[nonfinite]"
+    ],
+    [
+      "src.test.eval.test_mars_tamp_control",
+      "test_incomplete_stale_or_mislabeled_evidence_rejected[source]"
+    ],
+    [
+      "src.test.eval.test_mars_tamp_control",
+      "test_motion_metrics_keep_failed_motion_and_measure_jerk"
+    ],
+    [
+      "src.test.eval.test_mars_tamp_control",
+      "test_safety_failure_rejected[peak_contact_force-30.01]"
+    ],
+    [
+      "src.test.eval.test_mars_tamp_control",
+      "test_safety_failure_rejected[wheel_lift-True]"
+    ],
+    [
+      "src.test.eval.test_mars_tamp_control",
+      "test_safety_failure_rejected[wheel_support_evaluated-False]"
+    ],
+    [
+      "src.test.eval.test_mars_tamp_control",
+      "test_same_shape_altered_suite_cannot_self_certify"
+    ],
+    [
+      "src.test.eval.test_mars_tamp_control",
+      "test_structural_gate_accepts_complete_consistent_evidence"
+    ],
+    [
+      "src.test.eval.test_mars_tamp_control",
+      "test_success_receipt_counts_execution_and_external_failures_name_predicate"
+    ],
+    [
+      "src.test.eval.test_mars_tamp_control",
+      "test_summary_keeps_admission_planning_and_execution_denominators"
+    ],
+    [
+      "src.test.eval.test_mars_tamp_control",
+      "test_task_failure_cannot_be_hidden_by_success_boolean[calls-value5]"
+    ],
+    [
+      "src.test.eval.test_mars_tamp_control",
+      "test_task_failure_cannot_be_hidden_by_success_boolean[max_payload_rotation_rad-0.101]"
+    ],
+    [
+      "src.test.eval.test_mars_tamp_control",
+      "test_task_failure_cannot_be_hidden_by_success_boolean[max_payload_translation_m-0.021]"
+    ],
+    [
+      "src.test.eval.test_mars_tamp_control",
+      "test_task_failure_cannot_be_hidden_by_success_boolean[peak_base_displacement_m-0]"
+    ],
+    [
+      "src.test.eval.test_mars_tamp_control",
+      "test_task_failure_cannot_be_hidden_by_success_boolean[post_execution_stable_s-0]"
+    ],
+    [
+      "src.test.eval.test_mars_tamp_control",
+      "test_task_failure_cannot_be_hidden_by_success_boolean[robot_failure-retention_lost]"
+    ],
+    [
+      "src.test.eval.test_mars_tamp_sequences",
+      "test_agent_cannot_replace_frozen_stage_region_or_reset_physics"
+    ],
+    [
+      "src.test.eval.test_mars_tamp_sequences",
+      "test_multistep_agent_does_not_stop_after_first_transfer"
+    ],
+    [
+      "src.test.eval.test_mars_tamp_sequences",
+      "test_programs_are_declarative_and_use_existing_objects_and_distinct_supports"
+    ],
+    [
+      "src.test.rl.manipulation.test_acceptance",
+      "test_acceptance_requires_all_categories_and_no_safety_accuracy_regression"
+    ],
+    [
+      "src.test.rl.manipulation.test_acceptance",
+      "test_component_gates_do_not_ignore_valid_paths_that_fail_execution"
+    ],
+    [
+      "src.test.rl.manipulation.test_base_benchmark",
+      "test_success_interval_does_not_call_small_samples_certain"
+    ],
+    [
+      "src.test.rl.manipulation.test_base_benchmark",
+      "test_suite_freezes_disjoint_cases_without_relaxing_contract"
+    ],
+    [
+      "src.test.rl.manipulation.test_carry_training",
+      "test_carry_retarget_is_continuous_and_does_not_leak_before_event"
+    ],
+    [
+      "src.test.rl.manipulation.test_carry_training",
+      "test_frozen_carry_is_admitted_and_planning_does_not_edit_live_physics[1850001]"
+    ],
+    [
+      "src.test.rl.manipulation.test_carry_training",
+      "test_frozen_carry_is_admitted_and_planning_does_not_edit_live_physics[1850002]"
+    ],
+    [
+      "src.test.rl.manipulation.test_carry_training",
+      "test_frozen_carry_is_admitted_and_planning_does_not_edit_live_physics[1850007]"
+    ],
+    [
+      "src.test.rl.manipulation.test_carry_training",
+      "test_frozen_disturbance_uses_wider_support_without_weakening_the_push"
+    ],
+    [
+      "src.test.rl.manipulation.test_carry_training",
+      "test_late_disturbance_reserves_recovery_and_can_finish_contract"
+    ],
+    [
+      "src.test.rl.manipulation.test_carry_training",
+      "test_open_aperture_overshoot_is_not_misclassified_as_closed_and_fault_clears_wheel_bias"
+    ],
+    [
+      "src.test.rl.manipulation.test_carry_training",
+      "test_per_mass_gate_is_not_a_per_stratum_or_end_to_end_claim"
+    ],
+    [
+      "src.test.rl.manipulation.test_carry_training",
+      "test_same_shape_altered_catalog_and_case_parameters_are_rejected"
+    ],
+    [
+      "src.test.rl.manipulation.test_carry_training",
+      "test_smoke_suite_cannot_qualify_training"
+    ],
+    [
+      "src.test.rl.manipulation.test_carry_training",
+      "test_source_manifest_pins_shared_safety_modules_and_detects_changes[rl/contact.py]"
+    ],
+    [
+      "src.test.rl.manipulation.test_carry_training",
+      "test_source_manifest_pins_shared_safety_modules_and_detects_changes[rl/control.py]"
+    ],
+    [
+      "src.test.rl.manipulation.test_carry_training",
+      "test_source_manifest_pins_shared_safety_modules_and_detects_changes[rl/pose_targets.py]"
+    ],
+    [
+      "src.test.rl.manipulation.test_carry_training",
+      "test_training_cannot_relax_the_qualified_pose_contract"
+    ],
+    [
+      "src.test.rl.manipulation.test_carry_training",
+      "test_training_mixture_contains_quiet_and_disturbed_pose_categories"
+    ],
+    [
+      "src.test.rl.manipulation.test_carry_training",
+      "test_training_requires_complete_current_safe_evidence"
+    ],
+    [
+      "src.test.rl.manipulation.test_contract",
+      "test_arm_floor_loading_physically_lifts_wheels_and_is_detected"
+    ],
+    [
+      "src.test.rl.manipulation.test_contract",
+      "test_disturbance_is_a_ramped_wrench_on_the_hand_not_the_payload"
+    ],
+    [
+      "src.test.rl.manipulation.test_contract",
+      "test_disturbance_randomizes_world_frame_end_effector_wrench"
+    ],
+    [
+      "src.test.rl.manipulation.test_contract",
+      "test_fault_during_authorized_release_freezes_measured_gripper_position"
+    ],
+    [
+      "src.test.rl.manipulation.test_contract",
+      "test_frozen_goals_and_failures_unchanged"
+    ],
+    [
+      "src.test.rl.manipulation.test_contract",
+      "test_grip_corrections_are_bounded_and_release_requires_authorization"
+    ],
+    [
+      "src.test.rl.manipulation.test_contract",
+      "test_mars_gripper_uses_rectangular_urdf_contact_jaws"
+    ],
+    [
+      "src.test.rl.manipulation.test_contract",
+      "test_mars_physical_model_has_free_base_and_three_supports"
+    ],
+    [
+      "src.test.rl.manipulation.test_contract",
+      "test_payload_friction_randomization_does_not_change_support_traction"
+    ],
+    [
+      "src.test.rl.manipulation.test_contract",
+      "test_retention_boundary_is_not_relaxed"
+    ],
+    [
+      "src.test.rl.manipulation.test_contract",
+      "test_stage_rearm_preserves_physics_grasp_and_history_but_clears_motion_state"
+    ],
+    [
+      "src.test.rl.manipulation.test_contract",
+      "test_stretch_base_velocity_is_slewed_and_base_lock_is_enforced"
+    ],
+    [
+      "src.test.rl.manipulation.test_contract",
+      "test_stretch_carry_reset_handles_inactive_proximity_contacts"
+    ],
+    [
+      "src.test.rl.manipulation.test_contract",
+      "test_stretch_closed_gripper_reference_is_derived_from_archived_coupling"
+    ],
+    [
+      "src.test.rl.manipulation.test_contract",
+      "test_stretch_combined_base_and_hand_target_uses_fk_at_commanded_base"
+    ],
+    [
+      "src.test.rl.manipulation.test_contract",
+      "test_support_detector_observes_lift_without_impacts"
+    ],
+    [
+      "src.test.rl.manipulation.test_contract",
+      "test_tracking_trim_is_slow_and_bounded_to_compensate_load_error"
+    ],
+    [
+      "src.test.rl.manipulation.test_curriculum",
+      "test_curriculum_requires_sample_size_and_every_category_to_pass"
+    ],
+    [
+      "src.test.rl.manipulation.test_curriculum",
+      "test_endpoint_diagnostics_do_not_count_accurate_moving_hand_as_success"
+    ],
+    [
+      "src.test.rl.manipulation.test_curriculum",
+      "test_mars_carry_resets_physically_lift_both_payload_shapes_without_attachment"
+    ],
+    [
+      "src.test.rl.manipulation.test_curriculum",
+      "test_payload_mass_override_scales_inertia_and_resets_without_accumulation"
+    ],
+    [
+      "src.test.rl.manipulation.test_curriculum",
+      "test_randomization_zero_keeps_nominal_mass_friction_and_delay"
+    ],
+    [
+      "src.test.rl.manipulation.test_curriculum",
+      "test_reach_coverage_can_expand_before_strict_success_without_relaxing_safety"
+    ],
+    [
+      "src.test.rl.manipulation.test_curriculum",
+      "test_training_retarget_and_push_are_seeded_and_do_not_teleport"
+    ],
+    [
+      "src.test.rl.manipulation.test_direct_control",
+      "test_arm_contact_hold_keeps_base_active_and_resumes_on_new_arm_goal"
+    ],
+    [
+      "src.test.rl.manipulation.test_direct_control",
+      "test_base_tolerance_does_not_erase_hand_tracking_cost"
+    ],
+    [
+      "src.test.rl.manipulation.test_direct_control",
+      "test_dataset_aggregation_restores_curriculum_and_labels_learner_states"
+    ],
+    [
+      "src.test.rl.manipulation.test_direct_control",
+      "test_direct_bundle_declares_independent_action_semantics"
+    ],
+    [
+      "src.test.rl.manipulation.test_direct_control",
+      "test_direct_teacher_matches_residual_teacher_commands"
+    ],
+    [
+      "src.test.rl.manipulation.test_direct_control",
+      "test_direct_zero_action_stays_zero_despite_a_distant_goal_and_stop_latches"
+    ],
+    [
+      "src.test.rl.manipulation.test_direct_control",
+      "test_explicit_hold_stays_quiet_and_new_goal_resumes_without_clearing_faults"
+    ],
+    [
+      "src.test.rl.manipulation.test_direct_control",
+      "test_hand_contract_cannot_be_loosened_to_hide_tracking_failure"
+    ],
+    [
+      "src.test.rl.manipulation.test_direct_control",
+      "test_normal_hold_allows_only_executor_authorized_grip_release"
+    ],
+    [
+      "src.test.rl.manipulation.test_direct_control",
+      "test_persistent_tracking_and_settled_motion_are_penalized"
+    ],
+    [
+      "src.test.rl.manipulation.test_direct_control",
+      "test_release_rebases_obstructed_jaw_once_and_never_through_fault"
+    ],
+    [
+      "src.test.rl.manipulation.test_direct_control",
+      "test_residual_accept_advances_base_teacher_once_and_direct_never"
+    ],
+    [
+      "src.test.rl.manipulation.test_dynamic_trajectory",
+      "test_clear_arm_path_can_be_rejected_for_base_compensation_sweep"
+    ],
+    [
+      "src.test.rl.manipulation.test_dynamic_trajectory",
+      "test_colliding_goal_is_rejected_without_moving_robot"
+    ],
+    [
+      "src.test.rl.manipulation.test_dynamic_trajectory",
+      "test_dynamic_reset_is_reproducible_and_tracks_moving_reference"
+    ],
+    [
+      "src.test.rl.manipulation.test_dynamic_trajectory",
+      "test_faster_checkpoint_cannot_hide_failures_or_worse_forces"
+    ],
+    [
+      "src.test.rl.manipulation.test_dynamic_trajectory",
+      "test_replanning_preserves_position_velocity_acceleration_and_derivative_limits"
+    ],
+    [
+      "src.test.rl.manipulation.test_grasp_setup",
+      "test_loaded_setup_changes_base_but_preserves_world_hand_and_live_state"
+    ],
+    [
+      "src.test.rl.manipulation.test_integrated",
+      "test_mars_box_physical_pick_transport_place[direct_velocity-0.05-elliptic-False]"
+    ],
+    [
+      "src.test.rl.manipulation.test_integrated",
+      "test_mars_box_physical_pick_transport_place[direct_velocity-0.1-elliptic-True]"
+    ],
+    [
+      "src.test.rl.manipulation.test_integrated",
+      "test_mars_box_physical_pick_transport_place[direct_velocity-None-pyramidal-False]"
+    ],
+    [
+      "src.test.rl.manipulation.test_integrated",
+      "test_mars_box_physical_pick_transport_place[residual-0.05-elliptic-False]"
+    ],
+    [
+      "src.test.rl.manipulation.test_integrated",
+      "test_mars_box_physical_pick_transport_place[residual-0.1-elliptic-True]"
+    ],
+    [
+      "src.test.rl.manipulation.test_integrated",
+      "test_mars_box_physical_pick_transport_place[residual-None-pyramidal-False]"
+    ],
+    [
+      "src.test.rl.manipulation.test_integrated",
+      "test_verified_carry_to_place_restores_free_space_bias_before_contact[1860001-0.02]"
+    ],
+    [
+      "src.test.rl.manipulation.test_integrated",
+      "test_verified_carry_to_place_restores_free_space_bias_before_contact[1860007-0.05]"
+    ],
+    [
+      "src.test.rl.manipulation.test_integrated",
+      "test_verified_carry_to_place_restores_free_space_bias_before_contact[1860010-0.05]"
+    ],
+    [
+      "src.test.rl.manipulation.test_mars_chassis",
+      "test_caster_swivels_passively_while_driven_wheels_turn"
+    ],
+    [
+      "src.test.rl.manipulation.test_mars_chassis",
+      "test_feedback_cannot_bypass_final_actuator_acceleration_limit"
+    ],
+    [
+      "src.test.rl.manipulation.test_mars_chassis",
+      "test_hand_load_can_physically_unload_and_lift_caster"
+    ],
+    [
+      "src.test.rl.manipulation.test_mars_chassis",
+      "test_resting_support_loads_balance_weight_without_false_lift"
+    ],
+    [
+      "src.test.rl.manipulation.test_mars_chassis",
+      "test_support_dimensions_and_mass_come_from_pinned_cad"
+    ],
+    [
+      "src.test.rl.manipulation.test_mars_chassis",
+      "test_wheel_actuators_drive_chassis_through_ground_contact"
+    ],
+    [
+      "src.test.rl.manipulation.test_oracle",
+      "test_mars_tamp_component_generates_reachable_plans_with_physical_supports"
+    ],
+    [
+      "src.test.rl.manipulation.test_oracle",
+      "test_oracle_command_is_actuator_only_and_stop_cannot_release_payload"
+    ],
+    [
+      "src.test.rl.manipulation.test_oracle",
+      "test_public_arm_mapping_rejects_base_motion"
+    ],
+    [
+      "src.test.rl.manipulation.test_oracle",
+      "test_real_tamp_planner_uses_private_state_and_produces_coupled_path"
+    ],
+    [
+      "src.test.rl.manipulation.test_payload_assets",
+      "test_elliptic_contact_option_is_fingerprinted_without_raising_forces"
+    ],
+    [
+      "src.test.rl.manipulation.test_payload_assets",
+      "test_native_nominal_pinch_rejects_oversize_objects_before_motion[object1]"
+    ],
+    [
+      "src.test.rl.manipulation.test_payload_assets",
+      "test_native_nominal_pinch_rejects_oversize_objects_before_motion[object2]"
+    ],
+    [
+      "src.test.rl.manipulation.test_payload_assets",
+      "test_native_objects_preserve_source_geometry_mass_inertia_and_contacts"
+    ],
+    [
+      "src.test.rl.manipulation.test_payload_assets",
+      "test_native_payload_reset_selects_requested_object_without_mass_reduction[object1]"
+    ],
+    [
+      "src.test.rl.manipulation.test_payload_assets",
+      "test_native_payload_reset_selects_requested_object_without_mass_reduction[object2]"
+    ],
+    [
+      "src.test.rl.manipulation.test_payload_assets",
+      "test_native_suite_has_explicit_object_coverage_and_preserves_failures"
+    ],
+    [
+      "src.test.rl.manipulation.test_payload_assets",
+      "test_nominal_pinch_admission_accepts_existing_small_payload"
+    ],
+    [
+      "src.test.rl.manipulation.test_pose_value",
+      "test_pose_features_are_current_ee_relative_and_mask_padding"
+    ],
+    [
+      "src.test.rl.manipulation.test_pose_value",
+      "test_pose_features_reject_bad_real_poses_and_bad_mask"
+    ],
+    [
+      "src.test.rl.manipulation.test_pose_value",
+      "test_pose_value_is_permutation_equivariant_and_masks_padding"
+    ],
+    [
+      "src.test.rl.manipulation.test_pose_value",
+      "test_value_gate_selects_safe_lower_bound_and_abstains_on_uncertainty"
+    ],
+    [
+      "src.test.rl.manipulation.test_retention_training",
+      "test_empty_and_loaded_hands_share_retention_intent_but_different_labels"
+    ],
+    [
+      "src.test.rl.manipulation.test_retention_training",
+      "test_estimator_learns_closed_empty_counterexamples_and_exports_without_pickle"
+    ],
+    [
+      "src.test.rl.manipulation.test_retention_training",
+      "test_held_supervision_abstains_on_transitions_and_invalid_physics"
+    ],
+    [
+      "src.test.rl.manipulation.test_retention_training",
+      "test_invalid_task_distributions_rejected[weights0]"
+    ],
+    [
+      "src.test.rl.manipulation.test_retention_training",
+      "test_invalid_task_distributions_rejected[weights1]"
+    ],
+    [
+      "src.test.rl.manipulation.test_retention_training",
+      "test_invalid_task_distributions_rejected[weights2]"
+    ],
+    [
+      "src.test.rl.manipulation.test_retention_training",
+      "test_invalid_task_distributions_rejected[weights3]"
+    ],
+    [
+      "src.test.rl.manipulation.test_retention_training",
+      "test_payload_mass_com_randomization_is_episode_fixed_and_reset_reproducible"
+    ],
+    [
+      "src.test.rl.manipulation.test_retention_training",
+      "test_retention_context_preserves_tracking_rewards_and_has_no_ground_truth[innate_mars]"
+    ],
+    [
+      "src.test.rl.manipulation.test_retention_training",
+      "test_retention_context_preserves_tracking_rewards_and_has_no_ground_truth[stretch]"
+    ],
+    [
+      "src.test.rl.manipulation.test_retention_training",
+      "test_tracking_majority_preset_is_explicit_and_legacy_is_preserved"
+    ],
+    [
+      "src.test.rl.manipulation.test_retention_training",
+      "test_warm_start_and_auxiliary_export_preserve_actor_actions[False-ManipulationHistoryFeatures]"
+    ],
+    [
+      "src.test.rl.manipulation.test_retention_training",
+      "test_warm_start_and_auxiliary_export_preserve_actor_actions[False-ManipulationMLPFeatures]"
+    ],
+    [
+      "src.test.rl.manipulation.test_retention_training",
+      "test_warm_start_and_auxiliary_export_preserve_actor_actions[True-ManipulationHistoryFeatures]"
+    ],
+    [
+      "src.test.rl.manipulation.test_retention_training",
+      "test_warm_start_and_auxiliary_export_preserve_actor_actions[True-ManipulationMLPFeatures]"
+    ],
+    [
+      "src.test.rl.manipulation.test_reward",
+      "test_running_cost_orders_loading_and_jerk_without_forbidding_contact"
+    ],
+    [
+      "src.test.rl.manipulation.test_reward",
+      "test_safe_holding_is_preferred_to_early_failure_and_cost_is_cadence_invariant"
+    ],
+    [
+      "src.test.rl.manipulation.test_reward_audit",
+      "test_goal_gated_objective_prefers_reaching_over_idle_on_known_counterexample"
+    ],
+    [
+      "src.test.rl.manipulation.test_risk",
+      "test_risk_abstains_on_missing_safety_evidence_and_different_models"
+    ],
+    [
+      "src.test.rl.manipulation.test_risk",
+      "test_risk_rejects_frozen_data_duplicate_episodes_and_wrong_controller"
+    ],
+    [
+      "src.test.rl.manipulation.test_risk",
+      "test_robot_specific_prefix_excludes_phase_and_retains_every_action[innate_mars]"
+    ],
+    [
+      "src.test.rl.manipulation.test_risk",
+      "test_robot_specific_prefix_excludes_phase_and_retains_every_action[stretch]"
+    ],
+    [
+      "src.test.rl.manipulation.test_risk",
+      "test_trajectory_features_reject_nonfinite_and_invalid_shapes"
+    ],
+    [
+      "src.test.rl.manipulation.test_runtime_review",
+      "test_command_expiry_during_inference_prevents_another_action"
+    ],
+    [
+      "src.test.rl.manipulation.test_runtime_review",
+      "test_default_teacher_config_preserves_action_and_metric_changes_are_bounded"
+    ],
+    [
+      "src.test.rl.manipulation.test_runtime_review",
+      "test_explicit_budgets_do_not_waive_independent_freshness[0.12-0.4-0.3-policy inference deadline exceeded]"
+    ],
+    [
+      "src.test.rl.manipulation.test_runtime_review",
+      "test_explicit_budgets_do_not_waive_independent_freshness[0.2-0.25-0.3-control step deadline exceeded]"
+    ],
+    [
+      "src.test.rl.manipulation.test_runtime_review",
+      "test_explicit_budgets_do_not_waive_independent_freshness[0.2-0.4-0.1-stale physics state]"
+    ],
+    [
+      "src.test.rl.manipulation.test_runtime_review",
+      "test_explicit_budgets_do_not_waive_independent_freshness[0.2-0.4-0.3-None]"
+    ],
+    [
+      "src.test.rl.manipulation.test_runtime_review",
+      "test_gain_and_timing_limits_fail_closed[-1]"
+    ],
+    [
+      "src.test.rl.manipulation.test_runtime_review",
+      "test_gain_and_timing_limits_fail_closed[0.2]"
+    ],
+    [
+      "src.test.rl.manipulation.test_runtime_review",
+      "test_gain_and_timing_limits_fail_closed[0]"
+    ],
+    [
+      "src.test.rl.manipulation.test_runtime_review",
+      "test_gain_and_timing_limits_fail_closed[True]"
+    ],
+    [
+      "src.test.rl.manipulation.test_runtime_review",
+      "test_gain_and_timing_limits_fail_closed[inf]"
+    ],
+    [
+      "src.test.rl.manipulation.test_runtime_review",
+      "test_gain_and_timing_limits_fail_closed[nan]"
+    ],
+    [
+      "src.test.rl.manipulation.test_runtime_review",
+      "test_nonfinite_malformed_or_combined_motion_cannot_confirm_stop[velocity0]"
+    ],
+    [
+      "src.test.rl.manipulation.test_runtime_review",
+      "test_nonfinite_malformed_or_combined_motion_cannot_confirm_stop[velocity1]"
+    ],
+    [
+      "src.test.rl.manipulation.test_runtime_review",
+      "test_nonfinite_malformed_or_combined_motion_cannot_confirm_stop[velocity2]"
+    ],
+    [
+      "src.test.rl.manipulation.test_runtime_review",
+      "test_nonfinite_malformed_or_combined_motion_cannot_confirm_stop[velocity3]"
+    ],
+    [
+      "src.test.rl.manipulation.test_runtime_review",
+      "test_nonfinite_malformed_or_combined_motion_cannot_confirm_stop[velocity4]"
+    ],
+    [
+      "src.test.rl.manipulation.test_runtime_review",
+      "test_public_task_predicates_require_all_base_dofs_stopped[2]"
+    ],
+    [
+      "src.test.rl.manipulation.test_runtime_review",
+      "test_public_task_predicates_require_all_base_dofs_stopped[3]"
+    ],
+    [
+      "src.test.rl.manipulation.test_runtime_review",
+      "test_public_task_predicates_require_all_base_dofs_stopped[4]"
+    ],
+    [
+      "src.test.rl.manipulation.test_runtime_review",
+      "test_spatial_feedback_has_separate_gains_and_explicit_task_metric"
+    ],
+    [
+      "src.test.rl.manipulation.test_runtime_review",
+      "test_stop_requires_all_six_base_dofs_and_has_sim_time_bound[0]"
+    ],
+    [
+      "src.test.rl.manipulation.test_runtime_review",
+      "test_stop_requires_all_six_base_dofs_and_has_sim_time_bound[1]"
+    ],
+    [
+      "src.test.rl.manipulation.test_runtime_review",
+      "test_stop_requires_all_six_base_dofs_and_has_sim_time_bound[2]"
+    ],
+    [
+      "src.test.rl.manipulation.test_runtime_review",
+      "test_stop_requires_all_six_base_dofs_and_has_sim_time_bound[3]"
+    ],
+    [
+      "src.test.rl.manipulation.test_runtime_review",
+      "test_stop_requires_all_six_base_dofs_and_has_sim_time_bound[4]"
+    ],
+    [
+      "src.test.rl.manipulation.test_runtime_review",
+      "test_stop_requires_all_six_base_dofs_and_has_sim_time_bound[5]"
+    ],
+    [
+      "src.test.rl.manipulation.test_runtime_review",
+      "test_terminal_quiet_hold_does_not_ignore_vertical_roll_or_pitch[2]"
+    ],
+    [
+      "src.test.rl.manipulation.test_runtime_review",
+      "test_terminal_quiet_hold_does_not_ignore_vertical_roll_or_pitch[3]"
+    ],
+    [
+      "src.test.rl.manipulation.test_runtime_review",
+      "test_terminal_quiet_hold_does_not_ignore_vertical_roll_or_pitch[4]"
+    ],
+    [
+      "src.test.rl.manipulation.test_runtime_review",
+      "test_timing_defaults_preserve_limits_and_invalid_budget_combinations_reject"
+    ],
+    [
+      "src.test.rl.manipulation.test_task_pose_command_runtime",
+      "test_clearing_schedule_preserves_fault_grip_targets_and_history"
+    ],
+    [
+      "src.test.rl.manipulation.test_task_pose_command_runtime",
+      "test_executor_retiming_is_monotonic_bounded_and_does_not_release"
+    ],
+    [
+      "src.test.rl.manipulation.test_task_pose_command_runtime",
+      "test_hand_only_pose_schedule_reaches_fk_witness_using_base[innate_mars-0]"
+    ],
+    [
+      "src.test.rl.manipulation.test_task_pose_command_runtime",
+      "test_hand_only_pose_schedule_reaches_fk_witness_using_base[stretch-2]"
+    ],
+    [
+      "src.test.rl.manipulation.test_task_pose_command_runtime",
+      "test_hand_only_teacher_uses_free_base_and_ignores_inactive_base_values"
+    ],
+    [
+      "src.test.rl.manipulation.test_task_pose_command_runtime",
+      "test_late_policy_inference_stops_before_accepting_action"
+    ],
+    [
+      "src.test.rl.manipulation.test_task_pose_command_runtime",
+      "test_mid_motion_retarget_keeps_deadline_and_reaches_replacement"
+    ],
+    [
+      "src.test.rl.manipulation.test_task_pose_command_runtime",
+      "test_reachable_pose_schedule_completes_through_command_receipts"
+    ],
+    [
+      "src.test.rl.manipulation.test_task_pose_command_runtime",
+      "test_replace_cancel_ownership_and_faults_use_shared_protocol"
+    ],
+    [
+      "src.test.rl.manipulation.test_task_pose_command_runtime",
+      "test_stale_physics_stops_before_another_command"
+    ],
+    [
+      "src.test.rl.manipulation.test_task_pose_command_runtime",
+      "test_tamp_planner_pose_schedule_runs_through_protocol_without_relocation"
+    ],
+    [
+      "src.test.rl.manipulation.test_task_pose_command_runtime",
+      "test_timed_teacher_commands_motion_at_zero_tracking_error"
+    ],
+    [
+      "src.test.rl.manipulation.test_task_pose_command_runtime",
+      "test_unadvertised_or_malformed_schedule_never_starts"
+    ],
+    [
+      "src.test.rl.manipulation.test_task_pose_command_runtime",
+      "test_unconfirmed_stop_is_bounded_by_simulation_time"
+    ],
+    [
+      "src.test.rl.manipulation.test_task_pose_command_runtime",
+      "test_unconfirmed_stop_retains_command_ownership"
+    ],
+    [
+      "src.test.rl.manipulation.test_tracking_preview",
+      "test_base_distance_curriculum_expands_without_trivial_goals"
+    ],
+    [
+      "src.test.rl.manipulation.test_tracking_preview",
+      "test_base_training_targets_require_actual_translation_and_are_seeded"
+    ],
+    [
+      "src.test.rl.manipulation.test_tracking_preview",
+      "test_coupled_reward_requires_both_position_and_orientation_and_tightens"
+    ],
+    [
+      "src.test.rl.manipulation.test_tracking_preview",
+      "test_differential_base_reward_allows_turning_before_final_alignment"
+    ],
+    [
+      "src.test.rl.manipulation.test_tracking_preview",
+      "test_endpoint_motion_ramp_is_bounded_and_resets_with_new_reference_time"
+    ],
+    [
+      "src.test.rl.manipulation.test_tracking_preview",
+      "test_gt_tamp_path_can_be_retimed_into_task_space_without_moving_the_robot"
+    ],
+    [
+      "src.test.rl.manipulation.test_tracking_preview",
+      "test_hand_only_distribution_uses_whole_body_fk_without_leaking_a_base_solution"
+    ],
+    [
+      "src.test.rl.manipulation.test_tracking_preview",
+      "test_pose_schedule_runs_without_ik_or_joint_reference_hint_and_cannot_release_or_clear_fault"
+    ],
+    [
+      "src.test.rl.manipulation.test_tracking_preview",
+      "test_preview_hides_unannounced_retarget_but_exposes_announced_path"
+    ],
+    [
+      "src.test.rl.manipulation.test_tracking_preview",
+      "test_preview_masks_targets_without_locking_unconstrained_base"
+    ],
+    [
+      "src.test.rl.manipulation.test_tracking_preview",
+      "test_static_goal_age_ignores_duplicate_packets_and_inactive_targets"
+    ],
+    [
+      "src.test.rl.manipulation.test_tracking_preview",
+      "test_stationary_reward_prefers_accurate_quiet_hold_without_a_threshold_jump"
+    ],
+    [
+      "src.test.rl.manipulation.test_tracking_preview",
+      "test_task_frame_fk_and_preview_do_not_edit_physics_or_follow_base_disturbance[innate_mars]"
+    ],
+    [
+      "src.test.rl.manipulation.test_tracking_preview",
+      "test_task_frame_fk_and_preview_do_not_edit_physics_or_follow_base_disturbance[stretch]"
+    ],
+    [
+      "src.test.rl.manipulation.test_tracking_preview",
+      "test_task_pose_trajectory_interpolates_rotations_and_rejects_bad_inputs"
+    ],
+    [
+      "src.test.rl.manipulation.test_tracking_preview",
+      "test_tracking_success_keeps_controller_live_until_horizon_and_bonus_is_once"
+    ],
+    [
+      "src.test.rl.manipulation.test_training_options",
+      "test_fixed_case_training_wrapper_repeats_physics_and_reference_after_motion"
+    ],
+    [
+      "src.test.rl.manipulation.test_training_options",
+      "test_learning_rate_decay_covers_additional_steps_instead_of_lifetime_steps"
+    ],
+    [
+      "src.test.rl.manipulation.test_training_options",
+      "test_mlp_ppo_update_and_bundle_roundtrip_without_demonstrations[False]"
+    ],
+    [
+      "src.test.rl.manipulation.test_training_options",
+      "test_mlp_ppo_update_and_bundle_roundtrip_without_demonstrations[True]"
+    ],
+    [
+      "src.test.rl.manipulation.test_training_options",
+      "test_scratch_and_dagger_are_independent_options_with_appropriate_exploration"
+    ],
+    [
+      "src.test.rl.test_arm_curriculum",
+      "test_arm_configuration_rejects_base_task"
+    ],
+    [
+      "src.test.rl.test_arm_curriculum",
+      "test_arm_feedback_prior_matches_teacher_after_motion"
+    ],
+    [
+      "src.test.rl.test_arm_curriculum",
+      "test_arm_policy_refuses_base_goals"
+    ],
+    [
+      "src.test.rl.test_arm_curriculum",
+      "test_arm_sampler_reachable_path_and_repeatable[17]"
+    ],
+    [
+      "src.test.rl.test_arm_curriculum",
+      "test_arm_sampler_reachable_path_and_repeatable[1]"
+    ],
+    [
+      "src.test.rl.test_arm_curriculum",
+      "test_arm_sampler_reachable_path_and_repeatable[70000]"
+    ],
+    [
+      "src.test.rl.test_arm_curriculum",
+      "test_arm_sampler_reachable_path_and_repeatable[93]"
+    ],
+    [
+      "src.test.rl.test_arm_curriculum",
+      "test_arm_waypoints_require_final_measured_arrival"
+    ],
+    [
+      "src.test.rl.test_arm_curriculum",
+      "test_coordinated_pose_trajectory_uses_reachable_base_and_hand_waypoints"
+    ],
+    [
+      "src.test.rl.test_arm_curriculum",
+      "test_coordinated_waypoint_distribution_uses_turn_drive_align_instead_of_strafing"
+    ],
+    [
+      "src.test.rl.test_arm_curriculum",
+      "test_training_environment_advances_measured_coordinated_waypoints"
+    ],
+    [
+      "src.test.rl.test_base_control",
+      "test_acceleration_limits_reversal_and_retarget_hold_arm"
+    ],
+    [
+      "src.test.rl.test_base_control",
+      "test_base_baseline_runtime_acceleration"
+    ],
+    [
+      "src.test.rl.test_base_control",
+      "test_base_bundle_export_reload"
+    ],
+    [
+      "src.test.rl.test_base_control",
+      "test_base_gym_contract_and_reset"
+    ],
+    [
+      "src.test.rl.test_base_control",
+      "test_baseline_settles_accurately"
+    ],
+    [
+      "src.test.rl.test_base_control",
+      "test_delayed_dynamics_are_seeded_and_reset"
+    ],
+    [
+      "src.test.rl.test_base_control",
+      "test_runtime_matches_base_env_and_rejects_arm"
+    ],
+    [
+      "src.test.rl.test_contact_force",
+      "test_contact_force_decodes_normal_and_linear_force_in_newtons[1-elliptic]"
+    ],
+    [
+      "src.test.rl.test_contact_force",
+      "test_contact_force_decodes_normal_and_linear_force_in_newtons[1-pyramidal]"
+    ],
+    [
+      "src.test.rl.test_contact_force",
+      "test_contact_force_decodes_normal_and_linear_force_in_newtons[3-elliptic]"
+    ],
+    [
+      "src.test.rl.test_contact_force",
+      "test_contact_force_decodes_normal_and_linear_force_in_newtons[3-pyramidal]"
+    ],
+    [
+      "src.test.rl.test_contact_force",
+      "test_contact_force_decodes_normal_and_linear_force_in_newtons[4-elliptic]"
+    ],
+    [
+      "src.test.rl.test_contact_force",
+      "test_contact_force_decodes_normal_and_linear_force_in_newtons[4-pyramidal]"
+    ],
+    [
+      "src.test.rl.test_contact_force",
+      "test_contact_force_decodes_normal_and_linear_force_in_newtons[6-elliptic]"
+    ],
+    [
+      "src.test.rl.test_contact_force",
+      "test_contact_force_decodes_normal_and_linear_force_in_newtons[6-pyramidal]"
+    ],
+    [
+      "src.test.rl.test_history_control",
+      "test_box_contact_stops_or_unloads[False-30.0]"
+    ],
+    [
+      "src.test.rl.test_history_control",
+      "test_box_contact_stops_or_unloads[True-1.0]"
+    ],
+    [
+      "src.test.rl.test_history_control",
+      "test_box_contact_stops_or_unloads[True-30.0]"
+    ],
+    [
+      "src.test.rl.test_history_control",
+      "test_history_cadence_goal_pose_and_episode_reset"
+    ],
+    [
+      "src.test.rl.test_history_control",
+      "test_sim_effort_limits_and_contact_metrics"
+    ],
+    [
+      "src.test.rl.test_history_control",
+      "test_stalled_joint_bounds_lead_detects_and_allows_retreat"
+    ],
+    [
+      "src.test.rl.test_mars_env",
+      "test_baseline_completes_coordinated_reach"
+    ],
+    [
+      "src.test.rl.test_mars_env",
+      "test_clipping_and_invalid_actions"
+    ],
+    [
+      "src.test.rl.test_mars_env",
+      "test_collision_geometry_and_obstacle_observation"
+    ],
+    [
+      "src.test.rl.test_mars_env",
+      "test_coordinated_pose_targets_are_local_fk_ik_reachable_and_pose_scored"
+    ],
+    [
+      "src.test.rl.test_mars_env",
+      "test_coordinated_task_exposes_masked_pose_tokens"
+    ],
+    [
+      "src.test.rl.test_mars_env",
+      "test_ee_pose_target_uses_ik_and_can_lock_the_base"
+    ],
+    [
+      "src.test.rl.test_mars_env",
+      "test_feedback_teacher_reaches_local_coordinated_pose_targets"
+    ],
+    [
+      "src.test.rl.test_mars_env",
+      "test_gym_contract_and_seeded_trajectory"
+    ],
+    [
+      "src.test.rl.test_mars_env",
+      "test_reaching_excludes_gripper_mimic_and_masks_inactive_base"
+    ],
+    [
+      "src.test.rl.test_mars_env",
+      "test_runtime_goal_update_is_applied_at_next_tick_and_failure_stops"
+    ],
+    [
+      "src.test.rl.test_mars_env",
+      "test_terminal_accuracy_weight_penalizes_final_pose_error"
+    ],
+    [
+      "src.test.rl.test_mars_env",
+      "test_time_limit_and_goal_change_reward_rebase"
+    ],
+    [
+      "src.test.rl.test_mars_env",
+      "test_training_and_runtime_use_identical_observations_and_actions"
+    ],
+    [
+      "src.test.rl.test_mars_env",
+      "test_transformed_base_axes_map_acceleration_limited_forward_velocity"
+    ],
+    [
+      "src.test.rl.test_model_reference",
+      "test_audit_rejects_inertia_and_effort_drift"
+    ],
+    [
+      "src.test.rl.test_model_reference",
+      "test_base_envelope_covers_source_footprint_and_model_hash_covers_meshes"
+    ],
+    [
+      "src.test.rl.test_model_reference",
+      "test_reference_kinematics_limits_mass_and_collision_coverage"
+    ],
+    [
+      "src.test.rl.test_policy_bundle",
+      "test_export_keeps_observation_normalization_and_rejects_wrong_contract[False]"
+    ],
+    [
+      "src.test.rl.test_policy_bundle",
+      "test_export_keeps_observation_normalization_and_rejects_wrong_contract[True]"
+    ],
+    [
+      "src.test.rl.test_pose_targets",
+      "test_pose_targets_reject_empty_or_malformed_contracts"
+    ],
+    [
+      "src.test.rl.test_pose_targets",
+      "test_pose_targets_support_base_constraint_and_variable_masked_hands"
+    ],
+    [
+      "src.test.rl.test_recovery_scenarios",
+      "test_checkpoint_selection_uses_contact_severity_not_contact_count"
+    ],
+    [
+      "src.test.rl.test_recovery_scenarios",
+      "test_contact_benchmark_exposes_policy_to_contact_before_handoff"
+    ],
+    [
+      "src.test.rl.test_recovery_scenarios",
+      "test_contact_enabled_arrival_does_not_require_zero_contact"
+    ],
+    [
+      "src.test.rl.test_recovery_scenarios",
+      "test_hard_impact_stops_before_scheduled_retreat"
+    ],
+    [
+      "src.test.rl.test_recovery_scenarios",
+      "test_mixed_ordinary_deadline_matches_ten_second_gate"
+    ],
+    [
+      "src.test.rl.test_recovery_scenarios",
+      "test_residual_feedback_prior_matches_teacher_across_goals"
+    ],
+    [
+      "src.test.rl.test_recovery_scenarios",
+      "test_scenario_reset_clears_old_obstacle_before_sampling"
+    ],
+    [
+      "src.test.rl.test_recovery_scenarios",
+      "test_teacher_recovers_after_scheduled_event[contact_retreat]"
+    ],
+    [
+      "src.test.rl.test_recovery_scenarios",
+      "test_teacher_recovers_after_scheduled_event[push]"
+    ],
+    [
+      "src.test.rl.test_recovery_scenarios",
+      "test_teacher_recovers_after_scheduled_event[retarget]"
+    ],
+    [
+      "src.test.rl.test_regression_gate",
+      "test_existing_xml_is_not_a_launch_authorization"
+    ],
+    [
+      "src.test.rl.test_regression_gate",
+      "test_fresh_execution_receipt_binds_tests_sources_and_xml"
+    ],
+    [
+      "src.test.rl.test_regression_gate",
+      "test_malformed_xml_counts_fail_closed[-1]"
+    ],
+    [
+      "src.test.rl.test_regression_gate",
+      "test_malformed_xml_counts_fail_closed[NaN]"
+    ],
+    [
+      "src.test.rl.test_regression_gate",
+      "test_malformed_xml_counts_fail_closed[oops]"
+    ],
+    [
+      "src.test.rl.test_regression_gate",
+      "test_malformed_xml_syntax_fails_closed"
+    ],
+    [
+      "src.test.rl.test_regression_gate",
+      "test_source_edits_during_pytest_invalidate_result"
+    ],
+    [
+      "src.test.rl.test_regression_gate",
+      "test_target_list_is_pinned_to_control_and_safety_suites"
+    ],
+    [
+      "src.test.rl.test_regression_gate",
+      "test_unrelated_junit_and_tampering_are_rejected"
+    ],
+    [
+      "src.test.rl.test_serve_cli",
+      "test_reactive_cli_forwards_selection_and_preserves_legacy_default[base]"
+    ],
+    [
+      "src.test.rl.test_serve_cli",
+      "test_reactive_cli_forwards_selection_and_preserves_legacy_default[baseline]"
+    ],
+    [
+      "src.test.rl.test_serve_cli",
+      "test_reactive_cli_rejects_unsupported_robot_and_missing_policy"
+    ],
+    [
+      "src.test.rl.test_server_integration",
+      "test_base_only_server_completes_and_holds_arm"
+    ],
+    [
+      "src.test.rl.test_server_integration",
+      "test_legacy_goal_execution_remains_available"
+    ],
+    [
+      "src.test.rl.test_server_integration",
+      "test_policy_can_run_past_one_control_interval_but_misses_overall_budget"
+    ],
+    [
+      "src.test.rl.test_server_integration",
+      "test_stale_physics_fails_and_cancellation_requires_measured_stop"
+    ],
+    [
+      "src.test.rl.test_server_integration",
+      "test_table_sim_command_to_measured_completion_without_legacy_writes"
+    ],
+    [
+      "src.test.rl.test_test_drive",
+      "test_checkpoint_discovery_filters_incomplete_and_wrong_robot[direct_velocity]"
+    ],
+    [
+      "src.test.rl.test_test_drive",
+      "test_checkpoint_discovery_filters_incomplete_and_wrong_robot[residual]"
+    ],
+    [
+      "src.test.rl.test_test_drive",
+      "test_completed_physical_reach_can_resume_without_teleporting_or_clearing_faults"
+    ],
+    [
+      "src.test.rl.test_test_drive",
+      "test_coordinated_test_drive_switches_masked_base_and_ee_goals"
+    ],
+    [
+      "src.test.rl.test_test_drive",
+      "test_feedback_physically_reaches_base_targets_in_all_directions[offset0-mars-arm]"
+    ],
+    [
+      "src.test.rl.test_test_drive",
+      "test_feedback_physically_reaches_base_targets_in_all_directions[offset0-stretch-arm]"
+    ],
+    [
+      "src.test.rl.test_test_drive",
+      "test_feedback_physically_reaches_base_targets_in_all_directions[offset1-mars-arm]"
+    ],
+    [
+      "src.test.rl.test_test_drive",
+      "test_feedback_physically_reaches_base_targets_in_all_directions[offset1-stretch-arm]"
+    ],
+    [
+      "src.test.rl.test_test_drive",
+      "test_feedback_physically_reaches_base_targets_in_all_directions[offset2-mars-arm]"
+    ],
+    [
+      "src.test.rl.test_test_drive",
+      "test_feedback_physically_reaches_base_targets_in_all_directions[offset2-stretch-arm]"
+    ],
+    [
+      "src.test.rl.test_test_drive",
+      "test_feedback_physically_reaches_base_targets_in_all_directions[offset3-mars-arm]"
+    ],
+    [
+      "src.test.rl.test_test_drive",
+      "test_feedback_physically_reaches_base_targets_in_all_directions[offset3-stretch-arm]"
+    ],
+    [
+      "src.test.rl.test_test_drive",
+      "test_interactive_goal_nudge_moves_the_base_goal_without_teleporting"
+    ],
+    [
+      "src.test.rl.test_test_drive",
+      "test_mars_physical_test_drive_uses_wheels_and_reports_support"
+    ],
+    [
+      "src.test.rl.test_test_drive",
+      "test_only_simulation_modes_are_accepted"
+    ],
+    [
+      "src.test.rl.test_test_drive",
+      "test_physical_base_nudges_keep_se2_target_shape_and_preserve_state[mars-arm]"
+    ],
+    [
+      "src.test.rl.test_test_drive",
+      "test_physical_base_nudges_keep_se2_target_shape_and_preserve_state[stretch-arm]"
+    ],
+    [
+      "src.test.rl.test_test_drive",
+      "test_preview_policy_contract_survives_simulation_replacement_and_feedback_switch"
+    ],
+    [
+      "src.test.rl.test_test_drive",
+      "test_stretch_test_drive_uses_physical_base_and_cartesian_hand_targets"
+    ],
+    [
+      "src.test.rl.test_test_drive",
+      "test_target_selection_updates_masks_consistently_and_reset_can_keep_selection[mars-arm]"
+    ],
+    [
+      "src.test.rl.test_test_drive",
+      "test_target_selection_updates_masks_consistently_and_reset_can_keep_selection[mars-coordinated]"
+    ],
+    [
+      "src.test.rl.test_test_drive",
+      "test_target_selection_updates_masks_consistently_and_reset_can_keep_selection[stretch-arm]"
+    ],
+    [
+      "src.test.rl.test_test_drive",
+      "test_test_drive_changes_reference_without_teleporting_and_steps_physics"
+    ],
+    [
+      "src.test.rl.test_test_drive",
+      "test_training_status_separates_initialization_from_ppo_and_partial_writes"
+    ],
+    [
+      "src.test.rl.test_test_drive",
+      "test_whole_body_hand_tracking_converges_without_large_lateral_excursion[-0.04-mars-arm]"
+    ],
+    [
+      "src.test.rl.test_test_drive",
+      "test_whole_body_hand_tracking_converges_without_large_lateral_excursion[-0.04-stretch-arm]"
+    ],
+    [
+      "src.test.rl.test_test_drive",
+      "test_whole_body_hand_tracking_converges_without_large_lateral_excursion[0.04-mars-arm]"
+    ],
+    [
+      "src.test.rl.test_test_drive",
+      "test_whole_body_hand_tracking_converges_without_large_lateral_excursion[0.04-stretch-arm]"
+    ],
+    [
+      "src.test.rl.test_test_drive",
+      "test_whole_body_mid_motion_retarget_preserves_state_history_and_command_continuity[mars-arm]"
+    ],
+    [
+      "src.test.rl.test_test_drive",
+      "test_whole_body_mid_motion_retarget_preserves_state_history_and_command_continuity[stretch-arm]"
+    ],
+    [
+      "src.test.rl.test_training",
+      "test_base_features_use_current_goal_and_past_motion"
+    ],
+    [
+      "src.test.rl.test_training",
+      "test_bootstrap_exports_normalized_policy_and_bounded_labels"
+    ],
+    [
+      "src.test.rl.test_training",
+      "test_checkpoint_validation_and_best_policy"
+    ],
+    [
+      "src.test.rl.test_training",
+      "test_coordinated_distillation_only_scores_active_command_dimensions"
+    ],
+    [
+      "src.test.rl.test_training",
+      "test_critic_warmup_changes_values_not_actor"
+    ],
+    [
+      "src.test.rl.test_training",
+      "test_no_success_has_no_fabricated_settling_time"
+    ],
+    [
+      "src.test.rl.test_training",
+      "test_precision_policy_resume_keeps_normalization_frozen"
+    ],
+    [
+      "src.test.rl.test_training",
+      "test_wandb_optional_and_lifecycle"
+    ],
+    [
+      "src.test.rl.test_zmq_reactive",
+      "test_actual_zmq_server_receives_and_completes_reactive_goal"
+    ],
+    [
+      "src.test.robots.test_head_capability",
+      "test_effective_limits_intersect_active_joint_and_actuator"
+    ],
+    [
+      "src.test.robots.test_head_capability",
+      "test_malformed_capabilities_do_not_expand_limits[None]"
+    ],
+    [
+      "src.test.robots.test_head_capability",
+      "test_malformed_capabilities_do_not_expand_limits[caps1]"
+    ],
+    [
+      "src.test.robots.test_head_capability",
+      "test_malformed_capabilities_do_not_expand_limits[caps2]"
+    ],
+    [
+      "src.test.robots.test_head_capability",
+      "test_stretch_commands_and_preflight_share_effective_limits[False]"
+    ],
+    [
+      "src.test.robots.test_head_capability",
+      "test_stretch_commands_and_preflight_share_effective_limits[True]"
+    ],
+    [
+      "src.test.robots.test_mars_control_session",
+      "test_disabled_or_incomplete_driver_never_writes"
+    ],
+    [
+      "src.test.robots.test_mars_control_session",
+      "test_in_range_feedback_is_accepted_without_rebasing_command_slew"
+    ],
+    [
+      "src.test.robots.test_mars_control_session",
+      "test_measured_boundary_stops_and_exits_before_velocity_dispatch[pose0-0]"
+    ],
+    [
+      "src.test.robots.test_mars_control_session",
+      "test_measured_boundary_stops_and_exits_before_velocity_dispatch[pose1-0]"
+    ],
+    [
+      "src.test.robots.test_mars_control_session",
+      "test_measured_boundary_stops_and_exits_before_velocity_dispatch[pose2-0.201]"
+    ],
+    [
+      "src.test.robots.test_mars_control_session",
+      "test_measured_overspeed_rejects_even_a_zero_command_before_dispatch"
+    ],
+    [
+      "src.test.robots.test_mars_control_session",
+      "test_nonstationary_or_invalid_initial_arm_feedback_stops_and_latches[velocity0]"
+    ],
+    [
+      "src.test.robots.test_mars_control_session",
+      "test_nonstationary_or_invalid_initial_arm_feedback_stops_and_latches[velocity1]"
+    ],
+    [
+      "src.test.robots.test_mars_control_session",
+      "test_nonstationary_or_invalid_initial_arm_feedback_stops_and_latches[velocity2]"
+    ],
+    [
+      "src.test.robots.test_mars_control_session",
+      "test_profile_acceleration_and_target_limits_apply_before_dispatch"
+    ],
+    [
+      "src.test.robots.test_mars_control_session",
+      "test_target_loss_and_command_gap_latch_stop_without_automatic_resume"
+    ],
+    [
+      "src.test.robots.test_mars_control_session",
+      "test_unconfirmed_stop_is_reported_and_fault_retained"
+    ],
+    [
+      "src.test.robots.test_mars_motion_boundary",
+      "test_start_frame_wrap_and_latched_overrun"
+    ],
+    [
+      "src.test.robots.test_mars_motion_boundary",
+      "test_stop_failure_still_reports_and_exits"
+    ],
+    [
+      "src.test.robots.test_mars_motion_boundary",
+      "test_violation_stops_before_exit[pose0-0]"
+    ],
+    [
+      "src.test.robots.test_mars_motion_boundary",
+      "test_violation_stops_before_exit[pose1-0.201]"
+    ],
+    [
+      "src.test.robots.test_mars_motion_boundary",
+      "test_violation_stops_before_exit[pose2-0]"
+    ],
+    [
+      "src.test.robots.test_mars_motion_boundary",
+      "test_violation_stops_before_exit[pose3-0]"
+    ],
+    [
+      "src.test.scripts.test_trace_mars_carry",
+      "test_inactive_contact_slots_are_not_read"
+    ],
+    [
+      "src.test.scripts.test_trace_mars_carry",
+      "test_mixed_3d_and_error_plots_export_offline"
+    ],
+    [
+      "src.test.scripts.test_trace_mars_carry",
+      "test_trace_rejects_non_mars_units_before_building_a_model"
+    ],
+    [
+      "src.test.scripts.test_train_mars_carry_when_ready",
+      "test_dead_qualification_job_stops_without_training"
+    ],
+    [
+      "src.test.scripts.test_train_mars_carry_when_ready",
+      "test_regressions_must_have_no_failures_or_skips[0-1]"
+    ],
+    [
+      "src.test.scripts.test_train_mars_carry_when_ready",
+      "test_regressions_must_have_no_failures_or_skips[1-0]"
+    ]
+  ],
+  "xml_sha256": "deda5980940646117fc18077fc0e6f6ea751791300149582acb990554363e79a",
+  "xml_name": "pr224-review-regressions.xml",
+  "started_unix": 1792880974.9288394,
+  "finished_unix": 1792881308.3119395,
+  "returncode": 0
+}

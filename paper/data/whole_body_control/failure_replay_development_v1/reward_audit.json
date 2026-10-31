@@ -1,0 +1,160 @@
+{
+  "scope": "Measured diagnostic returns on the ten matched children with successful teacher final execution; no optimality proof.",
+  "discounts": {
+    "0.99": {
+      "pairs": [
+        {
+          "seed": 33000009,
+          "child": 0,
+          "teacher_return": 28.61664235143973,
+          "policy_return": 19.13333467379809,
+          "teacher_minus_policy": 9.48330767764164
+        },
+        {
+          "seed": 33000011,
+          "child": 0,
+          "teacher_return": 30.323137648737678,
+          "policy_return": 18.202310638262,
+          "teacher_minus_policy": 12.12082701047568
+        },
+        {
+          "seed": 33000011,
+          "child": 1,
+          "teacher_return": 30.65991285722911,
+          "policy_return": 17.90027552683878,
+          "teacher_minus_policy": 12.75963733039033
+        },
+        {
+          "seed": 33000019,
+          "child": 0,
+          "teacher_return": 31.002145529204316,
+          "policy_return": 18.418109315833284,
+          "teacher_minus_policy": 12.584036213371032
+        },
+        {
+          "seed": 33000019,
+          "child": 1,
+          "teacher_return": 30.85300204773701,
+          "policy_return": 18.02555151087243,
+          "teacher_minus_policy": 12.827450536864582
+        },
+        {
+          "seed": 33000000,
+          "child": 0,
+          "teacher_return": 29.462062865871886,
+          "policy_return": 18.815162069537315,
+          "teacher_minus_policy": 10.64690079633457
+        },
+        {
+          "seed": 33000000,
+          "child": 1,
+          "teacher_return": 29.408598790752695,
+          "policy_return": 18.916359722131673,
+          "teacher_minus_policy": 10.492239068621021
+        },
+        {
+          "seed": 33000001,
+          "child": 0,
+          "teacher_return": 29.22302875680445,
+          "policy_return": 19.571579519328363,
+          "teacher_minus_policy": 9.651449237476086
+        },
+        {
+          "seed": 33000001,
+          "child": 1,
+          "teacher_return": 29.183343271638186,
+          "policy_return": 19.125407629408244,
+          "teacher_minus_policy": 10.057935642229943
+        },
+        {
+          "seed": 33000003,
+          "child": 1,
+          "teacher_return": 28.933782323548396,
+          "policy_return": 18.47493085062243,
+          "teacher_minus_policy": 10.458851472925964
+        }
+      ],
+      "teacher_preferred_count": 10,
+      "minimum_advantage": 9.48330767764164,
+      "mean_advantage": 11.108263498633084
+    },
+    "0.9975": {
+      "pairs": [
+        {
+          "seed": 33000009,
+          "child": 0,
+          "teacher_return": 59.81856252505276,
+          "policy_return": 31.039131011596425,
+          "teacher_minus_policy": 28.779431513456338
+        },
+        {
+          "seed": 33000011,
+          "child": 0,
+          "teacher_return": 63.29814137272911,
+          "policy_return": 30.055456362708274,
+          "teacher_minus_policy": 33.242685010020836
+        },
+        {
+          "seed": 33000011,
+          "child": 1,
+          "teacher_return": 64.1517948389975,
+          "policy_return": 28.65119483800287,
+          "teacher_minus_policy": 35.50060000099464
+        },
+        {
+          "seed": 33000019,
+          "child": 0,
+          "teacher_return": 64.75416203056645,
+          "policy_return": 32.94748341708805,
+          "teacher_minus_policy": 31.806678613478397
+        },
+        {
+          "seed": 33000019,
+          "child": 1,
+          "teacher_return": 64.37932310473259,
+          "policy_return": 32.161939439181594,
+          "teacher_minus_policy": 32.217383665551
+        },
+        {
+          "seed": 33000000,
+          "child": 0,
+          "teacher_return": 61.8537752632198,
+          "policy_return": 31.922927795349974,
+          "teacher_minus_policy": 29.930847467869828
+        },
+        {
+          "seed": 33000000,
+          "child": 1,
+          "teacher_return": 61.718273657098905,
+          "policy_return": 33.319785907573404,
+          "teacher_minus_policy": 28.3984877495255
+        },
+        {
+          "seed": 33000001,
+          "child": 0,
+          "teacher_return": 61.35064274137554,
+          "policy_return": 33.664620915764985,
+          "teacher_minus_policy": 27.686021825610553
+        },
+        {
+          "seed": 33000001,
+          "child": 1,
+          "teacher_return": 61.06792263305969,
+          "policy_return": 31.827614124873666,
+          "teacher_minus_policy": 29.240308508186022
+        },
+        {
+          "seed": 33000003,
+          "child": 1,
+          "teacher_return": 60.676284371868356,
+          "policy_return": 29.572429908841123,
+          "teacher_minus_policy": 31.103854463027233
+        }
+      ],
+      "teacher_preferred_count": 10,
+      "minimum_advantage": 27.686021825610553,
+      "mean_advantage": 30.790629881772034
+    }
+  },
+  "safety_promoted": false
+}

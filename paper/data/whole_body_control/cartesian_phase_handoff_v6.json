@@ -1,0 +1,21 @@
+{
+  "scope": "Cartesian stage handoff correction; unchanged policy and initial physics in the paired replay",
+  "before_actor_phase_counts": {
+    "reach / pregrasp": 1,
+    "pregrasp / release": 370
+  },
+  "after_actor_phase_counts": {
+    "reach / reach": 1,
+    "pregrasp / pregrasp": 370
+  },
+  "paired_checkpoint": "logs/manipulation/tamp-pose-precision-v9/seed-64/step-24576",
+  "weights_sha256": "9d4f58e180ff9268fb23b65fbc64a729e5a53dd93d54555fc71bac1b2b1afa65",
+  "paired_before_completed_stages": 0,
+  "paired_after_completed_stages": 0,
+  "limitation": "Both paired runs still time out at pregrasp; phase correction is not a success claim. Before phase-count evidence is the earlier preserved v4 actor-input report.",
+  "regression_tests": 742,
+  "regression_receipt": "paper/data/whole_body_control/hold-cartesian-phase-v6-regressions-20261025.receipt.json",
+  "full_report_archive": "paper/data/whole_body_control/cartesian_phase_handoff_v6.json.gz",
+  "uncompressed_sha256": "32a4d3a75f9a5a88bb8d8ee33ffe0f554bdf9b3d4ca0872fe00f0278b3f9f8cc",
+  "safety_promoted": false
+}

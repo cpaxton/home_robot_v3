@@ -1,0 +1,79 @@
+{
+  "steps": 65536,
+  "seed": 90,
+  "controller_tests": 908,
+  "teacher_passed": 50,
+  "matched_initial_states_and_references": true,
+  "canonical_full_mastery": [
+    5,
+    5,
+    6,
+    4,
+    6
+  ],
+  "canonical_tracking_and_holding": [
+    10,
+    10,
+    10,
+    10,
+    10
+  ],
+  "canonical_common_filtered_smoothness": [
+    4,
+    4,
+    2,
+    3,
+    3
+  ],
+  "expanded": {
+    "baseline": {
+      "cases": 50,
+      "full_mastery": 23,
+      "tracking_and_holding": 40,
+      "safety_flags": {
+        "wheel_lift": 0,
+        "unsafe_contact": 0,
+        "invalid_physics": 0
+      },
+      "median_peak_jerk": {
+        "base_linear_jerk": 0.5629903865100212,
+        "base_yaw_jerk": 0.70496101762353,
+        "joint_jerk": 0.8149984311668861
+      }
+    },
+    "initial": {
+      "cases": 50,
+      "full_mastery": 33,
+      "tracking_and_holding": 50,
+      "safety_flags": {
+        "wheel_lift": 0,
+        "unsafe_contact": 0,
+        "invalid_physics": 0
+      },
+      "median_peak_jerk": {
+        "base_linear_jerk": 0.5843621021829049,
+        "base_yaw_jerk": 0.2507632813223969,
+        "joint_jerk": 0.7819686730082711
+      }
+    },
+    "final": {
+      "cases": 50,
+      "full_mastery": 34,
+      "tracking_and_holding": 50,
+      "safety_flags": {
+        "wheel_lift": 0,
+        "unsafe_contact": 0,
+        "invalid_physics": 0
+      },
+      "median_peak_jerk": {
+        "base_linear_jerk": 0.47372948132458514,
+        "base_yaw_jerk": 0.247669842562602,
+        "joint_jerk": 0.873902114729858
+      }
+    }
+  },
+  "hardware_used": false,
+  "weights_uploaded": false,
+  "safety_promoted": false,
+  "further_training_launched": false
+}

@@ -1,0 +1,21 @@
+{
+  "version": "mars-agent-controller-v1",
+  "scope": "Single-delivery development acceptance through agent public tools; existing multi-transfer gates remain unchanged",
+  "cases": [
+    "left:20g:0",
+    "left:50g:0",
+    "right:20g:0"
+  ],
+  "selection_case": "left:20g:0",
+  "program": {
+    "id": "single_delivery",
+    "instruction": "Pick up the blue object, carry it to destination support, place it entirely within the required region, release it and remain still.",
+    "stages": [
+      {
+        "object": "blue",
+        "support": "destination"
+      }
+    ]
+  },
+  "safety_promoted": false
+}

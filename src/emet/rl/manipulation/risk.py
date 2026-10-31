@@ -203,6 +203,7 @@ class TrajectoryRiskPredictor:
         empty = {
             "status": "unknown",
             "probabilities": dict.fromkeys(HEADS),
+            "unavailable_heads": dict.fromkeys(HEADS, "not evaluated"),
             "safety_certificate": False,
             "geometric_infeasibility": False,
         }
@@ -225,21 +226,25 @@ class TrajectoryRiskPredictor:
         z = torch.from_numpy(((x - np.asarray(m["mean"])) / np.asarray(m["std"])).astype(np.float32)[None])
         with torch.no_grad():
             logits = np.stack([model(z).numpy()[0] for model in self.models])
-        probabilities, disagreement = {}, {}
+        probabilities, disagreement, unavailable = {}, {}, {}
         for index, name in enumerate(HEADS):
             head = m["heads"][name]
             if not head["supported"]:
                 probabilities[name] = None
                 disagreement[name] = None
+                unavailable[name] = head.get("reason") or "unsupported calibration"
                 continue
             p = _sigmoid(logits[:, index] / head["temperature"])
             probabilities[name] = float(p.mean()) if p.std() <= 0.1 else None
             disagreement[name] = float(p.std())
+            if probabilities[name] is None:
+                unavailable[name] = "ensemble disagreement exceeds 0.1"
         unknown = geometry_valid is not True or any(v is None for v in probabilities.values())
         return {
             **empty,
             "status": "unknown" if unknown else "estimated",
             "probabilities": probabilities,
+            "unavailable_heads": unavailable,
             "ensemble_disagreement": disagreement,
             "reason": "missing geometry/calibration evidence" if unknown else None,
         }

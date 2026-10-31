@@ -1,0 +1,180 @@
+{
+  "scope": "Same 65536-step learned weights before/after clock correction, three current public programs, and separate current analytic teacher controls. All failures retained.",
+  "learned_programs": [
+    {
+      "case": "left:20g:0",
+      "completed_stages": 0,
+      "policy_calls": 371,
+      "robot_failure": "cartesian_tracking_timeout",
+      "stop_confirmed": true,
+      "failure_measurement": {
+        "reason": "cartesian_tracking_timeout",
+        "position_error_m": 0.004207326093434896,
+        "orientation_error_rad": 0.03236784504710128
+      },
+      "last_reference_trace": {
+        "trajectory_progress_s": 4.827465672730416,
+        "trajectory_rate": 0.6156879593412857
+      }
+    },
+    {
+      "case": "left:50g:0",
+      "completed_stages": 0,
+      "policy_calls": 198,
+      "robot_failure": "cartesian_path_tracking_envelope",
+      "stop_confirmed": true,
+      "failure_measurement": {
+        "reason": "cartesian_path_tracking_envelope",
+        "position_error_m": 0.010028887066044908,
+        "orientation_error_rad": 0.03941130952010662
+      },
+      "last_reference_trace": {
+        "trajectory_progress_s": 4.604418735181777,
+        "trajectory_rate": 0.3011271521340385
+      }
+    },
+    {
+      "case": "right:20g:0",
+      "completed_stages": 0,
+      "policy_calls": 371,
+      "robot_failure": "cartesian_tracking_timeout",
+      "stop_confirmed": true,
+      "failure_measurement": {
+        "reason": "cartesian_tracking_timeout",
+        "position_error_m": 0.004207326093434896,
+        "orientation_error_rad": 0.03236784504710128
+      },
+      "last_reference_trace": {
+        "trajectory_progress_s": 4.827465672730416,
+        "trajectory_rate": 0.6156879593412857
+      }
+    }
+  ],
+  "analytic_controls": [
+    {
+      "rotation_length_m_per_rad": 1.0,
+      "completed_stages": 0,
+      "robot_failure": "policy_cycle_deadline",
+      "stop_confirmed": true,
+      "last_result": "operation_failed",
+      "contact": {
+        "peak_contact_force": 3.727094722380042,
+        "contact_impulse": 283.79873299422104,
+        "contact": true,
+        "max_penetration": 0.00028690814223258573,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          0.0,
+          3.294789105511009e-06,
+          3.761956887864126e-05
+        ],
+        "min_wheel_load": [
+          1.606451989519207,
+          0.0,
+          0.0
+        ]
+      },
+      "stages": [
+        {
+          "goal": {
+            "object_filter": "blue",
+            "support_body": "destination",
+            "receptacle_name": "destination support",
+            "placement_region": [
+              [
+                0.21986386124376467,
+                0.029033107866031638
+              ],
+              [
+                0.27986386124376467,
+                0.08903310786603164
+              ]
+            ]
+          },
+          "verified": false,
+          "predicates": {
+            "inside_goal_region": true,
+            "destination_support": false,
+            "gripper_open": false,
+            "fingers_clear": false,
+            "object_still": true,
+            "safe": false,
+            "robot_still": true,
+            "base_goal_within_tolerance": true
+          }
+        }
+      ],
+      "learned_policy_evaluated": false
+    },
+    {
+      "rotation_length_m_per_rad": 0.15,
+      "completed_stages": 1,
+      "robot_failure": null,
+      "stop_confirmed": null,
+      "last_result": "no_plan_within_budget",
+      "contact": {
+        "peak_contact_force": 3.7242958886320014,
+        "contact_impulse": 379.4270764835107,
+        "contact": true,
+        "max_penetration": 0.00039266356777040504,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          0.0,
+          5.078266975197532e-07,
+          3.128471642743075e-05
+        ],
+        "min_wheel_load": [
+          1.622896861479173,
+          0.0,
+          0.0
+        ]
+      },
+      "stages": [
+        {
+          "goal": {
+            "object_filter": "blue",
+            "support_body": "destination",
+            "receptacle_name": "destination support",
+            "placement_region": [
+              [
+                0.21986386124376467,
+                0.029033107866031638
+              ],
+              [
+                0.27986386124376467,
+                0.08903310786603164
+              ]
+            ]
+          },
+          "verified": true,
+          "predicates": {
+            "inside_goal_region": true,
+            "destination_support": true,
+            "gripper_open": true,
+            "fingers_clear": true,
+            "object_still": true,
+            "safe": true,
+            "robot_still": true,
+            "base_goal_within_tolerance": true
+          }
+        }
+      ],
+      "learned_policy_evaluated": false
+    }
+  ],
+  "qualification_gate": false,
+  "unchanged_endpoint_bounds": {
+    "position_m": 0.003,
+    "orientation_rad": 0.02
+  },
+  "unchanged_tracking_tube": {
+    "position_m": 0.01,
+    "orientation_rad": 0.1
+  },
+  "before_clock_archive": "paper/data/whole_body_control/pose_precision_validation_v6.json.gz",
+  "full_report_archive": "paper/data/whole_body_control/cartesian_clock_v7.json.gz",
+  "uncompressed_sha256": "8efe1f12b2641656c85fe082f24bfbe70d07bd8215810f2b15f7b30f2e1c2b4e",
+  "safety_promoted": false
+}

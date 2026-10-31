@@ -1,0 +1,222 @@
+{
+  "program": {
+    "id": "single_delivery",
+    "instruction": "Pick up the blue object, carry it to destination support, place it entirely within the required region, release it and remain still.",
+    "stages": [
+      {
+        "object": "blue",
+        "support": "destination"
+      }
+    ]
+  },
+  "complete": true,
+  "safety_promoted": false,
+  "hardware_used": false,
+  "physics_paused_during_inference": true,
+  "server_weight_revision_verified": false,
+  "episodes": [
+    {
+      "label": "gain_4p0_bridge",
+      "case": {
+        "id": "left:20g:0",
+        "layout": "left",
+        "seed": 1861000,
+        "mass_kg": 0.02,
+        "yaw_offset_rad": 0.6,
+        "frozen_fixture": {
+          "accepted": true,
+          "source_support": [
+            0.2840054309335352,
+            -0.0529,
+            0.11319770937240886
+          ],
+          "destination_support": [
+            0.24986386124376467,
+            0.05903310786603164,
+            0.11319770937240886
+          ],
+          "witness_arm": [
+            0.6,
+            -0.44322706504606035,
+            0.22585010261422622,
+            0.21737696243183413,
+            0.0
+          ],
+          "witness_base": [
+            -0.0009640054633338128,
+            -4.932190148013802e-06,
+            9.284661069111383e-05
+          ],
+          "witness_hand": [
+            0.26581914273620844,
+            0.07003348572767182,
+            0.2387905364491753,
+            0.8252739969157307,
+            -0.5647120253608552,
+            0.5647190945598107,
+            0.8252831793230616,
+            -0.0038954145199553286,
+            0.002828840621267565
+          ],
+          "placement_region": [
+            [
+              0.21986386124376467,
+              0.029033107866031638
+            ],
+            [
+              0.27986386124376467,
+              0.08903310786603164
+            ]
+          ]
+        },
+        "model_signature": "805e6b34c8ab1e13c603fbdf747cd1e9c8dd0843aff3fee7e2bd4d7f5bcd91ca",
+        "initial_qpos": [
+          -0.0009640054633338128,
+          -4.932190148013802e-06,
+          -0.00013553556144078532,
+          0.9999971018348052,
+          6.750209742119732e-05,
+          0.0024061640478344934,
+          4.626048068370673e-05,
+          3.635035196037852e-07,
+          -0.3740895334158756,
+          -0.021935610619412696,
+          0.3990145580531259,
+          -2.997133564785949e-07,
+          0.34939866298144384,
+          -0.3494048648351942,
+          -1.0635778343509418e-05,
+          -0.0030428410452761814,
+          -0.014812594034436815,
+          0.0022003188610619905,
+          -0.09154339539312738,
+          0.2844706886935954,
+          -0.05291695903734503,
+          0.24314927927513433,
+          0.9999697202837616,
+          0.00041817643483186087,
+          0.007748816959015801,
+          -0.0005826489671320427,
+          4.0,
+          4.0,
+          0.02985784700184608,
+          1.0,
+          6.431712599295586e-17,
+          0.0,
+          0.0
+        ]
+      },
+      "success": false,
+      "robot_failure": "collision",
+      "policy_calls": 369,
+      "completed_stages": 0,
+      "stop_confirmed": true,
+      "contact_metrics": {
+        "peak_contact_force": 4.693370804667701,
+        "contact_impulse": 169.07865368512265,
+        "contact": true,
+        "max_penetration": 0.0017395582655543307,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          8.57783978055332e-06,
+          8.063835027646848e-06,
+          0.0
+        ],
+        "min_wheel_load": [
+          0.0,
+          0.0,
+          1.4604462324523948
+        ]
+      },
+      "motion_metrics": {
+        "samples": 412,
+        "duration_s": 20.549999999998906,
+        "hand_position_rms_m": 0.00430419088817295,
+        "hand_position_max_m": 0.006489785005839024,
+        "hand_rotation_rms_rad": 0.0158179300111681,
+        "hand_rotation_max_rad": 0.02151957570956687,
+        "arm_speed_max_rad_s": 0.015053084274100055,
+        "arm_velocity_command_error_rms_rad_s": 0.0015274098408099251,
+        "scope": "all recorded execution samples, including failed segments and stop transients; no smoothing",
+        "arm_acceleration_max_rad_s2": 0.14148643652154297,
+        "arm_jerk_rms_rad_s3": 0.5436213596308225,
+        "arm_jerk_max_rad_s3": 4.216425739677527
+      },
+      "failure_at": {
+        "stage": 0,
+        "tool": "execute_pick_place_plan",
+        "code": "collision",
+        "category": "execution_or_verification"
+      },
+      "agent_terminal": null,
+      "phase_completions": [
+        {
+          "sim_time": 1.300000000000001,
+          "phase": "approach_clearance_complete",
+          "execution_contract": "cartesian_arm_v1",
+          "position_error_m": 0.00023471821625308716,
+          "orientation_error_rad": 0.0012105444077446443,
+          "joint_witness_residual_rad": 0.0008184445651515312,
+          "controller_success": true
+        },
+        {
+          "sim_time": 11.80000000000061,
+          "phase": "pregrasp_complete",
+          "execution_contract": "cartesian_arm_v1",
+          "position_error_m": 0.0025058790366077233,
+          "orientation_error_rad": 0.011604032009484596,
+          "joint_witness_residual_rad": 0.05881479074812185,
+          "controller_success": true
+        },
+        {
+          "sim_time": 20.249999999999655,
+          "phase": "grasp_complete",
+          "execution_contract": "cartesian_arm_v1",
+          "position_error_m": 0.0026012584706933137,
+          "orientation_error_rad": 0.01728168645674623,
+          "joint_witness_residual_rad": 0.06497220959066621,
+          "controller_success": true
+        },
+        {
+          "sim_time": 20.59999999999946,
+          "phase": "gripper_settled",
+          "measured": 0.3614522917319713,
+          "controller_success": true
+        }
+      ],
+      "last_events": [
+        {
+          "sim_time": 21.599999999998907,
+          "phase": "pose_replan_attempt",
+          "attempt": 4,
+          "ik_success": true,
+          "position_error_m": 0.0020939049452409868,
+          "orientation_error_rad": 0.005579482713170171,
+          "reason": "arm_path_failed:invalid_start:collision"
+        },
+        {
+          "sim_time": 21.599999999998907,
+          "phase": "pose_replan_attempt",
+          "attempt": 5,
+          "ik_success": false,
+          "position_error_m": 0.010702402584206846,
+          "orientation_error_rad": 0.0479331539320113,
+          "reason": "pose_ik_failed:position=0.0107,rotation=0.0479"
+        },
+        {
+          "sim_time": 21.599999999998907,
+          "phase": "lift",
+          "reference_replan": "measured_world_pose",
+          "accepted": false,
+          "reason": "arm_path_failed:invalid_start:collision",
+          "execution_ik_added": true,
+          "witness_position_error_m": 0.012284628487001186,
+          "witness_orientation_error_rad": 0.012502654785227366
+        }
+      ]
+    }
+  ],
+  "uncompressed_sha256": "39808d2e6af3a701fc28a398881ed833352ef76545476b14a4c2fa9471201754",
+  "full_report_archive": "paper/data/whole_body_control/agent_controller_v1/gain4.json.gz"
+}

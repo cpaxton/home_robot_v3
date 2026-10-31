@@ -1,0 +1,18 @@
+{
+  "scope": "offline temporary-tree upstream patch checks; SDK test double, no ROS node or hardware",
+  "upstream_revision": "9e10601a124992068762528806f02c56ebc76f55",
+  "patch_sha256": "62cabcf90ce97321c020440b39f27609853b0764ba76c64075c845c3c6ef7fe5",
+  "validator_sha256": "52cdb76ef4c74e4010ec13230348cbea4cb4adbc7922ba20beaaa07f83c6db7b",
+  "checks": [
+    "patch applies to audited sources",
+    "C++ velocity conversion zero/positive/negative",
+    "valid read preserves signed register data",
+    "three reader methods reject communication failure",
+    "three reader methods reject missing servo data",
+    "upstream files unchanged"
+  ],
+  "passed": true,
+  "ros_package_built": false,
+  "deployed": false,
+  "hardware_commands_sent": false
+}

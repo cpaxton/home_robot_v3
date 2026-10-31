@@ -1,0 +1,1250 @@
+{
+  "scope": "Matched frozen pregrasp development holds; no physics changes or qualification",
+  "baselines": [
+    {
+      "selector": "zero",
+      "warmup_s": 0.0,
+      "accepted": true,
+      "policy_admission": {
+        "format": "mars-tamp-policy-admission-v1",
+        "robot_sha256": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+        "weights_sha256": "74db9cce239f9316faaf7874d4a6e61eefd4464db963f3c85bf802ca3367495a",
+        "training_fingerprint": "1e1110aaac94d6d32015c02262ef033f4810b8651e5780c88213beca94c2bb17",
+        "training_evidence_sha256": "c28f4ae506848f78d82768107e51045c7e55bad70dd94a77c7e484f893e82e7d",
+        "simulation_only": true,
+        "safety_promoted": false
+      },
+      "failure": null,
+      "stop_confirmed": null,
+      "quiet_at_end": false,
+      "joint_delta": null,
+      "hand_error_at_end_m": 0.000788530884372747,
+      "orientation_error_at_end_rad": 0.0029582333629561697,
+      "goal_reached_at_end": false,
+      "completed_duration": true,
+      "scored_policy_calls": 0,
+      "max_base_drift_m": 0.00027626751180675574,
+      "max_hand_error_m": 0.0008226458702742445,
+      "sim_duration_s": 10.000000000000343,
+      "contact": {
+        "peak_contact_force": 0.3799190763772873,
+        "contact_impulse": 2.775618357660589,
+        "contact": true,
+        "max_penetration": 0.000201852501429612,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "min_wheel_load": [
+          3.926403193338126,
+          6.087460508651359,
+          0.4769183155811052
+        ]
+      },
+      "case_id": "left:20g:1",
+      "quiet_metrics": {
+        "samples": 200,
+        "quiet_pose_fraction": 0.05,
+        "longest_quiet_pose_dwell_s": 0.15000000000000002,
+        "two_second_quiet_pose_hold": false,
+        "base_velocity_rms": [
+          0.006563086613783147,
+          2.595634487739453e-05,
+          0.00021491820850144517,
+          0.00037966279458365583,
+          0.012838561288065984,
+          0.0009335109352069789
+        ],
+        "base_velocity_abs_max": [
+          0.01073609571903944,
+          8.900555258151144e-05,
+          0.00040257678483612835,
+          0.0010969910072162747,
+          0.021406732499599457,
+          0.003698867978528142
+        ],
+        "angular_stop_violation_fraction": 0.02,
+        "linear_stop_violation_fraction": 0.95,
+        "arm_velocity_rms": [
+          0.0002869719553645614,
+          0.0011419769126544172,
+          0.0009981318516273016,
+          0.000369291612820299,
+          5.475595793788285e-05
+        ],
+        "scope": "Raw pre-step measurements; unchanged arm/all-six-base quiet and hand-pose bounds"
+      }
+    },
+    {
+      "selector": "explicit_hold",
+      "warmup_s": 0.0,
+      "accepted": true,
+      "policy_admission": {
+        "format": "mars-tamp-policy-admission-v1",
+        "robot_sha256": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+        "weights_sha256": "74db9cce239f9316faaf7874d4a6e61eefd4464db963f3c85bf802ca3367495a",
+        "training_fingerprint": "1e1110aaac94d6d32015c02262ef033f4810b8651e5780c88213beca94c2bb17",
+        "training_evidence_sha256": "c28f4ae506848f78d82768107e51045c7e55bad70dd94a77c7e484f893e82e7d",
+        "simulation_only": true,
+        "safety_promoted": false
+      },
+      "failure": null,
+      "stop_confirmed": null,
+      "quiet_at_end": true,
+      "joint_delta": null,
+      "hand_error_at_end_m": 0.00043644241743655835,
+      "orientation_error_at_end_rad": 0.0020240040802418364,
+      "goal_reached_at_end": true,
+      "completed_duration": true,
+      "scored_policy_calls": 0,
+      "max_base_drift_m": 0.000479250156763497,
+      "max_hand_error_m": 0.000477192071822032,
+      "sim_duration_s": 10.000000000000343,
+      "contact": {
+        "peak_contact_force": 0.637229746796351,
+        "contact_impulse": 5.938985876964387,
+        "contact": true,
+        "max_penetration": 0.00036129666553836454,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "min_wheel_load": [
+          3.3379250189911516,
+          5.181816385923935,
+          1.1389745103563924
+        ]
+      },
+      "case_id": "left:20g:1",
+      "quiet_metrics": {
+        "samples": 200,
+        "quiet_pose_fraction": 0.995,
+        "longest_quiet_pose_dwell_s": 9.9,
+        "two_second_quiet_pose_hold": true,
+        "base_velocity_rms": [
+          0.0005468555024312203,
+          4.860268639809276e-06,
+          9.43460090388935e-06,
+          2.4364950393613596e-05,
+          0.0004224523081827935,
+          0.00011350721801604705
+        ],
+        "base_velocity_abs_max": [
+          0.006234248634427786,
+          5.90104864386376e-05,
+          0.00011077428644057363,
+          0.0002303129294887185,
+          0.004933408461511135,
+          0.0012308525620028377
+        ],
+        "angular_stop_violation_fraction": 0.0,
+        "linear_stop_violation_fraction": 0.005,
+        "arm_velocity_rms": [
+          5.268263649966994e-05,
+          0.0003520196361637385,
+          0.00047439936745176386,
+          6.556013184582148e-05,
+          8.41572334499952e-06
+        ],
+        "scope": "Raw pre-step measurements; unchanged arm/all-six-base quiet and hand-pose bounds"
+      }
+    },
+    {
+      "selector": "reference",
+      "warmup_s": 0.0,
+      "accepted": true,
+      "policy_admission": {
+        "format": "mars-tamp-policy-admission-v1",
+        "robot_sha256": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+        "weights_sha256": "74db9cce239f9316faaf7874d4a6e61eefd4464db963f3c85bf802ca3367495a",
+        "training_fingerprint": "1e1110aaac94d6d32015c02262ef033f4810b8651e5780c88213beca94c2bb17",
+        "training_evidence_sha256": "c28f4ae506848f78d82768107e51045c7e55bad70dd94a77c7e484f893e82e7d",
+        "simulation_only": true,
+        "safety_promoted": false
+      },
+      "failure": null,
+      "stop_confirmed": null,
+      "quiet_at_end": false,
+      "joint_delta": null,
+      "hand_error_at_end_m": 0.0005345996629231286,
+      "orientation_error_at_end_rad": 0.00011231267848112936,
+      "goal_reached_at_end": false,
+      "completed_duration": true,
+      "scored_policy_calls": 0,
+      "max_base_drift_m": 0.0005520298882593454,
+      "max_hand_error_m": 0.0005345996629231286,
+      "sim_duration_s": 10.000000000000343,
+      "contact": {
+        "peak_contact_force": 0.43898165241075393,
+        "contact_impulse": 3.454166342687922,
+        "contact": true,
+        "max_penetration": 0.00025612594987550405,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "min_wheel_load": [
+          3.811870949410448,
+          5.926328947761723,
+          0.36479334885767967
+        ]
+      },
+      "case_id": "left:20g:1",
+      "quiet_metrics": {
+        "samples": 200,
+        "quiet_pose_fraction": 0.105,
+        "longest_quiet_pose_dwell_s": 0.15000000000000002,
+        "two_second_quiet_pose_hold": false,
+        "base_velocity_rms": [
+          0.006592471602180634,
+          3.25227695834987e-05,
+          0.0002097760184676639,
+          0.00038659859384934,
+          0.012138385691960355,
+          0.0009436822882680762
+        ],
+        "base_velocity_abs_max": [
+          0.011255903169512749,
+          0.00010737793490989134,
+          0.0004034738230984658,
+          0.0009511327953077853,
+          0.01851470209658146,
+          0.005532899871468544
+        ],
+        "angular_stop_violation_fraction": 0.0,
+        "linear_stop_violation_fraction": 0.895,
+        "arm_velocity_rms": [
+          0.00027098458542473234,
+          0.0008874372249097655,
+          0.0014926956659900535,
+          0.0006030533628365286,
+          5.9630784353893816e-05
+        ],
+        "scope": "Raw pre-step measurements; unchanged arm/all-six-base quiet and hand-pose bounds"
+      }
+    },
+    {
+      "selector": "checkpoint_policy",
+      "warmup_s": 0.0,
+      "accepted": true,
+      "policy_admission": {
+        "format": "mars-tamp-policy-admission-v1",
+        "robot_sha256": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+        "weights_sha256": "74db9cce239f9316faaf7874d4a6e61eefd4464db963f3c85bf802ca3367495a",
+        "training_fingerprint": "1e1110aaac94d6d32015c02262ef033f4810b8651e5780c88213beca94c2bb17",
+        "training_evidence_sha256": "c28f4ae506848f78d82768107e51045c7e55bad70dd94a77c7e484f893e82e7d",
+        "simulation_only": true,
+        "safety_promoted": false
+      },
+      "failure": null,
+      "stop_confirmed": null,
+      "quiet_at_end": false,
+      "joint_delta": null,
+      "hand_error_at_end_m": 0.0007748334080246058,
+      "orientation_error_at_end_rad": 0.00181907624837135,
+      "goal_reached_at_end": false,
+      "completed_duration": true,
+      "scored_policy_calls": 200,
+      "max_base_drift_m": 0.0006489026662051624,
+      "max_hand_error_m": 0.0007748334080246058,
+      "sim_duration_s": 10.000000000000343,
+      "contact": {
+        "peak_contact_force": 0.3933321652562822,
+        "contact_impulse": 3.3130660017424267,
+        "contact": true,
+        "max_penetration": 0.0002146395952861528,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "min_wheel_load": [
+          3.926298255235833,
+          6.0875151957686775,
+          0.47690435224497996
+        ]
+      },
+      "case_id": "left:20g:1",
+      "quiet_metrics": {
+        "samples": 200,
+        "quiet_pose_fraction": 0.085,
+        "longest_quiet_pose_dwell_s": 0.15000000000000002,
+        "two_second_quiet_pose_hold": false,
+        "base_velocity_rms": [
+          0.0065930955748016475,
+          3.0419814831727307e-05,
+          0.00021346853562369803,
+          0.000427144173507548,
+          0.012186716903925513,
+          0.0010961472471713708
+        ],
+        "base_velocity_abs_max": [
+          0.010978945530951023,
+          8.047762821661308e-05,
+          0.0004475600435398519,
+          0.0010650074109435081,
+          0.018822483718395233,
+          0.0037019297014921904
+        ],
+        "angular_stop_violation_fraction": 0.0,
+        "linear_stop_violation_fraction": 0.915,
+        "arm_velocity_rms": [
+          0.00030764676324545606,
+          0.0009281124901198857,
+          0.0013707845400498487,
+          0.0005830863440646546,
+          0.00019499735442212924
+        ],
+        "scope": "Raw pre-step measurements; unchanged arm/all-six-base quiet and hand-pose bounds"
+      }
+    },
+    {
+      "selector": "zero",
+      "warmup_s": 0.0,
+      "accepted": true,
+      "policy_admission": {
+        "format": "mars-tamp-policy-admission-v1",
+        "robot_sha256": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+        "weights_sha256": "74db9cce239f9316faaf7874d4a6e61eefd4464db963f3c85bf802ca3367495a",
+        "training_fingerprint": "1e1110aaac94d6d32015c02262ef033f4810b8651e5780c88213beca94c2bb17",
+        "training_evidence_sha256": "c28f4ae506848f78d82768107e51045c7e55bad70dd94a77c7e484f893e82e7d",
+        "simulation_only": true,
+        "safety_promoted": false
+      },
+      "failure": null,
+      "stop_confirmed": null,
+      "quiet_at_end": false,
+      "joint_delta": null,
+      "hand_error_at_end_m": 0.0006389578487551922,
+      "orientation_error_at_end_rad": 0.0029263536489762196,
+      "goal_reached_at_end": false,
+      "completed_duration": true,
+      "scored_policy_calls": 0,
+      "max_base_drift_m": 0.00044928094602374446,
+      "max_hand_error_m": 0.0006862127201544363,
+      "sim_duration_s": 10.000000000000343,
+      "contact": {
+        "peak_contact_force": 0.459029123099223,
+        "contact_impulse": 3.3344415730595705,
+        "contact": true,
+        "max_penetration": 0.00021909366572757036,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "min_wheel_load": [
+          3.919441278191677,
+          6.1707067927059915,
+          0.2646606767381448
+        ]
+      },
+      "case_id": "right:20g:2",
+      "quiet_metrics": {
+        "samples": 200,
+        "quiet_pose_fraction": 0.495,
+        "longest_quiet_pose_dwell_s": 0.15000000000000002,
+        "two_second_quiet_pose_hold": false,
+        "base_velocity_rms": [
+          0.006258069895379124,
+          3.1238945798542594e-05,
+          0.00019046678396136734,
+          0.00043485220124769207,
+          0.011864179641624076,
+          0.0011542214364238812
+        ],
+        "base_velocity_abs_max": [
+          0.011234915815293789,
+          6.055270569049753e-05,
+          0.00036920144339092076,
+          0.0009718423243612051,
+          0.021420203149318695,
+          0.007288020104169846
+        ],
+        "angular_stop_violation_fraction": 0.005,
+        "linear_stop_violation_fraction": 0.505,
+        "arm_velocity_rms": [
+          0.0003116453356803057,
+          0.0009090349579409038,
+          0.0013188886227672011,
+          0.0005449211636804987,
+          6.524105507422566e-05
+        ],
+        "scope": "Raw pre-step measurements; unchanged arm/all-six-base quiet and hand-pose bounds"
+      }
+    },
+    {
+      "selector": "explicit_hold",
+      "warmup_s": 0.0,
+      "accepted": true,
+      "policy_admission": {
+        "format": "mars-tamp-policy-admission-v1",
+        "robot_sha256": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+        "weights_sha256": "74db9cce239f9316faaf7874d4a6e61eefd4464db963f3c85bf802ca3367495a",
+        "training_fingerprint": "1e1110aaac94d6d32015c02262ef033f4810b8651e5780c88213beca94c2bb17",
+        "training_evidence_sha256": "c28f4ae506848f78d82768107e51045c7e55bad70dd94a77c7e484f893e82e7d",
+        "simulation_only": true,
+        "safety_promoted": false
+      },
+      "failure": null,
+      "stop_confirmed": null,
+      "quiet_at_end": true,
+      "joint_delta": null,
+      "hand_error_at_end_m": 0.000596226260944632,
+      "orientation_error_at_end_rad": 0.0024038928167739674,
+      "goal_reached_at_end": true,
+      "completed_duration": true,
+      "scored_policy_calls": 0,
+      "max_base_drift_m": 0.0005455846256234083,
+      "max_hand_error_m": 0.000596226260944632,
+      "sim_duration_s": 10.000000000000343,
+      "contact": {
+        "peak_contact_force": 0.5113461346347925,
+        "contact_impulse": 3.1273807037989263,
+        "contact": true,
+        "max_penetration": 0.00024987758768930945,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "min_wheel_load": [
+          3.3211723353070153,
+          5.228472098274279,
+          0.22074107162897227
+        ]
+      },
+      "case_id": "right:20g:2",
+      "quiet_metrics": {
+        "samples": 200,
+        "quiet_pose_fraction": 0.995,
+        "longest_quiet_pose_dwell_s": 9.850000000000001,
+        "two_second_quiet_pose_hold": true,
+        "base_velocity_rms": [
+          0.0008128322306766994,
+          7.815864868251515e-06,
+          3.0238340629107715e-05,
+          6.701250788984729e-05,
+          0.001387195047885746,
+          0.0004968609769171907
+        ],
+        "base_velocity_abs_max": [
+          0.010314185172319412,
+          0.00010430912516312674,
+          0.00040799195994623005,
+          0.0006902969325892627,
+          0.013162569142878056,
+          0.00372632616199553
+        ],
+        "angular_stop_violation_fraction": 0.0,
+        "linear_stop_violation_fraction": 0.005,
+        "arm_velocity_rms": [
+          7.445644444857994e-05,
+          0.0006781024567244565,
+          0.0007207982345631496,
+          0.00014955333698209096,
+          1.1203244405991504e-05
+        ],
+        "scope": "Raw pre-step measurements; unchanged arm/all-six-base quiet and hand-pose bounds"
+      }
+    },
+    {
+      "selector": "reference",
+      "warmup_s": 0.0,
+      "accepted": true,
+      "policy_admission": {
+        "format": "mars-tamp-policy-admission-v1",
+        "robot_sha256": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+        "weights_sha256": "74db9cce239f9316faaf7874d4a6e61eefd4464db963f3c85bf802ca3367495a",
+        "training_fingerprint": "1e1110aaac94d6d32015c02262ef033f4810b8651e5780c88213beca94c2bb17",
+        "training_evidence_sha256": "c28f4ae506848f78d82768107e51045c7e55bad70dd94a77c7e484f893e82e7d",
+        "simulation_only": true,
+        "safety_promoted": false
+      },
+      "failure": null,
+      "stop_confirmed": null,
+      "quiet_at_end": true,
+      "joint_delta": null,
+      "hand_error_at_end_m": 0.0007496344831160731,
+      "orientation_error_at_end_rad": 4.819329029339574e-05,
+      "goal_reached_at_end": true,
+      "completed_duration": true,
+      "scored_policy_calls": 0,
+      "max_base_drift_m": 0.0008200847317498045,
+      "max_hand_error_m": 0.0008032373187491079,
+      "sim_duration_s": 10.000000000000343,
+      "contact": {
+        "peak_contact_force": 0.40295941630369786,
+        "contact_impulse": 2.3476004761670928,
+        "contact": true,
+        "max_penetration": 0.00021197293790254507,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "min_wheel_load": [
+          3.8039702290292787,
+          5.982259853819642,
+          0.2789943629265813
+        ]
+      },
+      "case_id": "right:20g:2",
+      "quiet_metrics": {
+        "samples": 200,
+        "quiet_pose_fraction": 0.395,
+        "longest_quiet_pose_dwell_s": 0.15000000000000002,
+        "two_second_quiet_pose_hold": false,
+        "base_velocity_rms": [
+          0.006857066506279743,
+          2.3456898255999486e-05,
+          0.00022831838055734337,
+          0.00043711157071595356,
+          0.013775715288307141,
+          0.0009182937557181079
+        ],
+        "base_velocity_abs_max": [
+          0.011252842843532562,
+          8.118135156109929e-05,
+          0.0004503777017816901,
+          0.0010658438550308347,
+          0.022305510938167572,
+          0.0026132126804441214
+        ],
+        "angular_stop_violation_fraction": 0.155,
+        "linear_stop_violation_fraction": 0.595,
+        "arm_velocity_rms": [
+          0.00017805584628759717,
+          0.0012831797588010955,
+          0.001160446634049111,
+          0.0003848351553596634,
+          1.943022609567942e-05
+        ],
+        "scope": "Raw pre-step measurements; unchanged arm/all-six-base quiet and hand-pose bounds"
+      }
+    },
+    {
+      "selector": "checkpoint_policy",
+      "warmup_s": 0.0,
+      "accepted": true,
+      "policy_admission": {
+        "format": "mars-tamp-policy-admission-v1",
+        "robot_sha256": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+        "weights_sha256": "74db9cce239f9316faaf7874d4a6e61eefd4464db963f3c85bf802ca3367495a",
+        "training_fingerprint": "1e1110aaac94d6d32015c02262ef033f4810b8651e5780c88213beca94c2bb17",
+        "training_evidence_sha256": "c28f4ae506848f78d82768107e51045c7e55bad70dd94a77c7e484f893e82e7d",
+        "simulation_only": true,
+        "safety_promoted": false
+      },
+      "failure": null,
+      "stop_confirmed": null,
+      "quiet_at_end": false,
+      "joint_delta": null,
+      "hand_error_at_end_m": 0.00040225045247790014,
+      "orientation_error_at_end_rad": 0.0007177222970347664,
+      "goal_reached_at_end": false,
+      "completed_duration": true,
+      "scored_policy_calls": 200,
+      "max_base_drift_m": 0.0006603624352031522,
+      "max_hand_error_m": 0.0006582745475795897,
+      "sim_duration_s": 10.000000000000343,
+      "contact": {
+        "peak_contact_force": 0.4685622818364478,
+        "contact_impulse": 3.3729197534480693,
+        "contact": true,
+        "max_penetration": 0.00022147343075212475,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "min_wheel_load": [
+          3.9179880513477228,
+          6.160149362390403,
+          0.26011686560884895
+        ]
+      },
+      "case_id": "right:20g:2",
+      "quiet_metrics": {
+        "samples": 200,
+        "quiet_pose_fraction": 0.48,
+        "longest_quiet_pose_dwell_s": 0.15000000000000002,
+        "two_second_quiet_pose_hold": false,
+        "base_velocity_rms": [
+          0.006328878406535678,
+          3.258500613569849e-05,
+          0.00020127272792614686,
+          0.00042798624880216094,
+          0.011886705185275933,
+          0.0012277850476517924
+        ],
+        "base_velocity_abs_max": [
+          0.011492813006043434,
+          8.237624570028856e-05,
+          0.00040487165097147226,
+          0.0010210017208009958,
+          0.022511227056384087,
+          0.008347341790795326
+        ],
+        "angular_stop_violation_fraction": 0.035,
+        "linear_stop_violation_fraction": 0.52,
+        "arm_velocity_rms": [
+          0.0002914685506485212,
+          0.0008727747389624139,
+          0.0014120682596009079,
+          0.0006207370304403884,
+          0.00010072137576362405
+        ],
+        "scope": "Raw pre-step measurements; unchanged arm/all-six-base quiet and hand-pose bounds"
+      }
+    }
+  ],
+  "gain_ablation": [
+    {
+      "selector": "checkpoint_policy",
+      "warmup_s": 0.0,
+      "wheel_feedback_gain_override": 0,
+      "accepted": true,
+      "policy_admission": {
+        "format": "mars-tamp-policy-admission-v1",
+        "robot_sha256": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+        "weights_sha256": "74db9cce239f9316faaf7874d4a6e61eefd4464db963f3c85bf802ca3367495a",
+        "training_fingerprint": "1e1110aaac94d6d32015c02262ef033f4810b8651e5780c88213beca94c2bb17",
+        "training_evidence_sha256": "c28f4ae506848f78d82768107e51045c7e55bad70dd94a77c7e484f893e82e7d",
+        "simulation_only": true,
+        "safety_promoted": false
+      },
+      "failure": null,
+      "stop_confirmed": null,
+      "quiet_at_end": true,
+      "joint_delta": null,
+      "hand_error_at_end_m": 0.0004542755549426809,
+      "orientation_error_at_end_rad": 0.0016541832134255,
+      "goal_reached_at_end": true,
+      "completed_duration": true,
+      "scored_policy_calls": 120,
+      "max_base_drift_m": 0.0006880488905856022,
+      "max_hand_error_m": 0.0005991583166074884,
+      "sim_duration_s": 5.99999999999945,
+      "contact": {
+        "peak_contact_force": 0.547815940923448,
+        "contact_impulse": 1.7276094289115733,
+        "contact": true,
+        "max_penetration": 0.0003051709762191164,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "min_wheel_load": [
+          3.9313875425495333,
+          6.113290291650349,
+          0.4935077591783741
+        ]
+      },
+      "case_id": "left:20g:1",
+      "quiet_metrics": {
+        "samples": 120,
+        "quiet_pose_fraction": 0.9833333333333333,
+        "longest_quiet_pose_dwell_s": 5.8500000000000005,
+        "two_second_quiet_pose_hold": true,
+        "base_velocity_rms": [
+          0.0010388979572738667,
+          4.325568028299536e-06,
+          1.4622718468006182e-05,
+          5.7164733226802994e-05,
+          0.0009894696948787609,
+          0.00011928947782625869
+        ],
+        "base_velocity_abs_max": [
+          0.009059554897248745,
+          3.315093636047095e-05,
+          0.00011077428644057363,
+          0.0005207106005400419,
+          0.009942498058080673,
+          0.0008246552315540612
+        ],
+        "angular_stop_violation_fraction": 0.0,
+        "linear_stop_violation_fraction": 0.016666666666666666,
+        "arm_velocity_rms": [
+          7.374049113463987e-05,
+          0.0005315410649948938,
+          0.0005620021262517913,
+          0.00019376147239947192,
+          0.00010590463914274846
+        ],
+        "scope": "Raw pre-step measurements; unchanged arm/all-six-base quiet and hand-pose bounds"
+      }
+    },
+    {
+      "selector": "checkpoint_policy",
+      "warmup_s": 0.0,
+      "wheel_feedback_gain_override": 0.25,
+      "accepted": true,
+      "policy_admission": {
+        "format": "mars-tamp-policy-admission-v1",
+        "robot_sha256": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+        "weights_sha256": "74db9cce239f9316faaf7874d4a6e61eefd4464db963f3c85bf802ca3367495a",
+        "training_fingerprint": "1e1110aaac94d6d32015c02262ef033f4810b8651e5780c88213beca94c2bb17",
+        "training_evidence_sha256": "c28f4ae506848f78d82768107e51045c7e55bad70dd94a77c7e484f893e82e7d",
+        "simulation_only": true,
+        "safety_promoted": false
+      },
+      "failure": null,
+      "stop_confirmed": null,
+      "quiet_at_end": true,
+      "joint_delta": null,
+      "hand_error_at_end_m": 0.0004466709255792463,
+      "orientation_error_at_end_rad": 0.0015825270477869912,
+      "goal_reached_at_end": true,
+      "completed_duration": true,
+      "scored_policy_calls": 120,
+      "max_base_drift_m": 0.0003997822767124645,
+      "max_hand_error_m": 0.00045503181632167627,
+      "sim_duration_s": 5.99999999999945,
+      "contact": {
+        "peak_contact_force": 0.3826127968004891,
+        "contact_impulse": 1.736932156031982,
+        "contact": true,
+        "max_penetration": 0.00023383267607652441,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "min_wheel_load": [
+          3.9313875425495333,
+          6.113290291650349,
+          0.4935077591783741
+        ]
+      },
+      "case_id": "left:20g:1",
+      "quiet_metrics": {
+        "samples": 120,
+        "quiet_pose_fraction": 1.0,
+        "longest_quiet_pose_dwell_s": 6.0,
+        "two_second_quiet_pose_hold": true,
+        "base_velocity_rms": [
+          0.0003433792969379574,
+          3.901140855049836e-06,
+          1.1356458222578878e-05,
+          2.097402040655181e-05,
+          0.0001796651108821682,
+          7.741828206706062e-05
+        ],
+        "base_velocity_abs_max": [
+          0.003273453563451767,
+          3.315093636047095e-05,
+          0.00011077428644057363,
+          0.00021121298777870834,
+          0.0015660744393244386,
+          0.0002810973965097219
+        ],
+        "angular_stop_violation_fraction": 0.0,
+        "linear_stop_violation_fraction": 0.0,
+        "arm_velocity_rms": [
+          5.9242244916745325e-05,
+          0.0003280645759073998,
+          0.0003115780981413432,
+          0.00011052017832921937,
+          8.369395538997486e-05
+        ],
+        "scope": "Raw pre-step measurements; unchanged arm/all-six-base quiet and hand-pose bounds"
+      }
+    },
+    {
+      "selector": "checkpoint_policy",
+      "warmup_s": 0.0,
+      "wheel_feedback_gain_override": 0.5,
+      "accepted": true,
+      "policy_admission": {
+        "format": "mars-tamp-policy-admission-v1",
+        "robot_sha256": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+        "weights_sha256": "74db9cce239f9316faaf7874d4a6e61eefd4464db963f3c85bf802ca3367495a",
+        "training_fingerprint": "1e1110aaac94d6d32015c02262ef033f4810b8651e5780c88213beca94c2bb17",
+        "training_evidence_sha256": "c28f4ae506848f78d82768107e51045c7e55bad70dd94a77c7e484f893e82e7d",
+        "simulation_only": true,
+        "safety_promoted": false
+      },
+      "failure": null,
+      "stop_confirmed": null,
+      "quiet_at_end": true,
+      "joint_delta": null,
+      "hand_error_at_end_m": 0.0004261304835702068,
+      "orientation_error_at_end_rad": 0.001448971248929238,
+      "goal_reached_at_end": true,
+      "completed_duration": true,
+      "scored_policy_calls": 120,
+      "max_base_drift_m": 0.00034298462789507513,
+      "max_hand_error_m": 0.00048248762260322725,
+      "sim_duration_s": 5.99999999999945,
+      "contact": {
+        "peak_contact_force": 0.4159604288063392,
+        "contact_impulse": 1.931602387694608,
+        "contact": true,
+        "max_penetration": 0.0002256635354149182,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "min_wheel_load": [
+          3.9313875425495333,
+          6.113290291650349,
+          0.4935077591783741
+        ]
+      },
+      "case_id": "left:20g:1",
+      "quiet_metrics": {
+        "samples": 120,
+        "quiet_pose_fraction": 1.0,
+        "longest_quiet_pose_dwell_s": 6.0,
+        "two_second_quiet_pose_hold": true,
+        "base_velocity_rms": [
+          0.0011051179544977053,
+          7.202698023649291e-06,
+          2.5603942708103998e-05,
+          9.617478099447984e-05,
+          0.002066860796142184,
+          0.0002782311188060917
+        ],
+        "base_velocity_abs_max": [
+          0.002670100424438715,
+          3.315093636047095e-05,
+          0.00011077428644057363,
+          0.0006103456253185868,
+          0.0074906605295836926,
+          0.001237830612808466
+        ],
+        "angular_stop_violation_fraction": 0.0,
+        "linear_stop_violation_fraction": 0.0,
+        "arm_velocity_rms": [
+          9.0098945310121e-05,
+          0.0004018521858540775,
+          0.0004032704602491398,
+          0.0001666097093845877,
+          6.8334798895985e-05
+        ],
+        "scope": "Raw pre-step measurements; unchanged arm/all-six-base quiet and hand-pose bounds"
+      }
+    },
+    {
+      "selector": "checkpoint_policy",
+      "warmup_s": 0.0,
+      "wheel_feedback_gain_override": 1,
+      "accepted": true,
+      "policy_admission": {
+        "format": "mars-tamp-policy-admission-v1",
+        "robot_sha256": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+        "weights_sha256": "74db9cce239f9316faaf7874d4a6e61eefd4464db963f3c85bf802ca3367495a",
+        "training_fingerprint": "1e1110aaac94d6d32015c02262ef033f4810b8651e5780c88213beca94c2bb17",
+        "training_evidence_sha256": "c28f4ae506848f78d82768107e51045c7e55bad70dd94a77c7e484f893e82e7d",
+        "simulation_only": true,
+        "safety_promoted": false
+      },
+      "failure": null,
+      "stop_confirmed": null,
+      "quiet_at_end": false,
+      "joint_delta": null,
+      "hand_error_at_end_m": 0.0010551943521707305,
+      "orientation_error_at_end_rad": 0.002038669951433535,
+      "goal_reached_at_end": false,
+      "completed_duration": true,
+      "scored_policy_calls": 120,
+      "max_base_drift_m": 0.0014885370593938423,
+      "max_hand_error_m": 0.0010848844164743977,
+      "sim_duration_s": 5.99999999999945,
+      "contact": {
+        "peak_contact_force": 0.3864700909772336,
+        "contact_impulse": 2.552416441099516,
+        "contact": true,
+        "max_penetration": 0.000243607077798514,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "min_wheel_load": [
+          3.9313875425495333,
+          6.113290291650349,
+          0.4935077591783741
+        ]
+      },
+      "case_id": "left:20g:1",
+      "quiet_metrics": {
+        "samples": 120,
+        "quiet_pose_fraction": 0.5083333333333333,
+        "longest_quiet_pose_dwell_s": 0.1,
+        "two_second_quiet_pose_hold": false,
+        "base_velocity_rms": [
+          0.006125199249487423,
+          3.581530942810144e-05,
+          0.0002002935691064276,
+          0.00034297535219665517,
+          0.010031650116508384,
+          0.0010441561462361
+        ],
+        "base_velocity_abs_max": [
+          0.00952827837318182,
+          0.00010023390495916829,
+          0.0003385780437383801,
+          0.0007199958199635148,
+          0.016619591042399406,
+          0.0027514928951859474
+        ],
+        "angular_stop_violation_fraction": 0.0,
+        "linear_stop_violation_fraction": 0.49166666666666664,
+        "arm_velocity_rms": [
+          0.0002928807157057487,
+          0.0005433848709928482,
+          0.0015468576708720801,
+          0.0007018932914684177,
+          0.00020647473667309728
+        ],
+        "scope": "Raw pre-step measurements; unchanged arm/all-six-base quiet and hand-pose bounds"
+      }
+    },
+    {
+      "selector": "checkpoint_policy",
+      "warmup_s": 0.0,
+      "wheel_feedback_gain_override": 0,
+      "accepted": true,
+      "policy_admission": {
+        "format": "mars-tamp-policy-admission-v1",
+        "robot_sha256": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+        "weights_sha256": "74db9cce239f9316faaf7874d4a6e61eefd4464db963f3c85bf802ca3367495a",
+        "training_fingerprint": "1e1110aaac94d6d32015c02262ef033f4810b8651e5780c88213beca94c2bb17",
+        "training_evidence_sha256": "c28f4ae506848f78d82768107e51045c7e55bad70dd94a77c7e484f893e82e7d",
+        "simulation_only": true,
+        "safety_promoted": false
+      },
+      "failure": null,
+      "stop_confirmed": null,
+      "quiet_at_end": true,
+      "joint_delta": null,
+      "hand_error_at_end_m": 0.0003766309548145337,
+      "orientation_error_at_end_rad": 0.0011481736349307204,
+      "goal_reached_at_end": true,
+      "completed_duration": true,
+      "scored_policy_calls": 120,
+      "max_base_drift_m": 0.00019227078506835058,
+      "max_hand_error_m": 0.00043985894400965826,
+      "sim_duration_s": 5.99999999999945,
+      "contact": {
+        "peak_contact_force": 0.4378198571651272,
+        "contact_impulse": 1.6874082686426266,
+        "contact": true,
+        "max_penetration": 0.00023803846933711723,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "min_wheel_load": [
+          3.9179880513477228,
+          6.165631354642058,
+          0.19025411144999438
+        ]
+      },
+      "case_id": "right:20g:2",
+      "quiet_metrics": {
+        "samples": 120,
+        "quiet_pose_fraction": 1.0,
+        "longest_quiet_pose_dwell_s": 6.0,
+        "two_second_quiet_pose_hold": true,
+        "base_velocity_rms": [
+          0.0006893308608456404,
+          6.395826954393514e-06,
+          3.212112038128763e-05,
+          9.709257734460792e-05,
+          0.0021539783411488665,
+          0.000594627825755126
+        ],
+        "base_velocity_abs_max": [
+          0.0048974365927278996,
+          4.434386210050434e-05,
+          0.000280789245152846,
+          0.000797585176769644,
+          0.018129989504814148,
+          0.004801802337169647
+        ],
+        "angular_stop_violation_fraction": 0.0,
+        "linear_stop_violation_fraction": 0.0,
+        "arm_velocity_rms": [
+          9.65649723360702e-05,
+          0.0004474907053017024,
+          0.0003070205517519643,
+          0.00012395171441595887,
+          7.051288772977206e-05
+        ],
+        "scope": "Raw pre-step measurements; unchanged arm/all-six-base quiet and hand-pose bounds"
+      }
+    },
+    {
+      "selector": "checkpoint_policy",
+      "warmup_s": 0.0,
+      "wheel_feedback_gain_override": 0.25,
+      "accepted": true,
+      "policy_admission": {
+        "format": "mars-tamp-policy-admission-v1",
+        "robot_sha256": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+        "weights_sha256": "74db9cce239f9316faaf7874d4a6e61eefd4464db963f3c85bf802ca3367495a",
+        "training_fingerprint": "1e1110aaac94d6d32015c02262ef033f4810b8651e5780c88213beca94c2bb17",
+        "training_evidence_sha256": "c28f4ae506848f78d82768107e51045c7e55bad70dd94a77c7e484f893e82e7d",
+        "simulation_only": true,
+        "safety_promoted": false
+      },
+      "failure": null,
+      "stop_confirmed": null,
+      "quiet_at_end": true,
+      "joint_delta": null,
+      "hand_error_at_end_m": 0.0005277290411861634,
+      "orientation_error_at_end_rad": 0.002339076434477788,
+      "goal_reached_at_end": true,
+      "completed_duration": true,
+      "scored_policy_calls": 120,
+      "max_base_drift_m": 0.0011538960792099235,
+      "max_hand_error_m": 0.0012059501431436939,
+      "sim_duration_s": 5.99999999999945,
+      "contact": {
+        "peak_contact_force": 0.4002342902220202,
+        "contact_impulse": 1.2271453625403614,
+        "contact": true,
+        "max_penetration": 0.0002071022281668923,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "min_wheel_load": [
+          3.9179880513477228,
+          6.14784276883001,
+          0.12363203067866699
+        ]
+      },
+      "case_id": "right:20g:2",
+      "quiet_metrics": {
+        "samples": 120,
+        "quiet_pose_fraction": 0.9833333333333333,
+        "longest_quiet_pose_dwell_s": 5.800000000000001,
+        "two_second_quiet_pose_hold": true,
+        "base_velocity_rms": [
+          0.0012559466074712233,
+          6.643225920137112e-06,
+          1.9606761742537295e-05,
+          9.757475188105138e-05,
+          0.0012543462377488672,
+          0.0005265340218186786
+        ],
+        "base_velocity_abs_max": [
+          0.01084179151803255,
+          3.841227226075716e-05,
+          0.0001736772246658802,
+          0.0008261243929155171,
+          0.010312470607459545,
+          0.0034826917108148336
+        ],
+        "angular_stop_violation_fraction": 0.0,
+        "linear_stop_violation_fraction": 0.016666666666666666,
+        "arm_velocity_rms": [
+          0.0003508872327921069,
+          0.0003028501379556768,
+          0.000274392410589695,
+          0.00016494817929076487,
+          0.0002809842106587616
+        ],
+        "scope": "Raw pre-step measurements; unchanged arm/all-six-base quiet and hand-pose bounds"
+      }
+    },
+    {
+      "selector": "checkpoint_policy",
+      "warmup_s": 0.0,
+      "wheel_feedback_gain_override": 0.5,
+      "accepted": true,
+      "policy_admission": {
+        "format": "mars-tamp-policy-admission-v1",
+        "robot_sha256": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+        "weights_sha256": "74db9cce239f9316faaf7874d4a6e61eefd4464db963f3c85bf802ca3367495a",
+        "training_fingerprint": "1e1110aaac94d6d32015c02262ef033f4810b8651e5780c88213beca94c2bb17",
+        "training_evidence_sha256": "c28f4ae506848f78d82768107e51045c7e55bad70dd94a77c7e484f893e82e7d",
+        "simulation_only": true,
+        "safety_promoted": false
+      },
+      "failure": null,
+      "stop_confirmed": null,
+      "quiet_at_end": true,
+      "joint_delta": null,
+      "hand_error_at_end_m": 0.0003858640185224363,
+      "orientation_error_at_end_rad": 0.0018762595707009584,
+      "goal_reached_at_end": true,
+      "completed_duration": true,
+      "scored_policy_calls": 120,
+      "max_base_drift_m": 0.0009150078775912835,
+      "max_hand_error_m": 0.0009901481647537718,
+      "sim_duration_s": 5.99999999999945,
+      "contact": {
+        "peak_contact_force": 0.3845905722025679,
+        "contact_impulse": 1.2371526956493815,
+        "contact": true,
+        "max_penetration": 0.0002058117826698909,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "min_wheel_load": [
+          3.9179880513477228,
+          6.150461466967137,
+          0.10989645067080273
+        ]
+      },
+      "case_id": "right:20g:2",
+      "quiet_metrics": {
+        "samples": 120,
+        "quiet_pose_fraction": 0.9916666666666667,
+        "longest_quiet_pose_dwell_s": 5.8500000000000005,
+        "two_second_quiet_pose_hold": true,
+        "base_velocity_rms": [
+          0.0018800139710885516,
+          1.304252728154214e-05,
+          8.481154236214043e-05,
+          0.00012707337930043617,
+          0.002959635314987736,
+          0.0004967220181609412
+        ],
+        "base_velocity_abs_max": [
+          0.006992469076067209,
+          6.99211232131347e-05,
+          0.00019754681852646172,
+          0.0009523209882900119,
+          0.010312470607459545,
+          0.0032500438392162323
+        ],
+        "angular_stop_violation_fraction": 0.0,
+        "linear_stop_violation_fraction": 0.008333333333333333,
+        "arm_velocity_rms": [
+          0.00031485809236825513,
+          0.000333281289661807,
+          0.00038457263525269687,
+          0.00015305571308709187,
+          0.00021743053000852156
+        ],
+        "scope": "Raw pre-step measurements; unchanged arm/all-six-base quiet and hand-pose bounds"
+      }
+    },
+    {
+      "selector": "checkpoint_policy",
+      "warmup_s": 0.0,
+      "wheel_feedback_gain_override": 1,
+      "accepted": true,
+      "policy_admission": {
+        "format": "mars-tamp-policy-admission-v1",
+        "robot_sha256": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+        "weights_sha256": "74db9cce239f9316faaf7874d4a6e61eefd4464db963f3c85bf802ca3367495a",
+        "training_fingerprint": "1e1110aaac94d6d32015c02262ef033f4810b8651e5780c88213beca94c2bb17",
+        "training_evidence_sha256": "c28f4ae506848f78d82768107e51045c7e55bad70dd94a77c7e484f893e82e7d",
+        "simulation_only": true,
+        "safety_promoted": false
+      },
+      "failure": null,
+      "stop_confirmed": null,
+      "quiet_at_end": false,
+      "joint_delta": null,
+      "hand_error_at_end_m": 0.00046608959048325527,
+      "orientation_error_at_end_rad": 0.001171291123425886,
+      "goal_reached_at_end": false,
+      "completed_duration": true,
+      "scored_policy_calls": 120,
+      "max_base_drift_m": 0.0006713633285818637,
+      "max_hand_error_m": 0.0006790991435028953,
+      "sim_duration_s": 5.99999999999945,
+      "contact": {
+        "peak_contact_force": 0.43655801019306567,
+        "contact_impulse": 2.0140406320333137,
+        "contact": true,
+        "max_penetration": 0.00022289976776513482,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "min_wheel_load": [
+          3.9179880513477228,
+          6.167302628928203,
+          0.09811333144252754
+        ]
+      },
+      "case_id": "right:20g:2",
+      "quiet_metrics": {
+        "samples": 120,
+        "quiet_pose_fraction": 0.5083333333333333,
+        "longest_quiet_pose_dwell_s": 0.30000000000000004,
+        "two_second_quiet_pose_hold": false,
+        "base_velocity_rms": [
+          0.006028522006906904,
+          3.700986004200609e-05,
+          0.00019184239490852565,
+          0.0003779393186275486,
+          0.011470222316097047,
+          0.0015478895553419306
+        ],
+        "base_velocity_abs_max": [
+          0.00810857955366373,
+          8.39802814880386e-05,
+          0.00033385970164090395,
+          0.0009691079612821341,
+          0.01962376944720745,
+          0.008269395679235458
+        ],
+        "angular_stop_violation_fraction": 0.0,
+        "linear_stop_violation_fraction": 0.49166666666666664,
+        "arm_velocity_rms": [
+          0.00027708124656088205,
+          0.0008872209732252314,
+          0.0012677835240585903,
+          0.0005638543605550698,
+          0.00013953989943869593
+        ],
+        "scope": "Raw pre-step measurements; unchanged arm/all-six-base quiet and hand-pose bounds"
+      }
+    }
+  ],
+  "full_report_archive": "paper/data/whole_body_control/hold_dynamics_v3.json.gz",
+  "uncompressed_sha256": "9f64b63605fac9917778b7fbbdbf14609827a146f77a1750a2e1149dd0fc53ab",
+  "safety_promoted": false
+}

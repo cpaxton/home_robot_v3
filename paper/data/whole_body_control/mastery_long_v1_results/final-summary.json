@@ -1,0 +1,46 @@
+{
+  "complete": true,
+  "controller": "aebd72ad800ae08c21522a28d7440253e76ae4fba968081762d44da5e9ae1892",
+  "groups": {
+    "base/train": {
+      "cases": 5,
+      "admitted": 5,
+      "mastered": 0,
+      "tracking_and_settling_passed": 1,
+      "smoothness_passed": 0,
+      "failure_reasons": {
+        "tracking_timeout": 4,
+        "terminal_hold": 4,
+        "smoothness/base_linear_jerk": 5,
+        "smoothness/base_yaw_jerk": 3,
+        "smoothness/joint_jerk": 4
+      },
+      "codes": {
+        "tracking_timeout": 4,
+        "ok": 1
+      },
+      "all_pass": false
+    },
+    "base/validation": {
+      "cases": 5,
+      "admitted": 5,
+      "mastered": 0,
+      "tracking_and_settling_passed": 3,
+      "smoothness_passed": 1,
+      "failure_reasons": {
+        "smoothness/base_linear_jerk": 4,
+        "smoothness/base_yaw_jerk": 2,
+        "smoothness/joint_jerk": 3,
+        "terminal_hold": 2,
+        "tracking_timeout": 1
+      },
+      "codes": {
+        "ok": 4,
+        "tracking_timeout": 1
+      },
+      "all_pass": false
+    }
+  },
+  "all_pass": false,
+  "safety_promoted": false
+}

@@ -1,0 +1,279 @@
+{
+  "complete": true,
+  "uncompressed_sha256": "6d1f1b9013d8df2601a237cedb54461f61dc06e3b8327d8541ddf4aaee877884",
+  "teacher": {
+    "full_start": {
+      "cases": 8,
+      "admitted": 8,
+      "successes": 4,
+      "ever_settled": 8,
+      "outcomes": [
+        {
+          "seed": 3201000,
+          "admitted": true,
+          "code": "tracking_timeout",
+          "wheel_lift": false,
+          "unsafe_contact": false,
+          "retention_lost": false,
+          "mode": "start"
+        },
+        {
+          "seed": 3201001,
+          "admitted": true,
+          "code": "tracking_timeout",
+          "wheel_lift": false,
+          "unsafe_contact": false,
+          "retention_lost": false,
+          "mode": "start"
+        },
+        {
+          "seed": 3201002,
+          "admitted": true,
+          "code": "ok",
+          "wheel_lift": false,
+          "unsafe_contact": false,
+          "retention_lost": false,
+          "mode": "start"
+        },
+        {
+          "seed": 3201003,
+          "admitted": true,
+          "code": "tracking_timeout",
+          "wheel_lift": false,
+          "unsafe_contact": false,
+          "retention_lost": false,
+          "mode": "start"
+        },
+        {
+          "seed": 3201004,
+          "admitted": true,
+          "code": "ok",
+          "wheel_lift": false,
+          "unsafe_contact": false,
+          "retention_lost": false,
+          "mode": "start"
+        },
+        {
+          "seed": 3201005,
+          "admitted": true,
+          "code": "ok",
+          "wheel_lift": false,
+          "unsafe_contact": false,
+          "retention_lost": false,
+          "mode": "start"
+        },
+        {
+          "seed": 3201006,
+          "admitted": true,
+          "code": "tracking_timeout",
+          "wheel_lift": false,
+          "unsafe_contact": false,
+          "retention_lost": false,
+          "mode": "start"
+        },
+        {
+          "seed": 3201007,
+          "admitted": true,
+          "code": "ok",
+          "wheel_lift": false,
+          "unsafe_contact": false,
+          "retention_lost": false,
+          "mode": "start"
+        }
+      ]
+    },
+    "phase_mixture": {
+      "cases": 12,
+      "admitted": 12,
+      "successes": 6,
+      "ever_settled": 12,
+      "outcomes": [
+        {
+          "seed": 3201100,
+          "admitted": true,
+          "code": "ok",
+          "wheel_lift": false,
+          "unsafe_contact": false,
+          "retention_lost": false,
+          "mode": "start"
+        },
+        {
+          "seed": 3201101,
+          "admitted": true,
+          "code": "tracking_timeout",
+          "wheel_lift": false,
+          "unsafe_contact": false,
+          "retention_lost": false,
+          "mode": "mid"
+        },
+        {
+          "seed": 3201102,
+          "admitted": true,
+          "code": "ok",
+          "wheel_lift": false,
+          "unsafe_contact": false,
+          "retention_lost": false,
+          "mode": "mid"
+        },
+        {
+          "seed": 3201103,
+          "admitted": true,
+          "code": "tracking_timeout",
+          "wheel_lift": false,
+          "unsafe_contact": false,
+          "retention_lost": false,
+          "mode": "start"
+        },
+        {
+          "seed": 3201104,
+          "admitted": true,
+          "code": "ok",
+          "wheel_lift": false,
+          "unsafe_contact": false,
+          "retention_lost": false,
+          "mode": "start"
+        },
+        {
+          "seed": 3201105,
+          "admitted": true,
+          "code": "tracking_timeout",
+          "wheel_lift": false,
+          "unsafe_contact": false,
+          "retention_lost": false,
+          "mode": "start"
+        },
+        {
+          "seed": 3201106,
+          "admitted": true,
+          "code": "tracking_timeout",
+          "wheel_lift": false,
+          "unsafe_contact": false,
+          "retention_lost": false,
+          "mode": "hold"
+        },
+        {
+          "seed": 3201107,
+          "admitted": true,
+          "code": "tracking_timeout",
+          "wheel_lift": false,
+          "unsafe_contact": false,
+          "retention_lost": false,
+          "mode": "mid"
+        },
+        {
+          "seed": 3201108,
+          "admitted": true,
+          "code": "ok",
+          "wheel_lift": false,
+          "unsafe_contact": false,
+          "retention_lost": false,
+          "mode": "late"
+        },
+        {
+          "seed": 3201109,
+          "admitted": true,
+          "code": "ok",
+          "wheel_lift": false,
+          "unsafe_contact": false,
+          "retention_lost": false,
+          "mode": "mid"
+        },
+        {
+          "seed": 3201110,
+          "admitted": true,
+          "code": "ok",
+          "wheel_lift": false,
+          "unsafe_contact": false,
+          "retention_lost": false,
+          "mode": "mid"
+        },
+        {
+          "seed": 3201111,
+          "admitted": true,
+          "code": "tracking_timeout",
+          "wheel_lift": false,
+          "unsafe_contact": false,
+          "retention_lost": false,
+          "mode": "start"
+        }
+      ]
+    }
+  },
+  "tamp_generated": [
+    {
+      "robot": "innate_mars",
+      "seed": 3203000,
+      "planning_error": null,
+      "legacy_duration_s": 2.866297212595278,
+      "new_duration_s": 1.1374908026318156,
+      "certified_segments": 1
+    },
+    {
+      "robot": "innate_mars",
+      "seed": 3203001,
+      "planning_error": null,
+      "legacy_duration_s": 2.7984414748758257,
+      "new_duration_s": 1.1105622352723314,
+      "certified_segments": 1
+    },
+    {
+      "robot": "innate_mars",
+      "seed": 3203002,
+      "planning_error": null,
+      "legacy_duration_s": 2.720847176690459,
+      "new_duration_s": 1.0797689176307852,
+      "certified_segments": 1
+    },
+    {
+      "robot": "innate_mars",
+      "seed": 3203003,
+      "planning_error": null,
+      "legacy_duration_s": 2.7461930138935635,
+      "new_duration_s": 1.0898274197905906,
+      "certified_segments": 1
+    },
+    {
+      "robot": "stretch",
+      "seed": 3203000,
+      "planning_error": null,
+      "legacy_duration_s": 9.360078703937681,
+      "new_duration_s": 1.5389292744223073,
+      "certified_segments": 1
+    },
+    {
+      "robot": "stretch",
+      "seed": 3203001,
+      "planning_error": null,
+      "legacy_duration_s": 12.274038767831232,
+      "new_duration_s": 2.935093377977478,
+      "certified_segments": 1
+    },
+    {
+      "robot": "stretch",
+      "seed": 3203002,
+      "planning_error": null,
+      "legacy_duration_s": 11.933708111413951,
+      "new_duration_s": 2.6976505062305653,
+      "certified_segments": 1
+    },
+    {
+      "robot": "stretch",
+      "seed": 3203003,
+      "planning_error": null,
+      "legacy_duration_s": 11.470257483452968,
+      "new_duration_s": 2.395404999278961,
+      "certified_segments": 1
+    }
+  ],
+  "archive": "paper/data/whole_body_control/jerk_tracking_preflight_v1/report.json.gz",
+  "scope": "Portable current-source preflight and derivative plots; all failures retained.",
+  "canonical_carry_qualified": false,
+  "safety_promoted": false,
+  "hardware_used": false,
+  "teacher_totals": {
+    "admitted": 20,
+    "cases": 20,
+    "final_success": 10,
+    "ever_settled": 20
+  }
+}

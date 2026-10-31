@@ -20,7 +20,8 @@ def support_margin(model, data, profile, payload):
     for body in range(base + 1, model.nbody):
         if int(model.body_parentid[body]) in ids:
             ids.add(body)
-    ids.add(int(payload))
+    if payload is not None:
+        ids.add(int(payload))
     ids = np.array(sorted(ids))
     weights = model.body_mass[ids].copy()
     centers = data.xpos[ids] + np.einsum("nij,nj->ni", data.xmat[ids].reshape(-1, 3, 3), model.body_ipos[ids])

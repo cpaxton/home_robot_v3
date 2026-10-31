@@ -1,0 +1,755 @@
+{
+  "scope": "Diagnose checkpoint startup, target sensitivity and actual public TAMP inputs.\n\nSimulation only. Stationary diagnostics use the existing arm certificate's\n1 cm / 0.02 rad base envelope, independent force/wheel guards and measured stops.\nOffline phase/target predictions never command motion or establish feasibility.\n",
+  "source_hashes": {
+    "assets/robot/docking_station.xml": "3e00fc48583e27dd18c5c6e2471979b1e47b2b973b85c4ed4dc0a67411562ccf",
+    "assets/robot/innate_mars/NOTICE.md": "1e1d8e600976d8fc3b7f4f2eb6559eb91e5d8598610df138acc1731dbc346fa5",
+    "assets/robot/innate_mars/innate_mars.xml": "8535ccdaddbe696ba2ee5e7b556205a020a9d866860a05df16d558940eb58985",
+    "assets/robot/innate_mars/innate_mars_visual_extras.xml": "4a52fbf5d07b6242115d5f185f83bd81070aa27ee26a4d90473a8781294ddfa4",
+    "assets/robot/innate_mars/meshes/base.STL": "e725a419bbe85a9346a0187aff6b9c1fd3bcf9cf6cc1f1c4164777134b31f5ca",
+    "assets/robot/innate_mars/meshes/head.STL": "3852748e253644f9e9d710e92d11a15fee06cc9eeb4ed0d595eeedfebc03bd55",
+    "assets/robot/innate_mars/meshes/link1.STL": "9eb892e67efe447e802009cbbeaf46c30c86d46c08563858c9d26f1cee286587",
+    "assets/robot/innate_mars/meshes/link2.STL": "d8fe401af1ee98323ff128eeaab64945533ccf6e5a836ae1252fb571b6d70182",
+    "assets/robot/innate_mars/meshes/link3.STL": "71956e0cd0b868c46200af5e1b0a5191207fc056e0878fbba9dffbdd023add40",
+    "assets/robot/innate_mars/meshes/link4.STL": "2f1c87f188ddd71479f30d2e20c488b3d7eb30b4d19d4aec572e70d4c0529fae",
+    "assets/robot/innate_mars/meshes/link5.STL": "e668681a8f62060382c73f11630a1a752b11332012791886b1e21bfceeff54d0",
+    "assets/robot/innate_mars/meshes/link61.STL": "b57b1b055e3d0bb8eda43ae23604219a1155c01f4fcecfea6d3560494280e40e",
+    "assets/robot/innate_mars/meshes/link62.STL": "44df6c24e9af8cc1bc5a0feb179d23c7039c590e45dff7e5a388363f79b5f0ba",
+    "assets/robot/innate_mars/molmospaces_spawn.json": "fffc446085228f4f1a1783fedabbf7d5050f2c8f496e70c5adbe223a5659ed9d",
+    "assets/robot/innate_mars/reference/arm.srdf": "72f67c20b8e090b09be9ac3688a88b06d09360d1ae43f9fecb9b9780d0cb8aa3",
+    "assets/robot/innate_mars/reference/chassis_support.json": "05b58956b294505f045b4a916f6a3b40e1199c64384ef61c7f63cd42fe64a7b4",
+    "assets/robot/innate_mars/reference/maurice.urdf": "3e1dadfa4e3e10085691962dfa06e3fb2e9508663f7631829c17307e4f077b41",
+    "assets/robot/innate_mars/reference/provenance.json": "fa9763d7d18b5d06b33287d11b6527cbf153950f5e6d62a14c9769855ddac75a",
+    "assets/robot/innate_mars/t_2ki2q578.xml": "74fc54315db8bd0e0a1080c09262e4fab59eacb0c2877ad3c50ae3bd7a5f10b7",
+    "assets/robot/scene_environment.xml": "a4391e7ad761aa79c5ccde265bf20b6ea6d90336a63383d634bc91f3f5c5d68c",
+    "assets/robot/stretch.xml": "f84efccb18a5aaf4378f76654341140a45a6640e2457c49f0aa100a2d721a63c",
+    "controller/manipulation/__init__.py": "3867df5eff56c05d380f3c8ea1e1aefff4d70e387e64fafd911ef43f633bc929",
+    "controller/manipulation/closer_look.py": "069bd1f6c09a01b0a1daff6287045466044138210489ef93d6f4ed2d967d6f46",
+    "controller/manipulation/dynamem_manipulation/dynamem_manipulation.py": "0c8b1d97d35e648264026f46a21621a9ec28b06f2dccae850cd888979bee3ab4",
+    "controller/manipulation/dynamem_manipulation/grasper_utils.py": "6062ad09da372f767620d383121654bb70c1c57bec837dd4411a87c2cfd97089",
+    "controller/manipulation/dynamem_manipulation/image_publisher.py": "ddd19d4e32e20df45e122b4dbc32667ed6541414b4f82f4a87dfc9be99d434b1",
+    "controller/manipulation/dynamem_manipulation/place.py": "e86e33a3b3cd4477f15e09934962997bd1844f7f0a4e547e86701226fcf06df2",
+    "controller/manipulation/kinematic_pick_place.py": "d1e31f505047f1c87b3f790d993d763ffc5c16b1ed8092d917b87049935aff36",
+    "controller/manipulation/native_inputs.py": "e304662f3635ac8776005864fca64fa2c23c744c3d704fd9ad5020cafc62a56f",
+    "controller/manipulation/native_scene.py": "404fc7cfdd96adce6b16ed4bb843e118a6fa2b03ebdfaf1c8f62b710d6d77af5",
+    "controller/manipulation/physical_pick_place.py": "7e99e506f70eb7e17366f1699dc5433c1f1ea3eba4e4443c59d10d0a78ec4e0a",
+    "eval/physical_tamp.py": "deff19474bb165a33ca09ec63e7aa0708a5ecd0c79ed20faf64333c43b41fa4f",
+    "motion/__init__.py": "627228d1da4ec1fcf495127dd8a17cdfc154a10d3d9170eddcaace6e6b0088f0",
+    "motion/aabb_arm_collision.py": "d3d3190387717f7ecb78d3abced63a566763f56a1098450bce9db935ccdafecb",
+    "motion/agent_mcts.py": "7f7a7eef6e4e38e2e9e7eb5c090e300c4706178133360a376b293e1b3f4995fb",
+    "motion/algo/__init__.py": "239164c88ebd81c494b1bd0e67254edea795c9364a57792051bcca2ec63d00d6",
+    "motion/algo/a_star.py": "3c39ae9d57c44c1b05e1dadc6e6c46adf08e22d0590559806349b4936a4c9e63",
+    "motion/algo/node.py": "f0f0b02a487e08c8578c310ade0aabde16e235d719cf32dc6d0f13c0fa30e593",
+    "motion/algo/rrt.py": "23287d5010ea9eb87dd6a08859bc05b1dd6c06b8febf0ef15b5b4de77e202eb1",
+    "motion/algo/rrt_connect.py": "84390b19d04b6f17086c318a929f7abe730195f063c1789e2b1c2d138805b0ed",
+    "motion/algo/shortcut.py": "009b98197f26fe6467c632d6b816b01c24aff465a8e68f353fc399f8a78484f0",
+    "motion/algo/simplify.py": "1e10dd32d285f3d6ff3f0bb88910faed93aff623b66b48a5e84d5b8d1694df07",
+    "motion/arm_manip_profile.py": "2fb08fef144c87f991c906b33a1196ca3f16eb9dd358c56e1d63bdcc1fb12684",
+    "motion/arm_rrt.py": "bee9d28b4754f39d7aa977621bd80600e12657ac5caf3c532f57a0fb7d626131",
+    "motion/base/__init__.py": "5f16e1eb851328923b2994601c9672dbdcb622dd32fcd72e3effd225f5621d94",
+    "motion/base/base.py": "e0cc759cd4328b6859d7d6c70412fdbd4f747b8d8cca8c9a7419e94e095a42b0",
+    "motion/base/ik_solver_base.py": "28bc9d5dc51097587ef7d9cdd39e8161601120b5c66d75c5ca4380ed67b6f6dd",
+    "motion/base/space.py": "23f499f52c93df19400f486bc94b8a2d3e8e4422f2176b923e68e85c28230bfa",
+    "motion/base_goal_rank.py": "5084824c95765725e2025391bdfa0280b559cb61e0957e53731caa31b24fba75",
+    "motion/constants.py": "e79e7bab1e91ec5e33f42bb5450594eaa9820511aa34aef24f77c2b3a13a5bd4",
+    "motion/control/__init__.py": "824c822b380186ad14996ee4f1e53c57cebe11f2c08022a3d5bcd4bc861fcd7f",
+    "motion/control/feedback/__init__.py": "824c822b380186ad14996ee4f1e53c57cebe11f2c08022a3d5bcd4bc861fcd7f",
+    "motion/control/feedback/velocity_controllers.py": "f9711b8f12ec5b7ca1c41e1332fdbb948e003001885af5d406833d9d3d0c75c2",
+    "motion/control/goto_controller.py": "e95b871b4cb6bdbe3eafa1be40ba3e03734507d7304966f5e3d6a93774eb7f40",
+    "motion/control/traj_following_controller.py": "6ba470d045457e16da6377052e1ad6854f2bb92d2d6a22181eecfabf42c0dacc",
+    "motion/conversions.py": "b6307baa7cc391fe978d0547cb2dd0255a0652a38d4369908770cb935af9d901",
+    "motion/frontier_goals.py": "ea2fc1dd96a66ea9bbd02052feaf172c0c561a9a19a59b21fa5949b7330aa4a5",
+    "motion/grid_coordinates.py": "c2ae78a5555a2135edc57b655db423b3959f28447b05676d8d21c20bb876065f",
+    "motion/kinematics.py": "9f679bbbe8d98ef61975a6e6888956cc83eac7a88cb5242c853a57b5ca8aadd3",
+    "motion/mujoco_arm_ik.py": "313e0e09d7a8281fca608ab4bcff507f8fb633c01590b04ac738550b2df76b0f",
+    "motion/mujoco_collision.py": "c0dbeffe9dd232e5c78dd134851b451a6eb5a99ce67d0e09f8563931eeef4fdf",
+    "motion/navigation_sweep.py": "2a553a4c9631a28fd776b02e609d398be5097a9654d8913fe3c481ba42a702bb",
+    "motion/pinocchio_ik_solver.py": "f776d1f74b674215e74ae4076f87dfee914a8ef97e901c6129c7d3f675bbf29a",
+    "motion/placement.py": "9184873daa769c92c84d3b14009f4e4d600ada5847c807e182d7982e5816477e",
+    "motion/placement_geometry.py": "83dc90e667e4f81e602c247b5edb945c2923f4937aab31a8db1345eb25627487",
+    "motion/placement_replay.py": "06ff34147484b567509e7ab0541f3d2897a51adbb3367f87185ce93ec82e6aeb",
+    "motion/placement_surfaces.py": "98600279efd68451ec091fa34b64fc3d95a215b5ffd399a1da15906f999bf75f",
+    "motion/robot.py": "4e1926d18a5483b078a46ed9179476a84fe62a3d80f89ea2ad454d85f8398346",
+    "motion/simple_ik.py": "af9c4c9a2feb2c66c2a89d8d4331a8f3d6d40bb1bb70ded81dc9cd8d1d7c3b3e",
+    "motion/simple_ik_equations_numba.py": "f79e3130d18a1e899f90bcbcdec13b2e2f93c27e20feef389f6a478c1ba484cb",
+    "motion/utils/__init__.py": "3867df5eff56c05d380f3c8ea1e1aefff4d70e387e64fafd911ef43f633bc929",
+    "motion/utils/geometry.py": "cf20d151542f162c645e3ac8469563a4e6b2d51e534fec574b2ba592fcf1c952",
+    "motion/utils/simple_env.py": "3592c7229e3f220e619d3ff23612677855062201f54884fa1ae94988b0eb406d",
+    "motion/viewpoint_selection.py": "012f7fb23a751887ff68eea409a8f92e793e5565e62aea0bb765e44f8892db15",
+    "motion/voxel_arm_collision.py": "4cb99647badbe66785581f33f6d5b9c76704c06bd2cddc5c1a143403d6867ad0",
+    "rl/__init__.py": "fd8747eb2e1726ca596569f9154471d9cb7282c555236fe2d38ed2af4021b735",
+    "rl/__main__.py": "1fa6f2731c91b3691e168ee8c090b9dc9719b09299af133763fc50aca5383d4e",
+    "rl/arm.py": "5931a057a5c1d86ad811ca8fa59dc00dd812a4796ce7232f9a64bb9462dad38f",
+    "rl/audit.py": "f3f9c4de94b10621f20f6a2f67f0369cd1839753ac1891684ee3857e932f2e21",
+    "rl/base.py": "fc14e81f6881737e4eee8970317feea7fa9f8280f86fafe5a1210ddb9838ad51",
+    "rl/bootstrap.py": "9cf0b903247b94b724f753288c3ae7a3ae115de40b88de4fe0cce5c31716209c",
+    "rl/contact.py": "7258b978a81f9f7a941efcaf5f8b05609abeb2ba516662bf0c33cb2a5d497039",
+    "rl/control.py": "f2a0bfcaac71b03762e6060dfb1818d3a13086ee18dbd97082ae3284d572166e",
+    "rl/coverage.py": "258e5f9735beb3d2768f0658c7d59f1671901a8132ba6574a29c478566ddc189",
+    "rl/critic.py": "6a82b9d405fef8dfb903b6225e22c30629bc99e330a9d4b81636ae8e2f13d191",
+    "rl/env.py": "bcd6231ef2f59be80f09155069cf78237a46f9add2a807ed44c6e6d8bdea281d",
+    "rl/manipulation/__init__.py": "b1d021af151c366fb3569bf9dff91bd26a911b81a9d61fab8da49721a9242cea",
+    "rl/manipulation/__main__.py": "a68477564b4dc4c580c9676be6f01cc174fd545443dba0fe61e2770eaebcdfd2",
+    "rl/manipulation/base_benchmark.py": "470333af478bedb851c9f8e9eaaf8d4376a2c51d6b8344588074da3efa59feed",
+    "rl/manipulation/carry_benchmark.py": "e33e3858667d61260f5aa2da3712c371bec1839c276a3f626c96f36b3897e09d",
+    "rl/manipulation/carry_training.py": "21b9180134176d8a85c9095ad72c7ac917d69030a44ec5a65c4c635b35347633",
+    "rl/manipulation/command_runtime.py": "4121671a7e75b57c40e7224781e973552052c1ab08f137c2a8af1996acec71ab",
+    "rl/manipulation/control.py": "bed07f6df044c5aa31ffe9bf9a530aa8ff8a9568ff4c61af997c10b37bdc7593",
+    "rl/manipulation/dynamic_trajectory.py": "e41e1f1ee80849f4d049db02427d63a1181ce8e2382b96b364b02078a326b4fc",
+    "rl/manipulation/env.py": "f5f3b048908ff4b3a6d706809ed77265dedf2dc133b2a4c2406a8cef14f93b86",
+    "rl/manipulation/evaluation.py": "c559cac3a03217efecd16466dddab6b6d3e9ae27243a0f38574926db8c84ffa9",
+    "rl/manipulation/fixtures.py": "baaae9df99435b2713c46299c3610bae319a581496b7dda6da7d801028659503",
+    "rl/manipulation/grasp_setup.py": "9db8f39bba30bcb3e5f863081a5b18dc331dd7a3ef3a5274a5a8354e7f5f8f4c",
+    "rl/manipulation/held_object.py": "9875fef7a8de43859945b0466b86327429611a9b36dc5d3a55a5a2a3d3967aef",
+    "rl/manipulation/hold_audit.py": "9711458c42eb5883cbf522dc6b9abb0d7e08f3f6d626db240dff732b8f832cab",
+    "rl/manipulation/imitation.py": "eb301820f1a3692f8c8865ae6ec66dd98a17ca18d14be97461a93ddf1e8a59bf",
+    "rl/manipulation/integrated.py": "13c8df2bdd7940b5d3957d4bd23977b7698fea23ec60ea7aa035f36507980ca9",
+    "rl/manipulation/models.py": "9ba165454f91e4a165510a61b7c9b6c07c26ddc12265590ab3ae4901d2c08b24",
+    "rl/manipulation/observation_layout.py": "f991126888e2e51d6df91f47cd0924daccd6f180c74f0a20ae20f399401a6703",
+    "rl/manipulation/oracle.py": "09fb2d61194e6b143531c79e46cf49c033d7d6e365ccfa15ae81931fee0c5603",
+    "rl/manipulation/payload_assets.py": "5b1f0eb2efbd9af135894443c6d39bf1ab5419097531d70f5e6e8e31c8bb10cd",
+    "rl/manipulation/policy.py": "1d1e5bf3f3633eb7ea0dc2f01df197e8d8a4a4e71258b96a54910d636f66c3d2",
+    "rl/manipulation/pose_value.py": "beda169d04e729262d7f6a4e6c36d64dd5fc5c450e78dfa813702793bbee87cb",
+    "rl/manipulation/post_training.py": "472b86da36378d1654b1d1bd1f63a8f656c4220b31760b37a0a1e895f849c97d",
+    "rl/manipulation/profiles.py": "911acb00c84f16634e3413b992d3ae1900ec991507c94f8b8e91f7760e148b86",
+    "rl/manipulation/retention_training.py": "fdf4d376636d52aef6becf4c68b16ffa72b1e05e806e48e30c3eba3a918100b0",
+    "rl/manipulation/reward_audit.py": "a2be3c3852dc71c8618aa6c62c9310ad2dabed9c9fb7ad440310fd217b5e47de",
+    "rl/manipulation/risk.py": "5cf5485d750f1717b8a3e632cab50d3f0cd31076ef884d2b442266cf3e014f42",
+    "rl/manipulation/safety.py": "a1933653d66bb3daae2835e965398df427358ab5469d104f4c5a08a60aa7d4b8",
+    "rl/manipulation/support_audit.py": "6fd349215bb683c6d4818355a892d2db2ce7a968c4b24490a7a9bd6b878c7d04",
+    "rl/manipulation/tamp_benchmark.py": "869b7ce09ce9ce638c73cf8c0d0d4e28da59ed9f1ecfb6b8492df1304489329c",
+    "rl/manipulation/tamp_cases.py": "fa768562ab89ed05925242fcda1a5882a1da5b240f8bb5bbd86b0d8b3d2fbc5d",
+    "rl/manipulation/tamp_policy.py": "a879b1aa15d34cd81676b5d17e39afc332447c12d6cafd966426af1399be8431",
+    "rl/manipulation/tracking.py": "b83bfb970a3c4dc94b7f09e4a1e87d0071c0b74ca7cf2b6ba64ab755fc5ac241",
+    "rl/manipulation/tracking_audit.py": "6d78cb1258e444e244d555016a3bec3e76a53871221b480d536be546674c6d0a",
+    "rl/model.py": "a4a1354b3867f03b092d9158ff1bc7fa7ec83586ca7abd37a8ff053e53891453",
+    "rl/networks.py": "c58e59cf89945af1341eff23383c14293dfe4ed79029afde5037fbe454e4ec99",
+    "rl/policy.py": "ddd1e6ba0fdffc8dd5821618f36f7d9aff8cd4c5c47dc3625d2cecb6bf2d0406",
+    "rl/pose_targets.py": "a2d1a970ea2ea52ad8b0f6a2c99d88c86fc921dafbe4386d08b71c95cdd56d43",
+    "rl/profile.py": "9e02df85eb4f122e4ac1cf033c4caa36b9d5be2c854d0f99ca33d46510f09577",
+    "rl/reference.py": "213f1c3b882e339bc0361fe7c621347e77b443a30d66a2a415e8edc751b2fde6",
+    "rl/refit.py": "f2f4d58abed823727dc49e0829b2c17f5154ef07293dd7c1dae7da04325dc8e2",
+    "rl/regression_gate.py": "d614812868cf792e80868a37b5b2dc91ab6c2ac99d43c5019ece96a28a0f170c",
+    "rl/residual.py": "5a04900c56b419e4fefa6bd4380ea315e0ecd6281f40291892d87de65afc78ff",
+    "rl/robustness.py": "f864a9f3298dc2df038ca3515a445db7860b286d48de49c9cb04cc8554fdab51",
+    "rl/server.py": "cf69d1a87d32c39a1b44310476108ef5a33590bd6a1da29c6476c67eb2a1678e",
+    "rl/test_drive.py": "e80d132eab78b3a9b146934843fbd827fdf8b8fee5e983cf63bfff7e39077b47",
+    "rl/training.py": "4af1015abc0a488fc379a9087e0e2c12d42585a3c43cd0a4df408b1df7e0e338",
+    "rl/trajectories.py": "31545e53a2bd2bb9773fde0cab715ace31922e18f3316d52fcc3c09352e9588c",
+    "rl/transformer.py": "b7aa84a64c3f0dd76b6a647af23617c3a38c4e2bec76500d62e0c861fd610dbc",
+    "rl/waypoints.py": "bf7be5ebc76301d46da3e642177e1cfb600844decee98ae22620bb9bb29b77bf",
+    "robots/__init__.py": "bcd3da62da771c642ac3c3ee353fae6a14c956f37e6a88e7bae5b624c1e4e5cb",
+    "robots/base.py": "92b6b2fd557e52a5f0638d01012b80319cc731648274287876548f40589176be",
+    "robots/footprint.py": "5466857b9e23237f9821ed74b3fdf85911b65d8fe03a43731024e0e172a83de2",
+    "robots/franka_fr3/__init__.py": "c74675d245bba7653609cf95ddc0fa8993a7657f6b588dc78d6966967940a2ba",
+    "robots/galaxea_r1/__init__.py": "06b752161e15cf7b2d40d54908734c4c46d3b2a697c33634fa010f1b8a8a9215",
+    "robots/galaxea_r1/sim_stationary.py": "4345966232c33e2851724e905143ba5e0299d0a54818fa5c02e5e3d3e0fef8e5",
+    "robots/head_capability.py": "76ab8f959b7a4ff3c23cc9cb5ce5555d86166d471b50320fd85daffb6d877b11",
+    "robots/innate_mars/__init__.py": "7960ef65b89e60fc6f960a5a41e7e9a32d4686ea31830c7c30548ed6b181a6ec",
+    "robots/innate_mars/chassis.py": "ee9373ef44fc5de88e27d4985311f7f92a27fd3e21363058cefd438f91aa80bf",
+    "robots/innate_mars/control_session.py": "5870f6b3f11c8cfdb6ed047a71030e61f632046a38a3bb85fb6ab56715525fff",
+    "robots/innate_mars/dummy_client.py": "332d4710a82ce3b3cff91974582e99793e64fd136d58f3a965a4f1ebcd45c246",
+    "robots/innate_mars/emote_backend.py": "a830f20675cf59943417340c44eee49c7c2d99f0e3605a1d203af5079d598104",
+    "robots/innate_mars/head_kinematics.py": "6eaefab297668d799854931568ccccfb70c5037af5374a10886b91fab2c852ef",
+    "robots/innate_mars/motion_boundary.py": "aefe8821a761c0463ba6bc5a64d8a8733aa8d4c4ded2d329fb4ebe72a1979fb9",
+    "robots/innate_mars/ros_client.py": "95699538778c00f61ff09c6555493fa2d6c319c0d3976256c82be5f32e9043ee",
+    "robots/mobile_aloha/__init__.py": "788d13d6917cad4bdd3ae251da03e23e27bca578836a993f03a30ed769d950f0",
+    "robots/nori/__init__.py": "13e0964f820493d8313a96b31e25d0c953d379bf8c915cef26b8ccfb8192dce8",
+    "robots/rby1/__init__.py": "79840a21ccffc380355eac2ad089ff7963801b9b034812cd96702e94eea4e34e",
+    "robots/sourccey/__init__.py": "7fae96deca59c5fcbc13f4beaf9cac2f143082c6672515aad5656ec44d4262e5",
+    "robots/sourccey/emote_backend.py": "aed8810f56a3a782f49bb03be70f432ba655058ad0537552d3bd4cc7e5d79859",
+    "robots/spec_robot_model.py": "f88f76a8c80e82bfa84ea60197cd1c1d039a1ed3df79e8c94128d590aec934be",
+    "robots/stretch/__init__.py": "ffa2e2b7085bfd9aef6fc02b1837fd6790eca1bcd05f96db1cd3fda0b1230e3c",
+    "robots/stretch/sim_stationary.py": "a8f1ef1cc1ade25a4d7403da23d30ad86f740d11363fb66e785eb4a2ac3f9451",
+    "robots/xlerobot/__init__.py": "fb060854305ed3df44a6090963699691c396fd17a73f9bdb034ebd1a408ca12f",
+    "robots/yor/__init__.py": "3720dfb788c7bfb4d7786107aa9590e788c4ca763db69fb3dc6bf1a6339473a6",
+    "simulation/sim_object_placements.py": "fe8c0b11c31e9731021a9a943a2fd150c08369bd69cf3f21ce6e945f94e17586",
+    "utils/assets.py": "384085ced638f51a5208565d723577b31eced4188f641132825124605bfb65df",
+    "utils/logger.py": "f4a7e195cfd54d0146a1900c59b8790a2a7204b2cc043cd1de924cae32397877",
+    "@runtime": "549fb212e22c858dfb74c184b72642f056b184c6472eae95fcf74fa39e09276e",
+    "@canonical_suite": "5c7c8fd285f9c1fbad294b5887ed74c5d09ae400afb4fe1ae7427307462c5da2",
+    "@canonical_regressions": "f3143e2ab37cec866d1d8defbd6ce65dda90dfe8c9e66a5ec9362e741b9fb457",
+    "@canonical_public_tamp_suite": "5b638c6d748a343a646e733ab9bfe7a25a05b55f35d3bb4c23f4a4cc0d3567e7",
+    "controller/task/tamp/mars_native_adapter.py": "37eaededf4f026c2fa056923631124053eb7158237036fa0b5ff4095171b3385",
+    "controller/task/tamp/task_session.py": "89769391ea5593b6996344b7860d2dca6d6e0e4ae998d8907796f30940948487",
+    "controller/task/tamp/grasp_frames.py": "a24bf66c4c30ddaf8533c33ad3af33d487229b95b4097bc5c6d764ce0aad9bd3",
+    "controller/task/tamp/task_contracts.py": "2aefe3567da05118f7f3867a5471171ee08954c4c8d51b9240662524c78fba00",
+    "controller/task/tamp/smoke_grasps.py": "385fe383cda4e9b2721f3412ab30176155e278df3194e05c54256405c98bd1a9",
+    "controller/task/tamp/task_mcts.py": "7c596aa5f55ebb37f10627dac510c657f8e54d33c8ba5b2d04671ef5e1ecd63e",
+    "controller/task/tamp/agent_bridge.py": "9812304ec6070ebf9e1babc80c08e18a798d102ac902731c6c961363ab342d6e",
+    "controller/task/tamp/task_budget.py": "9ef9edfc57f64fd3c2551d8eba7d9a4b71f26d2e75d50cdb211436078a8039d2",
+    "controller/task/tamp/task_planning.py": "e3cc486fb5e66999b3fac18309d26fb90e6f016919c0c42af5c7aa1683374064",
+    "controller/task/tamp/native_adapter.py": "8da6170a7e704b8162a3e4f414131625f5b73739a525e3745802de672f2ff957",
+    "controller/task/tamp/api.py": "b90842b86acb18c9a3a9b5696dc3372a23b9890b7ae1e8bbdec73494a20717e8",
+    "controller/task/tamp/observed_discovery.py": "e1a1f8efc24a2400c7ad14072b974154b36d3280bdbe187cfded1c31425db3b1",
+    "controller/task/tamp/__init__.py": "cebb23f1d48fd8837d5919b061d9dc44e63c72fa902e23b089ecd394361572e4",
+    "controller/task/tamp/clutter_chain.py": "032043f497c889214c8f8ed1594599c3de43279b6ed79bf761c26c41768a07cb",
+    "controller/task/tamp/transfer_provider.py": "5e146e12022542301528d0605344326b9001e1173475a757bf627ca662a0678d",
+    "controller/task/tamp/mars_sim_robot.py": "070ad95f8563b46c30e5fcd6a74cc50b37d2fe4796f87dca0a802c582429fee3",
+    "controller/task/tamp/native_transfer.py": "ecae56920e0007c112b0f13f5a13c3cea1e4962a2ea5deab57b3e0716047ca07",
+    "controller/task/tamp/task_search.py": "c91022abea6a62351f6acfb5b51013addb6d8e4a446da98de4d719d5f17818ec",
+    "controller/task/tamp/articulation.py": "199cb09762862963b1501ab800019047224960e2eb8e47fc74d5732a37a25fac",
+    "controller/task/tamp/mars_transport.py": "5c3f87079805525e17d55f92f680a3141744831998ca0ed33813587c0ba77955",
+    "agent/loop.py": "af955eefcdc21ef6dd78cc14dba5b00384cddc146bbae467f56690aecca4ae5c",
+    "agent/env_flags.py": "1e2c3c5ad84010f410755677593eebf3a4ed9c3befb15ef2f60cc7e211ce239e",
+    "agent/model_debug.py": "c805fd2a2bf594b51b1682df3994cf4e757bb616dcdf31c754d26f60b7aa0576",
+    "agent/__init__.py": "3566877ce835d23b54475ad795bb527bf2e8662ad2500ef8291da9710e0a2e01",
+    "agent/camera_debug.py": "e6449bd45a0bfe5c29c737e300c2a24ea0dbc0155bcbcadb7273cfdcb94b14b9",
+    "agent/face_toward.py": "f4d8467dc8c25728b6bc67758c610570f0e4efa65ae70a6efdd4e458b23a5cc1",
+    "agent/thinking_status.py": "c1df5e75d60dc4433de88a843e5acc25c3af7260a8cff5171ec849c14c38aea3",
+    "agent/tool_outcome.py": "be99c23a67fbaa18dda1a9f4dbd74087f98789472ff5f3b14752e70a563a7a25",
+    "agent/prompt.py": "56843fda71344ba1713d7a7a15b602db860a507b03cd7b76740cab48d6cc5d92",
+    "agent/tamp_session.py": "e06144b45e11c47e3ee0bd8db233e9af94c9ce471560ba1292db38f974adbb30",
+    "agent/tools.py": "47611f27b1b2a3e7a43a3409664c78c3280dbea87e676c84d5b6772d612ed4af",
+    "agent/skills/modes.py": "390d3fd1ea25a2234344fedc85204d1b86ef48bf11f8810e126e487fb6c05a26",
+    "agent/skills/specs.py": "47c7281cccf055613adad4abe63be05207f14074efa869844c991dc3061a60a4",
+    "agent/skills/__init__.py": "4829dc99ae31b2545fe35591af6768395469c46445e8aee8627fb22fd2456a23",
+    "agent/skills/registry.py": "82550d8af12b790bd4f784a705b3be3e92132482d3d9a06956a074c5e0a6982d",
+    "agent/skills/eqa.py": "df314a72cd79d35ce9860445971f68f02fce53a21151eed9a51de165ec8318d0",
+    "core/abstract_perception.py": "a398c4da0e0128905504ac28aaaff7f6cb985ef68f8c1fd10e4bfc8cdb7e68d0",
+    "core/interfaces.py": "0dfa6363ab029b5ed8762556d926065ff98dd59e01773a897ab0d4cc3ca9c12b",
+    "core/parameters.py": "c11ab56fb329021337c8a7e3bc1cf9ad5d7b18cf94977c5b79dbb77da787c88b",
+    "core/command_client.py": "104b585284ef1ddd81d0de924e8333870e6851c2a88a48d48baa57a78a632d05",
+    "core/client.py": "17645fa84c23e0e278f5373d8d43484d019cbf61ebcbb5cc4bfa2995b6654214",
+    "core/status.py": "7f1d75d2906958661e349a5473da5fedafd53af3b0732c34db2ff9375c3e2a6c",
+    "core/server.py": "ebeda64ea453485d4cfbc465bc9dae518ee5c7fae1fb2b59cae94ed2fe087c50",
+    "core/comms.py": "ba9becc3e014bd4a62dc1cf5e9586f7d449ea4b7ed83c104c8457ea8af466026",
+    "core/command_tracker.py": "ab436d7c57195654427b7a60e0aa732d7f86ff514ac2d6ff78ff711858fc85f6",
+    "core/evaluator.py": "9c0ec2dcab8c8bb33c7e291e2b41ead9fe7eae56af043a3fd545d7d7c1720311",
+    "core/zmq_server_env.py": "b3b96d8597cb611b96cfc3ca6bcc5c6990eeaf2d681c691d66f908d963caac93",
+    "core/navigation_result.py": "b384e180372d754e7158c404fba7961536b6a49bbaa48b51a15d751e154e25c0",
+    "core/__init__.py": "db8b5fd86b7add5abce89b4ff0b9c3cb41723e9dda4ee8bb10cbeeb74d6acbfe",
+    "core/task.py": "2fcfa9128868ca8ee8f02b9c30ea423f7afe6cd65ad96ab59ee021f1ceabb17b",
+    "core/command_runtime.py": "b4e6b131b51d9c0c8b9264f1b9e0c91e6e46d49bdaf4a857c8d9008b8a62a615",
+    "core/reactive_runtime.py": "4ba45aed2b48304b2a3d3d2c9923303df7209321929325c60862c3a7ade108c7",
+    "core/robot.py": "8305f5faa5276aeb3bcd9be8f7aab51dd1bd64e6c4e80e85e3d4a348a1a8eba5",
+    "core/zmq_protocol.py": "1a5cdf25918a5eab8b91b329ec8ed0cbbdd3029395f147cedf431c63939e3bbd",
+    "core/zmq_obs_codec.py": "35b7d518eeb09839d491381315f1d1f6b6170d456e09ecdd0fb21477c57fd008",
+    "eval/mars_tamp_control.py": "4dc3d8781c061b58d1d48b50f309ccdf69e24655136bc2c18383df6ff03c1559",
+    "eval/mars_tamp_metrics.py": "4bad6ea274f534905e78e9e723d8ba056f9aa4dd9865dc62bf16f9263f4a4045",
+    "eval/mars_tamp_sequences.py": "98b5cd7d6d86baaf1854b6a6b17bb2201a915780f9cbc04a9dbab8f3287f33f2",
+    "eval/mars_tamp_agent.py": "bfff999feec429a9530a5503e3dcb50873d37967dad76f885de689ba9379f36e",
+    "eval/mars_policy_audit.py": "4961f2153c7e3bb76118e9739d3a6099a557d9675c1b66ff96b064e394bf06af"
+  },
+  "pre_fix_baseline": {
+    "summary": "paper/data/whole_body_control/tamp_policy_development_v1.json",
+    "archive_sha256": "37dfa378802901b3f9e7ca6413bbdd81eb38641693ec6fdec9c39434704188c1",
+    "commands_before_failure": 0,
+    "policy_calls": 14,
+    "failed_stage": "approach_clearance"
+  },
+  "post_fix_tamp": {
+    "policy_calls": 13,
+    "commands": [
+      {
+        "sim_time": 1.300000000000001,
+        "gripper": "open"
+      },
+      {
+        "sim_time": 1.350000000000001,
+        "phase": "pregrasp",
+        "arm": [
+          9.15203653625105e-07,
+          -0.3800301596361142,
+          -0.0031570659743898784,
+          0.38565650013119646,
+          2.2443788294463077e-07
+        ],
+        "hand_pose": [
+          0.3042134700258482,
+          -0.052862358002674956,
+          0.2613134896056465,
+          0.9999742952687459,
+          -9.311726212338903e-05,
+          9.409719648551391e-05,
+          0.9999999862777534,
+          -0.007169375669689145,
+          0.0001370170389105228
+        ],
+        "base_pose": [
+          -0.0009640054633338128,
+          -4.932190148013802e-06,
+          9.284661069111383e-05
+        ],
+        "base_mask": [
+          true,
+          true,
+          true
+        ],
+        "hand_mask": true,
+        "target_source": "certified_joint_witness_fk",
+        "controller": "checkpoint_policy"
+      }
+    ],
+    "failure_at": {
+      "stage": 0,
+      "tool": "execute_pick_place_plan",
+      "code": "base_drift_during_arm",
+      "category": "execution_or_verification"
+    },
+    "stop_confirmed": true,
+    "contact_metrics": {
+      "peak_contact_force": 4.077350397162219,
+      "contact_impulse": 0.9767654006049498,
+      "contact": true,
+      "max_penetration": 0.0007347210229879941,
+      "wheel_lift": false,
+      "wheel_support_evaluated": true,
+      "max_wheel_gap": [
+        4.6838349936781376e-05,
+        0.0,
+        0.0
+      ],
+      "min_wheel_load": [
+        0.0,
+        2.5053584559387256,
+        0.14438062888638023
+      ]
+    }
+  },
+  "first_input": {
+    "history": {
+      "max_abs_z": 9771.083290942222,
+      "clipped_fraction": 0.009900990099009901,
+      "largest_columns": [
+        {
+          "column": 41,
+          "name": "phase/release",
+          "value": 0.0,
+          "mean": 0.0,
+          "std": 0.00010234279764322532,
+          "last_z": 0.0
+        },
+        {
+          "column": 37,
+          "name": "phase/pregrasp",
+          "value": 1.0,
+          "mean": 0.002156919443961848,
+          "std": 0.04639264614701732,
+          "last_z": 21.508647672174042
+        },
+        {
+          "column": 27,
+          "name": "proprio/grip_reference/0",
+          "value": 0.3490999937057495,
+          "mean": 0.009130096205061984,
+          "std": 0.05571326902143294,
+          "last_z": 6.102135155090267
+        },
+        {
+          "column": 39,
+          "name": "phase/carry",
+          "value": 0.0,
+          "mean": 0.9631806735451715,
+          "std": 0.1883180132867867,
+          "last_z": -5.114649717965949
+        },
+        {
+          "column": 26,
+          "name": "proprio/grip_error/0",
+          "value": -0.0006563141942024231,
+          "mean": -0.30480174959719386,
+          "std": 0.06257855708436212,
+          "last_z": 4.860218093443304
+        },
+        {
+          "column": 2,
+          "name": "proprio/positions/2",
+          "value": -0.02222008816897869,
+          "mean": -0.3032470447386299,
+          "std": 0.1386943627998805,
+          "last_z": 2.026232003207944
+        },
+        {
+          "column": 80,
+          "name": "target_tokens/3",
+          "value": 1.0,
+          "mean": 0.2819055914794877,
+          "std": 0.307033525035524,
+          "last_z": 2.338814331227928
+        },
+        {
+          "column": 1,
+          "name": "proprio/positions/1",
+          "value": -0.37434911727905273,
+          "mean": -0.2521154762565628,
+          "std": 0.08005812315680802,
+          "last_z": -1.5268112241786347
+        }
+      ]
+    },
+    "preview": {
+      "max_abs_z": 4.925782035095989,
+      "clipped_fraction": 0.0,
+      "largest_columns": [
+        {
+          "column": 17,
+          "name": "preview/17",
+          "value": -0.0006563141942024231,
+          "mean": -0.30294084319396014,
+          "std": 0.06136782481360182,
+          "last_z": 4.925782035095989
+        },
+        {
+          "column": 7,
+          "name": "preview/7",
+          "value": 1.4320769878395367e-05,
+          "mean": 0.004318973016281154,
+          "std": 0.008552336349449366,
+          "last_z": -0.5033305602719788
+        },
+        {
+          "column": 9,
+          "name": "preview/9",
+          "value": -0.0017933255294337869,
+          "mean": 0.0025074390551635033,
+          "std": 0.010138554512483959,
+          "last_z": -0.4241989900336983
+        },
+        {
+          "column": 14,
+          "name": "preview/14",
+          "value": -8.669432281749323e-05,
+          "mean": 0.025373005650026165,
+          "std": 0.054327726845471935,
+          "last_z": -0.4686317917416354
+        },
+        {
+          "column": 3,
+          "name": "preview/3",
+          "value": 4.626311238098424e-06,
+          "mean": -0.01043606787499558,
+          "std": 0.02442824621023375,
+          "last_z": 0.42740252805621987
+        },
+        {
+          "column": 15,
+          "name": "preview/15",
+          "value": -1.212217739521293e-07,
+          "mean": 0.012823154319732803,
+          "std": 0.052774859732279134,
+          "last_z": -0.24298076028165255
+        },
+        {
+          "column": 1,
+          "name": "preview/1",
+          "value": -4.570353121380322e-05,
+          "mean": -0.002069006703910794,
+          "std": 0.008694905730462025,
+          "last_z": 0.23269984004639435
+        },
+        {
+          "column": 8,
+          "name": "preview/8",
+          "value": 8.96487449608685e-07,
+          "mean": -0.002284728102841958,
+          "std": 0.01152604546705916,
+          "last_z": 0.19830084800756365
+        }
+      ]
+    },
+    "inherited_phase_means": {
+      "reach": 0.030599813210491673,
+      "pregrasp": 0.002156919443961848,
+      "close": 0.0,
+      "carry": 0.9631806735451715,
+      "place": 0.0032045660310290386,
+      "release": 0.0,
+      "disturbance": 0.0008580272952903195
+    }
+  },
+  "phase_max_abs_z": {
+    "reach": 0.17766740598214772,
+    "pregrasp": 21.508647672174042,
+    "close": 0.0,
+    "carry": 5.114649717965949,
+    "place": 0.05669971558371416,
+    "release": 9771.083290942222,
+    "disturbance": 0.029304498740705464
+  },
+  "exploration_support": {
+    "normalized_action_std": [
+      0.029999855905771255,
+      0.030003754422068596,
+      0.029998503625392914,
+      0.030002644285559654,
+      0.0299995057284832,
+      0.03000326082110405,
+      0.02999652922153473,
+      0.030000384896993637
+    ],
+    "deterministic_action": [
+      0.1865091621875763,
+      0.09411351382732391,
+      0.23694390058517456,
+      -0.21297115087509155,
+      0.2202494889497757,
+      0.014810411259531975,
+      -0.43982991576194763,
+      -0.15547673404216766
+    ],
+    "distance_from_zero_in_std": [
+      6.217001934055836,
+      3.1367245746452586,
+      7.8985239911969485,
+      7.098412688164125,
+      7.341770592595417,
+      0.49362672103674987,
+      14.662693557432988,
+      5.1824913105614225
+    ],
+    "coordinates_with_zero_outside_two_std": 7,
+    "scope": "diagnostic, not a proof that PPO cannot recover; execution remains deterministic"
+  },
+  "phase_feature_ablation": {
+    "scope": "Offline network-input ablation only; changes normalized phase features, never executes actions or changes the checkpoint; not a runtime normalization fix",
+    "predictions": {
+      "original": [
+        0.1865091621875763,
+        0.09411351382732391,
+        0.23694390058517456,
+        -0.21297115087509155,
+        0.2202494889497757,
+        0.014810411259531975,
+        -0.43982991576194763,
+        -0.15547673404216766
+      ],
+      "unscaled_phase": [
+        0.1746094673871994,
+        0.12478321045637131,
+        0.2310054898262024,
+        -0.1875603348016739,
+        0.1959616094827652,
+        0.0538465678691864,
+        -0.4734583795070648,
+        -0.11977561563253403
+      ],
+      "neutral_phase": [
+        0.17346136271953583,
+        0.12652231752872467,
+        0.23065391182899475,
+        -0.18438686430454254,
+        0.1962813287973404,
+        0.05554682016372681,
+        -0.47324296832084656,
+        -0.11716306209564209
+      ]
+    }
+  },
+  "target_predictions": {
+    "not_executed": true,
+    "physics_unchanged": true,
+    "base_only_predictions": [
+      {
+        "forward_displacement_m": -0.1,
+        "action": [
+          -0.24948172271251678,
+          0.055280901491642,
+          0.005465297494083643,
+          0.10745371878147125,
+          -0.055049143731594086,
+          -0.021101539954543114,
+          -0.03802362456917763,
+          0.0066714780405163765
+        ]
+      },
+      {
+        "forward_displacement_m": 0.0,
+        "action": [
+          0.09838034212589264,
+          -0.11758563667535782,
+          -0.05364114046096802,
+          0.038488440215587616,
+          0.16703970730304718,
+          0.07920458912849426,
+          -0.12452057003974915,
+          -0.12690310180187225
+        ]
+      },
+      {
+        "forward_displacement_m": 0.1,
+        "action": [
+          0.3902602195739746,
+          -0.18791769444942474,
+          -0.05319289118051529,
+          -0.06514610350131989,
+          0.25378623604774475,
+          0.09877299517393112,
+          -0.08236618340015411,
+          -0.12699152529239655
+        ]
+      }
+    ]
+  },
+  "stationary_trials": [
+    {
+      "selector": "reference_teacher",
+      "warmup_s": 0.0,
+      "accepted": true,
+      "policy_admission": {
+        "format": "mars-tamp-policy-admission-v1",
+        "robot_sha256": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+        "weights_sha256": "a6be629f113a6b7f0a7a64d479f0eca675bff55d2b36c84074a37793cd0d6fed",
+        "training_fingerprint": "1e1110aaac94d6d32015c02262ef033f4810b8651e5780c88213beca94c2bb17",
+        "training_evidence_sha256": "bcc798321f6b2a2a2dafe94535d81f34cba2a6028e2c3db773d9c1ae29fa4518",
+        "simulation_only": true,
+        "safety_promoted": false
+      },
+      "failure": null,
+      "stop_confirmed": null,
+      "quiet_at_end": true,
+      "completed_duration": true,
+      "scored_policy_calls": 0,
+      "max_base_drift_m": 0.00013888566188921187,
+      "max_hand_error_m": 0.0004099242645814486,
+      "sim_duration_s": 1.9999999999998905,
+      "contact": {
+        "peak_contact_force": 0.43844663735876055,
+        "contact_impulse": 0.9107508162177798,
+        "contact": true,
+        "max_penetration": 0.000254152688573029,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "min_wheel_load": [
+          4.078902324131689,
+          6.296230916826889,
+          0.7410841187036541
+        ]
+      }
+    },
+    {
+      "selector": "zero",
+      "warmup_s": 0.0,
+      "accepted": true,
+      "policy_admission": {
+        "format": "mars-tamp-policy-admission-v1",
+        "robot_sha256": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+        "weights_sha256": "a6be629f113a6b7f0a7a64d479f0eca675bff55d2b36c84074a37793cd0d6fed",
+        "training_fingerprint": "1e1110aaac94d6d32015c02262ef033f4810b8651e5780c88213beca94c2bb17",
+        "training_evidence_sha256": "bcc798321f6b2a2a2dafe94535d81f34cba2a6028e2c3db773d9c1ae29fa4518",
+        "simulation_only": true,
+        "safety_promoted": false
+      },
+      "failure": null,
+      "stop_confirmed": null,
+      "quiet_at_end": false,
+      "completed_duration": true,
+      "scored_policy_calls": 0,
+      "max_base_drift_m": 0.0001644823249457273,
+      "max_hand_error_m": 0.0004967360682928295,
+      "sim_duration_s": 1.9999999999998905,
+      "contact": {
+        "peak_contact_force": 0.359010608952953,
+        "contact_impulse": 0.8525410861723498,
+        "contact": true,
+        "max_penetration": 0.00021017990386570234,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "min_wheel_load": [
+          4.076568796480078,
+          6.364651981198218,
+          0.6192151972127518
+        ]
+      }
+    },
+    {
+      "selector": "checkpoint_policy",
+      "warmup_s": 0.0,
+      "accepted": true,
+      "policy_admission": {
+        "format": "mars-tamp-policy-admission-v1",
+        "robot_sha256": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+        "weights_sha256": "a6be629f113a6b7f0a7a64d479f0eca675bff55d2b36c84074a37793cd0d6fed",
+        "training_fingerprint": "1e1110aaac94d6d32015c02262ef033f4810b8651e5780c88213beca94c2bb17",
+        "training_evidence_sha256": "bcc798321f6b2a2a2dafe94535d81f34cba2a6028e2c3db773d9c1ae29fa4518",
+        "simulation_only": true,
+        "safety_promoted": false
+      },
+      "failure": "diagnostic_base_envelope",
+      "stop_confirmed": true,
+      "quiet_at_end": true,
+      "completed_duration": false,
+      "scored_policy_calls": 14,
+      "max_base_drift_m": 0.010661359498695072,
+      "max_hand_error_m": 0.015283710070748332,
+      "sim_duration_s": 0.9000000000000008,
+      "contact": {
+        "peak_contact_force": 3.5783243651843337,
+        "contact_impulse": 1.2384676496627423,
+        "contact": true,
+        "max_penetration": 0.0011791493061917326,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          3.8116992373965486e-05,
+          0.0,
+          0.0
+        ],
+        "min_wheel_load": [
+          0.0,
+          1.4484017535119493,
+          0.5636689464757623
+        ]
+      }
+    },
+    {
+      "selector": "checkpoint_policy",
+      "warmup_s": 1.0,
+      "accepted": true,
+      "policy_admission": {
+        "format": "mars-tamp-policy-admission-v1",
+        "robot_sha256": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+        "weights_sha256": "a6be629f113a6b7f0a7a64d479f0eca675bff55d2b36c84074a37793cd0d6fed",
+        "training_fingerprint": "1e1110aaac94d6d32015c02262ef033f4810b8651e5780c88213beca94c2bb17",
+        "training_evidence_sha256": "bcc798321f6b2a2a2dafe94535d81f34cba2a6028e2c3db773d9c1ae29fa4518",
+        "simulation_only": true,
+        "safety_promoted": false
+      },
+      "failure": "diagnostic_base_envelope",
+      "stop_confirmed": true,
+      "quiet_at_end": true,
+      "completed_duration": false,
+      "scored_policy_calls": 14,
+      "max_base_drift_m": 0.010656190610175463,
+      "max_hand_error_m": 0.014972858435386361,
+      "sim_duration_s": 1.7999999999999126,
+      "contact": {
+        "peak_contact_force": 3.885420723766164,
+        "contact_impulse": 1.6595425677877351,
+        "contact": true,
+        "max_penetration": 0.0010999212369684104,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          4.122301998168293e-05,
+          0.0,
+          0.0
+        ],
+        "min_wheel_load": [
+          0.0,
+          1.520529833297345,
+          0.5555167182341902
+        ]
+      }
+    }
+  ],
+  "identical_initial_stationary_physics": true,
+  "regression_tests": 668,
+  "regression_receipt": "paper/data/whole_body_control/mars-policy-audit-regressions-20261025.receipt.json",
+  "safety_promoted": false,
+  "training_started": false,
+  "full_report_archive": "paper/data/whole_body_control/mars_policy_startup_audit_v1.json.gz",
+  "uncompressed_sha256": "2f86a7160b2779319d1915bf3fa0b6a93ac69b53b42c6ae30e3c4e385eff9a35",
+  "runtime_parity": true,
+  "paper_build": true,
+  "relevant_lint": true
+}

@@ -69,6 +69,37 @@ def test_persistent_tracking_and_settled_motion_are_penalized():
     assert running_cost(**args, motion=0.1) > hold
 
 
+@pytest.mark.sim
+@pytest.mark.parametrize("released", [False, True])
+def test_retention_cost_uses_current_error_while_peak_evidence_remains_latched(monkeypatch, released):
+    from emet.rl.manipulation import env as implementation
+
+    env = ManipulationEnv(
+        ManipulationConfig(robot="innate_mars", scenario="reach", retarget_probability=0, reach_push_probability=0)
+    )
+    try:
+        env.reset(seed=1800013)
+        env._released = released
+        errors = iter([(0.006, 0.06), (0.001, 0.01)])
+        monkeypatch.setattr(implementation, "retention_error", lambda *_: next(errors))
+        costs = []
+
+        def capture(**terms):
+            costs.append(terms)
+            return 0.0
+
+        monkeypatch.setattr(implementation, "running_cost", capture)
+        for _ in range(2):
+            env.step(np.zeros(env.action_space.shape))
+        assert [c["rotation"] for c in costs] == ([0, 0] if released else [0.06, 0.01])
+        assert [c["translation"] for c in costs] == ([0, 0] if released else [0.006, 0.001])
+        assert env.max_rotation == (0 if released else 0.06)
+        assert env.max_translation == (0 if released else 0.006)
+        assert not env.retention_lost
+    finally:
+        env.close()
+
+
 def test_direct_bundle_declares_independent_action_semantics():
     from emet.rl.manipulation.profiles import MARS
 

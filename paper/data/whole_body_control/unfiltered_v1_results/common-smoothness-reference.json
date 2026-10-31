@@ -1,0 +1,66 @@
+{
+  "reference": "filteredv2 teacher metrics; supplementary audit, not a rewritten mastery gate",
+  "limits": {
+    "train:base:hold": {
+      "peak_force_N": 1.0,
+      "base_linear_jerk": 0.1,
+      "base_yaw_jerk": 0.5,
+      "joint_jerk": 1.0
+    },
+    "train:base:forward": {
+      "peak_force_N": 1.0,
+      "base_linear_jerk": 0.22813552590458636,
+      "base_yaw_jerk": 0.5,
+      "joint_jerk": 1.0
+    },
+    "train:base:reverse": {
+      "peak_force_N": 1.0,
+      "base_linear_jerk": 0.19836918076343601,
+      "base_yaw_jerk": 0.5,
+      "joint_jerk": 1.0
+    },
+    "train:base:yaw_left": {
+      "peak_force_N": 1.0,
+      "base_linear_jerk": 1.0647451674715098,
+      "base_yaw_jerk": 4.566730933812191,
+      "joint_jerk": 1.0
+    },
+    "train:base:yaw_right": {
+      "peak_force_N": 1.0,
+      "base_linear_jerk": 0.930780235601648,
+      "base_yaw_jerk": 1.8309745635480492,
+      "joint_jerk": 1.0
+    },
+    "validation:base:hold": {
+      "peak_force_N": 1.0,
+      "base_linear_jerk": 0.1,
+      "base_yaw_jerk": 0.5,
+      "joint_jerk": 1.0
+    },
+    "validation:base:forward": {
+      "peak_force_N": 1.0,
+      "base_linear_jerk": 0.312692512266321,
+      "base_yaw_jerk": 0.5,
+      "joint_jerk": 1.0
+    },
+    "validation:base:reverse": {
+      "peak_force_N": 1.0,
+      "base_linear_jerk": 0.22839860427041075,
+      "base_yaw_jerk": 0.5,
+      "joint_jerk": 1.0
+    },
+    "validation:base:yaw_left": {
+      "peak_force_N": 1.0,
+      "base_linear_jerk": 0.5577246362422756,
+      "base_yaw_jerk": 2.9487116079418647,
+      "joint_jerk": 1.0
+    },
+    "validation:base:yaw_right": {
+      "peak_force_N": 1.0,
+      "base_linear_jerk": 0.63829773888994,
+      "base_yaw_jerk": 1.8080608680255004,
+      "joint_jerk": 1.0
+    }
+  },
+  "reference_sha256": "f2944257f9f722116b082eefd61155bd5a70ced0f354ee02350804c613962423"
+}

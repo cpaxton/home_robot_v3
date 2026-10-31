@@ -1,0 +1,10 @@
+{
+  "new_ppo_steps": 32768,
+  "variants": 4,
+  "steps_per_variant": 8192,
+  "training_complete": true,
+  "evaluation_complete": true,
+  "full_report_archive": "paper/data/whole_body_control/general_continuation_training_v1.json.gz",
+  "uncompressed_sha256": "a3522bb34c09eff88b6d6bbeb73c79bef72fe1468c9963f17761911bbf6837f6",
+  "safety_promoted": false
+}

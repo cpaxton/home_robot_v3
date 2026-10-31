@@ -1,0 +1,32 @@
+{
+  "scope": "Completed unfiltered comparison and crossed-posture diagnostic; no promotion.",
+  "source_revision": "f4a4f08e",
+  "steps": 65536,
+  "seed": 90,
+  "cases": 10,
+  "final_full_mastery": 5,
+  "final_tracking_and_holding": 9,
+  "final_paired_smoothness": 6,
+  "fixed_filtered_smoothness": 3,
+  "controller_tests": 880,
+  "median_peak_linear_jerk_initial": 2.0200943727983303,
+  "median_peak_linear_jerk_final": 0.35390587868792883,
+  "median_raw_linear_command_jerk_initial": 0.4255702617573698,
+  "median_raw_linear_command_jerk_final": 0.03941740785566323,
+  "checkpoint_safety_flags": {
+    "wheel_lift": 0,
+    "unsafe_contact": 0,
+    "invalid_physics": 0
+  },
+  "local_trace_sha256": {
+    "logs/manipulation/mars-mastery-unfiltered-v1-seed90/step-0/evaluation.json.gz": "b55b87f77146f866eeb82fed64269523edc067ac9e4ff7c602a913e02805fd74",
+    "logs/manipulation/mars-mastery-unfiltered-v1-seed90/step-16384/evaluation.json.gz": "14bd1a2b6bb82ae99b6d24cf3762987a6ac33bb86ea899be972d299f8858a096",
+    "logs/manipulation/mars-mastery-unfiltered-v1-seed90/step-32768/evaluation.json.gz": "a215931560af7248404d2d784315a2efdd57625c3713e24fb7da40d15661e839",
+    "logs/manipulation/mars-mastery-unfiltered-v1-seed90/step-49152/evaluation.json.gz": "d7d6002bdf03ff7d7448e527876f898ca596d061a4b496f2a80b24e55b318d7d",
+    "logs/manipulation/mars-mastery-unfiltered-v1-seed90/last/evaluation.json.gz": "27066af1737c9fde1adc6332c2190bb9208f15f6f8f98f68f92f1ac353fecc77"
+  },
+  "next_training_launched": false,
+  "hardware_used": false,
+  "safety_promoted": false,
+  "weights_uploaded": false
+}

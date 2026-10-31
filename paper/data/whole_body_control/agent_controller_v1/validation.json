@@ -1,0 +1,17 @@
+{
+  "fresh_source_bound_tests": 784,
+  "receipt": "paper/data/whole_body_control/agent-controller-v2-regressions.receipt.json",
+  "runtime_parity": true,
+  "relevant_ruff": true,
+  "paper_build": true,
+  "offline_lock_check": {
+    "passed": true,
+    "command": "uv lock --check --offline --no-build-isolation",
+    "cuda_disabled": true,
+    "sam2_build_cuda": false,
+    "note": "Exact pinned SAM2 was initialized from local Git objects. Uses existing installed build tools and cache; no dependency sync. Empty-cache default check cannot resolve build dependencies offline."
+  },
+  "checkpoint_portable_admissions": 6,
+  "safety_promoted": false,
+  "hardware_used": false
+}

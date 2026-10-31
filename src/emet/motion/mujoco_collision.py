@@ -9,6 +9,7 @@ are reported as unsupported; this is a sampled static check, not a dynamics proo
 from __future__ import annotations
 
 import time
+from contextlib import contextmanager
 
 import mujoco
 import numpy as np
@@ -66,6 +67,63 @@ class MujocoSceneCollisionChecker:
         self.payload_parent: str | None = None
         self.payload_transform: np.ndarray | None = None
         self.last_contacts: list[dict] = []
+        self._support_departure = {}
+
+    @contextmanager
+    def payload_support_departure(self, model, data):
+        """Permit separation from an existing shallow payload/static support.
+
+        Simulator-only opt-in: initial compression is capped at 2 mm, normal
+        must be within ~18 degrees of vertical, and sampled contact may never
+        deepen beyond its measured initial depth (1e-7 m numeric slack).
+        Only the original geometry pairs at the original support height qualify.
+        Contacts inside the ordinary tolerance need no exemption and retain
+        the ordinary threshold instead of a stricter numerical contact gate.
+        Robot/finger contacts, side impacts and other objects retain the normal
+        collision threshold. Independent runtime force/retention guards are
+        still required by the caller; this is not a dynamics certificate.
+        """
+        if self._support_departure:
+            raise RuntimeError("nested payload support departure")
+        scratch = mujoco.MjData(model)
+        mujoco.mj_copyData(scratch, model, data)
+        contacts = {}
+        if self.payload_body is not None:
+            self.configuration_collides(model, scratch)
+            payload = body_subtree(model, self.payload_body)
+            for contact in scratch.contact[: scratch.ncon]:
+                geoms = tuple(int(g) for g in contact.geom)
+                bodies = [int(model.geom_bodyid[g]) for g in geoms]
+                if sum(b in payload for b in bodies) != 1:
+                    continue
+                support = next(b for b in bodies if b not in payload)
+                parent, static = support, True
+                while parent:
+                    if model.body_jntnum[parent] or parent in self.robot_ids:
+                        static = False
+                        break
+                    parent = int(model.body_parentid[parent])
+                depth = float(contact.dist)
+                normal_sign = 1 if bodies[1] in payload else -1
+                if (
+                    not static
+                    or not -0.002 <= depth < -self.penetration_tolerance_m
+                    or normal_sign * float(contact.frame[2]) < 0.95
+                ):
+                    continue
+                key = frozenset(geoms)
+                old = contacts.get(key)
+                if old is None or depth < old["minimum_distance_m"]:
+                    contacts[key] = {
+                        "minimum_distance_m": depth,
+                        "height_m": float(contact.pos[2]),
+                        "normal_sign": normal_sign,
+                    }
+        self._support_departure = contacts
+        try:
+            yield [{"geoms": sorted(k), **v} for k, v in contacts.items()]
+        finally:
+            self._support_departure = {}
 
     def unsupported_links(self, model, link_bodies) -> list[str]:
         result = []
@@ -130,6 +188,14 @@ class MujocoSceneCollisionChecker:
             if (
                 frozenset(pair) in self.allowed_pairs
                 or frozenset(int(g) for g in contact.geom) in self.allowed_geom_pairs
+            ):
+                continue
+            departure = self._support_departure.get(frozenset(int(g) for g in contact.geom))
+            if (
+                departure is not None
+                and float(contact.dist) >= departure["minimum_distance_m"] - 1e-7
+                and departure["normal_sign"] * float(contact.frame[2]) >= 0.95
+                and abs(float(contact.pos[2]) - departure["height_m"]) <= self.penetration_tolerance_m
             ):
                 continue
             self.last_contacts.append({"bodies": pair, "distance_m": float(contact.dist)})

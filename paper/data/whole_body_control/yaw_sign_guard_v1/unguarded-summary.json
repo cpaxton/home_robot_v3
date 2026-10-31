@@ -1,0 +1,55 @@
+{
+  "teacher": {
+    "complete": true,
+    "controller": "task_pose_teacher",
+    "population": "canonical",
+    "groups": {
+      "base/train": {
+        "cases": 30,
+        "admitted": 30,
+        "mastered": 30,
+        "tracking_and_settling_passed": 30,
+        "smoothness_passed": 30,
+        "failure_reasons": {},
+        "codes": {
+          "ok": 30
+        },
+        "all_pass": true
+      }
+    },
+    "all_pass": true,
+    "safety_promoted": false
+  },
+  "policy": {
+    "complete": true,
+    "controller": "9297753f1ce9e91dd360835d290a8ef31f52a7103619eec22c18d40afdbbb9b1",
+    "population": "canonical",
+    "groups": {
+      "base/train": {
+        "cases": 30,
+        "admitted": 30,
+        "mastered": 13,
+        "tracking_and_settling_passed": 20,
+        "smoothness_passed": 23,
+        "failure_reasons": {
+          "smoothness/base_linear_jerk": 5,
+          "tracking_timeout": 9,
+          "terminal_hold": 10,
+          "smoothness/joint_jerk": 2,
+          "mastery_tracking_envelope": 1
+        },
+        "codes": {
+          "ok": 20,
+          "tracking_timeout": 9,
+          "mastery_tracking_envelope": 1
+        },
+        "all_pass": false
+      }
+    },
+    "all_pass": false,
+    "safety_promoted": false
+  },
+  "guard": false,
+  "hardware_used": false,
+  "safety_promoted": false
+}

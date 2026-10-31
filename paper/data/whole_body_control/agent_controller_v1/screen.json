@@ -1,0 +1,1747 @@
+{
+  "scope": "Real-agent single-delivery integration plus fixed learned-gain diagnostics.",
+  "program": {
+    "id": "single_delivery",
+    "instruction": "Pick up the blue object, carry it to destination support, place it entirely within the required region, release it and remain still.",
+    "stages": [
+      {
+        "object": "blue",
+        "support": "destination"
+      }
+    ]
+  },
+  "selection_case": "left:20g:0",
+  "source": "logs/manipulation/mars-pose-translation-v12/control/seed-64/step-16384",
+  "source_evidence": "logs/eval/pose-translation-v12-20261026/control/checkpoint_evidence.json",
+  "calibrations": {
+    "1p0": {
+      "factor": 1.0,
+      "bundle": "logs/manipulation/agent-hand-gain-v13/gain-1p0",
+      "evidence": "logs/manipulation/agent-hand-gain-v13/gain-1p0/checkpoint_evidence.json",
+      "ppo_steps_added": 0
+    },
+    "1p5": {
+      "factor": 1.5,
+      "bundle": "logs/manipulation/agent-hand-gain-v13/gain-1p5",
+      "evidence": "logs/manipulation/agent-hand-gain-v13/gain-1p5/checkpoint_evidence.json",
+      "ppo_steps_added": 0
+    },
+    "2p0": {
+      "factor": 2.0,
+      "bundle": "logs/manipulation/agent-hand-gain-v13/gain-2p0",
+      "evidence": "logs/manipulation/agent-hand-gain-v13/gain-2p0/checkpoint_evidence.json",
+      "ppo_steps_added": 0
+    },
+    "3p0": {
+      "factor": 3.0,
+      "bundle": "logs/manipulation/agent-hand-gain-v13/gain-3p0",
+      "evidence": "logs/manipulation/agent-hand-gain-v13/gain-3p0/checkpoint_evidence.json",
+      "ppo_steps_added": 0
+    }
+  },
+  "source_model_id": "Qwen/Qwen3-VL-8B-Instruct",
+  "server_weight_revision_verified": false,
+  "sampler": "OpenaiClient server defaults",
+  "physics_paused_during_inference": true,
+  "hardware_used": false,
+  "safety_promoted": false,
+  "complete": true,
+  "episodes": [
+    {
+      "label": "reference_agent",
+      "selector": "llm_privileged",
+      "controller": "reference_teacher",
+      "success": true,
+      "completed_stages": 1,
+      "robot_failure": null,
+      "stop_confirmed": null,
+      "policy_calls": 0,
+      "agent_terminal": "execution_returned_ok_pending_physical_score",
+      "failure_at": null,
+      "contact_metrics": {
+        "peak_contact_force": 3.317826920998131,
+        "contact_impulse": 224.78105062117373,
+        "contact": true,
+        "max_penetration": 0.00030416782550980395,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "min_wheel_load": [
+          1.5145669562127257,
+          0.10699237292308193,
+          0.002159482920041306
+        ]
+      },
+      "motion_metrics": {
+        "samples": 1351,
+        "duration_s": 67.50000000002164,
+        "hand_position_rms_m": 0.0016349596728012184,
+        "hand_position_max_m": 0.005548756810312293,
+        "hand_rotation_rms_rad": 0.00613163885030133,
+        "hand_rotation_max_rad": 0.025765718266060278,
+        "arm_speed_max_rad_s": 0.06486062816396934,
+        "arm_velocity_command_error_rms_rad_s": 0.010524192888933316,
+        "scope": "all recorded execution samples, including failed segments and stop transients; no smoothing",
+        "arm_acceleration_max_rad_s2": 0.8695986476350555,
+        "arm_jerk_rms_rad_s3": 2.04457785993698,
+        "arm_jerk_max_rad_s3": 16.74596284901542
+      },
+      "policy_admission": null,
+      "phase_completions": [
+        {
+          "sim_time": 1.300000000000001,
+          "phase": "approach_clearance_complete",
+          "controller_success": true,
+          "residual": 0.0005421430437625961
+        },
+        {
+          "sim_time": 1.7500000000000013,
+          "phase": "pregrasp",
+          "residual": 0.004323324065035788,
+          "controller_success": true
+        },
+        {
+          "sim_time": 2.149999999999985,
+          "phase": "pregrasp",
+          "residual": 0.004356506165609815,
+          "controller_success": true
+        },
+        {
+          "sim_time": 2.5499999999999408,
+          "phase": "pregrasp",
+          "residual": 0.0038919158560558748,
+          "controller_success": true
+        },
+        {
+          "sim_time": 2.899999999999902,
+          "phase": "pregrasp",
+          "residual": 0.004908459451652192,
+          "controller_success": true
+        },
+        {
+          "sim_time": 3.2499999999998637,
+          "phase": "pregrasp",
+          "residual": 0.004818834902239236,
+          "controller_success": true
+        },
+        {
+          "sim_time": 3.599999999999825,
+          "phase": "pregrasp",
+          "residual": 0.004437016471983732,
+          "controller_success": true
+        },
+        {
+          "sim_time": 3.9499999999997866,
+          "phase": "pregrasp",
+          "residual": 0.004105152889604877,
+          "controller_success": true
+        },
+        {
+          "sim_time": 4.549999999999721,
+          "phase": "pregrasp_complete",
+          "controller_success": true,
+          "residual": 0.0032711678754178686
+        },
+        {
+          "sim_time": 4.849999999999688,
+          "phase": "grasp",
+          "residual": 0.003704646462462574,
+          "controller_success": true
+        },
+        {
+          "sim_time": 5.199999999999649,
+          "phase": "grasp",
+          "residual": 0.0036468100098464296,
+          "controller_success": true
+        },
+        {
+          "sim_time": 5.549999999999611,
+          "phase": "grasp",
+          "residual": 0.0033585691826682473,
+          "controller_success": true
+        },
+        {
+          "sim_time": 5.849999999999578,
+          "phase": "grasp",
+          "residual": 0.004830062552374809,
+          "controller_success": true
+        },
+        {
+          "sim_time": 6.199999999999539,
+          "phase": "grasp",
+          "residual": 0.0032710294744056623,
+          "controller_success": true
+        },
+        {
+          "sim_time": 6.799999999999473,
+          "phase": "grasp_complete",
+          "controller_success": true,
+          "residual": 0.0033978996117789706
+        },
+        {
+          "sim_time": 7.199999999999429,
+          "phase": "gripper_settled",
+          "measured": 0.3247744809519919,
+          "controller_success": true
+        },
+        {
+          "sim_time": 8.749999999999591,
+          "phase": "lift",
+          "residual": 0.00419043216734763,
+          "controller_success": true
+        },
+        {
+          "sim_time": 9.249999999999758,
+          "phase": "lift",
+          "residual": 0.004035356065112711,
+          "controller_success": true
+        },
+        {
+          "sim_time": 9.699999999999909,
+          "phase": "lift",
+          "residual": 0.00422197162226115,
+          "controller_success": true
+        },
+        {
+          "sim_time": 10.100000000000042,
+          "phase": "lift",
+          "residual": 0.004834268526458574,
+          "controller_success": true
+        },
+        {
+          "sim_time": 10.500000000000176,
+          "phase": "lift",
+          "residual": 0.004384457592015126,
+          "controller_success": true
+        },
+        {
+          "sim_time": 10.90000000000031,
+          "phase": "lift",
+          "residual": 0.0038554366881415197,
+          "controller_success": true
+        },
+        {
+          "sim_time": 11.250000000000426,
+          "phase": "lift",
+          "residual": 0.004985893280076051,
+          "controller_success": true
+        },
+        {
+          "sim_time": 11.600000000000543,
+          "phase": "lift",
+          "residual": 0.004891769923836414,
+          "controller_success": true
+        },
+        {
+          "sim_time": 11.95000000000066,
+          "phase": "lift",
+          "residual": 0.004574030272904581,
+          "controller_success": true
+        },
+        {
+          "sim_time": 12.300000000000777,
+          "phase": "lift",
+          "residual": 0.0042339410529828,
+          "controller_success": true
+        },
+        {
+          "sim_time": 12.650000000000894,
+          "phase": "lift",
+          "residual": 0.00394864805425893,
+          "controller_success": true
+        },
+        {
+          "sim_time": 13.00000000000101,
+          "phase": "lift",
+          "residual": 0.0037268999383721843,
+          "controller_success": true
+        },
+        {
+          "sim_time": 13.350000000001128,
+          "phase": "lift",
+          "residual": 0.0035358281817441176,
+          "controller_success": true
+        },
+        {
+          "sim_time": 13.700000000001245,
+          "phase": "lift",
+          "residual": 0.0033587202045624043,
+          "controller_success": true
+        },
+        {
+          "sim_time": 14.050000000001361,
+          "phase": "lift",
+          "residual": 0.0032169852156940376,
+          "controller_success": true
+        },
+        {
+          "sim_time": 14.400000000001478,
+          "phase": "lift",
+          "residual": 0.00311653828009055,
+          "controller_success": true
+        },
+        {
+          "sim_time": 14.700000000001578,
+          "phase": "lift",
+          "residual": 0.004997708690254149,
+          "controller_success": true
+        },
+        {
+          "sim_time": 15.050000000001695,
+          "phase": "lift",
+          "residual": 0.0032978908695415476,
+          "controller_success": true
+        },
+        {
+          "sim_time": 15.350000000001796,
+          "phase": "lift",
+          "residual": 0.00486618909573977,
+          "controller_success": true
+        },
+        {
+          "sim_time": 15.700000000001912,
+          "phase": "lift",
+          "residual": 0.003098472746089126,
+          "controller_success": true
+        },
+        {
+          "sim_time": 16.00000000000201,
+          "phase": "lift",
+          "residual": 0.004667411975725955,
+          "controller_success": true
+        },
+        {
+          "sim_time": 16.350000000001817,
+          "phase": "lift",
+          "residual": 0.0029465160728904816,
+          "controller_success": true
+        },
+        {
+          "sim_time": 16.65000000000165,
+          "phase": "lift",
+          "residual": 0.004513069216892346,
+          "controller_success": true
+        },
+        {
+          "sim_time": 16.950000000001484,
+          "phase": "lift",
+          "residual": 0.004922492247408816,
+          "controller_success": true
+        },
+        {
+          "sim_time": 17.250000000001318,
+          "phase": "lift",
+          "residual": 0.004917457635806699,
+          "controller_success": true
+        },
+        {
+          "sim_time": 17.550000000001152,
+          "phase": "lift",
+          "residual": 0.004863120673541055,
+          "controller_success": true
+        },
+        {
+          "sim_time": 17.850000000000986,
+          "phase": "lift",
+          "residual": 0.0047599463449631285,
+          "controller_success": true
+        },
+        {
+          "sim_time": 18.15000000000082,
+          "phase": "lift",
+          "residual": 0.0047013538137650746,
+          "controller_success": true
+        },
+        {
+          "sim_time": 18.450000000000653,
+          "phase": "lift",
+          "residual": 0.0046147883489161545,
+          "controller_success": true
+        },
+        {
+          "sim_time": 18.750000000000487,
+          "phase": "lift",
+          "residual": 0.004575213045390103,
+          "controller_success": true
+        },
+        {
+          "sim_time": 19.05000000000032,
+          "phase": "lift",
+          "residual": 0.004506244242701907,
+          "controller_success": true
+        },
+        {
+          "sim_time": 19.350000000000154,
+          "phase": "lift",
+          "residual": 0.004481847769413239,
+          "controller_success": true
+        },
+        {
+          "sim_time": 19.649999999999988,
+          "phase": "lift",
+          "residual": 0.004426094787654655,
+          "controller_success": true
+        },
+        {
+          "sim_time": 20.899999999999295,
+          "phase": "lift_complete",
+          "controller_success": true,
+          "residual": 0.004333551059249707
+        },
+        {
+          "sim_time": 25.84999999999655,
+          "phase": "preplace",
+          "residual": 0.0038910514848684505,
+          "controller_success": true
+        },
+        {
+          "sim_time": 26.299999999996302,
+          "phase": "preplace",
+          "residual": 0.004682262650258888,
+          "controller_success": true
+        },
+        {
+          "sim_time": 26.749999999996053,
+          "phase": "preplace",
+          "residual": 0.004058952004378044,
+          "controller_success": true
+        },
+        {
+          "sim_time": 27.14999999999583,
+          "phase": "preplace",
+          "residual": 0.004984258556881352,
+          "controller_success": true
+        },
+        {
+          "sim_time": 27.54999999999561,
+          "phase": "preplace",
+          "residual": 0.004645426703187308,
+          "controller_success": true
+        },
+        {
+          "sim_time": 27.949999999995388,
+          "phase": "preplace",
+          "residual": 0.004165968475169396,
+          "controller_success": true
+        },
+        {
+          "sim_time": 28.349999999995166,
+          "phase": "preplace",
+          "residual": 0.00374501409075903,
+          "controller_success": true
+        },
+        {
+          "sim_time": 28.749999999994944,
+          "phase": "preplace",
+          "residual": 0.0034002592214476823,
+          "controller_success": true
+        },
+        {
+          "sim_time": 29.149999999994723,
+          "phase": "preplace",
+          "residual": 0.0031186609249484465,
+          "controller_success": true
+        },
+        {
+          "sim_time": 29.49999999999453,
+          "phase": "preplace",
+          "residual": 0.004844568162198137,
+          "controller_success": true
+        },
+        {
+          "sim_time": 29.899999999994307,
+          "phase": "preplace",
+          "residual": 0.002963878324495295,
+          "controller_success": true
+        },
+        {
+          "sim_time": 30.249999999994113,
+          "phase": "preplace",
+          "residual": 0.004464372165026431,
+          "controller_success": true
+        },
+        {
+          "sim_time": 30.59999999999392,
+          "phase": "preplace",
+          "residual": 0.00463972579776567,
+          "controller_success": true
+        },
+        {
+          "sim_time": 30.949999999993725,
+          "phase": "preplace",
+          "residual": 0.00451057106607361,
+          "controller_success": true
+        },
+        {
+          "sim_time": 31.29999999999353,
+          "phase": "preplace",
+          "residual": 0.004351666295675238,
+          "controller_success": true
+        },
+        {
+          "sim_time": 31.649999999993337,
+          "phase": "preplace",
+          "residual": 0.004206288422882898,
+          "controller_success": true
+        },
+        {
+          "sim_time": 31.999999999993143,
+          "phase": "preplace",
+          "residual": 0.0040874180163734675,
+          "controller_success": true
+        },
+        {
+          "sim_time": 32.34999999999357,
+          "phase": "preplace",
+          "residual": 0.003980161792364489,
+          "controller_success": true
+        },
+        {
+          "sim_time": 32.699999999994,
+          "phase": "preplace",
+          "residual": 0.0039004899193809672,
+          "controller_success": true
+        },
+        {
+          "sim_time": 33.04999999999443,
+          "phase": "preplace",
+          "residual": 0.0038295462757817478,
+          "controller_success": true
+        },
+        {
+          "sim_time": 33.399999999994854,
+          "phase": "preplace",
+          "residual": 0.0037654280405894913,
+          "controller_success": true
+        },
+        {
+          "sim_time": 33.74999999999528,
+          "phase": "preplace",
+          "residual": 0.0037178072245289684,
+          "controller_success": true
+        },
+        {
+          "sim_time": 34.09999999999571,
+          "phase": "preplace",
+          "residual": 0.003682439210765054,
+          "controller_success": true
+        },
+        {
+          "sim_time": 34.44999999999614,
+          "phase": "preplace",
+          "residual": 0.0036457218400935965,
+          "controller_success": true
+        },
+        {
+          "sim_time": 34.799999999996565,
+          "phase": "preplace",
+          "residual": 0.003615488886541951,
+          "controller_success": true
+        },
+        {
+          "sim_time": 35.14999999999699,
+          "phase": "preplace",
+          "residual": 0.003594711131625572,
+          "controller_success": true
+        },
+        {
+          "sim_time": 35.49999999999742,
+          "phase": "preplace",
+          "residual": 0.0035753174944583854,
+          "controller_success": true
+        },
+        {
+          "sim_time": 35.84999999999785,
+          "phase": "preplace",
+          "residual": 0.0035565876509965344,
+          "controller_success": true
+        },
+        {
+          "sim_time": 36.199999999998276,
+          "phase": "preplace",
+          "residual": 0.00354712451784156,
+          "controller_success": true
+        },
+        {
+          "sim_time": 37.499999999999865,
+          "phase": "preplace_complete",
+          "controller_success": true,
+          "residual": 0.0043597898423359815
+        },
+        {
+          "sim_time": 37.900000000000354,
+          "phase": "place",
+          "residual": 0.004960469455724481,
+          "controller_success": true
+        },
+        {
+          "sim_time": 38.350000000000904,
+          "phase": "place",
+          "residual": 0.003785356611831714,
+          "controller_success": true
+        },
+        {
+          "sim_time": 38.75000000000139,
+          "phase": "place",
+          "residual": 0.004371537841678541,
+          "controller_success": true
+        },
+        {
+          "sim_time": 39.15000000000188,
+          "phase": "place",
+          "residual": 0.004002833384784299,
+          "controller_success": true
+        },
+        {
+          "sim_time": 39.55000000000237,
+          "phase": "place",
+          "residual": 0.0035370915280580895,
+          "controller_success": true
+        },
+        {
+          "sim_time": 39.9000000000028,
+          "phase": "place",
+          "residual": 0.004776173059541422,
+          "controller_success": true
+        },
+        {
+          "sim_time": 40.250000000003226,
+          "phase": "place",
+          "residual": 0.004757926778117344,
+          "controller_success": true
+        },
+        {
+          "sim_time": 40.600000000003654,
+          "phase": "place",
+          "residual": 0.004464274292739712,
+          "controller_success": true
+        },
+        {
+          "sim_time": 40.95000000000408,
+          "phase": "place",
+          "residual": 0.004175077947950273,
+          "controller_success": true
+        },
+        {
+          "sim_time": 41.30000000000451,
+          "phase": "place",
+          "residual": 0.0039177133867390745,
+          "controller_success": true
+        },
+        {
+          "sim_time": 41.65000000000494,
+          "phase": "place",
+          "residual": 0.0037092305735341724,
+          "controller_success": true
+        },
+        {
+          "sim_time": 42.000000000005365,
+          "phase": "place",
+          "residual": 0.003531943115615152,
+          "controller_success": true
+        },
+        {
+          "sim_time": 42.35000000000579,
+          "phase": "place",
+          "residual": 0.003386742067317053,
+          "controller_success": true
+        },
+        {
+          "sim_time": 42.70000000000622,
+          "phase": "place",
+          "residual": 0.003264257422327582,
+          "controller_success": true
+        },
+        {
+          "sim_time": 43.05000000000665,
+          "phase": "place",
+          "residual": 0.0031590441860644553,
+          "controller_success": true
+        },
+        {
+          "sim_time": 43.400000000007076,
+          "phase": "place",
+          "residual": 0.0030863459426664075,
+          "controller_success": true
+        },
+        {
+          "sim_time": 43.7500000000075,
+          "phase": "place",
+          "residual": 0.0030163199420926087,
+          "controller_success": true
+        },
+        {
+          "sim_time": 44.05000000000787,
+          "phase": "place",
+          "residual": 0.004999321590482385,
+          "controller_success": true
+        },
+        {
+          "sim_time": 44.4000000000083,
+          "phase": "place",
+          "residual": 0.003279197732952828,
+          "controller_success": true
+        },
+        {
+          "sim_time": 44.700000000008664,
+          "phase": "place",
+          "residual": 0.004921717962738985,
+          "controller_success": true
+        },
+        {
+          "sim_time": 45.05000000000909,
+          "phase": "place",
+          "residual": 0.003132128269984734,
+          "controller_success": true
+        },
+        {
+          "sim_time": 45.35000000000946,
+          "phase": "place",
+          "residual": 0.0047666659830850056,
+          "controller_success": true
+        },
+        {
+          "sim_time": 45.70000000000989,
+          "phase": "place",
+          "residual": 0.002995378696819262,
+          "controller_success": true
+        },
+        {
+          "sim_time": 46.00000000001025,
+          "phase": "place",
+          "residual": 0.004662382476876767,
+          "controller_success": true
+        },
+        {
+          "sim_time": 46.35000000001068,
+          "phase": "place",
+          "residual": 0.002904496865478806,
+          "controller_success": true
+        },
+        {
+          "sim_time": 46.65000000001105,
+          "phase": "place",
+          "residual": 0.004567827077418096,
+          "controller_success": true
+        },
+        {
+          "sim_time": 47.000000000011475,
+          "phase": "place",
+          "residual": 0.0028392655795501653,
+          "controller_success": true
+        },
+        {
+          "sim_time": 47.30000000001184,
+          "phase": "place",
+          "residual": 0.0045260121484562155,
+          "controller_success": true
+        },
+        {
+          "sim_time": 47.60000000001221,
+          "phase": "place",
+          "residual": 0.004955568933143278,
+          "controller_success": true
+        },
+        {
+          "sim_time": 47.950000000012636,
+          "phase": "place",
+          "residual": 0.002814575199074132,
+          "controller_success": true
+        },
+        {
+          "sim_time": 48.250000000013,
+          "phase": "place",
+          "residual": 0.004420364110503228,
+          "controller_success": true
+        },
+        {
+          "sim_time": 48.55000000001337,
+          "phase": "place",
+          "residual": 0.004872508187265423,
+          "controller_success": true
+        },
+        {
+          "sim_time": 48.850000000013736,
+          "phase": "place",
+          "residual": 0.00492285901699635,
+          "controller_success": true
+        },
+        {
+          "sim_time": 49.1500000000141,
+          "phase": "place",
+          "residual": 0.004878935236631965,
+          "controller_success": true
+        },
+        {
+          "sim_time": 50.35000000001557,
+          "phase": "place_complete",
+          "controller_success": true,
+          "residual": 0.004441228306403644
+        },
+        {
+          "sim_time": 51.000000000016364,
+          "phase": "release",
+          "controller_success": true
+        },
+        {
+          "sim_time": 51.75000000001728,
+          "phase": "retreat",
+          "residual": 0.0049162228058996504,
+          "controller_success": true
+        },
+        {
+          "sim_time": 52.25000000001789,
+          "phase": "retreat",
+          "residual": 0.004567029208644158,
+          "controller_success": true
+        },
+        {
+          "sim_time": 52.70000000001844,
+          "phase": "retreat",
+          "residual": 0.004526788559994499,
+          "controller_success": true
+        },
+        {
+          "sim_time": 53.10000000001893,
+          "phase": "retreat",
+          "residual": 0.0049852317446736905,
+          "controller_success": true
+        },
+        {
+          "sim_time": 53.50000000001942,
+          "phase": "retreat",
+          "residual": 0.004467913768749998,
+          "controller_success": true
+        },
+        {
+          "sim_time": 53.90000000001991,
+          "phase": "retreat",
+          "residual": 0.003865708476734897,
+          "controller_success": true
+        },
+        {
+          "sim_time": 54.250000000020336,
+          "phase": "retreat",
+          "residual": 0.0048594784005975555,
+          "controller_success": true
+        },
+        {
+          "sim_time": 54.60000000002076,
+          "phase": "retreat",
+          "residual": 0.004714813678208973,
+          "controller_success": true
+        },
+        {
+          "sim_time": 54.95000000002119,
+          "phase": "retreat",
+          "residual": 0.004371532390812144,
+          "controller_success": true
+        },
+        {
+          "sim_time": 55.30000000002162,
+          "phase": "retreat",
+          "residual": 0.004031930180258714,
+          "controller_success": true
+        },
+        {
+          "sim_time": 55.65000000002205,
+          "phase": "retreat",
+          "residual": 0.0037439323945140657,
+          "controller_success": true
+        },
+        {
+          "sim_time": 56.000000000022474,
+          "phase": "retreat",
+          "residual": 0.00350108925115461,
+          "controller_success": true
+        },
+        {
+          "sim_time": 56.3500000000229,
+          "phase": "retreat",
+          "residual": 0.003287955844482368,
+          "controller_success": true
+        },
+        {
+          "sim_time": 56.65000000002327,
+          "phase": "retreat",
+          "residual": 0.004972471047109364,
+          "controller_success": true
+        },
+        {
+          "sim_time": 57.0000000000237,
+          "phase": "retreat",
+          "residual": 0.0033294868365047886,
+          "controller_success": true
+        },
+        {
+          "sim_time": 57.30000000002406,
+          "phase": "retreat",
+          "residual": 0.004711984661781771,
+          "controller_success": true
+        },
+        {
+          "sim_time": 57.60000000002443,
+          "phase": "retreat",
+          "residual": 0.0049889457170069,
+          "controller_success": true
+        },
+        {
+          "sim_time": 57.9000000000248,
+          "phase": "retreat",
+          "residual": 0.004931409340917289,
+          "controller_success": true
+        },
+        {
+          "sim_time": 58.20000000002516,
+          "phase": "retreat",
+          "residual": 0.004791558751027649,
+          "controller_success": true
+        },
+        {
+          "sim_time": 58.50000000002553,
+          "phase": "retreat",
+          "residual": 0.004657631455715822,
+          "controller_success": true
+        },
+        {
+          "sim_time": 58.800000000025896,
+          "phase": "retreat",
+          "residual": 0.004544635568739422,
+          "controller_success": true
+        },
+        {
+          "sim_time": 59.10000000002626,
+          "phase": "retreat",
+          "residual": 0.0044385288078094,
+          "controller_success": true
+        },
+        {
+          "sim_time": 59.40000000002663,
+          "phase": "retreat",
+          "residual": 0.004347234892719903,
+          "controller_success": true
+        },
+        {
+          "sim_time": 59.700000000026996,
+          "phase": "retreat",
+          "residual": 0.00427314983911245,
+          "controller_success": true
+        },
+        {
+          "sim_time": 60.00000000002736,
+          "phase": "retreat",
+          "residual": 0.004210750686941642,
+          "controller_success": true
+        },
+        {
+          "sim_time": 60.30000000002773,
+          "phase": "retreat",
+          "residual": 0.004154804559220682,
+          "controller_success": true
+        },
+        {
+          "sim_time": 60.600000000028096,
+          "phase": "retreat",
+          "residual": 0.004101223637372808,
+          "controller_success": true
+        },
+        {
+          "sim_time": 60.90000000002846,
+          "phase": "retreat",
+          "residual": 0.004051899715065338,
+          "controller_success": true
+        },
+        {
+          "sim_time": 61.20000000002883,
+          "phase": "retreat",
+          "residual": 0.004025373314423819,
+          "controller_success": true
+        },
+        {
+          "sim_time": 61.500000000029196,
+          "phase": "retreat",
+          "residual": 0.003985452407027079,
+          "controller_success": true
+        },
+        {
+          "sim_time": 61.80000000002956,
+          "phase": "retreat",
+          "residual": 0.00396889037557388,
+          "controller_success": true
+        },
+        {
+          "sim_time": 62.50000000003042,
+          "phase": "retreat_complete",
+          "controller_success": true,
+          "residual": 0.00496332114695297
+        }
+      ],
+      "last_events": [
+        {
+          "sim_time": 61.500000000029196,
+          "phase": "retreat",
+          "command": [
+            0.6891908837048476,
+            -0.5644067095988271,
+            -0.20839317126053936,
+            0.7747444046381122,
+            -7.084731368606949e-05
+          ],
+          "measured": [
+            0.6891889466929308,
+            -0.5649731487251465,
+            -0.20440771885351228,
+            0.7713007933605296,
+            -6.61230109102141e-05
+          ],
+          "residual": 0.003985452407027079,
+          "controller_success": true
+        },
+        {
+          "sim_time": 61.80000000002956,
+          "phase": "retreat",
+          "command": [
+            0.6892074594727329,
+            -0.5622891828249229,
+            -0.22670565691971817,
+            0.7908543600383708,
+            -9.341779829702976e-05
+          ],
+          "measured": [
+            0.6892034773875849,
+            -0.5628412126635035,
+            -0.2227367665441443,
+            0.7874341945689797,
+            -8.831862564210048e-05
+          ],
+          "residual": 0.00396889037557388,
+          "controller_success": true
+        },
+        {
+          "sim_time": 62.50000000003042,
+          "phase": "retreat_complete",
+          "controller_success": true,
+          "residual": 0.00496332114695297
+        }
+      ]
+    },
+    {
+      "label": "source_agent",
+      "selector": "llm_privileged",
+      "controller": "checkpoint_policy",
+      "success": false,
+      "completed_stages": 0,
+      "robot_failure": "cartesian_tracking_timeout",
+      "stop_confirmed": true,
+      "policy_calls": 371,
+      "agent_terminal": "partial_execution_requires_recovery",
+      "failure_at": {
+        "stage": 0,
+        "tool": "execute_pick_place_plan",
+        "code": "tracking_timeout",
+        "category": "execution_or_verification"
+      },
+      "contact_metrics": {
+        "peak_contact_force": 4.538245329092174,
+        "contact_impulse": 137.28007439767293,
+        "contact": true,
+        "max_penetration": 0.0016209218219760922,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          3.808656796083776e-06,
+          4.806760562692247e-06,
+          0.0
+        ],
+        "min_wheel_load": [
+          0.0,
+          0.0,
+          1.4604462324523948
+        ]
+      },
+      "motion_metrics": {
+        "samples": 377,
+        "duration_s": 18.799999999999876,
+        "hand_position_rms_m": 0.006663931931475324,
+        "hand_position_max_m": 0.009407128262034315,
+        "hand_rotation_rms_rad": 0.026598902580287104,
+        "hand_rotation_max_rad": 0.03541403967310623,
+        "arm_speed_max_rad_s": 0.007244989580177708,
+        "arm_velocity_command_error_rms_rad_s": 0.0009057170104911141,
+        "scope": "all recorded execution samples, including failed segments and stop transients; no smoothing",
+        "arm_acceleration_max_rad_s2": 0.14148643652154297,
+        "arm_jerk_rms_rad_s3": 0.3776533576841106,
+        "arm_jerk_max_rad_s3": 4.216425739677527
+      },
+      "policy_admission": {
+        "accepted": true,
+        "format": "mars-tamp-policy-admission-v1",
+        "robot_sha256": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+        "weights_sha256": "74dc0f8fc351f0d67932c485f7587eb2a740680e5887bc02d0f8e85fe7b4c3af",
+        "training_fingerprint": "1e1110aaac94d6d32015c02262ef033f4810b8651e5780c88213beca94c2bb17",
+        "training_evidence_sha256": "52b9ec105aa3c15eee46f7a109b46c0b9ca46505ac67b5ac63a9dda845ff4b87",
+        "simulation_only": true,
+        "safety_promoted": false
+      },
+      "phase_completions": [
+        {
+          "sim_time": 1.300000000000001,
+          "phase": "approach_clearance_complete",
+          "execution_contract": "cartesian_arm_v1",
+          "position_error_m": 0.00023471821625308716,
+          "orientation_error_rad": 0.0012105444077446443,
+          "joint_witness_residual_rad": 0.0008184445651515312,
+          "controller_success": true
+        }
+      ],
+      "last_events": [
+        {
+          "sim_time": 1.350000000000001,
+          "phase": "grasp_replan_after_open",
+          "option": 0,
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "sim_time": 1.350000000000001,
+          "phase": "pregrasp",
+          "execution_contract": "cartesian_arm_v1",
+          "position_tolerance_m": 0.003,
+          "orientation_tolerance_rad": 0.02,
+          "configuration_check_period_s": 0.05,
+          "reference_clock": "continuous_lag_scaling",
+          "tracking_position_limit_m": 0.01,
+          "tracking_orientation_limit_rad": 0.1
+        },
+        {
+          "sim_time": 19.849999999999877,
+          "phase": "pregrasp",
+          "execution_contract": "cartesian_arm_v1",
+          "reason": "cartesian_tracking_timeout",
+          "position_error_m": 0.004375731815435274,
+          "orientation_error_rad": 0.024048164429893864
+        }
+      ]
+    },
+    {
+      "label": "gain_1p0",
+      "selector": "scripted_reference",
+      "controller": "checkpoint_policy",
+      "success": false,
+      "completed_stages": 0,
+      "robot_failure": "cartesian_tracking_timeout",
+      "stop_confirmed": true,
+      "policy_calls": 371,
+      "agent_terminal": null,
+      "failure_at": {
+        "stage": 0,
+        "tool": "execute_pick_place_plan",
+        "code": "tracking_timeout",
+        "category": "execution_or_verification"
+      },
+      "contact_metrics": {
+        "peak_contact_force": 4.538245329092174,
+        "contact_impulse": 137.28007439767293,
+        "contact": true,
+        "max_penetration": 0.0016209218219760922,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          3.808656796083776e-06,
+          4.806760562692247e-06,
+          0.0
+        ],
+        "min_wheel_load": [
+          0.0,
+          0.0,
+          1.4604462324523948
+        ]
+      },
+      "motion_metrics": {
+        "samples": 377,
+        "duration_s": 18.799999999999876,
+        "hand_position_rms_m": 0.006663931931475324,
+        "hand_position_max_m": 0.009407128262034315,
+        "hand_rotation_rms_rad": 0.026598902580287104,
+        "hand_rotation_max_rad": 0.03541403967310623,
+        "arm_speed_max_rad_s": 0.007244989580177708,
+        "arm_velocity_command_error_rms_rad_s": 0.0009057170104911141,
+        "scope": "all recorded execution samples, including failed segments and stop transients; no smoothing",
+        "arm_acceleration_max_rad_s2": 0.14148643652154297,
+        "arm_jerk_rms_rad_s3": 0.3776533576841106,
+        "arm_jerk_max_rad_s3": 4.216425739677527
+      },
+      "policy_admission": {
+        "accepted": true,
+        "format": "mars-tamp-policy-admission-v1",
+        "robot_sha256": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+        "weights_sha256": "18e9abcf5162aca05906de8b94624442fe5d01c6932d5600b838dc595b0540a1",
+        "training_fingerprint": "1e1110aaac94d6d32015c02262ef033f4810b8651e5780c88213beca94c2bb17",
+        "training_evidence_sha256": "a83ffee39751df76e3fef5b41e9206a026f9e96f97eb37f32ca0916c04b8b927",
+        "policy_transform": {
+          "kind": "hand_pose_feedback_gain",
+          "factor": 1.0,
+          "arm_action_rows": [
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "feedback_columns": [
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23
+          ],
+          "source_weights_sha256": "74dc0f8fc351f0d67932c485f7587eb2a740680e5887bc02d0f8e85fe7b4c3af",
+          "source_manifest_sha256": "cf6f616cb8cb7c9f2acd97aa4caf94a119e3c7b572825625d4b1be03edfd9733",
+          "source_admission": {
+            "format": "mars-tamp-policy-admission-v1",
+            "robot_sha256": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+            "weights_sha256": "74dc0f8fc351f0d67932c485f7587eb2a740680e5887bc02d0f8e85fe7b4c3af",
+            "training_fingerprint": "1e1110aaac94d6d32015c02262ef033f4810b8651e5780c88213beca94c2bb17",
+            "training_evidence_sha256": "52b9ec105aa3c15eee46f7a109b46c0b9ca46505ac67b5ac63a9dda845ff4b87",
+            "simulation_only": true,
+            "safety_promoted": false
+          },
+          "base_and_gripper_heads_unchanged": true,
+          "measured_velocity_feedback_unchanged": true,
+          "ppo_steps_added": 0,
+          "optimizer_reset": true,
+          "safety_promoted": false
+        },
+        "simulation_only": true,
+        "safety_promoted": false
+      },
+      "phase_completions": [
+        {
+          "sim_time": 1.300000000000001,
+          "phase": "approach_clearance_complete",
+          "execution_contract": "cartesian_arm_v1",
+          "position_error_m": 0.00023471821625308716,
+          "orientation_error_rad": 0.0012105444077446443,
+          "joint_witness_residual_rad": 0.0008184445651515312,
+          "controller_success": true
+        }
+      ],
+      "last_events": [
+        {
+          "sim_time": 1.350000000000001,
+          "phase": "grasp_replan_after_open",
+          "option": 0,
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "sim_time": 1.350000000000001,
+          "phase": "pregrasp",
+          "execution_contract": "cartesian_arm_v1",
+          "position_tolerance_m": 0.003,
+          "orientation_tolerance_rad": 0.02,
+          "configuration_check_period_s": 0.05,
+          "reference_clock": "continuous_lag_scaling",
+          "tracking_position_limit_m": 0.01,
+          "tracking_orientation_limit_rad": 0.1
+        },
+        {
+          "sim_time": 19.849999999999877,
+          "phase": "pregrasp",
+          "execution_contract": "cartesian_arm_v1",
+          "reason": "cartesian_tracking_timeout",
+          "position_error_m": 0.004375731815435274,
+          "orientation_error_rad": 0.024048164429893864
+        }
+      ]
+    },
+    {
+      "label": "gain_1p5",
+      "selector": "scripted_reference",
+      "controller": "checkpoint_policy",
+      "success": false,
+      "completed_stages": 0,
+      "robot_failure": "cartesian_tracking_timeout",
+      "stop_confirmed": true,
+      "policy_calls": 371,
+      "agent_terminal": null,
+      "failure_at": {
+        "stage": 0,
+        "tool": "execute_pick_place_plan",
+        "code": "tracking_timeout",
+        "category": "execution_or_verification"
+      },
+      "contact_metrics": {
+        "peak_contact_force": 4.509315048553132,
+        "contact_impulse": 140.31151162396853,
+        "contact": true,
+        "max_penetration": 0.0017263942547384135,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          5.2450936261910774e-06,
+          3.7147361849551586e-06,
+          0.0
+        ],
+        "min_wheel_load": [
+          0.0,
+          0.0,
+          1.4604462324523948
+        ]
+      },
+      "motion_metrics": {
+        "samples": 377,
+        "duration_s": 18.799999999999876,
+        "hand_position_rms_m": 0.005644151948606964,
+        "hand_position_max_m": 0.00842439534270827,
+        "hand_rotation_rms_rad": 0.022235014711374696,
+        "hand_rotation_max_rad": 0.030803467574925195,
+        "arm_speed_max_rad_s": 0.009319259755706888,
+        "arm_velocity_command_error_rms_rad_s": 0.0009744742735332047,
+        "scope": "all recorded execution samples, including failed segments and stop transients; no smoothing",
+        "arm_acceleration_max_rad_s2": 0.14148643652154297,
+        "arm_jerk_rms_rad_s3": 0.382553402482819,
+        "arm_jerk_max_rad_s3": 4.216425739677527
+      },
+      "policy_admission": {
+        "accepted": true,
+        "format": "mars-tamp-policy-admission-v1",
+        "robot_sha256": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+        "weights_sha256": "cf79745915833f7c87b0d81de6bfbf1afe4cd11b5608ed5c8d726495b9796302",
+        "training_fingerprint": "1e1110aaac94d6d32015c02262ef033f4810b8651e5780c88213beca94c2bb17",
+        "training_evidence_sha256": "3c9252fd9e49af0321ed5a8d73115c5ab06f3b6a29e2f6c0700dfaeda929c8ad",
+        "policy_transform": {
+          "kind": "hand_pose_feedback_gain",
+          "factor": 1.5,
+          "arm_action_rows": [
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "feedback_columns": [
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23
+          ],
+          "source_weights_sha256": "74dc0f8fc351f0d67932c485f7587eb2a740680e5887bc02d0f8e85fe7b4c3af",
+          "source_manifest_sha256": "cf6f616cb8cb7c9f2acd97aa4caf94a119e3c7b572825625d4b1be03edfd9733",
+          "source_admission": {
+            "format": "mars-tamp-policy-admission-v1",
+            "robot_sha256": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+            "weights_sha256": "74dc0f8fc351f0d67932c485f7587eb2a740680e5887bc02d0f8e85fe7b4c3af",
+            "training_fingerprint": "1e1110aaac94d6d32015c02262ef033f4810b8651e5780c88213beca94c2bb17",
+            "training_evidence_sha256": "52b9ec105aa3c15eee46f7a109b46c0b9ca46505ac67b5ac63a9dda845ff4b87",
+            "simulation_only": true,
+            "safety_promoted": false
+          },
+          "base_and_gripper_heads_unchanged": true,
+          "measured_velocity_feedback_unchanged": true,
+          "ppo_steps_added": 0,
+          "optimizer_reset": true,
+          "safety_promoted": false
+        },
+        "simulation_only": true,
+        "safety_promoted": false
+      },
+      "phase_completions": [
+        {
+          "sim_time": 1.300000000000001,
+          "phase": "approach_clearance_complete",
+          "execution_contract": "cartesian_arm_v1",
+          "position_error_m": 0.00023471821625308716,
+          "orientation_error_rad": 0.0012105444077446443,
+          "joint_witness_residual_rad": 0.0008184445651515312,
+          "controller_success": true
+        }
+      ],
+      "last_events": [
+        {
+          "sim_time": 1.350000000000001,
+          "phase": "grasp_replan_after_open",
+          "option": 0,
+          "accepted": true,
+          "reason": null
+        },
+        {
+          "sim_time": 1.350000000000001,
+          "phase": "pregrasp",
+          "execution_contract": "cartesian_arm_v1",
+          "position_tolerance_m": 0.003,
+          "orientation_tolerance_rad": 0.02,
+          "configuration_check_period_s": 0.05,
+          "reference_clock": "continuous_lag_scaling",
+          "tracking_position_limit_m": 0.01,
+          "tracking_orientation_limit_rad": 0.1
+        },
+        {
+          "sim_time": 19.849999999999877,
+          "phase": "pregrasp",
+          "execution_contract": "cartesian_arm_v1",
+          "reason": "cartesian_tracking_timeout",
+          "position_error_m": 0.00316672772490354,
+          "orientation_error_rad": 0.013964361622213022
+        }
+      ]
+    },
+    {
+      "label": "gain_2p0",
+      "selector": "scripted_reference",
+      "controller": "checkpoint_policy",
+      "success": false,
+      "completed_stages": 0,
+      "robot_failure": "wheel_lift",
+      "stop_confirmed": true,
+      "policy_calls": 540,
+      "agent_terminal": null,
+      "failure_at": {
+        "stage": 0,
+        "tool": "execute_pick_place_plan",
+        "code": "wheel_lift",
+        "category": "execution_or_verification"
+      },
+      "contact_metrics": {
+        "peak_contact_force": 4.678219021914539,
+        "contact_impulse": 224.32875319432787,
+        "contact": true,
+        "max_penetration": 0.0017545023884784836,
+        "wheel_lift": true,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          0.00010017480140326468,
+          4.633321525775169e-06,
+          0.0
+        ],
+        "min_wheel_load": [
+          0.0,
+          0.0,
+          1.4604462324523948
+        ]
+      },
+      "motion_metrics": {
+        "samples": 551,
+        "duration_s": 27.459999999995077,
+        "hand_position_rms_m": 0.005267145012729466,
+        "hand_position_max_m": 0.0077750828277406035,
+        "hand_rotation_rms_rad": 0.0208678132366836,
+        "hand_rotation_max_rad": 0.028695337192000427,
+        "arm_speed_max_rad_s": 0.011860864595265499,
+        "arm_velocity_command_error_rms_rad_s": 0.001244435581633601,
+        "scope": "all recorded execution samples, including failed segments and stop transients; no smoothing",
+        "arm_acceleration_max_rad_s2": 0.25172056496344053,
+        "arm_jerk_rms_rad_s3": 0.579832005003971,
+        "arm_jerk_max_rad_s3": 8.395864347395545
+      },
+      "policy_admission": {
+        "accepted": true,
+        "format": "mars-tamp-policy-admission-v1",
+        "robot_sha256": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+        "weights_sha256": "dc0659157f2778b637bf0b14890d6b455c266c1a86bfffe472bc77a2c6f25f39",
+        "training_fingerprint": "1e1110aaac94d6d32015c02262ef033f4810b8651e5780c88213beca94c2bb17",
+        "training_evidence_sha256": "294e0e9f33c505fcd2817fb620930ae7087cf95d793c8c8eef8ec0dd10a627b8",
+        "policy_transform": {
+          "kind": "hand_pose_feedback_gain",
+          "factor": 2.0,
+          "arm_action_rows": [
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "feedback_columns": [
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23
+          ],
+          "source_weights_sha256": "74dc0f8fc351f0d67932c485f7587eb2a740680e5887bc02d0f8e85fe7b4c3af",
+          "source_manifest_sha256": "cf6f616cb8cb7c9f2acd97aa4caf94a119e3c7b572825625d4b1be03edfd9733",
+          "source_admission": {
+            "format": "mars-tamp-policy-admission-v1",
+            "robot_sha256": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+            "weights_sha256": "74dc0f8fc351f0d67932c485f7587eb2a740680e5887bc02d0f8e85fe7b4c3af",
+            "training_fingerprint": "1e1110aaac94d6d32015c02262ef033f4810b8651e5780c88213beca94c2bb17",
+            "training_evidence_sha256": "52b9ec105aa3c15eee46f7a109b46c0b9ca46505ac67b5ac63a9dda845ff4b87",
+            "simulation_only": true,
+            "safety_promoted": false
+          },
+          "base_and_gripper_heads_unchanged": true,
+          "measured_velocity_feedback_unchanged": true,
+          "ppo_steps_added": 0,
+          "optimizer_reset": true,
+          "safety_promoted": false
+        },
+        "simulation_only": true,
+        "safety_promoted": false
+      },
+      "phase_completions": [
+        {
+          "sim_time": 1.300000000000001,
+          "phase": "approach_clearance_complete",
+          "execution_contract": "cartesian_arm_v1",
+          "position_error_m": 0.00023471821625308716,
+          "orientation_error_rad": 0.0012105444077446443,
+          "joint_witness_residual_rad": 0.0008184445651515312,
+          "controller_success": true
+        },
+        {
+          "sim_time": 16.85000000000154,
+          "phase": "pregrasp_complete",
+          "execution_contract": "cartesian_arm_v1",
+          "position_error_m": 0.002397460478567152,
+          "orientation_error_rad": 0.013812910652800348,
+          "joint_witness_residual_rad": 0.06262832803349638,
+          "controller_success": true
+        }
+      ],
+      "last_events": [
+        {
+          "sim_time": 16.85000000000154,
+          "phase": "pregrasp_complete",
+          "execution_contract": "cartesian_arm_v1",
+          "position_error_m": 0.002397460478567152,
+          "orientation_error_rad": 0.013812910652800348,
+          "joint_witness_residual_rad": 0.06262832803349638,
+          "controller_success": true
+        },
+        {
+          "sim_time": 16.85000000000154,
+          "phase": "grasp",
+          "execution_contract": "cartesian_arm_v1",
+          "position_tolerance_m": 0.003,
+          "orientation_tolerance_rad": 0.02,
+          "configuration_check_period_s": 0.05,
+          "reference_clock": "continuous_lag_scaling",
+          "tracking_position_limit_m": 0.01,
+          "tracking_orientation_limit_rad": 0.1
+        },
+        {
+          "sim_time": 28.509999999995078,
+          "phase": "grasp",
+          "execution_contract": "cartesian_arm_v1",
+          "reason": "wheel_lift",
+          "check": "measured_configuration"
+        }
+      ]
+    },
+    {
+      "label": "gain_3p0",
+      "selector": "scripted_reference",
+      "controller": "checkpoint_policy",
+      "success": false,
+      "completed_stages": 0,
+      "robot_failure": "ik_failed",
+      "stop_confirmed": true,
+      "policy_calls": 430,
+      "agent_terminal": null,
+      "failure_at": {
+        "stage": 0,
+        "tool": "execute_pick_place_plan",
+        "code": "ik_failed",
+        "category": "execution_or_verification"
+      },
+      "contact_metrics": {
+        "peak_contact_force": 4.692514721780548,
+        "contact_impulse": 193.59634173779304,
+        "contact": true,
+        "max_penetration": 0.0017420862389238012,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          2.2660790362082073e-05,
+          3.763132217789178e-06,
+          0.0
+        ],
+        "min_wheel_load": [
+          0.0,
+          0.0,
+          1.4604462324523948
+        ]
+      },
+      "motion_metrics": {
+        "samples": 473,
+        "duration_s": 23.599999999997216,
+        "hand_position_rms_m": 0.004676258802106389,
+        "hand_position_max_m": 0.007067890559096571,
+        "hand_rotation_rms_rad": 0.017732229258131296,
+        "hand_rotation_max_rad": 0.024337337746325575,
+        "arm_speed_max_rad_s": 0.012849902303513778,
+        "arm_velocity_command_error_rms_rad_s": 0.0013799053100498452,
+        "scope": "all recorded execution samples, including failed segments and stop transients; no smoothing",
+        "arm_acceleration_max_rad_s2": 0.14148643652154297,
+        "arm_jerk_rms_rad_s3": 0.5296385120500803,
+        "arm_jerk_max_rad_s3": 4.216425739677527
+      },
+      "policy_admission": {
+        "accepted": true,
+        "format": "mars-tamp-policy-admission-v1",
+        "robot_sha256": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+        "weights_sha256": "20ce2ed2e31f1f215e0294b8c8cd12de51deab492161a1ce2d73ec6ade637eb2",
+        "training_fingerprint": "1e1110aaac94d6d32015c02262ef033f4810b8651e5780c88213beca94c2bb17",
+        "training_evidence_sha256": "5460b34ee56e5dbdc3a208bb155ec49c5841033718b601b7b78d80a2a6f3091d",
+        "policy_transform": {
+          "kind": "hand_pose_feedback_gain",
+          "factor": 3.0,
+          "arm_action_rows": [
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "feedback_columns": [
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23
+          ],
+          "source_weights_sha256": "74dc0f8fc351f0d67932c485f7587eb2a740680e5887bc02d0f8e85fe7b4c3af",
+          "source_manifest_sha256": "cf6f616cb8cb7c9f2acd97aa4caf94a119e3c7b572825625d4b1be03edfd9733",
+          "source_admission": {
+            "format": "mars-tamp-policy-admission-v1",
+            "robot_sha256": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+            "weights_sha256": "74dc0f8fc351f0d67932c485f7587eb2a740680e5887bc02d0f8e85fe7b4c3af",
+            "training_fingerprint": "1e1110aaac94d6d32015c02262ef033f4810b8651e5780c88213beca94c2bb17",
+            "training_evidence_sha256": "52b9ec105aa3c15eee46f7a109b46c0b9ca46505ac67b5ac63a9dda845ff4b87",
+            "simulation_only": true,
+            "safety_promoted": false
+          },
+          "base_and_gripper_heads_unchanged": true,
+          "measured_velocity_feedback_unchanged": true,
+          "ppo_steps_added": 0,
+          "optimizer_reset": true,
+          "safety_promoted": false
+        },
+        "simulation_only": true,
+        "safety_promoted": false
+      },
+      "phase_completions": [
+        {
+          "sim_time": 1.300000000000001,
+          "phase": "approach_clearance_complete",
+          "execution_contract": "cartesian_arm_v1",
+          "position_error_m": 0.00023471821625308716,
+          "orientation_error_rad": 0.0012105444077446443,
+          "joint_witness_residual_rad": 0.0008184445651515312,
+          "controller_success": true
+        },
+        {
+          "sim_time": 13.800000000001278,
+          "phase": "pregrasp_complete",
+          "execution_contract": "cartesian_arm_v1",
+          "position_error_m": 0.0023936124959023876,
+          "orientation_error_rad": 0.011864951536026071,
+          "joint_witness_residual_rad": 0.06046423875762147,
+          "controller_success": true
+        },
+        {
+          "sim_time": 23.299999999997965,
+          "phase": "grasp_complete",
+          "execution_contract": "cartesian_arm_v1",
+          "position_error_m": 0.0025532493374299395,
+          "orientation_error_rad": 0.01959040721623303,
+          "joint_witness_residual_rad": 0.06780284367750733,
+          "controller_success": true
+        },
+        {
+          "sim_time": 23.64999999999777,
+          "phase": "gripper_settled",
+          "measured": 0.36108513772854256,
+          "controller_success": true
+        }
+      ],
+      "last_events": [
+        {
+          "sim_time": 13.800000000001278,
+          "phase": "grasp",
+          "execution_contract": "cartesian_arm_v1",
+          "position_tolerance_m": 0.003,
+          "orientation_tolerance_rad": 0.02,
+          "configuration_check_period_s": 0.05,
+          "reference_clock": "continuous_lag_scaling",
+          "tracking_position_limit_m": 0.01,
+          "tracking_orientation_limit_rad": 0.1
+        },
+        {
+          "sim_time": 23.299999999997965,
+          "phase": "grasp_complete",
+          "execution_contract": "cartesian_arm_v1",
+          "position_error_m": 0.0025532493374299395,
+          "orientation_error_rad": 0.01959040721623303,
+          "joint_witness_residual_rad": 0.06780284367750733,
+          "controller_success": true
+        },
+        {
+          "sim_time": 23.64999999999777,
+          "phase": "gripper_settled",
+          "measured": 0.36108513772854256,
+          "controller_success": true
+        }
+      ]
+    }
+  ],
+  "full_report_archive": "paper/data/whole_body_control/agent_controller_v1/screen.json.gz",
+  "uncompressed_sha256": "67d8aa33ff3c5c45ebb9b9333aed89a7b3cd6a0c2a22f6458f41f334c85f7ec5"
+}

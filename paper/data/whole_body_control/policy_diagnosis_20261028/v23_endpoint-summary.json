@@ -1,0 +1,247 @@
+{
+  "scope": "Goal-only and heading-free lift ablations on repeated diagnostic seeds; no qualification.",
+  "complete": true,
+  "uncompressed_sha256": "d03b749ddf631860414ba167bfdeb1478db931d2478b3ee94d0dd89712e4ed3f",
+  "cases": [
+    {
+      "name": "control",
+      "mode": "endpoint",
+      "seed": 3202000,
+      "success": false,
+      "code": "fixed_base_contract_violation",
+      "position_error_m": 0.033233124904156336,
+      "orientation_error_rad": 0.2616999926460728,
+      "base_heading_error_rad": 0.006533683802955936
+    },
+    {
+      "name": "control",
+      "mode": "endpoint",
+      "seed": 3202001,
+      "success": false,
+      "code": "fixed_base_contract_violation",
+      "position_error_m": 0.03624996773875785,
+      "orientation_error_rad": 0.19913194884036292,
+      "base_heading_error_rad": 0.004546793750509896
+    },
+    {
+      "name": "control",
+      "mode": "endpoint",
+      "seed": 3202002,
+      "success": false,
+      "code": "tracking_timeout",
+      "position_error_m": 0.010523152962194485,
+      "orientation_error_rad": 0.04602325978314102,
+      "base_heading_error_rad": 0.00558094164025369
+    },
+    {
+      "name": "control",
+      "mode": "endpoint",
+      "seed": 3202003,
+      "success": false,
+      "code": "tracking_timeout",
+      "position_error_m": 0.008625722919081449,
+      "orientation_error_rad": 0.02737143357104409,
+      "base_heading_error_rad": 0.0038898326269185546
+    },
+    {
+      "name": "control",
+      "mode": "endpoint_heading_free",
+      "seed": 3202000,
+      "success": false,
+      "code": "fixed_base_contract_violation",
+      "position_error_m": 0.023172848293370605,
+      "orientation_error_rad": 0.13126733583560474,
+      "base_heading_error_rad": 0.0
+    },
+    {
+      "name": "control",
+      "mode": "endpoint_heading_free",
+      "seed": 3202001,
+      "success": false,
+      "code": "fixed_base_contract_violation",
+      "position_error_m": 0.029642148166235525,
+      "orientation_error_rad": 0.15209873459475332,
+      "base_heading_error_rad": 0.0
+    },
+    {
+      "name": "control",
+      "mode": "endpoint_heading_free",
+      "seed": 3202002,
+      "success": false,
+      "code": "tracking_timeout",
+      "position_error_m": 0.007168232721287117,
+      "orientation_error_rad": 0.01533238582113886,
+      "base_heading_error_rad": 0.0
+    },
+    {
+      "name": "control",
+      "mode": "endpoint_heading_free",
+      "seed": 3202003,
+      "success": false,
+      "code": "tracking_timeout",
+      "position_error_m": 0.005941218129248536,
+      "orientation_error_rad": 0.011634422579443268,
+      "base_heading_error_rad": 0.0
+    },
+    {
+      "name": "curriculum",
+      "mode": "endpoint",
+      "seed": 3202000,
+      "success": false,
+      "code": "fixed_base_contract_violation",
+      "position_error_m": 0.030818228347697058,
+      "orientation_error_rad": 0.2684451484935652,
+      "base_heading_error_rad": 0.008048903357679826
+    },
+    {
+      "name": "curriculum",
+      "mode": "endpoint",
+      "seed": 3202001,
+      "success": false,
+      "code": "fixed_base_contract_violation",
+      "position_error_m": 0.033927736702094896,
+      "orientation_error_rad": 0.15561112997912205,
+      "base_heading_error_rad": 0.02022118268610176
+    },
+    {
+      "name": "curriculum",
+      "mode": "endpoint",
+      "seed": 3202002,
+      "success": false,
+      "code": "fixed_base_contract_violation",
+      "position_error_m": 0.02315956089082918,
+      "orientation_error_rad": 0.2486446678907392,
+      "base_heading_error_rad": 0.010620470986973052
+    },
+    {
+      "name": "curriculum",
+      "mode": "endpoint",
+      "seed": 3202003,
+      "success": false,
+      "code": "fixed_base_contract_violation",
+      "position_error_m": 0.023508250037601694,
+      "orientation_error_rad": 0.21204799280383857,
+      "base_heading_error_rad": 0.009948257016655361
+    },
+    {
+      "name": "curriculum",
+      "mode": "endpoint_heading_free",
+      "seed": 3202000,
+      "success": false,
+      "code": "fixed_base_contract_violation",
+      "position_error_m": 0.029317338600757352,
+      "orientation_error_rad": 0.18952876024571683,
+      "base_heading_error_rad": 0.0
+    },
+    {
+      "name": "curriculum",
+      "mode": "endpoint_heading_free",
+      "seed": 3202001,
+      "success": false,
+      "code": "fixed_base_contract_violation",
+      "position_error_m": 0.029520098763644476,
+      "orientation_error_rad": 0.13483943216548494,
+      "base_heading_error_rad": 0.0
+    },
+    {
+      "name": "curriculum",
+      "mode": "endpoint_heading_free",
+      "seed": 3202002,
+      "success": false,
+      "code": "fixed_base_contract_violation",
+      "position_error_m": 0.02197071314869879,
+      "orientation_error_rad": 0.1793569963414578,
+      "base_heading_error_rad": 0.0
+    },
+    {
+      "name": "curriculum",
+      "mode": "endpoint_heading_free",
+      "seed": 3202003,
+      "success": false,
+      "code": "fixed_base_contract_violation",
+      "position_error_m": 0.020194531090104585,
+      "orientation_error_rad": 0.13920008315769902,
+      "base_heading_error_rad": 0.0
+    },
+    {
+      "name": "teacher",
+      "mode": "endpoint",
+      "seed": 3202000,
+      "success": false,
+      "code": "wheel_lift",
+      "position_error_m": 0.05791281007353072,
+      "orientation_error_rad": 0.004984803867496935,
+      "base_heading_error_rad": 0.00027649186732103814
+    },
+    {
+      "name": "teacher",
+      "mode": "endpoint",
+      "seed": 3202001,
+      "success": false,
+      "code": "fixed_base_contract_violation",
+      "position_error_m": 0.05378975418669404,
+      "orientation_error_rad": 0.14732175491335966,
+      "base_heading_error_rad": 0.00016498598489185013
+    },
+    {
+      "name": "teacher",
+      "mode": "endpoint",
+      "seed": 3202002,
+      "success": false,
+      "code": "wheel_lift",
+      "position_error_m": 0.05352562922101186,
+      "orientation_error_rad": 0.004896727908924703,
+      "base_heading_error_rad": 0.0005458166483605087
+    },
+    {
+      "name": "teacher",
+      "mode": "endpoint",
+      "seed": 3202003,
+      "success": false,
+      "code": "wheel_lift",
+      "position_error_m": 0.05061325173228082,
+      "orientation_error_rad": 0.004554895215133612,
+      "base_heading_error_rad": 0.0001947586207782237
+    },
+    {
+      "name": "teacher",
+      "mode": "endpoint_heading_free",
+      "seed": 3202000,
+      "success": false,
+      "code": "wheel_lift",
+      "position_error_m": 0.05791281007353072,
+      "orientation_error_rad": 0.004984803867496935,
+      "base_heading_error_rad": 0.0
+    },
+    {
+      "name": "teacher",
+      "mode": "endpoint_heading_free",
+      "seed": 3202001,
+      "success": false,
+      "code": "fixed_base_contract_violation",
+      "position_error_m": 0.05378975396321776,
+      "orientation_error_rad": 0.14732174916825105,
+      "base_heading_error_rad": 0.0
+    },
+    {
+      "name": "teacher",
+      "mode": "endpoint_heading_free",
+      "seed": 3202002,
+      "success": false,
+      "code": "wheel_lift",
+      "position_error_m": 0.05352562922101186,
+      "orientation_error_rad": 0.004896727908924703,
+      "base_heading_error_rad": 0.0
+    },
+    {
+      "name": "teacher",
+      "mode": "endpoint_heading_free",
+      "seed": 3202003,
+      "success": false,
+      "code": "wheel_lift",
+      "position_error_m": 0.05061325173228082,
+      "orientation_error_rad": 0.004554895215133612,
+      "base_heading_error_rad": 0.0
+    }
+  ]
+}

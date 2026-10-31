@@ -1,0 +1,19 @@
+{
+  "scope": "All repeated diagnostic populations remain development, not new qualification; uniform retiming changes reference timing, not original baseline evidence.",
+  "hardware_used": false,
+  "safety_promoted": false,
+  "files": {
+    "uniform_retime_v29-summary.json": "c56f6d1f70993f9dd909fbabd2daee30513657d07d7cd25741831ce7d9f2b6af",
+    "base_v26-report.json.gz": "725fc925b41e46c3fd7c5e1761cb3c825c566b2c74f9c0f05f842e1f75e24777",
+    "audit_teacher_grip_v28.py": "30021609f97c1a711a21e4fa4203eb9ca7dc025ce17cfc255cd9f5fae2dad22b",
+    "uniform_retime_v29-report.json.gz": "8deb7740fe8461abebed540a6db6adeb8e216bd94361b1ef06278dc35d6ffd36",
+    "audit_teacher_retention_v27.py": "3b9a12b26e13f3f275a5be68490371d0aae65e164f426b71f335d1464cff34ac",
+    "isolate_base_v26.py": "c543cc01640d033be92183312ce62e186dccca026c8ba85f916b905918989f9a",
+    "retiming_bounds_v27-report.json.gz": "ebe3fd4c4674ec013937098af017b17b18ab64ad0ee1583e3572540d598a2398",
+    "base_v26-summary.json": "c3d3b5be95a5d118759c607afe9fa82f0346b26974adc8345d10136be856bc1c",
+    "retiming_bounds_v27-summary.json": "a5f324962beb4751291cea430813984aa831ab438008ab66b19905ff3c8005b9",
+    "grip_and_retime_v28-summary.json": "671097bd2672ac7592f8c6e4ac1d00a9242469b88c4ed8e035c4144a7b87717e",
+    "grip_and_retime_v28-report.json.gz": "28af822f0788b4dbb6fa2dd05458e206839ba77f9a04a270ebdd4593256c7df8",
+    "audit_teacher_uniform_v29.py": "1383a3f1c1f7c10041046bf98e1e751041d740cdf99be686e720d7f0be66bae6"
+  }
+}

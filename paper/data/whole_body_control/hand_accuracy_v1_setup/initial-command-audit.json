@@ -1,0 +1,82 @@
+[
+  {
+    "id": "train:arm:pitch_up",
+    "duration_s": 1.749999999999918,
+    "hand_position_error_m": 0.010252676593465892,
+    "hand_orientation_error_rad": 0.037623435356311234,
+    "max_slewed_joint_request_rad_s": 0.00041278145508840677,
+    "max_motor_target_lag_rad": 0.001372583821461465,
+    "max_actuator_torque_Nm": 0.1760656556948934,
+    "requested_toward_goal_mean_m_s": -6.257219740020879e-07
+  },
+  {
+    "id": "train:arm:pitch_down",
+    "duration_s": 1.6999999999999236,
+    "hand_position_error_m": 0.010477076778326327,
+    "hand_orientation_error_rad": 0.03893855324838176,
+    "max_slewed_joint_request_rad_s": 0.0004889562958851456,
+    "max_motor_target_lag_rad": 0.0013637033375288599,
+    "max_actuator_torque_Nm": 0.17329938293191205,
+    "requested_toward_goal_mean_m_s": 4.841089254142045e-06
+  },
+  {
+    "id": "train:arm:roll_left",
+    "duration_s": 12.00000000000101,
+    "hand_position_error_m": 0.0006326521283140119,
+    "hand_orientation_error_rad": 0.08014686636496639,
+    "max_slewed_joint_request_rad_s": 0.00048611346865072845,
+    "max_motor_target_lag_rad": 0.0013856315796269003,
+    "max_actuator_torque_Nm": 0.176454229638761,
+    "requested_toward_goal_mean_m_s": 7.324240276708573e-07
+  },
+  {
+    "id": "train:arm:roll_right",
+    "duration_s": 12.00000000000101,
+    "hand_position_error_m": 0.0006389722980465827,
+    "hand_orientation_error_rad": 0.07998429413656809,
+    "max_slewed_joint_request_rad_s": 0.0004713703645393252,
+    "max_motor_target_lag_rad": 0.001376527638146996,
+    "max_actuator_torque_Nm": 0.1739564290970801,
+    "requested_toward_goal_mean_m_s": -6.429789402898724e-08
+  },
+  {
+    "id": "validation:arm:pitch_up",
+    "duration_s": 1.649999999999929,
+    "hand_position_error_m": 0.01055763424410829,
+    "hand_orientation_error_rad": 0.03927926101993441,
+    "max_slewed_joint_request_rad_s": 0.0004667046479880809,
+    "max_motor_target_lag_rad": 0.0014115149027196516,
+    "max_actuator_torque_Nm": 0.1779431930517923,
+    "requested_toward_goal_mean_m_s": -5.179859352619776e-06
+  },
+  {
+    "id": "validation:arm:pitch_down",
+    "duration_s": 1.54999999999994,
+    "hand_position_error_m": 0.010093947691911251,
+    "hand_orientation_error_rad": 0.03808903249732109,
+    "max_slewed_joint_request_rad_s": 0.0005358529044315218,
+    "max_motor_target_lag_rad": 0.0014029695867182335,
+    "max_actuator_torque_Nm": 0.17694321214883857,
+    "requested_toward_goal_mean_m_s": 1.8930517805903644e-05
+  },
+  {
+    "id": "validation:arm:roll_left",
+    "duration_s": 12.00000000000101,
+    "hand_position_error_m": 0.0005694372075564544,
+    "hand_orientation_error_rad": 0.09188309146222884,
+    "max_slewed_joint_request_rad_s": 0.0006074606906622648,
+    "max_motor_target_lag_rad": 0.0014124640738721883,
+    "max_actuator_torque_Nm": 0.1797568716472746,
+    "requested_toward_goal_mean_m_s": 1.1890654333853639e-05
+  },
+  {
+    "id": "validation:arm:roll_right",
+    "duration_s": 12.00000000000101,
+    "hand_position_error_m": 0.0007115193845568484,
+    "hand_orientation_error_rad": 0.09178594909184679,
+    "max_slewed_joint_request_rad_s": 0.0004967122455127537,
+    "max_motor_target_lag_rad": 0.0013799041381854227,
+    "max_actuator_torque_Nm": 0.17736968514200768,
+    "requested_toward_goal_mean_m_s": -3.0731360064997852e-06
+  }
+]

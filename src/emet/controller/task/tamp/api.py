@@ -172,6 +172,22 @@ def failure_code(message: str) -> str:
     for part in reversed(parts):
         if part in PLACEMENT_CODES:
             return part
+        control_codes = {
+            "wheel_lift": "wheel_lift",
+            "unsafe_contact": "unsafe_contact",
+            "retention_lost": "retention_lost",
+            "invalid_physics": "invalid_physics",
+            "transport_tracking_timeout": "tracking_timeout",
+            "cartesian_tracking_timeout": "tracking_timeout",
+            "cartesian_path_tracking_envelope": "tracking_timeout",
+            "cartesian_witness_goal_mismatch": "invalid_plan",
+            "cartesian_schedule_too_long": "invalid_plan",
+            "invalid_cartesian_witness": "invalid_plan",
+            "arm_joint_margin": "joint_bounds",
+            "arm_static_support_margin": "planning_failed",
+        }
+        if part in control_codes:
+            return control_codes[part]
         for code in ("placement_stale_observation", "placement_missing_joint_state",
                      "placement_nonfinite_joint_state", "placement_path_invalidated"):
             if part == code or part.endswith("_" + code):

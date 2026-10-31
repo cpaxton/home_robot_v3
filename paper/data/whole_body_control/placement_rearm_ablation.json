@@ -1,0 +1,167 @@
+{
+  "scope": "development-selected diagnostic ablation; not qualification or hardware evidence",
+  "baseline_source_revision": "a2872951",
+  "runner_sha256": "77a6268f395be02679aabbed8ddfc97adfd947cb55374ec5406a0bedf3cda307",
+  "interventions": {
+    "bias": "restore only executor-enabled base compensation after conservative rearm",
+    "trim": "restore only tracking integral after conservative rearm"
+  },
+  "cases": {
+    "bias": [
+      {
+        "seed": 1860001,
+        "mass": 0.02,
+        "success": true,
+        "failure": null,
+        "stage_codes": [
+          [
+            "approach_close_lift",
+            "ok"
+          ],
+          [
+            "transport",
+            null
+          ],
+          [
+            "transport",
+            null
+          ],
+          [
+            "lower_release_settle",
+            "ok"
+          ]
+        ],
+        "max_payload_rotation_rad": 0.018160334129137836
+      },
+      {
+        "seed": 1860007,
+        "mass": 0.05,
+        "success": true,
+        "failure": null,
+        "stage_codes": [
+          [
+            "approach_close_lift",
+            "ok"
+          ],
+          [
+            "transport",
+            null
+          ],
+          [
+            "transport",
+            null
+          ],
+          [
+            "lower_release_settle",
+            "ok"
+          ]
+        ],
+        "max_payload_rotation_rad": 0.01663008699392867
+      },
+      {
+        "seed": 1860010,
+        "mass": 0.05,
+        "success": true,
+        "failure": null,
+        "stage_codes": [
+          [
+            "approach_close_lift",
+            "ok"
+          ],
+          [
+            "transport",
+            null
+          ],
+          [
+            "transport",
+            null
+          ],
+          [
+            "lower_release_settle",
+            "ok"
+          ]
+        ],
+        "max_payload_rotation_rad": 0.01623065951867785
+      }
+    ],
+    "trim": [
+      {
+        "seed": 1860001,
+        "mass": 0.02,
+        "success": false,
+        "failure": "retention_lost",
+        "stage_codes": [
+          [
+            "approach_close_lift",
+            "ok"
+          ],
+          [
+            "transport",
+            null
+          ],
+          [
+            "transport",
+            null
+          ],
+          [
+            "lower_release_settle",
+            "retention_lost"
+          ]
+        ],
+        "max_payload_rotation_rad": 0.10024944498918996
+      },
+      {
+        "seed": 1860007,
+        "mass": 0.05,
+        "success": true,
+        "failure": null,
+        "stage_codes": [
+          [
+            "approach_close_lift",
+            "ok"
+          ],
+          [
+            "transport",
+            null
+          ],
+          [
+            "transport",
+            null
+          ],
+          [
+            "lower_release_settle",
+            "ok"
+          ]
+        ],
+        "max_payload_rotation_rad": 0.04027731116374482
+      },
+      {
+        "seed": 1860010,
+        "mass": 0.05,
+        "success": false,
+        "failure": "tracking_timeout",
+        "stage_codes": [
+          [
+            "approach_close_lift",
+            "ok"
+          ],
+          [
+            "transport",
+            null
+          ],
+          [
+            "transport",
+            null
+          ],
+          [
+            "lower_release_settle",
+            "tracking_timeout"
+          ]
+        ],
+        "max_payload_rotation_rad": 0.01623065951867785
+      }
+    ]
+  },
+  "runner_path": "paper/data/whole_body_control/placement_rearm_ablation_runner.py",
+  "reproduction": "Run archived runner with baseline source a2872951 and mode bias or trim; it monkeypatches rearm for diagnostics only."
+}

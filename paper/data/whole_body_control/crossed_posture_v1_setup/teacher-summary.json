@@ -1,0 +1,33 @@
+{
+  "complete": true,
+  "controller": "task_pose_teacher",
+  "population": "admission",
+  "groups": {
+    "base/train": {
+      "cases": 25,
+      "admitted": 25,
+      "mastered": 25,
+      "tracking_and_settling_passed": 25,
+      "smoothness_passed": 25,
+      "failure_reasons": {},
+      "codes": {
+        "ok": 25
+      },
+      "all_pass": true
+    },
+    "base/validation": {
+      "cases": 5,
+      "admitted": 5,
+      "mastered": 5,
+      "tracking_and_settling_passed": 5,
+      "smoothness_passed": 5,
+      "failure_reasons": {},
+      "codes": {
+        "ok": 5
+      },
+      "all_pass": true
+    }
+  },
+  "all_pass": true,
+  "safety_promoted": false
+}

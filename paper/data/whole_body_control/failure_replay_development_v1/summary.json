@@ -1,0 +1,103 @@
+{
+  "scope": "New development families; old assessment seeds are never training parents.",
+  "complete": true,
+  "parent_policy": "logs/manipulation/mars-jerk-tracking-v20/control/seed-86/last",
+  "parent_weights_sha256": "22f8223e891c8da9019050d537f6d960c0dc9c55a1c259d6cf6441ab6c97f54b",
+  "corpus_sha256": "d3e67417ee371b6f6f7a9a35631550ac942f560879e605133362895b9b571590",
+  "families": [
+    {
+      "seed": 33000000,
+      "partition": "train",
+      "failure": "tracking_timeout"
+    },
+    {
+      "seed": 33000001,
+      "partition": "train",
+      "failure": "tracking_timeout"
+    },
+    {
+      "seed": 33000003,
+      "partition": "train",
+      "failure": "tracking_timeout"
+    },
+    {
+      "seed": 33000004,
+      "partition": "train",
+      "failure": "tracking_timeout"
+    },
+    {
+      "seed": 33000005,
+      "partition": "train",
+      "failure": "tracking_timeout"
+    },
+    {
+      "seed": 33000006,
+      "partition": "train",
+      "failure": "tracking_timeout"
+    },
+    {
+      "seed": 33000007,
+      "partition": "train",
+      "failure": "tracking_timeout"
+    },
+    {
+      "seed": 33000008,
+      "partition": "train",
+      "failure": "tracking_timeout"
+    },
+    {
+      "seed": 33000009,
+      "partition": "validation",
+      "failure": "tracking_timeout"
+    },
+    {
+      "seed": 33000011,
+      "partition": "validation",
+      "failure": "tracking_timeout"
+    },
+    {
+      "seed": 33000013,
+      "partition": "train",
+      "failure": "tracking_timeout"
+    },
+    {
+      "seed": 33000014,
+      "partition": "train",
+      "failure": "tracking_timeout"
+    },
+    {
+      "seed": 33000015,
+      "partition": "train",
+      "failure": "tracking_timeout"
+    },
+    {
+      "seed": 33000016,
+      "partition": "train",
+      "failure": "tracking_timeout"
+    },
+    {
+      "seed": 33000017,
+      "partition": "train",
+      "failure": "tracking_timeout"
+    },
+    {
+      "seed": 33000018,
+      "partition": "train",
+      "failure": "tracking_timeout"
+    },
+    {
+      "seed": 33000019,
+      "partition": "validation",
+      "failure": "tracking_timeout"
+    }
+  ],
+  "teacher_unverified_parent_seeds": [
+    33000010,
+    33000012
+  ],
+  "rejected_parent_seeds": [
+    33000002
+  ],
+  "training_started": false,
+  "safety_promoted": false
+}

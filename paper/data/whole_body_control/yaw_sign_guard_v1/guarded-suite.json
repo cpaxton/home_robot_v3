@@ -1,0 +1,532 @@
+{
+  "format": "mars-yaw-sign-audit-v1",
+  "scope": "Sample nearby signed turns and expose the exact deployed yaw feedback terms.\n\nDevelopment diagnostics only: existing training postures, unchanged native\nphysics/limits and teacher/actor matched resets. This never replaces canonical\nmastery or held-out TAMP qualification, and never repairs an actor's action.\n",
+  "robot": "innate_mars",
+  "config": {
+    "robot": "innate_mars",
+    "scenario": "reach",
+    "horizon": 12,
+    "randomization_scale": 0,
+    "payload_mass_kg": 0.05,
+    "payload_object": "object1",
+    "action_mode": "direct_velocity",
+    "trajectory_preview": true,
+    "tracking_reward": true,
+    "tracking_precision": 4,
+    "retention_context": true,
+    "categorical_features_unscaled": true,
+    "feedback_policy": true,
+    "feedback_orientation_scale": 0.15,
+    "wheel_feedback_gain": 0.5,
+    "physical_wheel_slew": true,
+    "whole_body_settling": true,
+    "goal_gated_settling": true,
+    "endpoint_motion_weight": 0.25,
+    "body_motion_weight": 0.25,
+    "pose_progress_weight": 1,
+    "fixed_base_contract": true,
+    "fixed_base_xy_tolerance": 0.005,
+    "base_xy_tolerance": 0.005,
+    "base_heading_tolerance": 0.01,
+    "hand_position_tolerance": 0.003,
+    "hand_orientation_tolerance": 0.02,
+    "balanced_grasp_setup": true,
+    "support_half_width": 0.04,
+    "contact_cone": "elliptic",
+    "contact_impratio": 3,
+    "reach_hold_probability": 1,
+    "jerk_limited_lift_reference": true,
+    "grasp_lift_payload_object": "object1",
+    "precision_tracking_reward": true,
+    "terminal_hold_seconds": 2.0,
+    "normalized_jerk_weight": 0.1,
+    "wheel_jerk_limits": null,
+    "command_smoothness_weight": 0.1,
+    "base_turn_progress_guard": true
+  },
+  "stages": [
+    "base",
+    "arm",
+    "coupled",
+    "loaded"
+  ],
+  "reference": {
+    "minimum_duration_s": 3.0,
+    "loaded_time_scale": 1.1,
+    "hand_position_tube_m": 0.01,
+    "hand_orientation_tube_rad": 0.1,
+    "base_position_tube_m": 0.015,
+    "base_heading_tube_rad": 0.08
+  },
+  "gate": {
+    "terminal_hold_s": 2.0,
+    "hold_drift_m": 0.003,
+    "smoothness_ratio": 1.25,
+    "force_floor_N": 1.0,
+    "base_linear_jerk_floor_m_s3": 0.1,
+    "base_yaw_jerk_floor_rad_s3": 0.5,
+    "joint_jerk_floor_rad_s3": 1.0
+  },
+  "training": {
+    "steps": 16384,
+    "seed": 90,
+    "learning_rate": 0.0001,
+    "discount": 0.9975,
+    "base_exploration_std": 0.03,
+    "arm_exploration_std": 0.1
+  },
+  "cases": [
+    {
+      "id": "train:base:yaw_left:0.02@posture:hold",
+      "split": "train",
+      "stage": "base",
+      "reset_seed": 34000000,
+      "travel_m": 0.0,
+      "turn_rad": 0.02,
+      "arm_delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "train:base:yaw_right:0.02@posture:hold",
+      "split": "train",
+      "stage": "base",
+      "reset_seed": 34000000,
+      "travel_m": 0.0,
+      "turn_rad": -0.02,
+      "arm_delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "train:base:yaw_left:0.04@posture:hold",
+      "split": "train",
+      "stage": "base",
+      "reset_seed": 34000000,
+      "travel_m": 0.0,
+      "turn_rad": 0.04,
+      "arm_delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "train:base:yaw_right:0.04@posture:hold",
+      "split": "train",
+      "stage": "base",
+      "reset_seed": 34000000,
+      "travel_m": 0.0,
+      "turn_rad": -0.04,
+      "arm_delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "train:base:yaw_left:0.06@posture:hold",
+      "split": "train",
+      "stage": "base",
+      "reset_seed": 34000000,
+      "travel_m": 0.0,
+      "turn_rad": 0.06,
+      "arm_delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "train:base:yaw_right:0.06@posture:hold",
+      "split": "train",
+      "stage": "base",
+      "reset_seed": 34000000,
+      "travel_m": 0.0,
+      "turn_rad": -0.06,
+      "arm_delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "train:base:yaw_left:0.02@posture:forward",
+      "split": "train",
+      "stage": "base",
+      "reset_seed": 34000001,
+      "travel_m": 0.0,
+      "turn_rad": 0.02,
+      "arm_delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "train:base:yaw_right:0.02@posture:forward",
+      "split": "train",
+      "stage": "base",
+      "reset_seed": 34000001,
+      "travel_m": 0.0,
+      "turn_rad": -0.02,
+      "arm_delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "train:base:yaw_left:0.04@posture:forward",
+      "split": "train",
+      "stage": "base",
+      "reset_seed": 34000001,
+      "travel_m": 0.0,
+      "turn_rad": 0.04,
+      "arm_delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "train:base:yaw_right:0.04@posture:forward",
+      "split": "train",
+      "stage": "base",
+      "reset_seed": 34000001,
+      "travel_m": 0.0,
+      "turn_rad": -0.04,
+      "arm_delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "train:base:yaw_left:0.06@posture:forward",
+      "split": "train",
+      "stage": "base",
+      "reset_seed": 34000001,
+      "travel_m": 0.0,
+      "turn_rad": 0.06,
+      "arm_delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "train:base:yaw_right:0.06@posture:forward",
+      "split": "train",
+      "stage": "base",
+      "reset_seed": 34000001,
+      "travel_m": 0.0,
+      "turn_rad": -0.06,
+      "arm_delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "train:base:yaw_left:0.02@posture:reverse",
+      "split": "train",
+      "stage": "base",
+      "reset_seed": 34000002,
+      "travel_m": 0.0,
+      "turn_rad": 0.02,
+      "arm_delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "train:base:yaw_right:0.02@posture:reverse",
+      "split": "train",
+      "stage": "base",
+      "reset_seed": 34000002,
+      "travel_m": 0.0,
+      "turn_rad": -0.02,
+      "arm_delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "train:base:yaw_left:0.04@posture:reverse",
+      "split": "train",
+      "stage": "base",
+      "reset_seed": 34000002,
+      "travel_m": 0.0,
+      "turn_rad": 0.04,
+      "arm_delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "train:base:yaw_right:0.04@posture:reverse",
+      "split": "train",
+      "stage": "base",
+      "reset_seed": 34000002,
+      "travel_m": 0.0,
+      "turn_rad": -0.04,
+      "arm_delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "train:base:yaw_left:0.06@posture:reverse",
+      "split": "train",
+      "stage": "base",
+      "reset_seed": 34000002,
+      "travel_m": 0.0,
+      "turn_rad": 0.06,
+      "arm_delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "train:base:yaw_right:0.06@posture:reverse",
+      "split": "train",
+      "stage": "base",
+      "reset_seed": 34000002,
+      "travel_m": 0.0,
+      "turn_rad": -0.06,
+      "arm_delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "train:base:yaw_left:0.02@posture:yaw_left",
+      "split": "train",
+      "stage": "base",
+      "reset_seed": 34000003,
+      "travel_m": 0.0,
+      "turn_rad": 0.02,
+      "arm_delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "train:base:yaw_right:0.02@posture:yaw_left",
+      "split": "train",
+      "stage": "base",
+      "reset_seed": 34000003,
+      "travel_m": 0.0,
+      "turn_rad": -0.02,
+      "arm_delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "train:base:yaw_left:0.04@posture:yaw_left",
+      "split": "train",
+      "stage": "base",
+      "reset_seed": 34000003,
+      "travel_m": 0.0,
+      "turn_rad": 0.04,
+      "arm_delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "train:base:yaw_right:0.04@posture:yaw_left",
+      "split": "train",
+      "stage": "base",
+      "reset_seed": 34000003,
+      "travel_m": 0.0,
+      "turn_rad": -0.04,
+      "arm_delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "train:base:yaw_left:0.06@posture:yaw_left",
+      "split": "train",
+      "stage": "base",
+      "reset_seed": 34000003,
+      "travel_m": 0.0,
+      "turn_rad": 0.06,
+      "arm_delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "train:base:yaw_right:0.06@posture:yaw_left",
+      "split": "train",
+      "stage": "base",
+      "reset_seed": 34000003,
+      "travel_m": 0.0,
+      "turn_rad": -0.06,
+      "arm_delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "train:base:yaw_left:0.02@posture:yaw_right",
+      "split": "train",
+      "stage": "base",
+      "reset_seed": 34000004,
+      "travel_m": 0.0,
+      "turn_rad": 0.02,
+      "arm_delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "train:base:yaw_right:0.02@posture:yaw_right",
+      "split": "train",
+      "stage": "base",
+      "reset_seed": 34000004,
+      "travel_m": 0.0,
+      "turn_rad": -0.02,
+      "arm_delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "train:base:yaw_left:0.04@posture:yaw_right",
+      "split": "train",
+      "stage": "base",
+      "reset_seed": 34000004,
+      "travel_m": 0.0,
+      "turn_rad": 0.04,
+      "arm_delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "train:base:yaw_right:0.04@posture:yaw_right",
+      "split": "train",
+      "stage": "base",
+      "reset_seed": 34000004,
+      "travel_m": 0.0,
+      "turn_rad": -0.04,
+      "arm_delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "train:base:yaw_left:0.06@posture:yaw_right",
+      "split": "train",
+      "stage": "base",
+      "reset_seed": 34000004,
+      "travel_m": 0.0,
+      "turn_rad": 0.06,
+      "arm_delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "train:base:yaw_right:0.06@posture:yaw_right",
+      "split": "train",
+      "stage": "base",
+      "reset_seed": 34000004,
+      "travel_m": 0.0,
+      "turn_rad": -0.06,
+      "arm_delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    }
+  ],
+  "safety_promoted": false,
+  "parent_suite_sha256": "732cd40d5d927d659012b69b472a8a530c81023067a4bf83452384f98cb29396"
+}
