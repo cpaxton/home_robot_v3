@@ -115,6 +115,29 @@ def load_suite(path=SUITE):
         or not np.isclose(sum(weights.values()), 1, rtol=0, atol=1e-8)
     ):
         raise ValueError("training stage weights must be positive probabilities over known stages")
+    sampling = suite.get("training_sampling", "episodes")
+    if (
+        not isinstance(sampling, str)
+        or sampling not in {"episodes", "control_steps"}
+        or (sampling == "control_steps" and weights is None)
+    ):
+        raise ValueError("control-step sampling requires training stage weights")
+    primitive_weights = suite.get("training_primitive_weights")
+    if primitive_weights is not None:
+        if sampling != "control_steps" or not isinstance(primitive_weights, dict) or not primitive_weights:
+            raise ValueError("primitive weights require control-step sampling")
+        for stage, values in primitive_weights.items():
+            expected = {primitive_name(c) for c in suite["cases"] if c["stage"] == stage and c["split"] == "train"}
+            if (
+                not expected
+                or not isinstance(values, dict)
+                or set(values) != expected
+                or any(type(v) not in (int, float) or not np.isfinite(v) or v <= 0 for v in values.values())
+                or not np.isclose(sum(values.values()), 1, rtol=0, atol=1e-8)
+            ):
+                raise ValueError(
+                    "primitive weights must cover each original training primitive with positive probabilities"
+                )
     return suite
 
 
@@ -177,17 +200,33 @@ def select_cases(suite, stages, split, *, population="canonical"):
     return [c for c in cases if c["stage"] in stages and (split == "all" or c["split"] == split)]
 
 
-class TrainingCaseSampler:
-    """Stage probabilities are independent of family size; cycle every case within a stage.
+def primitive_name(case):
+    return case["id"].split("@", 1)[0].rsplit(":", 1)[-1]
 
-    Without explicit weights preserve the original shuffled full-case cycles.
-    This object only selects reset metadata; nothing is added to actor inputs.
+
+class TrainingCaseSampler:
+    """Balance stages independently of augmentation count; cycle cases per bucket.
+
+    Default weights apply to episode starts. Opt-in control-step deficits use
+    recorded policy transitions, so short failed episodes cannot starve a stage
+    or primitive. Seeded resets clear counts; ordinary episode resets retain them.
+    Without weights preserve the original shuffled full-case cycles. Only reset
+    metadata is selected; case IDs and budgets never enter actor observations.
     """
 
-    def __init__(self, cases, weights=None, seed=0):
+    def __init__(self, cases, weights=None, seed=0, *, sampling="episodes", primitive_weights=None):
         self.cases, self.weights = cases, weights
+        self.sampling, self.primitive_weights = sampling, primitive_weights or {}
         if not cases:
             raise ValueError("nonempty training cases required")
+        if (
+            not isinstance(sampling, str)
+            or sampling not in {"episodes", "control_steps"}
+            or (sampling == "control_steps" and weights is None)
+        ):
+            raise ValueError("control-step sampling requires stage weights")
+        if primitive_weights is not None and sampling != "control_steps":
+            raise ValueError("primitive weights require control-step sampling")
         self.groups = {stage: [i for i, c in enumerate(cases) if c["stage"] == stage] for stage in STAGES}
         self.groups = {stage: rows for stage, rows in self.groups.items() if rows}
         if weights is not None and not set(self.groups).issubset(weights):
@@ -197,18 +236,54 @@ class TrainingCaseSampler:
             if not np.isfinite(self.probabilities).all() or np.any(self.probabilities <= 0):
                 raise ValueError("positive finite stage weights required")
             self.probabilities /= self.probabilities.sum()
+        self.primitive_groups = {}
+        for stage, rows in self.groups.items():
+            if stage not in self.primitive_weights:
+                continue
+            groups = {}
+            for index in rows:
+                groups.setdefault(primitive_name(cases[index]), []).append(index)
+            values = self.primitive_weights[stage]
+            if set(values) != set(groups) or any(not np.isfinite(v) or v <= 0 for v in values.values()):
+                raise ValueError("primitive weights must cover selected stage families")
+            self.primitive_groups[stage] = groups
         self.reset(seed)
 
     def reset(self, seed):
         self.rng = np.random.default_rng(seed)
         self.orders = {}
+        self.control_steps = Counter()
+        self.primitive_steps = {stage: Counter() for stage in self.primitive_groups}
+
+    def record_step(self, case):
+        if self.sampling == "control_steps":
+            self.control_steps[case["stage"]] += 1
+            if case["stage"] in self.primitive_steps:
+                self.primitive_steps[case["stage"]][primitive_name(case)] += 1
+
+    def _deficit(self, keys, weights, counts):
+        probabilities = np.asarray([weights[key] for key in keys], dtype=float)
+        probabilities /= probabilities.sum()
+        values = np.asarray([counts[key] for key in keys])
+        deficit = probabilities * (values.sum() + 1) - values
+        tied = np.flatnonzero(np.isclose(deficit, deficit.max(), rtol=0, atol=1e-10))
+        return keys[int(self.rng.choice(tied))]
 
     def next(self):
-        stage = "all" if self.weights is None else str(self.rng.choice(list(self.groups), p=self.probabilities))
-        if not self.orders.get(stage):
-            indices = range(len(self.cases)) if stage == "all" else self.groups[stage]
-            self.orders[stage] = list(self.rng.permutation(indices))
-        return self.cases[self.orders[stage].pop()]
+        if self.sampling == "control_steps":
+            stage = self._deficit(list(self.groups), self.weights, self.control_steps)
+        else:
+            stage = "all" if self.weights is None else str(self.rng.choice(list(self.groups), p=self.probabilities))
+        bucket = stage
+        indices = range(len(self.cases)) if stage == "all" else self.groups[stage]
+        if stage in self.primitive_groups:
+            family = self._deficit(
+                list(self.primitive_groups[stage]), self.primitive_weights[stage], self.primitive_steps[stage]
+            )
+            bucket, indices = (stage, family), self.primitive_groups[stage][family]
+        if not self.orders.get(bucket):
+            self.orders[bucket] = list(self.rng.permutation(indices))
+        return self.cases[self.orders[bucket].pop()]
 
 
 def slow_path(path, factor):
@@ -286,7 +361,10 @@ class MasteryEnv(ManipulationEnv):
         self.suite = load_suite() if suite is None else suite
         self.cases = select_cases(self.suite, stages, split, population=population)
         self.sampler = TrainingCaseSampler(
-            self.cases, self.suite.get("training_stage_weights") if population == "training" else None
+            self.cases,
+            self.suite.get("training_stage_weights") if population == "training" else None,
+            sampling=self.suite.get("training_sampling", "episodes") if population == "training" else "episodes",
+            primitive_weights=self.suite.get("training_primitive_weights") if population == "training" else None,
         )
         self.mastery_case = self.mastery_reference = self.mastery_checker = None
         self.mastery_scratch = None
@@ -404,6 +482,7 @@ class MasteryEnv(ManipulationEnv):
     def step(self, action):
         self.update_witness()
         obs, reward, done, truncated, info = super().step(action)
+        self.sampler.record_step(self.mastery_case)
         if not self.initialization_failed and not info.get("invalid_physics"):
             ref = self.suite["reference"]
             position = info["ee_position_error"] if self.control.hand_mask else 0.0
