@@ -74,3 +74,20 @@ budgets remain unchanged. The same six-call counterbalanced replay is used.
 This is a hypothesis about the interface to an autoregressive model, not an
 established explanation; no runtime change is made without a positive result
 and a subsequent fresh live integration check.
+
+## Ordering result
+
+Job `20261031_151001_789df0`, source `332f63ad`, completed all six calls. The
+original-order replays again selected no actions. Answer-first q2 and q6 both
+reported insufficient evidence and proposed `frontier_0`, a valid observed
+action. q12 emitted a step while still confident; the existing controller
+would stop, so it is not counted as a usable navigation proposal.
+
+This is a two-case integration signal, not an accuracy gain or a statistical
+result. Explanations remain weak and q12's stopping error is not repaired.
+The fork now orders the same Pydantic fields as answer, then steps in all four
+response variants for a fresh q6 live check. No descriptions or constraints
+from the failed first probe are added. Allowed empty plans, model answers,
+action IDs and the controller's stopping rule are unchanged. The live check
+uses the normal current-view input, so it is a wiring gate rather than another
+matched replay or evidence of a causal task-performance effect.
