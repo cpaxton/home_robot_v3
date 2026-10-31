@@ -69,7 +69,7 @@ Accepted plan: [Mars controller integration](docs/plans/mars_controller_integrat
       its regressions. Component teacher passes16/16 with wheel/grip requests
       fixed; one32k PPO run passes8/8 at all checkpoints after8k and16/16 on final
       expanded/reloaded evaluation. This is not whole-body or loaded qualification.
-- [ ] Verify arm-to-whole-body mean-preserving training transfer, retain arm
+- [ ] Verify [arm-to-whole-body mean-preserving training transfer](docs/plans/mars_arm_to_whole_body.md), retain arm
       accuracy while reintroducing base motion, then loaded hold/lift and public
       pick/place. Keep one production actor; no permanent multi-task architecture
       or teacher/student loss is needed by the current component evidence.

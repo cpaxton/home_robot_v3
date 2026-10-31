@@ -848,6 +848,20 @@ def train(args, suite):
                 initialization = transfer_actor(
                     model, normalizer, args.initialize_from, cfg, normalizer.get_attr("fingerprint")[0]
                 )
+        if getattr(args, "initialize_arm_from", None):
+            from emet.rl.manipulation.component_transfer import transfer_arm_component
+
+            with preserve_training_rng():
+                initialization = transfer_arm_component(
+                    model,
+                    normalizer,
+                    args.initialize_arm_from,
+                    args.arm_evidence,
+                    cfg,
+                    normalizer.get_attr("fingerprint")[0],
+                )
+        if getattr(args, "freeze_normalization", False):
+            normalizer.training = False
         with torch.no_grad():
             model.policy.log_std[:2].fill_(np.log(args.base_std))
             model.policy.log_std[2:].fill_(np.log(args.arm_std))
@@ -864,6 +878,7 @@ def train(args, suite):
             "seed": args.seed,
             "steps": args.steps,
             "initialization": initialization,
+            "normalization_frozen": getattr(args, "freeze_normalization", False),
             "base_std": args.base_std,
             "arm_std": args.arm_std,
             "learning_rate": args.learning_rate,
@@ -1065,6 +1080,9 @@ def main():
     parser.add_argument("--preflight", type=Path)
     parser.add_argument("--regression-receipt", type=Path)
     parser.add_argument("--initialize-from", type=Path)
+    parser.add_argument("--initialize-arm-from", type=Path, help="training-only final arm component checkpoint")
+    parser.add_argument("--arm-evidence", type=Path, help="checksummed component evidence required for transfer")
+    parser.add_argument("--freeze-normalization", action="store_true")
     parser.add_argument("--steps", type=int, default=16384)
     parser.add_argument("--seed", type=int, default=90)
     parser.add_argument("--num-envs", type=int, default=1)
@@ -1104,6 +1122,12 @@ def main():
         return
     suite = load_suite(args.suite)
     if args.command == "train":
+        if (args.initialize_from and args.initialize_arm_from) or bool(args.initialize_arm_from) != bool(
+            args.arm_evidence
+        ):
+            parser.error("choose one initialization; arm transfer requires component and evidence together")
+        if args.freeze_normalization and not (args.initialize_from or args.initialize_arm_from):
+            parser.error("frozen normalization requires initialized statistics")
         if (
             not args.preflight
             or not args.regression_receipt
