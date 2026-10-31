@@ -7,6 +7,7 @@ from copy import deepcopy
 from dataclasses import asdict
 from pathlib import Path
 
+import numpy as np
 import torch
 from stable_baselines3 import PPO
 
@@ -84,6 +85,7 @@ def transfer_arm_component(model, normalizer, directory, evidence, config, finge
         "rl/profile.py",
         "rl/reference.py",
         "rl/manipulation/models.py",
+        "rl/manipulation/arm_component.py",
         "rl/manipulation/control.py",
         "rl/manipulation/profiles.py",
         "rl/manipulation/env.py",
@@ -119,6 +121,9 @@ def transfer_arm_component(model, normalizer, directory, evidence, config, finge
     for key, stats in old_normalizer.obs_rms.items():
         if stats.mean.shape != normalizer.obs_rms[key].mean.shape:
             raise ValueError("component observation layout differs")
+    zero_columns = list(getattr(normalizer, "component_zero_columns", []))
+    if zero_columns and np.any(old_normalizer.obs_rms["history"].mean[..., zero_columns] != 0):
+        raise ValueError("command-unit migration requires zero command means in the arm component")
     old, new = source.policy.state_dict(), model.policy.state_dict()
     shared = {key for key in new if not key.startswith("action_net.") and key != "log_std"}
     if shared != {key for key in old if not key.startswith("action_net.") and key != "log_std"}:
@@ -138,6 +143,11 @@ def transfer_arm_component(model, normalizer, directory, evidence, config, finge
     normalizer.obs_rms = deepcopy(old_normalizer.obs_rms)
     normalizer.epsilon, normalizer.clip_obs = old_normalizer.epsilon, old_normalizer.clip_obs
     normalizer.pin_command_features()
+    normalization_exact = all(
+        np.array_equal(stats.mean, normalizer.obs_rms[key].mean)
+        and np.array_equal(stats.var, normalizer.obs_rms[key].var)
+        for key, stats in old_normalizer.obs_rms.items()
+    )
     if any(_checksum(directory / name) != value for name, value in checked.items()):
         raise RuntimeError("component artifacts changed during transfer")
     return {
@@ -150,7 +160,11 @@ def transfer_arm_component(model, normalizer, directory, evidence, config, finge
         "new_base_general_mean": "zero",
         "new_yaw_branch": "target constructor initialization",
         "grip_mean": "zero offset",
-        "normalization_copied_exactly": True,
+        "normalization_copied_exactly": normalization_exact,
+        "zero_input_command_unit_columns": zero_columns if not normalization_exact else [],
+        "function_preserving_domain": "zero-wheel, zero-grip component observations"
+        if not normalization_exact
+        else "all observations",
         "optimizer_restored": False,
         "runtime_admitted": False,
         "safety_promoted": False,

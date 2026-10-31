@@ -80,6 +80,24 @@ It is **not adopted**. Stronger feedback alone does not fix the controller.
 
 ## Follow-up
 
+An additional history diagnostic reconstructs latest previous-request inputs
+from the final traces, excluding the terminal observation. The inherited
+wheel/grip request standard deviation is about0.000114. Although reaching ignores
+gripper corrections, the executor records their raw requests: the learned
+gripper-history input saturates about67–100% of the time. Sampling std0.01 would
+saturate this input about82% of the time even with a zero mean. These statistics
+and the method are retained in the compact results; this is a concrete
+observation-distribution issue, not evidence that a larger network is needed.
+
+The control-step sampler then passes957 source-bound tests. Its follow-up run
+is intentionally stopped after8,192 logged steps to fix the history problem;
+the partial weights/logs remain preserved and are not a completed comparison.
+The next pilot masks executor-ignored requests in sampling, means, likelihood
+and entropy, and keeps known wheel/grip command features in actor units. The
+same actor/trunk and all physical control/safety logic remain. Its declared
+normalization migration preserves the arm component on zero-wheel/zero-grip
+inputs; it does not claim unchanged statistics or all-input function equality.
+
 Keep one runtime actor and first fix sampling: budget actual control steps,
 retain 75% arm rehearsal, and allocate 80% of the 25% base budget to forward/reverse
 instead of letting augmentation count and early stops determine exposure.

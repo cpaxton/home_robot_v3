@@ -90,6 +90,10 @@ def transfer_actor(model, normalizer, directory, config, fingerprint, *, prior_c
     if config.robot != "innate_mars" or robot_identity(source_model) != robot_identity(target_model):
         raise ValueError("transfer robot or unsupported physics mismatch")
     old, contract_changes = _load_source(directory, manifest, source_fp, config.robot)
+    old_executor_mask = callable(getattr(old.model.policy, "executor_mask", None))
+    new_executor_mask = callable(getattr(model.policy, "executor_mask", None))
+    if old_executor_mask and not new_executor_mask:
+        raise ValueError("cannot silently remove executor action masks during transfer")
     from emet.rl.manipulation.feedback_policy import GoalFeedbackFeatures
     from emet.rl.manipulation.policy import ManipulationMLPFeatures
 
@@ -176,6 +180,7 @@ def transfer_actor(model, normalizer, directory, config, fingerprint, *, prior_c
         "control_contract_changes": contract_changes,
         "source_manifest_sha256": hashlib.sha256((Path(directory) / "manifest.json").read_bytes()).hexdigest(),
         "optimizer_restored": False,
+        "executor_action_mask_change": {"from": old_executor_mask, "to": new_executor_mask},
         "feedback_mean_head_reinitialized": new_feedback_head,
         "restoring_yaw_feedback_change": {
             "from": old_restoring,

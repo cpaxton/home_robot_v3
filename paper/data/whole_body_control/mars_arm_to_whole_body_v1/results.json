@@ -10237,5 +10237,109 @@
       "measured_world_vx_damping": 1.0
     },
     "report_sha256": "7abf01592eb2d0c7234cff40621b2d2e75e4c9cefb3bbb484e40d42a83b016f0"
+  },
+  "command_history_diagnostic": {
+    "method": "Reconstruct previous requests from trace actions and slewed base commands, using stored latest-history-row scales; exclude the terminal sample whose observation is unused.",
+    "command_sigmas": [
+      0.0001142438824347806,
+      0.0001142438824347806,
+      0.05163635205615721,
+      0.051976457028412644,
+      0.05085008293221733,
+      0.049983904171492864,
+      0.05099127317255908,
+      0.0001142438824347806
+    ],
+    "clip": 20,
+    "cases": [
+      {
+        "id": "train:arm:pitch_up",
+        "samples": 239,
+        "clipped_fraction_base_x_yaw_grip": [
+          0.03765690376569038,
+          0.0,
+          0.9288702928870293
+        ],
+        "peak_ignored_grip_request": 0.018105659633874893
+      },
+      {
+        "id": "train:arm:pitch_down",
+        "samples": 239,
+        "clipped_fraction_base_x_yaw_grip": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "peak_ignored_grip_request": 0.014876589179039001
+      },
+      {
+        "id": "train:arm:roll_left",
+        "samples": 239,
+        "clipped_fraction_base_x_yaw_grip": [
+          0.15481171548117154,
+          0.0,
+          0.8451882845188284
+        ],
+        "peak_ignored_grip_request": 0.020872440189123154
+      },
+      {
+        "id": "train:arm:roll_right",
+        "samples": 239,
+        "clipped_fraction_base_x_yaw_grip": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "peak_ignored_grip_request": 0.01840454339981079
+      },
+      {
+        "id": "validation:arm:pitch_up",
+        "samples": 239,
+        "clipped_fraction_base_x_yaw_grip": [
+          0.08786610878661087,
+          0.0,
+          0.8744769874476988
+        ],
+        "peak_ignored_grip_request": 0.01642480120062828
+      },
+      {
+        "id": "validation:arm:pitch_down",
+        "samples": 239,
+        "clipped_fraction_base_x_yaw_grip": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "peak_ignored_grip_request": 0.018567092716693878
+      },
+      {
+        "id": "validation:arm:roll_left",
+        "samples": 239,
+        "clipped_fraction_base_x_yaw_grip": [
+          0.16317991631799164,
+          0.0,
+          0.6694560669456067
+        ],
+        "peak_ignored_grip_request": 0.01786230131983757
+      },
+      {
+        "id": "validation:arm:roll_right",
+        "samples": 239,
+        "clipped_fraction_base_x_yaw_grip": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "peak_ignored_grip_request": 0.01456561777740717
+      }
+    ],
+    "zero_mean_grip_saturation_probability_at_training_std_0_01": 0.8192670668004488
+  },
+  "interrupted_sampling_only_followup": {
+    "timesteps_logged": 8192,
+    "complete": false,
+    "regression_tests": 957,
+    "reason": "Stopped to correct executor-ignored action history and inherited command scales; no automatic resume.",
+    "checkpoint_sha256": "576b831dfede6dccf93b14bce58f9e4f9a5ff268bee0c33955d6c06283b28be6"
   }
 }

@@ -79,3 +79,42 @@ Before another architecture or optimizer change, test one distribution change:
 The separate arm/base finite suite still does not qualify simultaneous goals,
 loaded hold/lift, public agent pick/place or hardware. Full smoothness remains
 required even when endpoint errors are small.
+
+## Executor-visible requests and command history
+
+The sampling-only follow-up passes 957 source-bound tests and logs 8,192 PPO
+steps before being intentionally stopped. Its partial checkpoint is retained.
+Inspection finds another concrete distribution defect: frozen arm-component
+statistics assign wheel/grip request history a standard deviation of about
+0.000114. The full actor samples an unused reaching gripper channel at std0.01,
+and the executor records that request even though it ignores its correction.
+Reconstructed final arm traces saturate this history channel about67–100% of
+the time. Zero-mean Gaussian noise alone would saturate it about82% of the time.
+
+Fix this without changing the native controller or adding task networks:
+
+- Use one existing eight-output feedback actor/trunk. Its Gaussian distribution
+  emits zero for channels ignored according to visible target masks and grip
+  phase/retention intent. Apply the same mask to sampled actions, deterministic
+  means, log probabilities and entropy. Preserve base authority when an active
+  hand has no base target. Executor holds, faults and release authority remain
+  independent and unconditional.
+- Keep normalized wheel/grip requests in actor units, preserving the learned
+  arm-command statistics. The old component's corresponding inputs and means
+  must be exactly zero before this declared normalization migration. Preserve
+  component arm/critic behavior on that domain; do not claim identical statistics
+  or equality on arbitrary new base-command inputs. Check real reset predictions
+  and all 16 physical arm cases again.
+- Test likelihood/entropy and gradient masking, shared/unshared feature paths,
+  actual PPO head updates, native ignored-command history, runtime export/reload,
+  fixed command scales and invalid migration/configuration rejection. A later
+  training transfer must not silently discard the executor mask.
+- Use `mars_tracking_mastery_command_history_v1.json`: retain the control-step
+  budgets, unchanged physical targets/reward/guards, original arm initialization
+  and one 32,768-step seed90 pilot. Obtain fresh teacher/regression receipts.
+  This combines the measured sampling and history repairs; it is no longer a
+  sampling-only ablation. Preserve every checkpoint and all 66 final outcomes.
+
+Only the executor-ignored output dimensions are zeroed. Active policy means
+receive no temporal filter or teacher residual. The original component and
+interrupted run stay immutable; the corrected pilot uses a fresh directory.

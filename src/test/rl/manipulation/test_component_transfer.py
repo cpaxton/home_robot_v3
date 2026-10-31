@@ -181,3 +181,49 @@ def test_component_transfer_rejects_changed_producer_contract(component, change)
     path.write_text(json.dumps(value))
     with pytest.raises(ValueError):
         transfer(component)
+
+
+@pytest.mark.sim
+def test_component_command_unit_migration_preserves_zero_command_domain(component):
+    from emet.rl.manipulation.command_policy import ExecutorCommandVecNormalize
+
+    source, source_env, target, target_env, base, directory, evidence = component
+    # The fixture owns/closes this underlying VecEnv; this wrapper adds no worker.
+    env = ExecutorCommandVecNormalize(target_env.venv, config=base.config, norm_reward=False)
+    details = transfer_arm_component(target, env, directory, evidence, base.config, base.fingerprint)
+    assert not details["normalization_copied_exactly"]
+    assert details["zero_input_command_unit_columns"] == env.component_zero_columns
+    assert details["function_preserving_domain"] == "zero-wheel, zero-grip component observations"
+    obs, _ = base.reset(options={"case_id": "train:arm:pitch_up"})
+    before, after = source_env.normalize_obs(obs), env.normalize_obs(obs)
+    for key in before:
+        np.testing.assert_array_equal(before[key], after[key])
+    np.testing.assert_allclose(
+        source.predict(before, deterministic=True)[0],
+        target.predict(after, deterministic=True)[0][2:7],
+        rtol=0,
+        atol=1e-7,
+    )
+    with torch.no_grad():
+        torch.testing.assert_close(
+            source.policy.predict_values(source.policy.obs_to_tensor(before)[0]),
+            target.policy.predict_values(target.policy.obs_to_tensor(after)[0]),
+            rtol=0,
+            atol=1e-7,
+        )
+
+
+@pytest.mark.sim
+def test_command_unit_migration_rejects_nonzero_producer_command_means(component):
+    from emet.rl.manipulation.command_policy import ExecutorCommandVecNormalize
+
+    _, source_env, target, old_env, base, directory, evidence = component
+    env = ExecutorCommandVecNormalize(old_env.venv, config=base.config, norm_reward=False)
+    path = directory / "normalizer.pkl"
+    source_env.obs_rms["history"].mean[..., env.component_zero_columns] = 0.01
+    source_env.save(path)
+    proof = json.loads(evidence.read_text())
+    proof["artifact_checksums"]["last/normalizer.pkl"] = hashlib.sha256(path.read_bytes()).hexdigest()
+    evidence.write_text(json.dumps(proof))
+    with pytest.raises(ValueError, match="zero command means"):
+        transfer_arm_component(target, env, directory, evidence, base.config, base.fingerprint)

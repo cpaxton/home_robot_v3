@@ -138,6 +138,24 @@ def load_suite(path=SUITE):
                 raise ValueError(
                     "primitive weights must cover each original training primitive with positive probabilities"
                 )
+    training_policy = suite.get("training_policy", "feedback")
+    if (
+        not isinstance(training_policy, str)
+        or training_policy not in {"feedback", "executor_mask_v1"}
+        or (
+            training_policy == "executor_mask_v1"
+            and not all(
+                suite["config"].get(key, False)
+                for key in (
+                    "feedback_policy",
+                    "categorical_features_unscaled",
+                    "retention_context",
+                    "trajectory_preview",
+                )
+            )
+        )
+    ):
+        raise ValueError("executor-mask training requires native categorical feedback/preview/retention features")
     return suite
 
 
@@ -887,7 +905,12 @@ def train(args, suite):
     if type(rollout_steps) is not int or rollout_steps < 2 or args.steps % rollout_size:
         raise ValueError("steps must be a multiple of num_envs * rollout_steps, with rollout_steps >= 2")
     sources = source_hashes()
-    normalizer = CommandVecNormalize(
+    policy_class, normalizer_class = FeedbackActorCriticPolicy, CommandVecNormalize
+    if suite.get("training_policy") == "executor_mask_v1":
+        from emet.rl.manipulation.command_policy import ExecutorCommandVecNormalize, ExecutorFeedbackPolicy
+
+        policy_class, normalizer_class = ExecutorFeedbackPolicy, ExecutorCommandVecNormalize
+    normalizer = normalizer_class(
         make_training_vec_env(suite, args.stages, num_envs=num_envs, backend=backend),
         config=cfg,
         norm_reward=False,
@@ -896,7 +919,7 @@ def train(args, suite):
     run = None
     try:
         model = PPO(
-            FeedbackActorCriticPolicy,
+            policy_class,
             normalizer,
             device="cpu",
             seed=args.seed,
@@ -958,6 +981,7 @@ def train(args, suite):
             "steps": args.steps,
             "initialization": initialization,
             "normalization_frozen": getattr(args, "freeze_normalization", False),
+            "executor_action_mask": suite.get("training_policy") == "executor_mask_v1",
             "base_std": args.base_std,
             "arm_std": args.arm_std,
             "learning_rate": args.learning_rate,
