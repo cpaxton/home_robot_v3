@@ -5,6 +5,23 @@
 from copy import deepcopy
 
 
+def answer_before_action_schema(schema):
+    """Reorder existing fields so confidence reasoning precedes action emission.
+
+    JSON object property order and the order of ``required`` do not change the
+    set of valid responses. No instructions, fields or constraints are added.
+    """
+    result = deepcopy(schema)
+    properties = result.get("properties", {})
+    if not {"answer", "steps"} <= properties.keys():
+        raise ValueError("Expected answer and steps in the planner schema")
+    keys = ["answer", "steps", *(key for key in properties if key not in {"answer", "steps"})]
+    result["properties"] = {key: properties[key] for key in keys}
+    if "required" in result:
+        result["required"] = sorted(result["required"], key=keys.index)
+    return result
+
+
 def clarify_planner_schema(schema):
     """Restate the reference policy next to its response fields, without forcing it.
 

@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from jsonschema import Draft202012Validator
 
-from emet.eval.planner_contract import clarify_planner_schema
+from emet.eval.planner_contract import answer_before_action_schema, clarify_planner_schema
 
 
 def schema():
@@ -52,6 +52,18 @@ def test_annotations_change_descriptions_only_without_mutating_original():
     data = {"steps": [], "answer": {"answer": "blue", "is_confident": False}}
     assert Draft202012Validator(original).is_valid(data)
     assert Draft202012Validator(clarified).is_valid(data)
+
+
+def test_answer_first_reorders_fields_without_adding_instructions_or_constraints():
+    original = schema()
+    original["required"] = list(original["properties"])
+    before = copy.deepcopy(original)
+    changed = answer_before_action_schema(original)
+    assert original == before
+    assert list(changed["properties"])[:2] == ["answer", "steps"]
+    assert changed["required"][:2] == ["answer", "steps"]
+    changed["required"] = original["required"]
+    assert changed == original  # Dictionary key ordering is the only other delta.
 
 
 def driver(monkeypatch):

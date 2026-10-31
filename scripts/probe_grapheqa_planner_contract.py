@@ -18,7 +18,7 @@ from pathlib import Path
 
 from run_shared_room_pairs import assert_frozen_source, git
 
-from emet.eval.planner_contract import clarify_planner_schema
+from emet.eval.planner_contract import answer_before_action_schema, clarify_planner_schema
 from emet.utils.job_registry import validated_gpu_lock_fd
 
 
@@ -33,6 +33,8 @@ def request_variant(request, variant):
     schema = json.loads(raw)
     if variant == "clarified":
         result["messages"][0]["content"] = prefix + "\n" + json.dumps(clarify_planner_schema(schema))
+    elif variant == "answer_first":
+        result["messages"][0]["content"] = prefix + "\n" + json.dumps(answer_before_action_schema(schema))
     elif variant != "original":
         raise ValueError("Unknown diagnostic variant")
     return result, schema
@@ -78,7 +80,8 @@ def run(args):
         "annotation_sha256": sha256(root / "src/emet/eval/planner_contract.py"),
         "input_manifest_sha256": sha256(args.recorded / "manifest.json"),
         "request_files_sha256": {name: sha256(path) for name, _, path in selected},
-        "variant_order": "original/clarified on even cases; clarified/original on odd cases",
+        "comparison_variant": args.variant,
+        "variant_order": f"original/{args.variant} on even cases; {args.variant}/original on odd cases",
         "planned_rows": len(selected) * 2,
         "status": "running",
         "scoring_labels_read": False,
@@ -104,7 +107,7 @@ def run(args):
             raise RuntimeError("Loaded model differs from the frozen request comparison")
         manifest["model"] = model
         for index, (name, original, _) in enumerate(selected):
-            order = ("original", "clarified") if index % 2 == 0 else ("clarified", "original")
+            order = ("original", args.variant) if index % 2 == 0 else (args.variant, "original")
             for variant in order:
                 request, schema = request_variant(original, variant)
                 row = {"case_id": name, "variant": variant, "complete": False}
@@ -149,4 +152,5 @@ if __name__ == "__main__":
         "--recorded", type=Path, required=True, help="Earlier paired/ directory, with every request retained"
     )
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--variant", choices=["clarified", "answer_first"], default="clarified")
     raise SystemExit(run(parser.parse_args()))

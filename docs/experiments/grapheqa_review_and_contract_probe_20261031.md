@@ -56,3 +56,21 @@ plans and confident stops. Keep answers exactly as emitted. A selected action
 would justify a fresh live integration check; it is not itself evidence of
 arrival or correct EQA. A small positive result would need broader validation,
 not a default flip or a paper-superiority claim.
+
+## Description-only result and next ordering probe
+
+Job `20261031_150511_b71068` completed all six calls at source `bd2a30cb`.
+Both conditions produced valid JSON in all three cases, but neither proposed
+any action. q2/q6 admitted insufficient evidence; q12 still treated missing
+bedside-table labels as absence. These annotations are not promoted to runtime.
+No gold labels were loaded or correctness improvement claimed.
+
+The responses expose another testable ordering issue: `steps: []` is emitted
+before the explanation concludes that further exploration is needed. The next
+comparison changes only root property/required ordering to put `answer` before
+`steps`. It adds no wording or constraints and leaves every valid answer/action,
+including empty plans, legal. Images, all other messages, graph and model/output
+budgets remain unchanged. The same six-call counterbalanced replay is used.
+This is a hypothesis about the interface to an autoregressive model, not an
+established explanation; no runtime change is made without a positive result
+and a subsequent fresh live integration check.
