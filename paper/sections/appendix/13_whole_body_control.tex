@@ -364,3 +364,20 @@ with action authority, so this is not a single-factor masking ablation.
 The component result does not establish loaded retention, whole-body control,
 public pick/place or hardware compliance. Complete metrics and identities are
 retained in \texttt{paper/data/whole\_body\_control/mars\_arm\_component\_v1/}.
+
+\paragraph{Whole-body transfer and sampling diagnostic.}
+The component's arm means, critic values and normalization transfer exactly to
+the eight-output actor on sixteen checked resets; serialized whole-body
+execution retains all sixteen arm passes before further training. A bounded
+32,768-step mixed refinement preserves 16/16 arm tracking and settling but
+only 8/16 full arm passes, with new base-jerk misses. Expanded base tracking
+remains 38/50 while full passes increase from 26/50 to 33/50. Normalization is
+frozen and all original acceptance thresholds remain unchanged. Although the
+sampler requests 25\% base episodes, yaw augmentation and short failed straight
+episodes leave only 389/32,768 transitions (1.19\%) for forward/reverse motion.
+A separate analytic translation-gain initialization improves base tracking but
+degrades quietness and paired jerk, and is not adopted. These development
+results motivate control-step exposure budgets before further mixed training;
+they do not qualify loaded manipulation or hardware. Per-case outcomes,
+exposure counts and identities are retained in
+\texttt{paper/data/whole\_body\_control/mars\_arm\_to\_whole\_body\_v1/}.

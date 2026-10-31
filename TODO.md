@@ -69,10 +69,16 @@ Accepted plan: [Mars controller integration](docs/plans/mars_controller_integrat
       its regressions. Component teacher passes16/16 with wheel/grip requests
       fixed; one32k PPO run passes8/8 at all checkpoints after8k and16/16 on final
       expanded/reloaded evaluation. This is not whole-body or loaded qualification.
-- [ ] Verify [arm-to-whole-body mean-preserving training transfer](docs/plans/mars_arm_to_whole_body.md), retain arm
-      accuracy while reintroducing base motion, then loaded hold/lift and public
+- [x] Verify [arm-to-whole-body mean-preserving training transfer](docs/plans/mars_arm_to_whole_body.md):
+      exact arm/critic predictions and16/16 physical arm passes before training.
+- [ ] Retain full arm smoothness while reintroducing base motion, then loaded hold/lift and public
       pick/place. Keep one production actor; no permanent multi-task architecture
       or teacher/student loss is needed by the current component evidence.
+- [ ] Correct mixed-training exposure using actual control-step budgets. The
+      [first whole-body pilot](docs/experiments/mars_arm_to_whole_body_20261031.md)
+      retains16/16 arm tracking but8/16 full passes, with base38/50 tracking and
+      33/50 full passes. Forward/reverse receive only389/32,768 steps (1.19%);
+      test deterministic budget accounting before another bounded comparison.
 - [ ] Port exact frozen TAMP fixture initialization to ARM without relaxing its
       hash/pose checks. Caliban's eight-worker pilot never started: one missing
       camera source is fixed; two exact frozen-fixture checks still reject ARM's
