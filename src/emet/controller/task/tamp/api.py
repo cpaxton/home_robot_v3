@@ -74,7 +74,6 @@ def placement_evidence(executor) -> dict[str, Any]:
     return evidence
 
 
-
 def response(
     tool: str,
     *,

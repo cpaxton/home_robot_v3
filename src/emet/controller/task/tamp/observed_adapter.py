@@ -124,14 +124,14 @@ class ObservedNativeAdapter:
         self.namespace = uuid.uuid4().hex
         self.task_session = None
         self.tasks = {}
-        namespace = uuid.uuid4().hex
+        task_key_namespace = uuid.uuid4().hex
         identities = set()
         for task in tasks:
             if (not isinstance(task, ObservedNativeTask) or not all((task.object_ref, task.support_ref,
                     task.object_name, task.receptacle_name)) or (task.object_ref, task.support_ref) in identities):
                 raise ValueError('invalid_observed_native_task')
             identities.add((task.object_ref, task.support_ref))
-            self.tasks[f'observed_task:{namespace}:{len(self.tasks)}'] = task
+            self.tasks[f'observed_task:{task_key_namespace}:{len(self.tasks)}'] = task
         if not self.tasks:
             raise ValueError('invalid_observed_native_task')
         self.lock, self.plans = threading.RLock(), {}

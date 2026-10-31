@@ -9,6 +9,23 @@ while learned OVMM, SQA3D, and dynamic-exploration tables remain incomplete.
 Detailed commands / LaTeX mapping: [paper_benchmarks.md](../paper_benchmarks.md).
 GPU preflight + overnight: [evaluation.md](../evaluation.md). Repo doc map: [README § Documentation map](../../README.md#documentation-map).
 
+## Evidence storage
+
+Commit concise Markdown findings and JSON summaries/manifests. Include source
+commit and dirty-file hashes, profile/input tier, denominators, failed attempts,
+job IDs, artifact locations and hashes, and commands needed to reproduce figures.
+Keep dense per-frame/per-query traces, camera captures and full logs in managed
+run artifacts (`.tamp-runs/` or the job's output directory), rather than copying
+those arrays into each checked-in summary. JSON remains the structured format.
+
+A local artifact path is not a public archive. Evidence cited by a paper needs a
+durable accessible archive or enough versioned inputs to reproduce it, with an
+archive identifier and content hashes in its manifest. Retain failed runs as well
+as successful ones. Existing detailed records remain until an archive migration
+can preserve their references and evidence; deleting them now would not remove
+their already-committed bytes from history. New review summaries follow the
+compact-manifest policy.
+
 | Need | Go to |
 |------|--------|
 | Experiment matrix + smokes | this page |

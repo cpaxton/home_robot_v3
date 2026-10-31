@@ -41,7 +41,15 @@ def parse_openai_endpoint_spec(spec: str) -> tuple[str, str | None]:
 
 
 class OpenaiVLLMClient(AbstractVLLMClient):
-    """Stateless multimodal client posting JPEG data-URLs to ``/v1/chat/completions``."""
+    """Reset-per-turn VLM client posting JPEG data-URLs to chat completions.
+
+    Explicit ``reset_context=False`` continues the full retained dialogue,
+    including prior encoded images; no turns or images are silently evicted.
+    ``generate_messages`` temporarily installs an explicit dialogue and restores
+    the caller's history afterward, including on failure. Shared-client calls and
+    history edits must be serialized. ``last_call_metrics`` describes the latest
+    request on this instance, not a concurrent per-request tracing interface.
+    """
 
     def __init__(
         self,
@@ -143,6 +151,12 @@ class OpenaiVLLMClient(AbstractVLLMClient):
         user_blocks = self._content_blocks(user_content, image)
         n_images = sum(block.get("type") == "image_url" for block in user_blocks)
         messages.append({"role": "user", "content": user_blocks})
+        request_images = sum(
+            isinstance(block, dict) and block.get("type") == "image_url"
+            for message in messages
+            if isinstance(message.get("content"), list)
+            for block in message["content"]
+        )
         history = list(messages)
         prefill = (assistant_prefill or "").strip()
         if prefill:
@@ -173,6 +187,7 @@ class OpenaiVLLMClient(AbstractVLLMClient):
                 "request_s": finished - encoded,
                 "total_s": finished - started,
                 "image_count": n_images,
+                "request_image_count": request_images,
                 "completed": completed,
             }
         text = completion.choices[0].message.content or ""
@@ -183,5 +198,5 @@ class OpenaiVLLMClient(AbstractVLLMClient):
         return text
 
     def _conversation_user_content(self, content):
-        """Encode a prior user turn, including images, for multi-turn transport."""
+        """Hook called by AbstractVLLMClient.generate_messages for prior user turns."""
         return self._content_blocks(content, None)

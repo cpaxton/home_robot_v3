@@ -13,6 +13,7 @@ from emet.core.server import BaseZmqServer
 from emet.simulation.mujoco_server_stretch import MujocoZmqServer
 from emet.simulation.stretch_mujoco.enums.stretch_cameras import StretchCameras
 from emet.simulation.stretch_mujoco.mujoco_server_camera_manager import MujocoServerCameraManagerSync
+from emet.simulation.synchronized_capture import camera_opencv_pose
 from emet.utils.assets import get_mujoco_models_path
 
 
@@ -96,3 +97,23 @@ def test_actual_stretch_registration_and_published_k_match_render_projection(mon
     np.testing.assert_array_equal(
         wk[:2, 2], [(wrist.initial_camera_settings.width - 1) / 2, (wrist.initial_camera_settings.height - 1) / 2]
     )
+    # End-to-end raw registration -> actual raster rotation -> published optical
+    # frame. Use the producer's pose transform at nonzero head angles rather
+    # than repeating the head_K formula as the only rotation reference.
+    data.joint("joint_head_pan").qpos[0] = .37
+    data.joint("joint_head_tilt").qpos[0] = -.61
+    mujoco.mj_forward(model, data)
+    raw_pose = camera_opencv_pose(model, data, cid)
+    upright_pose = camera_opencv_pose(model, data, cid, upright=True)
+    raw_depth = imagery.cam_d435i_depth
+    upright_depth = np.rot90(raw_depth, k=-1)
+    samples = np.argwhere(raw_depth > 0)[::max(1, int(valid.sum()) // 7)]
+    for y, x in samples:
+        z = raw_depth[y, x]
+        u, v = raw_depth.shape[0] - 1 - y, x
+        assert upright_depth[v, u] == z
+        raw_point = np.linalg.solve(raw_k, [x, y, 1.]) * z
+        upright_point = np.linalg.solve(server.head_K, [u, v, 1.]) * upright_depth[v, u]
+        raw_world = raw_pose[:3, :3] @ raw_point + raw_pose[:3, 3]
+        upright_world = upright_pose[:3, :3] @ upright_point + upright_pose[:3, 3]
+        np.testing.assert_allclose(upright_world, raw_world, atol=1e-10)
