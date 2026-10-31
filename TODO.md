@@ -15,6 +15,12 @@
       Next qualify useful task-independent exploration and one real model-selected
       movement. Preserve the model's final answer; do not add a forced-action or
       answer-override policy to inflate acceptance.
+      Review follow-up: 42 fork tests, 22 focused emet tests and a reviewed native
+      stream replay pass. Ordering-only frozen replays produce two uncertain
+      action proposals, but fresh q6 checks with one/four images both stop
+      confidently wrong without motion. The unvalidated default field-order
+      change was reverted; optional bounded history retains the one-image default.
+      Audit: `docs/experiments/grapheqa_review_and_contract_probe_20261031.md`.
 
 - [x] Fork GraphEQA for supplied model endpoints and paired frozen-context
       evaluation: https://github.com/cpaxton/graph_eqa/pull/1. Planner/room API

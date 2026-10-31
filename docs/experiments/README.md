@@ -14,6 +14,12 @@ attachments. Its three-case model diagnostic still fails active acceptance;
 the matched captured-history comparison is 0/3 in each condition. Keep these
 qualification results separate from the main shared-harness EQA benchmarks.
 
+**Review and planner-contract probes (2026-10-31):** [GraphEQA review disposition and live follow-up](grapheqa_review_and_contract_probe_20261031.md)
+records 42 passing fork tests and the reviewed native stream replay. Frozen
+ordering probes suggested actions, but fresh one/four-view checks still stopped
+wrong without motion. The default field-order change was reverted; active
+acceptance and matched physical contracts remain open.
+
 **Post-merge study (2026-10-28):** [RL-priority experiment and paper plan](shared_agent_paper_update.md#post-merge-evidence-program-2026-10-28),
 [proposed controlled capability suite](harness_capability_benchmark.md).
 The current shared-harness development pilot is separate from historical

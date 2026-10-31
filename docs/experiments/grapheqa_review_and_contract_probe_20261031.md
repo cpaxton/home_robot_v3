@@ -109,7 +109,7 @@ was replaced. Owned model server and native worker exited cleanly.
 The positive frozen-input signal used four images; this check used one. The next
 qualification explicitly supplies a bounded, task-independent uniform history:
 CURRENT first, then three uniformly spaced earlier captures from the same
-episode. For 17 captures these are sequences 16, 0, 5, 10. Each has its own PNG,
+episode. For 17 captures these are array indices 16, 0, 5, 10. Each has its own PNG,
 sequence, timestamp and estimated camera pose. Default current-image behavior
 remains unchanged (`--max-images 1`); the check opts into `--max-images 4`.
 The active adapter snapshots each assessment's packet and replaces it on the
@@ -121,3 +121,48 @@ Run q6 first with two decisions. Keep the existing model stopping rule, motion
 safety, generation budget, checkpoint and scorer separation. This still tests
 the interaction gate, not a matched active comparison or task-quality gain.
 Only widen the pilot after a model-selected action reaches a fresh assessment.
+
+## Four-view live result and final disposition
+
+Job `20261031_152415_f6d8a2` used emet `5be8cdcc` and fork `3eb0c82`.
+All four independent attachments reached the model and the reply validated.
+q6 again chose C (wrong), declared confidence 0.95 and proposed `frontier_0`.
+It stopped immediately: one decision, zero executed primitives, 23.33 seconds
+episode wall time. The server and native worker cleaned up normally. This
+does **not** close model-selected-motion acceptance.
+
+The request audit compared this run against the positive frozen ordering replay:
+the schema, agent-role prompt and question were exactly identical. The current
+image and first history image were byte-identical too. The replay used frames
+17/1/7/15 with concise XY/yaw labels; the live uniform control used 17/1/6/11
+with full estimated-pose labels and fresh timestamps. Consequently the live
+check is not an exact repeat of the positive request, nor does it isolate the
+effect of field ordering or additional images. No attachment was dropped. The
+current image was inspected manually: a partial stove/plant/adjacent-room view,
+insufficient to establish the ladder's room. The model incorrectly turns a
+missing learned detection into a confident answer about the wider scene.
+
+Do not promote the ordering effect as a reliable repair. Fork commit `c41439f`
+restores the original default response-field ordering. The ordering-only helper
+remains in the emet diagnostic, so later model comparisons can reproduce it.
+The failed description additions also remain experimental only. The optional
+bounded history adapter stays available with the single-image default unchanged.
+No stopping/answer override, forced action, target-specific fallback or safety
+relaxation was introduced.
+
+Final focused validation: **42 fork tests** and **22 emet sensor/diagnostic tests**
+pass. The reviewed native ten-packet replay also passes. These qualify API,
+configuration and evidence plumbing; the active task baseline remains unqualified.
+Keep the two failed live checks and all frozen replies in the evidence record.
+
+Next gates, in order:
+
+1. Establish model-chosen observation gathering under a frozen model/profile
+   and useful sensor coverage. Compare identical recorded requests when testing
+   prompt/schema changes; do not infer stability from one development replay.
+2. Qualify the emet policy with the same estimated-pose basis, footprint,
+   perception and movement budgets. Sharing executor code is insufficient.
+3. Run the preselected paired active pilot and matched-history image-only
+   controls, retaining errors and abstentions. Only then expand the paper row.
+
+No full sweep or task-quality superiority claim is warranted by these results.

@@ -218,3 +218,13 @@ footprint and movement budgets. Include an explicit basis conversion from the
 historical Habitat X/Z client to the local right-handed Z-up sensor frame.
 The current external avatar has radius 0.1 m and height 1.5 m; sharing executor
 code alone does not establish matched physical settings with the emet client.
+
+## Review and subsequent checks (2026-10-31)
+
+The [review follow-up and planner-contract report](grapheqa_review_and_contract_probe_20261031.md)
+records resolved API review points, 42 passing fork tests and the reviewed native
+stream replay. A frozen field-order probe elicited two uncertain action proposals,
+but fresh q6 one/four-image checks both stopped confidently wrong without motion.
+The default ordering change was reverted. Optional current-first uniform image
+history is now available for controlled qualification; it does not change the
+single-image default or establish active acceptance.
