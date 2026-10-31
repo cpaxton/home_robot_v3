@@ -44,6 +44,7 @@ def run(args):
         "fork_commit": fork_revision,
         "cases_sha256": hashlib.sha256(args.cases.read_bytes()).hexdigest() if args.cases else None,
         "active_question_ids": active_ids,
+        "active_max_images": args.max_images if active_ids else None,
         "driver_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
     }
     path = args.output / "interop.json"
@@ -133,6 +134,8 @@ def run(args):
                     str(args.output / "active"),
                     "--max-decisions",
                     str(args.max_decisions),
+                    "--max-images",
+                    str(args.max_images),
                     "--question-ids",
                     *map(str, active_ids),
                 ]
@@ -169,6 +172,7 @@ if __name__ == "__main__":
     mode.add_argument("--cases", type=Path)
     mode.add_argument("--active-question-ids", nargs="+", type=int)
     parser.add_argument("--max-decisions", type=int, default=4)
+    parser.add_argument("--max-images", type=int, choices=range(1, 17), default=1)
     parser.add_argument("--answers", type=Path)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--port", type=int, default=18653)

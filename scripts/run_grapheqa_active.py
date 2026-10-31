@@ -22,7 +22,7 @@ from run_shared_room_pairs import assert_frozen_source, git
 
 from emet.eval.grapheqa_native_client import NativeSensorGraph
 from emet.eval.grapheqa_navigation import HabitatMotionExecutor, ObservedSpaceNavigation, SensorOnlyHabitat
-from emet.eval.grapheqa_sensor import learned_label_map
+from emet.eval.grapheqa_sensor import learned_label_map, uniform_image_evidence
 from emet.habitat.config import hm3d_scene_glb_path, questions_csv_path
 from emet.habitat.datasets import load_hmeqa_questions, load_scene_init_poses
 from emet.perception.detection.yoloe import YoloEPerception
@@ -68,6 +68,8 @@ def run(args):
         "questions_sha256": sha256(questions_csv_path()),
         "question_ids": args.question_ids,
         "max_decisions": args.max_decisions,
+        "max_images": args.max_images,
+        "image_policy": "current_only" if args.max_images == 1 else "current_then_uniform_history",
         "native_image": NATIVE_IMAGE,
         "pose_source": "rgbd_odometry_command_initialized",
         "simulator_pose_input": False,
@@ -112,6 +114,7 @@ def run(args):
                 image=NATIVE_IMAGE,
             )
             latest = {}
+            captures = []
 
             def ingest(frame):
                 if frame["camera_pose"] is None:
@@ -126,6 +129,13 @@ def run(args):
                 path = case / f"frame-{frame['sequence']:05d}.png"
                 Image.fromarray(frame["rgb"]).save(path)
                 latest["image"] = path
+                captures.append(
+                    {
+                        "path": str(path),
+                        "label": f"sequence={frame['sequence']} timestamp_ns={frame['timestamp_ns']} "
+                        f"estimated_camera_to_local_world={json.dumps(frame['camera_pose'].tolist())}",
+                    }
+                )
                 with (case / "frames.jsonl").open("a") as stream:
                     stream.write(
                         json.dumps({key: frame[key] for key in ("sequence", "timestamp_ns", "collided", "odometry")})
@@ -157,7 +167,10 @@ def run(args):
                 context = latest["reply"]["context"]
                 if context is None:
                     raise RuntimeError("Native graph has no qualified current agent state")
-                return {"timestamp_ns": frame["timestamp_ns"], "image": latest["image"], "context": context}
+                capture = {"timestamp_ns": frame["timestamp_ns"], "image": latest["image"], "context": context}
+                if args.max_images > 1:
+                    capture["images"] = uniform_image_evidence(captures, args.max_images)
+                return capture
 
             def execute(target, position):
                 object_target = target in {item["id"] for item in latest["reply"]["context"]["actions"]["objects"]}
@@ -214,4 +227,5 @@ if __name__ == "__main__":
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--question-ids", nargs="+", type=int, required=True)
     parser.add_argument("--max-decisions", type=int, default=4)
+    parser.add_argument("--max-images", type=int, choices=range(1, 17), default=1)
     raise SystemExit(run(parser.parse_args()))

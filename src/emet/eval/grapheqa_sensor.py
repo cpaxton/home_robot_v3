@@ -14,6 +14,21 @@ import numpy as np
 PACKET_FIELDS = frozenset({"rgb", "depth", "camera_K", "camera_pose", "timestamp_ns", "learned_labels"})
 
 
+def uniform_image_evidence(captures, max_images):
+    """Current capture first, then uniformly spaced earlier sensor captures.
+
+    Records contain only path/label metadata from one episode. This simple
+    task-independent control does not rank views using questions or answers.
+    """
+    if isinstance(max_images, bool) or not isinstance(max_images, int) or not 1 <= max_images <= 16:
+        raise ValueError("Image budget must be an integer from one to sixteen")
+    if not captures:
+        raise ValueError("At least one captured image is required")
+    indices = np.linspace(0, len(captures) - 1, min(max_images, len(captures)), dtype=int)[:-1]
+    current = {**captures[-1], "label": "CURRENT: " + captures[-1]["label"]}
+    return [current, *({**captures[index], "label": "HISTORY: " + captures[index]["label"]} for index in indices)]
+
+
 def validate_packet(packet: Mapping[str, np.ndarray], *, num_labels: int) -> None:
     """Reject extra fields and malformed sensor/learned-perception outputs."""
     if set(packet) != PACKET_FIELDS:

@@ -91,3 +91,33 @@ from the failed first probe are added. Allowed empty plans, model answers,
 action IDs and the controller's stopping rule are unchanged. The live check
 uses the normal current-view input, so it is a wiring gate rather than another
 matched replay or evidence of a causal task-performance effect.
+
+## Fresh current-image check: active gate still open
+
+Job `20261031_151544_fbdafa` used emet `6660b780` and fork `62ee538` on q6,
+with two decisions available. Transport/typed-response validation completed, but
+the model declared confidence 0.9, selected C (wrong), and also proposed
+`frontier_0`. Its explanation incorrectly treated missing ladder detections as
+enough evidence to answer. The existing confidence stopping rule took precedence;
+zero motion primitives executed. The proposed step is **not** an executed action.
+
+`interop.status: passed` only means the checker/episode completed; it does not
+mean active exploration or task success. The saved outcome explicitly reports
+`model_stopped`, `primitive_count: 0`, and `correct: false`. No answer or action
+was replaced. Owned model server and native worker exited cleanly.
+
+The positive frozen-input signal used four images; this check used one. The next
+qualification explicitly supplies a bounded, task-independent uniform history:
+CURRENT first, then three uniformly spaced earlier captures from the same
+episode. For 17 captures these are sequences 16, 0, 5, 10. Each has its own PNG,
+sequence, timestamp and estimated camera pose. Default current-image behavior
+remains unchanged (`--max-images 1`); the check opts into `--max-images 4`.
+The active adapter snapshots each assessment's packet and replaces it on the
+same controller, preserving measured motion history. Tests exercise the real
+planner/provider adapter across two captures, checking image bytes/order and
+the motion receipt, and reject a packet whose first image is not current.
+
+Run q6 first with two decisions. Keep the existing model stopping rule, motion
+safety, generation budget, checkpoint and scorer separation. This still tests
+the interaction gate, not a matched active comparison or task-quality gain.
+Only widen the pilot after a model-selected action reaches a fresh assessment.

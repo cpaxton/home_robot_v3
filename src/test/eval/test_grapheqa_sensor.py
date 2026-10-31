@@ -4,7 +4,20 @@
 import numpy as np
 import pytest
 
-from emet.eval.grapheqa_sensor import command_camera_pose, learned_label_map, validate_packet
+from emet.eval.grapheqa_sensor import command_camera_pose, learned_label_map, uniform_image_evidence, validate_packet
+
+
+def test_uniform_images_preserve_current_and_bounded_history_without_mutating_input():
+    captures = [{"path": f"frame-{i}.png", "label": f"sequence={i} estimated_pose"} for i in range(17)]
+    images = uniform_image_evidence(captures, 4)
+    assert [image["path"] for image in images] == ["frame-16.png", "frame-0.png", "frame-5.png", "frame-10.png"]
+    assert images[0]["label"].startswith("CURRENT: ")
+    assert all(image["label"].startswith("HISTORY: ") for image in images[1:])
+    assert captures[-1]["label"] == "sequence=16 estimated_pose"
+    assert len(uniform_image_evidence(captures[:2], 4)) == 2
+    assert len(uniform_image_evidence(captures, 1)) == 1
+    with pytest.raises(ValueError, match="budget"):
+        uniform_image_evidence(captures, 0)
 
 
 def packet():
