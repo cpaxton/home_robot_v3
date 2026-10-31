@@ -381,3 +381,20 @@ results motivate control-step exposure budgets before further mixed training;
 they do not qualify loaded manipulation or hardware. Per-case outcomes,
 exposure counts and identities are retained in
 \texttt{paper/data/whole\_body\_control/mars\_arm\_to\_whole\_body\_v1/}.
+
+\paragraph{Command-history and exposure repairs.}
+Frozen component statistics amplify previously constant wheel/grip requests,
+while reaching ignores gripper corrections but records their requested values.
+We therefore mask executor-ignored dimensions consistently in sampling, means,
+likelihood and entropy, and retain normalized wheel/grip requests in actor units.
+The same actor/trunk is retained; arm-command statistics are preserved. A new
+32,768-step pilot raises actual translation exposure to 6,368 transitions
+(19.43\%), retaining 16/16 arm tracking/settling cases, but only 4/16 full arm
+passes. Base tracking remains 38/50, with 32/50 full passes. These repairs do
+not establish improved whole-body qualification or justify an unchanged
+extension. A separate telemetry repair selects MuJoCo's regular body frame
+instead of principal-inertia axes; a fresh 66-case replay reproduces all
+physical metrics and rewards exactly. Short constant-request probes track
+0.5--10\,mm/s within about 2.6\% by displacement, narrowing the remaining gap to
+policy learning. Complete results and request/motion plots are retained in
+\texttt{paper/data/whole\_body\_control/mars\_command\_history\_v1/}.

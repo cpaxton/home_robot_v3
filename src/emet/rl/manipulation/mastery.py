@@ -222,6 +222,18 @@ def primitive_name(case):
     return case["id"].split("@", 1)[0].rsplit(":", 1)[-1]
 
 
+def measured_base_command_velocity(control):
+    """Forward/yaw twist at base_link, in its regular body frame.
+
+    MuJoCo BODY/local uses the principal-inertia frame, whose axes can differ
+    substantially from base_link. XBODY selects the regular frame and origin.
+    This diagnostic never changes actor observations or physical control.
+    """
+    spatial = np.zeros(6)
+    mujoco.mj_objectVelocity(control.model, control.data, mujoco.mjtObj.mjOBJ_XBODY, control.base, spatial, 1)
+    return [float(spatial[3]), float(spatial[2])]
+
+
 class TrainingCaseSampler:
     """Balance stages independently of augmentation count; cycle cases per bucket.
 
@@ -532,8 +544,6 @@ class MasteryEnv(ManipulationEnv):
                     "reward_terms": {**info.get("reward_terms", {}), "mastery_envelope_penalty": 20.0},
                 }
         self.update_witness()
-        spatial = np.zeros(6)
-        mujoco.mj_objectVelocity(self.model, self.data, mujoco.mjtObj.mjOBJ_BODY, self.control.base, spatial, 1)
         info["mastery"] = {
             "case_id": self.mastery_case["id"],
             "stage": self.mastery_case["stage"],
@@ -543,7 +553,7 @@ class MasteryEnv(ManipulationEnv):
             "base_velocity_command": self.control.base_command.copy().tolist(),
             # Existing base_linear_velocity_m_s is displacement speed (unsigned).
             # A body-local measured twist preserves direction for reverse audits.
-            "base_velocity_measured": [float(spatial[3]), float(spatial[2])],
+            "base_velocity_measured": measured_base_command_velocity(self.control),
         }
         return self.control.observe(), reward, done, truncated, info
 

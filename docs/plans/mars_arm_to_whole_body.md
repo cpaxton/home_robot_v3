@@ -118,3 +118,11 @@ Fix this without changing the native controller or adding task networks:
 Only the executor-ignored output dimensions are zeroed. Active policy means
 receive no temporal filter or teacher residual. The original component and
 interrupted run stay immutable; the corrected pilot uses a fresh directory.
+
+The [completed command-history pilot](../experiments/mars_command_history_20261031.md)
+retains16/16 arm tracking but only4/16 full passes; base is38/50 tracking and32/50
+full passes. Translation receives19.43% of actual transitions. Keep it
+unpromoted. A separate inertia/body-frame telemetry correction reproduces every
+physical metric and reward on66 cases, and final current-source regressions
+pass976 tests. Isolate base optimization with the successful arm function fixed
+before another mixed extension or loaded-stage advancement.

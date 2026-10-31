@@ -74,11 +74,23 @@ Accepted plan: [Mars controller integration](docs/plans/mars_controller_integrat
 - [ ] Retain full arm smoothness while reintroducing base motion, then loaded hold/lift and public
       pick/place. Keep one production actor; no permanent multi-task architecture
       or teacher/student loss is needed by the current component evidence.
-- [ ] Correct mixed-training exposure using actual control-step budgets. The
+- [x] Correct mixed-training exposure using actual control-step budgets. The
       [first whole-body pilot](docs/experiments/mars_arm_to_whole_body_20261031.md)
       retains16/16 arm tracking but8/16 full passes, with base38/50 tracking and
       33/50 full passes. Forward/reverse receive only389/32,768 steps (1.19%);
       test deterministic budget accounting before another bounded comparison.
+- [x] Remove executor-ignored requests from policy sampling/means/likelihood/
+      entropy and keep known wheel/grip history in actor units. The completed
+      [repair pilot](docs/experiments/mars_command_history_20261031.md) allocates
+      6,368/32,768 steps (19.43%) to translation. Arm tracking remains16/16,
+      but full arm/base passes are4/16 and32/50; no policy promotion.
+- [x] Correct simulator forward/yaw diagnostics from principal-inertia axes to
+      regular body axes. Verify rotated inertia frames, identical66-case physical
+      metrics/rewards after replay, and constant-request velocity response.
+- [ ] Isolate base learning with the successful arm function fixed in the same
+      runtime actor. Audit small sustained-request returns/advantages, coherent
+      exploration and reference-velocity tracking before more mixed PPO. The
+      repaired32k run still has12/50 base path stops and new arm-case base jerk.
 - [ ] Port exact frozen TAMP fixture initialization to ARM without relaxing its
       hash/pose checks. Caliban's eight-worker pilot never started: one missing
       camera source is fixed; two exact frozen-fixture checks still reject ARM's
