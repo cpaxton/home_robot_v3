@@ -1,0 +1,343 @@
+{
+  "schema_version": 1,
+  "scope": "preplanned repeated privileged stationary native CHAT controls; not observed acceptance or a frozen household benchmark",
+  "source_sha": "fb0fb6ccca81371c44a217f43572314357ccf480",
+  "remote_model": "Qwen/Qwen3-VL-8B-Instruct",
+  "checkpoint_and_sampling_independently_pinned": false,
+  "repeats_per_configuration": 3,
+  "cases": [
+    {
+      "configuration": "two-goal",
+      "repeat": 1,
+      "job_id": "20261023_174952_8e6952",
+      "runner_exit_code": 0,
+      "task_passed": true,
+      "completed_transfers": 2,
+      "failure_attribution": "completed",
+      "tool_names": [
+        "scene_tasks",
+        "plan_task",
+        "execute_task_plan"
+      ],
+      "failure_boundaries": [],
+      "audit_commands": 529,
+      "forbidden_commands": 0,
+      "final_predicates": {
+        "object2": {
+          "in_region": true,
+          "supported": true,
+          "settled": true,
+          "satisfied": true,
+          "bounds_xy": [
+            [
+              -0.03953495498669636,
+              -0.8193335132495905
+            ],
+            [
+              0.0009654356248367663,
+              -0.7788344006672208
+            ]
+          ]
+        },
+        "object1": {
+          "in_region": true,
+          "supported": true,
+          "settled": true,
+          "satisfied": true,
+          "bounds_xy": [
+            [
+              -0.039634174843980054,
+              -0.7203943358630382
+            ],
+            [
+              0.001410966314236227,
+              -0.6398769194787286
+            ]
+          ]
+        }
+      },
+      "summary_sha256": "19c8ddcfbc9d8e5d87678df635d32826a3a64371e6ccdb8ea1df76df5c8378a5",
+      "protocol_sha256": "d4bcfe7d68320cb940b26f707a15eac873e72130e44ab283a9dcc8ef5ff1b31c"
+    },
+    {
+      "configuration": "two-goal",
+      "repeat": 2,
+      "job_id": "20261023_174952_8e6952",
+      "runner_exit_code": 0,
+      "task_passed": true,
+      "completed_transfers": 2,
+      "failure_attribution": "completed",
+      "tool_names": [
+        "scene_tasks",
+        "plan_task",
+        "execute_task_plan"
+      ],
+      "failure_boundaries": [],
+      "audit_commands": 529,
+      "forbidden_commands": 0,
+      "final_predicates": {
+        "object2": {
+          "in_region": true,
+          "supported": true,
+          "settled": true,
+          "satisfied": true,
+          "bounds_xy": [
+            [
+              -0.039602767625307594,
+              -0.8194118730183894
+            ],
+            [
+              0.000836602293528943,
+              -0.7789725707679619
+            ]
+          ]
+        },
+        "object1": {
+          "in_region": true,
+          "supported": true,
+          "settled": true,
+          "satisfied": true,
+          "bounds_xy": [
+            [
+              -0.03959902420325485,
+              -0.7204477067700407
+            ],
+            [
+              0.0014312832877062809,
+              -0.6399375614757908
+            ]
+          ]
+        }
+      },
+      "summary_sha256": "e3cdcec46971ad771a2dbe395bb3652c87196a2208e01f2b742449ac2cb9d53e",
+      "protocol_sha256": "4fc02dd33f5565fb5178e545b62e08b1aa10a81def8552406be98f97d9254dab"
+    },
+    {
+      "configuration": "two-goal",
+      "repeat": 3,
+      "job_id": "20261023_174952_8e6952",
+      "runner_exit_code": 0,
+      "task_passed": true,
+      "completed_transfers": 2,
+      "failure_attribution": "completed",
+      "tool_names": [
+        "scene_tasks",
+        "plan_task",
+        "execute_task_plan"
+      ],
+      "failure_boundaries": [],
+      "audit_commands": 529,
+      "forbidden_commands": 0,
+      "final_predicates": {
+        "object2": {
+          "in_region": true,
+          "supported": true,
+          "settled": true,
+          "satisfied": true,
+          "bounds_xy": [
+            [
+              -0.039567587340251315,
+              -0.819519227607835
+            ],
+            [
+              0.0007834542477573869,
+              -0.7791690288458372
+            ]
+          ]
+        },
+        "object1": {
+          "in_region": true,
+          "supported": true,
+          "settled": true,
+          "satisfied": true,
+          "bounds_xy": [
+            [
+              -0.03947009691067016,
+              -0.7203746633058143
+            ],
+            [
+              0.0015465637836562032,
+              -0.6398712091856713
+            ]
+          ]
+        }
+      },
+      "summary_sha256": "91bd3a078ef9a09908af8bb1c9566b6c5c7ff257730dae50e0d2d3dc292dad7c",
+      "protocol_sha256": "725912c35cd38d93149fc5ac7fedf35ba75b9f63a86299d0ccc2c0c484745527"
+    },
+    {
+      "configuration": "wide-destination-swap",
+      "repeat": 1,
+      "job_id": "20261023_174953_6c16d0",
+      "runner_exit_code": 0,
+      "task_passed": true,
+      "completed_transfers": 3,
+      "failure_attribution": "completed",
+      "tool_names": [
+        "scene_tasks",
+        "plan_task",
+        "execute_task_plan"
+      ],
+      "failure_boundaries": [],
+      "audit_commands": 750,
+      "forbidden_commands": 0,
+      "final_predicates": {
+        "object2": {
+          "in_region": true,
+          "supported": true,
+          "settled": true,
+          "satisfied": true,
+          "bounds_xy": [
+            [
+              -0.040102256988812424,
+              -0.5735024655578785
+            ],
+            [
+              0.0006857360040219695,
+              -0.5327156575669688
+            ]
+          ]
+        },
+        "object1": {
+          "in_region": true,
+          "supported": true,
+          "settled": true,
+          "satisfied": true,
+          "bounds_xy": [
+            [
+              -0.039497514815781606,
+              -0.7203996669608727
+            ],
+            [
+              0.0015608096890284279,
+              -0.6398757901984197
+            ]
+          ]
+        }
+      },
+      "summary_sha256": "21bef993d8f3c080088380993f3390b4c031454af94297acd889969c48896d37",
+      "protocol_sha256": "55ad16ed4876bac3937a1f6b96537d253fa5ad26ba8370eeaf1710c3a4d92cd5"
+    },
+    {
+      "configuration": "wide-destination-swap",
+      "repeat": 2,
+      "job_id": "20261023_174953_6c16d0",
+      "runner_exit_code": 1,
+      "task_passed": false,
+      "completed_transfers": 0,
+      "failure_attribution": "agent_malformed_json_after_plan",
+      "tool_names": [
+        "scene_tasks",
+        "plan_task"
+      ],
+      "failure_boundaries": [],
+      "audit_commands": 7,
+      "forbidden_commands": 0,
+      "final_predicates": {
+        "object2": {
+          "in_region": false,
+          "supported": true,
+          "settled": true,
+          "satisfied": false,
+          "bounds_xy": [
+            [
+              -0.039999992509664045,
+              -0.7199999356709862
+            ],
+            [
+              9.115975795476183e-07,
+              -0.679998916892197
+            ]
+          ]
+        },
+        "object1": {
+          "in_region": false,
+          "supported": true,
+          "settled": true,
+          "satisfied": false,
+          "bounds_xy": [
+            [
+              -0.04,
+              -0.5900000000000001
+            ],
+            [
+              0.0,
+              -0.51
+            ]
+          ]
+        }
+      },
+      "summary_sha256": "cb9884cb6ccea034b1e49c5deb526a217340bf2458c8120259d1ecc43f99358b",
+      "protocol_sha256": "51ace110ef391a0006416c92cd9e9c6bd78d0c33b2e2bc8c0e21012e60c70d07"
+    },
+    {
+      "configuration": "wide-destination-swap",
+      "repeat": 3,
+      "job_id": "20261023_174953_6c16d0",
+      "runner_exit_code": 0,
+      "task_passed": true,
+      "completed_transfers": 3,
+      "failure_attribution": "completed",
+      "tool_names": [
+        "scene_tasks",
+        "plan_task",
+        "execute_task_plan"
+      ],
+      "failure_boundaries": [],
+      "audit_commands": 750,
+      "forbidden_commands": 0,
+      "final_predicates": {
+        "object2": {
+          "in_region": true,
+          "supported": true,
+          "settled": true,
+          "satisfied": true,
+          "bounds_xy": [
+            [
+              -0.03991238612528579,
+              -0.5733085273313558
+            ],
+            [
+              0.00047467357017648426,
+              -0.5329220462116315
+            ]
+          ]
+        },
+        "object1": {
+          "in_region": true,
+          "supported": true,
+          "settled": true,
+          "satisfied": true,
+          "bounds_xy": [
+            [
+              -0.039712534074838504,
+              -0.720252768023499
+            ],
+            [
+              0.0013560064878934547,
+              -0.6397238861189508
+            ]
+          ]
+        }
+      },
+      "summary_sha256": "6215d7519fc5f9194d29d740a91ef664df19640189274c3e5450e10a52f8ebc7",
+      "protocol_sha256": "edd957fe9182e13568951e047768c4b6bda3e60520515bac07fda3bbb24362b0"
+    }
+  ],
+  "regression_validation": {
+    "job_id": "20261023_174952_ab90e2",
+    "selected_checks_passed": 796,
+    "boundary_repeat_count": 10,
+    "boundary_checks_per_repeat": 94,
+    "overlapping_checks_not_added": true
+  },
+  "summary": {
+    "two_goal_tasks_passed": 3,
+    "two_goal_attempts": 3,
+    "swap_tasks_passed": 2,
+    "swap_attempts": 3,
+    "failed_attempts_excluded": 0,
+    "total_audit_commands": 3094,
+    "forbidden_commands": 0
+  }
+}

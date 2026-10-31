@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "review_base": "ca85551faaa0044d30033aefe5ba7b01f5c10170",
+  "scope": "PR review regression and documentation; no new task-success experiment",
+  "observed_arm_execution_qualified": false,
+  "self_occupancy_blocker_resolved": false,
+  "findings": [
+    {
+      "comment_id": 4417132335,
+      "disposition": "confirmed unresolved execution blocker; raycast regression and explicit foundation scope; no unsafe unknown-space carve"
+    },
+    {
+      "comment_id": 4417133746,
+      "disposition": "retain conservative transport-entry marking; tests cover timeout before/after side effect; ordinary timeout cannot certify no send"
+    },
+    {
+      "comment_id": 4417138927,
+      "disposition": "shared pose uncertainty helper in payload, effects and gripper volumes; same admitted-angle behavior"
+    },
+    {
+      "comment_id": 4417139875,
+      "disposition": "actual Stretch model, real parameter setup and head_K constructor, MuJoCo frustum reference, two resolutions, rotation, baseline and missing depth tests"
+    },
+    {
+      "comment_id": 4417140898,
+      "disposition": "document intentional simulator FOV intrinsics change; hardware calibration unchanged; preserve source versions for metric comparisons"
+    }
+  ],
+  "validation": {
+    "focused": {
+      "tests": 68,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 10.364
+    },
+    "regression": {
+      "tests": 826,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 158.265
+    }
+  },
+  "validation_counts_overlap": true,
+  "managed_job_id": "20261029_222541_ebf47b",
+  "raw_directory": ".tamp-runs/pr226-review-20261029",
+  "paper": {
+    "pages": 53,
+    "undefined_references_or_citations": false
+  },
+  "working_source_sha256": {
+    "src/emet/controller/manipulation/observed_effects.py": "a25f5d89f668845d123f5f1d45d8f9bf924a0027716e60d004c995a6b1955dd9",
+    "src/emet/controller/manipulation/gripper_geometry.py": "36114da9f31ab72f1a548d62c566002da301be682b2a005a5e6b837159c3d440",
+    "src/emet/controller/manipulation/observed_collision.py": "23f8b02cbb4fea8c7bf0a6aa2cccf99fa9835ac94b6bd95455246c985540b960",
+    "src/emet/controller/task/tamp/observed_adapter.py": "1dc113d89f55d9f959a7553a41a7d16c20a84dd02c599a2d0a356844e1a6a7cc",
+    "src/emet/simulation/mujoco_server_stretch.py": "9b01259ecaf2b12bc705045ba20287af8ef63a6255e3b98a1accb0cbbafe7488",
+    "src/test/motion/test_observed_native_collision.py": "349ee8064361ca59a600a580f47793b6f2ea5bd0ee832a255943f62fd9a63f64",
+    "src/test/motion/test_observed_effects.py": "0a82f51ee85d1b5f063529291066099f215576dfbf2eef9887aa3840ada8ccf2",
+    "src/test/controller/task/tamp/test_observed_adapter.py": "b12d6299387c0378ab8906f9828283a0dcbef8d23e1b68a17d8c9332a98e7a2c",
+    "src/test/simulation/test_stretch_render_intrinsics.py": "78ef1422f9fa839a341f8332903759925765527f9730d54dfa343af4355b793f"
+  }
+}

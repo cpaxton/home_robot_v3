@@ -1,0 +1,1656 @@
+{
+  "scope": "Observed-input integration development: co-sampling, motor-only EE FK, geometry latency and privileged calibration controls",
+  "source_base": "e3e757fe",
+  "observed_task_success_assessed": false,
+  "observed_execution_qualified": false,
+  "note": "Trials ran from the development working tree. Script hashes are per-run; these are not frozen held-out task benchmarks.",
+  "live_attempts": [
+    {
+      "job_id": "20261029_004156_b485e5",
+      "raw_directory": ".tamp-runs/observed-alignment-20261029/live",
+      "note": "Initial full robot configuration includes passive truth; retrospectively debug-only, despite its initial generic source name.",
+      "source_base": "e3e757fec6b9260b5ea66a0bd0585fc24c04d778",
+      "script_sha256": "f94d219ae435085ee598da2cfcad29a06abc1fbee5693a8cdeb82d08398bd869",
+      "geometry_input_tier": "known_model_prior",
+      "prior_sha256": "9b0460b8c13793f4b96588ec94d10569ec70b736c06a6bb7590e75703d9726d4",
+      "diagnostic_passed": true,
+      "reacquisition_passed": true,
+      "geometry_diagnostic_passed": true,
+      "robot_sampling_debug_passed": true,
+      "motor_feedback_passed": null,
+      "vlm_calls": 3,
+      "queries": 5,
+      "geometry": [
+        {
+          "index": 0,
+          "state": "candidate",
+          "seconds": 1.1114287879900075,
+          "rms_m": [
+            0.00030115534513635314
+          ],
+          "search_starts": null
+        },
+        {
+          "index": 1,
+          "state": "candidate",
+          "seconds": 1.1834706430090591,
+          "rms_m": [
+            0.000301339975026811
+          ],
+          "search_starts": null
+        },
+        {
+          "index": 2,
+          "state": "candidate",
+          "seconds": 0.9747818259929772,
+          "rms_m": [
+            0.00030134000974252724
+          ],
+          "search_starts": null
+        },
+        {
+          "index": 3,
+          "state": "candidate",
+          "seconds": 1.1063528429949656,
+          "rms_m": [
+            0.00030134001800722916
+          ],
+          "search_starts": null
+        },
+        {
+          "index": 4,
+          "state": "candidate",
+          "seconds": 1.1075291229935829,
+          "rms_m": [
+            0.0003013400180074428
+          ],
+          "search_starts": null
+        }
+      ],
+      "robot_sampling_debug": [
+        {
+          "index": 0,
+          "state": "passed",
+          "source": "simulator_synchronized_robot_sample",
+          "observation_id": "capture:194967986789402",
+          "capture_span_s": 0.00016793800750747323,
+          "capture_age_s": 1.8687498359940946,
+          "alignment_error_m": 0.0,
+          "alignment_error_rad": 0.0,
+          "scope": "ideal simulator shared sample, not hardware calibration",
+          "world_from_ee": [
+            [
+              -0.00724057436513556,
+              0.00460908526981102,
+              -0.9999631645294946,
+              -0.03118302503145107
+            ],
+            [
+              -0.9977033092611363,
+              0.06731521550573397,
+              0.007534484109535944,
+              -0.14727211646326518
+            ],
+            [
+              0.0673474629978234,
+              0.9977211123828116,
+              0.004111098802582841,
+              0.4575398648086465
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ]
+          ]
+        },
+        {
+          "index": 1,
+          "state": "passed",
+          "source": "simulator_synchronized_robot_sample",
+          "observation_id": "capture:194969839941732",
+          "capture_span_s": 0.0002738900075200945,
+          "capture_age_s": 1.986681262991624,
+          "alignment_error_m": 0.0,
+          "alignment_error_rad": 0.0,
+          "scope": "ideal simulator shared sample, not hardware calibration",
+          "world_from_ee": [
+            [
+              -0.00723791214203065,
+              0.004608998167263623,
+              -0.9999631842041585,
+              -0.031182821458207225
+            ],
+            [
+              -0.9977032979375109,
+              0.06731568102996979,
+              0.007531823954874228,
+              -0.14727226713487884
+            ],
+            [
+              0.06734791691240422,
+              0.9977210813766375,
+              0.004111187686590967,
+              0.45761124313228607
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ]
+          ]
+        },
+        {
+          "index": 2,
+          "state": "passed",
+          "source": "simulator_synchronized_robot_sample",
+          "observation_id": "capture:194972095804797",
+          "capture_span_s": 0.0003240640216972679,
+          "capture_age_s": 1.543921055010287,
+          "alignment_error_m": 0.0,
+          "alignment_error_rad": 0.0,
+          "scope": "ideal simulator shared sample, not hardware calibration",
+          "world_from_ee": [
+            [
+              -0.007235786415897755,
+              0.004608917148280822,
+              -0.99996319996171,
+              -0.03118258576956459
+            ],
+            [
+              -0.9977032961326748,
+              0.06731594554035067,
+              0.007529698666206175,
+              -0.14727234813840093
+            ],
+            [
+              0.06734817206828136,
+              0.9977210639045004,
+              0.004111248026127973,
+              0.45769334437109654
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ]
+          ]
+        },
+        {
+          "index": 3,
+          "state": "passed",
+          "source": "simulator_synchronized_robot_sample",
+          "observation_id": "capture:194974084808319",
+          "capture_span_s": 0.00032629500492475927,
+          "capture_age_s": 1.5113955179986078,
+          "alignment_error_m": 0.0,
+          "alignment_error_rad": 0.0,
+          "scope": "ideal simulator shared sample, not hardware calibration",
+          "world_from_ee": [
+            [
+              -0.007234540138227358,
+              0.004608863191599144,
+              -0.999963209227755,
+              -0.03118238803244082
+            ],
+            [
+              -0.9977032983446629,
+              0.06731605219043799,
+              0.007528452010623854,
+              -0.14727237920569886
+            ],
+            [
+              0.0673482731862548,
+              0.9977210569580943,
+              0.004111277326358992,
+              0.457761992025657
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ]
+          ]
+        },
+        {
+          "index": 4,
+          "state": "passed",
+          "source": "simulator_synchronized_robot_sample",
+          "observation_id": "capture:194975997995954",
+          "capture_span_s": 0.00015855400124564767,
+          "capture_age_s": 1.5786553859943524,
+          "alignment_error_m": 0.0,
+          "alignment_error_rad": 0.0,
+          "scope": "ideal simulator shared sample, not hardware calibration",
+          "world_from_ee": [
+            [
+              -0.007233667219528728,
+              0.004608821722997647,
+              -0.9999632157339011,
+              -0.03118219879406718
+            ],
+            [
+              -0.9977033014021988,
+              0.0673161045610014,
+              0.007527578487627196,
+              -0.14727239381250395
+            ],
+            [
+              0.06734832165475374,
+              0.9977210536162198,
+              0.004111294349699646,
+              0.4578276107908878
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ]
+          ]
+        }
+      ],
+      "motor_feedback": [],
+      "default_execution_boundary": {
+        "state": "passed",
+        "planning_code": "observed_scene_unavailable",
+        "execution_code": "observed_scene_unavailable"
+      },
+      "execution_readiness_qualification": "not_qualified"
+    },
+    {
+      "job_id": "20261029_004936_9c83b3",
+      "raw_directory": ".tamp-runs/observed-alignment-20261029/qualified-debug-live",
+      "note": "Debug provenance/observed-admission guard added; one capture expired during slow fitting.",
+      "source_base": "e3e757fec6b9260b5ea66a0bd0585fc24c04d778",
+      "script_sha256": "4afdf00c3e2baa25f030a65c3386568d3182e46d17a90a4501f49e2869dd4b75",
+      "geometry_input_tier": "known_model_prior",
+      "prior_sha256": "9b0460b8c13793f4b96588ec94d10569ec70b736c06a6bb7590e75703d9726d4",
+      "diagnostic_passed": false,
+      "reacquisition_passed": true,
+      "geometry_diagnostic_passed": true,
+      "robot_sampling_debug_passed": false,
+      "motor_feedback_passed": null,
+      "vlm_calls": 3,
+      "queries": 5,
+      "geometry": [
+        {
+          "index": 0,
+          "state": "candidate",
+          "seconds": 1.287553564994596,
+          "rms_m": [
+            0.0003037874003557178
+          ],
+          "search_starts": null
+        },
+        {
+          "index": 1,
+          "state": "candidate",
+          "seconds": 1.3451716569834389,
+          "rms_m": [
+            0.00030378737601481664
+          ],
+          "search_starts": null
+        },
+        {
+          "index": 2,
+          "state": "candidate",
+          "seconds": 1.1948339999944437,
+          "rms_m": [
+            0.00030378740609403364
+          ],
+          "search_starts": null
+        },
+        {
+          "index": 3,
+          "state": "candidate",
+          "seconds": 1.3396069819864351,
+          "rms_m": [
+            0.00030378737601025697
+          ],
+          "search_starts": null
+        },
+        {
+          "index": 4,
+          "state": "candidate",
+          "seconds": 1.1137255970097613,
+          "rms_m": [
+            0.0003037874061016051
+          ],
+          "search_starts": null
+        }
+      ],
+      "robot_sampling_debug": [
+        {
+          "index": 0,
+          "state": "unknown",
+          "reason": "object_observation_stale"
+        },
+        {
+          "index": 1,
+          "state": "passed",
+          "source": "simulator_robot_kinematics_debug",
+          "execution_qualified": false,
+          "observation_id": "capture:195432310905680",
+          "capture_span_s": 0.00014213001122698188,
+          "capture_age_s": 1.8641585010045674,
+          "alignment_error_m": 0.0,
+          "alignment_error_rad": 0.0,
+          "scope": "ideal simulator shared sample, not hardware calibration",
+          "world_from_ee": [
+            [
+              -0.0060750046683678005,
+              0.004530580559555186,
+              -0.9999712836667207,
+              -0.030973759837603233
+            ],
+            [
+              -0.9977110430734313,
+              0.06732120712803885,
+              0.006366286213009942,
+              -0.14729176522345475
+            ],
+            [
+              0.06734811688237152,
+              0.9977210676890679,
+              0.004111233608219023,
+              0.4576618638402641
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ]
+          ]
+        },
+        {
+          "index": 2,
+          "state": "passed",
+          "source": "simulator_robot_kinematics_debug",
+          "execution_qualified": false,
+          "observation_id": "capture:195434259513686",
+          "capture_span_s": 0.0002848799922503531,
+          "capture_age_s": 1.8984377789893188,
+          "alignment_error_m": 0.0,
+          "alignment_error_rad": 0.0,
+          "scope": "ideal simulator shared sample, not hardware calibration",
+          "world_from_ee": [
+            [
+              -0.00607360635819959,
+              0.004530521355670558,
+              -0.9999712924289648,
+              -0.03097356669357691
+            ],
+            [
+              -0.997711043058491,
+              0.06732133959377551,
+              0.0063648876219514205,
+              -0.1472918042106159
+            ],
+            [
+              0.06734824322093452,
+              0.9977210590197784,
+              0.004111267871165586,
+              0.45772899089494945
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ]
+          ]
+        },
+        {
+          "index": 3,
+          "state": "passed",
+          "source": "simulator_robot_kinematics_debug",
+          "execution_qualified": false,
+          "observation_id": "capture:195436567051077",
+          "capture_span_s": 0.00013210999895818532,
+          "capture_age_s": 1.7625617989979219,
+          "alignment_error_m": 0.0,
+          "alignment_error_rad": 0.0,
+          "scope": "ideal simulator shared sample, not hardware calibration",
+          "world_from_ee": [
+            [
+              -0.006072453328183736,
+              0.004530467331906707,
+              -0.999971299676311,
+              -0.03097334502431386
+            ],
+            [
+              -0.9977110453215439,
+              0.06732141512633205,
+              0.006363733870918098,
+              -0.147291825337801
+            ],
+            [
+              0.06734831366833788,
+              0.9977210541685195,
+              0.004111291146169815,
+              0.45780588843142156
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ]
+          ]
+        },
+        {
+          "index": 4,
+          "state": "passed",
+          "source": "simulator_robot_kinematics_debug",
+          "execution_qualified": false,
+          "observation_id": "capture:195438432903274",
+          "capture_span_s": 0.0002706689992919564,
+          "capture_age_s": 1.7946399350184947,
+          "alignment_error_m": 0.0,
+          "alignment_error_rad": 0.0,
+          "scope": "ideal simulator shared sample, not hardware calibration",
+          "world_from_ee": [
+            [
+              -0.006071797437891546,
+              0.004530434026045471,
+              -0.9999713038099693,
+              -0.030973172385978614
+            ],
+            [
+              -0.9977110475369126,
+              0.06732144435138887,
+              0.006363077340439338,
+              -0.14729183300567997
+            ],
+            [
+              0.06734833998452211,
+              0.9977210523477891,
+              0.004111301904594772,
+              0.45786575520662165
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ]
+          ]
+        }
+      ],
+      "motor_feedback": [],
+      "default_execution_boundary": {
+        "state": "passed",
+        "planning_code": "observed_scene_unavailable",
+        "execution_code": "observed_scene_unavailable"
+      },
+      "execution_readiness_qualification": "not_qualified"
+    },
+    {
+      "job_id": "20261029_005357_2ae4f7",
+      "raw_directory": ".tamp-runs/observed-alignment-20261029/fast-live",
+      "note": "Exact shape-symmetry seed deduplication; provisioned fixture and unchanged freshness gates.",
+      "source_base": "e3e757fec6b9260b5ea66a0bd0585fc24c04d778",
+      "script_sha256": "4afdf00c3e2baa25f030a65c3386568d3182e46d17a90a4501f49e2869dd4b75",
+      "geometry_input_tier": "known_model_prior",
+      "prior_sha256": "9b0460b8c13793f4b96588ec94d10569ec70b736c06a6bb7590e75703d9726d4",
+      "diagnostic_passed": true,
+      "reacquisition_passed": true,
+      "geometry_diagnostic_passed": true,
+      "robot_sampling_debug_passed": true,
+      "motor_feedback_passed": null,
+      "vlm_calls": 3,
+      "queries": 5,
+      "geometry": [
+        {
+          "index": 0,
+          "state": "candidate",
+          "seconds": 0.4736489789793268,
+          "rms_m": [
+            0.00029853968964424477
+          ],
+          "search_starts": 3
+        },
+        {
+          "index": 1,
+          "state": "candidate",
+          "seconds": 0.4283100049942732,
+          "rms_m": [
+            0.0002985397472131935
+          ],
+          "search_starts": 4
+        },
+        {
+          "index": 2,
+          "state": "candidate",
+          "seconds": 0.4601944949827157,
+          "rms_m": [
+            0.0002985376399932939
+          ],
+          "search_starts": 4
+        },
+        {
+          "index": 3,
+          "state": "candidate",
+          "seconds": 0.40653179900255054,
+          "rms_m": [
+            0.00029853976208757697
+          ],
+          "search_starts": 4
+        },
+        {
+          "index": 4,
+          "state": "candidate",
+          "seconds": 0.40338985199923627,
+          "rms_m": [
+            0.00029853764005615123
+          ],
+          "search_starts": 4
+        }
+      ],
+      "robot_sampling_debug": [
+        {
+          "index": 0,
+          "state": "passed",
+          "source": "simulator_robot_kinematics_debug",
+          "execution_qualified": false,
+          "observation_id": "capture:195690547555654",
+          "capture_span_s": 0.0002846060087904334,
+          "capture_age_s": 1.1456058190087788,
+          "alignment_error_m": 0.0,
+          "alignment_error_rad": 0.0,
+          "scope": "ideal simulator shared sample, not hardware calibration",
+          "world_from_ee": [
+            [
+              -0.0066938600938189485,
+              0.004572218256131466,
+              -0.9999671429888397,
+              -0.031028049634706043
+            ],
+            [
+              -0.9977071300695193,
+              0.06731768690231049,
+              0.006986532656887701,
+              -0.1473216771981009
+            ],
+            [
+              0.06734741899648156,
+              0.997721115267358,
+              0.004111119576412803,
+              0.45749503982520545
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ]
+          ]
+        },
+        {
+          "index": 1,
+          "state": "passed",
+          "source": "simulator_robot_kinematics_debug",
+          "execution_qualified": false,
+          "observation_id": "capture:195691789378697",
+          "capture_span_s": 0.00031682601547800004,
+          "capture_age_s": 1.19746256901999,
+          "alignment_error_m": 0.0,
+          "alignment_error_rad": 0.0,
+          "scope": "ideal simulator shared sample, not hardware calibration",
+          "world_from_ee": [
+            [
+              -0.006692325970285823,
+              0.00457217418443534,
+              -0.9999671534587192,
+              -0.03102791246936152
+            ],
+            [
+              -0.9977071171662486,
+              0.06731803713841086,
+              0.0069850004756083495,
+              -0.1473217898067094
+            ],
+            [
+              0.06734776261257791,
+              0.9977210918383242,
+              0.004111176476524869,
+              0.457542590622636
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ]
+          ]
+        },
+        {
+          "index": 2,
+          "state": "passed",
+          "source": "simulator_robot_kinematics_debug",
+          "execution_qualified": false,
+          "observation_id": "capture:195693026274828",
+          "capture_span_s": 0.0003431759832892567,
+          "capture_age_s": 1.1946631939790677,
+          "alignment_error_m": 0.0,
+          "alignment_error_rad": 0.0,
+          "scope": "ideal simulator shared sample, not hardware calibration",
+          "world_from_ee": [
+            [
+              -0.00669113392261389,
+              0.004572136038335117,
+              -0.9999671616102602,
+              -0.03102777765029576
+            ],
+            [
+              -0.9977071103483681,
+              0.06731826175325928,
+              0.0069838094785426574,
+              -0.14732185964313185
+            ],
+            [
+              0.06734798205694481,
+              0.9977210768579414,
+              0.004111217130098294,
+              0.4575891669559987
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ]
+          ]
+        },
+        {
+          "index": 3,
+          "state": "passed",
+          "source": "simulator_robot_kinematics_debug",
+          "execution_qualified": false,
+          "observation_id": "capture:195694299085978",
+          "capture_span_s": 0.00020995497470721602,
+          "capture_age_s": 1.0997683969908394,
+          "alignment_error_m": 0.0,
+          "alignment_error_rad": 0.0,
+          "scope": "ideal simulator shared sample, not hardware calibration",
+          "world_from_ee": [
+            [
+              -0.00669019307639826,
+              0.004572102898411978,
+              -0.9999671680568767,
+              -0.031027644022063882
+            ],
+            [
+              -0.9977071071330135,
+              0.0673184069557323,
+              0.006982869125135349,
+              -0.14732190345012075
+            ],
+            [
+              0.06734812315779015,
+              0.9977210672126914,
+              0.004111246416159675,
+              0.45763523117552396
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ]
+          ]
+        },
+        {
+          "index": 4,
+          "state": "passed",
+          "source": "simulator_robot_kinematics_debug",
+          "execution_qualified": false,
+          "observation_id": "capture:195695650539102",
+          "capture_span_s": 0.0002118079864885658,
+          "capture_age_s": 0.925414722005371,
+          "alignment_error_m": 0.0,
+          "alignment_error_rad": 0.0,
+          "scope": "ideal simulator shared sample, not hardware calibration",
+          "world_from_ee": [
+            [
+              -0.0066894347190719905,
+              0.004572073784559427,
+              -0.9999671732634265,
+              -0.031027509218261362
+            ],
+            [
+              -0.9977071060371212,
+              0.06731850184195545,
+              0.006982110911992689,
+              -0.14732193128642065
+            ],
+            [
+              0.06734821472149072,
+              0.9977210609439209,
+              0.00411126778072346,
+              0.45768164167035386
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ]
+          ]
+        }
+      ],
+      "motor_feedback": [],
+      "default_execution_boundary": {
+        "state": "passed",
+        "planning_code": "observed_scene_unavailable",
+        "execution_code": "observed_scene_unavailable"
+      },
+      "execution_readiness_qualification": "not_qualified"
+    },
+    {
+      "job_id": "20261029_010537_303f19",
+      "raw_directory": ".tamp-runs/observed-alignment-20261029/encoder-live",
+      "note": "Distinct eight-channel motor packet and motor-only rigid EE FK; separate debug evaluator comparison.",
+      "source_base": "e3e757fec6b9260b5ea66a0bd0585fc24c04d778",
+      "script_sha256": "362748d53cc95aca602b3e23bb295147784ffc5fd817ea03fe5f76c6d874e212",
+      "geometry_input_tier": "known_model_prior",
+      "prior_sha256": "9b0460b8c13793f4b96588ec94d10569ec70b736c06a6bb7590e75703d9726d4",
+      "diagnostic_passed": true,
+      "reacquisition_passed": true,
+      "geometry_diagnostic_passed": true,
+      "robot_sampling_debug_passed": true,
+      "motor_feedback_passed": true,
+      "vlm_calls": 3,
+      "queries": 5,
+      "geometry": [
+        {
+          "index": 0,
+          "state": "candidate",
+          "seconds": 0.4176558190083597,
+          "rms_m": [
+            0.0003037956617478654
+          ],
+          "search_starts": 3
+        },
+        {
+          "index": 1,
+          "state": "candidate",
+          "seconds": 0.48291844499181025,
+          "rms_m": [
+            0.0003037956909569033
+          ],
+          "search_starts": 4
+        },
+        {
+          "index": 2,
+          "state": "candidate",
+          "seconds": 0.5509800680156332,
+          "rms_m": [
+            0.0003037956914709923
+          ],
+          "search_starts": 4
+        },
+        {
+          "index": 3,
+          "state": "candidate",
+          "seconds": 0.5369935909984633,
+          "rms_m": [
+            0.0003037956915213204
+          ],
+          "search_starts": 4
+        },
+        {
+          "index": 4,
+          "state": "candidate",
+          "seconds": 0.5227384949976113,
+          "rms_m": [
+            0.00030379569162121943
+          ],
+          "search_starts": 4
+        }
+      ],
+      "robot_sampling_debug": [
+        {
+          "index": 0,
+          "state": "passed",
+          "source": "simulator_robot_kinematics_debug",
+          "execution_qualified": false,
+          "observation_id": "capture:196391494762434",
+          "capture_span_s": 0.0003119409957434982,
+          "capture_age_s": 1.0520606549980585,
+          "alignment_error_m": 0.0,
+          "alignment_error_rad": 0.0,
+          "scope": "ideal simulator shared sample, not hardware calibration",
+          "world_from_ee": [
+            [
+              -0.00536281149719689,
+              0.004482451758258288,
+              -0.9999755736412155,
+              -0.030991049418915433
+            ],
+            [
+              -0.9977151465130765,
+              0.06732411130306573,
+              0.005652473409074876,
+              -0.14728019591674554
+            ],
+            [
+              0.06734780375953925,
+              0.99772108911433,
+              0.004111163494593839,
+              0.4575712323389784
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ]
+          ]
+        },
+        {
+          "index": 1,
+          "state": "passed",
+          "source": "simulator_robot_kinematics_debug",
+          "execution_qualified": false,
+          "observation_id": "capture:196392728483587",
+          "capture_span_s": 0.00021783998818136752,
+          "capture_age_s": 1.0802429479954299,
+          "alignment_error_m": 0.0,
+          "alignment_error_rad": 0.0,
+          "scope": "ideal simulator shared sample, not hardware calibration",
+          "world_from_ee": [
+            [
+              -0.005361394297727001,
+              0.004482399467025555,
+              -0.9999755814749705,
+              -0.030990925546778424
+            ],
+            [
+              -0.9977151408764888,
+              0.06732431376326395,
+              0.0056510567256515265,
+              -0.147280259397526
+            ],
+            [
+              0.06734800009647834,
+              0.9977210756876524,
+              0.004111205623799324,
+              0.45761454242491906
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ]
+          ]
+        },
+        {
+          "index": 2,
+          "state": "passed",
+          "source": "simulator_robot_kinematics_debug",
+          "execution_qualified": false,
+          "observation_id": "capture:196393900121071",
+          "capture_span_s": 0.0003598059993237257,
+          "capture_age_s": 1.356679107004311,
+          "alignment_error_m": 0.0,
+          "alignment_error_rad": 0.0,
+          "scope": "ideal simulator shared sample, not hardware calibration",
+          "world_from_ee": [
+            [
+              -0.005360286873633546,
+              0.004482355401816629,
+              -0.9999755876093601,
+              -0.030990807465919507
+            ],
+            [
+              -0.9977151383770922,
+              0.06732444374271557,
+              0.005649949372723784,
+              -0.1472802988889374
+            ],
+            [
+              0.06734812527318618,
+              0.9977210671148458,
+              0.0041112355079100105,
+              0.45765570162790903
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ]
+          ]
+        },
+        {
+          "index": 3,
+          "state": "passed",
+          "source": "simulator_robot_kinematics_debug",
+          "execution_qualified": false,
+          "observation_id": "capture:196395224014518",
+          "capture_span_s": 0.00030606600921601057,
+          "capture_age_s": 1.38480126200011,
+          "alignment_error_m": 0.0,
+          "alignment_error_rad": 0.0,
+          "scope": "ideal simulator shared sample, not hardware calibration",
+          "world_from_ee": [
+            [
+              -0.005359256056765682,
+              0.004482311384769455,
+              -0.9999755933317416,
+              -0.030990672802289652
+            ],
+            [
+              -0.9977151376182432,
+              0.06732454150735573,
+              0.005648918324355767,
+              -0.1472803276753319
+            ],
+            [
+              0.06734821855052231,
+              0.9977210607156066,
+              0.004111260463260852,
+              0.4577025340032216
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ]
+          ]
+        },
+        {
+          "index": 4,
+          "state": "passed",
+          "source": "simulator_robot_kinematics_debug",
+          "execution_qualified": false,
+          "observation_id": "capture:196396711648580",
+          "capture_span_s": 0.00015181099297478795,
+          "capture_age_s": 1.213733187993057,
+          "alignment_error_m": 0.0,
+          "alignment_error_rad": 0.0,
+          "scope": "ideal simulator shared sample, not hardware calibration",
+          "world_from_ee": [
+            [
+              -0.005358378369391598,
+              0.004482271229193091,
+              -0.999975598215215,
+              -0.03099052997591983
+            ],
+            [
+              -0.9977151381974515,
+              0.06732460659899961,
+              0.005648040184768333,
+              -0.14728034617466798
+            ],
+            [
+              0.06734827980646024,
+              0.9977210565037287,
+              0.004111279143144936,
+              0.45775212314127944
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ]
+          ]
+        }
+      ],
+      "motor_feedback": [
+        {
+          "index": 0,
+          "state": "passed",
+          "source": "simulator_stretch_motor_encoders",
+          "observation_id": "capture:196391494762434",
+          "positions": {
+            "lift": 0.5904774522221982,
+            "arm": 0.00999956829670285,
+            "wrist_yaw": 1.5099864839676123e-05,
+            "wrist_pitch": -1.502604549407318,
+            "wrist_roll": -3.6948785466397984e-05,
+            "gripper": 0.003917821112379106,
+            "head_pan": -1.5700007060650703,
+            "head_tilt": -0.6998377748167673
+          },
+          "units": "actuator_length",
+          "world_from_ee_estimate": [
+            [
+              -0.005362811497196945,
+              0.004482451758257955,
+              -0.999975573641216,
+              -0.030991049418915236
+            ],
+            [
+              -0.9977151465130769,
+              0.06732411130306612,
+              0.005652473409074987,
+              -0.14728019591674565
+            ],
+            [
+              0.06734780375953975,
+              0.9977210891143304,
+              0.0041111634945934505,
+              0.4575712323389786
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ]
+          ],
+          "inferred_joint_names": [
+            "@base_link:0",
+            "joint_right_wheel",
+            "joint_left_wheel",
+            "joint_arm_l3",
+            "joint_arm_l2",
+            "joint_arm_l1",
+            "joint_arm_l0",
+            "joint_gripper_finger_left_open",
+            "rubber_left_x",
+            "rubber_left_y",
+            "joint_gripper_finger_right_open",
+            "rubber_right_x",
+            "rubber_right_y",
+            "joint_head_nav_cam"
+          ],
+          "gripper_geometry_qualified": false,
+          "execution_qualified": false,
+          "scope": "motor readouts only; no passive joints, EE or gripper-geometry qualification",
+          "debug_fk_error_m": 3.173927742618046e-16,
+          "debug_fk_error_rad": 7.884953353001449e-08
+        },
+        {
+          "index": 1,
+          "state": "passed",
+          "source": "simulator_stretch_motor_encoders",
+          "observation_id": "capture:196392728483587",
+          "positions": {
+            "lift": 0.5905207636956347,
+            "arm": 0.009999577290440424,
+            "wrist_yaw": 1.5935712044257936e-05,
+            "wrist_pitch": -1.5026043472765807,
+            "wrist_roll": -3.757415144253388e-05,
+            "gripper": 0.003917852275560109,
+            "head_pan": -1.5700007060650705,
+            "head_tilt": -0.6998377748167673
+          },
+          "units": "actuator_length",
+          "world_from_ee_estimate": [
+            [
+              -0.005361394297727307,
+              0.004482399467025111,
+              -0.9999755814749687,
+              -0.030990925546778115
+            ],
+            [
+              -0.997715140876487,
+              0.06732431376326409,
+              0.0056510567256517485,
+              -0.14728025939752543
+            ],
+            [
+              0.06734800009647851,
+              0.9977210756876507,
+              0.004111205623798853,
+              0.4576145424249227
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ]
+          ],
+          "inferred_joint_names": [
+            "@base_link:0",
+            "joint_right_wheel",
+            "joint_left_wheel",
+            "joint_arm_l3",
+            "joint_arm_l2",
+            "joint_arm_l1",
+            "joint_arm_l0",
+            "joint_gripper_finger_left_open",
+            "rubber_left_x",
+            "rubber_left_y",
+            "joint_gripper_finger_right_open",
+            "rubber_right_x",
+            "rubber_right_y",
+            "joint_head_nav_cam"
+          ],
+          "gripper_geometry_qualified": false,
+          "execution_qualified": false,
+          "scope": "motor readouts only; no passive joints, EE or gripper-geometry qualification",
+          "debug_fk_error_m": 3.7226389768416315e-15,
+          "debug_fk_error_rad": 0.0
+        },
+        {
+          "index": 2,
+          "state": "passed",
+          "source": "simulator_stretch_motor_encoders",
+          "observation_id": "capture:196393900121071",
+          "positions": {
+            "lift": 0.5905619238586205,
+            "arm": 0.009999581942921002,
+            "wrist_yaw": 1.664223386129115e-05,
+            "wrist_pitch": -1.5026042176459051,
+            "wrist_roll": -3.801774673911599e-05,
+            "gripper": 0.003917873742396807,
+            "head_pan": -1.5700007060650705,
+            "head_tilt": -0.6998377748167673
+          },
+          "units": "actuator_length",
+          "world_from_ee_estimate": [
+            [
+              -0.005360286873632825,
+              0.004482355401816518,
+              -0.9999755876093599,
+              -0.030990807465919434
+            ],
+            [
+              -0.9977151383770919,
+              0.0673244437427159,
+              0.005649949372723229,
+              -0.14728029888893734
+            ],
+            [
+              0.06734812527318651,
+              0.9977210671148454,
+              0.0041112355079100105,
+              0.4576557016279097
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ]
+          ],
+          "inferred_joint_names": [
+            "@base_link:0",
+            "joint_right_wheel",
+            "joint_left_wheel",
+            "joint_arm_l3",
+            "joint_arm_l2",
+            "joint_arm_l1",
+            "joint_arm_l0",
+            "joint_gripper_finger_left_open",
+            "rubber_left_x",
+            "rubber_left_y",
+            "joint_gripper_finger_right_open",
+            "rubber_right_x",
+            "rubber_right_y",
+            "joint_head_nav_cam"
+          ],
+          "gripper_geometry_qualified": false,
+          "execution_qualified": false,
+          "scope": "motor readouts only; no passive joints, EE or gripper-geometry qualification",
+          "debug_fk_error_m": 6.724017337180624e-16,
+          "debug_fk_error_rad": 0.0
+        },
+        {
+          "index": 3,
+          "state": "passed",
+          "source": "simulator_stretch_motor_encoders",
+          "observation_id": "capture:196395224014518",
+          "positions": {
+            "lift": 0.5906087570389018,
+            "arm": 0.009999584694217235,
+            "wrist_yaw": 1.7352182135473274e-05,
+            "wrist_pitch": -1.5026041202775768,
+            "wrist_roll": -3.838817422305245e-05,
+            "gripper": 0.003917891126220615,
+            "head_pan": -1.5700007060650707,
+            "head_tilt": -0.6998377748167673
+          },
+          "units": "actuator_length",
+          "world_from_ee_estimate": [
+            [
+              -0.0053592560567659875,
+              0.004482311384769622,
+              -0.9999755933317416,
+              -0.030990672802289745
+            ],
+            [
+              -0.9977151376182432,
+              0.06732454150735509,
+              0.005648918324356045,
+              -0.14728032767533142
+            ],
+            [
+              0.0673482185505217,
+              0.9977210607156066,
+              0.00411126046326088,
+              0.4577025340032211
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ]
+          ],
+          "inferred_joint_names": [
+            "@base_link:0",
+            "joint_right_wheel",
+            "joint_left_wheel",
+            "joint_arm_l3",
+            "joint_arm_l2",
+            "joint_arm_l1",
+            "joint_arm_l0",
+            "joint_gripper_finger_left_open",
+            "rubber_left_x",
+            "rubber_left_y",
+            "joint_gripper_finger_right_open",
+            "rubber_right_x",
+            "rubber_right_y",
+            "joint_head_nav_cam"
+          ],
+          "gripper_geometry_qualified": false,
+          "execution_qualified": false,
+          "scope": "motor readouts only; no passive joints, EE or gripper-geometry qualification",
+          "debug_fk_error_m": 6.935510368191115e-16,
+          "debug_fk_error_rad": 0.0
+        },
+        {
+          "index": 4,
+          "state": "passed",
+          "source": "simulator_stretch_motor_encoders",
+          "observation_id": "capture:196396711648580",
+          "positions": {
+            "lift": 0.5906583468097204,
+            "arm": 0.009999586057541933,
+            "wrist_yaw": 1.8006203374712355e-05,
+            "wrist_pitch": -1.5026040555728863,
+            "wrist_roll": -3.866544345709843e-05,
+            "gripper": 0.003917903699833551,
+            "head_pan": -1.5700007060650711,
+            "head_tilt": -0.6998377748167673
+          },
+          "units": "actuator_length",
+          "world_from_ee_estimate": [
+            [
+              -0.005358378369391542,
+              0.0044822712291925915,
+              -0.999975598215215,
+              -0.03099052997591958
+            ],
+            [
+              -0.9977151381974516,
+              0.06732460659899916,
+              0.0056480401847682216,
+              -0.14728034617466784
+            ],
+            [
+              0.06734827980645974,
+              0.9977210565037287,
+              0.004111279143144464,
+              0.4577521231412798
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ]
+          ],
+          "inferred_joint_names": [
+            "@base_link:0",
+            "joint_right_wheel",
+            "joint_left_wheel",
+            "joint_arm_l3",
+            "joint_arm_l2",
+            "joint_arm_l1",
+            "joint_arm_l0",
+            "joint_gripper_finger_left_open",
+            "rubber_left_x",
+            "rubber_left_y",
+            "joint_gripper_finger_right_open",
+            "rubber_right_x",
+            "rubber_right_y",
+            "joint_head_nav_cam"
+          ],
+          "gripper_geometry_qualified": false,
+          "execution_qualified": false,
+          "scope": "motor readouts only; no passive joints, EE or gripper-geometry qualification",
+          "debug_fk_error_m": 4.388541835720876e-16,
+          "debug_fk_error_rad": 6.322027276634106e-08
+        }
+      ],
+      "default_execution_boundary": {
+        "state": "passed",
+        "planning_code": "observed_scene_unavailable",
+        "execution_code": "observed_scene_unavailable"
+      },
+      "execution_readiness_qualification": "not_qualified"
+    }
+  ],
+  "final_regression": {
+    "job_id": "20261029_013616_c49114",
+    "tests": "787",
+    "errors": "0",
+    "failures": "0",
+    "skipped": "0",
+    "time": "148.598"
+  },
+  "focused_motor_contracts": {
+    "job_id": null,
+    "tests": "27",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0",
+    "time": "11.742"
+  },
+  "control_calibration_attempts": [
+    {
+      "job_id": "20261029_011158_89b72d",
+      "raw_directory": ".tamp-runs/observed-alignment-20261029/contact-calibration",
+      "scope": "privileged simulator calibration/debug only; not observed task acceptance or certified uncertainty",
+      "counts": "physics samples within two development control episodes, not independent trials",
+      "cases": [
+        {
+          "object": "object1",
+          "control_passed": true,
+          "audit": {
+            "target_contact": {
+              "samples": 4758,
+              "max_finger_coupling_error_rad": 0.00826849039088776,
+              "max_telescope_split_error_m": 0.00030990668351104506,
+              "max_rubber_joint_angle_rad": 0.11061634873723789
+            },
+            "no_target_contact": {
+              "samples": 6167,
+              "max_finger_coupling_error_rad": 0.3581580276087507,
+              "max_telescope_split_error_m": 0.0007216732361318926,
+              "max_rubber_joint_angle_rad": 0.012072507237133167
+            }
+          }
+        },
+        {
+          "object": "object2",
+          "control_passed": true,
+          "audit": {
+            "target_contact": {
+              "samples": 4657,
+              "max_finger_coupling_error_rad": 0.007669994564331113,
+              "max_telescope_split_error_m": 0.00032268096559625453,
+              "max_rubber_joint_angle_rad": 0.11876868461122637
+            },
+            "no_target_contact": {
+              "samples": 6168,
+              "max_finger_coupling_error_rad": 0.3581580276087507,
+              "max_telescope_split_error_m": 0.0007216732361318926,
+              "max_rubber_joint_angle_rad": 0.03153361034577647
+            }
+          }
+        }
+      ]
+    },
+    {
+      "job_id": "20261029_011750_b866d0",
+      "raw_directory": ".tamp-runs/observed-alignment-20261029/contact-phased",
+      "scope": "privileged simulator calibration/debug only; not observed task acceptance or certified uncertainty",
+      "counts": "physics samples within two development control episodes, not independent trials",
+      "cases": [
+        {
+          "object": "object1",
+          "control_passed": true,
+          "audit": {
+            "initialization:target_contact": {
+              "samples": 0,
+              "max_finger_coupling_error_rad": 0.0,
+              "max_telescope_split_error_m": 0.0,
+              "max_rubber_joint_angle_rad": 0.0,
+              "peak_context": {}
+            },
+            "initialization:no_target_contact": {
+              "samples": 1000,
+              "max_finger_coupling_error_rad": 0.3581580276087507,
+              "max_telescope_split_error_m": 0.0007216732361318926,
+              "max_rubber_joint_angle_rad": 0.005213911341251205,
+              "peak_context": {
+                "max_finger_coupling_error_rad": {
+                  "sim_time": 0.002,
+                  "last_command": {
+                    "fixture_settling": true
+                  }
+                },
+                "max_telescope_split_error_m": {
+                  "sim_time": 0.04600000000000003,
+                  "last_command": {
+                    "fixture_settling": true
+                  }
+                },
+                "max_rubber_joint_angle_rad": {
+                  "sim_time": 0.004,
+                  "last_command": {
+                    "fixture_settling": true
+                  }
+                }
+              }
+            },
+            "execution:target_contact": {
+              "samples": 4758,
+              "max_finger_coupling_error_rad": 0.00826849039088776,
+              "max_telescope_split_error_m": 0.00030990668351104506,
+              "max_rubber_joint_angle_rad": 0.11061634873723789,
+              "peak_context": {
+                "max_finger_coupling_error_rad": {
+                  "sim_time": 6.4059999999995165,
+                  "last_command": {
+                    "sim_time": 6.349999999999523,
+                    "gripper": "close"
+                  }
+                },
+                "max_telescope_split_error_m": {
+                  "sim_time": 6.411999999999516,
+                  "last_command": {
+                    "sim_time": 6.349999999999523,
+                    "gripper": "close"
+                  }
+                },
+                "max_rubber_joint_angle_rad": {
+                  "sim_time": 6.945999999999457,
+                  "last_command": {
+                    "sim_time": 6.349999999999523,
+                    "gripper": "close"
+                  }
+                }
+              }
+            },
+            "execution:no_target_contact": {
+              "samples": 5167,
+              "max_finger_coupling_error_rad": 0.006219429134352528,
+              "max_telescope_split_error_m": 0.00023997156299680744,
+              "max_rubber_joint_angle_rad": 0.012072507237133167,
+              "peak_context": {
+                "max_finger_coupling_error_rad": {
+                  "sim_time": 6.365999999999521,
+                  "last_command": {
+                    "sim_time": 6.349999999999523,
+                    "gripper": "close"
+                  }
+                },
+                "max_telescope_split_error_m": {
+                  "sim_time": 6.385999999999519,
+                  "last_command": {
+                    "sim_time": 6.349999999999523,
+                    "gripper": "close"
+                  }
+                },
+                "max_rubber_joint_angle_rad": {
+                  "sim_time": 15.910000000001983,
+                  "last_command": {
+                    "sim_time": 15.90000000000198,
+                    "gripper": "open"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "object": "object2",
+          "control_passed": true,
+          "audit": {
+            "initialization:target_contact": {
+              "samples": 0,
+              "max_finger_coupling_error_rad": 0.0,
+              "max_telescope_split_error_m": 0.0,
+              "max_rubber_joint_angle_rad": 0.0,
+              "peak_context": {}
+            },
+            "initialization:no_target_contact": {
+              "samples": 1000,
+              "max_finger_coupling_error_rad": 0.3581580276087507,
+              "max_telescope_split_error_m": 0.0007216732361318926,
+              "max_rubber_joint_angle_rad": 0.005213911341251205,
+              "peak_context": {
+                "max_finger_coupling_error_rad": {
+                  "sim_time": 0.002,
+                  "last_command": {
+                    "fixture_settling": true
+                  }
+                },
+                "max_telescope_split_error_m": {
+                  "sim_time": 0.04600000000000003,
+                  "last_command": {
+                    "fixture_settling": true
+                  }
+                },
+                "max_rubber_joint_angle_rad": {
+                  "sim_time": 0.004,
+                  "last_command": {
+                    "fixture_settling": true
+                  }
+                }
+              }
+            },
+            "execution:target_contact": {
+              "samples": 4657,
+              "max_finger_coupling_error_rad": 0.007669994564331113,
+              "max_telescope_split_error_m": 0.00032268096559625453,
+              "max_rubber_joint_angle_rad": 0.11876868461122637,
+              "peak_context": {
+                "max_finger_coupling_error_rad": {
+                  "sim_time": 6.403999999999517,
+                  "last_command": {
+                    "sim_time": 6.349999999999523,
+                    "gripper": "close"
+                  }
+                },
+                "max_telescope_split_error_m": {
+                  "sim_time": 6.411999999999516,
+                  "last_command": {
+                    "sim_time": 6.349999999999523,
+                    "gripper": "close"
+                  }
+                },
+                "max_rubber_joint_angle_rad": {
+                  "sim_time": 7.01199999999945,
+                  "last_command": {
+                    "sim_time": 6.949999999999457,
+                    "arm": [
+                      0,
+                      0.6332530020850545,
+                      0.25129612518756217,
+                      0.004079289816116915,
+                      -0.7848695030528554,
+                      0.0057832997561080395
+                    ],
+                    "head": [
+                      -8.707268996233816e-06,
+                      -0.00916642966843581
+                    ]
+                  }
+                }
+              }
+            },
+            "execution:no_target_contact": {
+              "samples": 5168,
+              "max_finger_coupling_error_rad": 0.006219387340254845,
+              "max_telescope_split_error_m": 0.00024003489622909796,
+              "max_rubber_joint_angle_rad": 0.03153361034577647,
+              "peak_context": {
+                "max_finger_coupling_error_rad": {
+                  "sim_time": 6.365999999999521,
+                  "last_command": {
+                    "sim_time": 6.349999999999523,
+                    "gripper": "close"
+                  }
+                },
+                "max_telescope_split_error_m": {
+                  "sim_time": 6.385999999999519,
+                  "last_command": {
+                    "sim_time": 6.349999999999523,
+                    "gripper": "close"
+                  }
+                },
+                "max_rubber_joint_angle_rad": {
+                  "sim_time": 15.708000000001915,
+                  "last_command": {
+                    "sim_time": 15.700000000001912,
+                    "gripper": "open"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "fixture_provisioning": {
+    "schema_version": 1,
+    "tier": "development_fixture_not_held_out",
+    "source_sha256": {
+      "stretch.xml": "f84efccb18a5aaf4378f76654341140a45a6640e2457c49f0aa100a2d721a63c",
+      "docking_station.xml": "3e00fc48583e27dd18c5c6e2471979b1e47b2b973b85c4ed4dc0a67411562ccf",
+      "scene_environment.xml": "a4391e7ad761aa79c5ccde265bf20b6ea6d90336a63383d634bc91f3f5c5d68c",
+      "scene.xml": "c6685935430b57d10c86d65932d8bbbab5db23848f32ce2dbd357f44ef87bad4"
+    },
+    "sim_config": "sim.json",
+    "robot_only_model": "stretch.xml",
+    "note": "Initial-condition construction and independent evaluator inputs; not runtime object observations."
+  },
+  "review_command": {
+    "tests": "93",
+    "errors": "0",
+    "failures": "0",
+    "skipped": "0",
+    "time": "36.639"
+  },
+  "figure": "figures/observed_encoder_sampling_20261029.png",
+  "paper_build": {
+    "pages": 52,
+    "undefined_references_or_citations": false
+  },
+  "previous_regression": {
+    "job_id": "20261029_010831_287e75",
+    "tests": "786",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0",
+    "time": "146.748"
+  },
+  "final_calibration_guard": {
+    "tests": "13",
+    "errors": "0",
+    "failures": "0",
+    "skipped": "0",
+    "time": "10.863"
+  },
+  "validation_note": "Final broad regression includes the reference-offset calibration guard; prior/focused/review sets overlap and are not summed."
+}

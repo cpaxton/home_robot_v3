@@ -58,6 +58,29 @@ flowchart LR
 | **No LLM** | `--no-llm` | Letter commands: `E` explore, `M` pick+place, `Q` question, `P` picture, `FIND x` / `find x`. |
 | **Scripted** | `-c` / `--command` | Run one or more turns non-interactively, then exit. **Discord is disabled** automatically (pass `--no-discord` in scripts to silence the warning). |
 
+### VLM history and shared inference
+
+`OpenaiVLLMClient.generate_multimodal()` clears history by default
+(`reset_context=True`). Passing `False` deliberately replays the full retained
+dialogue, including encoded prior images; it does not evict old images to save
+tokens. CHAT resets at the first tool round of each user turn and continues for
+tool follow-ups/summarization. Interactive `emet run chat` also intentionally keeps
+history; its single-turn mode resets. DynaMem caption/keyword calls go through
+`dynamem_vllm_call`, which explicitly resets on each inference.
+
+For episode-owned dialogue, `generate_messages()` temporarily installs the supplied
+turns, encodes earlier user images through `_conversation_user_content`, and
+restores the client's previous history even if inference fails. The episode owns
+its dialogue separately, so shared caption calls cannot replace that dialogue.
+
+Calls and history edits on one client must be serialized. Conversation preservation
+is not a concurrency lock. `last_call_metrics` is the latest request's record on
+that client: copy it before another call, or use separate client instances for
+concurrent traces. Separate remote clients may use the same server endpoint.
+`image_count` counts new images in the current user turn; `request_image_count`
+also counts prior images retransmitted in the request. Wall time includes server
+queueing, transport, decoding and retries; it is not server compute time.
+
 ### Skill library vs orchestrator modes
 
 One shared skill library (`emet.agent.skills`); two tool packs:

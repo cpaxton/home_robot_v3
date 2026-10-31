@@ -3,7 +3,14 @@
 
 We introduced Dynagraph, a dynamic scene-graph memory system for exploring robot agents that combines DynaMem voxel navigation with GraphEQA-style graph memory and explicit merge/staleness lifecycle rules.
 The open-source \texttt{emet} implementation enables the same EQA loop across MuJoCo, Robocasa, and MolmoSpaces, with a Habitat harness that now runs end-to-end HM-EQA episodes on held-out question slices.
-An optional agentic tool-calling controller (retrieve place evidence, navigate / VLM frontier explore, detector proposals, VLM assess / submit) is a first-class ablation against the classic planning loop on the same memory: on the matched holdout-8, agentic answers 8/8 vs.\ classic 5/8 with roughly $3\times$ fewer planning steps, and the balanced-32 cross-policy composite records 16/32 vs.\ 9/32 while cutting mean steps significantly---making search efficiency the statistically robust claim and the holdout letter win the same-policy headline.
+An optional agentic tool-calling controller (retrieve place evidence, navigate / VLM frontier explore, detector proposals, VLM assess / submit) is a first-class ablation against the classic planning loop on the same memory: on the matched holdout-8, agentic answers 8/8 vs.\ classic 5/8 with roughly $3\times$ fewer planning steps, and the balanced-32 cross-policy composite records 16/32 vs.\ 9/32 while cutting mean steps significantly---supporting a historical search-efficiency finding, with the balanced-32 comparison explicitly limited by its cross-policy construction.
 
 The historical August 113-question evaluation is complete; it does not validate later shared-agent revisions. Future work includes evaluating the current stack on frozen paired episodes and auditing parity with the released GraphEQA selection, scaling classic vs.\ agentic verify beyond holdout gates, releasing curated EQA question sets for Robocasa/Molmo, tighter comparison to DREAM-style continuous map pruning, and real-robot home episodes.
-We are also extending the agentic loop from EQA to pick-and-place: a lightweight search over tool-call sequences (an MCTS planner with a distance-based policy) calibrated on MolmoSpaces scene metadata, complementing inference-time TAMP systems such as TiPToP~\citep{shen2026tiptop}.
+The manipulation extension now exposes guarded discovery, task planning and
+one-shot execution through the actual CHAT agent. Greedy, beam and UCT operate
+on a shared transfer domain, with fresh geometric refinement and measured effect
+checks after each step. Privileged stationary Stretch controls demonstrate
+multi-step composition; they do not establish observed navigation-to-manipulation
+or hardware readiness. The next gate connects fresh observed tracking and
+conservative geometry to the same interface before household comparisons with
+systems such as TiPToP~\citep{shen2026tiptop}.

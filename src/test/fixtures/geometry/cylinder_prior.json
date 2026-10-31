@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "construction": "known_model_prior",
+  "kind": "cylinder",
+  "dimensions_m": [0.02, 0.04],
+  "description": "Declared CAD radius and half-height for the tabletop test fixture; not inferred from runtime scene state."
+}

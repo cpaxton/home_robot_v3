@@ -1,0 +1,93 @@
+{
+  "job_id": "20261027_001043_cb29cc",
+  "base_commit": "8ae7819d9c00da20605754eee925bae0946ba3e3",
+  "scope": "live RGBD sensor and assembly-prerequisite audit; no observed manipulation qualification",
+  "cpu_renderer": "OSMesa",
+  "inference": "Caliban Qwen/Qwen3-VL-8B-Instruct",
+  "vlm_calls": 2,
+  "request_seconds": [
+    0.19023436800125637,
+    0.19023543099683593,
+    0.19514151900148136,
+    0.20923328400022,
+    0.2039148780022515
+  ],
+  "diagnostic_passed": true,
+  "execution_readiness": {
+    "scope": "live assembly prerequisite audit, not a manipulation or agent benchmark",
+    "qualification": "not_qualified",
+    "task_success_assessed": false,
+    "execution_source_installed": false,
+    "gates": {
+      "live_rgbd": {
+        "state": "passed",
+        "receive_age_s": 0.01041665900265798,
+        "valid_depth_fraction": 0.8615959119496855,
+        "capture": {
+          "received_monotonic": 20319.534865591,
+          "image_timing": {
+            "head_cam_left": {
+              "timestamp_ns": 20319374604944,
+              "clock_domain": "mujoco_render_monotonic",
+              "source": "renderer_scene_capture",
+              "available": true
+            }
+          }
+        }
+      },
+      "surface_refresh": {
+        "state": "passed",
+        "passed": 5,
+        "attempted": 5
+      },
+      "reference_features": {
+        "state": "unknown",
+        "reason": "rigid_tracking_insufficient"
+      },
+      "depth_workspace": {
+        "state": "passed",
+        "cells": {
+          "unknown": 5446,
+          "free": 8343,
+          "occupied": 35
+        },
+        "scope": "depth carving only; not target/robot-separated execution geometry"
+      },
+      "capture_encoder_alignment": {
+        "state": "not_configured",
+        "reason": "stream timestamps do not supply qualified CaptureInterval or alignment bounds"
+      },
+      "complete_payload_geometry": {
+        "state": "not_configured",
+        "reason": "partial visible surface is not a complete shape prior"
+      },
+      "robot_target_occupancy_provenance": {
+        "state": "not_configured"
+      },
+      "support_grounding": {
+        "state": "not_configured",
+        "reason": "single object seed, no support seed"
+      },
+      "visual_manipulation_effects": {
+        "state": "not_assessed",
+        "reason": "no manipulation attempted"
+      },
+      "default_execution_boundary": {
+        "state": "passed",
+        "planning_code": "observed_scene_unavailable",
+        "execution_code": "observed_scene_unavailable"
+      }
+    },
+    "audit_unchanged_during_admission_checks": true
+  },
+  "reference_mask_pixels": 217,
+  "reference_interior_pixels": 15,
+  "reference_material_landmarks": 0,
+  "targeted_unit_tests_passed": 25,
+  "raw_artifacts": ".tamp-runs/live-qualification-20261027/live",
+  "source_sha256": {
+    "scripts/eval_observed_capture_binding.py": "703bc7db2841c01c8825cc2fa000ce306d700c27237c131941df498fcb20aca2",
+    "src/emet/eval/observed_readiness.py": "f28a330adb75311225637a4709ff0b66a00c9549897266a7534d03539e8b584b",
+    "src/emet/controller/manipulation/rigid_rgbd_tracking.py": "739dbd4375ec5c1c7a6f8a8690917b6783f7da537dfca8aac34ef6338bdac0b9"
+  }
+}

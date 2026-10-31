@@ -42,9 +42,14 @@ Each node is an object or region with labels, a world-space position, an \texttt
 Edges encode spatial relations (\emph{near}, \emph{on}, \emph{on\_floor}).
 When a new detection reinforces an existing object, merge rules update the node's position, labels, and \texttt{last\_seen}; the supporting \texttt{obs\_id} tracks the freshest evidence.
 
-\textbf{Disappearance.} An object is considered gone when its voxel support stops being refreshed and no new observation reinforces it within the staleness horizon.
-Concretely, voxel fusion writes to a voxel only while the sensor observes it; when a voxel stops being refreshed, the map can remove its geometry, and the graph node that depended on that support ceases to be reinforced ($t_n$ is not updated).
-The staleness rule of Section~\ref{sec:staleness_pruning} then retires the node (with its linked observations) from the graph presented to the VLM, so EQA is not misled by hypotheses the map no longer supports.
+\textbf{Staleness and disappearance.} Voxel clearing and semantic aging serve
+different purposes. Sensor-based voxel updates can remove geometry inconsistent
+with current depth measurements. Separately, a graph hypothesis that receives no
+new supporting observation ages under the horizon in
+Section~\ref{sec:staleness_pruning} and may be removed from the graph presented to
+the VLM. The observation log retains historical provenance. Aging is not a
+certificate that an occluded object has disappeared, nor does a retired graph
+node establish free space for navigation or manipulation.
 
 An EQA module queries a shared VLM with the serialized graph and task-relevant images until confidence is sufficient or further exploration is requested.
 
@@ -72,14 +77,14 @@ Otherwise the candidate spawns a new node and observation.
 \subsection{Staleness pruning}
 \label{sec:staleness_pruning}
 
-If \texttt{dynagraph\_staleness\_horizon} $> 0$ (default 256 controller steps), \texttt{maintain(current\_step)} removes nodes whose \texttt{last\_seen} is older than the horizon, deletes their observations, renumbers nodes, and rebuilds edges.
-This discards objects that are no longer visible or relevant---analogous in spirit to map pruning in dynamic memory systems, but on the discrete object graph used for EQA.
+If \texttt{dynagraph\_staleness\_horizon} $> 0$ (default 256 controller steps), \texttt{maintain(current\_step)} removes ordinary object nodes whose \texttt{last\_seen} is older than the horizon, removes their graph-observation records, renumbers nodes, and rebuilds edges. Ground-truth and frontier nodes have separate lifecycle rules; the sensor frame log is not deleted by this graph operation.
+This discards semantic hypotheses without recent reinforcement---analogous in spirit to map pruning in dynamic memory systems, but on the discrete object graph used for EQA.
 
 Formally, at step $t$ every node $n$ with
 \begin{equation}
   t - t_n > \tau \quad (\tau = \text{staleness horizon, default } 256)
 \end{equation}
-is pruned together with its linked observations; the surviving nodes are renumbered and edges rebuilt so the serialized graph the VLM sees contains only hypotheses the voxel map still supports.
+is pruned with its graph-observation records when it is eligible for aging. Surviving nodes are renumbered and edges rebuilt. This age rule bounds stale hypotheses presented to the VLM; it does not itself certify current visibility or voxel occupancy.
 
 \subsection{Exploration and EQA loop}
 \label{sec:eqa_loops}
@@ -145,3 +150,9 @@ Discord and the terminal share one input queue; action status is announced while
 Scored Habitat HM-EQA uses the same episode function as \texttt{emet-habitat} via \texttt{emet run agent --eqa-eval} (optional \texttt{--extra-instruction}).
 The Discord/chat tool-router is not on the scored path; when agentic verify is enabled, scoring uses the EQA tool loop of Section~\ref{sec:eqa_loops} instead.
 This front-end does not change Dynagraph update rules---it exposes the same memory used by Habitat and MuJoCo paper harnesses for live debugging, demos, and eval.
+
+The current CHAT and scored EQA orchestrators share skills and memory interfaces
+but have different tool sets, stopping rules and evaluation populations
+(Appendix~\ref{app:combined_agent}). The camera-free native TAMP diagnostics
+explicitly select the DynaMem backend and privileged inputs; they do not exercise
+the default Dynagraph visual exploration path.

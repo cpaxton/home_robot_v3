@@ -1,0 +1,209 @@
+{
+  "schema_version": 1,
+  "branch": "feat/tamp-observed-integration",
+  "implementation_sha": "7c07fe6aa2b6d55429b9abb212a68e18d287b119",
+  "main_base_sha": "ef4c1bfadf28b413461f0a14275d69baa19c8465",
+  "observed_execution_available": false,
+  "validation": {
+    "job_id": "20261023_164229_7356c5",
+    "passed": 796,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 0,
+    "scope": "entire TAMP directory plus selected integrated regressions; not entire repository",
+    "junit_sha256": "e7f1da5d4fa2f422cda29f7ae81d5bd1107043866b4f33a77a17835c68ddc3f9"
+  },
+  "controls": [
+    {
+      "name": "two-goal",
+      "job_id": "20261023_164229_512b98",
+      "scope": "privileged stationary native Stretch, actual CHAT CLI, Caliban inference",
+      "completed_steps": 2,
+      "summary_sha256": "feb7d2cd620847a1249fcbe219e7fc1f18bed4faf116e490b2dfee3015114379",
+      "protocol_sha256": "383e0fefd1f24a0e45d750291e99a996db32bbf0bf693ed47c704c5583522fc8",
+      "result": {
+        "passed": true,
+        "task_passed": true,
+        "audit_commands": 449,
+        "forbidden_commands": 0,
+        "failure_boundaries": [],
+        "final_predicates": {
+          "object2": {
+            "in_region": true,
+            "supported": true,
+            "settled": true,
+            "satisfied": true,
+            "bounds_xy": [
+              [
+                -0.04022708113583785,
+                -0.8200467109768804
+              ],
+              [
+                -1.2899766392251988e-05,
+                -0.7798333611633618
+              ]
+            ]
+          },
+          "object1": {
+            "in_region": true,
+            "supported": true,
+            "settled": true,
+            "satisfied": true,
+            "bounds_xy": [
+              [
+                -0.04072976224796221,
+                -0.7177380803130474
+              ],
+              [
+                7.486781909464557e-05,
+                -0.6373388155420087
+              ]
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "wide-destination-swap",
+      "job_id": "20261023_164230_303bb5",
+      "scope": "privileged stationary native Stretch, actual CHAT CLI, Caliban inference",
+      "completed_steps": 3,
+      "summary_sha256": "c0cf29a5cf67285d811a718a3b08689863c8322e5ed2b7b8eac92c382101553a",
+      "protocol_sha256": "811dab063c0d61fe9d15913cdedbd4a4029b562122e77e927da2262c41bb54dc",
+      "result": {
+        "passed": true,
+        "task_passed": true,
+        "audit_commands": 750,
+        "forbidden_commands": 0,
+        "failure_boundaries": [],
+        "final_predicates": {
+          "object2": {
+            "in_region": true,
+            "supported": true,
+            "settled": true,
+            "satisfied": true,
+            "bounds_xy": [
+              [
+                -0.040183223561551185,
+                -0.5733946162994898
+              ],
+              [
+                0.0003629619399042605,
+                -0.5328495298076779
+              ]
+            ]
+          },
+          "object1": {
+            "in_region": true,
+            "supported": true,
+            "settled": true,
+            "satisfied": true,
+            "bounds_xy": [
+              [
+                -0.03956913865371738,
+                -0.7203518538599616
+              ],
+              [
+                0.0015095720527429982,
+                -0.6398179902999417
+              ]
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "offline_visual_diagnostic": {
+    "job_id": "20261023_164628_cbdbcd",
+    "scope": "offline RGBD region selection only; not observed task acceptance",
+    "input_sha256": "0038e390a08fe113d0dc9c9864df91ed2f5a40ff3a4ed871221971aff01e1904",
+    "raw_result_sha256": "8ca8b825e8729f12cd74724b1c9f4c761efc5dea9dbe41ccf3c5f4d56d596f82",
+    "fixture_color_totals": {
+      "red_dominant_pixels": 311,
+      "blue_dominant_pixels": 553
+    },
+    "results": [
+      {
+        "query": "red cylinder",
+        "seconds": 9.450892451000982,
+        "selection": {
+          "verified": true,
+          "box": [
+            478,
+            547,
+            521,
+            600
+          ],
+          "point": [
+            494,
+            568
+          ],
+          "reason": "The red cylinder is clearly visible as a small red cylinder on top of a blue block, centered on the brown surface. The bounding box tightly encloses it, and the point [494,568] is on its visible physical surface."
+        },
+        "depth_supported": true,
+        "visible_surface_pixels": 147,
+        "diagnostic_color_support": {
+          "red_dominant_pixels": 1,
+          "blue_dominant_pixels": 0,
+          "scope": "fixture color diagnostic only; not semantic mask certification"
+        }
+      },
+      {
+        "query": "blue cube",
+        "seconds": 9.241209861007519,
+        "selection": {
+          "verified": true,
+          "box": [
+            478,
+            547,
+            522,
+            687
+          ],
+          "point": [
+            496,
+            622
+          ],
+          "reason": "The blue cube is visible in the image, located in the center of the brown surface. The bounding box tightly encloses the blue cube, and the point [496,622] is an interior point on its visible physical surface."
+        },
+        "depth_supported": true,
+        "visible_surface_pixels": 366,
+        "diagnostic_color_support": {
+          "red_dominant_pixels": 3,
+          "blue_dominant_pixels": 0,
+          "scope": "fixture color diagnostic only; not semantic mask certification"
+        }
+      },
+      {
+        "query": "table",
+        "seconds": 9.067056587999105,
+        "selection": {
+          "verified": true,
+          "box": [
+            0,
+            333,
+            1000,
+            833
+          ],
+          "point": [
+            500,
+            500
+          ],
+          "reason": "The image shows a flat, brown surface that serves as a placement surface for the stacked blocks. This surface is consistent with a table or countertop. The point is centered on this surface, which is the only visible placement surface in the image."
+        },
+        "depth_supported": true,
+        "visible_surface_pixels": 9415,
+        "diagnostic_color_support": {
+          "red_dominant_pixels": 3,
+          "blue_dominant_pixels": 0,
+          "scope": "fixture color diagnostic only; not semantic mask certification"
+        }
+      }
+    ]
+  },
+  "remaining_gates": [
+    "qualified observed pose/geometry tracking",
+    "post-navigation acquisition and pose synchronization",
+    "observed native motion and visual effect verification",
+    "complete exploration/navigation/manipulation CHAT episode"
+  ]
+}

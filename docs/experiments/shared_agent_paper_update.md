@@ -1,5 +1,7 @@
 # Shared-agent paper update and figure plan
 
+October 23 audit: [paper/agent appendix corrections and remaining gates](paper_audit_20261023.md). New native control repeats retain their malformed-output failure; these updates do not close the P1–P7 empirical gates below.
+
 **Current inventory:** see [project status (2026-10-12)](../project_status.md)
 for merged work, remaining PRs, latest acceptance evidence, and specific LaTeX
 inconsistencies. The dated pilot notes below preserve their original source and

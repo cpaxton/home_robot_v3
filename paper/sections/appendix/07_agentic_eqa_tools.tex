@@ -4,6 +4,11 @@
 This appendix documents the scored HM-EQA / Dynagraph \emph{agentic} tool set (\texttt{emet.memory.graph\_eqa.agentic\_tools}), distinct from the interactive Discord/chat agent tools.
 When \texttt{eqa.agentic\_verify} (or \texttt{EMET\_EQA\_AGENTIC\_VERIFY=1}) is set, \texttt{GraphEQAController.run\_eqa} runs \texttt{AgenticEQAExecutor} instead of the classic planning/\texttt{query\_answer} loop (Section~\ref{sec:eqa_loops}).
 
+The historical scored rows pin their own source/configuration; current state,
+progress and recovery mechanisms below must not be assumed enabled in every
+archived experiment. Appendix~\ref{app:combined_agent} summarizes the separate
+CHAT/TAMP orchestrator and its capability gates.
+
 \subsection{Protocol}
 
 \paragraph{System prompt.}

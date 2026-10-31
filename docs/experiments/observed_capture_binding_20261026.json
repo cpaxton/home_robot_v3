@@ -1,0 +1,1807 @@
+{
+  "scope": "development sensor-binding diagnostics; task control scored separately",
+  "validated_source": "6eb7c242",
+  "merged_main": "61da55cb",
+  "merge_commit": "0f6cb3fd",
+  "sensor_runs": [
+    {
+      "name": "live",
+      "job_id": "20261026_090542_05a69c",
+      "note": "uncorrected sensor pair",
+      "result": {
+        "scope": "live ZMQ sensor-to-provider-to-tool smoke, single object reference; no support seed or task execution acceptance",
+        "queries": [
+          {
+            "index": 0,
+            "seconds": 0.11342112004058436,
+            "reacquisition_error": "surface_not_reacquired",
+            "response": {
+              "schema_version": 1,
+              "tool": "scene_tasks",
+              "status": "error",
+              "code": "observed_scene_unavailable",
+              "message": "observed scene unavailable",
+              "data": {},
+              "recovery": "inspect"
+            }
+          },
+          {
+            "index": 1,
+            "seconds": 0.11253880499862134,
+            "reacquisition_error": "surface_not_reacquired",
+            "response": {
+              "schema_version": 1,
+              "tool": "scene_tasks",
+              "status": "error",
+              "code": "observed_scene_unavailable",
+              "message": "observed scene unavailable",
+              "data": {},
+              "recovery": "inspect"
+            }
+          },
+          {
+            "index": 2,
+            "seconds": 0.11948074796237051,
+            "reacquisition_error": "surface_not_reacquired",
+            "response": {
+              "schema_version": 1,
+              "tool": "scene_tasks",
+              "status": "error",
+              "code": "observed_scene_unavailable",
+              "message": "observed scene unavailable",
+              "data": {},
+              "recovery": "inspect"
+            }
+          },
+          {
+            "index": 3,
+            "seconds": 0.1226544399978593,
+            "reacquisition_error": "surface_not_reacquired",
+            "response": {
+              "schema_version": 1,
+              "tool": "scene_tasks",
+              "status": "error",
+              "code": "observed_scene_unavailable",
+              "message": "observed scene unavailable",
+              "data": {},
+              "recovery": "inspect"
+            }
+          },
+          {
+            "index": 4,
+            "seconds": 0.11875091498950496,
+            "reacquisition_error": "surface_not_reacquired",
+            "response": {
+              "schema_version": 1,
+              "tool": "scene_tasks",
+              "status": "error",
+              "code": "observed_scene_unavailable",
+              "message": "observed scene unavailable",
+              "data": {},
+              "recovery": "inspect"
+            }
+          }
+        ],
+        "initialization": {
+          "source": "vlm_region",
+          "purpose": "object",
+          "prompt": "Locate the visible object 'red cylinder' in the image. Return a bounding box around the visible target; coordinates are integers normalized to 0..1000 in x,y order. Abstain if the object is absent or ambiguous in this image. Return JSON {\"verified\":true,\"box\":[x_min,y_min,x_max,y_max],\"reason\":\"...\"} or {\"verified\":false,\"reason\":\"...\"}. Do not predict a 3D position or surface point.",
+          "system_prompt": "Ground a robot target in the provided image. Do not invent missing visual evidence.",
+          "raw": "```json\n{\n  \"verified\": true,\n  \"box\": [\n    447,\n    592,\n    500,\n    656\n  ],\n  \"reason\": \"The image contains a small red cylinder located on a brown surface, positioned above a blue rectangular block. The object is clearly visible and matches the description.\"\n}\n```",
+          "image_order": [
+            "rgb_file"
+          ],
+          "valid": true,
+          "strategy": "depth_candidates",
+          "search_region": {
+            "box": [
+              397,
+              542,
+              550,
+              706
+            ],
+            "padding": 50
+          },
+          "surface_candidates": [
+            {
+              "id": 0,
+              "bbox_xyxy": [
+                95,
+                229,
+                132,
+                300
+              ],
+              "mask_bits": "///////////////////////////////////////////////////////////////////////////////////////////////////////gf////AH////AB////AAf///AAH///gAD///wAB///4AA///8AAf//+AAP///AAH///gAD///wAB///4AA///8AAf//+AAP///AAH///gAD///wAB///4AA///8AA///+AAf///AAP///wAH///8AH///+AH////wH/////////////////////////////////////////AAP///AAH///gAD///wAB///4AA///8AAf//+AAP///AAH///gAD///wAB///4AA///8AAf//+AAP///AAH///gAD///wAB///4AA///8AAf//+AAP///AAH///gAD///wAAA=",
+              "points": 1936
+            },
+            {
+              "id": 1,
+              "bbox_xyxy": [
+                119,
+                247,
+                130,
+                255
+              ],
+              "mask_bits": "H4/7///////f8fw=",
+              "points": 75
+            },
+            {
+              "id": 2,
+              "bbox_xyxy": [
+                117,
+                249,
+                131,
+                272
+              ],
+              "mask_bits": "gAMAHABwAeAHwD//////+///////////////////////3/8/+H/A/gA=",
+              "points": 241
+            },
+            {
+              "id": 3,
+              "bbox_xyxy": [
+                119,
+                280,
+                132,
+                300
+              ],
+              "mask_bits": "//f/v/3/7/9/+//f/v/3/7/////////////////////w",
+              "points": 250
+            }
+          ],
+          "surface_selection": {
+            "prompt": "Select a measured surface of 'red cylinder'. Image 1 is the original reference, NOT a candidate. Every subsequent image is ONE candidate, labeled with its ID. Image 2 is candidate 0, image 3 is candidate 1, and so on. All candidate images use the same enlarged context crop. In each candidate panel, ONLY pixels on the measured surface are retained; pixels outside that candidate have been replaced with black. Black background is not evidence. These unlabelled geometry proposals may include table, wall, occluders, or mixed objects. Select only a region whose bright pixels belong to the requested object, not its support furniture. A partial visible object surface is sufficient. If a region mixes target and other objects, or the target is ambiguous, abstain. Available IDs: [0, 1, 2, 3]. Return JSON {\"selected_id\":integer or null,\"target_unambiguous\":true or false,\"reason\":\"...\"}.",
+            "system_prompt": "Choose a visually supported surface, not an object location guess. Reply with JSON only.",
+            "raw": "{\"selected_id\":2,\"target_unambiguous\":true,\"reason\":\"Candidate 2 shows a clear, partial view of the red cylinder's side surface, with bright red pixels belonging exclusively to the target object. Other candidates either show ambiguous or non-target surfaces (Candidate 0 shows a brown object with a red part, Candidate 1 shows a small red dot that may be a top or bottom cap, Candidate 3 shows a blue object which is not the target).\"}",
+            "image_order": [
+              "rgb_file",
+              "surface_candidate_0_rgb_file",
+              "surface_candidate_1_rgb_file",
+              "surface_candidate_2_rgb_file",
+              "surface_candidate_3_rgb_file"
+            ],
+            "presentation": "isolated"
+          },
+          "selected_id": 2,
+          "proposal_source": "rgbd_components"
+        },
+        "reacquisition_passed": false,
+        "task_success_assessed": false
+      }
+    },
+    {
+      "name": "instrumented2",
+      "job_id": "20261026_091130_d07ad4",
+      "note": "raw pair with detailed diagnostics",
+      "result": {
+        "scope": "live ZMQ sensor-to-provider-to-tool smoke, single object reference; no support seed or task execution acceptance",
+        "queries": [
+          {
+            "index": 0,
+            "seconds": 0.1892865130212158,
+            "reacquisition_error": "surface_not_reacquired",
+            "response": {
+              "schema_version": 1,
+              "tool": "scene_tasks",
+              "status": "error",
+              "code": "observed_scene_unavailable",
+              "message": "observed scene unavailable",
+              "data": {},
+              "recovery": "inspect"
+            },
+            "diagnostics": {
+              "0": {
+                "candidates": [
+                  {
+                    "id": 0,
+                    "pixels": 7964,
+                    "rejected": "search_boundary"
+                  },
+                  {
+                    "id": 1,
+                    "pixels": 73,
+                    "center": [
+                      -0.021280766911612882,
+                      -0.7063663172079967,
+                      0.5691387945571355
+                    ],
+                    "rejected": "size_change"
+                  },
+                  {
+                    "id": 2,
+                    "pixels": 71,
+                    "rejected": "search_boundary"
+                  },
+                  {
+                    "id": 3,
+                    "pixels": 293,
+                    "center": [
+                      -0.022364118829794256,
+                      -0.5517340964578883,
+                      0.567086560299584
+                    ],
+                    "rejected": "size_change"
+                  },
+                  {
+                    "id": 4,
+                    "pixels": 28,
+                    "rejected": "search_boundary"
+                  },
+                  {
+                    "id": 5,
+                    "pixels": 26,
+                    "center": [
+                      -0.04190886963936845,
+                      -0.5248093003491251,
+                      0.5666021385623289
+                    ],
+                    "rejected": "size_change"
+                  },
+                  {
+                    "id": 6,
+                    "pixels": 78,
+                    "center": [
+                      -0.022190023020828377,
+                      -0.5138172957934457,
+                      0.5542927703300253
+                    ],
+                    "rejected": "size_change"
+                  },
+                  {
+                    "id": 7,
+                    "pixels": 77,
+                    "rejected": "search_boundary"
+                  }
+                ],
+                "near_pixels": 4265,
+                "reference_center": [
+                  0.02858560218739198,
+                  -0.7383829584389434,
+                  0.4890582579008008
+                ]
+              }
+            }
+          },
+          {
+            "index": 1,
+            "seconds": 0.19048582902178168,
+            "reacquisition_error": "surface_not_reacquired",
+            "response": {
+              "schema_version": 1,
+              "tool": "scene_tasks",
+              "status": "error",
+              "code": "observed_scene_unavailable",
+              "message": "observed scene unavailable",
+              "data": {},
+              "recovery": "inspect"
+            },
+            "diagnostics": {
+              "0": {
+                "candidates": [
+                  {
+                    "id": 0,
+                    "pixels": 7964,
+                    "rejected": "search_boundary"
+                  },
+                  {
+                    "id": 1,
+                    "pixels": 73,
+                    "center": [
+                      -0.021280816541033972,
+                      -0.7063663120124121,
+                      0.5691387896918657
+                    ],
+                    "rejected": "size_change"
+                  },
+                  {
+                    "id": 2,
+                    "pixels": 71,
+                    "rejected": "search_boundary"
+                  },
+                  {
+                    "id": 3,
+                    "pixels": 293,
+                    "center": [
+                      -0.022364156617581826,
+                      -0.5517340906416082,
+                      0.5670865564693495
+                    ],
+                    "rejected": "size_change"
+                  },
+                  {
+                    "id": 4,
+                    "pixels": 28,
+                    "rejected": "search_boundary"
+                  },
+                  {
+                    "id": 5,
+                    "pixels": 26,
+                    "center": [
+                      -0.04190890635851457,
+                      -0.5248092926423221,
+                      0.5666021347747842
+                    ],
+                    "rejected": "size_change"
+                  },
+                  {
+                    "id": 6,
+                    "pixels": 78,
+                    "center": [
+                      -0.02219005885458075,
+                      -0.5138172892868327,
+                      0.5542927667428217
+                    ],
+                    "rejected": "size_change"
+                  },
+                  {
+                    "id": 7,
+                    "pixels": 77,
+                    "rejected": "search_boundary"
+                  }
+                ],
+                "near_pixels": 4265,
+                "reference_center": [
+                  0.02858560218739198,
+                  -0.7383829584389434,
+                  0.4890582579008008
+                ]
+              }
+            }
+          },
+          {
+            "index": 2,
+            "seconds": 0.18949019501451403,
+            "reacquisition_error": "surface_not_reacquired",
+            "response": {
+              "schema_version": 1,
+              "tool": "scene_tasks",
+              "status": "error",
+              "code": "observed_scene_unavailable",
+              "message": "observed scene unavailable",
+              "data": {},
+              "recovery": "inspect"
+            },
+            "diagnostics": {
+              "0": {
+                "candidates": [
+                  {
+                    "id": 0,
+                    "pixels": 7964,
+                    "rejected": "search_boundary"
+                  },
+                  {
+                    "id": 1,
+                    "pixels": 73,
+                    "center": [
+                      -0.02128084515602731,
+                      -0.7063663090411907,
+                      0.5691387869087269
+                    ],
+                    "rejected": "size_change"
+                  },
+                  {
+                    "id": 2,
+                    "pixels": 71,
+                    "rejected": "search_boundary"
+                  },
+                  {
+                    "id": 3,
+                    "pixels": 293,
+                    "center": [
+                      -0.02236417841576466,
+                      -0.5517340873131186,
+                      0.5670865542782941
+                    ],
+                    "rejected": "size_change"
+                  },
+                  {
+                    "id": 4,
+                    "pixels": 28,
+                    "rejected": "search_boundary"
+                  },
+                  {
+                    "id": 5,
+                    "pixels": 26,
+                    "center": [
+                      -0.041908927541516997,
+                      -0.5248092882255508,
+                      0.5666021326081493
+                    ],
+                    "rejected": "size_change"
+                  },
+                  {
+                    "id": 6,
+                    "pixels": 78,
+                    "center": [
+                      -0.022190079527893296,
+                      -0.513817285561399,
+                      0.5542927646907904
+                    ],
+                    "rejected": "size_change"
+                  },
+                  {
+                    "id": 7,
+                    "pixels": 77,
+                    "rejected": "search_boundary"
+                  }
+                ],
+                "near_pixels": 4265,
+                "reference_center": [
+                  0.02858560218739198,
+                  -0.7383829584389434,
+                  0.4890582579008008
+                ]
+              }
+            }
+          },
+          {
+            "index": 3,
+            "seconds": 0.1876759750302881,
+            "reacquisition_error": "surface_not_reacquired",
+            "response": {
+              "schema_version": 1,
+              "tool": "scene_tasks",
+              "status": "error",
+              "code": "observed_scene_unavailable",
+              "message": "observed scene unavailable",
+              "data": {},
+              "recovery": "inspect"
+            },
+            "diagnostics": {
+              "0": {
+                "candidates": [
+                  {
+                    "id": 0,
+                    "pixels": 7964,
+                    "rejected": "search_boundary"
+                  },
+                  {
+                    "id": 1,
+                    "pixels": 73,
+                    "center": [
+                      -0.021280882376791606,
+                      -0.7063663052123392,
+                      0.5691387833210224
+                    ],
+                    "rejected": "size_change"
+                  },
+                  {
+                    "id": 2,
+                    "pixels": 71,
+                    "rejected": "search_boundary"
+                  },
+                  {
+                    "id": 3,
+                    "pixels": 293,
+                    "center": [
+                      -0.02236420678547043,
+                      -0.5517340830204489,
+                      0.5670865514538364
+                    ],
+                    "rejected": "size_change"
+                  },
+                  {
+                    "id": 4,
+                    "pixels": 28,
+                    "rejected": "search_boundary"
+                  },
+                  {
+                    "id": 5,
+                    "pixels": 26,
+                    "center": [
+                      -0.04190895511246065,
+                      -0.5248092825198765,
+                      0.5666021298151713
+                    ],
+                    "rejected": "size_change"
+                  },
+                  {
+                    "id": 6,
+                    "pixels": 78,
+                    "center": [
+                      -0.02219010643704729,
+                      -0.5138172807540033,
+                      0.5542927620455462
+                    ],
+                    "rejected": "size_change"
+                  },
+                  {
+                    "id": 7,
+                    "pixels": 77,
+                    "rejected": "search_boundary"
+                  }
+                ],
+                "near_pixels": 4265,
+                "reference_center": [
+                  0.02858560218739198,
+                  -0.7383829584389434,
+                  0.4890582579008008
+                ]
+              }
+            }
+          },
+          {
+            "index": 4,
+            "seconds": 0.18858552601886913,
+            "reacquisition_error": "surface_not_reacquired",
+            "response": {
+              "schema_version": 1,
+              "tool": "scene_tasks",
+              "status": "error",
+              "code": "observed_scene_unavailable",
+              "message": "observed scene unavailable",
+              "data": {},
+              "recovery": "inspect"
+            },
+            "diagnostics": {
+              "0": {
+                "candidates": [
+                  {
+                    "id": 0,
+                    "pixels": 7964,
+                    "rejected": "search_boundary"
+                  },
+                  {
+                    "id": 1,
+                    "pixels": 73,
+                    "center": [
+                      -0.021280913776070932,
+                      -0.7063663020246141,
+                      0.5691387803325957
+                    ],
+                    "rejected": "size_change"
+                  },
+                  {
+                    "id": 2,
+                    "pixels": 71,
+                    "rejected": "search_boundary"
+                  },
+                  {
+                    "id": 3,
+                    "pixels": 293,
+                    "center": [
+                      -0.02236423073671249,
+                      -0.5517340794425041,
+                      0.5670865491011662
+                    ],
+                    "rejected": "size_change"
+                  },
+                  {
+                    "id": 4,
+                    "pixels": 28,
+                    "rejected": "search_boundary"
+                  },
+                  {
+                    "id": 5,
+                    "pixels": 26,
+                    "center": [
+                      -0.04190897839155386,
+                      -0.5248092777529529,
+                      0.5666021274887227
+                    ],
+                    "rejected": "size_change"
+                  },
+                  {
+                    "id": 6,
+                    "pixels": 78,
+                    "center": [
+                      -0.022190129159254172,
+                      -0.5138172767437157,
+                      0.5542927598421543
+                    ],
+                    "rejected": "size_change"
+                  },
+                  {
+                    "id": 7,
+                    "pixels": 77,
+                    "rejected": "search_boundary"
+                  }
+                ],
+                "near_pixels": 4265,
+                "reference_center": [
+                  0.02858560218739198,
+                  -0.7383829584389434,
+                  0.4890582579008008
+                ]
+              }
+            }
+          }
+        ],
+        "initialization": {
+          "source": "vlm_region",
+          "purpose": "object",
+          "prompt": "Locate the visible object 'red cylinder' in the image. Return a bounding box around the visible target; coordinates are integers normalized to 0..1000 in x,y order. Abstain if the object is absent or ambiguous in this image. Return JSON {\"verified\":true,\"box\":[x_min,y_min,x_max,y_max],\"reason\":\"...\"} or {\"verified\":false,\"reason\":\"...\"}. Do not predict a 3D position or surface point.",
+          "system_prompt": "Ground a robot target in the provided image. Do not invent missing visual evidence.",
+          "raw": "```json\n{\n  \"verified\": true,\n  \"box\": [450, 583, 500, 650],\n  \"reason\": \"The image contains a small red cylinder positioned on a brown surface, which matches the description of the target object.\"\n}\n```",
+          "image_order": [
+            "rgb_file"
+          ],
+          "valid": true,
+          "strategy": "depth_candidates",
+          "search_region": {
+            "box": [
+              400,
+              533,
+              550,
+              700
+            ],
+            "padding": 50
+          },
+          "surface_candidates": [
+            {
+              "id": 0,
+              "bbox_xyxy": [
+                96,
+                225,
+                132,
+                297
+              ],
+              "mask_bits": "////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////4H////gB////AA///+AA///+AA///+AA///+AA///+AA///+AA///+AA///+AA///+AA///8AA///9gB///94H///9/////9/////9/////9/////9/////9/////9///////////+/////////////9/////////////////////////////////////////////+AA///8AA///8AA///8AA///8AA///8AA///8AA///8AA///8AA///8AA///8AA///8AA///8AA///8AA///8AA///8AA///8AA///8AA///8AA",
+              "points": 2141
+            },
+            {
+              "id": 1,
+              "bbox_xyxy": [
+                121,
+                247,
+                131,
+                255
+              ],
+              "mask_bits": "Pz////////f4/A==",
+              "points": 70
+            },
+            {
+              "id": 2,
+              "bbox_xyxy": [
+                121,
+                254,
+                131,
+                260
+              ],
+              "mask_bits": "gH//////z8A=",
+              "points": 48
+            },
+            {
+              "id": 3,
+              "bbox_xyxy": [
+                120,
+                280,
+                132,
+                297
+              ],
+              "mask_bits": "//////////////////////////////////A=",
+              "points": 204
+            }
+          ],
+          "surface_selection": {
+            "prompt": "Select a measured surface of 'red cylinder'. Image 1 is the original reference, NOT a candidate. Every subsequent image is ONE candidate, labeled with its ID. Image 2 is candidate 0, image 3 is candidate 1, and so on. All candidate images use the same enlarged context crop. In each candidate panel, ONLY pixels on the measured surface are retained; pixels outside that candidate have been replaced with black. Black background is not evidence. These unlabelled geometry proposals may include table, wall, occluders, or mixed objects. Select only a region whose bright pixels belong to the requested object, not its support furniture. A partial visible object surface is sufficient. If a region mixes target and other objects, or the target is ambiguous, abstain. Available IDs: [0, 1, 2, 3]. Return JSON {\"selected_id\":integer or null,\"target_unambiguous\":true or false,\"reason\":\"...\"}.",
+            "system_prompt": "Choose a visually supported surface, not an object location guess. Reply with JSON only.",
+            "raw": "{\"selected_id\":0,\"target_unambiguous\":true,\"reason\":\"Candidate 0 shows a clear, partial view of the red cylinder's surface, with bright red pixels corresponding to the object. Other candidates either show too little of the object (Candidate 1, 2) or show a different object (Candidate 3).\"}",
+            "image_order": [
+              "rgb_file",
+              "surface_candidate_0_rgb_file",
+              "surface_candidate_1_rgb_file",
+              "surface_candidate_2_rgb_file",
+              "surface_candidate_3_rgb_file"
+            ],
+            "presentation": "isolated"
+          },
+          "selected_id": 0,
+          "proposal_source": "rgbd_components"
+        },
+        "reacquisition_passed": false,
+        "task_success_assessed": false
+      }
+    },
+    {
+      "name": "registered",
+      "job_id": "20261026_103424_011249",
+      "note": "registered depth + render intrinsics + normal boundary refinement, premerge",
+      "result": {
+        "scope": "live ZMQ sensor-to-provider-to-tool smoke, single object reference; no support seed or task execution acceptance",
+        "queries": [
+          {
+            "index": 0,
+            "seconds": 0.19772818399360403,
+            "reacquisition_error": null,
+            "response": {
+              "schema_version": 1,
+              "tool": "scene_tasks",
+              "status": "ok",
+              "code": "ok",
+              "message": "ok",
+              "data": {
+                "tasks": [],
+                "inputs": "observed",
+                "discovery_only": true,
+                "execution_available": false,
+                "planning_available": false,
+                "unavailable_reason": "observed_execution_unavailable",
+                "assistance": []
+              },
+              "recovery": "none"
+            },
+            "diagnostics": {
+              "0": {
+                "candidates": [
+                  {
+                    "id": 0,
+                    "pixels": 956,
+                    "rejected": "search_boundary"
+                  },
+                  {
+                    "id": 1,
+                    "pixels": 74,
+                    "center": [
+                      -0.021621664851426553,
+                      -0.6971180863026474,
+                      0.560027262737882
+                    ],
+                    "rejected": "appearance_change"
+                  },
+                  {
+                    "id": 2,
+                    "pixels": 212,
+                    "center": [
+                      -0.021830822132766603,
+                      -0.6811593310402428,
+                      0.5223184865814297
+                    ],
+                    "current_support": 1.0,
+                    "reference_support": 1.0
+                  },
+                  {
+                    "id": 3,
+                    "pixels": 954,
+                    "rejected": "search_boundary"
+                  },
+                  {
+                    "id": 4,
+                    "pixels": 130,
+                    "rejected": "search_boundary"
+                  }
+                ],
+                "near_pixels": 590,
+                "reference_center": [
+                  -0.018232975093432476,
+                  -0.6802138864379798,
+                  0.5223525762665184
+                ]
+              }
+            }
+          },
+          {
+            "index": 1,
+            "seconds": 0.20696610200684518,
+            "reacquisition_error": null,
+            "response": {
+              "schema_version": 1,
+              "tool": "scene_tasks",
+              "status": "ok",
+              "code": "ok",
+              "message": "ok",
+              "data": {
+                "tasks": [],
+                "inputs": "observed",
+                "discovery_only": true,
+                "execution_available": false,
+                "planning_available": false,
+                "unavailable_reason": "observed_execution_unavailable",
+                "assistance": []
+              },
+              "recovery": "none"
+            },
+            "diagnostics": {
+              "0": {
+                "candidates": [
+                  {
+                    "id": 0,
+                    "pixels": 956,
+                    "rejected": "search_boundary"
+                  },
+                  {
+                    "id": 1,
+                    "pixels": 74,
+                    "center": [
+                      -0.021621688342576776,
+                      -0.6971180833697559,
+                      0.5600272604356313
+                    ],
+                    "rejected": "appearance_change"
+                  },
+                  {
+                    "id": 2,
+                    "pixels": 212,
+                    "center": [
+                      -0.021830845091549686,
+                      -0.681159327704216,
+                      0.522318484333374
+                    ],
+                    "current_support": 1.0,
+                    "reference_support": 1.0
+                  },
+                  {
+                    "id": 3,
+                    "pixels": 954,
+                    "rejected": "search_boundary"
+                  },
+                  {
+                    "id": 4,
+                    "pixels": 130,
+                    "rejected": "search_boundary"
+                  }
+                ],
+                "near_pixels": 590,
+                "reference_center": [
+                  -0.018232975093432476,
+                  -0.6802138864379798,
+                  0.5223525762665184
+                ]
+              }
+            }
+          },
+          {
+            "index": 2,
+            "seconds": 0.219370061007794,
+            "reacquisition_error": null,
+            "response": {
+              "schema_version": 1,
+              "tool": "scene_tasks",
+              "status": "ok",
+              "code": "ok",
+              "message": "ok",
+              "data": {
+                "tasks": [],
+                "inputs": "observed",
+                "discovery_only": true,
+                "execution_available": false,
+                "planning_available": false,
+                "unavailable_reason": "observed_execution_unavailable",
+                "assistance": []
+              },
+              "recovery": "none"
+            },
+            "diagnostics": {
+              "0": {
+                "candidates": [
+                  {
+                    "id": 0,
+                    "pixels": 956,
+                    "rejected": "search_boundary"
+                  },
+                  {
+                    "id": 1,
+                    "pixels": 74,
+                    "center": [
+                      -0.021621723575366875,
+                      -0.6971180790188747,
+                      0.5600272570238192
+                    ],
+                    "rejected": "appearance_change"
+                  },
+                  {
+                    "id": 2,
+                    "pixels": 212,
+                    "center": [
+                      -0.021830879527814335,
+                      -0.6811593227512882,
+                      0.5223184810018757
+                    ],
+                    "current_support": 1.0,
+                    "reference_support": 1.0
+                  },
+                  {
+                    "id": 3,
+                    "pixels": 954,
+                    "rejected": "search_boundary"
+                  },
+                  {
+                    "id": 4,
+                    "pixels": 130,
+                    "rejected": "search_boundary"
+                  }
+                ],
+                "near_pixels": 590,
+                "reference_center": [
+                  -0.018232975093432476,
+                  -0.6802138864379798,
+                  0.5223525762665184
+                ]
+              }
+            }
+          },
+          {
+            "index": 3,
+            "seconds": 0.21213735605124384,
+            "reacquisition_error": null,
+            "response": {
+              "schema_version": 1,
+              "tool": "scene_tasks",
+              "status": "ok",
+              "code": "ok",
+              "message": "ok",
+              "data": {
+                "tasks": [],
+                "inputs": "observed",
+                "discovery_only": true,
+                "execution_available": false,
+                "planning_available": false,
+                "unavailable_reason": "observed_execution_unavailable",
+                "assistance": []
+              },
+              "recovery": "none"
+            },
+            "diagnostics": {
+              "0": {
+                "candidates": [
+                  {
+                    "id": 0,
+                    "pixels": 956,
+                    "rejected": "search_boundary"
+                  },
+                  {
+                    "id": 1,
+                    "pixels": 74,
+                    "center": [
+                      -0.021621752568800487,
+                      -0.6971180754978912,
+                      0.5600272542671644
+                    ],
+                    "rejected": "appearance_change"
+                  },
+                  {
+                    "id": 2,
+                    "pixels": 212,
+                    "center": [
+                      -0.021830907868177398,
+                      -0.6811593187380791,
+                      0.5223184783101125
+                    ],
+                    "current_support": 1.0,
+                    "reference_support": 1.0
+                  },
+                  {
+                    "id": 3,
+                    "pixels": 954,
+                    "rejected": "search_boundary"
+                  },
+                  {
+                    "id": 4,
+                    "pixels": 130,
+                    "rejected": "search_boundary"
+                  }
+                ],
+                "near_pixels": 590,
+                "reference_center": [
+                  -0.018232975093432476,
+                  -0.6802138864379798,
+                  0.5223525762665184
+                ]
+              }
+            }
+          },
+          {
+            "index": 4,
+            "seconds": 0.20711289101745933,
+            "reacquisition_error": null,
+            "response": {
+              "schema_version": 1,
+              "tool": "scene_tasks",
+              "status": "ok",
+              "code": "ok",
+              "message": "ok",
+              "data": {
+                "tasks": [],
+                "inputs": "observed",
+                "discovery_only": true,
+                "execution_available": false,
+                "planning_available": false,
+                "unavailable_reason": "observed_execution_unavailable",
+                "assistance": []
+              },
+              "recovery": "none"
+            },
+            "diagnostics": {
+              "0": {
+                "candidates": [
+                  {
+                    "id": 0,
+                    "pixels": 956,
+                    "rejected": "search_boundary"
+                  },
+                  {
+                    "id": 1,
+                    "pixels": 74,
+                    "center": [
+                      -0.021621773368747214,
+                      -0.6971180730188062,
+                      0.5600272523297202
+                    ],
+                    "rejected": "appearance_change"
+                  },
+                  {
+                    "id": 2,
+                    "pixels": 212,
+                    "center": [
+                      -0.02183092820150292,
+                      -0.6811593159083987,
+                      0.5223184764182757
+                    ],
+                    "current_support": 1.0,
+                    "reference_support": 1.0
+                  },
+                  {
+                    "id": 3,
+                    "pixels": 954,
+                    "rejected": "search_boundary"
+                  },
+                  {
+                    "id": 4,
+                    "pixels": 130,
+                    "rejected": "search_boundary"
+                  }
+                ],
+                "near_pixels": 590,
+                "reference_center": [
+                  -0.018232975093432476,
+                  -0.6802138864379798,
+                  0.5223525762665184
+                ]
+              }
+            }
+          }
+        ],
+        "initialization": {
+          "source": "vlm_region",
+          "purpose": "object",
+          "prompt": "Locate the visible object 'red cylinder' in the image. Return a bounding box around the visible target; coordinates are integers normalized to 0..1000 in x,y order. Abstain if the object is absent or ambiguous in this image. Return JSON {\"verified\":true,\"box\":[x_min,y_min,x_max,y_max],\"reason\":\"...\"} or {\"verified\":false,\"reason\":\"...\"}. Do not predict a 3D position or surface point.",
+          "system_prompt": "Ground a robot target in the provided image. Do not invent missing visual evidence.",
+          "raw": "```json\n{\n  \"verified\": true,\n  \"box\": [450, 575, 500, 650],\n  \"reason\": \"The image contains a small red cylinder standing upright on a brown surface, positioned centrally in the lower half of the frame. The bounding box is tightly fitted around this visible object.\"\n}\n```",
+          "image_order": [
+            "rgb_file"
+          ],
+          "valid": true,
+          "strategy": "depth_candidates",
+          "search_region": {
+            "box": [
+              400,
+              525,
+              550,
+              700
+            ],
+            "padding": 50
+          },
+          "surface_candidates": [
+            {
+              "id": 0,
+              "bbox_xyxy": [
+                96,
+                222,
+                132,
+                265
+              ],
+              "mask_bits": "///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////B////8A////4A////wA////gA////gA////gA////gA////gA////gA////gA////gA////gA////gA////gA////gAA=",
+              "points": 1384
+            },
+            {
+              "id": 1,
+              "bbox_xyxy": [
+                123,
+                252,
+                132,
+                260
+              ],
+              "mask_bits": "Hz///////f4/",
+              "points": 63
+            },
+            {
+              "id": 2,
+              "bbox_xyxy": [
+                122,
+                257,
+                132,
+                277
+              ],
+              "mask_bits": "gDAMA//////////f////////////3/P8PA==",
+              "points": 165
+            },
+            {
+              "id": 3,
+              "bbox_xyxy": [
+                96,
+                265,
+                122,
+                266
+              ],
+              "mask_bits": "////wA==",
+              "points": 26
+            },
+            {
+              "id": 4,
+              "bbox_xyxy": [
+                96,
+                267,
+                122,
+                268
+              ],
+              "mask_bits": "////wA==",
+              "points": 26
+            },
+            {
+              "id": 5,
+              "bbox_xyxy": [
+                96,
+                268,
+                132,
+                297
+              ],
+              "mask_bits": "////gA////gA////gA////gA////gA////wA////wA////4A////8A/////n//////////////////////////////////wA////gA////gA////gA////gA////gA////gA////AA////AA////AA////AA////AA////AA////AAA=",
+              "points": 790
+            },
+            {
+              "id": 6,
+              "bbox_xyxy": [
+                122,
+                285,
+                132,
+                297
+              ],
+              "mask_bits": "f9/3/f9/////////////",
+              "points": 115
+            }
+          ],
+          "surface_selection": {
+            "prompt": "Select a measured surface of 'red cylinder'. Image 1 is the original reference, NOT a candidate. Every subsequent image is ONE candidate, labeled with its ID. Image 2 is candidate 0, image 3 is candidate 1, and so on. All candidate images use the same enlarged context crop. In each candidate panel, ONLY pixels on the measured surface are retained; pixels outside that candidate have been replaced with black. Black background is not evidence. These unlabelled geometry proposals may include table, wall, occluders, or mixed objects. Select only a region whose bright pixels belong to the requested object, not its support furniture. A partial visible object surface is sufficient. If a region mixes target and other objects, or the target is ambiguous, abstain. Available IDs: [0, 1, 2, 3, 4, 5, 6]. Return JSON {\"selected_id\":integer or null,\"target_unambiguous\":true or false,\"reason\":\"...\"}.",
+            "system_prompt": "Choose a visually supported surface, not an object location guess. Reply with JSON only.",
+            "raw": "{\"selected_id\":2,\"target_unambiguous\":true,\"reason\":\"Candidate 2 shows a red cylindrical shape that matches the 'red cylinder' in the reference image. The bright pixels are exclusively from the target object, with no mixing with other objects or background.\"}",
+            "image_order": [
+              "rgb_file",
+              "surface_candidate_0_rgb_file",
+              "surface_candidate_1_rgb_file",
+              "surface_candidate_2_rgb_file",
+              "surface_candidate_3_rgb_file",
+              "surface_candidate_4_rgb_file",
+              "surface_candidate_5_rgb_file",
+              "surface_candidate_6_rgb_file"
+            ],
+            "presentation": "isolated"
+          },
+          "selected_id": 2,
+          "proposal_source": "rgbd_components"
+        },
+        "reacquisition_passed": true,
+        "task_success_assessed": false
+      }
+    },
+    {
+      "name": "postmerge",
+      "job_id": "20261026_104104_f3d9e6",
+      "note": "registered sensor smoke on merged main",
+      "result": {
+        "scope": "live ZMQ camera/provider/tool sensor smoke, no support seed or task execution acceptance",
+        "source_sha": "6eb7c242a8d873f34112a39d2f646282110f14da",
+        "script_sha256": "b17c7b2cc08b4981d76c4b0135a0986c58fdcfc848e8968075b023fb94f90354",
+        "task_success_assessed": false,
+        "queries": [
+          {
+            "index": 0,
+            "seconds": 0.2014396179583855,
+            "reacquisition_error": null,
+            "response": {
+              "schema_version": 1,
+              "tool": "scene_tasks",
+              "status": "ok",
+              "code": "ok",
+              "message": "ok",
+              "data": {
+                "tasks": [],
+                "inputs": "observed",
+                "discovery_only": true,
+                "execution_available": false,
+                "planning_available": false,
+                "unavailable_reason": "observed_execution_unavailable",
+                "assistance": []
+              },
+              "recovery": "none"
+            },
+            "diagnostics": {
+              "0": {
+                "candidates": [
+                  {
+                    "id": 0,
+                    "pixels": 1031,
+                    "rejected": "search_boundary"
+                  },
+                  {
+                    "id": 1,
+                    "pixels": 73,
+                    "center": [
+                      -0.021846173272724236,
+                      -0.698881129443879,
+                      0.560067545125222
+                    ],
+                    "rejected": "size_change"
+                  },
+                  {
+                    "id": 2,
+                    "pixels": 220,
+                    "center": [
+                      -0.021952843629062534,
+                      -0.6813456346465432,
+                      0.5203725795852655
+                    ],
+                    "current_support": 0.9590909090909091,
+                    "reference_support": 1.0
+                  },
+                  {
+                    "id": 3,
+                    "pixels": 1046,
+                    "rejected": "search_boundary"
+                  },
+                  {
+                    "id": 4,
+                    "pixels": 120,
+                    "rejected": "search_boundary"
+                  }
+                ],
+                "near_pixels": 698,
+                "reference_center": [
+                  -0.021626820438416405,
+                  -0.6813188838818678,
+                  0.5217026172582611
+                ]
+              }
+            }
+          },
+          {
+            "index": 1,
+            "seconds": 0.1951971289818175,
+            "reacquisition_error": null,
+            "response": {
+              "schema_version": 1,
+              "tool": "scene_tasks",
+              "status": "ok",
+              "code": "ok",
+              "message": "ok",
+              "data": {
+                "tasks": [],
+                "inputs": "observed",
+                "discovery_only": true,
+                "execution_available": false,
+                "planning_available": false,
+                "unavailable_reason": "observed_execution_unavailable",
+                "assistance": []
+              },
+              "recovery": "none"
+            },
+            "diagnostics": {
+              "0": {
+                "candidates": [
+                  {
+                    "id": 0,
+                    "pixels": 1031,
+                    "rejected": "search_boundary"
+                  },
+                  {
+                    "id": 1,
+                    "pixels": 73,
+                    "center": [
+                      -0.021846230379520715,
+                      -0.6988811205831406,
+                      0.5600675392447532
+                    ],
+                    "rejected": "size_change"
+                  },
+                  {
+                    "id": 2,
+                    "pixels": 220,
+                    "center": [
+                      -0.021952899405849963,
+                      -0.6813456260164849,
+                      0.5203725739640608
+                    ],
+                    "current_support": 0.9590909090909091,
+                    "reference_support": 1.0
+                  },
+                  {
+                    "id": 3,
+                    "pixels": 1046,
+                    "rejected": "search_boundary"
+                  },
+                  {
+                    "id": 4,
+                    "pixels": 120,
+                    "rejected": "search_boundary"
+                  }
+                ],
+                "near_pixels": 698,
+                "reference_center": [
+                  -0.021626820438416405,
+                  -0.6813188838818678,
+                  0.5217026172582611
+                ]
+              }
+            }
+          },
+          {
+            "index": 2,
+            "seconds": 0.23025261797010899,
+            "reacquisition_error": null,
+            "response": {
+              "schema_version": 1,
+              "tool": "scene_tasks",
+              "status": "ok",
+              "code": "ok",
+              "message": "ok",
+              "data": {
+                "tasks": [],
+                "inputs": "observed",
+                "discovery_only": true,
+                "execution_available": false,
+                "planning_available": false,
+                "unavailable_reason": "observed_execution_unavailable",
+                "assistance": []
+              },
+              "recovery": "none"
+            },
+            "diagnostics": {
+              "0": {
+                "candidates": [
+                  {
+                    "id": 0,
+                    "pixels": 1031,
+                    "rejected": "search_boundary"
+                  },
+                  {
+                    "id": 1,
+                    "pixels": 73,
+                    "center": [
+                      -0.021846258187219532,
+                      -0.6988811163000302,
+                      0.5600675364064367
+                    ],
+                    "rejected": "size_change"
+                  },
+                  {
+                    "id": 2,
+                    "pixels": 220,
+                    "center": [
+                      -0.021952926567047077,
+                      -0.6813456218464129,
+                      0.5203725712508831
+                    ],
+                    "current_support": 0.9590909090909091,
+                    "reference_support": 1.0
+                  },
+                  {
+                    "id": 3,
+                    "pixels": 1046,
+                    "rejected": "search_boundary"
+                  },
+                  {
+                    "id": 4,
+                    "pixels": 120,
+                    "rejected": "search_boundary"
+                  }
+                ],
+                "near_pixels": 698,
+                "reference_center": [
+                  -0.021626820438416405,
+                  -0.6813188838818678,
+                  0.5217026172582611
+                ]
+              }
+            }
+          },
+          {
+            "index": 3,
+            "seconds": 0.23416885203914717,
+            "reacquisition_error": null,
+            "response": {
+              "schema_version": 1,
+              "tool": "scene_tasks",
+              "status": "ok",
+              "code": "ok",
+              "message": "ok",
+              "data": {
+                "tasks": [],
+                "inputs": "observed",
+                "discovery_only": true,
+                "execution_available": false,
+                "planning_available": false,
+                "unavailable_reason": "observed_execution_unavailable",
+                "assistance": []
+              },
+              "recovery": "none"
+            },
+            "diagnostics": {
+              "0": {
+                "candidates": [
+                  {
+                    "id": 0,
+                    "pixels": 1031,
+                    "rejected": "search_boundary"
+                  },
+                  {
+                    "id": 1,
+                    "pixels": 73,
+                    "center": [
+                      -0.021846288755401948,
+                      -0.6988811116237977,
+                      0.5600675333119292
+                    ],
+                    "rejected": "size_change"
+                  },
+                  {
+                    "id": 2,
+                    "pixels": 220,
+                    "center": [
+                      -0.021952956425707847,
+                      -0.6813456172951623,
+                      0.5203725682928095
+                    ],
+                    "current_support": 0.9590909090909091,
+                    "reference_support": 1.0
+                  },
+                  {
+                    "id": 3,
+                    "pixels": 1046,
+                    "rejected": "search_boundary"
+                  },
+                  {
+                    "id": 4,
+                    "pixels": 120,
+                    "rejected": "search_boundary"
+                  }
+                ],
+                "near_pixels": 698,
+                "reference_center": [
+                  -0.021626820438416405,
+                  -0.6813188838818678,
+                  0.5217026172582611
+                ]
+              }
+            }
+          },
+          {
+            "index": 4,
+            "seconds": 0.23514958703890443,
+            "reacquisition_error": null,
+            "response": {
+              "schema_version": 1,
+              "tool": "scene_tasks",
+              "status": "ok",
+              "code": "ok",
+              "message": "ok",
+              "data": {
+                "tasks": [],
+                "inputs": "observed",
+                "discovery_only": true,
+                "execution_available": false,
+                "planning_available": false,
+                "unavailable_reason": "observed_execution_unavailable",
+                "assistance": []
+              },
+              "recovery": "none"
+            },
+            "diagnostics": {
+              "0": {
+                "candidates": [
+                  {
+                    "id": 0,
+                    "pixels": 1031,
+                    "rejected": "search_boundary"
+                  },
+                  {
+                    "id": 1,
+                    "pixels": 73,
+                    "center": [
+                      -0.021846324891188332,
+                      -0.6988811061536115,
+                      0.5600675296999228
+                    ],
+                    "rejected": "size_change"
+                  },
+                  {
+                    "id": 2,
+                    "pixels": 220,
+                    "center": [
+                      -0.02195299172483719,
+                      -0.681345611974022,
+                      0.5203725648400532
+                    ],
+                    "current_support": 0.9590909090909091,
+                    "reference_support": 1.0
+                  },
+                  {
+                    "id": 3,
+                    "pixels": 1046,
+                    "rejected": "search_boundary"
+                  },
+                  {
+                    "id": 4,
+                    "pixels": 120,
+                    "rejected": "search_boundary"
+                  }
+                ],
+                "near_pixels": 698,
+                "reference_center": [
+                  -0.021626820438416405,
+                  -0.6813188838818678,
+                  0.5217026172582611
+                ]
+              }
+            }
+          }
+        ],
+        "vlm_calls": [
+          {
+            "encode_s": 0.000845614995341748,
+            "request_s": 9.917477615992539,
+            "total_s": 9.91832323098788,
+            "image_count": 1,
+            "completed": true
+          },
+          {
+            "encode_s": 0.003385390038602054,
+            "request_s": 6.625934062001761,
+            "total_s": 6.629319452040363,
+            "image_count": 6,
+            "completed": true
+          }
+        ],
+        "initialization": {
+          "source": "vlm_region",
+          "purpose": "object",
+          "prompt": "Locate the visible object 'red cylinder' in the image. Return a bounding box around the visible target; coordinates are integers normalized to 0..1000 in x,y order. Abstain if the object is absent or ambiguous in this image. Return JSON {\"verified\":true,\"box\":[x_min,y_min,x_max,y_max],\"reason\":\"...\"} or {\"verified\":false,\"reason\":\"...\"}. Do not predict a 3D position or surface point.",
+          "system_prompt": "Ground a robot target in the provided image. Do not invent missing visual evidence.",
+          "raw": "```json\n{\n  \"verified\": true,\n  \"box\": [\n    450,\n    600,\n    500,\n    650\n  ],\n  \"reason\": \"The image contains a small red cylinder positioned on a brown surface, centered in the lower half of the frame. The bounding box is tightly fitted around the visible red cylinder.\"\n}\n```",
+          "image_order": [
+            "rgb_file"
+          ],
+          "valid": true,
+          "strategy": "depth_candidates",
+          "search_region": {
+            "box": [
+              400,
+              550,
+              550,
+              700
+            ],
+            "padding": 50
+          },
+          "surface_candidates": [
+            {
+              "id": 0,
+              "bbox_xyxy": [
+                96,
+                233,
+                132,
+                265
+              ],
+              "mask_bits": "////////////////////////////////////////////////////////////////////////////////////////////////////gf////AH///+AD///8AB///4AA///4AA///4AA///4AA///4AA///4AA///4AA///4AA///4AA///4AA///4AA///4AA",
+              "points": 933
+            },
+            {
+              "id": 1,
+              "bbox_xyxy": [
+                119,
+                252,
+                130,
+                260
+              ],
+              "mask_bits": "Pw/7///////f8Pw=",
+              "points": 74
+            },
+            {
+              "id": 2,
+              "bbox_xyxy": [
+                118,
+                255,
+                131,
+                277
+              ],
+              "mask_bits": "gAwAYAMAHgH////////////+/+///////////////v/j/g/A",
+              "points": 219
+            },
+            {
+              "id": 3,
+              "bbox_xyxy": [
+                96,
+                268,
+                132,
+                297
+              ],
+              "mask_bits": "///4AB///4AB///4AB///4AB///4AB///8AB///8AD///+AH////gP////9//////////////////////////////////8AA///4AA///4AA///4AA///4AA///4AA///4AA///4AA///4AA///4AA///4AA///4AA///4AA///4AAA=",
+              "points": 722
+            },
+            {
+              "id": 4,
+              "bbox_xyxy": [
+                119,
+                285,
+                132,
+                297
+              ],
+              "mask_bits": "//f/v/3/7/9/+//f/v/3/7////A=",
+              "points": 146
+            }
+          ],
+          "surface_selection": {
+            "prompt": "Select a measured surface of 'red cylinder'. Image 1 is the original reference, NOT a candidate. Every subsequent image is ONE candidate, labeled with its ID. Image 2 is candidate 0, image 3 is candidate 1, and so on. All candidate images use the same enlarged context crop. In each candidate panel, ONLY pixels on the measured surface are retained; pixels outside that candidate have been replaced with black. Black background is not evidence. These unlabelled geometry proposals may include table, wall, occluders, or mixed objects. Select only a region whose bright pixels belong to the requested object, not its support furniture. A partial visible object surface is sufficient. If a region mixes target and other objects, or the target is ambiguous, abstain. Available IDs: [0, 1, 2, 3, 4]. Return JSON {\"selected_id\":integer or null,\"target_unambiguous\":true or false,\"reason\":\"...\"}.",
+            "system_prompt": "Choose a visually supported surface, not an object location guess. Reply with JSON only.",
+            "raw": "{\"selected_id\":2,\"target_unambiguous\":true,\"reason\":\"Candidate 2 shows a red cylindrical shape that matches the 'red cylinder' in the reference image. The bright pixels are exclusively from the target object, with no mixing with other objects or background.\"}",
+            "image_order": [
+              "rgb_file",
+              "surface_candidate_0_rgb_file",
+              "surface_candidate_1_rgb_file",
+              "surface_candidate_2_rgb_file",
+              "surface_candidate_3_rgb_file",
+              "surface_candidate_4_rgb_file"
+            ],
+            "presentation": "isolated"
+          },
+          "selected_id": 2,
+          "proposal_source": "rgbd_components"
+        },
+        "reacquisition_passed": true
+      }
+    }
+  ],
+  "harness_failure": {
+    "job_id": "20261026_090934_7988ff",
+    "code": "physical_execution_requires_audit_path",
+    "vlm_calls": 0,
+    "score": "not a sensor or task attempt"
+  },
+  "native_control": {
+    "job_id": "20261026_104106_015947",
+    "scope": "actual run-agent CLI, live stationary Stretch with privileged geometry, Caliban inference",
+    "summary": {
+      "task_passed": true,
+      "agent_integration": {
+        "tamp_calls": 3,
+        "outcome_counts": {
+          "ok": 3,
+          "error": 0,
+          "partial": 0,
+          "invalid": 0
+        },
+        "code_counts": {
+          "ok": 3
+        },
+        "result_contracts_valid": true,
+        "failure_stop_compliant": null,
+        "failure_cases": 0,
+        "discovery_only_cases": 0,
+        "stop_boundary_cases": 0,
+        "failure_boundaries": [],
+        "unassessed": [
+          "task_interpretation",
+          "goal_coverage",
+          "physical_recovery",
+          "observed_grounding",
+          "navigation",
+          "exploration"
+        ]
+      },
+      "cli_exit_code": 0,
+      "failure_boundaries": [],
+      "requested_rejection_observed": null,
+      "final_predicates": {
+        "object2": {
+          "in_region": true,
+          "supported": true,
+          "settled": true,
+          "satisfied": true,
+          "bounds_xy": [
+            [
+              -0.03909139099068264,
+              -0.8194358135050068
+            ],
+            [
+              0.0011569222949079222,
+              -0.7791872745185622
+            ]
+          ]
+        },
+        "object1": {
+          "in_region": true,
+          "supported": true,
+          "settled": true,
+          "satisfied": true,
+          "bounds_xy": [
+            [
+              -0.039843026416770136,
+              -0.7204342472448279
+            ],
+            [
+              0.0010369768429569354,
+              -0.6399978958570575
+            ]
+          ]
+        }
+      },
+      "tool_outcomes": [
+        {
+          "schema_version": 1,
+          "tool": "scene_tasks",
+          "status": "ok",
+          "code": "ok",
+          "message": "ok",
+          "data": {
+            "planning_scope": "task_skeleton",
+            "motion_refinement": "per_step",
+            "inputs": "privileged",
+            "task_planning_available": true,
+            "objects": [
+              "blue cube",
+              "red cylinder"
+            ],
+            "regions": [
+              "cube goal",
+              "cylinder goal"
+            ],
+            "locations": [
+              {
+                "object_name": "blue cube",
+                "region": "outside"
+              },
+              {
+                "object_name": "red cylinder",
+                "region": "cube goal"
+              }
+            ],
+            "free_regions": [
+              "cylinder goal"
+            ],
+            "instruction_forms": [
+              "move OBJECT to REGION; move OBJECT to REGION",
+              "swap OBJECT and OBJECT"
+            ]
+          },
+          "recovery": "none"
+        },
+        {
+          "schema_version": 1,
+          "tool": "plan_task",
+          "status": "ok",
+          "code": "ok",
+          "message": "ok",
+          "data": {
+            "plan_ref": "task_plan_c5b9b1fb575d43248e63398d44ffbce2",
+            "steps": 2,
+            "strategy": "beam",
+            "execution_started": false,
+            "planning_scope": "task_skeleton",
+            "motion_refinement": "per_step"
+          },
+          "recovery": "none"
+        },
+        {
+          "schema_version": 1,
+          "tool": "execute_task_plan",
+          "status": "ok",
+          "code": "ok",
+          "message": "ok",
+          "data": {
+            "execution_started": true,
+            "completed_steps": 2,
+            "goal_verified": true
+          },
+          "recovery": "none"
+        }
+      ],
+      "audit_commands": 529,
+      "forbidden_commands": 0,
+      "passed": true
+    }
+  },
+  "regressions": {
+    "job_id": "20261026_104721_86d491",
+    "tests": 369,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "junit_sha256": "a0890c666f66a67f6a48d2681ad71a3a674c2ece19e09ec69fe1857896a3a19d"
+  }
+}

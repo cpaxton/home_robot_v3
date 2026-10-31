@@ -1,7 +1,7 @@
 \section{Robot platforms in \texttt{emet}}
 \label{app:robots}
 
-Dynagraph experiments use the same ZMQ observation protocol and DynaMem/GraphEQA stack across embodiments; only camera layout, depth availability, and base kinematics differ.
+Dynagraph experiments use the same ZMQ observation protocol and DynaMem/GraphEQA stack across embodiments; camera layout, calibration, kinematics, actuator coupling and supported skills remain embodiment-specific.
 Table~\ref{tab:robots} summarizes the robots planned for MuJoCo and (where noted) hardware evaluation.
 
 \begin{table}[h]
@@ -9,18 +9,19 @@ Table~\ref{tab:robots} summarizes the robots planned for MuJoCo and (where noted
   \caption{Emet robot embodiments for Dynagraph evaluation.}
   \label{tab:robots}
   \small
-  \begin{tabular}{@{}llll@{}}
+  \begin{tabular}{@{}p{.14\linewidth}p{.20\linewidth}p{.32\linewidth}p{.25\linewidth}@{}}
     \toprule
     ID & Platform & Sim serve & Depth in sim \\
     \midrule
     \texttt{stretch} & Hello Robot Stretch & \texttt{emet serve mujoco} & Rendered sensor depth \\
     \texttt{rby1} / \texttt{galaxea\_r1} & Galaxea R1 (MolmoSpaces) & \texttt{emet serve molmospaces} & Rendered sensor depth \\
     \texttt{innate\_mars} & Innate Maurice (Mars) & \texttt{emet serve mujoco --robot innate\_mars} & Rendered stereo; see App.~\ref{app:innate_mars} \\
+    \texttt{sourccey} & Sourccey MkV & \texttt{emet serve mujoco --robot sourccey} & Rendered depth; native TAMP unqualified \\
     \bottomrule
   \end{tabular}
 \end{table}
 
-\textbf{Stretch} is the default table-scene robot and the closest analogue to GraphEQA's published Stretch-in-Habitat setup.
+\textbf{Stretch} is the default table-scene robot and shares its hardware family with GraphEQA's real-robot demonstrations.
 MuJoCo merges \texttt{stretch.xml} with shared scene assets; planar base navigation uses the standard \texttt{xyt} ZMQ interface.
 
 \textbf{Galaxea R1} (\texttt{--robot rby1}) extends evaluation to a humanoid-style platform in MolmoSpaces iTHOR and Robocasa merges.
@@ -30,4 +31,4 @@ Spawn metadata and merged MJCF paths live beside \texttt{galaxea\_r1.xml}; see p
 It is the primary case where \textbf{Depth Anything 3} (Appendix~\ref{app:da3}) replaces missing hardware depth while sim runs should keep sensor depth for reproducibility.
 
 All robots publish the same ZMQ keys where applicable: \texttt{rgb}, optional \texttt{depth}, \texttt{camera\_K}, \texttt{camera\_pose}, \texttt{gps}, \texttt{compass}, plus stereo/tertiary fields when the MJCF or ROS bridge exposes them.
-Dynagraph and GraphEQA clients consume this stream identically; embodiment-specific tuning is limited to dynav YAML (\texttt{depth\_source}, DA3 presets) and camera count.
+Dynagraph and GraphEQA clients consume this stream identically; navigation configuration includes dynav YAML (\texttt{depth\_source}, DA3 presets) and camera count. Shared key names do not imply equivalent manipulation controllers or sensor availability. Native TAMP acceptance in this paper is limited to stationary Stretch; the corrected Sourccey simulator model is an implementation asset, not evidence of Sourccey native task success.

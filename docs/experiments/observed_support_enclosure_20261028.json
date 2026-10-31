@@ -1,0 +1,295 @@
+{
+  "scope": "support patch producer and conservative enclosure development; not manipulation qualification",
+  "source_base": "b714908e",
+  "attempts": [
+    {
+      "job_id": "20261028_084417_623bba",
+      "vlm_calls": 3,
+      "reacquisition_passed": true,
+      "queries": 5,
+      "support_initialization": {
+        "source": "vlm_region",
+        "purpose": "placement_surface",
+        "prompt": "Locate the visible placement surface or receptacle 'tabletop'. Support furniture such as a countertop is a valid target when requested. Verify the requested relation in this full image. Unqualified left/right is image-relative; if a different stated reference frame or the anchor cannot be established visually, abstain. Do not select a surface on the wrong side. Coordinates are integers normalized to 0..1000, x then y. Return {\"verified\":true,\"box\":[x_min,y_min,x_max,y_max],\"point\":[x,y],\"reason\":\"...\"} with the point on the visible target, or {\"verified\":false,\"reason\":\"...\"}.",
+        "system_prompt": "Ground a robot target in the provided image. Do not invent missing visual evidence.",
+        "raw": "{\"verified\":true,\"box\":[0,345,1000,781],\"point\":[500,500],\"reason\":\"The image shows a flat, brown surface that serves as a tabletop or countertop, upon which two blocks are placed. The surface is clearly visible and occupies the central area of the image, making it the valid target for the requested placement surface.\"}",
+        "image_order": [
+          "rgb_file"
+        ],
+        "valid": false,
+        "strategy": "depth_candidates",
+        "reason": "too many surface candidates; another view or segmentation is needed",
+        "failure_kind": "candidate_overflow"
+      },
+      "support_reference": null,
+      "support_geometry_error": null,
+      "execution_readiness": {
+        "scope": "live assembly prerequisite audit, not a manipulation or agent benchmark",
+        "qualification": "not_qualified",
+        "task_success_assessed": false,
+        "execution_source_installed": false,
+        "gates": {
+          "live_rgbd": {
+            "state": "passed",
+            "receive_age_s": 0.023215340013848618,
+            "valid_depth_fraction": 0.854874213836478,
+            "capture": {
+              "received_monotonic": 137547.739166916,
+              "image_timing": {
+                "head_cam_left": {
+                  "timestamp_ns": 137547393271319,
+                  "clock_domain": "mujoco_render_monotonic",
+                  "clock_id": "9ed7ad0ab6b46f8515c340b2a9aea25444d800b3082017888a7fc4fcd4df3105",
+                  "source": "renderer_scene_capture",
+                  "available": true,
+                  "capture_interval_ns": [
+                    137547393271319,
+                    137547483610069
+                  ],
+                  "depth_capture_interval_ns": [
+                    137547535121989,
+                    137547547737063
+                  ]
+                }
+              }
+            }
+          },
+          "surface_refresh": {
+            "state": "passed",
+            "passed": 5,
+            "attempted": 5
+          },
+          "reference_features": {
+            "state": "unknown",
+            "reason": "rigid_tracking_insufficient"
+          },
+          "depth_workspace": {
+            "state": "passed",
+            "cells": {
+              "unknown": 7190,
+              "free": 6608,
+              "occupied": 26
+            },
+            "scope": "depth carving only; not target/robot-separated execution geometry"
+          },
+          "capture_clock_mapping": {
+            "state": "passed",
+            "scope": "local simulator RGB+depth interval union only",
+            "acquisition_span_s": 0.15446574400993995
+          },
+          "capture_encoder_alignment": {
+            "state": "not_configured",
+            "reason": "stream timestamps do not supply qualified CaptureInterval or alignment bounds"
+          },
+          "complete_payload_geometry": {
+            "state": "not_configured",
+            "reason": "partial visible surface is not a complete shape prior"
+          },
+          "robot_target_occupancy_provenance": {
+            "state": "partial",
+            "occupied_before": 26,
+            "occupied_after_target_exclusion": 18,
+            "target_cells_retained_unknown": 8,
+            "free_cells_added": 0,
+            "scope": "measured target/background endpoint attribution only; robot solid-volume and contact policies remain absent"
+          },
+          "support_grounding": {
+            "state": "not_configured",
+            "reason": "single object seed, no support seed"
+          },
+          "visual_manipulation_effects": {
+            "state": "not_assessed",
+            "reason": "no manipulation attempted"
+          },
+          "default_execution_boundary": {
+            "state": "passed",
+            "planning_code": "observed_scene_unavailable",
+            "execution_code": "observed_scene_unavailable"
+          }
+        },
+        "audit_unchanged_during_admission_checks": true
+      }
+    },
+    {
+      "job_id": "20261028_085139_b4f42d",
+      "vlm_calls": 3,
+      "reacquisition_passed": true,
+      "queries": 5,
+      "support_initialization": {
+        "source": "vlm_region",
+        "purpose": "placement_surface",
+        "prompt": "Locate the visible placement surface or receptacle 'tabletop'. Support furniture such as a countertop is a valid target when requested. Verify the requested relation in this full image. Unqualified left/right is image-relative; if a different stated reference frame or the anchor cannot be established visually, abstain. Do not select a surface on the wrong side. Coordinates are integers normalized to 0..1000, x then y. Return {\"verified\":true,\"box\":[x_min,y_min,x_max,y_max],\"point\":[x,y],\"reason\":\"...\"} with the point on the visible target, or {\"verified\":false,\"reason\":\"...\"}.",
+        "system_prompt": "Ground a robot target in the provided image. Do not invent missing visual evidence.",
+        "raw": "{\"verified\":true,\"box\":[0,350,1000,750],\"point\":[500,500],\"reason\":\"The image shows a flat, brown surface that serves as a tabletop or countertop, upon which two stacked blocks (red and blue) are placed. This surface is clearly visible and occupies the central area of the image, making it the valid target for the tabletop placement surface.\"}",
+        "image_order": [
+          "rgb_file"
+        ],
+        "valid": false
+      },
+      "support_reference": {
+        "bounds": [
+          [
+            -0.47000000000000003,
+            -1.1199999999999999,
+            0.47335482842867815
+          ],
+          [
+            0.38,
+            -1.0,
+            0.4875725098854859
+          ]
+        ],
+        "proposal_source": "semantic_seeded_plane",
+        "scope": "measured footprint candidate; 5mm admission margin is not hardware-calibrated"
+      },
+      "support_geometry_error": null,
+      "execution_readiness": {
+        "scope": "live assembly prerequisite audit, not a manipulation or agent benchmark",
+        "qualification": "not_qualified",
+        "task_success_assessed": false,
+        "execution_source_installed": false,
+        "gates": {
+          "live_rgbd": {
+            "state": "passed",
+            "receive_age_s": 0.03927455400116742,
+            "valid_depth_fraction": 0.8548717570754717,
+            "capture": {
+              "received_monotonic": 137991.64343623,
+              "image_timing": {
+                "head_cam_left": {
+                  "timestamp_ns": 137991242716349,
+                  "clock_domain": "mujoco_render_monotonic",
+                  "clock_id": "9ed7ad0ab6b46f8515c340b2a9aea25444d800b3082017888a7fc4fcd4df3105",
+                  "source": "renderer_scene_capture",
+                  "available": true,
+                  "capture_interval_ns": [
+                    137991242716349,
+                    137991364477276
+                  ],
+                  "depth_capture_interval_ns": [
+                    137991408925936,
+                    137991420940921
+                  ]
+                }
+              }
+            }
+          },
+          "surface_refresh": {
+            "state": "passed",
+            "passed": 5,
+            "attempted": 5
+          },
+          "reference_features": {
+            "state": "unknown",
+            "reason": "rigid_tracking_insufficient"
+          },
+          "depth_workspace": {
+            "state": "passed",
+            "cells": {
+              "unknown": 7193,
+              "free": 6602,
+              "occupied": 29
+            },
+            "scope": "depth carving only; not target/robot-separated execution geometry"
+          },
+          "capture_clock_mapping": {
+            "state": "passed",
+            "scope": "local simulator RGB+depth interval union only",
+            "acquisition_span_s": 0.17822457200963981
+          },
+          "capture_encoder_alignment": {
+            "state": "not_configured",
+            "reason": "stream timestamps do not supply qualified CaptureInterval or alignment bounds"
+          },
+          "complete_payload_geometry": {
+            "state": "not_configured",
+            "reason": "partial visible surface is not a complete shape prior"
+          },
+          "robot_target_occupancy_provenance": {
+            "state": "partial",
+            "occupied_before": 29,
+            "occupied_after_target_exclusion": 23,
+            "target_cells_retained_unknown": 6,
+            "free_cells_added": 0,
+            "scope": "measured target/background endpoint attribution only; robot solid-volume and contact policies remain absent"
+          },
+          "support_grounding": {
+            "state": "candidate",
+            "bounds": [
+              [
+                -0.46,
+                -1.11,
+                0.47346784020455107
+              ],
+              [
+                0.37000000000000005,
+                -1.01,
+                0.48746724003795205
+              ]
+            ],
+            "residual_m": 0.000639448481704219,
+            "received_monotonic": 137991.64343623,
+            "scope": "fresh measured footprint; sensor/calibration margin not hardware-qualified"
+          },
+          "visual_manipulation_effects": {
+            "state": "not_assessed",
+            "reason": "no manipulation attempted"
+          },
+          "default_execution_boundary": {
+            "state": "passed",
+            "planning_code": "observed_scene_unavailable",
+            "execution_code": "observed_scene_unavailable"
+          }
+        },
+        "audit_unchanged_during_admission_checks": true
+      }
+    }
+  ],
+  "regression": {
+    "name": "pytest",
+    "errors": "0",
+    "failures": "0",
+    "skipped": "0",
+    "tests": "690",
+    "time": "137.899",
+    "timestamp": "2026-10-28T08:57:43.029220-04:00",
+    "hostname": "olympia"
+  },
+  "regression_job": "20261028_085742_b934e2",
+  "enclosure_reanalysis": {
+    "scope": "offline spatial enclosure reanalysis; no capture age renewal or new live/agent trial",
+    "captures": [
+      {
+        "capture": "capture-0.npz",
+        "state": "unknown",
+        "reason": "object_geometry_unbounded"
+      },
+      {
+        "capture": "capture-1.npz",
+        "state": "unknown",
+        "reason": "object_geometry_unbounded"
+      },
+      {
+        "capture": "capture-2.npz",
+        "state": "unknown",
+        "reason": "object_geometry_unbounded"
+      },
+      {
+        "capture": "capture-3.npz",
+        "state": "unknown",
+        "reason": "object_geometry_unbounded"
+      },
+      {
+        "capture": "capture-4.npz",
+        "state": "unknown",
+        "reason": "object_geometry_unbounded"
+      }
+    ]
+  },
+  "source_sha256": {
+    "src/emet/motion/observed_support.py": "7b04d0950a2c5b1a4e323a8abc312f935eee475dfb72553aa499c819129dc743",
+    "src/emet/motion/observed_object_bound.py": "bc785a2d6498192bb27510e1d5faf52b190cad86d5eb8102e5bdb97eddd15794",
+    "src/emet/eval/observed_readiness.py": "28f914c93a0cdfd7e3f6a0ecba8f61b0f463ea877e7237ea690b01d9c8402c47",
+    "scripts/eval_observed_capture_binding.py": "67b9bce9c91fd54baf56a6d6644a729b3f076743b4c30837d634566e5157baa0"
+  }
+}
