@@ -339,3 +339,28 @@ admit, seven settle at least once, and five retain final success, with one
 retention loss and two settling failures. A 512-step PPO smoke test completes;
 these are runtime/distribution checks, not controller qualification or evidence
 that the subsequent matched training improves public task success.
+
+\paragraph{Isolated arm-learning diagnostic.}
+A subsequent 65,536-step mixed base/arm pilot retains 10/10 base tracking and
+holding but completes zero of eight canonical arm cases. We therefore isolate
+arm learning with the same measured-history, pose-preview and learned-feedback
+model family, using five joint-rate outputs and fixed wheel/grip requests. The
+base remains free in physics, and its pose/quiet, contact and wheel checks remain
+active. A paired zero-wheel teacher executes all sixteen admitted arm references;
+its discounted return exceeds zero arm requests on all sixteen. No teacher
+actions enter the PPO objective and no additional temporal action filter is used.
+
+One 32,768-step scratch PPO run passes all eight canonical cases at every
+scheduled evaluation after 8,192 steps: four training cases and four disjoint
+validation postures with larger motions. Final endpoint errors are
+0.003--0.037\,mm and 0.00005--0.00015\,rad, with nine seconds of quiet holding.
+These are deterministic same-model simulator measurements, not hardware
+precision estimates. All original 3\,mm/0.02\,rad, tracking-tube, drift, force and
+paired-jerk gates remain unchanged. A reloaded final actor and normalizer also
+pass 16/16 cases including smaller training amplitudes, reproducing the eight
+canonical metric dictionaries. Validation is repeatedly scored; no checkpoint
+is selected using it. Initialization, optimizer and distribution change along
+with action authority, so this is not a single-factor masking ablation.
+The component result does not establish loaded retention, whole-body control,
+public pick/place or hardware compliance. Complete metrics and identities are
+retained in \texttt{paper/data/whole\_body\_control/mars\_arm\_component\_v1/}.

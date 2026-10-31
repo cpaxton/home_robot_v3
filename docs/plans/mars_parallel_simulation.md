@@ -59,6 +59,22 @@ environment `/dev/shm/cpaxton-mars-rl-env` and GPU environment
 `/dev/shm/cpaxton-mars-warp-current`. Local persistent reports live under
 `logs/recovery/parallel-caliban-20261030/`.
 
+Build compute snapshots with `scripts/pack_mars_training_snapshot.py --output
+logs/parallel/source.tar`. It selects tracked inputs, includes the bridge camera
+source and category TSV used indirectly by tests, rejects unresolved LFS pointers
+and writes a per-file checksum manifest. Generated control traces stay excluded.
+Extract it only into an isolated workspace; it does not qualify that host.
+
+The 2026-10-30 eight-worker hand pilot stopped at its full regression gate and
+performed zero PPO steps. The missing bridge source is restored and its three
+focused tests pass. Two frozen public-TAMP cases still reject the ARM fixture:
+compiled floating arrays differ at about1e-15 and its settled initial wheel phase
+differs by0.00469rad; the derived destination shifts0.0404mm. Exact frozen hashes
+and1e-8 state checks remain intact. Do not re-freeze the canonical suite, skip
+those tests or accept this as qualified parallel training. A deliberate portable
+frozen-state/model protocol is needed. The validated local single-worker fallback
+completed65,536 hand-focused steps, but remained0/8 arm successes.
+
 ## GPU backend admission
 
 Use direct [MuJoCo Warp](https://github.com/google-deepmind/mujoco_warp) first.

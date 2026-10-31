@@ -94,3 +94,14 @@ Compact [baseline](../../paper/data/whole_body_control/hand_accuracy_v1_setup/ba
 and [matched functional-check metrics](../../paper/data/whole_body_control/hand_accuracy_v1_setup/smoke-comparison.json)
 are tracked. Full compressed traces and weights stay in ignored storage. All
 failures are preserved; no Herman motion occurred.
+
+## 2026-10-31 follow-up
+
+The Caliban regression gate finished with three failures and performed zero PPO
+steps. One missing bridge source is restored; the other two are exact frozen
+TAMP fixture mismatches on ARM. Thresholds and canonical fixtures remain intact.
+The validated local 65,536-step fallback finishes at0/8 arm cases, so it is not
+extended unchanged. A separate five-output arm-only diagnostic subsequently
+passes8/8 at every checkpoint after8k and16/16 in the final reloaded expanded
+evaluation. See the [complete component report](mars_arm_component_20261031.md)
+for its distinct optimization settings, limitations and preserved mixed failures.

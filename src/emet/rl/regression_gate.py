@@ -24,6 +24,7 @@ REGRESSION_TARGETS = (
     "src/test/scripts/test_train_mars_carry_when_ready.py",
     "src/test/scripts/test_trace_mars_carry.py",
     "src/test/scripts/test_control_artifacts.py",
+    "src/test/scripts/test_pack_mars_training_snapshot.py",
 )
 
 
@@ -57,6 +58,9 @@ def source_state(root):
             root / "scripts/trace_mars_carry.py",
             root / "scripts/check_generated_artifacts.py",
             root / "scripts/control_artifacts.py",
+            root / "scripts/pack_mars_training_snapshot.py",
+            root / "src/innate_mars_bridge/innate_mars_bridge/ros/camera.py",
+            root / "src/emet/perception/matterport_category_mappings.tsv",
             root / "scripts/sync_core_runtime.py",
             root / "scripts/eval_manipulation_tamp_oracle.py",
             root / "src/emet/eval/mars_tamp_control.py",

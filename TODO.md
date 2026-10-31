@@ -64,6 +64,20 @@ Accepted plan: [Mars controller integration](docs/plans/mars_controller_integrat
       amplitudes and native hand-gated base credit, preserving canonical gates.
       Measure requested versus actual hand/joint motion before adding loaded
       hold/lift and replaying the public learned-controller pick/place programs.
+- [x] Clear finite empty-hand arm learning with the [five-output component diagnostic](docs/plans/mars_arm_component.md).
+      The completed local 65,536-step mixed fallback remains 0/8 arm cases; retain
+      its regressions. Component teacher passes16/16 with wheel/grip requests
+      fixed; one32k PPO run passes8/8 at all checkpoints after8k and16/16 on final
+      expanded/reloaded evaluation. This is not whole-body or loaded qualification.
+- [ ] Verify arm-to-whole-body mean-preserving training transfer, retain arm
+      accuracy while reintroducing base motion, then loaded hold/lift and public
+      pick/place. Keep one production actor; no permanent multi-task architecture
+      or teacher/student loss is needed by the current component evidence.
+- [ ] Port exact frozen TAMP fixture initialization to ARM without relaxing its
+      hash/pose checks. Caliban's eight-worker pilot never started: one missing
+      camera source is fixed; two exact frozen-fixture checks still reject ARM's
+      compiled/reset differences. Use the tracked-input snapshot packer to catch
+      missing inputs before expensive gates; current hand learning stays local.
 
 - [x] Externalize generated control archives/streams into ignored, checksummed
       storage with a retrieval catalog and a regression guard against force-add.
