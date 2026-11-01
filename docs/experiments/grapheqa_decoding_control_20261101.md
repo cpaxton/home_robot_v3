@@ -125,3 +125,37 @@ Free space rises to 21.52 GiB. Repeat the same q2/q6 order, four decisions and
 four images, in a new output directory after freezing the trace repair. Keep
 checkpoint sampling; do not choose a winning seed or replay a saved action.
 The model must choose again, and the original interrupted run remains a failure.
+
+## Resource-recovered repeat: arrival succeeds, follow-up format fails
+
+Job `20261101_130813_d3dec4`, emet `f6d7b15d`, fork `a2102b6`, repeats the
+same two cases. q2 produces two uncertain empty plans, then an invalid answer
+value `B Black`; the schema allows only the choice value `Black`. It remains
+a retained contract failure, without extracting the letter or repairing text.
+
+q6 naturally selects `frontier_0` while uncertain (0.7). The shared executor
+reaches local XY (0.29977, 1.30121) versus goal (0.3, 1.3), position residual
+1.23 mm, yaw residual 0.000075 rad, zero replans. These are odometry-relative
+residuals, not ground-truth localization accuracy. No collision is reported.
+A fresh capture and model call follows: the current-image SHA changes from
+`33134b611587fcd5…` to `26051855e69d5d4f…`, and the actual successful motion
+receipt reaches that request. The follow-up fails validation (`C In the bathroom`
+instead of `In the bathroom`, plus omitted required descriptions). Both planned
+episodes therefore remain failures; reaching a view is not answering correctly.
+
+The trace identifies two context problems worth repairing independently of model
+quality. History combines a choice ID with its value in an invalid schema-shaped
+string. It now records explicit `choice_id` and exact `answer` fields. Also,
+39 low-level controller events inflate the follow-up motion receipt to 12,593
+characters; the top-level outcome/pose receipt is only 299 characters. Keep all
+events in `decisions.jsonl`, while the planner sees the complete high-level
+receipt without its internal control polls. No dialogue decision is removed.
+Tests verify both the prompt and full artifact so this cannot silently discard
+physical evidence. The observed prompt grew from 12,286 to 26,565 tokens; graph
+growth also contributes, so no total-token saving is claimed before measurement.
+
+Next repeat the same q2/q6 order and four-decision/four-image protocol after these
+context-only fixes. Keep original response ordering and checkpoint decoding,
+strict parsing, every failed row, safety and final-model authority. The remaining
+gate is a schema-valid post-motion assessment; do not accept a malformed final
+answer just because navigation succeeded.
