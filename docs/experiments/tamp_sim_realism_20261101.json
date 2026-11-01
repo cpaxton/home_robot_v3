@@ -1,0 +1,233 @@
+{
+  "schema_version": 1,
+  "source_base": "bac27abbc508a134ecd41e02f82dd123afa729bc",
+  "branch": "feat/tamp-sim-realism",
+  "scope": "Privileged native controller references; no TAMP, agent, observed or hardware success claim",
+  "observed_task_success_assessed": false,
+  "qualified_suite_provider": false,
+  "native_public_tamp_binding_qualified": false,
+  "protocol": "configs/eval/tamp_sim_realism.json",
+  "attempts": [
+    {
+      "name": "reference-v1",
+      "job_id": "20261101_090906_88081c",
+      "raw_summary": ".tamp-runs/sim-realism-20261101/reference-v1/summary.json",
+      "sha256": "8e92aa128607668084629c5a42e5c6c0379255abc74d647ed5bbdc4dcd91c269",
+      "references_passed": 2,
+      "reference_cases": 2,
+      "hold_controls_succeeding": 0,
+      "diagnostic_passed": true
+    },
+    {
+      "name": "reference-v2",
+      "job_id": "20261101_091517_d94adb",
+      "raw_summary": ".tamp-runs/sim-realism-20261101/reference-v2/summary.json",
+      "sha256": "012fc88e6125d87b4f4703ef81f87c29a53c9914635ad114c5bdb5798d42d134",
+      "references_passed": 4,
+      "reference_cases": 4,
+      "hold_controls_succeeding": 0,
+      "diagnostic_passed": true
+    },
+    {
+      "name": "reference-v3",
+      "job_id": "20261101_092206_5f3061",
+      "raw_summary": ".tamp-runs/sim-realism-20261101/reference-v3/summary.json",
+      "sha256": "fcecca2d32d372127ba04d1be4807f1cc66d97eb578c86084bab4663053c1089",
+      "references_passed": 4,
+      "reference_cases": 4,
+      "hold_controls_succeeding": 0,
+      "diagnostic_passed": true
+    },
+    {
+      "name": "reference-v4",
+      "job_id": "20261101_092731_858ab9",
+      "raw_summary": ".tamp-runs/sim-realism-20261101/reference-v4/summary.json",
+      "sha256": "c57e251e863aeb257deb0551a11ae29f16af6a838b914558f1a90ea811ec085d",
+      "references_passed": 4,
+      "reference_cases": 4,
+      "hold_controls_succeeding": 0,
+      "diagnostic_passed": true
+    },
+    {
+      "name": "reference-v5",
+      "job_id": "20261101_093532_e0e09a",
+      "raw_summary": ".tamp-runs/sim-realism-20261101/reference-v5/summary.json",
+      "sha256": "a2a8f3de5ae1d78d133a4b7e0f357c99565dcb029c0aa879cf0b0a6b6aec9ede",
+      "references_passed": 4,
+      "reference_cases": 4,
+      "hold_controls_succeeding": 0,
+      "diagnostic_passed": true
+    }
+  ],
+  "reported_run": "reference-v5",
+  "cases": [
+    {
+      "task": "Lift",
+      "seed": 7,
+      "policy": "scripted_reference",
+      "control_steps": 110,
+      "strict_reference_success": true,
+      "settled_lift_samples": 30,
+      "settled_place_samples": 0,
+      "relative_position_spread_m": 0.00015057596278128562,
+      "placement_position_spread_m": null,
+      "initial_state_sha256": "2db618cda5acbb9c98a1baaa1b297a48b1dac152e1f198a490635239533701d8",
+      "initial_ctrl_sha256": "834a709ba2534ebe3ee1397fd4f7bd288b2acc1d20a08d6c862dcd99b6f04400",
+      "controller_sha256": "00f3b6ec1e879f0ecba5a63cbc3640fc73aac1e8362bf5c25565af83e6258b59",
+      "upstream_task_source_sha256": "2d88a5e350a68d32461e08b3f24d00bdf5d269257b33f9db5da86e8aea19ce7e"
+    },
+    {
+      "task": "Lift",
+      "seed": 7,
+      "policy": "hold",
+      "control_steps": 400,
+      "strict_reference_success": false,
+      "settled_lift_samples": 0,
+      "settled_place_samples": 0,
+      "relative_position_spread_m": null,
+      "placement_position_spread_m": null,
+      "initial_state_sha256": "2db618cda5acbb9c98a1baaa1b297a48b1dac152e1f198a490635239533701d8",
+      "initial_ctrl_sha256": "834a709ba2534ebe3ee1397fd4f7bd288b2acc1d20a08d6c862dcd99b6f04400",
+      "controller_sha256": "00f3b6ec1e879f0ecba5a63cbc3640fc73aac1e8362bf5c25565af83e6258b59",
+      "upstream_task_source_sha256": "2d88a5e350a68d32461e08b3f24d00bdf5d269257b33f9db5da86e8aea19ce7e"
+    },
+    {
+      "task": "Lift",
+      "seed": 13,
+      "policy": "scripted_reference",
+      "control_steps": 114,
+      "strict_reference_success": true,
+      "settled_lift_samples": 30,
+      "settled_place_samples": 0,
+      "relative_position_spread_m": 0.000119333925182143,
+      "placement_position_spread_m": null,
+      "initial_state_sha256": "026f919d99f0cdd0d695821acf16a17baf09da6b123829c171d6d62db95ebb0a",
+      "initial_ctrl_sha256": "834a709ba2534ebe3ee1397fd4f7bd288b2acc1d20a08d6c862dcd99b6f04400",
+      "controller_sha256": "00f3b6ec1e879f0ecba5a63cbc3640fc73aac1e8362bf5c25565af83e6258b59",
+      "upstream_task_source_sha256": "2d88a5e350a68d32461e08b3f24d00bdf5d269257b33f9db5da86e8aea19ce7e"
+    },
+    {
+      "task": "Lift",
+      "seed": 13,
+      "policy": "hold",
+      "control_steps": 400,
+      "strict_reference_success": false,
+      "settled_lift_samples": 0,
+      "settled_place_samples": 0,
+      "relative_position_spread_m": null,
+      "placement_position_spread_m": null,
+      "initial_state_sha256": "026f919d99f0cdd0d695821acf16a17baf09da6b123829c171d6d62db95ebb0a",
+      "initial_ctrl_sha256": "834a709ba2534ebe3ee1397fd4f7bd288b2acc1d20a08d6c862dcd99b6f04400",
+      "controller_sha256": "00f3b6ec1e879f0ecba5a63cbc3640fc73aac1e8362bf5c25565af83e6258b59",
+      "upstream_task_source_sha256": "2d88a5e350a68d32461e08b3f24d00bdf5d269257b33f9db5da86e8aea19ce7e"
+    },
+    {
+      "task": "Stack",
+      "seed": 7,
+      "policy": "scripted_reference",
+      "control_steps": 215,
+      "strict_reference_success": true,
+      "settled_lift_samples": 30,
+      "settled_place_samples": 30,
+      "relative_position_spread_m": 0.0002329550865498704,
+      "placement_position_spread_m": 2.698421784014477e-08,
+      "initial_state_sha256": "6e5dd797c0926e8449e0ad0d7d337ad386ca7192a7f7555e025f318a4c033e20",
+      "initial_ctrl_sha256": "834a709ba2534ebe3ee1397fd4f7bd288b2acc1d20a08d6c862dcd99b6f04400",
+      "controller_sha256": "00f3b6ec1e879f0ecba5a63cbc3640fc73aac1e8362bf5c25565af83e6258b59",
+      "upstream_task_source_sha256": "a1f3fd3ad687bb1ac8dd6032408adab26616076767da3ea0afa20807fee6133f"
+    },
+    {
+      "task": "Stack",
+      "seed": 7,
+      "policy": "hold",
+      "control_steps": 400,
+      "strict_reference_success": false,
+      "settled_lift_samples": 0,
+      "settled_place_samples": 0,
+      "relative_position_spread_m": null,
+      "placement_position_spread_m": null,
+      "initial_state_sha256": "6e5dd797c0926e8449e0ad0d7d337ad386ca7192a7f7555e025f318a4c033e20",
+      "initial_ctrl_sha256": "834a709ba2534ebe3ee1397fd4f7bd288b2acc1d20a08d6c862dcd99b6f04400",
+      "controller_sha256": "00f3b6ec1e879f0ecba5a63cbc3640fc73aac1e8362bf5c25565af83e6258b59",
+      "upstream_task_source_sha256": "a1f3fd3ad687bb1ac8dd6032408adab26616076767da3ea0afa20807fee6133f"
+    },
+    {
+      "task": "Stack",
+      "seed": 13,
+      "policy": "scripted_reference",
+      "control_steps": 258,
+      "strict_reference_success": true,
+      "settled_lift_samples": 30,
+      "settled_place_samples": 30,
+      "relative_position_spread_m": 0.00025662244987069253,
+      "placement_position_spread_m": 1.0676116862583674e-08,
+      "initial_state_sha256": "860eedb04ea1dcbc766bc4a1b7366773fa9926ff98e8b122c43f242cff6e9d8f",
+      "initial_ctrl_sha256": "834a709ba2534ebe3ee1397fd4f7bd288b2acc1d20a08d6c862dcd99b6f04400",
+      "controller_sha256": "00f3b6ec1e879f0ecba5a63cbc3640fc73aac1e8362bf5c25565af83e6258b59",
+      "upstream_task_source_sha256": "a1f3fd3ad687bb1ac8dd6032408adab26616076767da3ea0afa20807fee6133f"
+    },
+    {
+      "task": "Stack",
+      "seed": 13,
+      "policy": "hold",
+      "control_steps": 400,
+      "strict_reference_success": false,
+      "settled_lift_samples": 0,
+      "settled_place_samples": 0,
+      "relative_position_spread_m": null,
+      "placement_position_spread_m": null,
+      "initial_state_sha256": "860eedb04ea1dcbc766bc4a1b7366773fa9926ff98e8b122c43f242cff6e9d8f",
+      "initial_ctrl_sha256": "834a709ba2534ebe3ee1397fd4f7bd288b2acc1d20a08d6c862dcd99b6f04400",
+      "controller_sha256": "00f3b6ec1e879f0ecba5a63cbc3640fc73aac1e8362bf5c25565af83e6258b59",
+      "upstream_task_source_sha256": "a1f3fd3ad687bb1ac8dd6032408adab26616076767da3ea0afa20807fee6133f"
+    }
+  ],
+  "paired_initial_states_match": {
+    "Lift:7": true,
+    "Lift:13": true,
+    "Stack:7": true,
+    "Stack:13": true
+  },
+  "cross_repeat_initial_states_match": true,
+  "budget_failure": {
+    "job_id": "20261101_093535_586f8c",
+    "raw_summary": ".tamp-runs/sim-realism-20261101/budget-stop-v3/summary.json",
+    "control_steps": 1,
+    "failure_reason": "diagnostic_step_budget_exhausted",
+    "expected_runner_exit_code": 1,
+    "distinct_identity_from_400_step_condition": true
+  },
+  "earlier_budget_controls": [
+    {
+      "job_id": "20261101_092208_e6b0c0",
+      "path": ".tamp-runs/sim-realism-20261101/budget-stop/summary.json"
+    },
+    {
+      "job_id": "20261101_092734_8d10a5",
+      "path": ".tamp-runs/sim-realism-20261101/budget-stop-v2/summary.json"
+    }
+  ],
+  "validation": {
+    "qualification_job_id": "20261101_090449_f58eac",
+    "qualification": {
+      "tests": 36,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "runtime_contracts": {
+      "tests": 42,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "trace_audit": "passed",
+    "ruff": "passed",
+    "local_gpu_used": false,
+    "vlm_calls": 0
+  },
+  "final_source_sha256": {
+    "scripts/eval_tamp_panda_reference.py": "f14f779258c6c7be149de8073f32b9898f75c63b4fc696d3e51f77a0dbcdde11",
+    "configs/eval/tamp_sim_realism.json": "0945287ce9874011ce42ad0d0e91c706c70d1a7f7863ecf4243ff266e4775b37"
+  }
+}
