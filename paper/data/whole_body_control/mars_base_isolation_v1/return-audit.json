@@ -1,0 +1,304 @@
+{
+  "scope": "training-only reference-velocity directional-return audit; not qualification",
+  "hardware_used": false,
+  "discount": 0.9975,
+  "complete": true,
+  "source_revision": "a7accb4b06879c773a8d49379120136d770d3ae7",
+  "source_hashes_sha256": "8a270892eb0082a5cca853243bea0d6f292bd4f663962d42ddddbd8286569ce4",
+  "raw_artifact": {
+    "path": "logs/recovery/hand-accuracy-v1/base-return-direction.json",
+    "sha256": "867d55ba466f2fb4171811fb7e1d686b46da61ef00f6a7b14123f8978b6a1b30",
+    "bytes": 1288734
+  },
+  "cases": [
+    {
+      "id": "train:base:forward@posture:hold",
+      "velocity_factor": -0.1,
+      "admitted": true,
+      "code": "mastery_tracking_envelope",
+      "control_steps": 36,
+      "discounted_return": -17.71966044111723,
+      "base_error_m": 0.015284270554425964,
+      "settled_seconds": 0,
+      "flags": {
+        "wheel_lift": false,
+        "unsafe_contact": false,
+        "invalid_physics": false,
+        "retention_lost": false
+      },
+      "initial_state_sha256": "8db54d96955e870cc475d24cbaf7c00aafe44ccdd1e7e233ce98cc98aa5b08ed",
+      "reference_sha256": "f4b3809d9fdaea635351bcf32e3544c59d16e21482417c7a8d6d56a9d14efd54"
+    },
+    {
+      "id": "train:base:forward@posture:hold",
+      "velocity_factor": 0,
+      "admitted": true,
+      "code": "mastery_tracking_envelope",
+      "control_steps": 39,
+      "discounted_return": -17.484926920083094,
+      "base_error_m": 0.015303791980033362,
+      "settled_seconds": 0,
+      "flags": {
+        "wheel_lift": false,
+        "unsafe_contact": false,
+        "invalid_physics": false,
+        "retention_lost": false
+      },
+      "initial_state_sha256": "8db54d96955e870cc475d24cbaf7c00aafe44ccdd1e7e233ce98cc98aa5b08ed",
+      "reference_sha256": "f4b3809d9fdaea635351bcf32e3544c59d16e21482417c7a8d6d56a9d14efd54"
+    },
+    {
+      "id": "train:base:forward@posture:hold",
+      "velocity_factor": 0.02,
+      "admitted": true,
+      "code": "mastery_tracking_envelope",
+      "control_steps": 40,
+      "discounted_return": -17.441067829792956,
+      "base_error_m": 0.015426648327096105,
+      "settled_seconds": 0,
+      "flags": {
+        "wheel_lift": false,
+        "unsafe_contact": false,
+        "invalid_physics": false,
+        "retention_lost": false
+      },
+      "initial_state_sha256": "8db54d96955e870cc475d24cbaf7c00aafe44ccdd1e7e233ce98cc98aa5b08ed",
+      "reference_sha256": "f4b3809d9fdaea635351bcf32e3544c59d16e21482417c7a8d6d56a9d14efd54"
+    },
+    {
+      "id": "train:base:forward@posture:hold",
+      "velocity_factor": 0.1,
+      "admitted": true,
+      "code": "mastery_tracking_envelope",
+      "control_steps": 43,
+      "discounted_return": -17.252295688591374,
+      "base_error_m": 0.015217326395784384,
+      "settled_seconds": 0,
+      "flags": {
+        "wheel_lift": false,
+        "unsafe_contact": false,
+        "invalid_physics": false,
+        "retention_lost": false
+      },
+      "initial_state_sha256": "8db54d96955e870cc475d24cbaf7c00aafe44ccdd1e7e233ce98cc98aa5b08ed",
+      "reference_sha256": "f4b3809d9fdaea635351bcf32e3544c59d16e21482417c7a8d6d56a9d14efd54"
+    },
+    {
+      "id": "train:base:forward@posture:hold",
+      "velocity_factor": 0.25,
+      "admitted": true,
+      "code": "mastery_tracking_envelope",
+      "control_steps": 71,
+      "discounted_return": -15.758616101492732,
+      "base_error_m": 0.015000129015991353,
+      "settled_seconds": 0,
+      "flags": {
+        "wheel_lift": false,
+        "unsafe_contact": false,
+        "invalid_physics": false,
+        "retention_lost": false
+      },
+      "initial_state_sha256": "8db54d96955e870cc475d24cbaf7c00aafe44ccdd1e7e233ce98cc98aa5b08ed",
+      "reference_sha256": "f4b3809d9fdaea635351bcf32e3544c59d16e21482417c7a8d6d56a9d14efd54"
+    },
+    {
+      "id": "train:base:forward@posture:hold",
+      "velocity_factor": 0.5,
+      "admitted": true,
+      "code": "tracking_timeout",
+      "control_steps": 240,
+      "discounted_return": 6.9335748917505775,
+      "base_error_m": 0.009989945177015616,
+      "settled_seconds": 0,
+      "flags": {
+        "wheel_lift": false,
+        "unsafe_contact": false,
+        "invalid_physics": false,
+        "retention_lost": false
+      },
+      "initial_state_sha256": "8db54d96955e870cc475d24cbaf7c00aafe44ccdd1e7e233ce98cc98aa5b08ed",
+      "reference_sha256": "f4b3809d9fdaea635351bcf32e3544c59d16e21482417c7a8d6d56a9d14efd54"
+    },
+    {
+      "id": "train:base:forward@posture:hold",
+      "velocity_factor": 0.75,
+      "admitted": true,
+      "code": "tracking_timeout",
+      "control_steps": 240,
+      "discounted_return": 14.131250280339737,
+      "base_error_m": 0.005026450038250887,
+      "settled_seconds": 0,
+      "flags": {
+        "wheel_lift": false,
+        "unsafe_contact": false,
+        "invalid_physics": false,
+        "retention_lost": false
+      },
+      "initial_state_sha256": "8db54d96955e870cc475d24cbaf7c00aafe44ccdd1e7e233ce98cc98aa5b08ed",
+      "reference_sha256": "f4b3809d9fdaea635351bcf32e3544c59d16e21482417c7a8d6d56a9d14efd54"
+    },
+    {
+      "id": "train:base:forward@posture:hold",
+      "velocity_factor": 1.0,
+      "admitted": true,
+      "code": "ok",
+      "control_steps": 240,
+      "discounted_return": 21.64294575342802,
+      "base_error_m": 0.00013558623925752488,
+      "settled_seconds": 8.999999999999993,
+      "flags": {
+        "wheel_lift": false,
+        "unsafe_contact": false,
+        "invalid_physics": false,
+        "retention_lost": false
+      },
+      "initial_state_sha256": "8db54d96955e870cc475d24cbaf7c00aafe44ccdd1e7e233ce98cc98aa5b08ed",
+      "reference_sha256": "f4b3809d9fdaea635351bcf32e3544c59d16e21482417c7a8d6d56a9d14efd54"
+    },
+    {
+      "id": "train:base:reverse@posture:hold",
+      "velocity_factor": -0.1,
+      "admitted": true,
+      "code": "mastery_tracking_envelope",
+      "control_steps": 36,
+      "discounted_return": -17.726277222083713,
+      "base_error_m": 0.015291673319888247,
+      "settled_seconds": 0,
+      "flags": {
+        "wheel_lift": false,
+        "unsafe_contact": false,
+        "invalid_physics": false,
+        "retention_lost": false
+      },
+      "initial_state_sha256": "8db54d96955e870cc475d24cbaf7c00aafe44ccdd1e7e233ce98cc98aa5b08ed",
+      "reference_sha256": "bed7316039e8736375b6193fae5cc541c5381024165b9ece7da8104c3333eb22"
+    },
+    {
+      "id": "train:base:reverse@posture:hold",
+      "velocity_factor": 0,
+      "admitted": true,
+      "code": "mastery_tracking_envelope",
+      "control_steps": 39,
+      "discounted_return": -17.48427857026715,
+      "base_error_m": 0.015289433024000551,
+      "settled_seconds": 0,
+      "flags": {
+        "wheel_lift": false,
+        "unsafe_contact": false,
+        "invalid_physics": false,
+        "retention_lost": false
+      },
+      "initial_state_sha256": "8db54d96955e870cc475d24cbaf7c00aafe44ccdd1e7e233ce98cc98aa5b08ed",
+      "reference_sha256": "bed7316039e8736375b6193fae5cc541c5381024165b9ece7da8104c3333eb22"
+    },
+    {
+      "id": "train:base:reverse@posture:hold",
+      "velocity_factor": 0.02,
+      "admitted": true,
+      "code": "mastery_tracking_envelope",
+      "control_steps": 40,
+      "discounted_return": -17.42483904702168,
+      "base_error_m": 0.015437978154073932,
+      "settled_seconds": 0,
+      "flags": {
+        "wheel_lift": false,
+        "unsafe_contact": false,
+        "invalid_physics": false,
+        "retention_lost": false
+      },
+      "initial_state_sha256": "8db54d96955e870cc475d24cbaf7c00aafe44ccdd1e7e233ce98cc98aa5b08ed",
+      "reference_sha256": "bed7316039e8736375b6193fae5cc541c5381024165b9ece7da8104c3333eb22"
+    },
+    {
+      "id": "train:base:reverse@posture:hold",
+      "velocity_factor": 0.1,
+      "admitted": true,
+      "code": "mastery_tracking_envelope",
+      "control_steps": 43,
+      "discounted_return": -17.240777970007965,
+      "base_error_m": 0.015225074622630586,
+      "settled_seconds": 0,
+      "flags": {
+        "wheel_lift": false,
+        "unsafe_contact": false,
+        "invalid_physics": false,
+        "retention_lost": false
+      },
+      "initial_state_sha256": "8db54d96955e870cc475d24cbaf7c00aafe44ccdd1e7e233ce98cc98aa5b08ed",
+      "reference_sha256": "bed7316039e8736375b6193fae5cc541c5381024165b9ece7da8104c3333eb22"
+    },
+    {
+      "id": "train:base:reverse@posture:hold",
+      "velocity_factor": 0.25,
+      "admitted": true,
+      "code": "tracking_timeout",
+      "control_steps": 240,
+      "discounted_return": 2.953212940102061,
+      "base_error_m": 0.014683973175999671,
+      "settled_seconds": 0,
+      "flags": {
+        "wheel_lift": false,
+        "unsafe_contact": false,
+        "invalid_physics": false,
+        "retention_lost": false
+      },
+      "initial_state_sha256": "8db54d96955e870cc475d24cbaf7c00aafe44ccdd1e7e233ce98cc98aa5b08ed",
+      "reference_sha256": "bed7316039e8736375b6193fae5cc541c5381024165b9ece7da8104c3333eb22"
+    },
+    {
+      "id": "train:base:reverse@posture:hold",
+      "velocity_factor": 0.5,
+      "admitted": true,
+      "code": "tracking_timeout",
+      "control_steps": 240,
+      "discounted_return": 6.387084723646586,
+      "base_error_m": 0.009976297129160198,
+      "settled_seconds": 0,
+      "flags": {
+        "wheel_lift": false,
+        "unsafe_contact": false,
+        "invalid_physics": false,
+        "retention_lost": false
+      },
+      "initial_state_sha256": "8db54d96955e870cc475d24cbaf7c00aafe44ccdd1e7e233ce98cc98aa5b08ed",
+      "reference_sha256": "bed7316039e8736375b6193fae5cc541c5381024165b9ece7da8104c3333eb22"
+    },
+    {
+      "id": "train:base:reverse@posture:hold",
+      "velocity_factor": 0.75,
+      "admitted": true,
+      "code": "tracking_timeout",
+      "control_steps": 240,
+      "discounted_return": 14.001632369688448,
+      "base_error_m": 0.00508827152995023,
+      "settled_seconds": 0,
+      "flags": {
+        "wheel_lift": false,
+        "unsafe_contact": false,
+        "invalid_physics": false,
+        "retention_lost": false
+      },
+      "initial_state_sha256": "8db54d96955e870cc475d24cbaf7c00aafe44ccdd1e7e233ce98cc98aa5b08ed",
+      "reference_sha256": "bed7316039e8736375b6193fae5cc541c5381024165b9ece7da8104c3333eb22"
+    },
+    {
+      "id": "train:base:reverse@posture:hold",
+      "velocity_factor": 1.0,
+      "admitted": true,
+      "code": "ok",
+      "control_steps": 240,
+      "discounted_return": 20.09702608192873,
+      "base_error_m": 8.571904268931592e-05,
+      "settled_seconds": 8.999999999999993,
+      "flags": {
+        "wheel_lift": false,
+        "unsafe_contact": false,
+        "invalid_physics": false,
+        "retention_lost": false
+      },
+      "initial_state_sha256": "8db54d96955e870cc475d24cbaf7c00aafe44ccdd1e7e233ce98cc98aa5b08ed",
+      "reference_sha256": "bed7316039e8736375b6193fae5cc541c5381024165b9ece7da8104c3333eb22"
+    }
+  ],
+  "limitations": "Two training trajectories only; private announced derivatives used for diagnostics, no task or learned-policy qualification."
+}

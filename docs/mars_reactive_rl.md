@@ -11,6 +11,16 @@ package is limited to simulation, training, and offline TAMP regression; no live
 Stretch command adapter is provided. Hardware publishers and perception adapters
 are follow-on work, and no learned policy is claimed to beat the baseline.
 
+Current whole-body learning status (November 1): the
+[frozen-arm base pilot](experiments/mars_base_isolation_20261101.md) completes
+32,768 PPO steps after 985 fresh regression tests and a 66/66 paired teacher.
+Expanded base tracking improves to 48/50, but full base passes are only 15/50;
+arm tracking/full is 14/16 and 0/16. The actor is not promoted. The
+[next comparison](plans/mars_base_isolation.md) isolates base-only task sampling
+before coordinated and loaded training. The bounded diagnostic CLI is
+`python -m emet.rl.manipulation.base_component --help`;
+its exported inference bundle remains one eight-output actor.
+
 ## Start with base-only control
 
 The CLI now defaults to `--task base --architecture mlp`: two 64-unit hidden

@@ -87,10 +87,16 @@ Accepted plan: [Mars controller integration](docs/plans/mars_controller_integrat
 - [x] Correct simulator forward/yaw diagnostics from principal-inertia axes to
       regular body axes. Verify rotated inertia frames, identical66-case physical
       metrics/rewards after replay, and constant-request velocity response.
-- [ ] Isolate base learning with the successful arm function fixed in the same
-      runtime actor. Audit small sustained-request returns/advantages, coherent
-      exploration and reference-velocity tracking before more mixed PPO. The
-      repaired32k run still has12/50 base path stops and new arm-case base jerk.
+- [x] Run the bounded [frozen-arm base diagnostic](docs/experiments/mars_base_isolation_20261101.md)
+      and sustained-request return audit. One 32k gSDE pilot improves expanded
+      base tracking to48/50 but only15/50 full passes; arm14/16 tracking and0/16
+      full. Keep every failure and retain the unpromoted source bundle. Removing
+      direct hand-to-base connections in a final-only diagnostic restores
+      canonical arm tracking8/8, but not smoothness; do not deploy that mask.
+- [ ] Isolate base-only task sampling next, matching the last pilot's base
+      transition budget with8,192 steps and the same frozen arm/context, source
+      normalization and acceptance gates. Audit base-feedback signs and quiet
+      holding, then restore coordinated hand/base cases before loaded/TAMP work.
 - [ ] Port exact frozen TAMP fixture initialization to ARM without relaxing its
       hash/pose checks. Caliban's eight-worker pilot never started: one missing
       camera source is fixed; two exact frozen-fixture checks still reject ARM's

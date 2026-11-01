@@ -398,3 +398,18 @@ physical metrics and rewards exactly. Short constant-request probes track
 0.5--10\,mm/s within about 2.6\% by displacement, narrowing the remaining gap to
 policy learning. Complete results and request/motion plots are retained in
 \texttt{paper/data/whole\_body\_control/mars\_command\_history\_v1/}.
+
+\paragraph{Frozen-arm base exploration diagnostic.}
+A subsequent bounded 32,768-step pilot fixes arm/context/grip parameters and
+normalization, training base readouts and exploration with generalized
+state-dependent noise~\cite{raffin2022smoothexploration}. Export still uses one
+eight-output actor. A fresh teacher passes 66/66 and 985 source-bound regressions
+pass. Final base tracking improves to 48/50, but full passes fall to 15/50;
+arm tracking/full passes are 14/16 and 0/16. No unsafe-contact or wheel-lift flag
+trips in these unloaded cases. A final-only diagnostic removing direct
+hand-error-to-base connections restores canonical arm tracking from 6/8 to 8/8,
+while full arm smoothness remains 0/8. Frozen arm weights therefore do not
+prevent physical interference from trainable base outputs. This motivates
+base-only task-distribution isolation before further coordinated training,
+not policy promotion or hardware testing. Complete outcomes are retained in
+\texttt{paper/data/whole\_body\_control/mars\_base\_isolation\_v1/}.

@@ -45,3 +45,22 @@ claim that the paper establishes safety or solves this particular benchmark.
 Raw component weights, merged bundles and traces stay in ignored `logs/`.
 Track compact case metrics, identities, exposure and update diagnostics. Loaded
 hold/lift, agent pick/place and Herman remain separate acceptance stages.
+
+## Completed pilot and next comparison
+
+The [complete report](../experiments/mars_base_isolation_20261101.md) records
+985 passing regressions, teacher 66/66 and initial arm 16/16. Final base tracking
+improves to 48/50 but full passes drop to 15/50; arm tracking/full is 14/16 and
+0/16. Exact frozen arm weights do not prevent physical interference from newly
+learned base outputs. A final-only hand-to-base connection ablation restores
+canonical arm tracking to 8/8, but still misses every arm smoothness gate.
+
+Next, isolate the base-only task distribution with the same source bundle and
+fixed arm/context/normalization. Match the present 8,172 base transitions with
+an 8,192-step base-only pilot, scoring all 18 canonical cases every 2,048 steps
+and all 66 expanded cases at final. Keep the other training settings and all
+physical gates unchanged. Inactive hand error receives no actor gradient,
+without permanently masking hand-driven base coordination at runtime. Require
+fresh regression/teacher evidence and initial 16/16 physical arm admission.
+Inspect base-feedback signs and quiet-hold failures before another coordinated
+curriculum. This next comparison is not launched.
