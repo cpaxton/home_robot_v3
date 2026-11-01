@@ -2,8 +2,35 @@
 # Licensed under the Apache License, Version 2.0 (see LICENSE).
 """Experimental schema descriptions; no change to valid answers or actions."""
 
+import json
+import re
 from contextlib import contextmanager
 from copy import deepcopy
+
+
+def schema_aligned_history(text):
+    """Replay the fork's history-format repair on its previously saved prompts.
+
+    Only the known HISTORY section changes. Model outputs are never repaired,
+    and the current graph, images and response schema remain byte-identical.
+    """
+    prefix, marker, history = text.partition("HISTORY: ")
+    if not marker or not history.strip(" .\n"):
+        raise ValueError("Expected a recorded planner history")
+    history = re.sub(
+        r"(Answer\(t=\d+\): )([A-Z]) ([^\n]+)",
+        lambda match: match[1] + json.dumps({"choice_id": match[2], "answer": match[3].strip()}),
+        history,
+    )
+    start = 0
+    motion_marker = "MOTION RESULT: "
+    while (start := history.find(motion_marker, start)) >= 0:
+        start += len(motion_marker)
+        receipt, end = json.JSONDecoder().raw_decode(history[start:])
+        compact = json.dumps({key: value for key, value in receipt.items() if key != "events"})
+        history = history[:start] + compact + history[start + end :]
+        start += len(compact)
+    return prefix + marker + history
 
 
 @contextmanager

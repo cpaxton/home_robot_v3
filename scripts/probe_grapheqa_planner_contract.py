@@ -18,7 +18,12 @@ from pathlib import Path
 
 from run_shared_room_pairs import assert_frozen_source, git
 
-from emet.eval.planner_contract import answer_before_action_schema, clarify_planner_schema, diagnostic_decoding
+from emet.eval.planner_contract import (
+    answer_before_action_schema,
+    clarify_planner_schema,
+    diagnostic_decoding,
+    schema_aligned_history,
+)
 from emet.utils.job_registry import validated_gpu_lock_fd
 
 
@@ -35,6 +40,17 @@ def request_variant(request, variant):
         result["messages"][0]["content"] = prefix + "\n" + json.dumps(clarify_planner_schema(schema))
     elif variant == "answer_first":
         result["messages"][0]["content"] = prefix + "\n" + json.dumps(answer_before_action_schema(schema))
+    elif variant == "history_contract":
+        states = [
+            message
+            for message in result["messages"]
+            if message["role"] == "user"
+            and isinstance(message["content"], str)
+            and message["content"].startswith("CURRENT STATE:")
+        ]
+        if len(states) != 1:
+            raise ValueError("Expected exactly one reference planner state message")
+        states[0]["content"] = schema_aligned_history(states[0]["content"])
     elif variant not in {"original", "greedy"}:
         raise ValueError("Unknown diagnostic variant")
     return result, schema
@@ -163,6 +179,8 @@ if __name__ == "__main__":
         "--recorded", type=Path, required=True, help="Earlier paired/ directory, with every request retained"
     )
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--variant", choices=["clarified", "answer_first", "greedy"], default="clarified")
+    parser.add_argument(
+        "--variant", choices=["clarified", "answer_first", "greedy", "history_contract"], default="clarified"
+    )
     parser.add_argument("--seeds", nargs="+", type=int, help="Explicit per-call sampling seeds; no HTTP seed claim")
     raise SystemExit(run(parser.parse_args()))

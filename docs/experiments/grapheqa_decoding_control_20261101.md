@@ -159,3 +159,30 @@ context-only fixes. Keep original response ordering and checkpoint decoding,
 strict parsing, every failed row, safety and final-model authority. The remaining
 gate is a schema-valid post-motion assessment; do not accept a malformed final
 answer just because navigation succeeded.
+
+## Context-fixed fresh repeat and frozen follow-up diagnostic
+
+Job `20261101_131529_46f653`, emet `be4aa4a6`, fork `2798dc4`, completes
+q2/q6 with five valid model responses. q2 exhausts four uncertain empty plans
+and returns B (wrong); q6 stops confidently with C (wrong) before executing its
+proposed frontier. No motion is executed in this repeat. Its q6 post-motion path
+is therefore unexercised, and it cannot establish that the context change fixes
+the earlier malformed follow-up. Retain this zero-correct/two-planned diagnostic;
+different stochastic trajectories prevent a causal live comparison.
+
+Rather than repeat navigation until a favorable sample, freeze the two malformed
+requests from the preceding run: q2's third assessment and q6's post-arrival
+assessment. Replay original vs schema-aligned history with seeds 0/1/2, resetting
+the RNG per paired call. Twelve calls run serially. Only the known HISTORY text
+changes: choice ID/value fields become explicit JSON, and low-level motion
+events leave the prompt while their high-level receipt remains. Current graph,
+question, legal response schema, images/order/labels, model and budget remain
+exactly unchanged. No response repair or gold answer input is allowed.
+
+Input fixture `/tmp/grapheqa-post-history-fixture-20261101/` copies both failed
+traces with source-file hashes and capture context. The experiment uses the
+advertised full JSON Schema to measure format adherence; inspect any distinction
+from the fork's Pydantic validation when reporting results. This deliberately
+selected failure set diagnoses a context mechanism, not representative accuracy
+or a full live acceptance pass. Eight diagnostic tests verify the transform and
+unchanged surrounding evidence. Keep the motion/receipt execution tests separate.

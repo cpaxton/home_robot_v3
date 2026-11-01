@@ -10,7 +10,43 @@ from types import SimpleNamespace
 import pytest
 from jsonschema import Draft202012Validator
 
-from emet.eval.planner_contract import answer_before_action_schema, clarify_planner_schema, diagnostic_decoding
+from emet.eval.planner_contract import (
+    answer_before_action_schema,
+    clarify_planner_schema,
+    diagnostic_decoding,
+    schema_aligned_history,
+)
+
+
+def test_history_replay_changes_only_answer_labels_and_low_level_events():
+    prefix = "CURRENT STATE: current measured pose; SCENE GRAPH: unchanged. HISTORY: "
+    receipt = {"success": False, "reason": "blocked", "current_pose": [1, 2, 0], "events": [{"phase": "control"}]}
+    old = prefix + "Answer(t=0): C In the bathroom\nConfident: False\nMOTION RESULT: " + json.dumps(receipt) + "\n"
+    revised = schema_aligned_history(old)
+    assert revised.startswith(prefix)
+    assert 'Answer(t=0): {"choice_id": "C", "answer": "In the bathroom"}' in revised
+    saved = json.loads(revised.split("MOTION RESULT: ")[1])
+    assert saved == {key: value for key, value in receipt.items() if key != "events"}
+    assert "Confident: False" in revised and receipt["events"]
+
+
+def test_history_variant_preserves_images_schema_question_and_model_settings(monkeypatch):
+    probe = driver(monkeypatch)
+    request = {
+        "model": "qwen",
+        "max_tokens": 2048,
+        "messages": [
+            {"role": "system", "content": "ROOT schema\n" + json.dumps(schema())},
+            {"role": "system", "content": "QUESTION: untouched"},
+            {"role": "user", "content": "CURRENT STATE: exact graph. HISTORY: Answer(t=0): A Red\nConfident: False\n"},
+            {"role": "user", "content": [{"type": "image_url", "image_url": {"url": "data:image/png;base64,AAAA"}}]},
+        ],
+    }
+    revised, _ = probe.request_variant(request, "history_contract")
+    assert revised["messages"][:2] == request["messages"][:2]
+    assert revised["messages"][3:] == request["messages"][3:]
+    assert revised["model"] == request["model"] and revised["max_tokens"] == request["max_tokens"]
+    assert request["messages"][2]["content"].endswith("Answer(t=0): A Red\nConfident: False\n")
 
 
 def test_greedy_diagnostic_changes_only_sampling_and_restores_checkpoint_on_failure():
