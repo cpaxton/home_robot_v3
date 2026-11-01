@@ -2,7 +2,26 @@
 # Licensed under the Apache License, Version 2.0 (see LICENSE).
 """Experimental schema descriptions; no change to valid answers or actions."""
 
+from contextlib import contextmanager
 from copy import deepcopy
+
+
+@contextmanager
+def diagnostic_decoding(client, *, greedy=False):
+    """Temporarily change sampling only; restore the original even on failure.
+
+    Used by the frozen-request diagnostic, never by the runtime planner. The
+    checkpoint otherwise owns decoding defaults, which may enable sampling.
+    """
+    original = client.model.generation_config
+    changed = deepcopy(original)
+    if greedy:
+        changed.do_sample = False
+    client.model.generation_config = changed
+    try:
+        yield changed
+    finally:
+        client.model.generation_config = original
 
 
 def answer_before_action_schema(schema):

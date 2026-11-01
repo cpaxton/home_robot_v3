@@ -18,7 +18,7 @@ from pathlib import Path
 
 from run_shared_room_pairs import assert_frozen_source, git
 
-from emet.eval.planner_contract import answer_before_action_schema, clarify_planner_schema
+from emet.eval.planner_contract import answer_before_action_schema, clarify_planner_schema, diagnostic_decoding
 from emet.utils.job_registry import validated_gpu_lock_fd
 
 
@@ -35,7 +35,7 @@ def request_variant(request, variant):
         result["messages"][0]["content"] = prefix + "\n" + json.dumps(clarify_planner_schema(schema))
     elif variant == "answer_first":
         result["messages"][0]["content"] = prefix + "\n" + json.dumps(answer_before_action_schema(schema))
-    elif variant != "original":
+    elif variant not in {"original", "greedy"}:
         raise ValueError("Unknown diagnostic variant")
     return result, schema
 
@@ -57,6 +57,7 @@ def read_requests(directory):
 
 
 def run(args):
+    import torch
     from jsonschema import Draft202012Validator
 
     from emet.llms.openai_server import LLMServeState
@@ -82,7 +83,8 @@ def run(args):
         "request_files_sha256": {name: sha256(path) for name, _, path in selected},
         "comparison_variant": args.variant,
         "variant_order": f"original/{args.variant} on even cases; {args.variant}/original on odd cases",
-        "planned_rows": len(selected) * 2,
+        "seeds": args.seeds,
+        "planned_rows": len(selected) * 2 * len(args.seeds or [None]),
         "status": "running",
         "scoring_labels_read": False,
     }
@@ -106,15 +108,24 @@ def run(args):
         ):
             raise RuntimeError("Loaded model differs from the frozen request comparison")
         manifest["model"] = model
-        for index, (name, original, _) in enumerate(selected):
+        manifest["checkpoint_generation_config"] = state.client.model.generation_config.to_dict()
+        manifest["client_num_beams"] = state.client.num_beams
+        # Reset sampling RNG before each paired request. Fixed seeds are a
+        # diagnostic control, not a promise of bitwise GPU reproducibility.
+        trials = [(item, seed) for item in selected for seed in (args.seeds or [None])]
+        for index, ((name, original, _), seed) in enumerate(trials):
             order = ("original", args.variant) if index % 2 == 0 else (args.variant, "original")
             for variant in order:
                 request, schema = request_variant(original, variant)
-                row = {"case_id": name, "variant": variant, "complete": False}
-                trace = {"case_id": name, "variant": variant, "request": request}
+                row = {"case_id": name, "variant": variant, "seed": seed, "complete": False}
+                trace = {"case_id": name, "variant": variant, "seed": seed, "request": request}
                 started = time.monotonic()
                 try:
-                    response = state.complete(request)
+                    with diagnostic_decoding(state.client, greedy=variant == "greedy") as config:
+                        trace["generation_config"] = config.to_dict()
+                        if seed is not None:
+                            torch.manual_seed(seed)
+                        response = state.complete(request)
                     trace["response"] = response
                     choice = response["choices"][0]
                     if choice["finish_reason"] != "stop":
@@ -152,5 +163,6 @@ if __name__ == "__main__":
         "--recorded", type=Path, required=True, help="Earlier paired/ directory, with every request retained"
     )
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--variant", choices=["clarified", "answer_first"], default="clarified")
+    parser.add_argument("--variant", choices=["clarified", "answer_first", "greedy"], default="clarified")
+    parser.add_argument("--seeds", nargs="+", type=int, help="Explicit per-call sampling seeds; no HTTP seed claim")
     raise SystemExit(run(parser.parse_args()))

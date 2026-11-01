@@ -5,11 +5,26 @@ import copy
 import importlib.util
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from jsonschema import Draft202012Validator
 
-from emet.eval.planner_contract import answer_before_action_schema, clarify_planner_schema
+from emet.eval.planner_contract import answer_before_action_schema, clarify_planner_schema, diagnostic_decoding
+
+
+def test_greedy_diagnostic_changes_only_sampling_and_restores_checkpoint_on_failure():
+    original = SimpleNamespace(do_sample=True, temperature=0.7, top_p=0.8, top_k=20)
+    client = SimpleNamespace(model=SimpleNamespace(generation_config=original))
+    with pytest.raises(RuntimeError, match="generation failed"):
+        with diagnostic_decoding(client, greedy=True) as config:
+            assert not config.do_sample
+            assert (config.temperature, config.top_p, config.top_k) == (0.7, 0.8, 20)
+            assert original.do_sample
+            raise RuntimeError("generation failed")
+    assert client.model.generation_config is original
+    with diagnostic_decoding(client) as config:
+        assert vars(config) == vars(original)
 
 
 def schema():
@@ -88,6 +103,8 @@ def test_replay_keeps_images_history_model_budget_and_original_request_exact(mon
     }
     original, _ = probe.request_variant(request, "original")
     assert original == request
+    greedy, _ = probe.request_variant(request, "greedy")
+    assert greedy == request
     clarified, _ = probe.request_variant(request, "clarified")
     assert clarified["messages"][1:] == request["messages"][1:]
     assert clarified["model"] == request["model"] and clarified["max_tokens"] == 2048
