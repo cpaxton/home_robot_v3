@@ -1,8 +1,8 @@
-# GraphEQA decoding control before live interaction
+# GraphEQA interaction audit: decoding, history and frontier registry
 
 Follow-up to the [review and planner-contract probes](grapheqa_review_and_contract_probe_20261031.md).
-The active reference adaptation still has no accepted model-selected-motion
-episode. Do not substitute passing API tests for that gate.
+An actual model-selected arrival now reaches a fresh view, but schema-valid
+post-motion live acceptance remains open. Passing API tests alone is not that gate.
 
 ## Audit finding
 
@@ -186,3 +186,51 @@ from the fork's Pydantic validation when reporting results. This deliberately
 selected failure set diagnoses a context mechanism, not representative accuracy
 or a full live acceptance pass. Eight diagnostic tests verify the transform and
 unchanged surrounding evidence. Keep the motion/receipt execution tests separate.
+
+## Frozen history result
+
+Job `20261101_132158_ff2540`, source `faa82cfa`, completes all 12 calls. Five
+original-condition replies fail schema validation, so the job deliberately exits
+nonzero; this is a retained negative control, not an infrastructure crash.
+
+| Selected failure request | Original valid / 3 seeds | Corrected history valid / 3 seeds |
+| --- | --- | --- |
+| q2, third assessment | 1 | 3 |
+| q6, post-arrival assessment | 0 | 3 |
+
+Counts agree under the advertised JSON Schema and the actual native Pydantic
+response classes in both the root and Habitat environments. Generated native
+schemas equal the saved schemas. Reconstructing history with the current fork's
+real builder exactly matches the replay transform for both cases. No model reply
+was repaired. q6 prompt length drops from 26,565 to 19,249 tokens (7,316 fewer)
+with the same current graph, images, labels and generation budget.
+
+This supports the format repair on these selected failures. It does not establish
+representative accuracy, reliable action selection, or a fresh end-to-end pass.
+Full outputs and both environment validations are at
+`/home/cpaxton/runs/emet/grapheqa-frozen-history-contract-20261101/`.
+
+## Another context inconsistency: non-callable frontier nodes
+
+The raw planning projection contains native 3-D frontier nodes even though their
+edges are explicitly excluded and the registry is replaced by observed-space
+navigation candidates. q2's captured context has 56 frontier nodes but eight
+actions; q6's post-arrival context has 67 but eight actions. One failed reply
+selects native `frontier_1800`, which is not a callable ID. This is misleading
+input, not evidence that unavailable geometry should be admitted or guessed.
+
+Fork `5f3fc51` omits native 3-D frontier nodes from the planning projection and
+replaces/clears supplied frontier nodes and their edges on refresh. The native
+Hydra reconstruction, objects and room data remain intact. A real wrapper test
+covers native vs callable IDs, shrinking and empty registries. All **46 fork
+tests** pass. A CPU-only isolated replay of 15 cached learned q6 packets confirms
+exact graph/registry equality before and after eight callable frontiers become
+available, with identical object IDs to the original contexts. No model,
+renderer, simulator pose or annotation assets enter that replay. Output:
+`/tmp/grapheqa-frontier-registry-5hf0kp_e/`.
+
+Run one final fresh q2/q6 diagnostic at the corrected projection/history commits,
+same case order, four decisions, four uniform images, checkpoint decoding and
+strict parsing. Retain all results regardless of which actions sampling chooses.
+This checks the corrected input contract; it does not turn prior failures into
+successes or establish an accuracy comparison with main.
