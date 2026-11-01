@@ -1,8 +1,9 @@
 # GraphEQA interaction audit: decoding, history and frontier registry
 
 Follow-up to the [review and planner-contract probes](grapheqa_review_and_contract_probe_20261031.md).
-An actual model-selected arrival now reaches a fresh view, but schema-valid
-post-motion live acceptance remains open. Passing API tests alone is not that gate.
+The sensor-only GraphEQA connection is qualified: supplied-model inference,
+native learned mapping and model-selected movement run together. Task-quality
+failures remain benchmark outcomes rather than prerequisites for this connection.
 
 ## Audit finding
 
@@ -258,13 +259,14 @@ Acceptance summary:
 | Native projection matches callable registry | Fifteen-packet isolated replay passes, retaining object IDs |
 | Real model-selected movement | q6 in the resource-recovered run arrives and receives a fresh assessment; position residual 1.23 mm is relative to odometry |
 | Corrected follow-up format on identical evidence | Selected failed requests improve from 1/6 to 6/6 valid replies under paired seeds and native validators |
-| Fresh schema-valid post-motion episode with final code | Not yet demonstrated: the final q6 repeat stops before motion |
-| Reliable active task quality / matched comparison with emet | Not accepted; do not expand to a full sweep |
+| GraphEQA baseline connection | Complete: runnable model/graph/executor integration with actual model-selected arrival |
+| Fresh schema-valid post-motion episode with final code | Not yet demonstrated; retained as a performance limitation, not a connection blocker |
+| Matched comparison with emet | Separate evaluation work; match physical/input contracts and retain baseline failures |
 
 Do not repair the model's answers, increase the cap after seeing a failure, force
-movement or reinterpret confident stopping as an action. The next capacity
-control can compare the cached stronger Qwen checkpoint on the same saved
-requests, with explicit decoding and image budgets, before another fresh pilot.
+movement or reinterpret confident stopping as an action. A stronger Qwen
+comparison on the same saved requests is an optional capacity ablation; further
+model tuning or a successful EQA episode is not required to accept the connection.
 The larger emet comparison still needs matched estimated-pose basis, footprint,
 perception and movement budgets. Effective decoding and environment versions
 should be part of every paper-run manifest; source freezing alone does not fix

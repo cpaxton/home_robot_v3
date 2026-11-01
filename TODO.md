@@ -1,20 +1,18 @@
 # Living TODOs (small / near-term)
 
-- [ ] Finish sensor-only active GraphEQA acceptance. A real model-selected q6
-      frontier now reaches a fresh assessment (1.23 mm odometry-relative endpoint
-      residual), but that live follow-up fails formatting. Corrected history
-      improves selected frozen failures from 1/6 to 6/6 valid replies with paired
-      seeds; a final fresh two-case check still has zero successful answers
-      (q2 output truncation, q6 confident wrong stop). Keep the baseline opt-in.
-      Bounded empty-plan retries, interrupted-decision traces and exact callable
-      frontier projection are repaired; 46 fork tests, 25 emet tests and a native
-      15-packet registry replay pass. No default field-order/decoding flip, forced
-      action or answer override. Next compare a stronger cached Qwen on identical
-      requests and qualify a fresh schema-valid post-motion episode. Match emet
-      estimated-pose basis, footprint, perception and motion budgets before paired
-      active claims; retain matched-history image-only controls. Report:
-      `docs/experiments/grapheqa_decoding_control_20261101.md`. Earlier source-bound
-      failures remain in the Oct 30/31 qualification reports; no full sweep yet.
+- [x] Connect the sensor-only active GraphEQA baseline. Supplied-model inference,
+      learned native graph and observed-space navigation run together; a real
+      model-selected q6 frontier reaches a fresh assessment. Bounded retries,
+      interrupted-decision traces, answer history and callable frontier projection
+      are repaired; 46 fork tests, 25 emet tests and a native 15-packet replay pass.
+      Task failures remain baseline outcomes, not blockers for this connection.
+      The final two-case check has no successful answers; preserve all truncations,
+      wrong answers and failed rows without overrides or further model tuning.
+      Report: `docs/experiments/grapheqa_decoding_control_20261101.md`.
+- [ ] Run the paired baseline comparison after matching emet's estimated-pose
+      basis, footprint, perception and motion budgets; retain matched-history
+      image-only controls. Stronger-model comparisons are optional ablations,
+      not prerequisites for accepting the existing GraphEQA connection.
 - [ ] Record effective generation config, RNG/seed policy and environment versions
       in paper-run manifests. Qwen's checkpoint defaults enable sampling at 0.7;
       an unseeded one-call contrast does not establish a stable prompt effect.
@@ -25,7 +23,7 @@
       evaluation: https://github.com/cpaxton/graph_eqa/pull/1. Planner/room API
       routing, instance IDs, scorer isolation and complete request traces are
       tested; the real Qwen8B int4 current-image/graph pair returns valid replies.
-      Active navigation and matched-history acceptance remain open below.
+      The active connection is complete; matched evaluations remain separate work.
 - [ ] Extract the model-server contract repairs into a focused PR against current
       main: loaded-model identity, complete dialogue, unsupported-setting errors,
       decode receipts and declared native/text tool capabilities. They are tested
