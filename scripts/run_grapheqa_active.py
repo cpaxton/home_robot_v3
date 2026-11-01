@@ -117,6 +117,8 @@ def run(args):
             captures = []
 
             def ingest(frame):
+                if shutil.disk_usage(args.output).free < 20 * 1024**3 + 4 * 1024**2:
+                    raise OSError("Stop sensor recording before consuming the shared 20 GiB disk reserve")
                 if frame["camera_pose"] is None:
                     raise RuntimeError(f"RGB-D tracking failed: {frame['odometry']}")
                 semantic, instances, _ = detector.predict(frame["rgb"], draw_instance_predictions=False)

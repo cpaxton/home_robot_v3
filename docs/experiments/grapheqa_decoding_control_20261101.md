@@ -93,3 +93,6 @@ sampling defaults, original response-field order, safety and scorer separation.
 This is an integration check of a reproduced bug repair, not an accuracy or
 matched-runtime comparison with the earlier two-decision checks. Require actual
 executed motion and a fresh receipt-bearing assessment to close the movement gate.
+The active capture loop also checks the disk reserve before every learned sensor
+packet, stopping with a retained infrastructure failure if other work consumes it.
+Do not discard evidence or silently shorten the run to avoid a failure row.
