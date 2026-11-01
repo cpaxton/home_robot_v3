@@ -1,4 +1,4 @@
-# Non-Stretch MuJoCo realism pilot — November 1
+# Panda MuJoCo native-reference pilot — November 1
 
 The first native-physics pilot passes **4/4 scripted references**: Panda Lift and
 Stack, each at seeds 7 and 13. All **four hold controls fail the task**, as intended.
@@ -8,10 +8,17 @@ performed by the runner after reset. These are privileged controller references,
 not TAMP planning, production agent, observed-input or hardware successes.
 
 The [staged plan](../plans/2026-11-01_tamp_sim_realism.md) and
-[JSON protocol](../../configs/eval/tamp_sim_realism.json) exclude Stretch from new
-runs. Panda is the initial upstream track; Sourccey remains a separate adapted
-robot track requiring native task-adapter qualification. Existing corrected
+[JSON protocol](../../configs/eval/tamp_sim_realism.json) include Stretch in MuJoCo;
+only real Stretch hardware trials are paused. Stretch's existing simulated
+adapter can support agent integration while Panda supplies upstream references.
+Sourccey remains a separate adapted robot track requiring native task-adapter
+qualification. Existing corrected
 Sourccey asset/controller checks do not establish native pick/place.
+
+The initial protocol had excluded Stretch entirely. The user clarified that the
+exclusion concerns hardware only; this corrects future scope without changing
+the Panda pilot or rescoring its results. Its original source/config hashes are
+pinned to commit `51616f08` in the JSON record.
 
 ## Reported final condition
 
@@ -82,8 +89,11 @@ python scripts/eval_tamp_panda_reference.py --output RUN_DIR --tasks Lift Stack 
 CLI help also exposes `--policies` and `--max-steps`; the failure control uses
 `--tasks Stack --seeds 7 --policies scripted_reference --max-steps 1`.
 
-Next bind a joint-path-compatible native controller and full arm/payload planner
-to the shared public TAMP tools, then requalify references through those tools.
+Panda next needs a joint-path-compatible native controller and full arm/payload
+planner bound to the shared public TAMP tools, then reference requalification.
+Simulated Stretch can use its existing privileged native adapter for agent tests
+while that upstream binding is built. Its observed collision/contact source gate
+still applies.
 OSC endpoint success does not certify a redundant joint-space path. Only after
 that gate should agent runs, clutter/buffer dependencies, assisted RGBD, observed
 grounding or asynchronous disturbances enter the corresponding scored conditions.

@@ -1,16 +1,22 @@
 # TAMP simulations with increasing realism
 
-New experiments exclude Stretch. Start with the installed upstream Panda in
-robosuite; keep Sourccey as a separately qualified robot-transfer track. This work
+Experiments are simulation-only. Stretch in MuJoCo is included; real Stretch
+hardware trials are paused. Native contact physics in simulation is included.
+Use the working simulated Stretch adapter for shared-agent/TAMP integration,
+Panda in robosuite for upstream benchmarks, and Sourccey as a separately qualified
+robot-transfer track. This work
 is on `feat/tamp-sim-realism`, stacked on the reviewed #226 foundation, rather
 than expanding that PR. Machine-readable protocol:
 [`configs/eval/tamp_sim_realism.json`](../../configs/eval/tamp_sim_realism.json).
 
-The installed native public-tool adapter is currently Stretch/table-specific.
-Neither Panda nor Sourccey can acquire native TAMP merely by changing its robot
-name. Sourccey's corrected model/kinematic manipulation support does not qualify
-native contact pick/place. The first gate is a truthful robot/controller binding
-for the existing tool and task-session contracts.
+The installed native public-tool adapter supports privileged stationary
+Stretch/table diagnostics in simulation, so new agent experiments can use it
+without waiting for another robot binding. Neither Panda nor Sourccey can acquire
+native TAMP merely by changing its robot name. Sourccey's corrected
+model/kinematic manipulation support does not qualify
+native contact pick/place. New robot profiles still require a truthful
+robot/controller binding for the existing tool and task-session contracts.
+Observed collision/contact source qualification remains open for Stretch too.
 
 ## Progression
 
@@ -22,7 +28,7 @@ or disturbance axis at a time and retain the matched control condition.
 | Stage | Experiment | Pass gate |
 | --- | --- | --- |
 | R0: native reference | Upstream Panda Lift, then Stack pick/place/release, with exact-state scripted references and hold controls | Original success plus sustained grasp/retention and settled post-release support; hold controls fail the task. These are reference diagnostics, not TAMP/agent results. |
-| R1: exact geometry TAMP | Same robot, full native environment and shared public primitive/multi-step tools, with privileged geometry explicitly declared | Collision-checked arm and payload paths, measured convergence, no forbidden assistance, two reference replays using the same motion tools. Bind the upstream controller to the shared planner; direct scripted OSC success alone is insufficient. |
+| R1: exact geometry TAMP | Simulated Stretch through the existing shared public tools; add Panda/Sourccey after their native bindings qualify. Declare privileged geometry explicitly. | Collision-checked arm and payload paths, measured convergence, no forbidden assistance, two reference replays using the same motion tools. New controller profiles need planner binding; direct scripted OSC success alone is insufficient. |
 | R2: clutter/composition | Add blocked straight paths, narrow placement spaces and buffer dependencies | Alternative collision-free paths, temporary relocation, protected goals and partial-progress reporting. Include intended failures; bounded search failure is not proof of impossibility. |
 | R3: measured geometry, oracle masks | RGBD and known robot/declared object priors, with oracle instance segmentation isolated as assistance | Qualified spatial/timing alignment, complete-object bounds, support and persistent background evidence, actor/phase-specific contact admission. No hidden scene-object poses. This remains a privileged/assisted condition in public receipts, not fully observed success or a new public input mode. |
 | R4: observed grounding | Same frozen cases with Caliban grounding and continuous measured tracking | Unknown-space and lost-track stops, fresh effects after release/retreat, explicit re-observation/replanning episodes through the same tools. No pose fallback. |
@@ -37,7 +43,9 @@ Buffered swaps and clearing layouts are adapted composition tasks, not official
 Lift/Stack benchmark scores; report their task goals separately from the original
 environment's success predicate.
 
-After the robosuite bindings pass, move the same applicable tests into full
+Simulated Stretch can advance the shared-agent tests while the upstream Panda
+binding is built. After the respective full-scene bindings pass, move applicable
+tests into full
 RoboCasa tasks and fixed MolmoSpaces episodes. Preserve the upstream reset,
 horizon/controller and original success check; scene XML export alone is not an
 upstream benchmark integration. Articulation/navigation enter only after their
@@ -76,7 +84,7 @@ the runner source and original upstream task source. Reference/hold pairs requir
 matching state, controls, model XML and controller configuration. These captures
 do not by themselves satisfy the complete benchmark reset certificate.
 
-These OSC references qualify the upstream task/actuation path only. R1 must bind
+These Panda OSC references qualify the upstream task/actuation path only. Its R1 track must bind
 an action interface that follows the motion planner's chosen joint paths and
 requalify its references under that declared controller profile before freezing.
 An OSC end-effector target does not certify tracking of a redundant joint-space

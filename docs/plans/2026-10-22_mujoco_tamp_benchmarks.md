@@ -122,11 +122,13 @@ or observed-input acceptance. No experimental IK restart/yaw changes were landed
 
 ## November 1 active experiment direction
 
-New experiments exclude Stretch. The [non-Stretch realism progression](2026-11-01_tamp_sim_realism.md)
+New experiments are simulation-only; Stretch in MuJoCo is included, while real
+Stretch hardware trials are paused. The [simulation realism progression](2026-11-01_tamp_sim_realism.md)
 and [`configs/eval/tamp_sim_realism.json`](../../configs/eval/tamp_sim_realism.json)
-start with upstream Panda native contact references, then shared TAMP bindings,
-clutter/composition, assisted RGBD, observed grounding and timing/physics stress.
+uses the existing simulated Stretch adapter for shared-agent integration and
+Panda for upstream references/bindings, followed by clutter/composition, assisted
+RGBD, observed grounding and timing/physics stress.
 Sourccey remains a separate robot-transfer track pending native task-adapter
-qualification. Earlier Stretch results and robot lists above are historical;
-they do not prescribe new runs. The protocol preserves the same production CHAT
+qualification. Earlier results remain historical evidence, not automatic
+qualification of new cases. The protocol preserves the same production CHAT
 agent and separates reference-control success from scored agent capability.

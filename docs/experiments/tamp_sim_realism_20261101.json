@@ -229,5 +229,8 @@
   "final_source_sha256": {
     "scripts/eval_tamp_panda_reference.py": "f14f779258c6c7be149de8073f32b9898f75c63b4fc696d3e51f77a0dbcdde11",
     "configs/eval/tamp_sim_realism.json": "0945287ce9874011ce42ad0d0e91c706c70d1a7f7863ecf4243ff266e4775b37"
-  }
+  },
+  "robot": "Panda",
+  "source_hash_scope": "Original Panda pilot source/config at protocol_snapshot_commit; subsequent hardware/simulation clarification does not rescore these runs",
+  "protocol_snapshot_commit": "51616f08d40e59513ab4b7e4b942b64b4af8b0f9"
 }

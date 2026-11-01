@@ -110,13 +110,14 @@ privileged. No fictitious tactile sensors are assumed on hardware.
 
 ## What has been demonstrated
 
-New simulation experiments follow a [non-Stretch realism progression](plans/2026-11-01_tamp_sim_realism.md):
-upstream Panda native contact references first, then shared TAMP tools, clutter,
-RGBD geometry, observed grounding and timing/physics stress. Sourccey is a separate
+New experiments follow a [simulation realism progression](plans/2026-11-01_tamp_sim_realism.md).
+Stretch in MuJoCo supports shared-agent integration; real Stretch hardware trials
+are paused. Panda provides upstream native references, while Sourccey is a separate
 robot-transfer track requiring native task-adapter qualification. The
 [first native references](experiments/tamp_sim_realism_20261101.md) are controller
-diagnostics, not production agent or observed task results. Earlier Stretch
-experiments below remain historical evidence.
+diagnostics, not production agent or observed task results. Clutter, RGBD geometry,
+observed grounding and timing/physics stress retain their separate gates. Earlier
+Stretch experiments below remain historical evidence.
 
 The [main-integration regression](experiments/tamp_main_integration_20261022.md)
 passes 616 selected checks and repeats both successful multi-step controls
