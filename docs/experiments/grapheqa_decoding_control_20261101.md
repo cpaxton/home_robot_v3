@@ -96,3 +96,32 @@ executed motion and a fresh receipt-bearing assessment to close the movement gat
 The active capture loop also checks the disk reserve before every learned sensor
 packet, stopping with a retained infrastructure failure if other work consumes it.
 Do not discard evidence or silently shorten the run to avoid a failure row.
+
+## First repaired live check: natural action, resource interruption
+
+Job `20261101_130129_138592` used emet `f31ad6a5` and fork `6a18c99`.
+q2 now receives all four allowed assessments instead of stopping after the first
+empty plan. Every reply is uncertain and empty, and its final A is wrong. It
+executes no motion and reports `no_action_not_confident` at budget exhaustion.
+
+q6 naturally selects `frontier_0` while uncertain (confidence 0.5). The executor
+begins following that observed-space route. Fifty sensor frames are saved; the
+last estimated camera XY is approximately (0.050, 0.350) metres, with tracking
+valid and no reported collision. The shared 20 GiB disk guard then stops
+recording before route completion. This is a retained infrastructure failure,
+not an accepted arrival or a wrong-answer result. No final follow-up assessment
+was reached. The original rows/frames/model response remain untouched at
+`/home/cpaxton/runs/emet/grapheqa-empty-plan-retry-live-20261101/`.
+
+The interruption also exposed an audit gap: a valid model decision was appended
+only after execution returned. An exception could leave physical sensor evidence
+but no decision row. The adapter now records that decision in a finally block,
+marks execution attempted, and retains the exception without inventing an
+unavailable measured receipt. A focused test reproduces the failure.
+
+Storage recovery evicts one old, unshared Torch 2.7.1 **package cache**, retaining
+the separate installed root/Habitat environments and every model/run artifact.
+Free space rises to 21.52 GiB. Repeat the same q2/q6 order, four decisions and
+four images, in a new output directory after freezing the trace repair. Keep
+checkpoint sampling; do not choose a winning seed or replay a saved action.
+The model must choose again, and the original interrupted run remains a failure.
