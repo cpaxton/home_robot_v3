@@ -49,3 +49,47 @@ Resources: one GPU lock, CPU 12, one BLAS/OpenMP thread, offline cached models,
 
 Validation before launch: six diagnostic tests pass, including exact request
 preservation and restoration of checkpoint settings after a generation failure.
+
+## Decoding result
+
+Job `20261101_125344_fab70f`, source `e211fe67`, completed all 18 calls with
+zero malformed/truncated responses. Output is
+`/home/cpaxton/runs/emet/grapheqa-decoding-control-20261101/`.
+
+| Case | Default sampling confident stops / 3 | Greedy confident stops / 3 | Usable actions, sampling / greedy |
+| --- | --- | --- | --- |
+| q2 | 0 | 0 | 0 / 0 |
+| q6 | 2 | 0 | 0 / 0 |
+| q12 | 3 | 3 | 0 / 0 |
+
+Each case's three greedy replies were byte-identical across the declared seeds.
+Sampling changes q6's confidence, but disabling it does not produce an action.
+All answer fields are retained; no gold labels were loaded and no answer-quality
+effect is claimed. Total measured request time was 196.47 seconds, excluding
+loading/admission. Greedy decoding is **not promoted** to the live profile.
+The earlier unseeded schema comparisons remain exploratory, not stable causal
+evidence of an interface improvement.
+
+## Independent adapter bug: uncertain empty plans ended episodes
+
+While auditing the legacy loop, `scripts/run_vlm_planner_hmeqa_habitat.py`
+continues after an uncertain empty plan within its existing 20-step budget.
+The new external `run_active_episode` instead ended immediately with
+`no_action_not_confident`. This was a harness decision, not a confident model
+stop. It removed the reference controller's opportunity to retry.
+
+The repair keeps the model's confident stop, retries uncertain empty plans only
+within the declared decision budget, and requires a fresh capture each time.
+An empty plan never invokes the executor. Answer/confidence summaries for these
+decisions now remain in history and advance its decision index. Budget exhaustion
+still reports `no_action_not_confident`; no movement or answer is invented.
+All **44 fork tests** pass, including the empty-plan → chosen action → final answer
+sequence and the real planner/provider history/budget integration.
+
+Predeclare a serial fresh q2/q6 diagnostic, four decisions and four independent
+uniform sensor images per assessment. q2 exercises the repeatedly uncertain
+empty-plan path; q6 controls the model's confident-stop behavior. Keep checkpoint
+sampling defaults, original response-field order, safety and scorer separation.
+This is an integration check of a reproduced bug repair, not an accuracy or
+matched-runtime comparison with the earlier two-decision checks. Require actual
+executed motion and a fresh receipt-bearing assessment to close the movement gate.
