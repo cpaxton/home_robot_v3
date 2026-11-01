@@ -1,26 +1,25 @@
 # Living TODOs (small / near-term)
 
-- [ ] Finish sensor-only active GraphEQA acceptance: short measured navigation
-      gates pass in q2/q6; persistent native stream and controller feedback tests
-      pass. The fixed q2/q6/q12 diagnostic remains zero correct with no model-selected
-      motion: one text-JSON truncation, one uncertain empty plan, one confident
-      wrong answer. Keep the baseline opt-in and inspect the planner contract.
-      Match pose/motion contracts on the emet side before
-      claiming a paired active comparison. Preserve matched-history image-only
-      controls as a separate gate. See
-      `docs/experiments/grapheqa_active_qualification_20261030.md`.
-      The corrected four-independent-image replay completes all six replies
-      but remains 0/3 in each condition (`20261030_184519_a76b60`). Contact sheets
-      are human audits, not four full model images under a 512-pixel size cap.
-      Next qualify useful task-independent exploration and one real model-selected
-      movement. Preserve the model's final answer; do not add a forced-action or
-      answer-override policy to inflate acceptance.
-      Review follow-up: 42 fork tests, 22 focused emet tests and a reviewed native
-      stream replay pass. Ordering-only frozen replays produce two uncertain
-      action proposals, but fresh q6 checks with one/four images both stop
-      confidently wrong without motion. The unvalidated default field-order
-      change was reverted; optional bounded history retains the one-image default.
-      Audit: `docs/experiments/grapheqa_review_and_contract_probe_20261031.md`.
+- [ ] Finish sensor-only active GraphEQA acceptance. A real model-selected q6
+      frontier now reaches a fresh assessment (1.23 mm odometry-relative endpoint
+      residual), but that live follow-up fails formatting. Corrected history
+      improves selected frozen failures from 1/6 to 6/6 valid replies with paired
+      seeds; a final fresh two-case check still has zero successful answers
+      (q2 output truncation, q6 confident wrong stop). Keep the baseline opt-in.
+      Bounded empty-plan retries, interrupted-decision traces and exact callable
+      frontier projection are repaired; 46 fork tests, 25 emet tests and a native
+      15-packet registry replay pass. No default field-order/decoding flip, forced
+      action or answer override. Next compare a stronger cached Qwen on identical
+      requests and qualify a fresh schema-valid post-motion episode. Match emet
+      estimated-pose basis, footprint, perception and motion budgets before paired
+      active claims; retain matched-history image-only controls. Report:
+      `docs/experiments/grapheqa_decoding_control_20261101.md`. Earlier source-bound
+      failures remain in the Oct 30/31 qualification reports; no full sweep yet.
+- [ ] Record effective generation config, RNG/seed policy and environment versions
+      in paper-run manifests. Qwen's checkpoint defaults enable sampling at 0.7;
+      an unseeded one-call contrast does not establish a stable prompt effect.
+      The supplied HTTP server correctly rejects unsupported request seed settings;
+      diagnostic per-call RNG control is not an API capability or cross-GPU guarantee.
 
 - [x] Fork GraphEQA for supplied model endpoints and paired frozen-context
       evaluation: https://github.com/cpaxton/graph_eqa/pull/1. Planner/room API

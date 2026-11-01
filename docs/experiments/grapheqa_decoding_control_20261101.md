@@ -234,3 +234,44 @@ same case order, four decisions, four uniform images, checkpoint decoding and
 strict parsing. Retain all results regardless of which actions sampling chooses.
 This checks the corrected input contract; it does not turn prior failures into
 successes or establish an accuracy comparison with main.
+
+## Final live contract check and remaining acceptance
+
+Job `20261101_133508_40d0cc` pins emet `df417e0c` and fork `5f3fc51`.
+Both initial contexts contain exactly eight frontier nodes and eight callable
+IDs, with no native non-callable frontier nodes. q6's initial prompt is 7,465
+tokens (the earlier full-pose four-view request was 12,351); these are descriptive
+input sizes, not a matched task-runtime comparison.
+
+q2 emits two valid uncertain empty plans, then hits the unchanged 2,048-token
+output cap. The raw truncated reply remains an explicit contract failure.
+q6 stops confidently with C (wrong), leaving its valid `frontier_1` proposal
+unexecuted. No motion is executed in this final repeat. Thus there are zero
+successful final answers among two planned cases, with one incomplete case;
+the failed wrapper exits nonzero and its owned server cleans up normally.
+
+Acceptance summary:
+
+| Gate | Evidence / status |
+| --- | --- |
+| API/config/history/registry contracts | 46 fork tests and 25 emet sensor/diagnostic tests pass |
+| Native projection matches callable registry | Fifteen-packet isolated replay passes, retaining object IDs |
+| Real model-selected movement | q6 in the resource-recovered run arrives and receives a fresh assessment; position residual 1.23 mm is relative to odometry |
+| Corrected follow-up format on identical evidence | Selected failed requests improve from 1/6 to 6/6 valid replies under paired seeds and native validators |
+| Fresh schema-valid post-motion episode with final code | Not yet demonstrated: the final q6 repeat stops before motion |
+| Reliable active task quality / matched comparison with emet | Not accepted; do not expand to a full sweep |
+
+Do not repair the model's answers, increase the cap after seeing a failure, force
+movement or reinterpret confident stopping as an action. The next capacity
+control can compare the cached stronger Qwen checkpoint on the same saved
+requests, with explicit decoding and image budgets, before another fresh pilot.
+The larger emet comparison still needs matched estimated-pose basis, footprint,
+perception and movement budgets. Effective decoding and environment versions
+should be part of every paper-run manifest; source freezing alone does not fix
+an inference seed or an environment.
+
+Persistent replay evidence is copied to
+`/home/cpaxton/runs/emet/grapheqa-frontier-registry-20261101/` (result, final
+context, worker log, source-packet hashes and exact validation driver).
+The frozen history output also retains its input fixture and both validation
+scripts. The original live runs and every failure remain unchanged.

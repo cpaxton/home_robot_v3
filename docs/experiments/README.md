@@ -20,6 +20,13 @@ ordering probes suggested actions, but fresh one/four-view checks still stopped
 wrong without motion. The default field-order change was reverted; active
 acceptance and matched physical contracts remain open.
 
+**Interaction audit (2026-11-01):** [GraphEQA decoding, history and frontier registry](grapheqa_decoding_control_20261101.md)
+records a real model-selected arrival, bounded-retry/trace repairs, and selected
+follow-up format improvement from 1/6 to 6/6 valid replies. Native replay confirms
+the graph exposes only callable frontiers. Tests pass (46 fork / 25 emet), but
+the final two-case live check has zero successful answers; full active acceptance
+and matched physical contracts remain open. No answer/action override is added.
+
 **Post-merge study (2026-10-28):** [RL-priority experiment and paper plan](shared_agent_paper_update.md#post-merge-evidence-program-2026-10-28),
 [proposed controlled capability suite](harness_capability_benchmark.md).
 The current shared-harness development pilot is separate from historical
