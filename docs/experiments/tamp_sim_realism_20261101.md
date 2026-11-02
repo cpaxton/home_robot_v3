@@ -94,8 +94,10 @@ planner bound to the shared public TAMP tools, then reference requalification.
 Simulated Stretch can use its existing privileged native adapter for agent tests
 while that upstream binding is built. Its observed collision/contact source gate
 still applies.
-OSC endpoint success does not certify a redundant joint-space path. Only after
-that gate should agent runs, clutter/buffer dependencies, assisted RGBD, observed
-grounding or asynchronous disturbances enter the corresponding scored conditions.
+OSC endpoint success does not certify a redundant joint-space path. Panda agent
+runs and clutter/buffer dependencies require that robot's joint-path gate first.
+The existing simulated Stretch adapter can already exercise privileged agent
+composition; assisted RGBD, observed grounding and observed disturbances still
+require the corresponding source and execution qualification.
 Both protocol files retain `executable_registry=false`; neither is a qualified
 episode registry. No episode or suite provider is silently promoted to qualified status.

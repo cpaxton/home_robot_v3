@@ -110,3 +110,36 @@ This uses no renderer or VLM. GPU use is unnecessary for R0; Caliban remains the
 planned inference endpoint for agent conditions. Start with at most two CPU
 simulation jobs. Do not infer an observed task success or an agent score from
 this reference pilot. See the [first results](../experiments/tamp_sim_realism_20261101.md).
+
+## Stretch agent regression pilot
+
+The fixed [four-case development pilot](../../configs/eval/tamp_stretch_realism_pilot.json)
+uses the production `run agent` CLI, remote Caliban inference and two independent
+CPU-only live MuJoCo simulators. First repeat the prior two-goal transfer and
+buffered-swap controls, then shift both initial object X positions by +15 mm.
+Keep each family's final regions, instruction, motion tolerances and budgets
+unchanged. The planner chooses the transfer order and buffer; the evaluation
+does not supply a scripted sequence.
+
+These are privileged, camera-free, stationary Stretch trials with native contact
+and asynchronous physics. They exercise the exact-geometry and composition
+interfaces in R1/R2 under live timing, without claiming R5 observed disturbances.
+They are not held-out, reference-certified cases or an estimate of household-task
+success. Score complete released/settled final goals independently of valid tool
+contracts and correct stopping after failure. Preserve all four outcomes,
+including construction or infrastructure failures. Do not alter a failed case's
+goals or remove it from the denominator.
+
+Raw launch inputs, scene hashes, command audits and CHAT logs live under
+`.tamp-runs/stretch-realism-20261101/`; commit compact result/provenance manifests
+after completion. Sampling and the remote checkpoint are not independently
+pinned. Hardware trials remain disabled, and the observed geometry/contact
+qualification gate remains open.
+
+The [November 1 result](../experiments/tamp_stretch_realism_20261101.md) is
+**2/4 complete tasks**: both controls pass and both shifted layouts stop on cube
+lift retention. Agent JSON contracts and failure stops pass; exact-geometry
+native execution is still sensitive to initial placement. Preserve this result
+while investigating measured grasp/lift behavior. The stepped diagnostic
+successes are separate from the live agent denominator. Do not promote the
+shifted cases to qualified observed execution on that evidence.

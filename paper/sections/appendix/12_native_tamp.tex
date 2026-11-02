@@ -159,3 +159,44 @@ pinned. They are a small reliability diagnostic, not held-out household or
 observed-input acceptance. Source/job identifiers, failed-attempt accounting,
 final predicates and raw-result hashes are retained in
 \texttt{paper/data/native\_tamp/agent\_control\_repeats\_20261023.json}.
+
+\paragraph{Upstream MuJoCo reference pilot.}
+A separate November 1 development check uses the full robosuite Panda Lift and
+Stack tasks, each at seeds 7 and 13. Native scripted OSC/gripper references pass
+4/4 original task checks and sustained physical reference checks; all four
+matched hold controls fail the task. Reference/hold pairs share initial state,
+actuator controls, model XML and controller configuration. Lift requires
+30 retained-lift samples; Stack additionally requires 30 released, settled
+support samples after retreat. The upstream horizon remains 1000 actions, with
+a separately declared 400-action diagnostic cap. These are privileged controller
+references, not agent or shared TAMP-tool results. Panda still requires a
+joint-path-compatible planner/controller binding: an OSC endpoint does not
+certify a redundant joint-space path. Global collision integrity, observed
+execution and hardware transfer remain unqualified. Source snapshots, job IDs
+and raw-result hashes are recorded in
+\path{docs/experiments/tamp_sim_realism_20261101.json}.
+
+\paragraph{Live agent placement perturbation pilot.}
+At revision \texttt{d4a05983}, four fixed development trials repeat the two-goal
+and wider-destination swap controls, then shift both initial object X positions
+by +15 mm while retaining each family's final regions, instructions, tolerances
+and budgets. The production CLI uses Caliban inference, privileged stationary
+Stretch inputs, live asynchronous native MuJoCo physics and no cameras. Both
+controls pass; both shifted trials fail during the second object's lift with
+\texttt{payload\_not\_retained}. Thus complete-task success is 2/4, with 7/10
+planned transfers completed and 5/8 final object goals independently verified.
+All tool results satisfy the JSON contract and both failed trials stop further
+dispatch. Sixteen inference calls and 2,153 audited commands are recorded, with
+zero forbidden commands or agent-trial infrastructure failures. These small
+development cases are neither held-out nor reference-certified benchmark
+instances. Separate stepped-physics diagnostic successes do not replace the
+failed live outcomes. They expose a native execution gate before observed or
+household acceptance; they do not establish that destination-space search needs
+additional task depth. A separate live diagnostic reproduces the lift rejection
+at 1.3 mm relative translation and 0.10085 rad relative rotation, just beyond the
+0.1 rad limit, while both fingertips still contact the cube. This is a rigid
+payload-pose rejection, not evidence of a dropped object; relaxing the limit
+would require collision checking to account for the changed payload pose.
+The fixed population, measured outcomes and diagnostic
+attempts are retained in
+\path{docs/experiments/tamp_stretch_realism_20261101.json}.
