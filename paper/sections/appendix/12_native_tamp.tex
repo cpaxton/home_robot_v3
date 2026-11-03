@@ -200,3 +200,31 @@ would require collision checking to account for the changed payload pose.
 The fixed population, measured outcomes and diagnostic
 attempts are retained in
 \path{docs/experiments/tamp_stretch_realism_20261101.json}.
+
+\paragraph{Measured contact-stability comparison.}
+At revision \texttt{81c014cf}, a separate four-episode native diagnostic compares
+the existing grasp yaw candidates with an additional $\pm0.175$ rad pair, using
+scripted public task tools and no LLM calls. Each policy completes the familiar
+two-goal control and fails the +15 mm layout: 1/2 complete tasks per policy,
+6/8 total planned transfers, 1,992 audited commands and zero forbidden commands.
+Finer yaw selects a grasp target 12 mm lower and completes the shifted cube lift,
+but fails later during placement descent. The existing policy fails during lift.
+The rotation and translation limits remain 0.1 rad and 20 mm. Both failure
+snapshots retain bilateral fingertip contact; their complete tasks remain failed.
+Nominal scene hashes match within each pair, while independent live initial
+states differ. Instrumentation costs up to 1.72 ms per recorded event. These
+development diagnostics do not change the previous actual-agent denominator or
+qualify the candidate policy. Source, phase attribution, outcomes and raw-file
+hashes are retained in
+\path{docs/experiments/tamp_contact_stability_20261103.json}.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/tamp_contact_stability_20261103.pdf}
+\caption{Sampled loaded-lift rotation in the four native task-tool diagnostics.
+Crosses mark lift-time rejection; the finer-yaw shifted cube completes lift and
+is rejected later in placement, outside the plotted lift segment. Lines connect
+measured samples for readability. One development replay per condition does not
+estimate manipulation reliability.}
+\label{fig:tamp_contact_stability}
+\end{figure}

@@ -39,14 +39,14 @@ class ContactTrace:
     def close(self):
         self.stream.close()
 
-    def record(self, obj, executor, row):
+    def record(self, obj, executor, row, *, motion_phase=None):
         phase = row.get('phase', '')
         if phase not in self.phases and not phase.startswith('grasp_replan'):
             return
         start = time.monotonic()
         data = executor.data
         event = {'source': 'simulator_ground_truth_debug', 'sim_time': float(data.time),
-                 'object_body': obj, 'event': row}
+                 'object_body': obj, 'motion_phase': motion_phase, 'event': row}
         if phase.startswith('grasp_replan'):
             event['kind'] = 'planning_targets'
         else:
@@ -96,10 +96,20 @@ class TracedNativeAdapter(NativeTableAdapter):
     def _executor(self, obj):
         executor = super()._executor(obj)
         original = executor.event
+        execute_path = executor._execute_path
+        context = [None]
+
+        def path(phase, waypoints):
+            context[0] = phase
+            try:
+                return execute_path(phase, waypoints)
+            finally:
+                context[0] = None
 
         def record(**row):
             original(**row)
-            self.trace.record(obj, executor, row)
+            self.trace.record(obj, executor, row, motion_phase=context[0])
 
+        executor._execute_path = path
         executor.event = record
         return executor

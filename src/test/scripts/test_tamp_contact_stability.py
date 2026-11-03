@@ -69,3 +69,18 @@ def test_truncated_audit_cannot_become_a_pass_or_erase_summary(runner, monkeypat
     assert runner.main() == 1
     summary = json.loads((out / 'summary.json').read_text())
     assert summary['passed'] is False and summary['malformed_audit_rows'] == 1
+
+
+@pytest.mark.parametrize('lift_complete', (False, True))
+def test_plot_does_not_label_later_place_rejection_as_a_failed_lift(monkeypatch, lift_complete):
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3] / 'scripts'))
+    plotter = importlib.import_module('plot_tamp_contact_stability')
+    def row(phase):
+        return {'object_body': 'cube', 'event': {'phase': phase}, 'rotation_residual_rad': .1}
+    rows = [row('gripper_settled'), row('lift')]
+    if lift_complete:
+        rows += [row('lift_complete'), row('preplace_complete')]
+    rows += [row('payload_retention')]
+    _, lift, later = plotter.lift_samples(rows, 'cube')
+    assert later == lift_complete
+    assert any(r['event']['phase'] == 'payload_retention' for r in lift) is not lift_complete

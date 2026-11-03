@@ -56,3 +56,9 @@ A fix that admits payload rotation must include its volume in collision
 validation; changing the retention threshold alone is insufficient. Assisted
 RGBD and observed execution still require self-occlusion/background/contact source
 qualification after this native gate.
+
+The [completed comparison](../experiments/tamp_contact_stability_20261103.md)
+retains 1/2 complete tasks per policy. Finer yaw completes the shifted cube lift
+but fails later during placement. The next isolated candidate is a checked
+loaded-grasp payload binding followed by complete placement replanning; neither
+the candidate search policy nor a relaxed retention limit has been promoted.

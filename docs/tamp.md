@@ -179,6 +179,14 @@ to 6/12. Remaining failures are bounded planning and one malformed region argume
 
 ## Implementation and detailed references
 
+The [November 1 live agent pilot](experiments/tamp_stretch_realism_20261101.md)
+completes 2/4 fixed development tasks: familiar two-goal/swap controls pass,
+while both +15 mm initial-X variants stop on cube lift rotation. The separate
+[November 3 native diagnostic](experiments/tamp_contact_stability_20261103.md)
+shows finer grasp candidates can complete the shifted lift, but placement still
+fails the retained-payload pose check. No observed or household success is
+inferred, and the earlier populations remain unchanged.
+
 | Topic | Reference |
 | --- | --- |
 | Agent tools, capabilities, and modes | [Tool index](agent_tools.md) |
