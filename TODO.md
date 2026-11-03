@@ -9,10 +9,21 @@
       The final two-case check has no successful answers; preserve all truncations,
       wrong answers and failed rows without overrides or further model tuning.
       Report: `docs/experiments/grapheqa_decoding_control_20261101.md`.
-- [ ] Run the paired baseline comparison after matching emet's estimated-pose
+- [x] Run the first frozen paired answer-path pilot: images-only, external
+      GraphEQA and production model-final answering on an empty graph receive
+      identical PNG packets and matched total output allowances, including the
+      keyword call. All 36 planned trials complete inference; one GraphEQA reply
+      fails formatting. Correct counts are 0/12, 1/12 and 1/12 on four correlated
+      development snapshots. Mean answer-path times are 2.44 / 11.97 / 3.61 s;
+      these exclude collection/navigation and are not full-agent results. Packet
+      audit, question/view/path panels, source pins and limits:
+      `docs/experiments/frozen_eqa_comparison_20261103.md`.
+- [ ] Run the active paired baseline comparison after matching emet's estimated-pose
       basis, footprint, perception and motion budgets; retain matched-history
       image-only controls. Stronger-model comparisons are optional ablations,
       not prerequisites for accepting the existing GraphEQA connection.
+      First collect broader task-independent trajectories: the frozen pilot's
+      initial/arrival packets do not adequately cover the requested targets.
 - [ ] Record effective generation config, RNG/seed policy and environment versions
       in paper-run manifests. Qwen's checkpoint defaults enable sampling at 0.7;
       an unseeded one-call contrast does not establish a stable prompt effect.

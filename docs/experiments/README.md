@@ -28,6 +28,13 @@ the final two-case live check has zero successful answers. The connection is
 qualified; task failures remain results, and matched evaluation is separate work.
 No answer/action override is added.
 
+**Frozen paired answering (2026-11-03):** [Three answer paths on identical PNG packets](frozen_eqa_comparison_20261103.md)
+records 36 planned trials with matched output allowances and counted helper calls.
+Images-only / GraphEQA / emet packet answer counts are 0/12, 1/12, 1/12 on four
+correlated development snapshots; mean answer-path times are 2.44 / 11.97 / 3.61 s.
+The packet audit passes and figures expose limited target coverage. This tests
+answer/context modules, not full active-agent performance or representative accuracy.
+
 **Post-merge study (2026-10-28):** [RL-priority experiment and paper plan](shared_agent_paper_update.md#post-merge-evidence-program-2026-10-28),
 [proposed controlled capability suite](harness_capability_benchmark.md).
 The current shared-harness development pilot is separate from historical
