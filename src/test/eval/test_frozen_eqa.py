@@ -91,12 +91,23 @@ def test_unlisted_crop_and_excess_hidden_inference_fail_before_inference(tmp_pat
     assert "response" not in state.records[-1]
 
 
+def test_changed_fixture_is_rejected_against_the_original_manifest(tmp_path, monkeypatch):
+    case = packet(tmp_path)
+    state = backend(tmp_path, monkeypatch, case)
+    original = list(state.expected_images)
+    Image.new("RGB", (8, 8), "white").save(case["images"][0]["path"])
+    with pytest.raises(ValueError, match="changed"):
+        state.begin_arm(tmp_path, case["images"], 2048, expected_hashes=original)
+
+
 def test_exact_semantic_scoring_does_not_extract_or_replace_answers():
     choices = ["Dark blue", "Black", "Gray", "White"]
     assert semantic_choice("Dark blue", choices) == "A"
     assert semantic_choice("B", choices) == "B"
     assert semantic_choice("B. Black", choices) is None
     assert semantic_choice("Unknown", choices) is None
+    assert semantic_choice(None, ["None", "One"]) is None
+    assert semantic_choice("None", ["None", "One"]) == "A"
     assert semantic_choice("red", ["Red", "red"]) is None
 
 

@@ -30,7 +30,9 @@ def png_hashes(images):
 
 def semantic_choice(answer, choices):
     """Scorer-only exact choice/letter normalization; never repair model text."""
-    text = " ".join(str(answer).split())
+    if not isinstance(answer, str):
+        return None
+    text = " ".join(answer.split())
     letters = [chr(65 + index) for index in range(len(choices))]
     if text in letters:
         return text
@@ -65,9 +67,11 @@ class PinnedPNGClient(OpenaiVLLMClient):
 class FrozenServeState(LLMServeState):
     """Real model inference with an auditable per-arm allowance and PNG boundary."""
 
-    def begin_arm(self, output, images, allowance):
+    def begin_arm(self, output, images, allowance, *, expected_hashes=None):
         self.trace_path = Path(output) / "transport_calls.jsonl"
         self.expected_images = png_hashes(images)
+        if expected_hashes is not None and self.expected_images != expected_hashes:
+            raise ValueError("Frozen PNG files changed since the comparison manifest was captured")
         self.allowance = allowance
         self.requested_tokens = 0
         self.records = []

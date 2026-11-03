@@ -149,7 +149,7 @@ def run(args):
                     assert_frozen_source(args.fork, revisions["reference"])
                     output = args.output / f"trial-{len(rows):04d}"
                     output.mkdir()
-                    state.begin_arm(output, case["images"], 2048)
+                    state.begin_arm(output, case["images"], 2048, expected_hashes=manifest["images_sha256"][case["id"]])
                     torch.manual_seed(seed)
                     row = {"case_id": case["id"], "arm": arm, "seed": seed, "interaction_steps": 0, "complete": False}
                     started = time.monotonic()
