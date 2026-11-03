@@ -93,10 +93,21 @@ Accepted plan: [Mars controller integration](docs/plans/mars_controller_integrat
       full. Keep every failure and retain the unpromoted source bundle. Removing
       direct hand-to-base connections in a final-only diagnostic restores
       canonical arm tracking8/8, but not smoothness; do not deploy that mask.
-- [ ] Isolate base-only task sampling next, matching the last pilot's base
-      transition budget with8,192 steps and the same frozen arm/context, source
-      normalization and acceptance gates. Audit base-feedback signs and quiet
-      holding, then restore coordinated hand/base cases before loaded/TAMP work.
+- [x] Complete the paired [base curriculum and reward comparison](docs/experiments/mars_contract_curriculum_20261103.md):
+      1,005 regressions pass and teacher66/66 reproduces exactly. Native-reward
+      base-only8k reaches49/50 base tracking,42/50 full base and15/16 full arm;
+      aligned reward reaches48/50,41/50 and12/16. Both retain16/16 arm tracking.
+      Preserve the stronger native baseline; neither actor is promoted.
+- [x] Add tunable force/jerk budget excess costs and a terminal full-contract
+      bonus shared with evaluation, with teacher/reset binding and native
+      observation/physics preservation checks. Keep the package opt-in.
+- [ ] Test a gradual reward transition and quieter refinement exploration:
+      the first aligned run removes50 native completion points but pays no
+      full-contract bonuses during exploration. Preserve movement credit early,
+      repair the remaining base/arm jerk cases and validation translation lag,
+      then restore coordinated hand/base cases before loaded/TAMP work. Verify
+      exact source-transfer fidelity for partly qualified continuation rather
+      than silently bypassing initial admission or relaxing evaluation gates.
 - [ ] Port exact frozen TAMP fixture initialization to ARM without relaxing its
       hash/pose checks. Caliban's eight-worker pilot never started: one missing
       camera source is fixed; two exact frozen-fixture checks still reject ARM's

@@ -413,3 +413,18 @@ prevent physical interference from trainable base outputs. This motivates
 base-only task-distribution isolation before further coordinated training,
 not policy promotion or hardware testing. Complete outcomes are retained in
 \texttt{paper/data/whole\_body\_control/mars\_base\_isolation\_v1/}.
+
+\paragraph{Base-only curriculum and reward alignment.}
+Two subsequent 8,192-step pilots isolate base-only task sampling with the same
+frozen arm function. Native reward reaches 49/50 base tracking, 42/50 full base
+and 15/16 full arm passes. An optional aligned reward shares evaluation's force
+and jerk budgets, adds dense excess and incremental peak costs, and moves the
+full-contract bonus to episode termination. This first aligned package reaches
+48/50, 41/50 and 12/16 respectively; both retain 16/16 arm tracking, and neither
+is promoted. Exploratory aligned rollouts earn no full-contract bonuses after
+removal of native completion credit, motivating a staged reward transition.
+Initial physical metrics match, the 66-case teacher reproduces exactly and
+1,005 source-bound regressions pass. These are fixed-seed development results,
+not hardware or loaded-manipulation qualification. Complete outcomes and
+training-case weight calibration are retained in
+\texttt{paper/data/whole\_body\_control/mars\_contract\_curriculum\_v1/}.

@@ -18,8 +18,9 @@ physical costs. The optional contract reward adds:
 
 - A control-tick jerk excess cost integrated over physical time. For each jerk
   group use `h(r) = sqrt(1 + max(r - 1, 0)^2) - 1`, where `r` is measured jerk
-  divided by its acceptance budget. Start weight 1.0.
-- An incremental peak excess cost across force and jerk groups, weight 2.0.
+  divided by its acceptance budget. Template weight 1.0; first-pilot weight 0.1.
+- An incremental peak excess cost across force and jerk groups, template weight
+  2.0 and first-pilot weight 0.2.
   Charge only newly accumulated excess; do not integrate a stale maximum.
 - A terminal full-contract bonus of 10. Remove the native first-settle bonus.
   Award the replacement only when the complete episode passes tracking,
@@ -45,6 +46,14 @@ transitions and evaluations every 2,048 steps:
 
 1. Existing reward, base-only sampling.
 2. Contract-aligned reward, identical base-only sampling and PPO settings.
+
+Before either pilot, four low-amplitude teacher-plus-oscillation training-case
+probes expose excessive initial soft costs: one 0.5 mm/s perturbation retains
+about +20 native return but receives -59 with template weights. Calibrate both
+new soft weights to 0.1 of template strength, giving that fixed trace about +5
+against +20 for smooth completion. The full-contract bonus remains strict.
+Record sensitivities at 0.05, 0.1, 0.25, 0.5 and 1.0 multipliers; this selection
+uses training-case diagnostics, not trained validation checkpoints.
 
 Keep actor context, arm/grip rows and normalization fixed. Retain existing held
 arm postures, hold/forward/reverse/left/right cases and 80% translation transition
@@ -81,7 +90,7 @@ python -m emet.rl.manipulation.base_component \
   --preflight logs/eval/mars-base-curriculum-v1-teacher/report.json.gz \
   --regression-receipt logs/recovery/hand-accuracy-v1/base-curriculum-full.receipt.json \
   --training-stages base --steps 8192 --evaluation-every 2048 \
-  --contract-reward --jerk-excess-weight 1 --peak-excess-weight 2 \
+  --contract-reward --jerk-excess-weight 0.1 --peak-excess-weight 0.2 \
   --completion-bonus 10 --wandb-mode offline \
   --output logs/manipulation/mars-base-curriculum-contract-v1-seed90
 ```
@@ -89,3 +98,19 @@ python -m emet.rl.manipulation.base_component \
 Omit `--contract-reward` and weight overrides for the legacy-reward comparison,
 using a distinct output directory. Run with the bounded CPU/thread settings
 above. Generated models, full traces and W&B files remain in ignored `logs/`.
+
+## Completed first comparison
+
+The [complete report](../experiments/mars_contract_curriculum_20261103.md) records
+1,005 passing regressions and a reproduced 66/66 teacher. Native-reward base-only
+training reaches 49/50 base tracking, 42/50 full base and 15/16 full arm passes;
+the aligned reward reaches 48/50, 41/50 and 12/16 respectively. Both retain
+16/16 arm tracking. Initial metrics and final teacher/reset identities match.
+No later phase starts automatically and neither actor is promoted.
+
+The aligned exploratory rollout pays no full-contract bonuses after removing
+50 points of native completion credit. Keep the native curriculum as baseline
+and test a gradual reward transition plus quieter refinement exploration next,
+with unchanged acceptance gates. Explicitly verify source-transfer fidelity
+when continuing a partly qualified checkpoint, rather than bypassing admission
+or weakening the final arm/smoothness gates.
