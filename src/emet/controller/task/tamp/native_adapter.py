@@ -41,6 +41,7 @@ class NativePlan:
 
 class NativeTableAdapter:
     max_planning_ik_calls = 256
+    grasp_yaw_offsets = (0., -.35, .35, -.7, .7, -1.57, 1.57)
     input_mode = 'privileged'
 
     def __init__(self, robot, *, model=None):
@@ -215,7 +216,7 @@ class NativeTableAdapter:
 
     def _grasp_candidates(self, executor, before, point, frames, pinch_offset, obj):
         for frame, grasp_height in frames:
-            for yaw in (0., -.35, .35, -.7, .7, -1.57, 1.57):
+            for yaw in self.grasp_yaw_offsets:
                 self.data.qpos[:] = before
                 executor.collision.set_payload(self.model, self.data, None)
                 mujoco.mj_kinematics(self.model, self.data)

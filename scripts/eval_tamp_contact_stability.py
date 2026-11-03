@@ -1,0 +1,211 @@
+#!/usr/bin/env python3
+# Copyright (c) Chris Paxton 2026
+# Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
+"""Compare grasp-search policies through live native task tools, without an LLM.
+
+Privileged stationary Stretch diagnostic. Native actuation, no cameras or GPU.
+Launch via emet jobs. Original agent outcomes are never rescored by this runner.
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import shutil
+import subprocess
+import time
+import traceback
+import xml.etree.ElementTree as ET
+from pathlib import Path
+from types import SimpleNamespace
+
+import mujoco
+import numpy as np
+
+from emet.agent.loop import _dispatch_tool_calls
+from emet.agent.tools import get_tools
+from emet.controller.dynamem.constants import DYNAMEM_HEAD_SETTLE_S
+from emet.controller.manipulation.native_scene import model_signature, read_snapshot
+from emet.controller.task.tamp.native_transfer import NativeTableTransferProvider, validate_native_task_config
+from emet.controller.task.tamp.task_session import TaskSession
+from emet.eval.contact_stability import GRASP_POLICIES, ContactTrace, TracedNativeAdapter
+from emet.eval.native_table_live import live_table_robot
+from emet.eval.native_table_scoring import goal_predicates, load_placement_regions
+from emet.simulation.mujoco_server_stretch import default_scene_xml_path
+
+REPO = Path(__file__).resolve().parents[1]
+
+
+def write_json(path, data):
+    path.write_text(json.dumps(data, indent=2, allow_nan=False) + '\n')
+
+
+def sha256(path):
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def prepare_fixture(output, initial_positions, shift):
+    """Reset-only scene construction; canonical robot/contact/controller unchanged."""
+    source = Path(default_scene_xml_path).parent
+    fixture = output / 'fixture'
+    fixture.mkdir()
+    for name in ('scene.xml', 'stretch.xml', 'docking_station.xml', 'scene_environment.xml'):
+        shutil.copyfile(source / name, fixture / name)
+    for name in ('stretch.xml', 'docking_station.xml'):
+        tree = ET.parse(fixture / name)
+        tree.find('compiler').set('assetdir', str((source / 'assets').resolve()))
+        tree.write(fixture / name)
+    tree = ET.parse(fixture / 'scene_environment.xml')
+    for name, position in initial_positions.items():
+        body = tree.find(f'.//body[@name="{name}"]')
+        point = np.asarray(position, dtype=float).copy()
+        if body is None or body.find('freejoint') is None or point.shape != (3,) or not np.isfinite(point).all():
+            raise ValueError('invalid_initial_object_position')
+        point[0] += shift
+        body.set('pos', ' '.join(map(str, point)))
+    tree.write(fixture / 'scene_environment.xml')
+    return fixture / 'scene.xml'
+
+
+def prepare(args, pilot, case, out):
+    validate_native_task_config(case['task'])
+    scene = prepare_fixture(out, pilot['initial_object_positions'], case['initial_x_shift_m'])
+    model = mujoco.MjModel.from_xml_path(default_scene_xml_path)
+    fixture_model = mujoco.MjModel.from_xml_path(str(scene))
+    if model_signature(model) != model_signature(fixture_model):
+        raise ValueError('fixture_changed_robot_or_scene_model')
+    write_json(out / 'sim.json', {'kind': 'default_mujoco', 'robot': 'stretch', 'headless': True,
+               'scene_path': str(scene), 'no_cameras': True, 'port_offset': args.port_offset, 'seed': case['seed']})
+    write_json(out / 'regions.json', case['final_regions_object2_then_object1'])
+    regions = load_placement_regions(out / 'regions.json')
+    write_json(out / 'task.json', case['task'])
+    sources = out / 'sources'
+    sources.mkdir()
+    hashes = {}
+    for name in ('scripts/eval_tamp_contact_stability.py', 'src/emet/eval/contact_stability.py',
+                 'src/emet/controller/task/tamp/native_adapter.py',
+                 'src/emet/controller/manipulation/physical_pick_place.py'):
+        path = REPO / name
+        shutil.copyfile(path, sources / path.name)
+        hashes[name] = sha256(path)
+    protocol = {'case_id': case['case_id'], 'instruction': case['instruction'], 'task': case['task'],
+                'policy': args.policy, 'grasp_yaw_offsets_rad': GRASP_POLICIES[args.policy],
+                'source_sha': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=REPO, text=True).strip(),
+                'source_dirty': bool(subprocess.check_output(['git', 'status', '--porcelain'], cwd=REPO, text=True)),
+                'source_sha256': hashes, 'case_file_sha256': sha256(args.case_file),
+                'fixture_sha256': {p.name: sha256(p) for p in scene.parent.glob('*.xml')},
+                'model_signature': model_signature(model), 'mujoco_version': mujoco.__version__,
+                'initial_x_shift_m': case['initial_x_shift_m'], 'startup_settle_sim_s': args.startup_settle,
+                'execution': 'simulation_live_async', 'inputs': 'privileged', 'agent_score': False,
+                'collision_and_retention_thresholds_changed': False, 'recording_changes_timing': True,
+                'initial_state_certificate': False, 'hardware_trials': False}
+    write_json(out / 'protocol.json', protocol)
+    return model, dict(zip(('object2', 'object1'), regions, strict=True))
+
+
+def run(args, pilot, case, out, result):
+    model, goals = prepare(args, pilot, case, out)
+    if args.prepare_only:
+        result.update(run_status='prepared', passed=None)
+        return
+    os.environ['EMET_PHYSICAL_EXECUTION'] = '1'
+    os.environ['EMET_PHYSICAL_AUDIT'] = str(out / 'actuation.jsonl')
+    with live_table_robot(out / 'sim.json', out, model, initialize=False) as robot:
+        robot.move_to_nav_posture()
+        robot.look_front(blocking=True, timeout=3.)
+        time.sleep(DYNAMEM_HEAD_SETTLE_S)
+        robot.step(args.startup_settle)
+        _, initial = read_snapshot(robot, model_signature(model))
+        write_json(out / 'initial.json', initial)
+        result['initial_predicates'] = goal_predicates(robot, goals)
+        trace = ContactTrace(model, out / 'contact.jsonl')
+        try:
+            adapter = TracedNativeAdapter(robot, model=model, trace=trace, policy=args.policy)
+            provider = NativeTableTransferProvider(robot, case['task'], adapter=adapter)
+            session = TaskSession(provider)
+            tools = {t.name: t for t in get_tools({'robot': robot, 'manip_mode': 'physical',
+                     'tamp_inputs': 'privileged', '_native_tamp_adapter': adapter, 'tamp_task_session': session})}
+            responses = []
+
+            def call(name, **kwargs):
+                _, rendered, _ = _dispatch_tool_calls(
+                    [{'name': name, 'arguments': kwargs}], tools, SimpleNamespace())
+                envelope = json.loads(rendered[0].removeprefix(f'[{name}] '))
+                responses.append(envelope)
+                with (out / 'responses.jsonl').open('a') as stream:
+                    stream.write(json.dumps(envelope) + '\n')
+                return envelope
+
+            discovery = call('scene_tasks')
+            if discovery['status'] == 'ok':
+                plan = call('plan_task', instruction=case['instruction'], strategy='beam')
+                if plan['status'] == 'ok':
+                    call('execute_task_plan', plan_ref=plan['data']['plan_ref'])
+            stable = True
+            for _ in range(40):
+                robot.step(.05)
+                stable &= all(p['satisfied'] for p in goal_predicates(robot, goals).values())
+            result.update(run_status='complete', final_predicates=goal_predicates(robot, goals),
+                          responses=responses, payload_residual_maxima=trace.extrema,
+                          trace_records=trace.records, max_record_wall_s=trace.max_record_wall_s)
+            # An independent final task score and an explicit tool completion
+            # are both needed; a failed receipt cannot become a reference pass.
+            result['passed'] = bool(stable and responses[-1]['tool'] == 'execute_task_plan'
+                                    and responses[-1]['status'] == 'ok'
+                                    and not any(p['satisfied'] for p in result['initial_predicates'].values()))
+            write_json(out / 'adapter_events.json', adapter.events)
+            _, final = read_snapshot(robot, model_signature(model))
+            write_json(out / 'final.json', final)
+        finally:
+            trace.close()
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--case-file', type=Path, default=REPO / 'configs/eval/tamp_stretch_realism_pilot.json')
+    parser.add_argument('--case-id', required=True)
+    parser.add_argument('--policy', choices=tuple(GRASP_POLICIES), required=True)
+    parser.add_argument('--port-offset', type=int, required=True)
+    parser.add_argument('--startup-settle', type=float, default=6., help='Additional native simulated startup settling seconds')
+    parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--prepare-only', action='store_true', help='Freeze inputs and validate model; start no server or controllers')
+    args = parser.parse_args()
+    if not np.isfinite(args.startup_settle) or args.startup_settle < 0:
+        parser.error('--startup-settle must be finite and nonnegative')
+    pilot = json.loads(args.case_file.read_text())
+    matches = [c for c in pilot['cases'] if c['case_id'] == args.case_id]
+    if len(matches) != 1:
+        parser.error('--case-id must select exactly one declared case')
+    out = args.output.resolve()
+    if out.exists():
+        parser.error('--output must be new; preserve earlier attempts')
+    out.mkdir(parents=True)
+    result = {'case_id': args.case_id, 'policy': args.policy, 'agent_score': False, 'passed': False}
+    started = time.monotonic()
+    try:
+        run(args, pilot, matches[0], out, result)
+    except Exception as error:
+        result.update(run_status='infrastructure_error', error_type=type(error).__name__, error=str(error))
+        traceback.print_exc()
+    result['wall_time_s'] = time.monotonic() - started
+    audit = out / 'actuation.jsonl'
+    commands, malformed = [], 0
+    for line in audit.read_text().splitlines() if audit.exists() else []:
+        try:
+            command = json.loads(line)
+            if not isinstance(command, dict):
+                raise ValueError('invalid_audit_row')
+            commands.append(command)
+        except ValueError:
+            malformed += 1
+    result.update(audit_commands=len(commands), malformed_audit_rows=malformed,
+                  forbidden_commands=sum(bool(r.get('forbidden')) for r in commands))
+    result['passed'] = result['passed'] and bool(commands) and not malformed and not result['forbidden_commands']
+    write_json(out / 'summary.json', result)
+    print(json.dumps(result), flush=True)
+    return 0 if result['passed'] or result['run_status'] == 'prepared' else 1
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

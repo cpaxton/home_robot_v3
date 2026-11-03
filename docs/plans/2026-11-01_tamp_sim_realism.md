@@ -143,3 +143,7 @@ native execution is still sensitive to initial placement. Preserve this result
 while investigating measured grasp/lift behavior. The stepped diagnostic
 successes are separate from the live agent denominator. Do not promote the
 shifted cases to qualified observed execution on that evidence.
+
+The next [contact-stability experiment](2026-11-03_tamp_contact_stability.md)
+compares bounded grasp-search candidates with measured closure/lift traces and
+unchanged collision/retention checks before spending more agent inference calls.

@@ -191,6 +191,7 @@ to 6/12. Remaining failures are bounded planning and one malformed region argume
 | IK, collision, and motion planning | [Motion implementation](../src/emet/motion/) |
 | API and native-adapter regression coverage | [TAMP tests](../src/test/controller/task/tamp/) |
 | Comparing experiments without changing denominators | [Paired metrics](experiments/tamp_paired_metrics.md) |
+| Live grasp/contact diagnostics and fixed-policy comparisons | [Contact stability experiment](plans/2026-11-03_tamp_contact_stability.md) |
 
 
 The [PR #213 merge scope](plans/2026-10-15_tamp_213_merge_scope.md) fixes the
