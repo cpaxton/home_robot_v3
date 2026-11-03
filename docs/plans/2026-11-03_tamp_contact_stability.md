@@ -62,3 +62,6 @@ retains 1/2 complete tasks per policy. Finer yaw completes the shifted cube lift
 but fails later during placement. The next isolated candidate is a checked
 loaded-grasp payload binding followed by complete placement replanning; neither
 the candidate search policy nor a relaxed retention limit has been promoted.
+The next [checked handoff comparison](2026-11-03_tamp_loaded_payload_handoff.md)
+includes an identical extra-hold control so reference renewal is isolated from
+additional settling time.

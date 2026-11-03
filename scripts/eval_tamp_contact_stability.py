@@ -91,6 +91,8 @@ def prepare(args, pilot, case, out):
         hashes[name] = sha256(path)
     protocol = {'case_id': case['case_id'], 'instruction': case['instruction'], 'task': case['task'],
                 'policy': args.policy, 'grasp_yaw_offsets_rad': GRASP_POLICIES[args.policy],
+                'payload_binding': args.payload_binding,
+                'payload_reference_changes_at_verified_lift': args.payload_binding == 'verified_lift',
                 'source_sha': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=REPO, text=True).strip(),
                 'source_dirty': bool(subprocess.check_output(['git', 'status', '--porcelain'], cwd=REPO, text=True)),
                 'source_sha256': hashes, 'case_file_sha256': sha256(args.case_file),
@@ -121,7 +123,8 @@ def run(args, pilot, case, out, result):
         result['initial_predicates'] = goal_predicates(robot, goals)
         trace = ContactTrace(model, out / 'contact.jsonl')
         try:
-            adapter = TracedNativeAdapter(robot, model=model, trace=trace, policy=args.policy)
+            adapter = TracedNativeAdapter(robot, model=model, trace=trace, policy=args.policy,
+                                          payload_binding=args.payload_binding)
             provider = NativeTableTransferProvider(robot, case['task'], adapter=adapter)
             session = TaskSession(provider)
             tools = {t.name: t for t in get_tools({'robot': robot, 'manip_mode': 'physical',
@@ -148,6 +151,7 @@ def run(args, pilot, case, out, result):
                 stable &= all(p['satisfied'] for p in goal_predicates(robot, goals).values())
             result.update(run_status='complete', final_predicates=goal_predicates(robot, goals),
                           responses=responses, payload_residual_maxima=trace.extrema,
+                          payload_binding=args.payload_binding,
                           trace_records=trace.records, max_record_wall_s=trace.max_record_wall_s)
             # An independent final task score and an explicit tool completion
             # are both needed; a failed receipt cannot become a reference pass.
@@ -166,6 +170,8 @@ def main():
     parser.add_argument('--case-file', type=Path, default=REPO / 'configs/eval/tamp_stretch_realism_pilot.json')
     parser.add_argument('--case-id', required=True)
     parser.add_argument('--policy', choices=tuple(GRASP_POLICIES), required=True)
+    parser.add_argument('--payload-binding', choices=('preserve', 'verified_lift_keep', 'verified_lift'), default='preserve',
+                        help='Diagnostic only: bind measured payload once after a verified stable lift, before full place replan')
     parser.add_argument('--port-offset', type=int, required=True)
     parser.add_argument('--startup-settle', type=float, default=6., help='Additional native simulated startup settling seconds')
     parser.add_argument('--output', type=Path, required=True)
