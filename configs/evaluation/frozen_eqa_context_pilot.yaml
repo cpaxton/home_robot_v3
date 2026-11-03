@@ -1,0 +1,28 @@
+# Four development snapshots, not four independent questions or a paper test set.
+# Capture boundaries are fixed; no frame selection uses a reference answer.
+images: 4
+cases:
+  - id: hmeqa-q2-start
+    question_source_id: hmeqa-q2-uniform4
+    source: grapheqa-final-contract-live-20261101/active/q2
+    capture: 17
+    context: controller/context-000.json
+    collector: fixed stationary scan and floor inspection
+  - id: hmeqa-q6-start
+    question_source_id: hmeqa-q6-uniform4
+    source: grapheqa-final-contract-live-20261101/active/q6
+    capture: 17
+    context: controller/context-000.json
+    collector: fixed stationary scan and floor inspection
+  - id: hmeqa-q12-start
+    question_source_id: hmeqa-q12-uniform4
+    source: grapheqa-active-calibrated-pilot-20261030/active/q12
+    capture: 17
+    context: controller/context-000.json
+    collector: fixed stationary scan and floor inspection
+  - id: hmeqa-q6-arrival
+    question_source_id: hmeqa-q6-uniform4
+    source: grapheqa-empty-plan-retry-r2-20261101/active/q6
+    capture: 152
+    context: controller/context-001.json
+    collector: reference policy frontier trajectory
