@@ -194,7 +194,8 @@ def test_initialization_rejects_environment_drift(setup):
 
 
 @pytest.mark.sim
-def test_base_component_runs_native_physics_and_preserves_arm_rows(tmp_path):
+@pytest.mark.parametrize("stages", [["base"], ["base", "arm"]])
+def test_base_component_runs_native_physics_and_preserves_arm_rows(tmp_path, stages):
     from pathlib import Path
 
     from emet.rl.manipulation.mastery import MasteryEnv, load_suite
@@ -202,7 +203,7 @@ def test_base_component_runs_native_physics_and_preserves_arm_rows(tmp_path):
     spec = load_suite(
         Path(__file__).resolve().parents[4] / "configs/benchmarks/mars_tracking_mastery_command_history_v1.json"
     )
-    base = MasteryEnv(spec, stages=["base", "arm"], split="train")
+    base = MasteryEnv(spec, stages=stages, split="train", population="training")
     source_env = ExecutorCommandVecNormalize(DummyVecEnv([lambda: base]), config=base.config, norm_reward=False)
     params = kwargs()
     params["features_extractor_kwargs"]["orientation_scale"] = base.config.feedback_orientation_scale
@@ -210,7 +211,26 @@ def test_base_component_runs_native_physics_and_preserves_arm_rows(tmp_path):
         full = PPO(ExecutorFeedbackPolicy, source_env, device="cpu", n_steps=8, batch_size=8, policy_kwargs=params)
         export(full, source_env, tmp_path / "source", base.config, base.fingerprint, steps=0)
         source = ManipulationPolicy(tmp_path / "source")
-        wrapper = FrozenArmActions(base, source)
+        reward_env = base
+        if stages == ["base"]:
+            from copy import deepcopy
+
+            from emet.rl.manipulation.command_runtime import task_pose_teacher_action
+            from emet.rl.manipulation.mastery import TrainingCaseSampler
+            from emet.rl.manipulation.mastery_objective import TeacherContractReward, mastery_metrics
+
+            case = next(c for c in base.cases if c["id"] == "train:base:hold")
+            base.cases = [case]
+            base.sampler = TrainingCaseSampler(base.cases, {"base": 1}, sampling="control_steps")
+            base.reset(options={"case_id": case["id"]})
+            admission = deepcopy(base.mastery_admission)
+            while True:
+                _, _, done, truncated, info = base.step(task_pose_teacher_action(base.control))
+                if done or truncated:
+                    break
+            row = {"id": case["id"], "mastered": True, "admission": admission, "metrics": mastery_metrics(base, info)}
+            reward_env = TeacherContractReward(base, {"cases": [row]})
+        wrapper = FrozenArmActions(reward_env, source)
         component_env = ExecutorCommandVecNormalize(
             DummyVecEnv([lambda: wrapper]), config=base.config, norm_reward=False
         )
@@ -228,6 +248,12 @@ def test_base_component_runs_native_physics_and_preserves_arm_rows(tmp_path):
         initialize(model, component_env, source, base.config, base.fingerprint)
         model.learn(16)
         verify_frozen(model, source)
+        if stages == ["base"]:
+            columns = [*range(3, 12), *range(15, 24)]
+            for key in ("weight", "bias"):
+                current = getattr(model.policy.action_net.gain, key).reshape(7, 35, -1)
+                original = getattr(source.model.policy.action_net.gain, key).reshape(7, 35, -1)
+                torch.testing.assert_close(current[:2, columns], original[:2, columns], rtol=0, atol=0)
         assert model.num_timesteps == 16
         merged = merge(model, component_env, source, tmp_path / "actor", base.config, base.fingerprint)
         assert merged.model.action_space.shape == (8,) and merged.manifest["steps"] == 16

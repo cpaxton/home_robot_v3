@@ -24,6 +24,7 @@ from emet.rl.manipulation.feedback_policy import FeedbackActorCriticPolicy, Goal
 from emet.rl.manipulation.mastery import (
     MasteryEnv,
     RolloutDiagnostics,
+    TrainingCaseSampler,
     evaluate_suite,
     load_suite,
     preserve_training_rng,
@@ -31,6 +32,11 @@ from emet.rl.manipulation.mastery import (
     save_report,
     summarize,
     validate_preflight,
+)
+from emet.rl.manipulation.mastery_objective import (
+    TeacherContractReward,
+    add_contract_reward_arguments,
+    contract_reward_from_args,
 )
 from emet.rl.manipulation.policy import ManipulationPolicy, export
 from emet.rl.regression_gate import verify_regressions
@@ -112,10 +118,11 @@ class FrozenArmActions(gym.Wrapper):
 
     def __init__(self, env, arm):
         super().__init__(env)
+        native = env.unwrapped
         if (
-            env.profile.robot != "innate_mars"
-            or arm.robot != env.profile.robot
-            or arm.manifest["fingerprint"] != env.fingerprint
+            native.profile.robot != "innate_mars"
+            or arm.robot != native.profile.robot
+            or arm.manifest["fingerprint"] != native.fingerprint
         ):
             raise ValueError("frozen arm robot/model mismatch")
         self.arm, self.last_observation = arm, None
@@ -225,9 +232,24 @@ def train(args, suite):
     source = ManipulationPolicy(args.source)
     torch.set_num_threads(1)
     args.output.mkdir(parents=True, exist_ok=False)
-    base = MasteryEnv(suite, stages=["base", "arm"], split="train", population="training")
+    stages = getattr(args, "training_stages", ["base", "arm"])
+    evaluation_every = getattr(args, "evaluation_every", 8192)
+    objective_config = getattr(args, "contract_reward_config", None)
+    base = MasteryEnv(suite, stages=stages, split="train", population="training")
+    arm_fraction = getattr(args, "arm_step_fraction", None)
+    if arm_fraction is not None:
+        if set(stages) != {"base", "arm"} or not np.isfinite(arm_fraction) or not 0 < arm_fraction < 1:
+            base.close()
+            raise ValueError("arm fraction in (0,1) requires both base and arm stages")
+        base.sampler = TrainingCaseSampler(
+            base.cases,
+            {"base": 1 - arm_fraction, "arm": arm_fraction},
+            sampling="control_steps",
+            primitive_weights=suite.get("training_primitive_weights"),
+        )
+    reward_env = base if objective_config is None else TeacherContractReward(base, teacher, objective_config)
     env = ExecutorCommandVecNormalize(
-        DummyVecEnv([lambda: FrozenArmActions(base, source)]), config=base.config, norm_reward=False
+        DummyVecEnv([lambda: FrozenArmActions(reward_env, source)]), config=base.config, norm_reward=False
     )
     run = None
     sources = source_hashes()
@@ -269,6 +291,11 @@ def train(args, suite):
             "teacher_report_sha256": digest(teacher),
             "regression_receipt": json.loads(args.regression_receipt.read_text()),
             "steps": args.steps,
+            "training_stages": stages,
+            "training_stage_weights": base.sampler.weights,
+            "effective_stage_probabilities": dict(zip(base.sampler.groups, base.sampler.probabilities, strict=True)),
+            "evaluation_every": evaluation_every,
+            "contract_reward": None if objective_config is None else asdict(objective_config),
             "seed": 90,
             "frozen_normalization": True,
             "frozen_actor_context_and_arm": True,
@@ -293,7 +320,7 @@ def train(args, suite):
             import wandb
 
             run = wandb.init(
-                project="emet-mars-control", mode="offline", dir=str(args.output), name="base-isolation", config=record
+                project="emet-mars-control", mode="offline", dir=str(args.output), name=args.output.name, config=record
             )
 
         class Audit(BaseCallback):
@@ -327,6 +354,12 @@ def train(args, suite):
                 model.save(directory / "component.zip")
                 with preserve_training_rng():
                     policy = merge(model, env, source, directory / "actor", base.config, base.fingerprint)
+                    policy.manifest["training_recipe"] = {
+                        "run_sha256": digest(record),
+                        "training_stages": stages,
+                        "contract_reward": record["contract_reward"],
+                    }
+                    (directory / "actor/manifest.json").write_text(json.dumps(policy.manifest, indent=2) + "\n")
                     report = evaluate_suite(suite, stages=["base", "arm"], policy=policy, teacher_report=teacher)
                 save_report(directory / "evaluation.json.gz", report)
                 summary = summarize(report)
@@ -359,7 +392,7 @@ def train(args, suite):
 
             def _on_rollout_start(self):
                 self.record_update()
-                if self.num_timesteps and self.num_timesteps % 8192 == 0:
+                if self.num_timesteps and self.num_timesteps % evaluation_every == 0:
                     self.checkpoint(f"step-{self.num_timesteps}")
 
             def _on_rollout_end(self):
@@ -433,10 +466,22 @@ def main():
     parser.add_argument("--regression-receipt", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--steps", type=int, default=32768)
+    parser.add_argument("--training-stages", nargs="+", choices=["base", "arm"], default=["base", "arm"])
+    parser.add_argument("--evaluation-every", type=int, default=8192)
+    parser.add_argument("--arm-step-fraction", type=float)
+    add_contract_reward_arguments(parser)
     parser.add_argument("--wandb-mode", choices=["disabled", "offline"], default="disabled")
     args = parser.parse_args()
     if args.steps <= 0 or args.steps % 256:
-        parser.error("positive multiple of256 steps required")
+        parser.error("positive multiple of 256 steps required")
+    if args.evaluation_every <= 0 or args.evaluation_every % 256:
+        parser.error("evaluation interval must be a positive multiple of 256")
+    if len(set(args.training_stages)) != len(args.training_stages):
+        parser.error("duplicate training stages")
+    try:
+        args.contract_reward_config = contract_reward_from_args(args)
+    except ValueError as exc:
+        parser.error(str(exc))
     train(args, load_suite(args.suite))
 
 

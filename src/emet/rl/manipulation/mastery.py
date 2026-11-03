@@ -21,6 +21,14 @@ from emet.rl.manipulation.carry_benchmark import digest, source_hashes
 from emet.rl.manipulation.dynamic_trajectory import ArmTrajectory, Segment
 from emet.rl.manipulation.env import ManipulationConfig, ManipulationEnv
 from emet.rl.manipulation.jerk_reference import compile_joint_path, polynomial_peaks
+from emet.rl.manipulation.mastery_objective import (
+    TeacherContractReward,
+    add_contract_reward_arguments,
+    contract_reward_from_args,
+    mastery_metrics,
+    smoothness_budgets,
+    tracking_contract_passes,
+)
 from emet.rl.manipulation.tracking import TaskFrameFK, TaskPoseTrajectory
 
 ROOT = Path(__file__).resolve().parents[4]
@@ -673,18 +681,7 @@ def evaluate_suite(suite, *, stages=STAGES, policy=None, teacher_report=None, po
                     )
                     if done or truncated:
                         break
-            metrics = {
-                "peak_force_N": float(info["peak_contact_force"]),
-                "base_linear_jerk": float(env.peak_base_axis_jerk[0]),
-                "base_yaw_jerk": float(env.peak_base_axis_jerk[1]),
-                "joint_jerk": float(np.max(env.peak_joint_jerk)),
-                "hand_position_error_m": info["ee_position_error"],
-                "hand_orientation_error_rad": info["ee_orientation_error"],
-                "base_error_m": info["base_goal_error"],
-                "base_heading_error_rad": info["base_heading_error_rad"],
-                "hold_drift_m": env.peak_hold_drift,
-                "settled_seconds": env.settle_time,
-            }
+            metrics = mastery_metrics(env, info)
             smooth = bool(row["admitted"])
             failures = []
             if not row["admitted"]:
@@ -703,25 +700,13 @@ def evaluate_suite(suite, *, stages=STAGES, policy=None, teacher_report=None, po
                     or row["admission"]["reference_sha256"] != reference["admission"]["reference_sha256"]
                 ):
                     raise ValueError("teacher/policy initial state or reference differs")
-                floors = {
-                    "peak_force_N": suite["gate"]["force_floor_N"],
-                    "base_linear_jerk": suite["gate"]["base_linear_jerk_floor_m_s3"],
-                    "base_yaw_jerk": suite["gate"]["base_yaw_jerk_floor_rad_s3"],
-                    "joint_jerk": suite["gate"]["joint_jerk_floor_rad_s3"],
-                }
-                smooth_failures = [
-                    k
-                    for k in floors
-                    if metrics[k] > max(floors[k], suite["gate"]["smoothness_ratio"] * reference["metrics"][k])
-                ]
+                budgets = smoothness_budgets(suite, reference["metrics"])
+                smooth_failures = [k for k in budgets if metrics[k] > budgets[k]]
                 smooth = not smooth_failures
                 failures += ["smoothness/" + k for k in smooth_failures]
             passed = (
                 row["admitted"]
-                and info.get("is_success", False)
-                and env.settle_time + 1e-8 >= suite["gate"]["terminal_hold_s"]
-                and env.peak_hold_drift <= suite["gate"]["hold_drift_m"]
-                and not env.path_failed
+                and tracking_contract_passes(info, metrics, suite["gate"], path_failed=env.path_failed)
                 and smooth
             )
             row.update(
@@ -823,6 +808,7 @@ class RolloutDiagnostics:
                 "reward_sum": 0.0,
                 "reward_terms_sum": Counter(),
                 "terminal_codes": Counter(),
+                "contract_terminals": Counter(),
                 "action_sum": np.zeros_like(action, dtype=float),
                 "action_square_sum": np.zeros_like(action, dtype=float),
                 "action_clipped_count": np.zeros_like(action, dtype=int),
@@ -839,6 +825,8 @@ class RolloutDiagnostics:
         )
         if done:
             row["terminal_codes"][info["code"]] += 1
+            if "contract_reward" in info:
+                row["contract_terminals"]["passed" if info["contract_reward"]["terminal_pass"] else "failed"] += 1
         row["action_sum"] += action
         row["action_square_sum"] += action**2
         row["action_clipped_count"] += action != clipped_action
@@ -858,6 +846,7 @@ class RolloutDiagnostics:
                 "reward_mean": row["reward_sum"] / n,
                 "reward_terms_sum": dict(row["reward_terms_sum"]),
                 "terminal_codes": dict(row["terminal_codes"]),
+                "contract_terminals": dict(row["contract_terminals"]),
                 "action_mean": mean.tolist(),
                 "action_std": np.sqrt(np.maximum(0, row["action_square_sum"] / n - mean**2)).tolist(),
                 "action_clipped_fraction": (row["action_clipped_count"] / n).tolist(),
@@ -869,18 +858,21 @@ class RolloutDiagnostics:
         return result
 
 
-def make_training_vec_env(suite, stages, *, num_envs=1, backend="subproc"):
+def make_training_vec_env(suite, stages, *, num_envs=1, backend="subproc", teacher=None, contract_reward=None):
     """Independent native-physics worlds; no simulator/model shared across workers."""
     from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
 
     if type(num_envs) is not int or not 1 <= num_envs <= 64 or backend not in {"dummy", "subproc"}:
         raise ValueError("1-64 environments and dummy/subproc backend required")
+    if contract_reward is not None and teacher is None:
+        raise ValueError("contract reward requires paired teacher evidence")
 
     def factory():
         import torch
 
         torch.set_num_threads(1)
-        return MasteryEnv(suite, stages=stages, split="train", population="training")
+        env = MasteryEnv(suite, stages=stages, split="train", population="training")
+        return env if contract_reward is None else TeacherContractReward(env, teacher, contract_reward)
 
     factories = [factory for _ in range(num_envs)]
     return (
@@ -921,7 +913,14 @@ def train(args, suite):
 
         policy_class, normalizer_class = ExecutorFeedbackPolicy, ExecutorCommandVecNormalize
     normalizer = normalizer_class(
-        make_training_vec_env(suite, args.stages, num_envs=num_envs, backend=backend),
+        make_training_vec_env(
+            suite,
+            args.stages,
+            num_envs=num_envs,
+            backend=backend,
+            teacher=teacher,
+            contract_reward=getattr(args, "contract_reward_config", None),
+        ),
         config=cfg,
         norm_reward=False,
         clip_obs=20,
@@ -1003,6 +1002,9 @@ def train(args, suite):
             "teacher_action_loss": False,
             "audit_initial_admission": getattr(args, "audit_initial_admission", False),
             "command_smoothness_warmup_steps": getattr(args, "command_smoothness_warmup", 0),
+            "contract_reward": (
+                asdict(args.contract_reward_config) if getattr(args, "contract_reward_config", None) else None
+            ),
             "safety_promoted": False,
         }
         (out / "run.json").write_text(json.dumps(record, indent=2) + "\n")
@@ -1109,6 +1111,14 @@ def train(args, suite):
                     normalizer.get_attr("fingerprint")[0],
                     steps=self.num_timesteps,
                 )
+                manifest_path = destination / "manifest.json"
+                manifest = json.loads(manifest_path.read_text())
+                manifest["training_recipe"] = {
+                    "run_sha256": digest(record),
+                    "training_stages": args.stages,
+                    "contract_reward": record["contract_reward"],
+                }
+                manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
                 with preserve_training_rng():
                     report = evaluate_suite(
                         suite, stages=args.stages, policy=ManipulationPolicy(destination), teacher_report=teacher
@@ -1214,7 +1224,12 @@ def main():
     )
     parser.add_argument("--wandb-mode", choices=["disabled", "offline"], default="disabled")
     parser.add_argument("--audit-initial-admission", action="store_true")
+    add_contract_reward_arguments(parser)
     args = parser.parse_args()
+    try:
+        args.contract_reward_config = contract_reward_from_args(args)
+    except ValueError as exc:
+        parser.error(str(exc))
     if args.stages is None:
         args.stages = ["base"] if args.command == "train" else list(STAGES)
     import torch

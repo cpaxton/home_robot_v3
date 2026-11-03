@@ -2018,6 +2018,8 @@ class ManipulationEnv(gym.Env):
         )
         info = {
             **self._info(),
+            "reference_complete": bool(at_reference_end),
+            "control_tick_jerk": {"joint": jerk.copy().tolist(), "base": base_jerk.copy().tolist()},
             "reward_terms": {
                 "hand_tracking_reward": float(dt * hand_density) if self.config.tracking_reward else 0.0,
                 "base_tracking_reward": float(dt * base_density) if self.config.tracking_reward else 0.0,
