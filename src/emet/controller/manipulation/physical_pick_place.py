@@ -228,7 +228,8 @@ class PhysicalPickPlaceExecutor:
             self.data.qpos[:] = before
             mujoco.mj_kinematics(self.model, self.data)
         if not result.success:
-            return None, f"gripper_open_path_failed:{result.reason}"
+            detail = f":{result.detail}" if result.detail else ""
+            return None, f"gripper_open_path_failed:{result.reason}{detail}"
         self.data.qpos[addresses] = goal
         mujoco.mj_kinematics(self.model, self.data)
         return result.waypoints, None

@@ -1,0 +1,673 @@
+{
+  "schema_version": 1,
+  "source_commit": "dbc708ab110fcffd67bc185b5beed48f64ed0279",
+  "scope": "Checked loaded-grasp handoff plus full placement replanning; privileged native tool diagnostic, no agent score",
+  "agent_score": false,
+  "original_agent_result_unchanged": "2/4",
+  "hardware_trials": false,
+  "llm_calls": 0,
+  "production_policy_changed": false,
+  "numerical_pose_limits_changed": false,
+  "reference_semantics_changed_in_loaded_binding_condition": true,
+  "protocol": "configs/eval/tamp_loaded_payload_handoff.json",
+  "frozen_batch": {
+    "path": ".tamp-runs/loaded-payload-handoff-20261103/frozen_batch.json",
+    "sha256": "d3a2f2ab79257eef7812c115eb01024ac5e64a07d89ecfbc29913eb05c936fc9"
+  },
+  "cases": [
+    {
+      "id": "shift-checked-preserve",
+      "case_id": "two-goal-shift",
+      "job_id": "20261103_185235_718a46",
+      "payload_binding": "verified_lift_keep",
+      "run_status": "complete",
+      "passed": false,
+      "execution_result": {
+        "schema_version": 1,
+        "tool": "execute_task_plan",
+        "status": "partial",
+        "code": "task_execution_failed",
+        "message": "task execution failed",
+        "data": {
+          "execution_started": true,
+          "completed_steps": 0,
+          "planned_steps": 2,
+          "failed_step_1based": 1,
+          "failed_phase": "execution"
+        },
+        "recovery": "inspect"
+      },
+      "native_failure_stages": [
+        "release"
+      ],
+      "hold_and_bindings": {
+        "object2": {
+          "samples": 31,
+          "sample_span_sim_s": 0.3059999999998304,
+          "max_interval_translation_m": 6.632161188631549e-05,
+          "max_interval_rotation_rad": 0.00014808337072734463,
+          "reference_changed": false,
+          "binding_sim_time": 25.00399999999702
+        },
+        "object1": {
+          "samples": 0,
+          "sample_span_sim_s": null,
+          "max_interval_translation_m": null,
+          "max_interval_rotation_rad": null,
+          "reference_changed": null,
+          "binding_sim_time": null
+        }
+      },
+      "final_predicates": {
+        "object2": {
+          "in_region": true,
+          "supported": false,
+          "settled": true,
+          "satisfied": false,
+          "bounds_xy": [
+            [
+              -0.042050982057321634,
+              -0.8211575962795756
+            ],
+            [
+              0.003579357783621978,
+              -0.7779938636769428
+            ]
+          ]
+        },
+        "object1": {
+          "in_region": false,
+          "supported": true,
+          "settled": true,
+          "satisfied": false,
+          "bounds_xy": [
+            [
+              -0.025,
+              -0.5900000000000001
+            ],
+            [
+              0.015,
+              -0.51
+            ]
+          ]
+        }
+      },
+      "audit_commands": 220,
+      "forbidden_commands": 0,
+      "malformed_audit_rows": 0,
+      "wall_time_s": 170.57640727609396,
+      "max_record_wall_s": 0.0014042890397831798,
+      "artifacts": [
+        {
+          "path": ".tamp-runs/loaded-payload-handoff-20261103/episodes/shift-checked-preserve/summary.json",
+          "sha256": "1350a2b5b7ad99237f6bc946b7ae0617999b6c26c859043ffce8607f1af087c1"
+        },
+        {
+          "path": ".tamp-runs/loaded-payload-handoff-20261103/episodes/shift-checked-preserve/protocol.json",
+          "sha256": "ee3193cc5116978dd1f5a29c7b7f9de0dfa8b2f160105e65a3de2e0c1cae15f2"
+        },
+        {
+          "path": ".tamp-runs/loaded-payload-handoff-20261103/episodes/shift-checked-preserve/initial.json",
+          "sha256": "47daef0e3e230c5cb6166519f2e99a65f5dd948235f0c22d8106556a9cb6f2b9"
+        },
+        {
+          "path": ".tamp-runs/loaded-payload-handoff-20261103/episodes/shift-checked-preserve/contact.jsonl",
+          "sha256": "fc1dd9ddcea3615117ebe23c4ad0e968237ec9af009e0f083cf8ffa430487d7f"
+        }
+      ]
+    },
+    {
+      "id": "shift-loaded-bind",
+      "case_id": "two-goal-shift",
+      "job_id": "20261103_185238_787189",
+      "payload_binding": "verified_lift",
+      "run_status": "complete",
+      "passed": false,
+      "execution_result": {
+        "schema_version": 1,
+        "tool": "execute_task_plan",
+        "status": "partial",
+        "code": "task_execution_failed",
+        "message": "task execution failed",
+        "data": {
+          "execution_started": true,
+          "completed_steps": 0,
+          "planned_steps": 2,
+          "failed_step_1based": 1,
+          "failed_phase": "execution"
+        },
+        "recovery": "inspect"
+      },
+      "native_failure_stages": [
+        "release"
+      ],
+      "hold_and_bindings": {
+        "object2": {
+          "samples": 31,
+          "sample_span_sim_s": 0.3019999999998326,
+          "max_interval_translation_m": 6.049791601658384e-05,
+          "max_interval_rotation_rad": 6.021154892106249e-05,
+          "reference_changed": true,
+          "binding_sim_time": 24.851999999997105
+        },
+        "object1": {
+          "samples": 0,
+          "sample_span_sim_s": null,
+          "max_interval_translation_m": null,
+          "max_interval_rotation_rad": null,
+          "reference_changed": null,
+          "binding_sim_time": null
+        }
+      },
+      "final_predicates": {
+        "object2": {
+          "in_region": true,
+          "supported": false,
+          "settled": true,
+          "satisfied": false,
+          "bounds_xy": [
+            [
+              -0.041860499521855485,
+              -0.8208873795945173
+            ],
+            [
+              0.003113695064504096,
+              -0.7783754924057666
+            ]
+          ]
+        },
+        "object1": {
+          "in_region": false,
+          "supported": true,
+          "settled": true,
+          "satisfied": false,
+          "bounds_xy": [
+            [
+              -0.025,
+              -0.5900000000000001
+            ],
+            [
+              0.015,
+              -0.51
+            ]
+          ]
+        }
+      },
+      "audit_commands": 220,
+      "forbidden_commands": 0,
+      "malformed_audit_rows": 0,
+      "wall_time_s": 170.63097188004758,
+      "max_record_wall_s": 0.0015183320501819253,
+      "artifacts": [
+        {
+          "path": ".tamp-runs/loaded-payload-handoff-20261103/episodes/shift-loaded-bind/summary.json",
+          "sha256": "1c56813ec749888200114ab5812fb27aa4f4d9c1956c012ab2970620b1fcc63f"
+        },
+        {
+          "path": ".tamp-runs/loaded-payload-handoff-20261103/episodes/shift-loaded-bind/protocol.json",
+          "sha256": "0c74686c2f1529acef2bb7d2506c48060bfa9f2cd56301367127b61b856da1fe"
+        },
+        {
+          "path": ".tamp-runs/loaded-payload-handoff-20261103/episodes/shift-loaded-bind/initial.json",
+          "sha256": "9cc9729d07f506e6bda49f27bb98d9147c40565fe5bdc699d17b489c3d212b7d"
+        },
+        {
+          "path": ".tamp-runs/loaded-payload-handoff-20261103/episodes/shift-loaded-bind/contact.jsonl",
+          "sha256": "1d337f164b13124198fe74513daff487f734915c809d17a5d9b5fc7f0c89f97d"
+        }
+      ]
+    },
+    {
+      "id": "control-checked-preserve",
+      "case_id": "two-goal-control",
+      "job_id": "20261103_185253_41cc2d",
+      "payload_binding": "verified_lift_keep",
+      "run_status": "complete",
+      "passed": true,
+      "execution_result": {
+        "schema_version": 1,
+        "tool": "execute_task_plan",
+        "status": "ok",
+        "code": "ok",
+        "message": "ok",
+        "data": {
+          "execution_started": true,
+          "completed_steps": 2,
+          "goal_verified": true
+        },
+        "recovery": "none"
+      },
+      "native_failure_stages": [],
+      "hold_and_bindings": {
+        "object2": {
+          "samples": 32,
+          "sample_span_sim_s": 0.3039999999998315,
+          "max_interval_translation_m": 8.855199942100293e-05,
+          "max_interval_rotation_rad": 0.0003821389891629106,
+          "reference_changed": false,
+          "binding_sim_time": 25.09799999999697
+        },
+        "object1": {
+          "samples": 31,
+          "sample_span_sim_s": 0.3020000000003691,
+          "max_interval_translation_m": 2.570420302610065e-05,
+          "max_interval_rotation_rad": 0.0009438299333588195,
+          "reference_changed": false,
+          "binding_sim_time": 46.43200000001078
+        }
+      },
+      "final_predicates": {
+        "object2": {
+          "in_region": true,
+          "supported": true,
+          "settled": true,
+          "satisfied": true,
+          "bounds_xy": [
+            [
+              -0.039337564397285515,
+              -0.8192332980017255
+            ],
+            [
+              0.0007282635169443136,
+              -0.7791685046299238
+            ]
+          ]
+        },
+        "object1": {
+          "in_region": true,
+          "supported": true,
+          "settled": true,
+          "satisfied": true,
+          "bounds_xy": [
+            [
+              -0.03965822765582272,
+              -0.7207277848416538
+            ],
+            [
+              0.0013407572525479111,
+              -0.6402329999993726
+            ]
+          ]
+        }
+      },
+      "audit_commands": 524,
+      "forbidden_commands": 0,
+      "malformed_audit_rows": 0,
+      "wall_time_s": 304.7148473019479,
+      "max_record_wall_s": 0.001529956003651023,
+      "artifacts": [
+        {
+          "path": ".tamp-runs/loaded-payload-handoff-20261103/episodes/control-checked-preserve/summary.json",
+          "sha256": "09331658ab37dacc89f5f354d19342d5a2e2ab6459dd7809d8d9b84699beb97a"
+        },
+        {
+          "path": ".tamp-runs/loaded-payload-handoff-20261103/episodes/control-checked-preserve/protocol.json",
+          "sha256": "7d6148f7341762d732e191226dfb5f98dd3f0e7759c75fd5ce8d382d3624ee14"
+        },
+        {
+          "path": ".tamp-runs/loaded-payload-handoff-20261103/episodes/control-checked-preserve/initial.json",
+          "sha256": "5b0aaf09b5bebd5a03f23633ab5107955f6b230b4653a194b0b82f357c47bb4e"
+        },
+        {
+          "path": ".tamp-runs/loaded-payload-handoff-20261103/episodes/control-checked-preserve/contact.jsonl",
+          "sha256": "9d78a64cc021d775bb4c183ffe42b9edf30a29e9af3e35e41c79a0d8373bb5cc"
+        }
+      ]
+    },
+    {
+      "id": "control-loaded-bind",
+      "case_id": "two-goal-control",
+      "job_id": "20261103_185255_bac031",
+      "payload_binding": "verified_lift",
+      "run_status": "complete",
+      "passed": true,
+      "execution_result": {
+        "schema_version": 1,
+        "tool": "execute_task_plan",
+        "status": "ok",
+        "code": "ok",
+        "message": "ok",
+        "data": {
+          "execution_started": true,
+          "completed_steps": 2,
+          "goal_verified": true
+        },
+        "recovery": "none"
+      },
+      "native_failure_stages": [],
+      "hold_and_bindings": {
+        "object2": {
+          "samples": 32,
+          "sample_span_sim_s": 0.3039999999998315,
+          "max_interval_translation_m": 0.00022250090469960753,
+          "max_interval_rotation_rad": 0.0002827115079652466,
+          "reference_changed": true,
+          "binding_sim_time": 23.317999999997955
+        },
+        "object1": {
+          "samples": 30,
+          "sample_span_sim_s": 0.30400000000037153,
+          "max_interval_translation_m": 8.729545172540209e-05,
+          "max_interval_rotation_rad": 0.00041025629835229275,
+          "reference_changed": true,
+          "binding_sim_time": 43.818000000007586
+        }
+      },
+      "final_predicates": {
+        "object2": {
+          "in_region": true,
+          "supported": true,
+          "settled": true,
+          "satisfied": true,
+          "bounds_xy": [
+            [
+              -0.0400926759853527,
+              -0.8204120245395687
+            ],
+            [
+              0.00019157998810290927,
+              -0.7801285138284033
+            ]
+          ]
+        },
+        "object1": {
+          "in_region": true,
+          "supported": true,
+          "settled": true,
+          "satisfied": true,
+          "bounds_xy": [
+            [
+              -0.039873167666278304,
+              -0.7182983841124854
+            ],
+            [
+              0.0011811483450515775,
+              -0.6377764714996162
+            ]
+          ]
+        }
+      },
+      "audit_commands": 472,
+      "forbidden_commands": 0,
+      "malformed_audit_rows": 0,
+      "wall_time_s": 291.31522301305085,
+      "max_record_wall_s": 0.0013974109897390008,
+      "artifacts": [
+        {
+          "path": ".tamp-runs/loaded-payload-handoff-20261103/episodes/control-loaded-bind/summary.json",
+          "sha256": "baab1ef4674ca7b74746ba0ea2889928d5956d311777b8c0497078f4a54c0813"
+        },
+        {
+          "path": ".tamp-runs/loaded-payload-handoff-20261103/episodes/control-loaded-bind/protocol.json",
+          "sha256": "13eae1add6a872039cbe6bdc9f87cd3a502ccdc03dd7b3e1318080fd8e92a1a9"
+        },
+        {
+          "path": ".tamp-runs/loaded-payload-handoff-20261103/episodes/control-loaded-bind/initial.json",
+          "sha256": "2a4ee190d66f867b6a3af02389b39a821afbdd603ae5a688c039648ef549374e"
+        },
+        {
+          "path": ".tamp-runs/loaded-payload-handoff-20261103/episodes/control-loaded-bind/contact.jsonl",
+          "sha256": "377d5fee3969eeca65960ce08b527b49e6c2bce4c9752a66d947fa7b95abb8bd"
+        }
+      ]
+    }
+  ],
+  "completion_by_policy": {
+    "verified_lift_keep": {
+      "passed": 1,
+      "cases": 2
+    },
+    "verified_lift": {
+      "passed": 1,
+      "cases": 2
+    }
+  },
+  "aggregate": {
+    "population": 4,
+    "native_tasks_passed": 2,
+    "completed_transfers": 4,
+    "declared_transfers": 8,
+    "audit_commands": 1436,
+    "forbidden_commands": 0,
+    "infrastructure_failures": 0
+  },
+  "initial_pair_comparisons": {
+    "control": {
+      "nominal_scene_hashes_match": true,
+      "max_qpos_difference_mixed_units": 0.019821444415753123,
+      "bit_identical": false
+    },
+    "shift": {
+      "nominal_scene_hashes_match": true,
+      "max_qpos_difference_mixed_units": 0.019767403822785405,
+      "bit_identical": false
+    }
+  },
+  "validation": {
+    "tests": 46,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "junit": {
+      "path": ".tamp-runs/contact-stability-20261103/handoff-tests.xml",
+      "sha256": "51813c3f39ec3f53428cd01e70354ad4d3ac85e7166fd7cd1dbf673e4698e10e"
+    },
+    "final_guard_rerun": {
+      "path": ".tamp-runs/contact-stability-20261103/handoff-guards-final.xml",
+      "sha256": "a951cfc6cfb93a274ea57a79ff46544bef155843c44e4a8545a4fd29c3fc6220"
+    },
+    "guard_rerun_cases": 6,
+    "guard_rerun_overlap": true
+  },
+  "private_release_replays": {
+    "release_replay.json": {
+      "artifact": {
+        "path": ".tamp-runs/loaded-payload-handoff-20261103/release_replay.json",
+        "sha256": "f0a6ae838d692b05166a69b2cd8d4c42eeda0aed5af56affda47b623f4fb8709"
+      },
+      "results": [
+        {
+          "case": "shift-checked-preserve",
+          "source": "private replay of measured place_complete qpos/qvel and captured payload reference",
+          "object_center": [
+            -0.018991228528841945,
+            -0.8000395428040123,
+            0.5235225515324609
+          ],
+          "reason": "invalid_goal",
+          "detail": "collision",
+          "contacts": [
+            {
+              "bodies": [
+                "rubber_tip_left",
+                "table"
+              ],
+              "distance_m": -0.0013698545309202633
+            }
+          ],
+          "gripper_joint_start": {
+            "joint_gripper_slide": 0.00475706240316815,
+            "joint_gripper_finger_left_open": 0.04815794007962747,
+            "joint_gripper_finger_right_open": 0.04814966997129589
+          },
+          "gripper_joint_goal": {
+            "joint_gripper_slide": 0.04,
+            "joint_gripper_finger_left_open": 0.4,
+            "joint_gripper_finger_right_open": 0.4
+          }
+        },
+        {
+          "case": "shift-loaded-bind",
+          "source": "private replay of measured place_complete qpos/qvel and captured payload reference",
+          "object_center": [
+            -0.01943504913994647,
+            -0.8001055224221781,
+            0.5230511764925012
+          ],
+          "reason": "invalid_goal",
+          "detail": "collision",
+          "contacts": [
+            {
+              "bodies": [
+                "rubber_tip_left",
+                "table"
+              ],
+              "distance_m": -0.0014307854212852523
+            }
+          ],
+          "gripper_joint_start": {
+            "joint_gripper_slide": 0.0046172883612291896,
+            "joint_gripper_finger_left_open": 0.04676756910806675,
+            "joint_gripper_finger_right_open": 0.046759321732533055
+          },
+          "gripper_joint_goal": {
+            "joint_gripper_slide": 0.04,
+            "joint_gripper_finger_left_open": 0.4,
+            "joint_gripper_finger_right_open": 0.4
+          }
+        }
+      ]
+    },
+    "release_passive_replay.json": {
+      "artifact": {
+        "path": ".tamp-runs/loaded-payload-handoff-20261103/release_passive_replay.json",
+        "sha256": "ed57c6e09dbf065adaa5025216a502f93bb7fed003b3d1f7497e6acff5fa763a"
+      },
+      "results": [
+        {
+          "case": "shift-checked-preserve",
+          "counterfactual_neutral_passives": false,
+          "opening_goal_collides": true,
+          "contacts": [
+            {
+              "bodies": [
+                "rubber_tip_left",
+                "table"
+              ],
+              "distance_m": -0.0013698545309202633
+            }
+          ]
+        },
+        {
+          "case": "shift-checked-preserve",
+          "counterfactual_neutral_passives": true,
+          "opening_goal_collides": true,
+          "contacts": [
+            {
+              "bodies": [
+                "rubber_tip_left",
+                "table"
+              ],
+              "distance_m": -0.001628663040658446
+            }
+          ]
+        },
+        {
+          "case": "shift-loaded-bind",
+          "counterfactual_neutral_passives": false,
+          "opening_goal_collides": true,
+          "contacts": [
+            {
+              "bodies": [
+                "rubber_tip_left",
+                "table"
+              ],
+              "distance_m": -0.0014307854212852523
+            }
+          ]
+        },
+        {
+          "case": "shift-loaded-bind",
+          "counterfactual_neutral_passives": true,
+          "opening_goal_collides": true,
+          "contacts": [
+            {
+              "bodies": [
+                "rubber_tip_left",
+                "table"
+              ],
+              "distance_m": -0.0016703422705319926
+            }
+          ]
+        }
+      ]
+    },
+    "release_attribution_replay.json": {
+      "artifact": {
+        "path": ".tamp-runs/loaded-payload-handoff-20261103/release_attribution_replay.json",
+        "sha256": "069304a44d4f30d61dcaf2176630f3b1951edded7bee87526add0b2582ce565e"
+      },
+      "results": [
+        {
+          "case": "shift-checked-preserve",
+          "scope": "private recorded-state replay; no new live task result",
+          "internal_message": "gripper_open_path_failed:invalid_goal:collision",
+          "public_failure_code": "collision",
+          "contacts": [
+            {
+              "bodies": [
+                "rubber_tip_left",
+                "table"
+              ],
+              "distance_m": -0.0013698545309202633
+            }
+          ]
+        },
+        {
+          "case": "shift-loaded-bind",
+          "scope": "private recorded-state replay; no new live task result",
+          "internal_message": "gripper_open_path_failed:invalid_goal:collision",
+          "public_failure_code": "collision",
+          "contacts": [
+            {
+              "bodies": [
+                "rubber_tip_left",
+                "table"
+              ],
+              "distance_m": -0.0014307854212852523
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "post_capture_attribution_validation": {
+    "failure-attribution-tests-final.xml": {
+      "tests": 102,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "artifact": {
+        "path": ".tamp-runs/loaded-payload-handoff-20261103/failure-attribution-tests-final.xml",
+        "sha256": "d5f4d1c954a439ed475c409297a714a03a9e5fdb12d15a7a734ad5edae2a5d43"
+      }
+    },
+    "native-api-final.xml": {
+      "tests": 80,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "artifact": {
+        "path": ".tamp-runs/loaded-payload-handoff-20261103/native-api-final.xml",
+        "sha256": "11849e00f742d8e2f6eb7b5a2a3c2349093af994865c9126c532b02adbd85947"
+      }
+    }
+  },
+  "attribution_fix": {
+    "behavior": "preserve gripper-opening planner detail through public failure_code()",
+    "acceptance_or_physics_changed": false,
+    "old_receipts_rescored": false,
+    "source": {
+      "path": "src/emet/controller/manipulation/physical_pick_place.py",
+      "sha256": "58d591f3f972dc8712b1cf9b5ee8cce94108acf2b181ac7a5dae0e1a030d289d"
+    }
+  },
+  "paper_validation": {
+    "pages": 55,
+    "undefined_references_or_citations": false,
+    "log": {
+      "path": ".tamp-runs/loaded-payload-handoff-20261103/paper-build.log",
+      "sha256": "6d7e476dc2098edf4e58d7a47ab30a9483c262227a2995e23c8047fcc89a835c"
+    }
+  }
+}

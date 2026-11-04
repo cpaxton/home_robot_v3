@@ -40,3 +40,11 @@ If this improves complete native tasks and preserves controls, next verify a
 broader prospective placement population before promoting a default. Then repeat
 the actual-agent cases through Caliban. A native profile success is not an agent
 result or evidence that observed robot/object/contact sources are qualified.
+
+The [completed follow-up](../experiments/tamp_loaded_payload_handoff_20261103.md)
+retains 1/2 complete tasks per policy. Both shifted episodes stop at the first
+gripper-opening preflight: private replay predicts a fingertip/table collision.
+The cube comparison remains unassessed. Prioritize measured-state release pose
+selection, opening sweep and retreat clearance before repeating this comparison.
+The next [release-pose search](2026-11-03_tamp_release_pose_search.md) keeps goals
+and tolerances fixed and validates the arm, payload, opening and retreat together.

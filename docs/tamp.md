@@ -186,6 +186,10 @@ while both +15 mm initial-X variants stop on cube lift rotation. The separate
 shows finer grasp candidates can complete the shifted lift, but placement still
 fails the retained-payload pose check. No observed or household success is
 inferred, and the earlier populations remain unchanged.
+The subsequent [checked handoff comparison](experiments/tamp_loaded_payload_handoff_20261103.md)
+is masked by an earlier fingertip/table collision in the shifted release
+preflight. The next gate is measured release-pose/opening/retreat clearance,
+followed by broader native placements and actual-agent repeats.
 
 | Topic | Reference |
 | --- | --- |
