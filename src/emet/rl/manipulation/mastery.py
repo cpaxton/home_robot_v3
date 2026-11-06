@@ -22,6 +22,7 @@ from emet.rl.manipulation.dynamic_trajectory import ArmTrajectory, Segment
 from emet.rl.manipulation.env import ManipulationConfig, ManipulationEnv
 from emet.rl.manipulation.jerk_reference import compile_joint_path, polynomial_peaks
 from emet.rl.manipulation.mastery_objective import (
+    ContractRewardSchedule,
     TeacherContractReward,
     add_contract_reward_arguments,
     contract_reward_from_args,
@@ -809,6 +810,8 @@ class RolloutDiagnostics:
                 "reward_terms_sum": Counter(),
                 "terminal_codes": Counter(),
                 "contract_terminals": Counter(),
+                "contract_fraction_sum": 0.0,
+                "contract_steps": 0,
                 "action_sum": np.zeros_like(action, dtype=float),
                 "action_square_sum": np.zeros_like(action, dtype=float),
                 "action_clipped_count": np.zeros_like(action, dtype=int),
@@ -820,6 +823,9 @@ class RolloutDiagnostics:
         row = self.cases[case_id]
         row["steps"] += 1
         row["reward_sum"] += float(reward)
+        if "fraction" in info.get("contract_reward", {}):
+            row["contract_fraction_sum"] += info["contract_reward"]["fraction"]
+            row["contract_steps"] += 1
         row["reward_terms_sum"].update(
             info.get("reward_terms", {"initialization_penalty": 20.0} if info["initialization_failed"] else {})
         )
@@ -847,6 +853,9 @@ class RolloutDiagnostics:
                 "reward_terms_sum": dict(row["reward_terms_sum"]),
                 "terminal_codes": dict(row["terminal_codes"]),
                 "contract_terminals": dict(row["contract_terminals"]),
+                "contract_fraction_mean": (
+                    row["contract_fraction_sum"] / row["contract_steps"] if row["contract_steps"] else None
+                ),
                 "action_mean": mean.tolist(),
                 "action_std": np.sqrt(np.maximum(0, row["action_square_sum"] / n - mean**2)).tolist(),
                 "action_clipped_fraction": (row["action_clipped_count"] / n).tolist(),
@@ -858,7 +867,9 @@ class RolloutDiagnostics:
         return result
 
 
-def make_training_vec_env(suite, stages, *, num_envs=1, backend="subproc", teacher=None, contract_reward=None):
+def make_training_vec_env(
+    suite, stages, *, num_envs=1, backend="subproc", teacher=None, contract_reward=None, contract_schedule=None
+):
     """Independent native-physics worlds; no simulator/model shared across workers."""
     from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
 
@@ -872,7 +883,13 @@ def make_training_vec_env(suite, stages, *, num_envs=1, backend="subproc", teach
 
         torch.set_num_threads(1)
         env = MasteryEnv(suite, stages=stages, split="train", population="training")
-        return env if contract_reward is None else TeacherContractReward(env, teacher, contract_reward)
+        return (
+            env
+            if contract_reward is None
+            else TeacherContractReward(
+                env, teacher, contract_reward, fraction=contract_schedule.fraction(0) if contract_schedule else 1.0
+            )
+        )
 
     factories = [factory for _ in range(num_envs)]
     return (
@@ -901,6 +918,8 @@ def train(args, suite):
     num_envs = getattr(args, "num_envs", 1)
     backend = getattr(args, "vec_backend", "subproc")
     rollout_steps = getattr(args, "rollout_steps", 256)
+    objective_config = getattr(args, "contract_reward_config", None)
+    schedule = getattr(args, "contract_schedule", ContractRewardSchedule())
     if type(num_envs) is not int or not 1 <= num_envs <= 64:
         raise ValueError("1-64 environments required")
     rollout_size = num_envs * rollout_steps
@@ -919,7 +938,8 @@ def train(args, suite):
             num_envs=num_envs,
             backend=backend,
             teacher=teacher,
-            contract_reward=getattr(args, "contract_reward_config", None),
+            contract_reward=objective_config,
+            contract_schedule=schedule,
         ),
         config=cfg,
         norm_reward=False,
@@ -1002,9 +1022,8 @@ def train(args, suite):
             "teacher_action_loss": False,
             "audit_initial_admission": getattr(args, "audit_initial_admission", False),
             "command_smoothness_warmup_steps": getattr(args, "command_smoothness_warmup", 0),
-            "contract_reward": (
-                asdict(args.contract_reward_config) if getattr(args, "contract_reward_config", None) else None
-            ),
+            "contract_reward": asdict(objective_config) if objective_config is not None else None,
+            "contract_schedule": asdict(schedule) if objective_config is not None else None,
             "safety_promoted": False,
         }
         (out / "run.json").write_text(json.dumps(record, indent=2) + "\n")
@@ -1117,6 +1136,7 @@ def train(args, suite):
                     "run_sha256": digest(record),
                     "training_stages": args.stages,
                     "contract_reward": record["contract_reward"],
+                    "contract_schedule": record["contract_schedule"],
                 }
                 manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
                 with preserve_training_rng():
@@ -1154,6 +1174,8 @@ def train(args, suite):
 
             def _on_rollout_start(self):
                 self.record_update()
+                if objective_config is not None:
+                    normalizer.env_method("set_reward_fraction", schedule.fraction(self.num_timesteps))
                 warmup = getattr(args, "command_smoothness_warmup", 0)
                 fraction = min(1.0, self.num_timesteps / warmup) if warmup else 1.0
                 normalizer.env_method("set_command_smoothness_fraction", fraction)
@@ -1228,6 +1250,7 @@ def main():
     args = parser.parse_args()
     try:
         args.contract_reward_config = contract_reward_from_args(args)
+        args.contract_schedule = ContractRewardSchedule(args.contract_warmup_steps, args.contract_ramp_steps)
     except ValueError as exc:
         parser.error(str(exc))
     if args.stages is None:

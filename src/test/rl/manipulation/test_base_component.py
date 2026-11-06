@@ -9,7 +9,14 @@ import torch
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv
 
-from emet.rl.manipulation.base_component import BasePolicy, FrozenArmActions, initialize, merge, verify_frozen
+from emet.rl.manipulation.base_component import (
+    BasePolicy,
+    FrozenArmActions,
+    initialize,
+    merge,
+    verify_frozen,
+    verify_source_fidelity,
+)
 from emet.rl.manipulation.command_policy import ExecutorCommandVecNormalize, ExecutorFeedbackPolicy
 from emet.rl.manipulation.env import ManipulationConfig
 from emet.rl.manipulation.feedback_policy import GoalFeedbackFeatures
@@ -193,6 +200,61 @@ def test_initialization_rejects_environment_drift(setup):
         initialize(model, env, source, cfg, Toy.fingerprint)
 
 
+def test_quieter_exploration_is_serialized_without_changing_mean(setup, tmp_path):
+    original, env, source, _, _ = setup
+    quiet = PPO(
+        BasePolicy,
+        env,
+        device="cpu",
+        n_steps=8,
+        batch_size=8,
+        use_sde=True,
+        policy_kwargs={**kwargs(), "exploration_coefficient_std": 0.1},
+    )
+    initialize(quiet, env, source, config(), Toy.fingerprint)
+    obs = env.reset()
+    np.testing.assert_array_equal(
+        original.predict(obs, deterministic=True)[0], quiet.predict(obs, deterministic=True)[0]
+    )
+    assert quiet.policy.log_std.exp().max().item() == pytest.approx(0.1)
+    quiet.save(tmp_path / "quiet.zip")
+    loaded = PPO.load(tmp_path / "quiet.zip", device="cpu")
+    assert loaded.policy.exploration_coefficient_std == 0.1
+    torch.testing.assert_close(loaded.policy.log_std, quiet.policy.log_std)
+
+
+def test_source_fidelity_records_known_failure_without_qualifying_it():
+    from copy import deepcopy
+
+    case = {
+        "id": "a",
+        "admitted": True,
+        "code": "ok",
+        "mastered": False,
+        "metrics": {"base_linear_jerk": 0.5},
+        "failure_reasons": ["smoothness/base_linear_jerk"],
+        "admission": {"initial_state_sha256": "initial", "reference_sha256": "reference"},
+        "trace": [{"action": [0] * 8, "reward": 1, "hand": [0] * 9, "base": [0] * 3}],
+    }
+    report = {"complete": True, "suite_sha256": "suite", "source_hashes": {"source": "hash"}, "cases": [case]}
+    result = verify_source_fidelity(report, deepcopy(report), expected_ids={"a"})
+    assert result == {"exact": True, "cases": 1, "source_failures": {"a": case["failure_reasons"]}}
+    for change in ("metrics", "trace", "identity", "missing", "source"):
+        changed = deepcopy(report)
+        if change == "metrics":
+            changed["cases"][0]["metrics"]["base_linear_jerk"] += 0.01
+        elif change == "trace":
+            changed["cases"][0]["trace"][0]["reward"] += 0.01
+        elif change == "identity":
+            changed["cases"][0]["admission"]["reference_sha256"] = "other"
+        elif change == "missing":
+            changed["cases"] = []
+        else:
+            changed["source_hashes"] = {"source": "other"}
+        with pytest.raises(RuntimeError, match="source"):
+            verify_source_fidelity(changed, report, expected_ids={"a"})
+
+
 @pytest.mark.sim
 @pytest.mark.parametrize("stages", [["base"], ["base", "arm"]])
 def test_base_component_runs_native_physics_and_preserves_arm_rows(tmp_path, stages):
@@ -246,6 +308,9 @@ def test_base_component_runs_native_physics_and_preserves_arm_rows(tmp_path, sta
             policy_kwargs=params,
         )
         initialize(model, component_env, source, base.config, base.fingerprint)
+        if stages == ["base"]:
+            component_env.env_method("set_reward_fraction", 0)
+            assert reward_env.next_fraction == 0
         model.learn(16)
         verify_frozen(model, source)
         if stages == ["base"]:

@@ -63,16 +63,36 @@ class ContractRewardConfig:
             raise ValueError("contract reward weights must be finite and nonnegative")
 
 
+@dataclass(frozen=True)
+class ContractRewardSchedule:
+    warmup_steps: int = 0
+    ramp_steps: int = 0
+
+    def __post_init__(self):
+        if any(type(v) is not int or v < 0 for v in asdict(self).values()):
+            raise ValueError("reward schedule requires nonnegative integer step counts")
+
+    def fraction(self, steps):
+        if steps < 0:
+            raise ValueError("negative curriculum step")
+        if steps < self.warmup_steps:
+            return 0.0
+        return float(np.clip((steps - self.warmup_steps) / self.ramp_steps, 0, 1)) if self.ramp_steps else 1.0
+
+
 def add_contract_reward_arguments(parser):
     parser.add_argument("--contract-reward", action="store_true")
     parser.add_argument("--jerk-excess-weight", type=float, default=1.0)
     parser.add_argument("--peak-excess-weight", type=float, default=2.0)
     parser.add_argument("--completion-bonus", type=float, default=10.0)
+    parser.add_argument("--contract-warmup-steps", type=int, default=0)
+    parser.add_argument("--contract-ramp-steps", type=int, default=0)
 
 
 def contract_reward_from_args(args):
     config = ContractRewardConfig(args.jerk_excess_weight, args.peak_excess_weight, args.completion_bonus)
-    if not args.contract_reward and config != ContractRewardConfig():
+    schedule = ContractRewardSchedule(args.contract_warmup_steps, args.contract_ramp_steps)
+    if not args.contract_reward and (config != ContractRewardConfig() or schedule != ContractRewardSchedule()):
         raise ValueError("reward weight overrides require --contract-reward")
     return config if args.contract_reward else None
 
@@ -80,8 +100,11 @@ def contract_reward_from_args(args):
 class ContractObjective:
     """Dense excess cost, incremental peak cost, and one terminal contract bonus."""
 
-    def __init__(self, suite, teacher_metrics, config=ContractRewardConfig()):
+    def __init__(self, suite, teacher_metrics, config=ContractRewardConfig(), *, fraction=1.0):
+        if not np.isfinite(fraction) or not 0 <= fraction <= 1:
+            raise ValueError("reward fraction must be in [0,1]")
         self.gate, self.budgets, self.config = suite["gate"], smoothness_budgets(suite, teacher_metrics), config
+        self.fraction = float(fraction)
         self.previous_peak_cost = 0.0
         self.bonus_paid = False
         self.passed = False
@@ -94,7 +117,7 @@ class ContractObjective:
     def apply(self, reward, info, metrics, *, dt, terminal, path_failed):
         if not np.isfinite(dt) or dt <= 0:
             raise ValueError("positive finite control timestep required")
-        old_bonus = float(info.get("reward_terms", {}).get("success_bonus", 0))
+        old_bonus = self.fraction * float(info.get("reward_terms", {}).get("success_bonus", 0))
         if info.get("initialization_failed") or info.get("invalid_physics"):
             self.passed = False
             return float(reward - old_bonus), {
@@ -115,7 +138,8 @@ class ContractObjective:
         peak_increment = max(0.0, peak_cost - self.previous_peak_cost)
         self.previous_peak_cost = max(self.previous_peak_cost, peak_cost)
         dense = (
-            self.config.jerk_excess_weight
+            self.fraction
+            * self.config.jerk_excess_weight
             * dt
             * self.excess_cost(
                 [
@@ -125,13 +149,15 @@ class ContractObjective:
                 ]
             )
         )
-        peak = self.config.peak_excess_weight * peak_increment
+        peak = self.fraction * self.config.peak_excess_weight * peak_increment
         self.passed = (
             tracking_contract_passes(info, metrics, self.gate, path_failed=path_failed)
             and info["reference_complete"]
             and all(r <= 1 for r in ratios)
         )
-        bonus = self.config.completion_bonus if terminal and self.passed and not self.bonus_paid else 0.0
+        bonus = (
+            self.fraction * self.config.completion_bonus if terminal and self.passed and not self.bonus_paid else 0.0
+        )
         self.bonus_paid |= bonus > 0
         return float(reward - old_bonus - dense - peak + bonus), {
             "removed_native_success_bonus": old_bonus,
@@ -144,13 +170,20 @@ class ContractObjective:
 class TeacherContractReward(gym.Wrapper):
     """Reset-bound reward wrapper; native observations and commands are untouched."""
 
-    def __init__(self, env, teacher_report, config=ContractRewardConfig()):
+    def __init__(self, env, teacher_report, config=ContractRewardConfig(), *, fraction=1.0):
         super().__init__(env)
         rows = teacher_report["cases"]
         self.rows = {row["id"]: row for row in rows}
         if len(rows) != len(self.rows):
             raise ValueError("duplicate teacher cases")
         self.reward_config, self.objective = config, None
+        self.set_reward_fraction(fraction)
+
+    def set_reward_fraction(self, fraction):
+        """Latch the requested fraction at the next reset, never mid-trajectory."""
+        if not np.isfinite(fraction) or not 0 <= fraction <= 1:
+            raise ValueError("reward fraction must be in [0,1]")
+        self.next_fraction = float(fraction)
 
     def reset(self, **kwargs):
         obs, info = self.env.reset(**kwargs)
@@ -164,7 +197,9 @@ class TeacherContractReward(gym.Wrapper):
             )
         ):
             raise ValueError("reward teacher/reset identity mismatch")
-        self.objective = ContractObjective(native.suite, row["metrics"], self.reward_config)
+        self.objective = ContractObjective(
+            native.suite, row["metrics"], self.reward_config, fraction=self.next_fraction
+        )
         return obs, info
 
     def step(self, action):
@@ -190,11 +225,14 @@ class TeacherContractReward(gym.Wrapper):
                 "reward_terms": {
                     **info.get("reward_terms", {}),
                     **terms,
-                    "success_bonus": terms["contract_success_bonus"],
+                    "success_bonus": info.get("reward_terms", {}).get("success_bonus", 0)
+                    - terms["removed_native_success_bonus"]
+                    + terms["contract_success_bonus"],
                 },
                 "contract_reward": {
                     "terminal_pass": self.objective.passed if done or truncated else None,
                     "budgets": self.objective.budgets.copy(),
+                    "fraction": self.objective.fraction,
                 },
             },
         )

@@ -9,6 +9,7 @@ import pytest
 from emet.rl.manipulation.mastery_objective import (
     ContractObjective,
     ContractRewardConfig,
+    ContractRewardSchedule,
     TeacherContractReward,
     add_contract_reward_arguments,
     contract_reward_from_args,
@@ -155,6 +156,38 @@ def test_cli_requires_explicit_reward_enable_and_records_tunable_weights():
     assert result == ContractRewardConfig(peak_excess_weight=3)
 
 
+def test_reward_schedule_is_native_then_ramps_to_full_contract():
+    schedule = ContractRewardSchedule(4096, 4096)
+    assert [schedule.fraction(t) for t in (0, 4095, 4096, 6144, 8192, 20000)] == [0, 0, 0, 0.5, 1, 1]
+    assert ContractRewardSchedule().fraction(0) == 1
+    assert ContractRewardSchedule(10, 0).fraction(9) == 0
+    assert ContractRewardSchedule(10, 0).fraction(10) == 1
+
+
+@pytest.mark.parametrize("steps", [-1, 2.5, True])
+def test_invalid_reward_schedule_rejected(steps):
+    with pytest.raises(ValueError):
+        ContractRewardSchedule(warmup_steps=steps)
+
+
+def test_zero_fraction_preserves_native_reward_even_on_a_jerk_miss():
+    measured, observation = metrics(), info()
+    measured["base_linear_jerk"] = observation["control_tick_jerk"]["base"][0] = 5
+    reward, terms = ContractObjective(suite(), metrics(), fraction=0).apply(
+        10.2, observation, measured, dt=0.05, terminal=False, path_failed=False
+    )
+    assert reward == 10.2 and all(v == 0 for v in terms.values())
+
+
+def test_fractional_bonus_is_shared_between_native_and_terminal_events():
+    objective = ContractObjective(suite(), metrics(), fraction=0.5)
+    early, _ = objective.apply(10, info(), metrics(), dt=0.05, terminal=False, path_failed=False)
+    final = info()
+    final["reward_terms"]["success_bonus"] = 0
+    late, _ = objective.apply(0, final, metrics(), dt=0.05, terminal=True, path_failed=False)
+    assert early == late == 5
+
+
 @pytest.mark.sim
 def test_native_teacher_wrapping_preserves_physics_observations_and_delays_bonus():
     from emet.rl.manipulation.command_runtime import task_pose_teacher_action
@@ -176,8 +209,18 @@ def test_native_teacher_wrapping_preserves_physics_observations_and_delays_bonus
                 break
         measured = mastery_metrics(env, result)
         teacher = {"cases": [{"id": cid, "mastered": True, "admission": admission, "metrics": measured}]}
-        wrapped = TeacherContractReward(env, teacher)
+        wrapped = TeacherContractReward(env, teacher, fraction=0)
         wrapped.reset(options={"case_id": cid})
+        wrapped.set_reward_fraction(1)
+        for old_obs, old_reward, old_done, old_truncated, old_info in originals:
+            obs, reward, done, truncated, result = wrapped.step(task_pose_teacher_action(env.control))
+            assert reward == old_reward
+            assert (done, truncated, result["code"]) == (old_done, old_truncated, old_info["code"])
+            assert result["contract_reward"]["fraction"] == 0
+            for key in obs:
+                np.testing.assert_array_equal(obs[key], old_obs[key])
+        wrapped.reset(options={"case_id": cid})
+        assert wrapped.objective.fraction == 1
         bonuses, old_bonuses = [], []
         for old_obs, old_reward, old_done, old_truncated, old_info in originals:
             obs, reward, done, truncated, result = wrapped.step(task_pose_teacher_action(env.control))

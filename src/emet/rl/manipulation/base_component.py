@@ -30,10 +30,12 @@ from emet.rl.manipulation.mastery import (
     preserve_training_rng,
     read_report,
     save_report,
+    select_cases,
     summarize,
     validate_preflight,
 )
 from emet.rl.manipulation.mastery_objective import (
+    ContractRewardSchedule,
     TeacherContractReward,
     add_contract_reward_arguments,
     contract_reward_from_args,
@@ -62,7 +64,10 @@ class BaseMean(RestoringYawAction):
 
 
 class BasePolicy(FeedbackActorCriticPolicy):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, exploration_coefficient_std=0.5, **kwargs):
+        if not np.isfinite(exploration_coefficient_std) or not 0 < exploration_coefficient_std <= 1:
+            raise ValueError("exploration coefficient std must be in (0,1]")
+        self.exploration_coefficient_std = exploration_coefficient_std
         if (
             not kwargs.get("use_sde", False)
             or not kwargs.get("full_std", True)
@@ -101,7 +106,7 @@ class BasePolicy(FeedbackActorCriticPolicy):
         noise_mask[[1, 2, 4, 5, 6], 1] = 1
         with torch.no_grad():
             self.log_std.fill_(-20)
-            self.log_std[noise_mask.bool()] = np.log(0.5)
+            self.log_std[noise_mask.bool()] = np.log(self.exploration_coefficient_std)
         self.log_std.register_hook(lambda grad: grad * noise_mask)
         self.optimizer = self.optimizer_class(
             [p for p in self.parameters() if p.requires_grad], lr=lr_schedule(1), **self.optimizer_kwargs
@@ -198,6 +203,47 @@ def verify_frozen(model, source):
             raise RuntimeError("frozen arm/context changed: " + key)
 
 
+def verify_source_fidelity(report, baseline, *, expected_ids):
+    """Permit repair of declared failures only when transfer is physically exact."""
+    expected = {c["id"]: c for c in baseline["cases"]}
+    if (
+        not report.get("complete")
+        or not baseline.get("complete")
+        or len(expected) != len(baseline["cases"])
+        or {c["id"] for c in report["cases"]} != set(expected_ids)
+        or not set(expected_ids).issubset(expected)
+        or report["suite_sha256"] != baseline["suite_sha256"]
+        or report["source_hashes"] != baseline["source_hashes"]
+    ):
+        raise RuntimeError("source fidelity coverage or source mismatch")
+    seen = set()
+    for case in report["cases"]:
+        cid = case["id"]
+        if cid in seen or cid not in expected:
+            raise RuntimeError("source fidelity case identity mismatch")
+        seen.add(cid)
+        original = expected[cid]
+        keys = ("admitted", "code", "mastered", "metrics", "failure_reasons")
+        identity = ("initial_state_sha256", "reference_sha256")
+        trace_keys = ("action", "reward", "hand", "base")
+        if (
+            any(case[k] != original[k] for k in keys)
+            or any(case["admission"][k] != original["admission"][k] for k in identity)
+            or len(case["trace"]) != len(original["trace"])
+            or any(any(a[k] != b[k] for k in trace_keys) for a, b in zip(case["trace"], original["trace"], strict=True))
+        ):
+            raise RuntimeError("source transfer changed physical behavior: " + cid)
+    if not seen:
+        raise RuntimeError("empty source fidelity evaluation")
+    return {
+        "exact": True,
+        "cases": len(seen),
+        "source_failures": {
+            cid: expected[cid]["failure_reasons"] for cid in sorted(seen) if not expected[cid]["mastered"]
+        },
+    }
+
+
 def merge(model, normalizer, source, destination, config, fingerprint):
     """Export one ordinary eight-output actor; no component or noise wrapper."""
     verify_frozen(model, source)
@@ -235,6 +281,12 @@ def train(args, suite):
     stages = getattr(args, "training_stages", ["base", "arm"])
     evaluation_every = getattr(args, "evaluation_every", 8192)
     objective_config = getattr(args, "contract_reward_config", None)
+    schedule = getattr(args, "contract_schedule", ContractRewardSchedule())
+    admission_mode = getattr(args, "initial_admission", "strict")
+    if admission_mode not in {"strict", "source_fidelity"}:
+        raise ValueError("unknown initial admission mode")
+    learning_rate = getattr(args, "learning_rate", 1e-4)
+    exploration_std = getattr(args, "exploration_coefficient_std", 0.5)
     base = MasteryEnv(suite, stages=stages, split="train", population="training")
     arm_fraction = getattr(args, "arm_step_fraction", None)
     if arm_fraction is not None:
@@ -247,7 +299,11 @@ def train(args, suite):
             sampling="control_steps",
             primitive_weights=suite.get("training_primitive_weights"),
         )
-    reward_env = base if objective_config is None else TeacherContractReward(base, teacher, objective_config)
+    reward_env = (
+        base
+        if objective_config is None
+        else TeacherContractReward(base, teacher, objective_config, fraction=schedule.fraction(0))
+    )
     env = ExecutorCommandVecNormalize(
         DummyVecEnv([lambda: FrozenArmActions(reward_env, source)]), config=base.config, norm_reward=False
     )
@@ -262,13 +318,14 @@ def train(args, suite):
             n_steps=256,
             batch_size=256,
             n_epochs=5,
-            learning_rate=1e-4,
+            learning_rate=learning_rate,
             gamma=0.9975,
             target_kl=0.01,
             clip_range=0.1,
             use_sde=True,
             sde_sample_freq=8,
             policy_kwargs={
+                "exploration_coefficient_std": exploration_std,
                 "restoring_yaw_feedback": True,
                 "turn_xy_tolerance": base.config.base_xy_tolerance,
                 "features_extractor_class": GoalFeedbackFeatures,
@@ -296,15 +353,17 @@ def train(args, suite):
             "effective_stage_probabilities": dict(zip(base.sampler.groups, base.sampler.probabilities, strict=True)),
             "evaluation_every": evaluation_every,
             "contract_reward": None if objective_config is None else asdict(objective_config),
+            "contract_schedule": None if objective_config is None else asdict(schedule),
+            "initial_admission": admission_mode,
             "seed": 90,
             "frozen_normalization": True,
             "frozen_actor_context_and_arm": True,
             "teacher_action_loss": False,
             "sde_sample_freq": 8,
             "sde_noise_features": "current/future base errors plus constant .002",
-            "initial_sde_coefficient_std": 0.5,
+            "initial_sde_coefficient_std": exploration_std,
             "ppo": {
-                "learning_rate": 1e-4,
+                "learning_rate": learning_rate,
                 "gamma": 0.9975,
                 "n_steps": 256,
                 "batch_size": 256,
@@ -358,6 +417,8 @@ def train(args, suite):
                         "run_sha256": digest(record),
                         "training_stages": stages,
                         "contract_reward": record["contract_reward"],
+                        "contract_schedule": record["contract_schedule"],
+                        "initial_admission": admission_mode,
                     }
                     (directory / "actor/manifest.json").write_text(json.dumps(policy.manifest, indent=2) + "\n")
                     report = evaluate_suite(suite, stages=["base", "arm"], policy=policy, teacher_report=teacher)
@@ -392,6 +453,8 @@ def train(args, suite):
 
             def _on_rollout_start(self):
                 self.record_update()
+                if objective_config is not None:
+                    env.env_method("set_reward_fraction", schedule.fraction(self.num_timesteps))
                 if self.num_timesteps and self.num_timesteps % evaluation_every == 0:
                     self.checkpoint(f"step-{self.num_timesteps}")
 
@@ -403,6 +466,7 @@ def train(args, suite):
                     "sampling_starts": dict(self.starts),
                     "sde_coefficients": model.policy.log_std.detach().exp().cpu().tolist(),
                     "rollout_cases": self.rollout.record(),
+                    "requested_contract_fraction": schedule.fraction(self.num_timesteps) if objective_config else None,
                 }
                 with (args.output / "metrics.jsonl").open("a") as stream:
                     stream.write(json.dumps(values) + "\n")
@@ -415,8 +479,21 @@ def train(args, suite):
 
         audit = Audit()
         audit.init_callback(model)
+        baseline = None
+        if admission_mode == "source_fidelity":
+            with preserve_training_rng():
+                baseline = evaluate_suite(
+                    suite, stages=["base", "arm"], policy=source, teacher_report=teacher, population="admission"
+                )
+            save_report(args.output / "source-baseline.json.gz", baseline)
+            if any(
+                c["final_info"].get(flag, False)
+                for c in baseline["cases"]
+                for flag in ("unsafe_contact", "wheel_lift", "invalid_physics", "retention_lost")
+            ):
+                raise RuntimeError("source repair requires a physically safe baseline")
         initial = audit.checkpoint("step-0")
-        if not all(r["mastered"] for r in initial["cases"] if r["stage"] == "arm"):
+        if admission_mode == "strict" and not all(r["mastered"] for r in initial["cases"] if r["stage"] == "arm"):
             raise RuntimeError("initial merged actor lost canonical arm qualification")
         with preserve_training_rng():
             report = evaluate_suite(
@@ -427,8 +504,25 @@ def train(args, suite):
                 population="admission",
             )
         save_report(args.output / "initial-arm-expanded.json.gz", report)
-        if len(report["cases"]) != 16 or not all(r["mastered"] for r in report["cases"]):
+        if len(report["cases"]) != 16 or (
+            admission_mode == "strict" and not all(r["mastered"] for r in report["cases"])
+        ):
             raise RuntimeError("initial arm admission failed")
+        if baseline is not None:
+            fidelity = {
+                "canonical": verify_source_fidelity(
+                    initial, baseline, expected_ids={c["id"] for c in select_cases(suite, ["base", "arm"], "all")}
+                ),
+                "expanded_arm": verify_source_fidelity(
+                    report,
+                    baseline,
+                    expected_ids={c["id"] for c in select_cases(suite, ["arm"], "all", population="admission")},
+                ),
+                "source_weights_sha256": source.manifest["weights_sha256"],
+                "source_safety_flags_clear": True,
+                "qualification_granted": False,
+            }
+            (args.output / "initial-fidelity.json").write_text(json.dumps(fidelity, indent=2) + "\n")
         model.learn(args.steps, callback=audit)
         final = audit.checkpoint("last")
         with preserve_training_rng():
@@ -469,6 +563,9 @@ def main():
     parser.add_argument("--training-stages", nargs="+", choices=["base", "arm"], default=["base", "arm"])
     parser.add_argument("--evaluation-every", type=int, default=8192)
     parser.add_argument("--arm-step-fraction", type=float)
+    parser.add_argument("--learning-rate", type=float, default=1e-4)
+    parser.add_argument("--exploration-coefficient-std", type=float, default=0.5)
+    parser.add_argument("--initial-admission", choices=["strict", "source_fidelity"], default="strict")
     add_contract_reward_arguments(parser)
     parser.add_argument("--wandb-mode", choices=["disabled", "offline"], default="disabled")
     args = parser.parse_args()
@@ -480,8 +577,11 @@ def main():
         parser.error("duplicate training stages")
     try:
         args.contract_reward_config = contract_reward_from_args(args)
+        args.contract_schedule = ContractRewardSchedule(args.contract_warmup_steps, args.contract_ramp_steps)
     except ValueError as exc:
         parser.error(str(exc))
+    if not np.isfinite(args.learning_rate) or args.learning_rate <= 0:
+        parser.error("positive finite learning rate required")
     train(args, load_suite(args.suite))
 
 
