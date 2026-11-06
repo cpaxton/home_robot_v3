@@ -126,19 +126,27 @@ def load_suite(path=SUITE):
             raise ValueError("extra arm delta must have five finite nearby joint displacements") from error
         if delta.shape != (5,) or not np.isfinite(delta).all() or np.any(abs(delta) > 0.2):
             raise ValueError("extra arm delta must have five finite nearby joint displacements")
+        if "arm_start" in case:
+            try:
+                posture = np.asarray(case["arm_start"], dtype=float)
+            except (TypeError, ValueError) as error:
+                raise ValueError("extra arm start requires five finite nearby joint coordinates") from error
+            if posture.shape != (5,) or not np.isfinite(posture).all() or np.any(abs(posture) > 1):
+                raise ValueError("extra arm start requires five finite nearby joint coordinates")
         ids.add(case["id"])
     if not np.isfinite(suite["reference"]["loaded_time_scale"]) or suite["reference"]["loaded_time_scale"] < 1:
         raise ValueError("loaded references may only slow down")
-    scales = suite.get("arm_training_scales")
-    if scales is not None and (
-        suite["format"] != "mars-tracking-mastery-v2"
-        or not isinstance(scales, list)
-        or not scales
-        or any(type(x) not in (int, float) or not np.isfinite(x) or not 0 < x <= 1 for x in scales)
-        or scales != sorted(set(scales))
-        or scales[-1] != 1
-    ):
-        raise ValueError("arm training scales require ordered unique positive amplitudes through 1")
+    for stage in ("arm", "coupled"):
+        scales = suite.get(f"{stage}_training_scales")
+        if scales is not None and (
+            suite["format"] != "mars-tracking-mastery-v2"
+            or not isinstance(scales, list)
+            or not scales
+            or any(type(x) not in (int, float) or not np.isfinite(x) or not 0 < x <= 1 for x in scales)
+            or scales != sorted(set(scales))
+            or scales[-1] != 1
+        ):
+            raise ValueError(f"{stage} training scales require ordered unique positive amplitudes through 1")
     weights = suite.get("training_stage_weights")
     if weights is not None and (
         not isinstance(weights, dict)
@@ -243,14 +251,16 @@ def select_cases(suite, stages, split, *, population="canonical"):
                         )
     if population != "canonical":
         for case in list(cases):
-            if case["stage"] == "arm" and case["split"] == "train":
-                for scale in suite.get("arm_training_scales", []):
+            if case["stage"] in {"arm", "coupled"} and case["split"] == "train":
+                for scale in suite.get(f"{case['stage']}_training_scales", []):
                     if scale != 1:
                         cases.append(
                             {
                                 **case,
                                 "id": case["id"] + f"@amplitude:{scale:g}",
                                 "arm_delta": (np.asarray(case["arm_delta"]) * scale).tolist(),
+                                "travel_m": case["travel_m"] * scale,
+                                "turn_rad": case["turn_rad"] * scale,
                             }
                         )
     return [c for c in cases if c["stage"] in stages and (split == "all" or c["split"] == split)]
@@ -446,6 +456,34 @@ class MasteryEnv(ManipulationEnv):
         self.mastery_admission = None
         self.case_visits = Counter()
         super().__init__(ManipulationConfig(**self.suite["config"]))
+
+    def _initial_arm_posture(self, sampled):
+        """Start a free-space arm case before ordinary fixture settling/admission.
+
+        This is benchmark-owned reset data, never a runtime command or private
+        joint reference in observations. Default cases preserve their RNG draws
+        and exact initialization. Loaded/frozen fixtures cannot use this hook.
+        """
+        if self.mastery_case is None or "arm_start" not in self.mastery_case:
+            return super()._initial_arm_posture(sampled)
+        if (
+            self.mastery_case["stage"] != "arm"
+            or self.scenario != "reach"
+            or self.profile.robot != "innate_mars"
+            or self.config.hold_pregrasp_fixture
+            or self.grasp_lift_trial
+        ):
+            raise ValueError("arm start is restricted to free-space Mars arm reset cases")
+        posture = np.asarray(self.mastery_case["arm_start"], dtype=float)
+        if (
+            posture.shape != (5,)
+            or not np.isfinite(posture).all()
+            or np.any(abs(posture) > 1)
+            or np.any(posture < self.control.limits[:, 0] + 0.02)
+            or np.any(posture > self.control.limits[:, 1] - 0.02)
+        ):
+            raise ValueError("arm start exceeds finite joint-margin limits")
+        return posture.copy()
 
     def reset(self, *, seed=None, options=None):
         if seed is not None:

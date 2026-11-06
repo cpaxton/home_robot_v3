@@ -270,7 +270,12 @@ Accepted plan: [Mars controller integration](docs/plans/mars_controller_integrat
       replay stops in pregrasp after 56 policy calls; original arm primitives
       excite only two joint directions. Train all seven motion rows on the
       [rank-complete nearby arm expansion](docs/experiments/mars_tamp_arm_coverage_20261106.md),
-      then replay actual admitted pick/place checkpoints. Require coupled
+      then replay actual admitted pick/place checkpoints. The first seven-motion
+      final reaches 151 public-tool calls inside the hand-position tube but stops
+      on base drift and regresses arm smoothness: reject it. A matched smaller-step
+      control runs in an immutable checkout; procedural near-straight postures and
+      coupled amplitudes have native reset tests and await full teacher/regressions.
+      Require coupled
       dynamic-pose, loaded TAMP and real feedback/watchdog/stop acceptance before
       hardware motion. Primitive success alone does not close this gate.
 - [x] Add a frozen small Mars mastery suite: 13 training / 13 nearby validation

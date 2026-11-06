@@ -58,3 +58,19 @@ Full final results and a new public-tool replay are still required.
 [Complete compact results and artifact checksums](../../paper/data/whole_body_control/mars_tamp_arm_coverage_v1/results.json)
 retain both tool outcomes, contact/motion metrics, admission evidence and the
 coverage audit. Raw histories, weights and traces remain ignored under `logs/`.
+
+
+A subsequent initial replay on the expanded suite passes 40/40 arm tracking and
+37/40 full arm gates (24/24 and 22/24 on the new cases), while coupled remains
+0/4. Rank coverage alone therefore does not establish the cause of pregrasp
+failure or demonstrate that the new training will fix it. The
+[offline posture audit](../../paper/data/whole_body_control/mars_tamp_arm_coverage_v1/posture-audit.json)
+finds another concrete mismatch: training arm reset elbows span 0.169–0.183 rad,
+whereas the TAMP pregrasp starts at −0.022 rad; its wrist pitch is 0.399 rad,
+versus training resets 0.151–0.243 rad. The elbow is about −12.95 standard
+deviations from the retained normalization mean, before the clip at 20.
+These are initial-posture ranges, not complete trajectory ranges. This input
+audit is not causal proof, but motivates explicit near-straight elbow and
+TAMP-like wrist resets in the next training-distribution experiment. Preserve
+the declared current run to its fixed final and score its actual public-tool
+replay before selecting any policy or changing the next recipe.

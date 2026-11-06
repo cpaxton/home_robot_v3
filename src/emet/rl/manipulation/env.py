@@ -575,6 +575,10 @@ class ManipulationEnv(gym.Env):
         mujoco.mj_forward(self.model, self.data)
         return last
 
+    def _initial_arm_posture(self, sampled):
+        """Procedural reset hook; runtime goals never set joint configurations."""
+        return sampled
+
     def _initialize(self):
         grasp_fixture = self.scenario != "reach" or (
             (self.reach_hold_trial or self.reach_local_trial) and self.config.hold_pregrasp_fixture
@@ -637,7 +641,7 @@ class ManipulationEnv(gym.Env):
             if grasp_fixture:
                 q[0] = q[4] = 0
                 q[3] = -q[1] - q[2] + self.config.grasp_pitch_rad
-        self.control.initialize(q, p.gripper_open)
+        self.control.initialize(self._initial_arm_posture(q), p.gripper_open)
         if self.scenario == "reach" and self.config.initial_heading_range:
             base_joint = int(m.body_jntadr[self.control.base])
             if base_joint < 0 or m.jnt_type[base_joint] != mujoco.mjtJoint.mjJNT_FREE:

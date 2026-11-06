@@ -480,3 +480,16 @@ optimization are proposed; successful general arm or hardware control is not
 established. Full outcomes remain in
 \texttt{paper/data/whole\_body\_control/mars\_gain\_bias\_v1/} and
 \texttt{paper/data/whole\_body\_control/mars\_tamp\_arm\_coverage\_v1/}.
+
+
+The subsequent 65,536-transition seven-motion trial keeps context/gripper fixed
+and expands nearby arm directions. Its fixed final gives base 50/50 tracking,
+42/50 full; arm 37/40 tracking, 4/40 full; coupled 0/4. A separately frozen
+12-case audit falls from source 12/12 full to 8/12 tracking and 0/12 full. The
+public-tool final makes 151 calls within the 10\,mm hand-position tube, then
+stops on 10.3\,mm base drift with measured stop confirmed; no transfer completes.
+The source remains the baseline. Same-batch update diagnostics and an observed
+TAMP starting-posture mismatch motivate smaller actor steps and expanded
+procedural resets; neither is yet a demonstrated general controller fix.
+All outcomes remain in
+\texttt{paper/data/whole\_body\_control/mars\_whole\_body\_seven\_v1/}.

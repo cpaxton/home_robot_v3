@@ -265,3 +265,77 @@ initial-fidelity audit frees CPU15, replay teacher/source and then the fixed
 final, preserving every admission/execution failure and plotting targets. Do not
 choose another checkpoint or tune this run from these audit outcomes. These are
 extra exploratory development checks, separate from the frozen canonical gate.
+
+## Smaller-step control after the first seven-motion trial
+
+The fixed 65,536-step final is rejected: expanded base tracking/full 50/50 and
+42/50, arm 37/40 and 4/40, coupled 0/4. The fresh 12-case arm audit regresses
+from source 12/12 full to 8/12 tracking and 0/12 full. Public-tool pregrasp lasts
+151 policy calls with maximum hand position error 7.33 mm, but stops at 10.3 mm
+base drift; stop is confirmed. Thus arm responsiveness improves without meeting
+whole-body stability. No new hardware qualification follows.
+
+A same-batch, one-update conditioning audit from the critic-warmup checkpoint
+finds exact active-action Gaussian KL 0.756 at actor LR 3e-5 / gain-bias ×300.
+Changing gain-bias alone to ×1 still gives 0.056. Reducing all actor learning rates
+tenfold, while retaining critic LR 3e-4 and bias ratio ×300, gives KL 0.00756.
+This is a local optimization diagnostic, not demonstrated policy success.
+
+Declare a matched smaller-step control: same source, 94-case distribution,
+65,536 transitions, warmup, objectives, seeds and evaluation cadence. Actor LR
+3e-6, critic multiplier 100 (same effective 3e-4), bias multiplier 300 (effective
+9e-4). Use immutable detached checkout `11305c8c` under
+`/tmp/mars-rate-control-11305c`; verify its complete source state against the
+1,064-test receipt and teacher 94/94 before launch. The current working branch
+may then develop a separate TAMP-posture curriculum. Source-fidelity admission
+and exact warmup checks remain; no auxiliary CPU15 simulator is launched by this
+control, leaving that worker for new-code tests. Score the fixed final, then run
+public-tool pick/place and the frozen 12-case audit serially on CPU14. Retain the
+source unless all declared nonregression/improvement gates pass. No automatic
+hardware promotion or motion.
+
+## Procedural TAMP-like postures and longer scheduled refinement
+
+The first seven-motion final improves public-tool position response but fails
+base drift and regresses the fresh audit; see the
+[complete report](../experiments/mars_seven_motion_20261106.md). In parallel with
+the immutable smaller-step control, implement a separate training-only expansion:
+`mars_tracking_mastery_tamp_postures_v1.json`. It adds two nominal near-straight
+postures (elbows −0.04/+0.04 rad, compensating wrist pitch), eight extra arm parents
+and 0.25/0.5/1 coupled amplitudes. Half the arm budget rehearses the old families;
+half uses the new postures. All original canonical cases and validation seeds
+remain fixed. Expanded admission is 122: 50 base, 64 arm and eight coupled.
+
+Posture selection occurs before ordinary reset settling and geometric/support
+admission. Generic runtime/reset commands cannot inject these coordinates, and
+loaded/pregrasp fixtures reject the override. Actor inputs remain measured state,
+masked task poses and preview; joint target witnesses remain private.
+
+After the matched control and its serial tests finish, declare a bounded longer
+candidate from the retained source: 262,144 transitions, 4,096 critic warmup;
+30/50/20 base/arm/coupled control-step budgets; actor LR 3e-6, critic ×100 and
+gain-bias ×300; noise 0.1/0.03, native reward scale 0.01. Use the existing staged
+contract objective: 4,096 native steps, then ramp over 32,768 steps, jerk excess
+weight 0.1, incremental peak weight 0.2 and full-contract bonus 10. This is a
+multi-factor development experiment, not an isolated reward claim. Context/grip
+and normalization remain frozen. Evaluate canonical 22 at warmup and every
+32,768; score the fixed final on all 122, original 70 and separate audits, then
+real public-tool pick/place. No intermediate selection or hardware promotion.
+
+Fresh full regressions, teacher 122/122, legacy physical replay, source-fidelity
+admission, and reset/frozen-fixture tests must pass first. Keep the matched
+control in its immutable checkout: new source must never change underneath a
+running experiment. On this workstation, one CPU14 native training worker and
+one CPU15 test/teacher worker remain the limit. Caliban is reachable, but its
+previous exact frozen-fixture portability failures still block a qualified
+training launch there; do not skip those gates or change their tolerances.
+
+Also freeze [12 new near-straight audit cases](../../paper/data/whole_body_control/mars_tamp_posture_audit_v1/cases.json)
+with seeds 34300000–34300011 and independent procedural starting postures before
+training. These never enter the sampler. Replay teacher/source/fixed final on
+both the previous 12-case audit and these new 12; preserve every failed admission.
+Any optional development-baseline replacement by the smaller-step control must
+preserve all original/expanded tracking and full counts, keep the old fresh audit
+12/12 full, clear recorded safety flags and complete the public-tool transfer.
+Otherwise the longer candidate starts from the retained native base-curriculum
+source. No intermediate checkpoint participates in that decision.
