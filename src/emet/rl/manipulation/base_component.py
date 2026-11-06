@@ -56,11 +56,12 @@ class BaseNoise(StateDependentNoiseDistribution):
 
 
 class BaseMean(RestoringYawAction):
-    def __init__(self, context_width, feedback_width):
+    def __init__(self, context_width, feedback_width, outputs=2):
         super().__init__(context_width, feedback_width, 8)
+        self.outputs = outputs
 
     def forward(self, latent):
-        return super().forward(latent)[:, :2]
+        return super().forward(latent)[:, : self.outputs]
 
 
 class RoleAdam(torch.optim.Adam):
@@ -82,6 +83,9 @@ class RoleAdam(torch.optim.Adam):
 
 
 class BasePolicy(FeedbackActorCriticPolicy):
+    motion_outputs = 2
+    noise_type = BaseNoise
+
     def __init__(
         self,
         *args,
@@ -110,18 +114,18 @@ class BasePolicy(FeedbackActorCriticPolicy):
             raise ValueError("base component requires full-std unsquashed gSDE")
         super().__init__(*args, **kwargs)
         if (
-            self.action_space.shape != (2,)
+            self.action_space.shape != (self.motion_outputs,)
             or not self.restoring_yaw_feedback
             or self.features_extractor.robot != "innate_mars"
         ):
-            raise ValueError("two-output Mars restoring-yaw component required")
+            raise ValueError("Mars restoring-yaw motion component required")
 
     def _build(self, lr_schedule):
-        self.action_dist = BaseNoise(2, full_std=True, epsilon=1e-8)
+        self.action_dist = self.noise_type(self.motion_outputs, full_std=True, epsilon=1e-8)
         super()._build(lr_schedule)
-        self.action_net = BaseMean(self.mlp_extractor.context_width, self.features_extractor.feedback_width).to(
-            self.device
-        )
+        self.action_net = BaseMean(
+            self.mlp_extractor.context_width, self.features_extractor.feedback_width, outputs=self.motion_outputs
+        ).to(self.device)
         for parameter in self.parameters():
             parameter.requires_grad_(False)
         for module in (self.mlp_extractor.value_net, self.value_net, self.action_net.turn_gain):
@@ -131,15 +135,13 @@ class BasePolicy(FeedbackActorCriticPolicy):
         for parameter in (self.action_net.gain.weight, self.action_net.gain.bias):
             parameter.requires_grad_(True)
             mask = torch.zeros_like(parameter).reshape(7, width, -1)
-            mask[:2] = 1
+            mask[: self.motion_outputs] = 1
             parameter.register_hook(lambda grad, mask=mask.reshape(parameter.shape): grad * mask)
         self.log_std.requires_grad_(True)
-        noise_mask = torch.zeros_like(self.log_std)
-        noise_mask[[0, 3, 6], 0] = 1
-        noise_mask[[1, 2, 4, 5, 6], 1] = 1
+        noise_mask, coefficients = self.noise_configuration()
         with torch.no_grad():
             self.log_std.fill_(-20)
-            self.log_std[noise_mask.bool()] = np.log(self.exploration_coefficient_std)
+            self.log_std[noise_mask.bool()] = coefficients[noise_mask.bool()].log()
         self.log_std.register_hook(lambda grad: grad * noise_mask)
         self._actor_parameter_names = tuple(
             name for name, parameter in self.named_parameters() if parameter.requires_grad and not self.is_critic(name)
@@ -173,6 +175,12 @@ class BasePolicy(FeedbackActorCriticPolicy):
                 for group_role, scale in scales.items()
             ]
             self.optimizer = RoleAdam(groups, lr=lr_schedule(1), **self.optimizer_kwargs)
+
+    def noise_configuration(self):
+        mask = torch.zeros_like(self.log_std)
+        mask[[0, 3, 6], 0] = 1
+        mask[[1, 2, 4, 5, 6], 1] = 1
+        return mask, torch.full_like(mask, self.exploration_coefficient_std)
 
     @staticmethod
     def is_critic(name):
@@ -376,7 +384,8 @@ def verify_frozen(model, source):
             continue
         if key in {"action_net.gain.weight", "action_net.gain.bias"}:
             width = model.policy.features_extractor.feedback_width
-            value, expected = value.reshape(7, width, -1)[2:], original[key].reshape(7, width, -1)[2:]
+            count = model.policy.motion_outputs
+            value, expected = value.reshape(7, width, -1)[count:], original[key].reshape(7, width, -1)[count:]
         else:
             expected = original[key]
         if not torch.equal(value, expected):
@@ -441,7 +450,7 @@ def merge(model, normalizer, source, destination, config, fingerprint):
         manifest = json.loads(path.read_text())
         manifest["critic_reward_scale"] = model.policy.critic_reward_scale
         manifest["component_training"] = {
-            "scope": SCOPE,
+            "scope": "mars-whole-body-gsde-v1" if model.policy.motion_outputs == 7 else SCOPE,
             "optimizer_resume_supported": False,
             "one_runtime_actor": True,
         }
@@ -456,6 +465,12 @@ def train(args, suite):
     verify_regressions(args.regression_receipt)
     teacher = read_report(args.preflight)
     stages = getattr(args, "training_stages", ["base", "arm"])
+    train_arm = getattr(args, "train_arm", False)
+    policy_type, action_wrapper = BasePolicy, FrozenArmActions
+    if train_arm:
+        from emet.rl.manipulation.whole_body import FrozenGripActions, WholeBodyPolicy
+
+        policy_type, action_wrapper = WholeBodyPolicy, FrozenGripActions
     evaluation_stages = ["base", "arm"] + (["coupled"] if "coupled" in stages else [])
     validate_preflight(teacher, suite, evaluation_stages)
     source = ManipulationPolicy(args.source)
@@ -494,13 +509,13 @@ def train(args, suite):
     if reward_scale != 1:
         reward_env = TrainingRewardScale(reward_env, reward_scale)
     env = ExecutorCommandVecNormalize(
-        DummyVecEnv([lambda: FrozenArmActions(reward_env, source)]), config=base.config, norm_reward=False
+        DummyVecEnv([lambda: action_wrapper(reward_env, source)]), config=base.config, norm_reward=False
     )
     run = None
     sources = source_hashes()
     try:
         model = PPO(
-            BasePolicy,
+            policy_type,
             env,
             device="cpu",
             seed=90,
@@ -518,6 +533,7 @@ def train(args, suite):
                 "critic_lr_multiplier": critic_multiplier,
                 "critic_reward_scale": reward_scale,
                 "gain_bias_lr_multiplier": gain_bias_multiplier,
+                **({"arm_exploration_coefficient_std": args.arm_exploration_coefficient_std} if train_arm else {}),
                 "restoring_yaw_feedback": True,
                 "turn_xy_tolerance": base.config.base_xy_tolerance,
                 "features_extractor_class": GoalFeedbackFeatures,
@@ -531,7 +547,7 @@ def train(args, suite):
         )
         initialize(model, env, source, base.config, base.fingerprint)
         record = {
-            "scope": SCOPE,
+            "scope": "mars-whole-body-gsde-v1" if train_arm else SCOPE,
             "suite": suite,
             "suite_sha256": digest(suite),
             "source_hashes": sources,
@@ -552,10 +568,17 @@ def train(args, suite):
             "initial_admission": admission_mode,
             "seed": 90,
             "frozen_normalization": True,
-            "frozen_actor_context_and_arm": True,
+            "frozen_actor_context_and_arm": not train_arm,
+            "frozen_actor_context_and_grip": True,
+            "arm_trainable": train_arm,
+            "arm_exploration_coefficient_std": args.arm_exploration_coefficient_std if train_arm else None,
             "teacher_action_loss": False,
             "sde_sample_freq": 8,
-            "sde_noise_features": "current/future base errors plus constant .002",
+            "sde_noise_features": (
+                "masked base/hand errors, free-base hand errors, constant .002"
+                if train_arm
+                else "current/future base errors plus constant .002"
+            ),
             "initial_sde_coefficient_std": exploration_std,
             "ppo": {
                 "learning_rate": learning_rate,
@@ -676,6 +699,10 @@ def train(args, suite):
                     .reshape(7, model.policy.features_extractor.feedback_width)[:2]
                     .cpu()
                     .tolist(),
+                    "motion_gain_bias": model.policy.action_net.gain.bias.detach()
+                    .reshape(7, model.policy.features_extractor.feedback_width)[: model.policy.motion_outputs]
+                    .cpu()
+                    .tolist(),
                     "rollout_cases": self.rollout.record(),
                     "requested_contract_fraction": schedule.fraction(self.num_timesteps) if objective_config else None,
                     "critic_warmup": warmup.active,
@@ -717,7 +744,8 @@ def train(args, suite):
                 population="admission",
             )
         save_report(args.output / "initial-arm-expanded.json.gz", report)
-        if len(report["cases"]) != 16 or (
+        expected_arm = select_cases(suite, ["arm"], "all", population="admission")
+        if len(report["cases"]) != len(expected_arm) or (
             admission_mode == "strict" and not all(r["mastered"] for r in report["cases"])
         ):
             raise RuntimeError("initial arm admission failed")
@@ -779,6 +807,10 @@ def main():
     parser.add_argument("--arm-step-fraction", type=float)
     parser.add_argument("--coupled-step-fraction", type=float)
     parser.add_argument("--reward-scale", type=float, default=1.0)
+    parser.add_argument(
+        "--train-arm", action="store_true", help="train all seven motion rates; retain executor gripper"
+    )
+    parser.add_argument("--arm-exploration-coefficient-std", type=float, default=0.03)
     parser.add_argument("--learning-rate", type=float, default=1e-4)
     parser.add_argument("--exploration-coefficient-std", type=float, default=0.5)
     parser.add_argument("--critic-lr-multiplier", type=float, default=1.0)

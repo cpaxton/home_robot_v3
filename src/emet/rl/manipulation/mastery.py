@@ -102,6 +102,31 @@ def load_suite(path=SUITE):
         counts[split, stage] != n for split in seeds for stage, n in zip(STAGES, (5, 4, 2, 2), strict=True)
     ):
         raise ValueError("expected disjoint 13-case train/validation partitions")
+    extras = suite.get("extra_training_cases", [])
+    if not isinstance(extras, list):
+        raise ValueError("extra training cases must be a list")
+    for case in extras:
+        if (
+            not isinstance(case, dict)
+            or case.get("stage") != "arm"
+            or case.get("split") != "train"
+            or not isinstance(case.get("id"), str)
+            or not case["id"].startswith("train:arm:")
+            or "@" in case["id"]
+            or case["id"] in ids
+            or type(case.get("reset_seed")) is not int
+            or case["reset_seed"] not in seeds["train"]
+            or case.get("travel_m") != 0
+            or case.get("turn_rad") != 0
+        ):
+            raise ValueError("extra arm cases require unique training IDs and existing training reset seeds")
+        try:
+            delta = np.asarray(case["arm_delta"], dtype=float)
+        except (KeyError, TypeError, ValueError) as error:
+            raise ValueError("extra arm delta must have five finite nearby joint displacements") from error
+        if delta.shape != (5,) or not np.isfinite(delta).all() or np.any(abs(delta) > 0.2):
+            raise ValueError("extra arm delta must have five finite nearby joint displacements")
+        ids.add(case["id"])
     if not np.isfinite(suite["reference"]["loaded_time_scale"]) or suite["reference"]["loaded_time_scale"] < 1:
         raise ValueError("loaded references may only slow down")
     scales = suite.get("arm_training_scales")
@@ -136,7 +161,9 @@ def load_suite(path=SUITE):
         if sampling != "control_steps" or not isinstance(primitive_weights, dict) or not primitive_weights:
             raise ValueError("primitive weights require control-step sampling")
         for stage, values in primitive_weights.items():
-            expected = {primitive_name(c) for c in suite["cases"] if c["stage"] == stage and c["split"] == "train"}
+            expected = {
+                primitive_name(c) for c in [*suite["cases"], *extras] if c["stage"] == stage and c["split"] == "train"
+            }
             if (
                 not expected
                 or not isinstance(values, dict)
@@ -187,6 +214,8 @@ def select_cases(suite, stages, split, *, population="canonical"):
     if population == "training" and split != "train":
         raise ValueError("training population requires the training split")
     cases = list(suite["cases"])
+    if population != "canonical":
+        cases.extend(suite.get("extra_training_cases", []))
     if population != "canonical" and "training_population" in suite:
         base = [c for c in cases if c["stage"] == "base" and c["split"] == "train"]
         for primitive in base:
@@ -213,7 +242,7 @@ def select_cases(suite, stages, split, *, population="canonical"):
                             }
                         )
     if population != "canonical":
-        for case in suite["cases"]:
+        for case in list(cases):
             if case["stage"] == "arm" and case["split"] == "train":
                 for scale in suite.get("arm_training_scales", []):
                     if scale != 1:

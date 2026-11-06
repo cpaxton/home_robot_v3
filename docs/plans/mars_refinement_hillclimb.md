@@ -194,3 +194,63 @@ Do not select an intermediate validation checkpoint. Quarter-amplitude training
 parents pass 2/2 under the source; half and three-quarter parents fail tracking.
 This establishes an easier curriculum starting point for a later experiment,
 without changing any canonical goal or threshold.
+
+## Rank-complete arm coverage and joint whole-body refinement
+
+The gain-bias ×1000 trial finished with base 50/50 tracking, 33/50 full;
+arm 16/16 tracking, 0/16 full; coupled 1/4 full. Reject it. Larger updates to
+base feedback recover some coupled motion but introduce arm-stage base jerk.
+
+A ground-truth public-tool replay on `left:20g:0` exposes a separate coverage
+gap. The retained actor, admitted as the actual initialized step-zero checkpoint
+of that experiment, makes 56 policy calls and stops during pregrasp at 10.10 mm
+position error. The reference completes the first pick/place but cannot plan the
+return within its planning budget. Neither completes the two-transfer program.
+The learned elbow command is much weaker than the reference rate. Replacing
+only the phase one-hot in the logged observations reproduces the original
+56 actions and changes that elbow command modestly, insufficient to explain
+the deficit. This counterfactual is an input audit, not a successful rollout.
+
+The original four arm primitives excite only joint 2 and joint 5: their joint
+displacement matrix has rank two. Recent refinements freeze the arm, including
+on coupled examples. Strong scores there do not establish general arm control.
+
+Next bounded experiment, declared before training:
+
+- Keep all 26 frozen cases, thresholds, limits, references and reset partitions.
+  Add eight **training-only** arm parents in
+  `mars_tracking_mastery_full_arm_v1.json`: positive/negative joint 1, 3 and 4,
+  plus two coordinated pitch-joint translation motions. All targets come from
+  nearby FK joint paths, with collision/support/joint-margin admission. The
+  joint displacement matrix has rank five. Use existing training reset seeds;
+  no validation seed or target is mined into training. Keep 0.25/0.5/1 arm
+  amplitudes. Expanded admission: 50 base, 40 arm, four coupled (94 total).
+- Sample control-step budgets 30% base / 50% arm / 20% coupled. Within arm,
+  half the budget rehearses original primitives, half covers new parents.
+- Train all seven motion readout rows together, retaining context, gripper and
+  normalization initially. Use executor-consistent action masking for means,
+  sampling, likelihood and entropy. State-dependent noise uses current/future
+  pose errors, with a small stationary floor; hand errors may explore base
+  motion when its corresponding pose constraint is absent. Export one ordinary
+  eight-output actor; no training wrapper is deployed.
+- Restart from the retained source, seed 90. Run 65,536 transitions including
+  4,096 critic-only warmup. Actor LR 3e-5, critic ×10, gain-bias ×300; base/arm
+  exploration coefficients 0.1/0.03, resampled every eight ticks. Uniform reward
+  scale 0.01; keep native reward shape, gamma, rollout/batch, clip and KL. Restore
+  five PPO epochs and GAE lambda 0.95 after critic warmup (20 epochs, lambda 1).
+- Require fresh complete regression receipt and teacher 94/94. Verify physical
+  source fidelity, actor identity through warmup, and export/reload consistency.
+  Evaluate fixed canonical 22 at zero, warmup, each 16,384 and final; expanded
+  94 at the fixed final. Preserve all intermediate/final failures; no checkpoint
+  selection using validation. This changes distribution and trainable motion
+  rows together, and is not a matched single-factor comparison.
+- Retain the source unless the final preserves its original base/arm tracking
+  and full-pass counts, introduces no recorded safety events, and improves the
+  new arm/coupled failures. Then replay public-tool pick/place with real checkpoint
+  admission, first one transfer and then continuous multi-step programs. A
+  teacher planning failure remains a planner issue, never controller success.
+- Finite nearby cases still do not qualify hardware or full SE(3). Follow with
+  independent translation/orientation combinations, changed goals, disturbances,
+  loaded grasp/lift/transport/place and measured-stop tests. Passive Herman
+  feedback/velocity/watchdog validation remains a separate prerequisite. No
+  hardware motion is authorized by this experiment.
