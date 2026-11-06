@@ -99,3 +99,10 @@ box exceeds it. `configs/eval/tamp_release_shape_extents.json` freezes a third
 pair with exact primitive/mesh bounds and 0.1 simulated seconds of measured
 supported stillness before retreat. There is no new object/table collision
 exemption; deep contacts still reject. Keep all earlier failed task receipts.
+
+The shape-aware pair at `6a1d063c` passes 2/2 native tasks and 4/4 transfers:
+988 audited commands, no forbidden commands or infrastructure failures. All
+prior six outcomes remain unchanged. See
+`docs/experiments/tamp_release_pose_search_20261106.md` for the three populations,
+replay evidence and measured-vs-commanded trace figure. Broader placements,
+explicit recovery and actual-agent repeats remain necessary before promotion.

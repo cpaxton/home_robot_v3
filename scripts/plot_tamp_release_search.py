@@ -65,7 +65,7 @@ def main():
     fig, axes = plt.subplots(1, 2, figsize=(8, 3.2), sharey=True)
     all_records = []
     for ax, label, directory in zip(
-        axes, ("Small nominal corrections", "Measured-error reserve"), (args.before, args.after), strict=True
+        axes, ("Small nominal corrections", "Error reserve + shape extents"), (args.before, args.after), strict=True
     ):
         records = measurements(directory, model)
         for row in records:

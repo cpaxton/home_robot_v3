@@ -243,3 +243,43 @@ recorded outcomes remain failed. Measured release geometry, opening sweep and
 retreat clearance remain necessary before broader native/observed acceptance.
 Provenance and the preserved comparison are recorded in
 \path{docs/experiments/tamp_loaded_payload_handoff_20261103.json}.
+
+\paragraph{Measured release refinement.}
+The November~6 development comparison at \texttt{d5e1df78} evaluates four native
+public-tool episodes with the same final goals: control and shifted layouts,
+each with existing release or bounded nearby release-pose search. Each policy
+passes 1/2 tasks; together they complete 5/8 planned transfers with 1,767 audited
+commands and no forbidden commands or infrastructure failures. Small nominal
+corrections leave the measured arm too low for opening. A separate two-episode
+follow-up at \texttt{816f1f4e} includes measured command/FK height error in the
+opening reserve. It passes the familiar control, but the shifted task stops
+after opening because the rotated cylinder's local bounding box overestimates
+its vertical extent: predicted table penetration is 1.054~mm versus 0.887~mm
+from the actual primitive/contact geometry, crossing the unchanged 1~mm gate.
+These results remain failed; private replay is not a physical task rescore.
+Protocols, receipts and source/trace hashes are in
+\path{docs/experiments/tamp_release_pose_search_20261106.json} and
+\path{docs/experiments/tamp_release_tracking_reserve_20261106.json}.
+A third, separately frozen pair at \texttt{6a1d063c} uses analytic primitive
+extents and measured supported stillness before retreat, with no exemption for
+deep payload/table contact. It passes 2/2 development tasks and 4/4 transfers,
+including the shifted layout, with 988 audited commands, zero forbidden commands
+and zero infrastructure failures. Raise/drop limits remain 40~mm and final goal
+checks are unchanged. Figure~\ref{fig:tamp_release_search} illustrates the first
+cylinder's delivered-versus-commanded pose. These are privileged native tool
+references, not agent results or an exact reset-paired benchmark. The release
+profile stays opt-in; the actual-agent baseline remains 2/4. Broader placements,
+recovery and actual-agent repeats remain necessary. Provenance is in
+\path{docs/experiments/tamp_release_shape_extents_20261106.json}.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/tamp_release_pose_search_20261106.pdf}
+\caption{First-cylinder release traces from separate shifted development trials.
+Small nominal corrections leave the measured arm low (left). Measured-error-aware
+search with shape extents and support settling qualifies release (right).
+Orange is command FK with other joints measured; blue is measured EE height;
+green marks verified opening and supported stillness. Task labels are complete
+native task outcomes; only the first cylinder is plotted.}
+\label{fig:tamp_release_search}
+\end{figure}

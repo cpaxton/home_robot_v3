@@ -193,6 +193,9 @@ keeps the familiar controls passing but exposes a loaded command/FK offset: smal
 nominal corrections can leave the measured opening invalid. The opt-in follow-up
 uses that measured offset as a search reserve, under explicit raise/drop limits;
 it still requires fresh geometry, measured opening and final support checks.
+With exact shape extents and support settling, the latest separate native pair
+passes 2/2 development tasks (4/4 transfers); the profile remains opt-in and the
+actual-agent 2/4 baseline is unchanged.
 Broader native placements and actual-agent repeats remain the next acceptance gate.
 
 | Topic | Reference |

@@ -47,7 +47,10 @@ and the delivered pose. In the shifted bounded trial, EE z is 0.52060 m at place
 completion, 0.52047 m at the first correction acknowledgment, and 0.51915 m at the
 second. Both joint residuals are inside the unchanged 0.03 tolerance. Small
 nominal increments cannot reliably produce opening clearance under this loaded
-tracking offset. The policy exhausts its two-command budget and withholds opening.
+tracking offset. The existing pose-IK tolerance is 3 mm, so a 3 mm nominal
+increment need not increase the achieved command-FK height either. Geometry
+must be checked at the solved configuration and the delivered pose, rather than
+assuming that a target-height increment equals physical clearance. The policy exhausts its two-command budget and withholds opening.
 The failed task remains failed even though a later hypothetical candidate exists.
 
 ## Separate measured-error follow-up
@@ -104,3 +107,44 @@ contact, within the existing three-second wait. This prevents retreat planning o
 a bouncing object. Final scoring is unchanged, including its original conservative
 XY footprint calculation. The protocol is
 [`tamp_release_shape_extents.json`](../../configs/eval/tamp_release_shape_extents.json).
+
+## Shape-aware native outcome
+
+The fresh pair at `6a1d063c` passes **2/2 complete two-object tasks and 4/4
+planned transfers**, including the +15 mm shifted layout. Both objects meet the
+unchanged final full-footprint, support and settling goals. The pair contains
+**988 audited commands, zero forbidden/malformed commands and zero infrastructure
+failures**. Each release also passes the new measured opening/separation,
+geometry and supported-stillness gate. The [shape-aware manifest](tamp_release_shape_extents_20261106.json)
+retains both cases, source/input/trace hashes and job IDs. Raw artifacts are under
+`.tamp-runs/release-shape-extents-20261106/`.
+
+![First-cylinder release refinement, measured heights and command FK](media/tamp_release_pose_search_20261106.png)
+
+The figure compares first-cylinder traces from two separately initialized
+shifted development trials. Blue is measured EE height; orange is FK with the
+commanded arm joints and other joints measured. Green marks measured opening
+and supported settling. It is not a same-state paired benchmark or a full-task
+trajectory plot. Reproduce with `scripts/plot_tamp_release_search.py`; plotted
+CSV and PDF/PNG exports are retained in the shape-aware raw root's `figures/`.
+
+The shape-aware revision passes **97 focused tests**, zero failures/skips,
+including the tilted-cylinder/excess-penetration regression and measured
+opening/support gate. The recorded offset-aware release state's old box depth
+is rejected, while exact geometry passes at the same 1 mm tolerance without
+changing qpos/qvel/qacc/contact buffers or sending commands. The captured task
+remains failed. An initial test setup put a box exactly at the zero-margin contact
+boundary, producing no contact row; the corrected test uses shallow physical
+penetration within tolerance. Both attempts are retained.
+
+This is a successful native primitive/tool reference on two familiar development
+layouts. It does **not** update the actual-agent 2/4 baseline, establish observed
+execution, or qualify household environments. The release profile stays opt-in.
+Next: freeze additional initial placements and failure/recovery cases, repeat the
+loaded-binding versus equal-hold comparison after removing the early-release
+confound, then run the production agent using Caliban with the qualified policy.
+
+The paper builds at **56 pages**, with no undefined references or citations in
+the final TeX pass. Initial-pass reference warnings and existing font warnings
+remain in the build output; the final log and figure provenance/CSV hashes are
+recorded in the shape-aware manifest. Ruff and whitespace checks pass.
