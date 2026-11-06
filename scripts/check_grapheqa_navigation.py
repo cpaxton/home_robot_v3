@@ -24,6 +24,8 @@ from emet.utils.job_registry import validated_gpu_lock_fd
 
 
 def run(args):
+    if not np.isfinite(args.turn_deg) or not 0 < args.turn_deg <= 180:
+        raise ValueError("Turn gate must be between zero and 180 degrees")
     if validated_gpu_lock_fd() is None:
         raise RuntimeError("Run through emet jobs --gpu-exclusive; rendering uses the shared GPU")
     root = Path(__file__).resolve().parents[1]
@@ -43,6 +45,7 @@ def run(args):
         "pose_source": "rgbd_odometry_command_initialized_no_simulator_pose",
         "routing": "observed_floor_shared_grid_search_and_sweep",
         "model_calls": 0,
+        "requested_turn_deg": args.turn_deg,
         "tests": [],
     }
 
@@ -109,7 +112,7 @@ def run(args):
             raise RuntimeError(f"Reachable route failed: {receipt['reason']}")
         # Object/view behind the camera: only heading must change.
         goal = nav.pose.copy()
-        goal[2] += np.pi / 2
+        goal[2] += np.deg2rad(args.turn_deg)
         receipt = executor.execute([goal.tolist()])
         result["tests"].append({"case": "turn_to_view", **receipt})
         if not receipt["success"]:
@@ -134,5 +137,6 @@ def run(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--question-id", type=int, default=2)
+    parser.add_argument("--turn-deg", type=float, default=90)
     parser.add_argument("--output", type=Path, required=True)
     raise SystemExit(run(parser.parse_args()))

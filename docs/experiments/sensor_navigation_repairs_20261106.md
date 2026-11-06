@@ -92,3 +92,27 @@ An independent CPU test pins that convention. The oracle is corrected without
 changing sensor calibration or navigation. A 1e-4 unit-depth ray tolerance
 accommodates native float32 far-plane unprojection (<0.02 pixel here); the
 half-pixel convention error is much larger. Preserve the failed oracle result.
+
+## Exploration effort and fixed-turn control
+
+The corrected ray oracle passes at `355bd05f` (maximum centre-ray error 6.74e-6,
+all 176 original RGB frames matched). Distance-only q2 reaches **both** goals
+but exhausts 200 actions during its last fixed camera scan. Removing obsolete
+intermediate grid yaw reduces the second arrival from frame 199 to 190; the
+full prescribed collection still needs six more scan actions. These remain
+failed 200-action collections, not successful episodes.
+
+The task-independent collector now ranks the *executed prefix* by drive length
+and turning angle in calibrated primitive equivalents (0.1 m and 5 degrees).
+Previously its closest frontier could require a half-turn even when a reachable
+frontier lay ahead. This general control-cost objective uses no question, target
+label, answer, scene identifier or case-specific parameter. Distance-only remains
+an explicit `--frontier-policy distance` control. Record the chosen policy and
+all candidate scores. This is an exploration-policy change, separate from the
+camera-calibration repair; do not attribute its outcome to memory or VLM quality.
+
+Predeclare q2/q6/q12 again, seed 0, `--frontier-policy motion_effort`, with the
+same 200 actions, 240 seconds, two prefixes and all fixed scans. Also run the
+independent q6 `check_grapheqa_navigation.py --turn-deg 180` gate: fresh translation,
+fixed half-turn, and unknown-goal rejection. New frontier choices must not be
+used as a substitute for proving that the original turning capability works.

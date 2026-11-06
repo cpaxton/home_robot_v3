@@ -17,7 +17,7 @@ from PIL import Image
 from probe_grapheqa_sensor_only import habitat_sensor_config
 from run_shared_room_pairs import assert_frozen_source, git
 
-from emet.eval.grapheqa_navigation import SensorOnlyHabitat
+from emet.eval.grapheqa_navigation import ROTATION_STEP_DEG, TRANSLATION_STEP_M, SensorOnlyHabitat
 from emet.habitat.config import hm3d_scene_glb_path
 from emet.habitat.datasets import load_scene_init_poses
 from emet.utils.job_registry import validated_gpu_lock_fd
@@ -80,7 +80,7 @@ def run(args):
             command = row["command"]
             if command is not None:
                 action = command["action"]
-                limit = 0.1 if action == "move_forward" else 5.0
+                limit = TRANSLATION_STEP_M if action == "move_forward" else ROTATION_STEP_DEG
                 amount = limit if command["amount"] is None else command["amount"]
                 if action not in sensor.sim.get_agent(0).agent_config.action_space or not 0 < amount <= limit:
                     raise ValueError("Recorded action exceeds the calibrated primitive contract")

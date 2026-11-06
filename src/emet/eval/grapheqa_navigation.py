@@ -16,6 +16,9 @@ from emet.eval.grapheqa_sensor import command_camera_pose
 from emet.mapping.rgbd_odometry import RGBDOdometry
 from emet.utils.pinhole_intrinsics import pinhole_K_from_opengl_projection
 
+TRANSLATION_STEP_M = 0.1
+ROTATION_STEP_DEG = 5.0
+
 
 def base_xyt(camera_pose):
     """Local Z-up heading from the calibrated forward optical axis."""
@@ -27,13 +30,13 @@ def predicted_camera_pose(camera_pose, action, amount=None):
     pose = np.asarray(camera_pose).copy()
     yaw = base_xyt(pose)[2]
     if action == "move_forward":
-        pose[:2, 3] += (0.1 if amount is None else amount) * np.array([np.cos(yaw), np.sin(yaw)])
+        pose[:2, 3] += (TRANSLATION_STEP_M if amount is None else amount) * np.array([np.cos(yaw), np.sin(yaw)])
     elif action in {"turn_left", "turn_right"}:
-        angle = np.deg2rad((5 if amount is None else amount) * (1 if action == "turn_left" else -1))
+        angle = np.deg2rad((ROTATION_STEP_DEG if amount is None else amount) * (1 if action == "turn_left" else -1))
         c, s = np.cos(angle), np.sin(angle)
         pose[:3, :3] = np.array([[c, -s, 0], [s, c, 0], [0, 0, 1]]) @ pose[:3, :3]
     elif action in {"look_down", "look_up"}:
-        angle = np.deg2rad((5 if amount is None else amount) * (-1 if action == "look_down" else 1))
+        angle = np.deg2rad((ROTATION_STEP_DEG if amount is None else amount) * (-1 if action == "look_down" else 1))
         c, s = np.cos(angle), np.sin(angle)
         pose[:3, :3] = pose[:3, :3] @ np.array([[1, 0, 0], [0, c, -s], [0, s, c]])
     else:
@@ -84,11 +87,11 @@ class SensorOnlyHabitat:
         agent.action_space = {
             name: habitat_sim.agent.ActionSpec(name, habitat_sim.agent.ActuationSpec(amount=amount))
             for name, amount in [
-                ("move_forward", 0.1),
-                ("turn_left", 5.0),
-                ("turn_right", 5.0),
-                ("look_down", 5.0),
-                ("look_up", 5.0),
+                ("move_forward", TRANSLATION_STEP_M),
+                ("turn_left", ROTATION_STEP_DEG),
+                ("turn_right", ROTATION_STEP_DEG),
+                ("look_down", ROTATION_STEP_DEG),
+                ("look_up", ROTATION_STEP_DEG),
             ]
         }
         config.sim_cfg.allow_sliding = False
@@ -131,7 +134,7 @@ class SensorOnlyHabitat:
     def step(self, action, amount=None):
         if self.last["camera_pose"] is None:
             raise RuntimeError("Tracking lost: refusing further motion")
-        limit = 0.1 if action == "move_forward" else 5.0
+        limit = TRANSLATION_STEP_M if action == "move_forward" else ROTATION_STEP_DEG
         amount = limit if amount is None else amount
         if not np.isfinite(amount) or not 0 < amount <= limit:
             raise ValueError("Primitive exceeds the calibrated small-step bound")
@@ -344,9 +347,12 @@ class HabitatMotionExecutor:
                 reason = "waypoint_timeout"
                 break
             if abs(yaw) > np.deg2rad(2):
-                action, amount = ("turn_left" if yaw > 0 else "turn_right"), min(5.0, abs(np.rad2deg(yaw)))
+                action, amount = (
+                    ("turn_left" if yaw > 0 else "turn_right"),
+                    min(ROTATION_STEP_DEG, abs(np.rad2deg(yaw))),
+                )
             else:
-                action, amount = "move_forward", min(0.1, distance)
+                action, amount = "move_forward", min(TRANSLATION_STEP_M, distance)
             predicted = base_xyt(predicted_camera_pose(self.sensor.last["camera_pose"], action, amount))
             valid, rejection = validate_navigation_sweep(self.navigation.space, current, [predicted])
             if not valid:

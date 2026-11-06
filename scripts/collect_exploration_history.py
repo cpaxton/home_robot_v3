@@ -17,7 +17,12 @@ from probe_grapheqa_sensor_only import habitat_sensor_config
 from run_shared_room_pairs import assert_frozen_source, git
 
 from emet.eval.exploration_history import CollectionBudgetExceeded, RecordedSensor, collect_history
-from emet.eval.grapheqa_navigation import ObservedSpaceNavigation, SensorOnlyHabitat
+from emet.eval.grapheqa_navigation import (
+    ROTATION_STEP_DEG,
+    TRANSLATION_STEP_M,
+    ObservedSpaceNavigation,
+    SensorOnlyHabitat,
+)
 from emet.habitat.config import hm3d_scene_glb_path, questions_csv_path, scene_init_poses_csv_path
 from emet.habitat.datasets import load_scene_init_poses
 from emet.utils.job_registry import validated_gpu_lock_fd
@@ -57,6 +62,8 @@ def run(args):
         "spawns_sha256": sha256(scene_init_poses_csv_path()),
         "budgets": {key: getattr(args, key) for key in ("max_primitives", "max_seconds", "max_legs", "leg_distance_m")},
         "initial_yaw_scan_deg": 360,
+        "frontier_policy": args.frontier_policy,
+        "frontier_effort_scales": {"translation_step_m": TRANSLATION_STEP_M, "rotation_step_deg": ROTATION_STEP_DEG},
         "arrival_yaw_scan_deg": 90,
         "sensor_pose": "command_initialized_rgbd_odometry_no_global_pose_or_loop_closure",
         "footprint_radius_m": 0.1,
@@ -129,7 +136,14 @@ def run(args):
         path.write_text(json.dumps(manifest, indent=2) + "\n")
         sensor = RecordedSensor(raw_sensor, record, max_primitives=args.max_primitives, max_seconds=args.max_seconds)
         manifest.update(
-            collect_history(sensor, navigation, event, max_legs=args.max_legs, leg_distance_m=args.leg_distance_m)
+            collect_history(
+                sensor,
+                navigation,
+                event,
+                max_legs=args.max_legs,
+                leg_distance_m=args.leg_distance_m,
+                frontier_policy=args.frontier_policy,
+            )
         )
     except CollectionBudgetExceeded as exc:
         manifest.update(status="budget_exhausted", reason=str(exc))
@@ -170,6 +184,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--question-id", type=int, required=True, help="Existing development scene/spawn index only")
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--frontier-policy", choices=("motion_effort", "distance"), default="motion_effort")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--max-primitives", type=int, default=200)
     parser.add_argument("--max-seconds", type=float, default=240)

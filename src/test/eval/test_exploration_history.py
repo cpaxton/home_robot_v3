@@ -137,9 +137,31 @@ def test_frontier_distance_ranking_is_independent_of_waypoint_count(monkeypatch)
             return {"success": False, "reason": "test_stop"}
 
     monkeypatch.setattr("emet.eval.exploration_history.HabitatMotionExecutor", Executor)
-    collect_history(sensor, nav, events.append)
+    collect_history(sensor, nav, events.append, frontier_policy="distance")
     selected = next(event for event in events if event["stage"] == "motion_started")
     assert selected["target"] == [0.5, 0, 0]
+
+
+def test_motion_effort_policy_accounts_for_turnaround_instead_of_only_nearest_xy(monkeypatch):
+    from emet.motion.navigation_sweep import differential_drive_waypoints
+
+    raw, events = Sensor(), []
+    sensor = RecordedSensor(raw, lambda *args: None, max_primitives=100, max_seconds=10)
+    nav = navigation([[-0.5, 0, np.pi], [1, 0, 0]])
+    nav.pose = np.zeros(3)
+    nav.plan = lambda point, **kwargs: (differential_drive_waypoints(nav.pose, point), "ok")
+
+    class Executor:
+        def __init__(self, *args):
+            pass
+
+        def execute(self, route):
+            return {"success": False, "reason": "test_stop"}
+
+    monkeypatch.setattr("emet.eval.exploration_history.HabitatMotionExecutor", Executor)
+    collect_history(sensor, nav, events.append, frontier_policy="motion_effort")
+    selected = next(event for event in events if event["stage"] == "motion_started")
+    assert selected["target"] == [1, 0, 0]
 
 
 def test_interrupted_route_keeps_its_leg_and_measured_pose(monkeypatch):

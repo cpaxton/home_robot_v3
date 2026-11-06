@@ -10,7 +10,8 @@ import time
 
 import numpy as np
 
-from emet.eval.grapheqa_navigation import HabitatMotionExecutor
+from emet.eval.grapheqa_navigation import ROTATION_STEP_DEG, TRANSLATION_STEP_M, HabitatMotionExecutor
+from emet.motion.navigation_sweep import drive_route_effort
 
 
 class CollectionBudgetExceeded(RuntimeError):
@@ -84,8 +85,8 @@ def route_prefix(route, start, max_distance_m):
     return prefix, distance
 
 
-def collect_history(sensor, navigation, event, *, max_legs=2, leg_distance_m=0.75):
-    """Scan, calibrate stationary floor, then visit shortest observed frontiers.
+def collect_history(sensor, navigation, event, *, max_legs=2, leg_distance_m=0.75, frontier_policy="motion_effort"):
+    """Scan, calibrate floor, then visit frontiers by calibrated motion effort.
 
     The fixed initial panorama is 360 degrees (72 calibrated 5-degree turns).
     Every arrival adds a fixed 90-degree scan. Candidate routes, failures and
@@ -95,6 +96,8 @@ def collect_history(sensor, navigation, event, *, max_legs=2, leg_distance_m=0.7
     """
     if isinstance(max_legs, bool) or not isinstance(max_legs, int) or max_legs < 0:
         raise ValueError("Leg count must be a nonnegative integer")
+    if frontier_policy not in {"motion_effort", "distance"}:
+        raise ValueError("Unknown frontier selection policy")
     route_prefix([], navigation.pose, leg_distance_m)  # Validate before motion.
     navigation.update(sensor.last)
 
@@ -121,7 +124,20 @@ def collect_history(sensor, navigation, event, *, max_legs=2, leg_distance_m=0.7
                 route_distance = float(
                     np.linalg.norm(np.diff(np.array([navigation.pose, *route])[:, :2], axis=0), axis=1).sum()
                 )
-                proposals.append((route_distance, index, point, prefix))
+                score = (
+                    route_distance
+                    if frontier_policy == "distance"
+                    else drive_route_effort(
+                        navigation.pose,
+                        prefix,
+                        translation_step_m=TRANSLATION_STEP_M,
+                        rotation_step_rad=np.deg2rad(ROTATION_STEP_DEG),
+                    )
+                )
+                event(
+                    {"stage": "proposal_score", "leg": leg, "target": point, "policy": frontier_policy, "score": score}
+                )
+                proposals.append((score, index, point, prefix))
         if not proposals:
             return {"status": "no_admitted_frontier", "completed_legs": leg}
         _, _, target, route = min(proposals, key=lambda item: item[:2])

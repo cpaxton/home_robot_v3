@@ -187,6 +187,18 @@ def test_shortcut_keeps_corner_travel_heading_without_a_grid_yaw_round_trip():
     np.testing.assert_allclose(short[-1], route[-1])
 
 
+def test_drive_effort_counts_geometry_and_turns_independently_of_waypoint_density():
+    from emet.motion.navigation_sweep import drive_route_effort
+
+    options = {"translation_step_m": 0.1, "rotation_step_rad": np.pi / 2}
+    assert drive_route_effort([0, 0, 0], [[1, 0, 0], [1, 0, np.pi]], **options) == pytest.approx(12)
+    assert drive_route_effort(
+        [0, 0, 0], [[0.25, 0, 0], [0.5, 0, 0], [1, 0, 0], [1, 0, np.pi]], **options
+    ) == pytest.approx(12)
+    with pytest.raises(ValueError):
+        drive_route_effort([0, 0, 0], [], translation_step_m=0, rotation_step_rad=1)
+
+
 @pytest.mark.parametrize("proposal", [[[0.2, 0, 0]], [[0.2, 0.2, 0], [0.2, 0, 0]], [[0.1, 0, 0]]])
 def test_route_proposal_requires_fresh_sweep_and_correct_endpoint(proposal):
     from types import SimpleNamespace

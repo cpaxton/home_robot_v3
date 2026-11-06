@@ -128,6 +128,28 @@ def shortcut_navigation_route(space, start, waypoints, *, max_translation_m=0.2)
     return result
 
 
+def drive_route_effort(start, waypoints, *, translation_step_m, rotation_step_rad):
+    """Nominal primitive-equivalent work for an admitted turn/drive route.
+
+    This is a geometry/control cost, not wall time or a semantic score. Required
+    scales come from the executor's calibrated primitives. Inserting collinear
+    waypoints does not change the score.
+    """
+    if (
+        not np.isfinite([translation_step_m, rotation_step_rad]).all()
+        or min(translation_step_m, rotation_step_rad) <= 0
+    ):
+        raise ValueError("Positive finite primitive scales required")
+    poses = np.asarray([start, *waypoints], dtype=float)
+    if poses.ndim != 2 or poses.shape[1] != 3 or not np.isfinite(poses).all():
+        raise ValueError("Finite XYT route required")
+    delta = np.diff(poses, axis=0)
+    return float(
+        np.linalg.norm(delta[:, :2], axis=1).sum() / translation_step_m
+        + np.abs(np.arctan2(np.sin(delta[:, 2]), np.cos(delta[:, 2]))).sum() / rotation_step_rad
+    )
+
+
 @dataclass
 class RouteExecutionResult:
     success: bool
