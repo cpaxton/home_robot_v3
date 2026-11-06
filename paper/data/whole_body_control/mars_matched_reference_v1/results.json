@@ -456,6 +456,7 @@
         "eval/mars_tamp_sequences.py": "34691772208edef850ab0495fc7c0e81e71cc6179be440ba4d551cc76e71a1d9",
         "eval/mars_tamp_agent.py": "bfff999feec429a9530a5503e3dcb50873d37967dad76f885de689ba9379f36e"
       },
+      "phase_metrics_scope": "Active pre-fault ticks only; payload_rotation trace field is a world rotation matrix, not a retention angle.",
       "phase_metrics": {
         "reach": {
           "ticks": 15,
@@ -463,17 +464,6 @@
           "time_end_s": 1.7500000000000013,
           "hand_position_max_m": 0.00020637131853509745,
           "hand_rotation_max_rad": 0.0007190333147747529,
-          "payload_rotation_max_rad": [
-            0.9999494992277254,
-            0.0016934458819520737,
-            0.0099061211009296,
-            -0.0016868775141930406,
-            0.9999983518456406,
-            -0.0006713793671869841,
-            -0.009907241718737513,
-            0.0006546350490724206,
-            0.9999507077923788
-          ],
           "bilateral_contact_fraction": 1.0,
           "grip_torque_max_abs_Nm": 0.001365669816920101
         },
@@ -483,17 +473,6 @@
           "time_end_s": 1.8000000000000014,
           "hand_position_max_m": 0.00021177280755703328,
           "hand_rotation_max_rad": 0.0007526365342649281,
-          "payload_rotation_max_rad": [
-            0.9999479331154892,
-            0.0017428620240672336,
-            0.010054525847833147,
-            -0.0017373616310282353,
-            0.999998336348586,
-            -0.0005557648979268552,
-            -0.010055477742141916,
-            0.0005382676135538932,
-            0.9999492975323059
-          ],
           "bilateral_contact_fraction": 1.0,
           "grip_torque_max_abs_Nm": 0.0014356397002530663
         },
@@ -503,17 +482,6 @@
           "time_end_s": 8.799999999999608,
           "hand_position_max_m": 0.0019081439519076366,
           "hand_rotation_max_rad": 0.0030821143530778785,
-          "payload_rotation_max_rad": [
-            0.9999612946452316,
-            0.0010398139692844317,
-            0.008736589628774088,
-            -0.0010384146472419461,
-            0.9999994472838749,
-            -0.00016470265732940344,
-            -0.008736756060043989,
-            0.0001556240798171591,
-            0.9999618217085555
-          ],
           "bilateral_contact_fraction": 0.15714285714285714,
           "grip_torque_max_abs_Nm": 0.0018750562353229139
         },
@@ -523,40 +491,30 @@
           "time_end_s": 10.200000000000076,
           "hand_position_max_m": 0.0010311817126197617,
           "hand_rotation_max_rad": 0.0011605258868698967,
-          "payload_rotation_max_rad": [
-            0.9947728778932546,
-            0.10210883702536311,
-            -0.0008407195149127976,
-            -0.10210915075610394,
-            0.9947731431902899,
-            -0.0003389973173531064,
-            0.0008017105725615746,
-            0.00042307049267327143,
-            0.9999995891356751
-          ],
           "bilateral_contact_fraction": 0.9642857142857143,
           "grip_torque_max_abs_Nm": 0.08
         },
         "carry": {
-          "ticks": 318,
+          "ticks": 269,
           "time_start_s": 10.250000000000092,
-          "time_end_s": 26.099999999996413,
-          "hand_position_max_m": 0.02716405776318919,
-          "hand_rotation_max_rad": 0.12756436613274047,
-          "payload_rotation_max_rad": [
-            0.9987978167791323,
-            0.0016408321037315776,
-            -0.04899213066651401,
-            -0.0015660002965376257,
-            0.9999975480008509,
-            0.00156576989226216,
-            0.048994579703357626,
-            -0.0014871658588181725,
-            0.9987979372712972
-          ],
+          "time_end_s": 23.64999999999777,
+          "hand_position_max_m": 0.0029500115956588935,
+          "hand_rotation_max_rad": 0.009496043698253012,
           "bilateral_contact_fraction": 1.0,
           "grip_torque_max_abs_Nm": 0.08
         }
+      },
+      "first_failure": {
+        "time_s": 23.699999999997743,
+        "object_relative_rotation_rad": 0.10592934365827544,
+        "hand_position_error_m": 0.002036323435516108,
+        "arm_velocity_rad_s": [
+          0.1976186903394368,
+          -0.07316869211434965,
+          0.07923661647279684,
+          -0.0027983459547368406,
+          0.0013050900238442725
+        ]
       },
       "fault_stop_final_velocities": {
         "floating_base_six_dof": [
@@ -1017,6 +975,7 @@
         "eval/mars_tamp_sequences.py": "34691772208edef850ab0495fc7c0e81e71cc6179be440ba4d551cc76e71a1d9",
         "eval/mars_tamp_agent.py": "bfff999feec429a9530a5503e3dcb50873d37967dad76f885de689ba9379f36e"
       },
+      "phase_metrics_scope": "Active pre-fault ticks only; payload_rotation trace field is a world rotation matrix, not a retention angle.",
       "phase_metrics": {
         "reach": {
           "ticks": 15,
@@ -1024,17 +983,6 @@
           "time_end_s": 1.7500000000000013,
           "hand_position_max_m": 0.0001323291861939323,
           "hand_rotation_max_rad": 0.0004508743514574276,
-          "payload_rotation_max_rad": [
-            0.9999242921939427,
-            0.0016566561494819657,
-            0.012192840966855247,
-            -0.0016438357916872407,
-            0.9999980856015432,
-            -0.001061412802089081,
-            -0.012194576020945048,
-            0.0010412894164708475,
-            0.9999251012110951
-          ],
           "bilateral_contact_fraction": 1.0,
           "grip_torque_max_abs_Nm": 0.0011798213419973447
         },
@@ -1044,17 +992,6 @@
           "time_end_s": 1.8000000000000014,
           "hand_position_max_m": 9.532279357070179e-05,
           "hand_rotation_max_rad": 0.0004605258601172819,
-          "payload_rotation_max_rad": [
-            0.9999240745759306,
-            0.0016622859973120625,
-            0.012209909447980142,
-            -0.0016487263769905025,
-            0.9999980130615693,
-            -0.0011205240930955251,
-            -0.012211747819151452,
-            0.0011003082170610288,
-            0.999924828443131
-          ],
           "bilateral_contact_fraction": 1.0,
           "grip_torque_max_abs_Nm": 0.001216016120341501
         },
@@ -1064,17 +1001,6 @@
           "time_end_s": 4.149999999999765,
           "hand_position_max_m": 0.010033738605597498,
           "hand_rotation_max_rad": 0.01113050000869962,
-          "payload_rotation_max_rad": [
-            0.9999455211861078,
-            -0.0009100931654417493,
-            0.010398384022309385,
-            0.0009093787651897965,
-            0.9999995838189918,
-            7.343096420846218e-05,
-            -0.010398446523718087,
-            -6.397089415445206e-05,
-            0.9999459326471708
-          ],
           "bilateral_contact_fraction": 1.0,
           "grip_torque_max_abs_Nm": 0.002107181549624637
         }
@@ -1527,6 +1453,7 @@
         "eval/mars_tamp_sequences.py": "34691772208edef850ab0495fc7c0e81e71cc6179be440ba4d551cc76e71a1d9",
         "eval/mars_tamp_agent.py": "bfff999feec429a9530a5503e3dcb50873d37967dad76f885de689ba9379f36e"
       },
+      "phase_metrics_scope": "Active pre-fault ticks only; payload_rotation trace field is a world rotation matrix, not a retention angle.",
       "phase_metrics": {
         "reach": {
           "ticks": 15,
@@ -1534,17 +1461,6 @@
           "time_end_s": 1.7500000000000013,
           "hand_position_max_m": 0.0004442757569985791,
           "hand_rotation_max_rad": 0.0012847285221996513,
-          "payload_rotation_max_rad": [
-            0.9999853330310673,
-            0.003090156862006016,
-            0.004447994302386266,
-            -0.0030850117453119046,
-            0.99999456490771,
-            -0.0011631240568420454,
-            -0.004451564362912341,
-            0.0011493848826716966,
-            0.9999894311887074
-          ],
           "bilateral_contact_fraction": 0.9333333333333333,
           "grip_torque_max_abs_Nm": 0.003951782603069387
         },
@@ -1554,17 +1470,6 @@
           "time_end_s": 11.100000000000376,
           "hand_position_max_m": 0.0015075071762087329,
           "hand_rotation_max_rad": 0.002965812263713481,
-          "payload_rotation_max_rad": [
-            0.9999368016660138,
-            -0.0003027520812372052,
-            0.011238372440853513,
-            0.00036451884646807986,
-            0.9999848391323253,
-            -0.00549441821369497,
-            -0.011236538610826682,
-            0.005498167574175963,
-            0.9999217521153206
-          ],
           "bilateral_contact_fraction": 0.6236559139784946,
           "grip_torque_max_abs_Nm": 0.01071771024974022
         },
@@ -1574,17 +1479,6 @@
           "time_end_s": 3.8499999999997976,
           "hand_position_max_m": 0.0006798849467503898,
           "hand_rotation_max_rad": 0.0013611499618134569,
-          "payload_rotation_max_rad": [
-            0.9996771484067296,
-            -0.000783045602550686,
-            0.02539657049633045,
-            0.0008807296728949854,
-            0.9999922570139884,
-            -0.0038353914159939767,
-            -0.025393370564657985,
-            0.003856520666990393,
-            0.9996700975720502
-          ],
           "bilateral_contact_fraction": 1.0,
           "grip_torque_max_abs_Nm": 0.004484059426490328
         },
@@ -1594,40 +1488,30 @@
           "time_end_s": 12.40000000000081,
           "hand_position_max_m": 0.0004903512908316024,
           "hand_rotation_max_rad": 0.0013694583333711294,
-          "payload_rotation_max_rad": [
-            0.999936738750526,
-            0.010717747923913888,
-            0.003412971784288575,
-            -0.010716961784588514,
-            0.9999425408271327,
-            -0.0002485443306701506,
-            -0.0034154395132368733,
-            0.00021195191926114338,
-            0.999994144907516
-          ],
           "bilateral_contact_fraction": 1.0,
           "grip_torque_max_abs_Nm": 0.08
         },
         "carry": {
-          "ticks": 128,
+          "ticks": 79,
           "time_start_s": 12.450000000000827,
-          "time_end_s": 18.80000000000046,
-          "hand_position_max_m": 0.02456596745999421,
+          "time_end_s": 16.350000000001817,
+          "hand_position_max_m": 0.0035383300391381755,
           "hand_rotation_max_rad": 0.005812360026004446,
-          "payload_rotation_max_rad": [
-            0.9999435745234178,
-            0.009092510349765106,
-            0.005493088827814494,
-            -0.009092975083736401,
-            0.9999586562692835,
-            5.9634356616303916e-05,
-            -0.005492319497024457,
-            -0.0001095795115633791,
-            0.9999849110955996
-          ],
           "bilateral_contact_fraction": 1.0,
           "grip_torque_max_abs_Nm": 0.08
         }
+      },
+      "first_failure": {
+        "time_s": 16.40000000000179,
+        "object_relative_rotation_rad": 0.10444062866436837,
+        "hand_position_error_m": 0.0017340720148347802,
+        "arm_velocity_rad_s": [
+          0.0012911342605697246,
+          0.057352190256868794,
+          -0.1668757867968402,
+          0.1122211173991642,
+          -0.00022354204335968755
+        ]
       },
       "fault_stop_final_velocities": {
         "floating_base_six_dof": [
@@ -2088,6 +1972,7 @@
         "eval/mars_tamp_sequences.py": "34691772208edef850ab0495fc7c0e81e71cc6179be440ba4d551cc76e71a1d9",
         "eval/mars_tamp_agent.py": "bfff999feec429a9530a5503e3dcb50873d37967dad76f885de689ba9379f36e"
       },
+      "phase_metrics_scope": "Active pre-fault ticks only; payload_rotation trace field is a world rotation matrix, not a retention angle.",
       "phase_metrics": {
         "reach": {
           "ticks": 15,
@@ -2095,17 +1980,6 @@
           "time_end_s": 1.7500000000000013,
           "hand_position_max_m": 0.0009698816443415164,
           "hand_rotation_max_rad": 0.0011739583319305123,
-          "payload_rotation_max_rad": [
-            0.999994994481525,
-            0.0031640183148216316,
-            2.5307742359566645e-09,
-            -0.003164018314821642,
-            0.999994994481525,
-            4.180616916108819e-09,
-            -2.5175340196296466e-09,
-            -4.188603405986851e-09,
-            1.0000000000000009
-          ],
           "bilateral_contact_fraction": 0.0,
           "grip_torque_max_abs_Nm": 0.0003772441912558433
         },
@@ -2115,17 +1989,6 @@
           "time_end_s": 5.949999999999567,
           "hand_position_max_m": 0.010235392856985243,
           "hand_rotation_max_rad": 0.011229029359103374,
-          "payload_rotation_max_rad": [
-            0.9999948392254308,
-            0.00316409132931425,
-            0.000556820046956483,
-            -0.0031637783923511033,
-            0.9999948373213912,
-            -0.0005619936374504361,
-            -0.0005585953714689244,
-            0.000560229081894975,
-            0.9999996870572443
-          ],
           "bilateral_contact_fraction": 0.6265060240963856,
           "grip_torque_max_abs_Nm": 0.003322160054675005
         },
@@ -2135,17 +1998,6 @@
           "time_end_s": 3.7499999999998086,
           "hand_position_max_m": 0.0008461027839728085,
           "hand_rotation_max_rad": 0.0007278973972496503,
-          "payload_rotation_max_rad": [
-            0.9999841393469656,
-            0.003343812725195035,
-            0.004532104474330781,
-            -0.0033362490904248676,
-            0.9999930311551727,
-            -0.0016754351958169604,
-            -0.004537675232325973,
-            0.0016602883928904424,
-            0.9999883264048323
-          ],
           "bilateral_contact_fraction": 0.0,
           "grip_torque_max_abs_Nm": 0.0006817726167710481
         }
@@ -2598,6 +2450,7 @@
         "eval/mars_tamp_sequences.py": "34691772208edef850ab0495fc7c0e81e71cc6179be440ba4d551cc76e71a1d9",
         "eval/mars_tamp_agent.py": "bfff999feec429a9530a5503e3dcb50873d37967dad76f885de689ba9379f36e"
       },
+      "phase_metrics_scope": "Active pre-fault ticks only; payload_rotation trace field is a world rotation matrix, not a retention angle.",
       "phase_metrics": {
         "reach": {
           "ticks": 15,
@@ -2605,17 +2458,6 @@
           "time_end_s": 1.7500000000000013,
           "hand_position_max_m": 0.00020637131853509745,
           "hand_rotation_max_rad": 0.0007190333147747529,
-          "payload_rotation_max_rad": [
-            0.9999494992277254,
-            0.0016934458819520737,
-            0.0099061211009296,
-            -0.0016868775141930406,
-            0.9999983518456406,
-            -0.0006713793671869841,
-            -0.009907241718737513,
-            0.0006546350490724206,
-            0.9999507077923788
-          ],
           "bilateral_contact_fraction": 1.0,
           "grip_torque_max_abs_Nm": 0.001365669816920101
         },
@@ -2625,17 +2467,6 @@
           "time_end_s": 1.8000000000000014,
           "hand_position_max_m": 0.00021177280755703328,
           "hand_rotation_max_rad": 0.0007526365342649281,
-          "payload_rotation_max_rad": [
-            0.9999479331154892,
-            0.0017428620240672336,
-            0.010054525847833147,
-            -0.0017373616310282353,
-            0.999998336348586,
-            -0.0005557648979268552,
-            -0.010055477742141916,
-            0.0005382676135538932,
-            0.9999492975323059
-          ],
           "bilateral_contact_fraction": 1.0,
           "grip_torque_max_abs_Nm": 0.0014356397002530663
         },
@@ -2645,17 +2476,6 @@
           "time_end_s": 8.799999999999608,
           "hand_position_max_m": 0.0019081439519076366,
           "hand_rotation_max_rad": 0.0030821143530778785,
-          "payload_rotation_max_rad": [
-            0.9999612946452316,
-            0.0010398139692844317,
-            0.008736589628774088,
-            -0.0010384146472419461,
-            0.9999994472838749,
-            -0.00016470265732940344,
-            -0.008736756060043989,
-            0.0001556240798171591,
-            0.9999618217085555
-          ],
           "bilateral_contact_fraction": 0.15714285714285714,
           "grip_torque_max_abs_Nm": 0.0018750562353229139
         },
@@ -2665,40 +2485,30 @@
           "time_end_s": 10.200000000000076,
           "hand_position_max_m": 0.0010311817126197617,
           "hand_rotation_max_rad": 0.0011605258868698967,
-          "payload_rotation_max_rad": [
-            0.9947728778932546,
-            0.10210883702536311,
-            -0.0008407195149127976,
-            -0.10210915075610394,
-            0.9947731431902899,
-            -0.0003389973173531064,
-            0.0008017105725615746,
-            0.00042307049267327143,
-            0.9999995891356751
-          ],
           "bilateral_contact_fraction": 0.9642857142857143,
           "grip_torque_max_abs_Nm": 0.08
         },
         "carry": {
-          "ticks": 334,
+          "ticks": 285,
           "time_start_s": 10.250000000000092,
-          "time_end_s": 26.89999999999597,
-          "hand_position_max_m": 0.054149769368863926,
-          "hand_rotation_max_rad": 0.27824608768423004,
-          "payload_rotation_max_rad": [
-            0.9947744190957165,
-            0.10209483216261252,
-            -0.0007073602114758875,
-            -0.1020950887929903,
-            0.994774587294044,
-            -0.00033662786102439603,
-            0.0006692959974666084,
-            0.00040708678850123606,
-            0.9999996931615608
-          ],
+          "time_end_s": 24.449999999997328,
+          "hand_position_max_m": 0.0029500115956588935,
+          "hand_rotation_max_rad": 0.019586048892265423,
           "bilateral_contact_fraction": 1.0,
           "grip_torque_max_abs_Nm": 0.08
         }
+      },
+      "first_failure": {
+        "time_s": 24.4999999999973,
+        "object_relative_rotation_rad": 0.10339239199238555,
+        "hand_position_error_m": 0.0026807215292509,
+        "arm_velocity_rad_s": [
+          -0.26721891905953177,
+          -0.0728020924374518,
+          0.06674152711493377,
+          0.006586053484103251,
+          0.000964258649789484
+        ]
       },
       "fault_stop_final_velocities": {
         "floating_base_six_dof": [
@@ -3159,6 +2969,7 @@
         "eval/mars_tamp_sequences.py": "34691772208edef850ab0495fc7c0e81e71cc6179be440ba4d551cc76e71a1d9",
         "eval/mars_tamp_agent.py": "bfff999feec429a9530a5503e3dcb50873d37967dad76f885de689ba9379f36e"
       },
+      "phase_metrics_scope": "Active pre-fault ticks only; payload_rotation trace field is a world rotation matrix, not a retention angle.",
       "phase_metrics": {
         "reach": {
           "ticks": 15,
@@ -3166,17 +2977,6 @@
           "time_end_s": 1.7500000000000013,
           "hand_position_max_m": 0.0001323291861939323,
           "hand_rotation_max_rad": 0.0004508743514574276,
-          "payload_rotation_max_rad": [
-            0.9999242921939427,
-            0.0016566561494819657,
-            0.012192840966855247,
-            -0.0016438357916872407,
-            0.9999980856015432,
-            -0.001061412802089081,
-            -0.012194576020945048,
-            0.0010412894164708475,
-            0.9999251012110951
-          ],
           "bilateral_contact_fraction": 1.0,
           "grip_torque_max_abs_Nm": 0.0011798213419973447
         },
@@ -3186,17 +2986,6 @@
           "time_end_s": 1.8000000000000014,
           "hand_position_max_m": 9.532279357070179e-05,
           "hand_rotation_max_rad": 0.0004605258601172819,
-          "payload_rotation_max_rad": [
-            0.9999240745759306,
-            0.0016622859973120625,
-            0.012209909447980142,
-            -0.0016487263769905025,
-            0.9999980130615693,
-            -0.0011205240930955251,
-            -0.012211747819151452,
-            0.0011003082170610288,
-            0.999924828443131
-          ],
           "bilateral_contact_fraction": 1.0,
           "grip_torque_max_abs_Nm": 0.001216016120341501
         },
@@ -3206,17 +2995,6 @@
           "time_end_s": 4.149999999999765,
           "hand_position_max_m": 0.010033738605597498,
           "hand_rotation_max_rad": 0.01113050000869962,
-          "payload_rotation_max_rad": [
-            0.9999455211861078,
-            -0.0009100931654417493,
-            0.010398384022309385,
-            0.0009093787651897965,
-            0.9999995838189918,
-            7.343096420846218e-05,
-            -0.010398446523718087,
-            -6.397089415445206e-05,
-            0.9999459326471708
-          ],
           "bilateral_contact_fraction": 1.0,
           "grip_torque_max_abs_Nm": 0.002107181549624637
         }
@@ -3302,6 +3080,11 @@
       "path": "logs/recovery/hand-accuracy-v1/matched-reference-focused.log",
       "sha256": "6e88d7552c7d0f69ef9dd94f2f03455134c26c337f91efc46162eecf0ee3a909",
       "bytes": 80
+    },
+    {
+      "path": "/home/cpaxton/src/home_robot_v4/.worktrees/mars-controller-integration/logs/recovery/hand-accuracy-v1/matched-reference-results.py",
+      "sha256": "ec0780b8c1488dc94a7a8b679f206806cbe4eeea5cccc6884b908d57faf66efe",
+      "bytes": 4457
     }
   ]
 }

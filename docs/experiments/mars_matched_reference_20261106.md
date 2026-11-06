@@ -18,8 +18,9 @@ or a learned controller. Call counts and admissions distinguish it explicitly.
 | left,50g,seed0 | Lift retention limit;237 reference calls | Pregrasp path envelope;73 policy calls |
 | right,20g,seed0 | Preplace retention limit;368 reference calls | Pregrasp path envelope;57 policy calls |
 
-The reference's maximum object-relative rotations are 0.147/0.241/0.103 rad,
-above the unchanged 0.1 rad retention limit. A retention-contract failure does not
+At the first fault, object-relative rotations are 0.1059/0.1044/0.1034 rad,
+above the unchanged 0.1 rad retention limit, while hand-position errors are
+2.04/1.73/2.68 mm. Episode peaks of 0.147/0.241/0.103 rad include fault stopping. A retention-contract failure does not
 by itself prove the object has dropped. Peak contact force stays below 6 N and no
 wheel lift is recorded; these facts do not qualify the failed transfers.
 

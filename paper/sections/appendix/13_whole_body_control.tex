@@ -523,3 +523,13 @@ pregrasp. All three joint-reference baselines complete the transfer. More
 transitions and expanded resets have not established whole-body stability.
 Full evidence is retained in
 \texttt{paper/data/whole\_body\_control/mars\_tamp\_postures\_v1/}.
+
+
+A matched Cartesian/jerk-limited analytic reference uses the admitted
+checkpoint's actuator settings and identical initial state, with analytic calls
+counted separately from learned inference. All three transfers violate retention
+at lift/preplace despite roughly 2\,mm hand tracking; the learned final still
+fails earlier in pregrasp. Repeated stop calls also rebase the arm hold target.
+Latching the first target fixes three diagnostic loaded fault resets within
+0.10/0.25/0.20\,s under unchanged stop thresholds. These resets are not full
+transfer or hardware qualifications; retention remains unresolved.

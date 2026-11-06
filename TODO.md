@@ -269,6 +269,15 @@ Accepted plan: [Mars controller integration](docs/plans/mars_controller_integrat
 - [ ] Audit dependence on executor phase labels; compare a tracking actor using
       only measured state, masked pose/gripper references and explicit retain
       intent. Keep task-stage decisions and release authority in TAMP/execution.
+- [ ] Qualify matched Cartesian TAMP carry: an explicit privileged pose teacher
+      with admitted checkpoint settings gets past pregrasp but violates retention
+      in all three cases (lift/preplace), despite about2mm hand tracking.
+      Learned finals still fail earlier. See [matched evidence](docs/experiments/mars_matched_reference_20261106.md).
+      The resulting unconfirmed stops expose repeated hold-target rebasing:
+      the fix latches the first arm/grip target and passes three recorded loaded
+      stop resets in0.10/0.25/0.20s, with original thresholds. Fresh full-source
+      gates and an initialized-source compatibility audit precede integrated
+      retesting. Do not claim retention fixed or hardware ready.
 - [ ] Continue the [Mars refinement hill climb](docs/plans/mars_refinement_hillclimb.md):
       retain the stronger 49/50 base-tracking, 15/16 full-arm source; both quieter
       mixed refinements reach 50/50 base tracking but regress arm smoothness.

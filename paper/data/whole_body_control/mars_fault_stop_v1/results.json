@@ -1,0 +1,129 @@
+{
+  "complete": true,
+  "scope": "Latched fault stop and finite grip command tests; loaded reset diagnostics, not full TAMP success or hardware qualification.",
+  "hardware_used": false,
+  "safety_promoted": false,
+  "before_revision": "b3115331",
+  "before_control_sha256": "08705fe5ed7bbc83883fc9d5f042969e2e2d04c043c66f4b277f2eaf71a99715",
+  "before_regressions_expected_failures": 6,
+  "focused_after_existing_and_new": 52,
+  "final_fault_file_tests_passed": 7,
+  "full_regressions": "pending",
+  "loaded_reset_replay": {
+    "complete": true,
+    "scope": "Measure three diagnostic loaded stop resets, not complete TAMP transfers.",
+    "hardware_used": false,
+    "safety_promoted": false,
+    "timeout_unchanged_seconds": 0.75,
+    "arm_speed_threshold_unchanged_rad_s": 0.03,
+    "rows": [
+      {
+        "case_id": "left:20g:0",
+        "confirmed": true,
+        "reason": "retention_lost",
+        "simulation_stop_seconds": 0.09999999999994458,
+        "arm_velocity_rad_s": [
+          0.02518460468697469,
+          -0.005888118615127415,
+          0.002979812709970129,
+          0.0026542603469805292,
+          -9.310343482229298e-05
+        ],
+        "floating_base_velocity_six_dof": [
+          -0.002265688840840401,
+          -9.769784571811852e-07,
+          7.503232596311994e-05,
+          0.0006907994745319105,
+          -0.006010646989109862,
+          -0.0027877821095398524
+        ],
+        "arm_hold_target_drift_rad": 0.0,
+        "grip_reference": 0.0,
+        "grip_target": 0.0,
+        "release_authorized": false
+      },
+      {
+        "case_id": "left:50g:0",
+        "confirmed": true,
+        "reason": "retention_lost",
+        "simulation_stop_seconds": 0.24999999999986144,
+        "arm_velocity_rad_s": [
+          0.00011130569989236171,
+          0.006892041982913235,
+          -0.019380202839324845,
+          0.012578353019033926,
+          -4.4020314684346945e-06
+        ],
+        "floating_base_velocity_six_dof": [
+          -0.0002438775955152007,
+          5.3833306318298476e-05,
+          0.00010553243471891224,
+          -0.00021682967064791677,
+          -0.0005170779369373376,
+          -0.0005220569043055041
+        ],
+        "arm_hold_target_drift_rad": 0.0,
+        "grip_reference": 0.0,
+        "grip_target": 0.0,
+        "release_authorized": false
+      },
+      {
+        "case_id": "right:20g:0",
+        "confirmed": true,
+        "reason": "retention_lost",
+        "simulation_stop_seconds": 0.19999999999988916,
+        "arm_velocity_rad_s": [
+          -0.023153000979113266,
+          -0.006142570187364922,
+          0.004961575121046701,
+          0.0011243979713349873,
+          5.5282116361454045e-05
+        ],
+        "floating_base_velocity_six_dof": [
+          -0.0004768067756086544,
+          -1.0948932558741528e-05,
+          9.398416590756187e-06,
+          0.0006144578007142538,
+          -0.0013284995565016782,
+          0.004536762355228266
+        ],
+        "arm_hold_target_drift_rad": 0.0,
+        "grip_reference": 0.0,
+        "grip_target": 0.0,
+        "release_authorized": false
+      }
+    ],
+    "sources": {
+      "src/test/rl/manipulation/test_fault_stop_latching.py": "dea5d743dda2232c9576db48b05a040ffaf0eb4eb416220e796feeb6e2516a35",
+      "src/emet/rl/manipulation/control.py": "83fa5b76d08cceaff2a3472b5d93028c9c482a825856567b870eee0c8bd35a63",
+      "paper/data/whole_body_control/mars_matched_reference_v1/stop-cases.json": "8fb716f6a6f16175e399b685478bbc5c91e279130ab0a36a4783d3383a77111d"
+    }
+  },
+  "artifacts": [
+    {
+      "path": "logs/recovery/hand-accuracy-v1/fault-stop-before.log",
+      "sha256": "16b4307dd2b3f7845dbc610e37def612e3f611d5f83b09e97ff6d24241ed5242",
+      "bytes": 4382
+    },
+    {
+      "path": "logs/recovery/hand-accuracy-v1/fault-stop-after.log",
+      "sha256": "4cf2124032e464147e816ec20702b3b32e3647b01af12dd56f695de26cf6f779",
+      "bytes": 80
+    },
+    {
+      "path": "logs/recovery/hand-accuracy-v1/fault-stop-final-focused.log",
+      "sha256": "83a1593c5b5783693fe3006d1f6597bcb4f3a5968f23b59481ee09a0477f910a",
+      "bytes": 80
+    },
+    {
+      "path": "logs/recovery/hand-accuracy-v1/fault-stop-replay.py",
+      "sha256": "5ce7ed4a537766cf1ac49f9e257bc175fa75315e8e813ff4eb211bbd96d58802",
+      "bytes": 1889
+    },
+    {
+      "path": "logs/recovery/hand-accuracy-v1/fault-stop-replay-final.log",
+      "sha256": "fb3832077871b98cfd8aabe0e6e86d9d0b58be814ea962aac81ba540ff493afc",
+      "bytes": 2827
+    }
+  ]
+}
