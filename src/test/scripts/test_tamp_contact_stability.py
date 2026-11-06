@@ -2,6 +2,7 @@
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 """Freeze real inputs without actuation; retain failed/incomplete audit outcomes."""
 import importlib
+import inspect
 import json
 from pathlib import Path
 
@@ -10,6 +11,8 @@ import numpy as np
 import pytest
 
 from emet.controller.manipulation.native_scene import model_signature
+from emet.eval.contact_stability import TracedNativeAdapter
+from emet.motion.release import ReleaseLimits
 
 
 @pytest.fixture
@@ -69,6 +72,18 @@ def test_truncated_audit_cannot_become_a_pass_or_erase_summary(runner, monkeypat
     assert runner.main() == 1
     summary = json.loads((out / 'summary.json').read_text())
     assert summary['passed'] is False and summary['malformed_audit_rows'] == 1
+
+
+def test_bounded_release_protocol_and_constructor_wiring(runner, monkeypatch, tmp_path):
+    inspect.signature(TracedNativeAdapter).bind(object(), model=object(), trace=object(),
+        policy='fine_yaw', payload_binding='verified_lift', release_limits=ReleaseLimits(.04, .04))
+    monkeypatch.setattr(runner, 'live_table_robot', lambda *a, **kw: pytest.fail('prepare only'))
+    out = tmp_path / 'bounded'
+    arguments(monkeypatch, out, '--prepare-only', '--release-policy', 'bounded')
+    assert runner.main() == 0
+    protocol = json.loads((out / 'protocol.json').read_text())
+    assert protocol['release_limits'] == {'max_raise_m': .04, 'max_drop_m': .04, 'clearance_m': .003}
+    assert 'src/emet/motion/release.py' in protocol['source_sha256']
 
 
 @pytest.mark.parametrize('lift_complete', (False, True))

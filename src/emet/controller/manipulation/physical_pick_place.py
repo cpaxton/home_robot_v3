@@ -35,6 +35,9 @@ class PhysicalPickPlaceExecutor:
     ENDPOINT_STILLNESS_TOLERANCE = 0.002
 
     execution_mode = "physical"
+    release_refiner: Callable[[], PhysicalMotionResult] | None = None
+    release_verifier: Callable[[], PhysicalMotionResult] | None = None
+    released_collision = None
 
     def __init__(
         self,
@@ -580,6 +583,10 @@ class PhysicalPickPlaceExecutor:
             result = self._execute_path(phase, path)
             if not result.success:
                 return result
+        if self.release_refiner is not None:
+            result = self.release_refiner()
+            if not result.success:
+                return result
         # Certify release and open-finger retreat from the actual placement pose.
         # Planning preserves measured state and the retention reference on failure.
         paths, error = self._replan_at_measured_pose(
@@ -592,6 +599,12 @@ class PhysicalPickPlaceExecutor:
         self.event(phase="release", controller_success=True)
         self.collision.set_payload(self.model, self.data, None)
         self.payload_body = None
+        if self.release_verifier is not None:
+            result = self.release_verifier()
+            if not result.success:
+                return result
+        if self.released_collision is not None:
+            self.collision = self.released_collision
         paths, error = self._replan_at_measured_pose(
             ("retreat",), self.place_targets[2:], object_body=object_gt_body, grasp=False,
         )

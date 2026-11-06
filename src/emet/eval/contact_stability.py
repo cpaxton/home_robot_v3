@@ -16,6 +16,7 @@ import mujoco
 import numpy as np
 
 from emet.controller.task.tamp.native_adapter import NativeTableAdapter
+from emet.motion.release import refine_release
 
 GRASP_POLICIES = {
     'baseline': NativeTableAdapter.grasp_yaw_offsets,
@@ -42,13 +43,13 @@ class ContactTrace:
 
     def record(self, obj, executor, row, *, motion_phase=None):
         phase = row.get('phase', '')
-        if phase not in self.phases and not phase.startswith('grasp_replan'):
+        if phase not in self.phases and phase not in ('release_adjustment', 'release_open_verified') and not phase.startswith(('grasp_replan', 'release_plan')):
             return
         start = time.monotonic()
         data = executor.data
         event = {'source': 'simulator_ground_truth_debug', 'sim_time': float(data.time),
                  'object_body': obj, 'motion_phase': motion_phase, 'event': row}
-        if phase.startswith('grasp_replan'):
+        if phase.startswith(('grasp_replan', 'release_plan')):
             event['kind'] = 'planning_targets'
         else:
             event['kind'] = 'measured_qpos_private_fk_and_collision'
@@ -87,15 +88,23 @@ class ContactTrace:
 
 
 class TracedNativeAdapter(NativeTableAdapter):
-    """Reuse the production planner/executor; change only declared yaw candidates."""
+    """Reuse production execution with explicit diagnostic policy selections."""
 
-    def __init__(self, robot, *, model, trace, policy, payload_binding='preserve'):
+    def __init__(self, robot, *, model, trace, policy, payload_binding='preserve', release_limits=None):
         if payload_binding not in ('preserve', 'verified_lift_keep', 'verified_lift'):
             raise ValueError('invalid_payload_binding_policy')
         self.trace = trace
         self.grasp_yaw_offsets = GRASP_POLICIES[policy]
         self.payload_binding = payload_binding
+        self.release_limits = release_limits
         super().__init__(robot, model=model)
+
+    def execute(self, plan_ref):
+        plan = self.plans.get(plan_ref)
+        if plan is not None and self.release_limits is not None:
+            plan.executor.release_refiner = lambda: refine_release(plan.executor, support=plan.support_body,
+                region=plan.placement_region, limits=self.release_limits)
+        return super().execute(plan_ref)
 
     def _bind_loaded_payload(self, plan, *, rebind=True):
         """One measured primitive handoff; never renew a violated/creeping bound.

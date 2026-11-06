@@ -32,6 +32,7 @@ from emet.controller.task.tamp.task_session import TaskSession
 from emet.eval.contact_stability import GRASP_POLICIES, ContactTrace, TracedNativeAdapter
 from emet.eval.native_table_live import live_table_robot
 from emet.eval.native_table_scoring import goal_predicates, load_placement_regions
+from emet.motion.release import ReleaseLimits
 from emet.simulation.mujoco_server_stretch import default_scene_xml_path
 
 REPO = Path(__file__).resolve().parents[1]
@@ -84,6 +85,7 @@ def prepare(args, pilot, case, out):
     sources.mkdir()
     hashes = {}
     for name in ('scripts/eval_tamp_contact_stability.py', 'src/emet/eval/contact_stability.py',
+                 'src/emet/motion/release.py',
                  'src/emet/controller/task/tamp/native_adapter.py',
                  'src/emet/controller/manipulation/physical_pick_place.py'):
         path = REPO / name
@@ -93,6 +95,9 @@ def prepare(args, pilot, case, out):
                 'policy': args.policy, 'grasp_yaw_offsets_rad': GRASP_POLICIES[args.policy],
                 'payload_binding': args.payload_binding,
                 'payload_reference_changes_at_verified_lift': args.payload_binding == 'verified_lift',
+                'release_policy': args.release_policy,
+                'release_limits': {'max_raise_m': args.max_release_raise, 'max_drop_m': args.max_release_drop,
+                                   'clearance_m': args.release_clearance} if args.release_policy == 'bounded' else None,
                 'source_sha': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=REPO, text=True).strip(),
                 'source_dirty': bool(subprocess.check_output(['git', 'status', '--porcelain'], cwd=REPO, text=True)),
                 'source_sha256': hashes, 'case_file_sha256': sha256(args.case_file),
@@ -124,7 +129,9 @@ def run(args, pilot, case, out, result):
         trace = ContactTrace(model, out / 'contact.jsonl')
         try:
             adapter = TracedNativeAdapter(robot, model=model, trace=trace, policy=args.policy,
-                                          payload_binding=args.payload_binding)
+                                          payload_binding=args.payload_binding,
+                                          release_limits=ReleaseLimits(args.max_release_raise, args.max_release_drop,
+                                              clearance_m=args.release_clearance) if args.release_policy == 'bounded' else None)
             provider = NativeTableTransferProvider(robot, case['task'], adapter=adapter)
             session = TaskSession(provider)
             tools = {t.name: t for t in get_tools({'robot': robot, 'manip_mode': 'physical',
@@ -152,6 +159,7 @@ def run(args, pilot, case, out, result):
             result.update(run_status='complete', final_predicates=goal_predicates(robot, goals),
                           responses=responses, payload_residual_maxima=trace.extrema,
                           payload_binding=args.payload_binding,
+                          release_policy=args.release_policy,
                           trace_records=trace.records, max_record_wall_s=trace.max_record_wall_s)
             # An independent final task score and an explicit tool completion
             # are both needed; a failed receipt cannot become a reference pass.
@@ -173,12 +181,20 @@ def main():
     parser.add_argument('--payload-binding', choices=('preserve', 'verified_lift_keep', 'verified_lift'), default='preserve',
                         help='Diagnostic only: bind measured payload once after a verified stable lift, before full place replan')
     parser.add_argument('--port-offset', type=int, required=True)
+    parser.add_argument('--release-policy', choices=('legacy', 'bounded'), default='legacy')
+    parser.add_argument('--max-release-drop', type=float, default=.04, help='Declared maximum release gap in bounded native diagnostic (metres)')
+    parser.add_argument('--max-release-raise', type=float, default=.04, help='Maximum arm raise from measured release pose (metres)')
+    parser.add_argument('--release-clearance', type=float, default=.003, help='Vertical clearance reserve for opening (metres)')
     parser.add_argument('--startup-settle', type=float, default=6., help='Additional native simulated startup settling seconds')
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--prepare-only', action='store_true', help='Freeze inputs and validate model; start no server or controllers')
     args = parser.parse_args()
     if not np.isfinite(args.startup_settle) or args.startup_settle < 0:
         parser.error('--startup-settle must be finite and nonnegative')
+    try:
+        ReleaseLimits(args.max_release_raise, args.max_release_drop, clearance_m=args.release_clearance)
+    except ValueError as error:
+        parser.error(str(error))
     pilot = json.loads(args.case_file.read_text())
     matches = [c for c in pilot['cases'] if c['case_id'] == args.case_id]
     if len(matches) != 1:
