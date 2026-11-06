@@ -495,3 +495,20 @@ queued afterward to record actual solved pad/object forces, frames, friction
 and contact positions. Require their physical traces to match the saved
 baseline exactly; keep raw contact data ignored. Do not infer success or
 change force/friction limits from static clearance.
+
+The complete36mm/38mm axial comparison also gives0/30 each (23/26 retention
+failures). The36mm candidate also trips the wheel-unloading guard once
+(`right:20g:0`, measured stop confirmed); reject it without relaxing the gate.
+Reject a depth-only planner change. All three solved-contact probes
+reproduce the original physical traces exactly. First-fault cone utilization
+is0.556/0.448/1.000 at20/50/100g, while the50g jaws are pushed beyond the
+nominal open range under a closing target. Normal load alone is not a wrench
+certificate. Next diagnose contact locations, wrench capacity, stop compliance
+and angular creep, then calibrate any simulator change. Do not perturb the
+ongoing unloaded training recipe based on this separate experiment.
+
+The translation trial clears source-fidelity admission (canonical22 and expanded
+arm88 exactly reproduced), and its4096 critic-only boundary is physically exact.
+Actor updates are running. Final selection must compare the unchanged70/94/122
+subsets separately from the expanded146 and all fresh audits, so gains on added
+cases cannot mask old-case regressions. No intermediate is selected or promoted.

@@ -280,8 +280,11 @@ Accepted plan: [Mars controller integration](docs/plans/mars_controller_integrat
       retesting. Do not claim retention fixed or hardware ready.
 - [ ] Repair full-volume Mars grasp fit: height priorities fail0/30 each over90
       diagnostic episodes. Open-pad overlap is verified against recorded FK;
-      test axial pinch depth36/38mm after exact baseline replays, preserving
-      geometry, loads, object poses and all guards. See [fit evidence](docs/experiments/mars_grasp_fit_20261106.md).
+      axial pinch36/38mm also fails0/30 each after exact baseline replays,
+      with one36mm wheel-unloading guard trip (stop confirmed).
+      Three solved-contact probes reproduce original physics exactly; inspect
+      wrench capacity, contact locations, joint-stop compliance and angular
+      creep before calibrating physical parameters. See [fit evidence](docs/experiments/mars_grasp_fit_20261106.md).
       Keep grasp/placement planning fixes separate from learned tracking; no
       candidate is qualified by static clearance alone.
 - [ ] Complete the orientation-preserving hand-translation refinement and all

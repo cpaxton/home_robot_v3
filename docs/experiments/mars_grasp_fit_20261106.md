@@ -65,3 +65,37 @@ A subsequent three-case read-only contact diagnostic will record solved
 pad/object contact forces and geometry, requiring exact physical baseline
 replay. This prepares a force/fit diagnosis if changed depth also fails; it is
 not another physical parameter sweep.
+
+The depth comparison is complete and also rejected:36mm gives0/30 transfers
+(23 latched retention failures),38mm0/30 (26 retention failures), with no
+unconfirmed stops. The36mm candidate also trips the wheel-unloading guard on
+`right:20g:0`: peak caster gap0.154mm and zero measured caster load. The
+measured stop confirms; keep the conservative guard and reject the candidate.
+These latched runtime categories can differ from the initial public-tool failure
+(e.g. grasp verification), and both remain explicit. The original three identity replays are exact. Preserve all63 episodes
+and both candidate failures; positive nominal clearance is insufficient.
+[Complete depth results](../../paper/data/whole_body_control/mars_grasp_priority_v1/depth-results.json).
+
+All three solved-contact probes reproduce their original physical traces exactly.
+At the first retention fault, both fingers remain loaded: summed active normal
+loads are3.59/4.78/2.33N for20/50/100g. Contact-friction ellipse utilization at
+that instant is0.556/0.448/1.000 respectively, using the actual dimension-four
+contact friction ordering from the installed MuJoCo headers. Contacts below
+0.05N are omitted only from this descriptive ratio; actual safety decisions and
+all raw contacts are retained. Normal sums are not a support wrench or proof
+of adequate grip capacity. The50g driver's measured angle is0.3601rad despite
+a zero closing target, beyond the nominal open limit; the20g and100g drivers
+remain within range. The cases do not support a single explanation that every
+failure merely needs more normal force. These are first threshold violations,
+not proof that the object has dropped.
+
+[Contact evidence](../../paper/data/whole_body_control/mars_grasp_priority_v1/contact-forces.json)
+retains per-phase observations, the preceding carry second, exact-replay evidence,
+raw first-fault force/frame/friction values and source/header digests. Next
+examine full grasp wrench capacity, actual contact locations versus the measured
+hand error, compliant joint stops and angular creep. Calibrate any physical
+change against measurements or independent evidence. Improve grasp feasibility
+and clearance accounting in TAMP as needed; keep the controller responsible
+for tracking and safety. Do not increase friction/torque or loosen retention
+simply to turn this suite green. Unloaded controller refinement continues
+separately; loaded training is not qualified by these failures.

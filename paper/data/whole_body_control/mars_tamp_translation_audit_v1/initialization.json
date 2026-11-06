@@ -1,0 +1,150 @@
+{
+  "complete": true,
+  "scope": "Initialized transfer and4096 critic-only warmup admission, not learned final qualification.",
+  "implementation_revision": "2227f58a",
+  "hardware_used": false,
+  "safety_promoted": false,
+  "source_fidelity": {
+    "canonical": {
+      "exact": true,
+      "cases": 22,
+      "source_failures": {
+        "train:base:hold": [
+          "smoothness/base_linear_jerk"
+        ],
+        "train:coupled:forward_turn": [
+          "tracking_timeout",
+          "terminal_hold"
+        ],
+        "train:coupled:reverse_turn": [
+          "tracking_timeout",
+          "terminal_hold"
+        ],
+        "validation:base:forward": [
+          "mastery_tracking_envelope",
+          "terminal_hold"
+        ],
+        "validation:base:hold": [
+          "smoothness/base_linear_jerk"
+        ],
+        "validation:coupled:forward_turn": [
+          "mastery_tracking_envelope",
+          "terminal_hold"
+        ],
+        "validation:coupled:reverse_turn": [
+          "mastery_tracking_envelope",
+          "terminal_hold"
+        ]
+      }
+    },
+    "expanded_arm": {
+      "exact": true,
+      "cases": 88,
+      "source_failures": {
+        "train:arm:elbow_down": [
+          "smoothness/base_linear_jerk"
+        ],
+        "train:arm:near_straight_A_translate_down@amplitude:0.25": [
+          "smoothness/base_linear_jerk"
+        ],
+        "train:arm:near_straight_A_translate_up@amplitude:0.25": [
+          "smoothness/base_linear_jerk"
+        ],
+        "train:arm:roll_right@amplitude:0.25": [
+          "smoothness/base_linear_jerk"
+        ],
+        "train:arm:tamp_translation_A_elbow_translate_negative": [
+          "tracking_timeout",
+          "terminal_hold"
+        ],
+        "train:arm:tamp_translation_A_shoulder_translate_positive": [
+          "smoothness/base_linear_jerk"
+        ],
+        "train:arm:tamp_translation_A_shoulder_translate_positive@amplitude:0.25": [
+          "smoothness/base_linear_jerk"
+        ],
+        "train:arm:translate_down": [
+          "smoothness/base_linear_jerk"
+        ]
+      }
+    },
+    "source_weights_sha256": "e7b425699510cc635485bdd8f59a5b25692fb165faf248aaecbc2707c0dbb883",
+    "source_safety_flags_clear": true,
+    "qualification_granted": false
+  },
+  "source_groups_on_expanded146": {
+    "base": {
+      "cases": 50,
+      "tracking": 49,
+      "full": 42,
+      "failure_reasons": {
+        "smoothness/base_linear_jerk": 6,
+        "mastery_tracking_envelope": 1,
+        "terminal_hold": 1,
+        "smoothness/joint_jerk": 1
+      }
+    },
+    "arm": {
+      "cases": 88,
+      "tracking": 87,
+      "full": 80,
+      "failure_reasons": {
+        "smoothness/base_linear_jerk": 7,
+        "tracking_timeout": 1,
+        "terminal_hold": 1
+      }
+    },
+    "coupled": {
+      "cases": 8,
+      "tracking": 2,
+      "full": 2,
+      "failure_reasons": {
+        "tracking_timeout": 4,
+        "terminal_hold": 6,
+        "mastery_tracking_envelope": 2
+      }
+    }
+  },
+  "warmup_transitions": 4096,
+  "canonical_physical_cases_exact_at_warmup_boundary": true,
+  "canonical_cases": 22,
+  "actor_updates_now_running": true,
+  "final_candidate_results_pending": true,
+  "artifacts": [
+    {
+      "path": "logs/manipulation/mars-tamp-translation-v1-seed90/run.json",
+      "bytes": 258893,
+      "sha256": "a987113ccbc6455fb08d3ea0b824047da5b7aa938a0eeba3530f58c2951985c9"
+    },
+    {
+      "path": "logs/manipulation/mars-tamp-translation-v1-seed90/source-baseline.json.gz",
+      "bytes": 21832688,
+      "sha256": "0cacada6a5fd8b9aeae3302293ce6a36a2fdd8f8ec4d977ed7b6bcf10be1a311"
+    },
+    {
+      "path": "logs/manipulation/mars-tamp-translation-v1-seed90/initial-fidelity.json",
+      "bytes": 1883,
+      "sha256": "4d53bb0c1c20566548c1fa64c492ad25e98d40ec00b9f1f85468e2018110ea40"
+    },
+    {
+      "path": "logs/manipulation/mars-tamp-translation-v1-seed90/step-0/evaluation.json.gz",
+      "bytes": 2782221,
+      "sha256": "6012717b2cb73bf2f3f88c0c7dccb2c8caf96076af2acae038744152d4346982"
+    },
+    {
+      "path": "logs/manipulation/mars-tamp-translation-v1-seed90/initial-arm-expanded.json.gz",
+      "bytes": 16133520,
+      "sha256": "a537d822caca1af6d20859066bd96c0c8c5d03954f444e61a0440d2f3fb4fbb4"
+    },
+    {
+      "path": "logs/manipulation/mars-tamp-translation-v1-seed90/step-4096/evaluation.json.gz",
+      "bytes": 2782217,
+      "sha256": "d8bb2e1c22c3f6d34aaa553990eed760e0c8cee61959b5ae17006693d324dbad"
+    },
+    {
+      "path": "logs/manipulation/mars-tamp-translation-v1-seed90/step-4096/actor/manifest.json",
+      "bytes": 217865,
+      "sha256": "dea90157d58f42655de8fd89691fea47c19abfa9ac68755db9284c80e7d77f2d"
+    }
+  ]
+}

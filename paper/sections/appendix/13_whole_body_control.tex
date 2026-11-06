@@ -553,3 +553,11 @@ transfers. A static full-pad box audit finds open-pad overlap in all twenty-four
 available grasp frames; recorded native FK verifies the analytic transforms.
 Testing axial pinch geometry is a separate planning diagnostic, not a change
 to friction, force limits or retention acceptance, and not evidence of success.
+
+Both subsequent axial pinch candidates also fail all thirty cases. Three
+read-only solved-contact probes reproduce the original physical trajectories
+exactly and distinguish contact-friction saturation from jaw-stop deflection.
+Positive geometric clearance alone does not qualify loaded retention.
+
+The 36\,mm pinch candidate also trips the conservative wheel-unloading guard
+once with a confirmed measured stop; it is rejected without relaxing the gate.

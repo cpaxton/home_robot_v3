@@ -27,6 +27,11 @@ orientation. Existing amplitude scaling yields 24 extra cases: 146 total,
 mass; prior families retain the other half. Overall control-step allocation
 remains 30% base / 50% arm / 20% coupled.
 
+The new elbow families move mostly vertically by up to20.8mm; the largest
+25.3mm paths are oblique. They broaden coverage rather than exactly reproducing
+the25mm vertical TAMP pregrasp. Actual timed public-tool trajectories remain
+required acceptance tests.
+
 Only the extra families use a 2.5 s minimum duration. The original minimum
 remains 3 s. Retiming always respects the existing physical speed, acceleration
 and jerk bounds; the option can only slow a compiled path. Caliban's isolated
@@ -80,3 +85,12 @@ PYTHONPATH=src .venv/bin/python -m emet.rl.manipulation.mastery plot \
 
 Use a fresh output directory. Visualization sub-selection never changes an
 admission, training or final evaluation gate.
+
+Source-fidelity admission is complete: all22 canonical and88 expanded-arm
+initialized cases reproduce the retained actor exactly, preserving its existing
+failures. All146 source cases clear the recorded safety flags. The4096 critic-only
+warmup boundary reproduces all22 physical cases exactly; ordinary PPO actor
+updates have begun. The expanded source itself reaches87/88 arm tracking and
+80/88 full, so this is not evidence that every new target is already mastered.
+[Initialization evidence](../../paper/data/whole_body_control/mars_tamp_translation_audit_v1/initialization.json).
+The final262k candidate and all declared post-tests remain pending.
