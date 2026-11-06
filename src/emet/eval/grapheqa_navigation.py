@@ -14,6 +14,7 @@ import numpy as np
 
 from emet.eval.grapheqa_sensor import command_camera_pose
 from emet.mapping.rgbd_odometry import RGBDOdometry
+from emet.utils.pinhole_intrinsics import pinhole_K_from_opengl_projection
 
 
 def base_xyt(camera_pose):
@@ -99,8 +100,8 @@ class SensorOnlyHabitat:
         state.position = [spawn.x, spawn.y, spawn.z]
         state.rotation = quat_from_angle_axis(spawn.heading, np.array([0.0, 1.0, 0.0]))
         self.sim.initialize_agent(0, state)
-        focal = 320.0 / np.tan(np.deg2rad(60))
-        self.k = np.array([[focal, 0, 320], [0, focal, 240], [0, 0, 1]], dtype=float)
+        depth_sensor = self.sim.get_agent(0).scene_node.subtree_sensors["depth"]
+        self.k = pinhole_K_from_opengl_projection(depth_sensor.render_camera.projection_matrix, 640, 480)
         self.odometry = RGBDOdometry(self.k, command_camera_pose(yaw_deg=0, tilt_deg=-30, sensor_height=1.5))
         self.sequence = 0
         self.last = self._capture(self.sim.get_sensor_observations(), None)

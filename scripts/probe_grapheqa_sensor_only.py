@@ -373,6 +373,8 @@ def render_and_detect(scene, spawn, frames, labels, ids, vocabulary, inputs, man
     from habitat_sim.utils.common import quat_from_angle_axis
     from PIL import Image
 
+    from emet.utils.pinhole_intrinsics import pinhole_K_from_opengl_projection
+
     started = time.monotonic()
     detector = detector_type(class_list=vocabulary, device="cuda", confidence_threshold=0.1)
     manifest["perception_init_wall_s"] = time.monotonic() - started
@@ -381,8 +383,8 @@ def render_and_detect(scene, spawn, frames, labels, ids, vocabulary, inputs, man
         state.position = [spawn.x, spawn.y, spawn.z]
         state.rotation = quat_from_angle_axis(spawn.heading, np.array([0.0, 1.0, 0.0]))
         sim.initialize_agent(0, state)
-        focal = 320.0 / np.tan(np.deg2rad(60.0))
-        k = np.array([[focal, 0, 320], [0, focal, 240], [0, 0, 1]], dtype=np.float64)
+        depth_sensor = sim.get_agent(0).scene_node.subtree_sensors["depth"]
+        k = pinhole_K_from_opengl_projection(depth_sensor.render_camera.projection_matrix, 640, 480)
         for index in range(frames):
             # Sensor data only: never inspect semantic_scene, agent state,
             # pathfinder, scene bounds, or object annotations after spawning.
