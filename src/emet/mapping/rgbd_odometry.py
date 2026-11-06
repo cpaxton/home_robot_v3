@@ -120,6 +120,26 @@ class RGBDOdometry:
                 raise ValueError("Finite source-to-target initial transform required")
             h, w = depth.shape
             intrinsic = o3d.camera.PinholeCameraIntrinsic(w, h, self.k[0, 0], self.k[1, 1], self.k[0, 2], self.k[1, 2])
+            # A motor prior can predict movement while RGB-D measures a blocked
+            # base. Choose the stationary initializer when it dominates that
+            # prior on overlap, depth and appearance; always estimate/validate
+            # the transform from the images below, never return the command.
+            prior_quality = registration_quality(self.previous[0], self.previous[1], rgb, depth, self.k, guess)
+            stationary_quality = registration_quality(self.previous[0], self.previous[1], rgb, depth, self.k, np.eye(4))
+            if (
+                stationary_quality[1] is not None
+                and stationary_quality[2] is not None
+                and (
+                    prior_quality[1] is None
+                    or prior_quality[2] is None
+                    or (
+                        stationary_quality[0] >= prior_quality[0]
+                        and stationary_quality[1] <= prior_quality[1]
+                        and stationary_quality[2] <= prior_quality[2]
+                    )
+                )
+            ):
+                guess = np.eye(4)
             ok, transform, _ = o3d.pipelines.odometry.compute_rgbd_odometry(
                 self.previous[2],
                 target,

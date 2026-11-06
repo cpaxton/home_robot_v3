@@ -59,3 +59,15 @@ def test_stale_frames_and_changed_calibration_are_rejected():
         odometry.update(rgb[:32], depth[:32], 2)
     with pytest.raises(ValueError, match="right-handed"):
         RGBDOdometry(calibration(), np.diag([-1, 1, 1, 1]))
+
+
+def test_repeated_blocked_motion_does_not_accumulate_commanded_progress():
+    rgb, depth = frame()
+    odometry = RGBDOdometry(calibration(), np.eye(4))
+    odometry.update(rgb, depth, 1)
+    guess = np.eye(4)
+    guess[0, 3] = -0.1
+    for stamp in range(2, 8):
+        receipt = odometry.update(rgb, depth, stamp, source_to_target_guess=guess)
+        assert receipt.ok
+        assert np.linalg.norm(receipt.camera_pose[:3, 3]) < 0.003
