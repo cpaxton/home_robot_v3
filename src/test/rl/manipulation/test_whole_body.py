@@ -6,14 +6,14 @@ import pytest
 import torch
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv
-from test_base_component import Toy, config, kwargs
-from test_base_component import setup as setup
 
 from emet.rl.manipulation.base_component import initialize, merge, verify_frozen
 from emet.rl.manipulation.command_policy import ExecutorCommandVecNormalize
 from emet.rl.manipulation.observation_layout import history_layout
 from emet.rl.manipulation.profiles import MARS
 from emet.rl.manipulation.whole_body import FrozenGripActions, WholeBodyPolicy
+
+from ._component_helpers import Toy, config, kwargs
 
 
 class ArmToy(Toy):

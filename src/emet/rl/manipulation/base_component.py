@@ -7,6 +7,8 @@ ordinary eight-output actor; the gripper and executor release authority persist.
 
 import argparse
 import json
+import os
+import tempfile
 from collections import Counter
 from dataclasses import asdict
 from pathlib import Path
@@ -41,7 +43,7 @@ from emet.rl.manipulation.mastery_objective import (
     add_contract_reward_arguments,
     contract_reward_from_args,
 )
-from emet.rl.manipulation.policy import ManipulationPolicy, export, value_reward_scale
+from emet.rl.manipulation.policy import ManipulationPolicy, export, validate_critic_reward_scale
 from emet.rl.regression_gate import verify_regressions
 
 ROOT = Path(__file__).resolve().parents[4]
@@ -105,7 +107,7 @@ class BasePolicy(FeedbackActorCriticPolicy):
         if not np.isfinite(gain_bias_lr_multiplier) or gain_bias_lr_multiplier <= 0:
             raise ValueError("positive finite gain-bias LR multiplier required")
         self.gain_bias_lr_multiplier = gain_bias_lr_multiplier
-        self.critic_reward_scale = value_reward_scale({"critic_reward_scale": critic_reward_scale})
+        self.critic_reward_scale = validate_critic_reward_scale(critic_reward_scale)
         if (
             not kwargs.get("use_sde", False)
             or not kwargs.get("full_std", True)
@@ -303,7 +305,7 @@ class TrainingRewardScale(gym.Wrapper):
 
     def __init__(self, env, scale):
         super().__init__(env)
-        self.scale = value_reward_scale({"critic_reward_scale": scale})
+        self.scale = validate_critic_reward_scale(scale)
 
     def step(self, action):
         obs, reward, done, truncated, info = self.env.step(action)
@@ -367,7 +369,7 @@ def make_motion_vec_env(
     the parent. Single-worker and dummy execution use the same factory.
     """
     motion_rollout_size(num_envs, backend)
-    reward_scale = value_reward_scale({"critic_reward_scale": reward_scale})
+    reward_scale = validate_critic_reward_scale(reward_scale)
     if objective is not None and teacher is None:
         raise ValueError("motion contract objective requires paired teacher evidence")
     source_directory = str(Path(source_directory).resolve())
@@ -541,32 +543,42 @@ def verify_source_fidelity(report, baseline, *, expected_ids):
 
 
 def merge(model, normalizer, source, destination, config, fingerprint):
-    """Export one ordinary eight-output actor; no component or noise wrapper."""
+    """Publish one validated actor bundle; a failed export exposes no partial bundle."""
+    destination = Path(destination)
+    if destination.exists():
+        raise FileExistsError("merged actor destination already exists: " + str(destination))
     verify_frozen(model, source)
+    destination.parent.mkdir(parents=True, exist_ok=True)
     original = {k: v.clone() for k, v in source.model.policy.state_dict().items()}
     original_steps = source.model.num_timesteps
-    try:
-        full = {k: v.clone() for k, v in original.items()}
-        for key, value in model.policy.state_dict().items():
-            if key != "log_std":
-                full[key] = value.clone()
-        source.model.policy.load_state_dict(full)
-        source.model.num_timesteps = model.num_timesteps
-        export(source.model, normalizer, destination, config, fingerprint, steps=model.num_timesteps)
-        path = Path(destination) / "manifest.json"
-        manifest = json.loads(path.read_text())
-        manifest["critic_reward_scale"] = model.policy.critic_reward_scale
-        manifest["component_training"] = {
-            "scope": "mars-whole-body-gsde-v1" if model.policy.motion_outputs == 7 else SCOPE,
-            "optimizer_resume_supported": False,
-            "one_runtime_actor": True,
-            "actor_context_trainable": getattr(model.policy, "train_context", False),
-        }
-        path.write_text(json.dumps(manifest, indent=2) + "\n")
-    finally:
-        source.model.policy.load_state_dict(original)
-        source.model.num_timesteps = original_steps
-    return ManipulationPolicy(destination, robot=config.robot, fingerprint=fingerprint)
+    # Stage on the same filesystem: critic units and component provenance must
+    # agree with the merged weights before a consumer can see this destination.
+    with tempfile.TemporaryDirectory(prefix=f".{destination.name}-", dir=destination.parent) as temporary:
+        staging = Path(temporary)
+        try:
+            full = {k: v.clone() for k, v in original.items()}
+            for key, value in model.policy.state_dict().items():
+                if key != "log_std":
+                    full[key] = value.clone()
+            source.model.policy.load_state_dict(full)
+            source.model.num_timesteps = model.num_timesteps
+            export(source.model, normalizer, staging, config, fingerprint, steps=model.num_timesteps)
+            path = staging / "manifest.json"
+            manifest = json.loads(path.read_text())
+            manifest["critic_reward_scale"] = validate_critic_reward_scale(model.policy.critic_reward_scale)
+            manifest["component_training"] = {
+                "scope": "mars-whole-body-gsde-v1" if model.policy.motion_outputs == 7 else SCOPE,
+                "optimizer_resume_supported": False,
+                "one_runtime_actor": True,
+                "actor_context_trainable": getattr(model.policy, "train_context", False),
+            }
+            path.write_text(json.dumps(manifest, indent=2) + "\n")
+            policy = ManipulationPolicy(staging, robot=config.robot, fingerprint=fingerprint)
+        finally:
+            source.model.policy.load_state_dict(original)
+            source.model.num_timesteps = original_steps
+        os.rename(staging, destination)
+    return policy
 
 
 def train(args, suite):
@@ -604,7 +616,7 @@ def train(args, suite):
         raise ValueError("unknown initial admission mode")
     learning_rate = getattr(args, "learning_rate", 1e-4)
     exploration_std = getattr(args, "exploration_coefficient_std", 0.5)
-    reward_scale = value_reward_scale({"critic_reward_scale": getattr(args, "reward_scale", 1.0)})
+    reward_scale = validate_critic_reward_scale(getattr(args, "reward_scale", 1.0))
     critic_multiplier = getattr(args, "critic_lr_multiplier", 1.0)
     gain_bias_multiplier = getattr(args, "gain_bias_lr_multiplier", 1.0)
     warmup = CriticWarmup(getattr(args, "critic_warmup_steps", 0), getattr(args, "critic_warmup_epochs", 20))
@@ -975,7 +987,7 @@ def main():
         parser.error("positive finite gain-bias LR multiplier required")
     try:
         stage_step_weights(args.training_stages, args.arm_step_fraction, args.coupled_step_fraction)
-        value_reward_scale({"critic_reward_scale": args.reward_scale})
+        validate_critic_reward_scale(args.reward_scale)
         CriticWarmup(args.critic_warmup_steps, args.critic_warmup_epochs)
     except ValueError as exc:
         parser.error(str(exc))

@@ -27,6 +27,8 @@ class MotionNoise(StateDependentNoiseDistribution):
         return super().mode() * self.mask
 
     def log_prob(self, actions):
+        # Diagonal factors give the active marginal in a fixed-width PPO batch;
+        # deterministic inactive requests add no likelihood, entropy or gradient.
         return (self.distribution.log_prob(actions) * self.mask).sum(dim=-1)
 
     def entropy(self):

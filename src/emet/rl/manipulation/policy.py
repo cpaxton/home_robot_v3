@@ -14,9 +14,8 @@ from torch import nn
 from emet.rl.manipulation.profiles import PROFILES
 
 
-def value_reward_scale(manifest):
-    """Units of the PPO critic only; actor outputs retain physical semantics."""
-    scale = manifest.get("critic_reward_scale", 1.0)
+def validate_critic_reward_scale(scale: float) -> float:
+    """Validate critic reward units without changing actor action semantics."""
     if (
         isinstance(scale, (bool, np.bool_))
         or not isinstance(scale, (int, float, np.integer, np.floating))
@@ -25,6 +24,11 @@ def value_reward_scale(manifest):
     ):
         raise ValueError("positive finite critic reward scale required")
     return float(scale)
+
+
+def value_reward_scale(manifest):
+    """Read critic units, retaining native-unit compatibility for old bundles."""
+    return validate_critic_reward_scale(manifest.get("critic_reward_scale", 1.0))
 
 
 class ManipulationMLPFeatures(BaseFeaturesExtractor):
@@ -69,6 +73,7 @@ class ManipulationHistoryFeatures(BaseFeaturesExtractor):
 
 
 def export(model, normalizer, directory, env_config, fingerprint, *, steps, held_estimator=None):
+    critic_scale = validate_critic_reward_scale(getattr(model.policy, "critic_reward_scale", 1.0))
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=True)
     model.save(directory / "policy.zip")
@@ -79,9 +84,7 @@ def export(model, normalizer, directory, env_config, fingerprint, *, steps, held
         "contract": PROFILES[env_config.robot].contract(env_config.action_mode),
         "fingerprint": fingerprint,
         "steps": steps,
-        "critic_reward_scale": value_reward_scale(
-            {"critic_reward_scale": getattr(model.policy, "critic_reward_scale", 1.0)}
-        ),
+        "critic_reward_scale": critic_scale,
         "mean": stats.mean.tolist(),
         "var": stats.var.tolist(),
         "count": float(stats.count),

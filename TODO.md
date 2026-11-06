@@ -140,6 +140,11 @@ Accepted plan: [Mars controller integration](docs/plans/mars_controller_integrat
       simulator timing budgets with a post-inference deadline/freshness check,
       and name/document spatial teacher gains and the task metric. See the
       [review repair report](docs/experiments/pr224_runtime_review_20261024.md).
+- [x] Address PR 227's concrete review notes: shared test fixtures compatible
+      with importlib collection, scalar critic-unit validation, staged and
+      validated component exports, and documented masked likelihood semantics.
+      Bind helper sources into regression receipts. See the
+      [review follow-up](docs/experiments/pr227_review_20261106.md).
 
 - [x] Generate and execute privileged real-model multi-step development cases
       through public TAMP tools without resets between transfers. Stretch's

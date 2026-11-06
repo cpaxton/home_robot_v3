@@ -40,6 +40,21 @@ def test_files(root):
     return sorted(files)
 
 
+def test_sources(root):
+    """Bind helper/package/fixture code as well as collected test modules."""
+    paths = set(test_files(root))
+    for target in REGRESSION_TARGETS:
+        path = root / target
+        if path.is_dir():
+            paths.update(path.rglob("*.py"))
+    for path in list(paths):
+        for parent in path.parents:
+            if not parent.is_relative_to(root / "src/test"):
+                break
+            paths.update(p for name in ("conftest.py", "__init__.py") if (p := parent / name).is_file())
+    return sorted(paths)
+
+
 def source_state(root):
     from emet.rl.manipulation.carry_benchmark import source_hashes
 
@@ -49,7 +64,7 @@ def source_state(root):
         + list((root / "src/emet_core/emet/core").rglob("*.py"))
         + list((root / "src/emet/controller/task/tamp").rglob("*.py"))
         + list((root / "src/emet/agent").rglob("*.py"))
-        + test_files(root)
+        + test_sources(root)
         + [
             root / "src/test/conftest.py",
             root / "pyproject.toml",
