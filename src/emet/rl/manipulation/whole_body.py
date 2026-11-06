@@ -51,7 +51,10 @@ class WholeBodyPolicy(BasePolicy):
     motion_outputs = 7
     noise_type = MotionNoise
 
-    def __init__(self, *args, arm_exploration_coefficient_std=0.03, **kwargs):
+    def __init__(self, *args, arm_exploration_coefficient_std=0.03, train_context=False, **kwargs):
+        if type(train_context) is not bool:
+            raise ValueError("train_context must be boolean")
+        self.train_context = train_context
         if not np.isfinite(arm_exploration_coefficient_std) or not 0 < arm_exploration_coefficient_std <= 1:
             raise ValueError("arm exploration coefficient std must be in (0,1]")
         self.arm_exploration_coefficient_std = arm_exploration_coefficient_std

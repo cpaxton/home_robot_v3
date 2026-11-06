@@ -74,3 +74,11 @@ audit is not causal proof, but motivates explicit near-straight elbow and
 TAMP-like wrist resets in the next training-distribution experiment. Preserve
 the declared current run to its fixed final and score its actual public-tool
 replay before selecting any policy or changing the next recipe.
+
+An offline audit of all 56 logged policy inputs finds no clipping of measured
+arm positions or pose/preview error fields under the retained normalizer's
+clip of 20. The maximum measured-position z-score is 13.68: the starting posture
+is shifted, but not erased by clipping. Only gripper position/error fields clip
+in a small fraction of tokens. This does not establish causation or qualify a
+normalization change; [per-field evidence](../../paper/data/whole_body_control/mars_tamp_arm_coverage_v1/input-saturation.json)
+is preserved without rerunning or changing the source policy.

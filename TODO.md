@@ -111,8 +111,12 @@ Accepted plan: [Mars controller integration](docs/plans/mars_controller_integrat
 - [ ] Port exact frozen TAMP fixture initialization to ARM without relaxing its
       hash/pose checks. Caliban's eight-worker pilot never started: one missing
       camera source is fixed; two exact frozen-fixture checks still reject ARM's
-      compiled/reset differences. Use the tracked-input snapshot packer to catch
-      missing inputs before expensive gates; current hand learning stays local.
+      compiled/reset differences. The current 122-case ARM teacher passes; the
+      fresh full gate is 1,077/1,080, with the third Git-context setup failure
+      repaired by a focused rerun. An exact binary model/state numeric probe
+      passes its listed checks, but full admission/dynamic parity and a portable
+      loader remain open. See [evidence](docs/experiments/mars_caliban_portability_20261106.md).
+      Keep training local until the complete ARM gate passes.
 
 - [x] Externalize generated control archives/streams into ignored, checksummed
       storage with a retrieval catalog and a regression guard against force-add.
@@ -273,8 +277,14 @@ Accepted plan: [Mars controller integration](docs/plans/mars_controller_integrat
       then replay actual admitted pick/place checkpoints. The first seven-motion
       final reaches 151 public-tool calls inside the hand-position tube but stops
       on base drift and regresses arm smoothness: reject it. A matched smaller-step
-      control runs in an immutable checkout; procedural near-straight postures and
-      coupled amplitudes have native reset tests and await full teacher/regressions.
+      control completed in an immutable checkout; procedural near-straight postures and
+      coupled amplitudes pass 1,080 regressions and teacher122/122 (94 legacy
+      physical cases exact). The smaller-step final is also rejected: arm40/40
+      tracking but20/40 full and zero public-tool transfers. A262k scheduled
+      posture trial is running; optional end-to-end context adaptation preserves
+      constant grip output and passes 1,085 fresh regressions; its paired teacher
+      is still running before a matched fixed-final trial. Keep both finals
+      and actual public-tool/fresh-pose results; no hardware qualification.
       Require coupled
       dynamic-pose, loaded TAMP and real feedback/watchdog/stop acceptance before
       hardware motion. Primitive success alone does not close this gate.

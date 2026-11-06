@@ -145,7 +145,8 @@ def test_grip_wrapper_keeps_source_gripper_and_requires_reset(whole):
 
 @pytest.mark.sim
 @pytest.mark.parametrize("stage,case", [("arm", "train:arm:translate_down"), ("coupled", "train:coupled:forward_turn")])
-def test_whole_body_runs_native_physics_with_no_context_or_grip_change(tmp_path, stage, case):
+@pytest.mark.parametrize("train_context", [False, True])
+def test_whole_body_runs_native_physics_with_no_context_or_grip_change(tmp_path, stage, case, train_context):
     from pathlib import Path
 
     from emet.rl.manipulation.command_policy import ExecutorFeedbackPolicy
@@ -180,7 +181,7 @@ def test_whole_body_runs_native_physics_with_no_context_or_grip_change(tmp_path,
             n_epochs=1,
             use_sde=True,
             sde_sample_freq=2,
-            policy_kwargs=params,
+            policy_kwargs={**params, "train_context": train_context},
         )
         initialize(model, env, source, native.config, native.fingerprint)
         model.learn(16)
@@ -197,3 +198,107 @@ def test_whole_body_runs_native_physics_with_no_context_or_grip_change(tmp_path,
         if env is not None:
             env.close()
         source_env.close()
+
+
+def test_context_adaptation_warmup_and_export_preserve_constant_grip(whole, tmp_path):
+    from emet.rl.manipulation.base_component import CriticWarmup
+
+    _, env, source, _, _ = whole
+    with torch.no_grad():
+        source.model.policy.action_net.grip.bias.fill_(0.2)
+    model = PPO(
+        WholeBodyPolicy,
+        env,
+        device="cpu",
+        n_steps=8,
+        batch_size=8,
+        n_epochs=2,
+        seed=19,
+        use_sde=True,
+        sde_sample_freq=2,
+        policy_kwargs={**kwargs(), "train_context": True, "critic_lr_multiplier": 10},
+    )
+    initialize(model, env, source, config(), Toy.fingerprint)
+    obs = env.reset()
+    raw = {k: v[0] for k, v in env.get_original_obs().items()}
+    np.testing.assert_allclose(model.predict(obs, deterministic=True)[0][0], source(raw)[:7], atol=1e-7, rtol=0)
+    before = {k: p.detach().clone() for k, p in model.policy.named_parameters()}
+    callback = CriticWarmup(256, epochs=2)
+    model.learn(256, callback=callback)
+    assert callback.actor_unchanged
+    for name, p in model.policy.named_parameters():
+        if not model.policy.is_critic(name):
+            torch.testing.assert_close(p, before[name], rtol=0, atol=0)
+    model.learn(32)
+    assert any(
+        not torch.equal(p, before[name])
+        for name, p in model.policy.named_parameters()
+        if name.startswith("mlp_extractor.policy_net.")
+    )
+    verify_frozen(model, source)
+    fields, _ = history_layout(MARS, retention_context=True)
+    raw["history"][:, fields["phase"]] = 0
+    raw["history"][:, fields["phase"].start + 3] = 1
+    raw["history"][:, fields["retain_object_command"]] = 1
+    expected = model.predict(env.normalize_obs({k: v[None] for k, v in raw.items()}), deterministic=True)[0][0]
+    actor = merge(model, env, source, tmp_path / "context-actor", config(), Toy.fingerprint)
+    np.testing.assert_allclose(actor(raw)[:7], expected, atol=1e-7, rtol=0)
+    assert source(raw)[-1] > 0.1
+    assert actor(raw)[-1] == source(raw)[-1]
+    assert actor.manifest["component_training"]["actor_context_trainable"]
+    quiet = {k: v.copy() for k, v in raw.items()}
+    quiet["preview"][:, 1:4] = 0
+    quiet["preview"][:, 7:16] = [0, 0, 0, 1, 0, 0, 1, 0, 0]
+    # Adapting the context cannot introduce constant motion at zero pose error
+    # and measured velocity, even while the constant grip request is active.
+    np.testing.assert_array_equal(actor(quiet)[:7], 0)
+    model.save(tmp_path / "context.zip")
+    loaded = PPO.load(tmp_path / "context.zip", env=env, device="cpu")
+    assert loaded.policy.train_context is True
+    loaded.learn(8)
+    verify_frozen(loaded, source)
+
+
+def test_context_adaptation_refuses_context_dependent_source_grip(whole):
+    _, env, source, _, _ = whole
+    with torch.no_grad():
+        source.model.policy.action_net.grip.weight[0, 0] = 0.1
+    model = PPO(
+        WholeBodyPolicy,
+        env,
+        device="cpu",
+        n_steps=8,
+        batch_size=8,
+        use_sde=True,
+        policy_kwargs={**kwargs(), "train_context": True},
+    )
+    with pytest.raises(ValueError, match="constant gripper head"):
+        initialize(model, env, source, config(), Toy.fingerprint)
+
+
+def test_context_flag_requires_joint_motion_training_before_any_files_are_opened(monkeypatch, tmp_path, capsys):
+    import sys
+
+    from emet.rl.manipulation.base_component import main
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "train",
+            "--source",
+            "missing",
+            "--preflight",
+            "missing",
+            "--regression-receipt",
+            "missing",
+            "--output",
+            str(tmp_path / "no-run"),
+            "--train-context",
+        ],
+    )
+    with pytest.raises(SystemExit) as error:
+        main()
+    assert error.value.code == 2
+    assert "--train-context requires --train-arm" in capsys.readouterr().err
+    assert not (tmp_path / "no-run").exists()

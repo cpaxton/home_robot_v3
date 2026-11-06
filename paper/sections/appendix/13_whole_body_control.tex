@@ -493,3 +493,14 @@ TAMP starting-posture mismatch motivate smaller actor steps and expanded
 procedural resets; neither is yet a demonstrated general controller fix.
 All outcomes remain in
 \texttt{paper/data/whole\_body\_control/mars\_whole\_body\_seven\_v1/}.
+
+
+A matched tenfold smaller actor step retains 40/40 arm tracking but only 20/40
+full arm and 40/50 full base passes; it remains below the source. Its public-tool
+pregrasp stops at the position envelope after 55 calls. These results are retained
+in \texttt{paper/data/whole\_body\_control/mars\_small\_actor\_rate\_v1/}.
+A subsequent procedural reset curriculum adds near-straight elbow/wrist postures
+and coupled amplitudes: fresh teacher 122/122 and 1,080 regressions pass, with
+all 94 earlier teacher rollouts reproducing native metrics and rewards exactly.
+Longer scheduled refinement and optional context adaptation are subsequent
+experiments; no successful general controller or hardware qualification follows.

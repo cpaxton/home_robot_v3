@@ -1,7 +1,8 @@
-"""Train base exploration/readout while preserving one shared learned arm actor.
+"""Train selected motion parameters of one shared Mars tracking actor.
 
-The training wrapper supplies frozen learned arm means. Export merges the base
-rows back into that same eight-output actor; no component runtime is deployed.
+The default preserves learned arm/context means; whole-body training can adapt
+all motion rows and optionally their context network. Export remains one
+ordinary eight-output actor; the gripper and executor release authority persist.
 """
 
 import argparse
@@ -131,6 +132,9 @@ class BasePolicy(FeedbackActorCriticPolicy):
         for module in (self.mlp_extractor.value_net, self.value_net, self.action_net.turn_gain):
             for parameter in module.parameters():
                 parameter.requires_grad_(True)
+        if getattr(self, "train_context", False):
+            for parameter in self.mlp_extractor.policy_net.parameters():
+                parameter.requires_grad_(True)
         width = self.features_extractor.feedback_width
         for parameter in (self.action_net.gain.weight, self.action_net.gain.bias):
             parameter.requires_grad_(True)
@@ -187,7 +191,7 @@ class BasePolicy(FeedbackActorCriticPolicy):
         return name.startswith(("mlp_extractor.value_net.", "value_net."))
 
     def set_actor_trainable(self, enabled):
-        """Freeze only the originally trainable base mean and exploration rows."""
+        """Toggle originally selected motion, context and exploration parameters."""
         for name, parameter in self.named_parameters():
             if name in self._actor_parameter_names:
                 parameter.grad = None
@@ -342,6 +346,12 @@ def initialize(model, normalizer, source, config, fingerprint):
         or source.manifest["fingerprint"] != fingerprint
     ):
         raise ValueError("exact source environment/model required")
+    if getattr(model.policy, "train_context", False) and torch.count_nonzero(
+        source.model.policy.action_net.grip.weight
+    ):
+        raise ValueError(
+            "context adaptation requires a constant gripper head to preserve training/export grip authority"
+        )
     if (
         not isinstance(source.model.policy.features_extractor, GoalFeedbackFeatures)
         or source.model.policy.features_extractor.orientation_scale != model.policy.features_extractor.orientation_scale
@@ -377,7 +387,14 @@ def initialize(model, normalizer, source, config, fingerprint):
 
 def verify_frozen(model, source):
     current, original = model.policy.state_dict(), source.model.policy.state_dict()
+    if getattr(model.policy, "train_context", False) and (
+        torch.count_nonzero(model.policy.action_net.grip.weight)
+        or torch.count_nonzero(source.model.policy.action_net.grip.weight)
+    ):
+        raise RuntimeError("context adaptation requires a constant gripper head")
     for key, value in current.items():
+        if getattr(model.policy, "train_context", False) and key.startswith("mlp_extractor.policy_net."):
+            continue
         if key in {"log_std", "value_net.weight", "value_net.bias"} or key.startswith(
             ("mlp_extractor.value_net.", "action_net.turn_gain.")
         ):
@@ -453,6 +470,7 @@ def merge(model, normalizer, source, destination, config, fingerprint):
             "scope": "mars-whole-body-gsde-v1" if model.policy.motion_outputs == 7 else SCOPE,
             "optimizer_resume_supported": False,
             "one_runtime_actor": True,
+            "actor_context_trainable": getattr(model.policy, "train_context", False),
         }
         path.write_text(json.dumps(manifest, indent=2) + "\n")
     finally:
@@ -466,6 +484,8 @@ def train(args, suite):
     teacher = read_report(args.preflight)
     stages = getattr(args, "training_stages", ["base", "arm"])
     train_arm = getattr(args, "train_arm", False)
+    if getattr(args, "train_context", False) and not train_arm:
+        raise ValueError("context adaptation requires joint motion training")
     policy_type, action_wrapper = BasePolicy, FrozenArmActions
     if train_arm:
         from emet.rl.manipulation.whole_body import FrozenGripActions, WholeBodyPolicy
@@ -534,6 +554,7 @@ def train(args, suite):
                 "critic_reward_scale": reward_scale,
                 "gain_bias_lr_multiplier": gain_bias_multiplier,
                 **({"arm_exploration_coefficient_std": args.arm_exploration_coefficient_std} if train_arm else {}),
+                **({"train_context": getattr(args, "train_context", False)} if train_arm else {}),
                 "restoring_yaw_feedback": True,
                 "turn_xy_tolerance": base.config.base_xy_tolerance,
                 "features_extractor_class": GoalFeedbackFeatures,
@@ -569,7 +590,9 @@ def train(args, suite):
             "seed": 90,
             "frozen_normalization": True,
             "frozen_actor_context_and_arm": not train_arm,
-            "frozen_actor_context_and_grip": True,
+            "frozen_actor_context_and_grip": not getattr(args, "train_context", False),
+            "frozen_grip_head": True,
+            "actor_context_trainable": getattr(args, "train_context", False),
             "arm_trainable": train_arm,
             "arm_exploration_coefficient_std": args.arm_exploration_coefficient_std if train_arm else None,
             "teacher_action_loss": False,
@@ -811,6 +834,9 @@ def main():
         "--train-arm", action="store_true", help="train all seven motion rates; retain executor gripper"
     )
     parser.add_argument("--arm-exploration-coefficient-std", type=float, default=0.03)
+    parser.add_argument(
+        "--train-context", action="store_true", help="also adapt motion context; requires a constant source grip head"
+    )
     parser.add_argument("--learning-rate", type=float, default=1e-4)
     parser.add_argument("--exploration-coefficient-std", type=float, default=0.5)
     parser.add_argument("--critic-lr-multiplier", type=float, default=1.0)
@@ -821,6 +847,8 @@ def main():
     add_contract_reward_arguments(parser)
     parser.add_argument("--wandb-mode", choices=["disabled", "offline"], default="disabled")
     args = parser.parse_args()
+    if args.train_context and not args.train_arm:
+        parser.error("--train-context requires --train-arm")
     if args.steps <= 0 or args.steps % 256:
         parser.error("positive multiple of 256 steps required")
     if args.evaluation_every <= 0 or args.evaluation_every % 256:

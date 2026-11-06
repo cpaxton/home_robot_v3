@@ -339,3 +339,35 @@ preserve all original/expanded tracking and full counts, keep the old fresh audi
 12/12 full, clear recorded safety flags and complete the public-tool transfer.
 Otherwise the longer candidate starts from the retained native base-curriculum
 source. No intermediate checkpoint participates in that decision.
+
+## Optional context adaptation, keeping the same inference actor
+
+The motion readout pilots keep the policy's context MLP frozen, including when
+new initial postures differ from its training distribution. Add opt-in
+--train-context with --train-arm so the existing motion network can adapt
+end to end. Keep the observation schema, stationary mean at zero feedback error,
+velocity limits, executor masks and release guards. No extra inference head,
+teacher residual, or temporal action filter is introduced.
+
+A shared context can change a gripper readout even when its weights are frozen.
+Therefore this mode requires a **constant source gripper head** (zero context
+weights; its bias may be nonzero), and checks that invariant during training and
+export. The retained source satisfies it exactly. A context-dependent gripper
+source is rejected rather than silently changing training/export behavior.
+Critic warmup freezes the context as well; actual PPO, export, reload, nonzero
+constant grip requests and zero-error equilibrium are covered by tests.
+
+Next matched experiment after the current fixed-final posture trial and its
+serial tests: same retained parent, 122 cases, 262,144 transitions, learning
+rates, warmup, contract schedule, noise, seeds and evaluation cadence; only
+enable context adaptation. Require a fresh source-bound full regression receipt
+and teacher 122/122 under the new code, plus exact native replay of the prior
+teacher cases. Evaluate fixed final on all 122 and original subsets, then the
+same actual public-tool and old/new fresh-pose tests. Retain the better existing
+candidate unless all physical nonregression and strict-improvement gates pass.
+This is still nearby free-space training, not contact/hardware qualification.
+
+Implementation validation: 1,085 fresh source-bound regressions pass, including
+actual context PPO updates, critic warmup, closed constant-grip export/reload
+and zero-error equilibrium. Fresh paired teacher replay is pending; the matched
+trial stays queued behind that gate and the prior candidate's serial tests.

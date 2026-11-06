@@ -1,0 +1,131 @@
+{
+  "complete": true,
+  "scope": "Offline source input saturation audit; no rollout or causal ablation.",
+  "source_clip": 20,
+  "inputs": 56,
+  "fields": {
+    "history": {
+      "proprio/positions": {
+        "max_abs_z": 13.677916227267595,
+        "fraction_at_clip": 0.0
+      },
+      "proprio/velocities": {
+        "max_abs_z": 0.007936136486629646,
+        "fraction_at_clip": 0.0
+      },
+      "proprio/base_pose": {
+        "max_abs_z": 9.033736522502414,
+        "fraction_at_clip": 0.0
+      },
+      "proprio/base_command": {
+        "max_abs_z": 0.0001250417117262259,
+        "fraction_at_clip": 0.0
+      },
+      "proprio/target_error": {
+        "max_abs_z": 0.9598836764919652,
+        "fraction_at_clip": 0.0
+      },
+      "proprio/reference_error": {
+        "max_abs_z": 0.0,
+        "fraction_at_clip": 0.0
+      },
+      "proprio/grip_position": {
+        "max_abs_z": 21.842023266940654,
+        "fraction_at_clip": 0.008928571428571428
+      },
+      "proprio/grip_error": {
+        "max_abs_z": 22.147950411221696,
+        "fraction_at_clip": 0.013392857142857142
+      },
+      "proprio/grip_reference": {
+        "max_abs_z": 9.195017229481067e-06,
+        "fraction_at_clip": 0.0
+      },
+      "proprio/previous_action": {
+        "max_abs_z": 0.17829366658429058,
+        "fraction_at_clip": 0.0
+      },
+      "phase": {
+        "max_abs_z": 1.0,
+        "fraction_at_clip": 0.0
+      },
+      "base_pose": {
+        "max_abs_z": 9.033736522502414,
+        "fraction_at_clip": 0.0
+      },
+      "hand_pose": {
+        "max_abs_z": 2.6354097770579363,
+        "fraction_at_clip": 0.0
+      },
+      "base_goal": {
+        "max_abs_z": 10.374868373755799,
+        "fraction_at_clip": 0.0
+      },
+      "base_mask": {
+        "max_abs_z": 1.0,
+        "fraction_at_clip": 0.0
+      },
+      "hand_goal": {
+        "max_abs_z": 2.6854603473207774,
+        "fraction_at_clip": 0.0
+      },
+      "hand_mask": {
+        "max_abs_z": 1.0,
+        "fraction_at_clip": 0.0
+      },
+      "base_velocity": {
+        "max_abs_z": 0.01343104037611435,
+        "fraction_at_clip": 0.0
+      },
+      "target_tokens": {
+        "max_abs_z": 10.37487970603993,
+        "fraction_at_clip": 0.0
+      },
+      "target_mask": {
+        "max_abs_z": 1.0,
+        "fraction_at_clip": 0.0
+      },
+      "retain_object_command": {
+        "max_abs_z": 0.0,
+        "fraction_at_clip": 0.0
+      },
+      "gripper_velocity": {
+        "max_abs_z": 3.615805693299082,
+        "fraction_at_clip": 0.0
+      }
+    },
+    "preview": {
+      "time_offset": {
+        "max_abs_z": 2.4048023472329048e-05,
+        "fraction_at_clip": 0.0
+      },
+      "base_error": {
+        "max_abs_z": 0.0009650376159697771,
+        "fraction_at_clip": 0.0
+      },
+      "base_mask": {
+        "max_abs_z": 1.0,
+        "fraction_at_clip": 0.0
+      },
+      "hand_error": {
+        "max_abs_z": 1.0,
+        "fraction_at_clip": 0.0
+      },
+      "hand_mask": {
+        "max_abs_z": 1.0,
+        "fraction_at_clip": 0.0
+      },
+      "grip_error": {
+        "max_abs_z": 22.147950411221696,
+        "fraction_at_clip": 0.08928571428571429
+      }
+    }
+  },
+  "hardware_used": false,
+  "source_manifest_sha256": "fb0df2c1f737017e208d2849a7cc2523aaa3a0d60a73f71871bbc623603345a1",
+  "input_trace_sha256": "e5bc1cfe4889f712b678adddd66e01f2895d90b4cc68ee7a5390dd34871bcae9",
+  "audit_script": {
+    "path": "logs/recovery/hand-accuracy-v1/tamp-input-saturation.py",
+    "sha256": "0c7a4124667baf8d1f80f030b91be21c63eceefb03e1a79ee3fb161e11b48a3a"
+  }
+}
