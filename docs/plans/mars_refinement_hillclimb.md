@@ -512,3 +512,17 @@ arm88 exactly reproduced), and its4096 critic-only boundary is physically exact.
 Actor updates are running. Final selection must compare the unchanged70/94/122
 subsets separately from the expanded146 and all fresh audits, so gains on added
 cases cannot mask old-case regressions. No intermediate is selected or promoted.
+
+The first32,768-transition checkpoint preserves8/8 canonical arm tracking but
+passes only1/8 full arm and0/4 coupled cases. Keep the fixed-final trial and all
+later evaluations; this is not a selected candidate or a new held-out estimate.
+A separate paired simulator diagnostic uses the rejected, fully trained context
+final: only when base x/y/yaw and hand masks are all active, remove direct
+current/future hand-pose-error contributions from the two base readout rows.
+Keep arm/grip outputs, context/history, base-error and velocity feedback, and
+all physical limits. Free/partial base masks and base-only goals remain intact.
+Replay its baseline and intervention on all122 old cases with fixed teacher
+budgets; record exact old-context replay and every failure. This is a causal
+readout experiment with unchanged weights, not an exported policy or production
+filter. Any useful result still needs an ordinary implementation, fresh full
+gates and actual TAMP/fresh-case tests before adoption.
