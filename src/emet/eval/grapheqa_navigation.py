@@ -157,6 +157,8 @@ class ObservedSpaceNavigation:
     """Shared geometry map, observed-space search and swept-footprint admission."""
 
     def __init__(self):
+        import torch
+
         from emet.mapping.voxel.voxel_dynamem import SparseVoxelMap
         from emet.mapping.voxel.voxel_map_dynamem import SparseVoxelMapNavigationSpace
         from emet.robots.footprint import CircularFootprint
@@ -189,6 +191,8 @@ class ObservedSpaceNavigation:
         )
         self.pose = None
         self.floor_calibration = None
+        # Mapping subsampling must not depend on unrelated model RNG draws.
+        self._mapping_rng = torch.Generator(device="cpu").manual_seed(0).get_state()
 
     def calibrate_stationary_floor(self, frame):
         import torch
@@ -219,13 +223,20 @@ class ObservedSpaceNavigation:
         self.support[cells[:, 0], cells[:, 1]] = True
         k = frame["camera_K"].copy()
         k[:2] /= 2
-        self.map.add(
-            camera_pose=torch.tensor(frame["camera_pose"], dtype=torch.float32),
-            rgb=torch.tensor(frame["rgb"][::2, ::2].copy()),
-            depth=torch.tensor(frame["depth"][::2, ::2].copy()),
-            camera_K=torch.tensor(k, dtype=torch.float32),
-            base_pose=torch.tensor(self.pose, dtype=torch.float32),
-        )
+        # Episode execution is serial. Restore the caller's CPU RNG even when
+        # admission raises; this scope does not touch a CUDA generator.
+        with torch.random.fork_rng(devices=[]):
+            torch.set_rng_state(self._mapping_rng)
+            try:
+                self.map.add(
+                    camera_pose=torch.tensor(frame["camera_pose"], dtype=torch.float32),
+                    rgb=torch.tensor(frame["rgb"][::2, ::2].copy()),
+                    depth=torch.tensor(frame["depth"][::2, ::2].copy()),
+                    camera_K=torch.tensor(k, dtype=torch.float32),
+                    base_pose=torch.tensor(self.pose, dtype=torch.float32),
+                )
+            finally:
+                self._mapping_rng = torch.get_rng_state()
         obstacles, explored = self.map.get_navigation_map()
         # This adapter's visited support is explicit and uses the same grid and
         # physical footprint as admission. Terrain remains in obstacles.

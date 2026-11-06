@@ -15,11 +15,13 @@ import time
 from pathlib import Path
 
 import numpy as np
+import torch
 import yaml
 from PIL import Image
 from probe_grapheqa_sensor_only import LABEL_PATH, NATIVE_IMAGE, UPSTREAM_REV, habitat_sensor_config, sha256
 from run_shared_room_pairs import assert_frozen_source, git
 
+from emet.eval.exploration_history import RecordedSensor
 from emet.eval.grapheqa_native_client import NativeSensorGraph
 from emet.eval.grapheqa_navigation import HabitatMotionExecutor, ObservedSpaceNavigation, SensorOnlyHabitat
 from emet.eval.grapheqa_sensor import learned_label_map, uniform_image_evidence
@@ -33,6 +35,9 @@ def run(args):
     if validated_gpu_lock_fd() is None:
         raise RuntimeError("Run through emet jobs --gpu-exclusive")
     root = Path(__file__).resolve().parents[1]
+    arm = getattr(args, "agent", "grapheqa")
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
     revision, fork_revision = git(root, "rev-parse", "HEAD"), git(args.fork, "rev-parse", "HEAD")
     assert_frozen_source(root, revision)
     assert_frozen_source(args.fork, fork_revision)
@@ -57,10 +62,20 @@ def run(args):
     args.output.mkdir(parents=True, exist_ok=False)
     labels = yaml.safe_load(labels_path.read_text())
     entries = [entry for entry in labels["label_names"] if entry["label"] not in labels["invalid_labels"]]
-    detector = YoloEPerception(class_list=[entry["name"] for entry in entries], device="cuda", confidence_threshold=0.1)
+    detector = (
+        YoloEPerception(class_list=[entry["name"] for entry in entries], device="cuda", confidence_threshold=0.1)
+        if arm == "grapheqa"
+        else None
+    )
     ids = [entry["label"] for entry in entries]
     manifest = {
         "mode": "active_external_adaptation_qualification_not_paired_emet_acceptance",
+        "agent": arm,
+        "seed": args.seed,
+        "max_primitives": args.max_primitives,
+        "max_seconds": args.max_seconds,
+        "startup_scan_degrees": args.startup_scan_degrees,
+        "mapping_perception_stride": 9,
         "source_commit": revision,
         "fork_commit": fork_revision,
         "model_config_sha256": sha256(args.model_config),
@@ -97,7 +112,7 @@ def run(args):
         case = args.output / f"q{qid}"
         case.mkdir()
         question = questions[qid]
-        sensor, graph = None, None
+        sensor, graph, remote = None, None, None
         row = {"question_id": qid, "complete": False}
         started = time.monotonic()
         try:
@@ -105,31 +120,32 @@ def run(args):
                 habitat_sensor_config(hm3d_scene_glb_path(question.scene)), spawns[(question.scene, question.floor)]
             )
             nav = ObservedSpaceNavigation()
-            graph = NativeSensorGraph(
-                fork=args.fork,
-                contract=root / "src/emet/eval/grapheqa_sensor.py",
-                labels=labels_path,
-                inputs=case / "inputs",
-                output=case / "native",
-                image=NATIVE_IMAGE,
+            graph = (
+                NativeSensorGraph(
+                    fork=args.fork,
+                    contract=root / "src/emet/eval/grapheqa_sensor.py",
+                    labels=labels_path,
+                    inputs=case / "inputs",
+                    output=case / "native",
+                    image=NATIVE_IMAGE,
+                )
+                if arm == "grapheqa"
+                else None
             )
             latest = {}
             captures = []
 
-            def ingest(frame):
+            def record(frame, command):
                 if shutil.disk_usage(args.output).free < 20 * 1024**3 + 4 * 1024**2:
                     raise OSError("Stop sensor recording before consuming the shared 20 GiB disk reserve")
                 if frame["camera_pose"] is None:
                     raise RuntimeError(f"RGB-D tracking failed: {frame['odometry']}")
-                semantic, instances, _ = detector.predict(frame["rgb"], draw_instance_predictions=False)
-                packet = {key: frame[key] for key in ("rgb", "depth", "camera_K", "camera_pose")}
-                packet.update(
-                    timestamp_ns=np.array(frame["timestamp_ns"], dtype=np.int64),
-                    learned_labels=learned_label_map(semantic, instances, ids),
-                )
-                latest["reply"] = graph.step(packet, nav.frontiers(), num_labels=labels["total_semantic_labels"])
                 path = case / f"frame-{frame['sequence']:05d}.png"
                 Image.fromarray(frame["rgb"]).save(path)
+                np.savez_compressed(
+                    path.with_suffix(".npz"),
+                    **{key: frame[key] for key in ("depth", "camera_K", "camera_pose")},
+                )
                 latest["image"] = path
                 captures.append(
                     {
@@ -140,9 +156,42 @@ def run(args):
                 )
                 with (case / "frames.jsonl").open("a") as stream:
                     stream.write(
-                        json.dumps({key: frame[key] for key in ("sequence", "timestamp_ns", "collided", "odometry")})
+                        json.dumps(
+                            {
+                                **{key: frame[key] for key in ("sequence", "timestamp_ns", "collided", "odometry")},
+                                "command": command,
+                            }
+                        )
                         + "\n"
                     )
+
+            sensor = RecordedSensor(sensor, record, max_primitives=args.max_primitives, max_seconds=args.max_seconds)
+            if arm == "emet":
+                from emet.eval.sensor_agent import build_sensor_agent
+                from emet.eval.sensor_robot_client import SensorRobotClient
+
+                robot = SensorRobotClient(sensor, nav)
+                agent, remote = build_sensor_agent(robot, dict(cfg.vlm), case, max_images=args.max_images)
+
+            ingest_count = 0
+
+            def ingest(frame, *, force=False):
+                nonlocal ingest_count
+                ingest_count += 1
+                # Record/geometry remain dense; semantic ingestion is sampled
+                # at the same cadence in both whole-system conditions.
+                if not force and (ingest_count - 1) % 9:
+                    return
+                if arm == "emet":
+                    agent.update(full_perception=True)
+                    return
+                semantic, instances, _ = detector.predict(frame["rgb"], draw_instance_predictions=False)
+                packet = {key: frame[key] for key in ("rgb", "depth", "camera_K", "camera_pose")}
+                packet.update(
+                    timestamp_ns=np.array(frame["timestamp_ns"], dtype=np.int64),
+                    learned_labels=learned_label_map(semantic, instances, ids),
+                )
+                latest["reply"] = graph.step(packet, nav.frontiers(), num_labels=labels["total_semantic_labels"])
 
             nav.update(sensor.last)
             ingest(sensor.last)
@@ -153,6 +202,8 @@ def run(args):
                 nav.update(frame)
                 ingest(frame)
             row["floor_calibration"] = nav.calibrate_stationary_floor(sensor.last)
+            if arm == "emet":
+                agent.voxel_map.parameters["floor_evidence"] = dict(nav.map.parameters["floor_evidence"])
             # Retain the measured floor, then restore the task-facing view.
             # A navigation inspection must not silently become the sole image
             # used to answer a distant-object question.
@@ -160,12 +211,16 @@ def run(args):
                 frame = sensor.step("look_up")
                 nav.update(frame)
                 ingest(frame)
+            for _ in range((args.startup_scan_degrees - 45) // 5):
+                frame = sensor.step("turn_left")
+                nav.update(frame)
+                ingest(frame)
             executor = HabitatMotionExecutor(sensor, nav, ingest)
 
             def observe():
                 frame = sensor.capture()
                 nav.update(frame)
-                ingest(frame)
+                ingest(frame, force=True)
                 context = latest["reply"]["context"]
                 if context is None:
                     raise RuntimeError("Native graph has no qualified current agent state")
@@ -186,19 +241,52 @@ def run(args):
                     }
                 return {**executor.execute(route), "execution_started": True}
 
-            outcome = run_active_episode(
-                cfg.vlm,
-                question.question,
-                question.choices,
-                observe,
-                execute,
-                case / "controller",
-                max_decisions=args.max_decisions,
-            )
-            row.update(complete=True, **outcome, primitive_count=executor.primitive_count)
+            if arm == "grapheqa":
+                outcome = run_active_episode(
+                    cfg.vlm,
+                    question.question,
+                    question.choices,
+                    observe,
+                    execute,
+                    case / "controller",
+                    max_decisions=args.max_decisions,
+                )
+            else:
+                from dataclasses import fields
+
+                from emet.memory.graph_eqa.agentic_eqa import run_agentic_eqa_result
+
+                robot.executor.on_frame = ingest
+                text = (
+                    question.question
+                    + "\n"
+                    + "\n".join(f"{chr(65 + i)}. {choice}" for i, choice in enumerate(question.choices))
+                )
+                result = run_agentic_eqa_result(
+                    agent,
+                    text,
+                    max_rounds=args.max_decisions,
+                    max_nav_steps=args.max_decisions,
+                    trace_path=case / "controller.jsonl",
+                    trace_meta={"question_id": qid, "session_id": f"sensor-pilot-{arm}-q{qid}-s{args.seed}"},
+                )
+                outcome = {
+                    "answer": result.answer,
+                    "production_result": {
+                        field.name: getattr(result, field.name)
+                        for field in fields(result)
+                        if field.name != "relevant_images"
+                    },
+                }
+            row.update(complete=True, **outcome, primitive_count=sensor.primitive_count)
         except Exception as exc:
             row["error"] = f"{type(exc).__name__}: {exc}"
         finally:
+            if isinstance(sensor, RecordedSensor):
+                row["primitive_count"] = sensor.primitive_count
+                sensor = sensor.sensor
+            if remote is not None:
+                remote._openai.close()
             for resource in (graph, sensor):
                 if resource is not None:
                     try:
@@ -230,4 +318,9 @@ if __name__ == "__main__":
     parser.add_argument("--question-ids", nargs="+", type=int, required=True)
     parser.add_argument("--max-decisions", type=int, default=4)
     parser.add_argument("--max-images", type=int, choices=range(1, 17), default=1)
+    parser.add_argument("--agent", choices=("grapheqa", "emet"), default="grapheqa")
+    parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--max-primitives", type=int, default=200)
+    parser.add_argument("--max-seconds", type=float, default=900)
+    parser.add_argument("--startup-scan-degrees", type=int, choices=(45, 360), default=360)
     raise SystemExit(run(parser.parse_args()))

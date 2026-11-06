@@ -27,7 +27,8 @@ from emet.utils.job_registry import validated_gpu_lock_fd
 
 
 def run(args):
-    if validated_gpu_lock_fd() is None:
+    lock_fd = validated_gpu_lock_fd()
+    if lock_fd is None:
         raise RuntimeError("Run inside emet jobs --gpu-exclusive")
     root = Path(__file__).resolve().parents[1]
     revision, fork_revision = git(root, "rev-parse", "HEAD"), git(args.fork, "rev-parse", "HEAD")
@@ -36,9 +37,16 @@ def run(args):
     with socket.socket() as check:
         check.bind(("127.0.0.1", args.port))
     args.output.mkdir(parents=True, exist_ok=False)
-    active_ids = getattr(args, "active_question_ids", None)
+    paired_ids = getattr(args, "paired_active_question_ids", None)
+    active_ids = getattr(args, "active_question_ids", None) or paired_ids
     manifest = {
-        "mode": "live_active_reference_qualification" if active_ids else "live_model_api_frozen_context_pair",
+        "mode": (
+            "sensor_only_active_agent_pair"
+            if paired_ids
+            else "live_active_reference_qualification"
+            if active_ids
+            else "live_model_api_frozen_context_pair"
+        ),
         "status": "running",
         "source_commit": revision,
         "fork_commit": fork_revision,
@@ -71,7 +79,7 @@ def run(args):
             stdout=log,
             stderr=subprocess.STDOUT,
             start_new_session=True,
-            pass_fds=(9,),
+            pass_fds=(lock_fd,),
         )
         try:
             deadline = time.monotonic() + 300
@@ -125,7 +133,9 @@ def run(args):
                 habitat = Path("/home/cpaxton/src/home_robot_v3/.venv-habitat")
                 command = [
                     str(habitat / "bin/python"),
-                    str(root / "scripts/run_grapheqa_active.py"),
+                    str(
+                        root / ("scripts/run_sensor_agent_pairs.py" if paired_ids else "scripts/run_grapheqa_active.py")
+                    ),
                     "--fork",
                     str(args.fork),
                     "--model-config",
@@ -139,14 +149,25 @@ def run(args):
                     "--question-ids",
                     *map(str, active_ids),
                 ]
+                if not paired_ids:
+                    command += [
+                        "--seed",
+                        "0",
+                        "--max-primitives",
+                        "200",
+                        "--max-seconds",
+                        "900",
+                        "--startup-scan-degrees",
+                        "360",
+                    ]
                 env.update(PYTHONPATH=str(root / "src"), LD_LIBRARY_PATH=str(habitat / "lib"))
             result = subprocess.run(
                 command,
                 cwd=root if active_ids else args.fork,
                 env=env,
                 check=False,
-                timeout=1800 if active_ids else 600,
-                pass_fds=(9,),
+                timeout=(len(active_ids) * 2400 if paired_ids else 1800) if active_ids else 600,
+                pass_fds=(lock_fd,),
             )
             manifest.update(status="passed" if result.returncode == 0 else "failed", returncode=result.returncode)
         except Exception as exc:
@@ -171,6 +192,7 @@ if __name__ == "__main__":
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--cases", type=Path)
     mode.add_argument("--active-question-ids", nargs="+", type=int)
+    mode.add_argument("--paired-active-question-ids", nargs="+", type=int)
     parser.add_argument("--max-decisions", type=int, default=4)
     parser.add_argument("--max-images", type=int, choices=range(1, 17), default=1)
     parser.add_argument("--answers", type=Path)
