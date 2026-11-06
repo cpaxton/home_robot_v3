@@ -73,3 +73,21 @@ simulators concurrently, queue the controls after the shifted pair, keep all
 failures and source/input hashes. No Caliban inference or hardware trial is
 needed for this native primitive gate. Any measured retention, opening,
 tracking, retreat or final-support failure remains a failed task.
+
+The first live shifted bounded run at `d5e1df78` exhausts both corrections
+without opening: measured EE z is 0.52060 m at place completion, 0.52047 m after
+the first command acknowledgment, and 0.51915 m after the second. Small nominal
+height increments do not overcome the loaded command/FK offset. This is retained
+as a failed run; it is not a reason to waive the opening or tracking checks.
+
+The prospectively frozen follow-up in
+`configs/eval/tamp_release_tracking_reserve.json` adds the positive measured
+command-FK minus delivered EE-height error to the *hypothetical* lower opening
+probe for new correction targets. It samples +3/+10/+20 mm nominal alternatives
+within the same 40 mm raise/drop limits and two-command budget. Both nominal and
+lowered openings are checked. Actual measured-state release still has to pass;
+the measured error reserve is not a bound on future tracking error. A regression
+overhang demonstrates why checking only the lowered opening would be insufficient
+(the shared actual-opening guard already withheld unsafe opening in that case).
+The follow-up is a separate pair of bounded development trials, not a matched
+rescore of the first four episodes or an agent baseline.

@@ -104,6 +104,45 @@ def test_retreat_obstacle_is_checked_with_open_fingers():
     ex.command_joints.assert_not_called()
 
 
+def test_measured_tracking_reserve_selects_more_clearance_without_relaxing_limits():
+    ex = rig()
+    ordinary, error = search(ex)
+    assert ordinary is not None and error is None
+    reserved, error = plan_release(
+        ex,
+        support="table",
+        region=None,
+        limits=ReleaseLimits(0.04, 0.04, height_joint="height"),
+        initial_z=0.025,
+        tracking_reserve_m=0.008,
+    )
+    assert reserved is not None and error is None
+    assert reserved.target_z > ordinary.target_z
+    assert reserved.gap_m <= 0.04
+    ex.command_joints.assert_not_called()
+
+
+def test_nominal_opening_is_checked_as_well_as_lowered_reserve():
+    ex = rig('<body name="overhang" pos="-.045 0 .069"><geom type="box" size=".003 .02 .0015"/></body>')
+    for name in ("left", "right"):
+        ex.model.jnt_range[ex.model.joint(name).id, 1] = 0.05
+    ex.gripper_open_configuration = {"left": 0.045, "right": 0.045}
+    ex.data.qpos[0] = 0.04
+    addr = ex.model.jnt_qposadr[ex.model.body("payload").jntadr[0]]
+    ex.data.qpos[addr + 2] = 0.065
+    mujoco.mj_forward(ex.model, ex.data)
+    ex.collision.set_payload(ex.model, ex.data, "payload", "base_link")
+    point = ex.data.body(ex.ee_body).xpos.copy()
+    ex.place_targets = [(point, np.eye(3)), (point, np.eye(3)), (point + [0, 0, 0.03], np.eye(3))]
+    # The lowered probe alone clears this overhang. The actual opening arc
+    # intersects it, so the measured pose must never be accepted as-is.
+    plan, _ = plan_release(
+        ex, support="table", region=None, limits=ReleaseLimits(0.04, 0.06, height_joint="height"), initial_z=0.065
+    )
+    assert plan is None or len(plan.prefix) > 1
+    ex.command_joints.assert_not_called()
+
+
 def test_observed_input_never_uses_privileged_release_geometry(monkeypatch):
     ex = rig()
     ex.input_mode = "observed"

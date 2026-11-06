@@ -27,7 +27,7 @@ class ReleaseLimits:
     max_raise_m: float
     max_drop_m: float
     clearance_m: float = 0.003
-    offsets_m: tuple[float, ...] = (0.003, 0.006, 0.01)
+    offsets_m: tuple[float, ...] = (0.003, 0.01, 0.02)
     max_adjustments: int = 2
     height_joint: str = "joint_lift"
 
@@ -163,7 +163,7 @@ class ReleasePlan:
     gap_m: float
 
 
-def plan_release(executor, *, support, region, limits, initial_z, attempted=()):
+def plan_release(executor, *, support, region, limits, initial_z, attempted=(), tracking_reserve_m=0.0):
     """Certify closed-arm motion, opening (including reserve) and retreat; no IO."""
     ex = executor
     if (
@@ -243,14 +243,27 @@ def plan_release(executor, *, support, region, limits, initial_z, attempted=()):
             continue
         patch = max(patches, key=lambda p: p[1, 2])
         closed = probe.data.qpos.copy()
-        probe.collision.set_payload(model, probe.data, None)
-        probe.collision.robot_ids = probe.collision.robot_ids | body_subtree(model, ex.payload_body)
-        # Reserve vertical clearance without waiving a contact: also certify
-        # opening with the lifting joint lower than the proposed arm pose.
-        # Native base compliance can tilt the lift slightly. Certify the actual
-        # lift-axis displacement that lowers the fingers by the declared reserve.
-        probe.data.qpos[int(height.qposadr[0])] -= limits.clearance_m / height_z
-        _, error = probe.plan_gripper_open()
+        # Both the commanded configuration and a lower delivered configuration
+        # must permit opening. The measured command/FK offset is a diagnostic
+        # reserve, not a guarantee that future tracking error is bounded by it.
+        error = None
+        reserve = limits.clearance_m + (tracking_reserve_m if index else 0.0)
+        for lower_by in (0.0, reserve):
+            probe.data.qpos[:] = closed
+            probe.data.qpos[int(height.qposadr[0])] -= lower_by / height_z
+            mujoco.mj_kinematics(model, probe.data)
+            set_private_payload(model, probe.data, ex.payload_body, ex.ee_body, measured)
+            if not bounds_fit(
+                body_bounds(model, probe.data, body_subtree(model, ex.payload_body)), patch, region, limits.max_drop_m
+            ):
+                error = "no_plan_within_budget"
+                break
+            probe.collision = held_checker(ex.collision, measured)
+            probe.collision.set_payload(model, probe.data, None)
+            probe.collision.robot_ids |= body_subtree(model, ex.payload_body)
+            _, error = probe.plan_gripper_open()
+            if error:
+                break
         if error:
             last = error
             continue
@@ -276,12 +289,26 @@ def refine_release(executor, *, support, region, limits):
     ex.synchronize(ex.data)
     initial_z = float(ex.data.body(ex.ee_body).xpos[2])
     attempted = []
+    command = ex.place_paths[1][-1] if ex.place_paths else None
+    scratch = mujoco.MjData(ex.model)
     for _ in range(limits.max_adjustments + 1):
         ex.synchronize(ex.data)
         if not ex.payload_retained():
             return PhysicalMotionResult(False, "payload_not_retained", "release")
+        tracking_reserve = 0.0
+        if command is not None:
+            mujoco.mj_copyData(scratch, ex.model, ex.data)
+            scratch.qpos[ex.qadr] = command
+            mujoco.mj_kinematics(ex.model, scratch)
+            tracking_reserve = max(0.0, float(scratch.body(ex.ee_body).xpos[2] - ex.data.body(ex.ee_body).xpos[2]))
         plan, error = plan_release(
-            ex, support=support, region=region, limits=limits, initial_z=initial_z, attempted=attempted
+            ex,
+            support=support,
+            region=region,
+            limits=limits,
+            initial_z=initial_z,
+            attempted=attempted,
+            tracking_reserve_m=tracking_reserve,
         )
         ex.event(
             phase="release_plan",
@@ -289,6 +316,7 @@ def refine_release(executor, *, support, region, limits):
             reason=error,
             target_z=None if plan is None else plan.target_z,
             max_drop_m=limits.max_drop_m,
+            tracking_reserve_m=tracking_reserve,
         )
         if plan is None:
             return PhysicalMotionResult(False, error, "release")
@@ -300,6 +328,7 @@ def refine_release(executor, *, support, region, limits):
         if len(attempted) >= limits.max_adjustments:
             break
         attempted.append(plan.target_z)
+        command = plan.prefix[-1]
         ex.collision = plan.checker
         result = ex._execute_path("release_adjustment", plan.prefix)
         if not result.success:
@@ -320,10 +349,10 @@ def wait_native_open(executor):
         mujoco.mj_copyData(scratch, ex.model, ex.data)
         mujoco.mj_kinematics(ex.model, scratch)
         mujoco.mj_collision(ex.model, scratch)
-        obj = ex.model.body(released.obj).id
+        objects = body_subtree(ex.model, released.obj)
         tips = {ex.model.body(n).id for n in ("rubber_tip_left", "rubber_tip_right")}
         touching = any(
-            obj in ex.model.geom_bodyid[c.geom] and tips.intersection(ex.model.geom_bodyid[c.geom])
+            objects.intersection(ex.model.geom_bodyid[c.geom]) and tips.intersection(ex.model.geom_bodyid[c.geom])
             for c in scratch.contact
         )
         arrived = all(

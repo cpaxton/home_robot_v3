@@ -82,7 +82,7 @@ def test_bounded_release_protocol_and_constructor_wiring(runner, monkeypatch, tm
     arguments(monkeypatch, out, '--prepare-only', '--release-policy', 'bounded')
     assert runner.main() == 0
     protocol = json.loads((out / 'protocol.json').read_text())
-    assert protocol['release_limits'] == {'max_raise_m': .04, 'max_drop_m': .04, 'clearance_m': .003}
+    assert protocol['release_limits'] == {'max_raise_m': .04, 'max_drop_m': .04, 'clearance_m': .003, 'offsets_m': [.003, .01, .02], 'max_adjustments': 2, 'tracking_reserve': 'positive_command_fk_minus_measured_ee_z'}
     assert 'src/emet/motion/release.py' in protocol['source_sha256']
 
 
