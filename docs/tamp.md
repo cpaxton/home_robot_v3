@@ -188,8 +188,12 @@ fails the retained-payload pose check. No observed or household success is
 inferred, and the earlier populations remain unchanged.
 The subsequent [checked handoff comparison](experiments/tamp_loaded_payload_handoff_20261103.md)
 is masked by an earlier fingertip/table collision in the shifted release
-preflight. The next gate is measured release-pose/opening/retreat clearance,
-followed by broader native placements and actual-agent repeats.
+preflight. The [November 6 release-search experiment](experiments/tamp_release_pose_search_20261106.md)
+keeps the familiar controls passing but exposes a loaded command/FK offset: small
+nominal corrections can leave the measured opening invalid. The opt-in follow-up
+uses that measured offset as a search reserve, under explicit raise/drop limits;
+it still requires fresh geometry, measured opening and final support checks.
+Broader native placements and actual-agent repeats remain the next acceptance gate.
 
 | Topic | Reference |
 | --- | --- |

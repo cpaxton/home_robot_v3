@@ -91,3 +91,11 @@ overhang demonstrates why checking only the lowered opening would be insufficien
 (the shared actual-opening guard already withheld unsafe opening in that case).
 The follow-up is a separate pair of bounded development trials, not a matched
 rescore of the first four episodes or an agent baseline.
+
+The offset-aware shifted run releases successfully but stops on a conservative
+rotated-cylinder AABB/support intersection during retreat. The exact cylinder
+support extent and MuJoCo contact depth are within 1 mm while the rotated local
+box exceeds it. `configs/eval/tamp_release_shape_extents.json` freezes a third
+pair with exact primitive/mesh bounds and 0.1 simulated seconds of measured
+supported stillness before retreat. There is no new object/table collision
+exemption; deep contacts still reject. Keep all earlier failed task receipts.

@@ -52,6 +52,23 @@ def body_bounds(model, data, ids):
         rotation = data.geom_xmat[gid].reshape(3, 3)
         center = data.geom_xpos[gid] + rotation @ model.geom_aabb[gid, :3]
         half = np.abs(rotation) @ model.geom_aabb[gid, 3:]
+        kind, size = model.geom_type[gid], model.geom_size[gid]
+        if kind == mujoco.mjtGeom.mjGEOM_SPHERE:
+            center, half = data.geom_xpos[gid], np.full(3, size[0])
+        elif kind == mujoco.mjtGeom.mjGEOM_CYLINDER:
+            axis = rotation[:, 2]
+            center = data.geom_xpos[gid]
+            half = np.abs(axis) * size[1] + size[0] * np.sqrt(np.maximum(0.0, 1.0 - axis**2))
+        elif kind == mujoco.mjtGeom.mjGEOM_CAPSULE:
+            center, half = data.geom_xpos[gid], size[0] + size[1] * np.abs(rotation[:, 2])
+        elif kind == mujoco.mjtGeom.mjGEOM_ELLIPSOID:
+            center, half = data.geom_xpos[gid], np.sqrt(np.sum((rotation * size) ** 2, axis=1))
+        elif kind == mujoco.mjtGeom.mjGEOM_MESH:
+            mesh = int(model.geom_dataid[gid])
+            start, count = int(model.mesh_vertadr[mesh]), int(model.mesh_vertnum[mesh])
+            vertices = model.mesh_vert[start : start + count] @ rotation.T + data.geom_xpos[gid]
+            boxes.append((vertices.min(axis=0), vertices.max(axis=0)))
+            continue
         boxes.append((center - half, center + half))
     if not boxes:
         raise ValueError("missing_payload_collision_volume")
@@ -118,8 +135,10 @@ class ReleasedFallChecker(MujocoSceneCollisionChecker):
         names = {model.body(b).name for b in self.ids}
         self.robot_ids = base.robot_ids | self.ids
         self.allowed_pairs = {p for p in base.allowed_pairs if not names.intersection(p)}
-        self.allowed_pairs |= {frozenset((name, support)) for name in names}
+        # Ordinary support contact is below the existing penetration tolerance.
+        # Watching the released payload must not exempt deep table penetration.
         self.obj, self.patch, self.region, self.limits = obj, patch, region, limits
+        self.support = support
         self._probe = mujoco.MjData(model)
         self.last_contacts = []
 
@@ -344,6 +363,8 @@ def wait_native_open(executor):
     scratch = mujoco.MjData(ex.model)
     active = ex._settling_window(3.0)
     released = ex.released_collision
+    stable_since = None
+    last_reason = "gripper_open_tracking_failed"
     while active():
         ex.synchronize(ex.data)
         mujoco.mj_copyData(scratch, ex.model, ex.data)
@@ -360,8 +381,38 @@ def wait_native_open(executor):
             <= (0.002 if ex.model.joint(name).type[0] == mujoco.mjtJoint.mjJNT_SLIDE else 0.02)
             for name, target in ex.gripper_open_configuration.items()
         )
-        if arrived and not touching:
-            ex.event(phase="release_open_verified", controller_success=True, source="simulator_ground_truth_debug")
-            return PhysicalMotionResult(True, "gripper_open_verified", "release")
+        support = body_subtree(ex.model, released.support)
+        supported = any(
+            objects.intersection(ex.model.geom_bodyid[c.geom]) and support.intersection(ex.model.geom_bodyid[c.geom])
+            for c in scratch.contact
+        )
+        dof = int(ex.model.jnt_dofadr[ex.model.body(released.obj).jntadr[0]])
+        settled = (
+            np.linalg.norm(scratch.qvel[dof : dof + 3]) <= 0.01
+            and np.linalg.norm(scratch.qvel[dof + 3 : dof + 6]) <= 0.1
+        )
+        if (
+            arrived
+            and not touching
+            and supported
+            and settled
+            and not released.configuration_collides(ex.model, scratch)
+        ):
+            if stable_since is None:
+                stable_since = ex._motion_time()
+            if ex._motion_time() - stable_since >= 0.1:
+                ex.event(
+                    phase="release_open_verified",
+                    controller_success=True,
+                    source="simulator_ground_truth_debug",
+                    supported=True,
+                    settled=True,
+                    stable_interval_s=0.1,
+                )
+                return PhysicalMotionResult(True, "gripper_open_verified", "release")
+        else:
+            stable_since = None
+        if arrived:
+            last_reason = "release_verify_failed"
         time.sleep(0.05)
-    return PhysicalMotionResult(False, "gripper_open_tracking_failed", "release")
+    return PhysicalMotionResult(False, last_reason, "release")

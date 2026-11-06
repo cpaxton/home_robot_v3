@@ -11,7 +11,14 @@ import pytest
 
 from emet.controller.manipulation.physical_pick_place import PhysicalMotionResult, PhysicalPickPlaceExecutor
 from emet.motion.mujoco_collision import MujocoSceneCollisionChecker
-from emet.motion.release import ReleasedFallChecker, ReleaseLimits, plan_release, refine_release, wait_native_open
+from emet.motion.release import (
+    ReleasedFallChecker,
+    ReleaseLimits,
+    body_bounds,
+    plan_release,
+    refine_release,
+    wait_native_open,
+)
 
 
 def rig(extra=""):
@@ -143,6 +150,34 @@ def test_nominal_opening_is_checked_as_well_as_lowered_reserve():
     ex.command_joints.assert_not_called()
 
 
+def test_tilted_cylinder_support_uses_shape_extent_and_still_rejects_deep_contact():
+    model = mujoco.MjModel.from_xml_string("""<mujoco><worldbody>
+      <body name="robot" pos="2 0 0"><geom size=".01"/></body>
+      <body name="payload"><freejoint/><geom type="cylinder" size=".02 .04" mass=".1"/></body>
+      <body name="table" pos="0 0 -.05"><geom type="box" size=".3 .3 .05"/></body>
+    </worldbody></mujoco>""")
+    data = mujoco.MjData(model)
+    angle = 0.12
+    data.qpos[3:7] = [np.cos(angle / 2), np.sin(angle / 2) / np.sqrt(2), np.sin(angle / 2) / np.sqrt(2), 0]
+    data.qpos[2] = 0.04 * np.cos(angle) + 0.02 * np.sin(angle) - 0.0002
+    mujoco.mj_forward(model, data)
+    gid, bid = model.body("payload").geomadr[0], model.body("payload").id
+    exaggerated = data.geom_xpos[gid, 2] - np.abs(data.geom_xmat[gid].reshape(3, 3)[2]) @ model.geom_aabb[gid, 3:]
+    assert exaggerated < -0.001
+    bounds = body_bounds(model, data, {bid})
+    np.testing.assert_allclose(bounds[0, 2], -0.0002, atol=1e-12)
+    base = MujocoSceneCollisionChecker(model, robot_body="robot")
+    checker = ReleasedFallChecker(
+        model, base, "payload", "table", np.array([[-0.3, -0.3, 0], [0.3, 0.3, 0]]), None, ReleaseLimits(0.04, 0.04)
+    )
+    before = data.qpos.copy()
+    assert not checker.configuration_collides(model, data)
+    assert frozenset(("payload", "table")) not in checker.allowed_pairs
+    np.testing.assert_array_equal(before, data.qpos)
+    data.qpos[2] -= 0.002
+    assert checker.configuration_collides(model, data)
+
+
 def test_observed_input_never_uses_privileged_release_geometry(monkeypatch):
     ex = rig()
     ex.input_mode = "observed"
@@ -179,7 +214,7 @@ def test_falling_payload_volume_rejects_an_obstacle_below_it():
 def test_open_ack_requires_measured_joint_arrival_and_contact_release(monkeypatch, lingering_contact):
     ex = rig()
     ex.use_sim_time = True
-    ex.released_collision = SimpleNamespace(obj="payload")
+    ex.released_collision = SimpleNamespace(obj="payload", support="table", configuration_collides=lambda *args: False)
     ticks = [0]
 
     def synchronize(data):
@@ -188,6 +223,7 @@ def test_open_ack_requires_measured_joint_arrival_and_contact_release(monkeypatc
         if ticks[0] >= 4:
             data.qpos[ex.model.joint("left").qposadr[0]] = 0.02
             data.qpos[ex.model.joint("right").qposadr[0]] = 0.02
+            data.qpos[ex.model.jnt_qposadr[ex.model.body("payload").jntadr[0]] + 2] = 0.0199
         mujoco.mj_kinematics(ex.model, data)
 
     ex.synchronize = synchronize
