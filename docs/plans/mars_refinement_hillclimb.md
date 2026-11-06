@@ -72,3 +72,49 @@ TAMP trajectories. Generate new audit cases before claiming generalization.
 Verify real velocity-command framing, limits, watchdog, measured stop and
 telemetry-only integration before a reviewable, bounded Herman motion test.
 No simulator score alone authorizes uncontrolled hardware motion.
+
+## Refinement results and critic calibration experiment (November 6)
+
+The fixed native and scheduled finals both improve expanded base tracking to
+50/50. Native achieves 43/50 full base and 11/16 full arm; scheduled achieves
+40/50 and 2/16. Both retain 16/16 arm tracking and clear the recorded safety
+flags, but neither preserves the baseline's 15/16 full arm passes. Retain the
+source. All checkpoint results and failures are in the
+[refinement report](../experiments/mars_refinement_20261106.md).
+
+The source also fails all four coupled cases (teacher 4/4), so separate base and
+arm success cannot qualify it as a useful whole-body controller. Keep these
+failures visible while repairing the simpler distribution first.
+
+An on-policy audit of the native refined actor, using its saved exploration and
+8-tick resampling, finds reset-value residuals of about 25 on a base hold and
+67--69 on two arm trajectories. These include SB3's time-limit bootstrap. Two
+exploration seeds per case are diagnostic evidence, not a calibrated estimate
+of broad performance. Critic underfit is a testable explanation for poor policy
+updates, not an established cause of the smoothness regression.
+
+Next bounded experiment, before any further reward change:
+
+- Restart from the retained source, same 80/20 base/arm control-step mixture,
+  coefficient std 0.1, seed 90, actor LR 3e-5 and native reward throughout.
+- Train for 24,576 transitions: 8,192 critic-only transitions, then 16,384 PPO
+  actor transitions. Freeze both actor means and noise during critic warmup;
+  verify exact tensor identity at its boundary and evaluate physical behavior.
+- Use a separate critic LR multiplier of 30 (effective 9e-4). During critic
+  warmup use 20 epochs and GAE lambda 1; restore five epochs and lambda 0.95
+  for actor learning. Leave gamma, rollout/batch size, clipping and KL unchanged.
+  The optimizer must preserve its role ratio when SB3 applies LR schedules.
+- Require fresh full regression receipt and teacher 66/66 under the new source.
+  Evaluate canonical 18 at zero, every 4,096 and final; expanded 66 at final.
+  Repeat the noisy value diagnostic at the warmup boundary and final. Do not
+  select a checkpoint by repeated validation scores.
+- Use the same physical nonregression/strict-improvement selection gate above.
+  This changes training only; the exported inference actor, target interface,
+  limits, measured feedback and executor safety remain the same.
+
+If this does not improve the fixed final, examine task reward/value scale and
+arm-error-to-base coupling before adding more training time. If it does, add
+coupled goals, mask combinations and dynamic target changes, then loaded TAMP
+plans and passive Herman interface validation. Hardware readiness additionally
+requires verified SI feedback, freshness, odometry/twist, watchdog and measured
+whole-body stop on the actual robot.

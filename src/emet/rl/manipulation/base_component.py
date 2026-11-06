@@ -63,11 +63,32 @@ class BaseMean(RestoringYawAction):
         return super().forward(latent)[:, :2]
 
 
+class RoleAdam(torch.optim.Adam):
+    """Preserve role LR ratios when SB3 updates every group's base LR.
+
+    Group metadata is saved in the ordinary optimizer state. Restoring the base
+    rates also keeps SB3 schedules and logged actor LR in their usual units.
+    """
+
+    def step(self, closure=None):
+        rates = [group["lr"] for group in self.param_groups]
+        try:
+            for group, rate in zip(self.param_groups, rates, strict=True):
+                group["lr"] = rate * group.get("lr_scale", 1.0)
+            return super().step(closure)
+        finally:
+            for group, rate in zip(self.param_groups, rates, strict=True):
+                group["lr"] = rate
+
+
 class BasePolicy(FeedbackActorCriticPolicy):
-    def __init__(self, *args, exploration_coefficient_std=0.5, **kwargs):
+    def __init__(self, *args, exploration_coefficient_std=0.5, critic_lr_multiplier=1.0, **kwargs):
         if not np.isfinite(exploration_coefficient_std) or not 0 < exploration_coefficient_std <= 1:
             raise ValueError("exploration coefficient std must be in (0,1]")
         self.exploration_coefficient_std = exploration_coefficient_std
+        if not np.isfinite(critic_lr_multiplier) or critic_lr_multiplier <= 0:
+            raise ValueError("positive finite critic LR multiplier required")
+        self.critic_lr_multiplier = critic_lr_multiplier
         if (
             not kwargs.get("use_sde", False)
             or not kwargs.get("full_std", True)
@@ -108,14 +129,99 @@ class BasePolicy(FeedbackActorCriticPolicy):
             self.log_std.fill_(-20)
             self.log_std[noise_mask.bool()] = np.log(self.exploration_coefficient_std)
         self.log_std.register_hook(lambda grad: grad * noise_mask)
-        self.optimizer = self.optimizer_class(
-            [p for p in self.parameters() if p.requires_grad], lr=lr_schedule(1), **self.optimizer_kwargs
+        self._actor_parameter_names = tuple(
+            name for name, parameter in self.named_parameters() if parameter.requires_grad and not self.is_critic(name)
         )
+        if self.critic_lr_multiplier == 1:
+            self.optimizer = self.optimizer_class(
+                [p for p in self.parameters() if p.requires_grad], lr=lr_schedule(1), **self.optimizer_kwargs
+            )
+        else:
+            if self.optimizer_class is not torch.optim.Adam:
+                raise ValueError("role-scaled base training requires Adam")
+            groups = [
+                {
+                    "params": [
+                        p for name, p in self.named_parameters() if p.requires_grad and self.is_critic(name) == critic
+                    ],
+                    "role": "critic" if critic else "actor",
+                    "lr_scale": self.critic_lr_multiplier if critic else 1.0,
+                }
+                for critic in (False, True)
+            ]
+            self.optimizer = RoleAdam(groups, lr=lr_schedule(1), **self.optimizer_kwargs)
+
+    @staticmethod
+    def is_critic(name):
+        return name.startswith(("mlp_extractor.value_net.", "value_net."))
+
+    def set_actor_trainable(self, enabled):
+        """Freeze only the originally trainable base mean and exploration rows."""
+        for name, parameter in self.named_parameters():
+            if name in self._actor_parameter_names:
+                parameter.grad = None
+                parameter.requires_grad_(enabled)
 
     def _get_action_dist_from_latent(self, latent_pi):
         errors = latent_pi[:, -self.features_extractor.feedback_width :]
         noise = torch.cat([errors[:, [0, 1, 2, 12, 13, 14]], errors.new_full((len(errors), 1), 0.002)], dim=1)
         return self.action_dist.proba_distribution(self.action_net(latent_pi), self.log_std, noise)
+
+
+class CriticWarmup(BaseCallback):
+    """Fit values on the policy's own noisy rollouts before changing its mean.
+
+    Warmup uses long-return targets (GAE lambda 1); ordinary PPO settings are
+    restored at a rollout boundary. No expert actions or runtime filter.
+    """
+
+    def __init__(self, steps=0, epochs=20):
+        super().__init__()
+        if type(steps) is not int or steps < 0 or steps % 256:
+            raise ValueError("critic warmup must be a nonnegative multiple of 256")
+        if type(epochs) is not int or epochs <= 0:
+            raise ValueError("positive integer critic warmup epochs required")
+        self.steps, self.epochs = steps, epochs
+        self.active = False
+        self.actor_unchanged = None
+
+    def _on_training_start(self):
+        self.normal_epochs = self.model.n_epochs
+        self.normal_lambda = self.model.gae_lambda
+        self.actor_before = {
+            name: parameter.detach().clone()
+            for name, parameter in self.model.policy.named_parameters()
+            if name in self.model.policy._actor_parameter_names
+        }
+
+    def _on_rollout_start(self):
+        warmup = self.num_timesteps < self.steps
+        if self.active and not warmup:
+            self.verify_actor()
+        self.active = warmup
+        self.model.policy.set_actor_trainable(not warmup)
+        self.model.n_epochs = self.epochs if warmup else self.normal_epochs
+        self.model.gae_lambda = 1.0 if warmup else self.normal_lambda
+        self.model.rollout_buffer.gae_lambda = self.model.gae_lambda
+        self.logger.record("train/critic_warmup", int(warmup))
+        self.logger.record("train/critic_lr_multiplier", self.model.policy.critic_lr_multiplier)
+
+    def verify_actor(self):
+        current = dict(self.model.policy.named_parameters())
+        self.actor_unchanged = all(torch.equal(current[name], value) for name, value in self.actor_before.items())
+        if not self.actor_unchanged:
+            raise RuntimeError("actor changed during critic-only warmup")
+
+    def _on_step(self):
+        return True
+
+    def _on_training_end(self):
+        if self.active:
+            self.verify_actor()
+        self.model.policy.set_actor_trainable(True)
+        self.model.n_epochs, self.model.gae_lambda = self.normal_epochs, self.normal_lambda
+        self.model.rollout_buffer.gae_lambda = self.normal_lambda
+        self.active = False
 
 
 class FrozenArmActions(gym.Wrapper):
@@ -287,6 +393,10 @@ def train(args, suite):
         raise ValueError("unknown initial admission mode")
     learning_rate = getattr(args, "learning_rate", 1e-4)
     exploration_std = getattr(args, "exploration_coefficient_std", 0.5)
+    critic_multiplier = getattr(args, "critic_lr_multiplier", 1.0)
+    warmup = CriticWarmup(getattr(args, "critic_warmup_steps", 0), getattr(args, "critic_warmup_epochs", 20))
+    if warmup.steps >= args.steps:
+        raise ValueError("critic warmup must leave at least one actor rollout")
     base = MasteryEnv(suite, stages=stages, split="train", population="training")
     arm_fraction = getattr(args, "arm_step_fraction", None)
     if arm_fraction is not None:
@@ -326,6 +436,7 @@ def train(args, suite):
             sde_sample_freq=8,
             policy_kwargs={
                 "exploration_coefficient_std": exploration_std,
+                "critic_lr_multiplier": critic_multiplier,
                 "restoring_yaw_feedback": True,
                 "turn_xy_tolerance": base.config.base_xy_tolerance,
                 "features_extractor_class": GoalFeedbackFeatures,
@@ -364,6 +475,10 @@ def train(args, suite):
             "initial_sde_coefficient_std": exploration_std,
             "ppo": {
                 "learning_rate": learning_rate,
+                "critic_lr_multiplier": critic_multiplier,
+                "critic_warmup_steps": warmup.steps,
+                "critic_warmup_epochs": warmup.epochs,
+                "critic_warmup_gae_lambda": 1.0,
                 "gamma": 0.9975,
                 "n_steps": 256,
                 "batch_size": 256,
@@ -419,6 +534,9 @@ def train(args, suite):
                         "contract_reward": record["contract_reward"],
                         "contract_schedule": record["contract_schedule"],
                         "initial_admission": admission_mode,
+                        "critic_lr_multiplier": critic_multiplier,
+                        "critic_warmup_steps": warmup.steps,
+                        "actor_unchanged_during_critic_warmup": warmup.actor_unchanged,
                     }
                     (directory / "actor/manifest.json").write_text(json.dumps(policy.manifest, indent=2) + "\n")
                     report = evaluate_suite(suite, stages=["base", "arm"], policy=policy, teacher_report=teacher)
@@ -467,6 +585,8 @@ def train(args, suite):
                     "sde_coefficients": model.policy.log_std.detach().exp().cpu().tolist(),
                     "rollout_cases": self.rollout.record(),
                     "requested_contract_fraction": schedule.fraction(self.num_timesteps) if objective_config else None,
+                    "critic_warmup": warmup.active,
+                    "actor_unchanged_during_critic_warmup": warmup.actor_unchanged,
                 }
                 with (args.output / "metrics.jsonl").open("a") as stream:
                     stream.write(json.dumps(values) + "\n")
@@ -523,7 +643,7 @@ def train(args, suite):
                 "qualification_granted": False,
             }
             (args.output / "initial-fidelity.json").write_text(json.dumps(fidelity, indent=2) + "\n")
-        model.learn(args.steps, callback=audit)
+        model.learn(args.steps, callback=[warmup, audit])
         final = audit.checkpoint("last")
         with preserve_training_rng():
             expanded = evaluate_suite(
@@ -538,6 +658,7 @@ def train(args, suite):
             json.dumps(
                 {
                     "steps": model.num_timesteps,
+                    "actor_unchanged_during_critic_warmup": warmup.actor_unchanged,
                     "canonical": summarize(final),
                     "expanded": summarize(expanded),
                     "safety_promoted": False,
@@ -565,6 +686,9 @@ def main():
     parser.add_argument("--arm-step-fraction", type=float)
     parser.add_argument("--learning-rate", type=float, default=1e-4)
     parser.add_argument("--exploration-coefficient-std", type=float, default=0.5)
+    parser.add_argument("--critic-lr-multiplier", type=float, default=1.0)
+    parser.add_argument("--critic-warmup-steps", type=int, default=0)
+    parser.add_argument("--critic-warmup-epochs", type=int, default=20)
     parser.add_argument("--initial-admission", choices=["strict", "source_fidelity"], default="strict")
     add_contract_reward_arguments(parser)
     parser.add_argument("--wandb-mode", choices=["disabled", "offline"], default="disabled")
@@ -582,6 +706,14 @@ def main():
         parser.error(str(exc))
     if not np.isfinite(args.learning_rate) or args.learning_rate <= 0:
         parser.error("positive finite learning rate required")
+    if not np.isfinite(args.critic_lr_multiplier) or args.critic_lr_multiplier <= 0:
+        parser.error("positive finite critic LR multiplier required")
+    try:
+        CriticWarmup(args.critic_warmup_steps, args.critic_warmup_epochs)
+    except ValueError as exc:
+        parser.error(str(exc))
+    if args.critic_warmup_steps >= args.steps:
+        parser.error("critic warmup must leave at least one actor rollout")
     train(args, load_suite(args.suite))
 
 

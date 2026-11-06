@@ -11,7 +11,9 @@ from stable_baselines3.common.vec_env import DummyVecEnv
 
 from emet.rl.manipulation.base_component import (
     BasePolicy,
+    CriticWarmup,
     FrozenArmActions,
+    RoleAdam,
     initialize,
     merge,
     verify_frozen,
@@ -221,6 +223,94 @@ def test_quieter_exploration_is_serialized_without_changing_mean(setup, tmp_path
     loaded = PPO.load(tmp_path / "quiet.zip", device="cpu")
     assert loaded.policy.exploration_coefficient_std == 0.1
     torch.testing.assert_close(loaded.policy.log_std, quiet.policy.log_std)
+
+
+def test_role_lr_ratio_survives_sb3_schedule_and_optimizer_reload():
+    actor, critic = torch.nn.Parameter(torch.zeros(1)), torch.nn.Parameter(torch.zeros(1))
+    optimizer = RoleAdam([{"params": [actor], "lr_scale": 1.0}, {"params": [critic], "lr_scale": 3.0}], lr=0.1)
+    for rate in (0.1, 0.02):
+        before = [p.detach().clone() for p in (actor, critic)]
+        # SB3 assigns the scheduled rate to every group before each update.
+        for group in optimizer.param_groups:
+            group["lr"] = rate
+        actor.grad, critic.grad = torch.ones(1), torch.ones(1)
+        optimizer.step()
+        torch.testing.assert_close(critic - before[1], 3 * (actor - before[0]))
+        assert [g["lr"] for g in optimizer.param_groups] == [rate, rate]
+    restored = RoleAdam([{"params": [actor]}, {"params": [critic]}])
+    restored.load_state_dict(optimizer.state_dict())
+    assert [g["lr_scale"] for g in restored.param_groups] == [1.0, 3.0]
+
+
+def test_critic_warmup_keeps_mean_and_noise_exact_then_restores_actor_updates(setup, tmp_path):
+    _, env, source, _, _ = setup
+    model = PPO(
+        BasePolicy,
+        env,
+        device="cpu",
+        n_steps=8,
+        batch_size=8,
+        n_epochs=1,
+        seed=19,
+        use_sde=True,
+        policy_kwargs={**kwargs(), "critic_lr_multiplier": 10.0, "exploration_coefficient_std": 0.1},
+    )
+    initialize(model, env, source, config(), Toy.fingerprint)
+    before = {name: p.detach().clone() for name, p in model.policy.named_parameters()}
+    obs = env.reset()
+    mean = model.predict(obs, deterministic=True)[0]
+
+    class RecordingWarmup(CriticWarmup):
+        def _on_rollout_start(self):
+            super()._on_rollout_start()
+            assert self.model.gae_lambda == self.model.rollout_buffer.gae_lambda == 1.0
+            assert self.model.n_epochs == 2
+
+    callback = RecordingWarmup(256, epochs=2)
+    model.learn(256, callback=callback)
+    assert callback.actor_unchanged
+    assert model.gae_lambda == model.rollout_buffer.gae_lambda == 0.95
+    assert model.n_epochs == 1
+    for name, p in model.policy.named_parameters():
+        if not model.policy.is_critic(name):
+            torch.testing.assert_close(p, before[name], rtol=0, atol=0)
+    assert not torch.equal(model.policy.value_net.weight, before["value_net.weight"])
+    np.testing.assert_array_equal(model.predict(obs, deterministic=True)[0], mean)
+    verify_frozen(model, source)
+    model.save(tmp_path / "critic.zip")
+    loaded = PPO.load(tmp_path / "critic.zip", env=env, device="cpu")
+    assert loaded.policy.critic_lr_multiplier == 10
+    assert isinstance(loaded.policy.optimizer, RoleAdam)
+    assert [g["lr_scale"] for g in loaded.policy.optimizer.param_groups] == [1.0, 10.0]
+    loaded.learn(16)
+    assert not torch.equal(loaded.policy.action_net.gain.weight, before["action_net.gain.weight"])
+    verify_frozen(loaded, source)
+
+
+def test_warmup_transition_uses_original_ppo_targets_and_epochs(setup):
+    model = setup[0]
+
+    class RecordingWarmup(CriticWarmup):
+        def _on_rollout_start(self):
+            super()._on_rollout_start()
+            if self.num_timesteps == 256:
+                assert self.actor_unchanged
+                assert not self.active
+                assert model.gae_lambda == model.rollout_buffer.gae_lambda == 0.95
+                assert model.n_epochs == 1
+
+    callback = RecordingWarmup(256, epochs=2)
+    model.learn(264, callback=callback)
+    assert callback.actor_unchanged
+    assert any(
+        p.requires_grad for name, p in model.policy.named_parameters() if name in model.policy._actor_parameter_names
+    )
+
+
+@pytest.mark.parametrize("steps,epochs", [(-256, 20), (1, 20), (256.0, 20), (256, 0), (256, 1.5)])
+def test_invalid_critic_warmup_fails_closed(steps, epochs):
+    with pytest.raises(ValueError):
+        CriticWarmup(steps, epochs)
 
 
 def test_source_fidelity_records_known_failure_without_qualifying_it():

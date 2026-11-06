@@ -260,6 +260,12 @@ Accepted plan: [Mars controller integration](docs/plans/mars_controller_integrat
 - [ ] Audit dependence on executor phase labels; compare a tracking actor using
       only measured state, masked pose/gripper references and explicit retain
       intent. Keep task-stage decisions and release authority in TAMP/execution.
+- [ ] Continue the [Mars refinement hill climb](docs/plans/mars_refinement_hillclimb.md):
+      retain the stronger 49/50 base-tracking, 15/16 full-arm source; both quieter
+      mixed refinements reach 50/50 base tracking but regress arm smoothness.
+      Test critic-only warmup and role-specific critic LR, then require coupled
+      dynamic-pose, loaded TAMP and real feedback/watchdog/stop acceptance before
+      hardware motion. Primitive success alone does not close this gate.
 - [x] Add a frozen small Mars mastery suite: 13 training / 13 nearby validation
       cases, paired FK/axle-valid targets, two-second holding and per-case safety/
       smoothness gates. Teacher passes 26/26; old policy passes 1/26 full mastery.

@@ -428,3 +428,17 @@ Initial physical metrics match, the 66-case teacher reproduces exactly and
 not hardware or loaded-manipulation qualification. Complete outcomes and
 training-case weight calibration are retained in
 \texttt{paper/data/whole\_body\_control/mars\_contract\_curriculum\_v1/}.
+
+\paragraph{Refinement and value calibration.}
+Two 16,384-step continuations from the stronger native actor add 20\% moving-arm
+control-step exposure and quieter exploration. Native reward reaches 50/50 base
+tracking, 43/50 full base and 11/16 full arm; a gradual contract-reward transition
+reaches 50/50, 40/50 and 2/16. Both retain 16/16 arm tracking, but neither preserves
+the source's arm smoothness, so the source remains the development baseline.
+A fresh teacher passes 66/66 and 1,013 source-bound regressions pass. A separate
+coupled diagnostic gives the source 0/4 against the teacher's 4/4, preventing a
+whole-body qualification claim. No hardware is used. Noisy on-policy return
+audits, including time-limit bootstrapping, find substantial critic calibration
+errors; critic-only warmup is a subsequent experiment, not a demonstrated fix.
+Complete case outcomes are retained in
+\texttt{paper/data/whole\_body\_control/mars\_refinement\_v1/}.
