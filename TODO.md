@@ -304,10 +304,11 @@ Accepted plan: [Mars controller integration](docs/plans/mars_controller_integrat
       physical cases exact). The smaller-step final is also rejected: arm40/40
       tracking but20/40 full and zero public-tool transfers. The262k scheduled
       posture final is rejected (base50/50 tracking40/50 full, arm62/64 tracking
-      7/64 full, coupled2/8 full); public-tool/fresh-pose tests continue; optional end-to-end context adaptation preserves
-      constant grip output and passes 1,085 fresh regressions plus teacher122/122
-      (all122 previous teacher cases physically exact); its matched trial starts
-      after complete serial post-tests. The rejected posture final has0/3
+      7/64 full, coupled2/8 full). The matched trainable-context262k final
+      improves arm to63/64 tracking29/64 full and coupled4/8, but regresses
+      from the retained source. Its two fresh audits give4/12 and3/12 full,
+      and actual public-tool transfers remain0/3: reject it. See the
+      [complete context report](docs/experiments/mars_context_20261106.md). The rejected posture final has0/3
       public-tool transfers and0/12,2/12 full fresh-audit passes; teacher/source
       have12/12 on each. See [full report](docs/experiments/mars_tamp_postures_20261106.md). Keep both finals
       and actual public-tool/fresh-pose results; no hardware qualification.

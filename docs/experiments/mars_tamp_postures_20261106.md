@@ -61,3 +61,6 @@ Only motion-context trainability changes; constant grip requests are preserved.
 No intermediate is selected or promoted automatically. If it also regresses,
 prioritize constrained-base credit assignment and stability, using these saved
 failures, rather than assuming further scale alone will fix it. No hardware used.
+
+The matched context trial is now complete and also rejected; see its
+[full results](mars_context_20261106.md).

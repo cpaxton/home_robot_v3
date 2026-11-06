@@ -446,7 +446,9 @@ The context trial's fixed262k final reaches base50/50 tracking42/50 full,
 arm63/64 tracking29/64 full and coupled4/8 tracking/full. This improves over
 frozen-context refinement but regresses arm stability from the retained59/64.
 All three actual public-tool attempts still fail before grasp. Keep the source;
-finish the two frozen-pose audits and publish the complete negative result.
+the two frozen-pose audits finish at4/12 and3/12 full (source12/12 each).
+The [complete negative report](../experiments/mars_context_20261106.md) keeps
+all cases/checkpoints and actual public-tool failures.
 
 A new reference audit finds that constant-orientation training translations
 are shorter and slower than actual TAMP pregrasp. See the
