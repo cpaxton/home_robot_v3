@@ -56,7 +56,7 @@ def run_egl_probe(*, question_id: int = 0) -> EglProbeResult:
     try:
         from emet_habitat.simulator import HabitatEQASimulator
 
-        sim = HabitatEQASimulator(glb, scene_id=glb.parent.name)
+        sim = HabitatEQASimulator(glb, scene_id=glb.parent.name, use_hm3d_semantics=False)
         frame = sim.get_frame()
         rgb = getattr(frame, "rgb", None)
         shape = tuple(getattr(rgb, "shape", ())) if rgb is not None else None
