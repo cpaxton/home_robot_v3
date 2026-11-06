@@ -91,6 +91,7 @@ def build_sensor_agent(robot, model_config, output, *, max_images):
         use_sensor_perception=True,
         log=str(output / "memory"),
         apply_harness_profile=False,
+        server_ip="127.0.0.1",  # Required by the controller's unused manipulation REQ socket.
     )
     remote = AuditedPNGClient(
         base_url=model_config["base_url"], model=model_config["name"], trace_path=output / "model_calls.jsonl"

@@ -12,6 +12,7 @@ import json
 import shutil
 import sys
 import time
+import traceback
 from pathlib import Path
 
 import numpy as np
@@ -281,6 +282,7 @@ def run(args):
             row.update(complete=True, **outcome, primitive_count=sensor.primitive_count)
         except Exception as exc:
             row["error"] = f"{type(exc).__name__}: {exc}"
+            (case / "error.txt").write_text(traceback.format_exc())
         finally:
             if isinstance(sensor, RecordedSensor):
                 row["primitive_count"] = sensor.primitive_count

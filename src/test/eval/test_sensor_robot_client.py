@@ -129,7 +129,30 @@ def test_factory_keeps_production_agent_and_model_final_contract(tmp_path, monke
     assert agent is production and transport is remote
     assert captured["robot"] is client and captured["backend"] == "lazy_graph"
     assert captured["use_instance_graph"] is False
+    assert captured["server_ip"] == "127.0.0.1"
     assert captured["parameters"].get("eqa/agentic_decision_policy") == "model_final"
     assert captured["parameters"].get("eqa/habitat_perfect_nav") is False
     assert agent.graph_memory.eqa_client._vl is remote
     assert agent.voxel_map.eqa_client is agent.graph_memory.eqa_client
+
+
+def test_production_controller_initializes_without_a_manipulation_server(tmp_path, monkeypatch):
+    from emet.eval import sensor_agent
+
+    # Exercise real controller construction; only weights and HTTP are mocked.
+    monkeypatch.setattr("torch.cuda.is_available", lambda: False)
+    monkeypatch.setattr("emet.perception.encoders.siglip_encoder.get_shared_mask_siglip_encoder", lambda **kwargs: None)
+    monkeypatch.setattr(sensor_agent, "AuditedPNGClient", lambda **kwargs: object())
+    client = robot()
+    client.navigation.map = SimpleNamespace(parameters={"floor_evidence": {"enabled": True, "reference_z_m": 0}})
+    agent, _ = sensor_agent.build_sensor_agent(
+        client, {"base_url": "http://localhost/v1", "name": "qwen"}, tmp_path, max_images=4
+    )
+    try:
+        assert type(agent).__name__ == "LazyGraphController"
+        assert agent._use_instance_memory is False
+        assert agent.parameters.get("eqa/agentic_decision_policy") == "model_final"
+    finally:
+        context = agent.manip_socket.context
+        agent.manip_socket.close(linger=0)
+        context.term()
