@@ -101,6 +101,28 @@ def test_terrain_map_shape_mismatch_rejects_without_indexing():
     assert space.last_validity["reason"] == "terrain_map_shape_mismatch"
 
 
+def test_unknown_footprint_reports_height_conflicts_separately_from_missing_returns():
+    from types import SimpleNamespace
+
+    from emet.mapping.voxel.floor_evidence import floor_evidence
+
+    layers = floor_evidence([[0, 0, 0], [0, 0, -0.031]], (9, 9), 0.1, [4, 4], reference_z_m=0)
+    obstacles, explored = np.zeros((9, 9), dtype=bool), np.ones((9, 9), dtype=bool)
+    explored[4, 4] = explored[5, 4] = False
+    space = object.__new__(SparseVoxelMapNavigationSpace)
+    space.obstacle_map_mode = "physical"
+    space._footprint = Footprint(0.1, 0.1)
+    space.voxel_map = SimpleNamespace(
+        grid_resolution=0.1, grid=SimpleNamespace(grid_origin=np.array([4, 4])), _floor_evidence=layers
+    )
+    assert not space.is_valid(np.zeros(3), obstacles=obstacles, explored=explored)
+    assert space.last_validity["reason"] == "unobserved_footprint"
+    assert space.last_validity["floor_evidence"] == {
+        "height_conflict_cells": [[4, 4]],
+        "missing_return_cells": [[5, 4]],
+    }
+
+
 def test_fractional_start_repair_preserves_unknown_and_obstacle_guards():
     from types import SimpleNamespace
 

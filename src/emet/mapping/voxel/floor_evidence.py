@@ -14,9 +14,10 @@ class FloorEvidence:
     inferred: np.ndarray
     drops: np.ndarray
     raised: np.ndarray
+    ambiguous: np.ndarray
 
     def __post_init__(self):
-        for layer in (self.observed, self.inferred, self.drops, self.raised):
+        for layer in (self.observed, self.inferred, self.drops, self.raised, self.ambiguous):
             layer.setflags(write=False)
 
 
@@ -61,4 +62,4 @@ def floor_evidence(points, shape, resolution, origin, *, reference_z_m, toleranc
     inferred[1:-1, 1:-1] = (
         ~seen[1:-1, 1:-1] & observed[:-2, 1:-1] & observed[2:, 1:-1] & observed[1:-1, :-2] & observed[1:-1, 2:]
     )
-    return FloorEvidence(observed, inferred, drops, raised)
+    return FloorEvidence(observed, inferred, drops, raised, conflicting & ~drops & ~raised)

@@ -378,4 +378,7 @@ class HabitatMotionExecutor:
             initial_route=route,
             event=lambda **event: events.append(event),
         )
-        return {**asdict(result), "events": events}
+        outcome = {**asdict(result), "events": events}
+        if not result.success:
+            outcome["footprint"] = dict(getattr(self.navigation.space, "last_validity", {}) or {})
+        return outcome
