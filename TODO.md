@@ -265,9 +265,12 @@ Accepted plan: [Mars controller integration](docs/plans/mars_controller_integrat
       mixed refinements reach 50/50 base tracking but regress arm smoothness.
       Critic-only warmup improves base value calibration but regresses full arm
       to 5/16; return-unit conditioning plus 40/20/40 coordination training also
-      remains 0/4 coupled. Preserve both negative reports. Test gain-bias optimizer
-      units in a matched run; quarter-amplitude parents offer a later curriculum.
-      Require coupled
+      remains 0/4 coupled. Gain-bias ×1000 reaches 1/4 coupled but regresses to
+      0/16 full arm: reject it. Preserve every negative result. A real public-tool
+      replay stops in pregrasp after 56 policy calls; original arm primitives
+      excite only two joint directions. Train all seven motion rows on the
+      [rank-complete nearby arm expansion](docs/experiments/mars_tamp_arm_coverage_20261106.md),
+      then replay actual admitted pick/place checkpoints. Require coupled
       dynamic-pose, loaded TAMP and real feedback/watchdog/stop acceptance before
       hardware motion. Primitive success alone does not close this gate.
 - [x] Add a frozen small Mars mastery suite: 13 training / 13 nearby validation

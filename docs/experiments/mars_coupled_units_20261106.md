@@ -18,6 +18,11 @@ selection checks.
 
 ![All canonical checkpoints](../../paper/data/whole_body_control/mars_coupled_units_v1/learning-curves.svg)
 
+![Native errors on identical coupled paths](../../paper/data/whole_body_control/mars_coupled_units_v1/coupled-tracking.svg)
+
+The dotted lines are terminal tolerances, not path-wide limits. Curves stop at
+the actual episode stop; failed traces are not extended into a fictitious hold.
+
 At `d7764fc6`, 1,041 fresh source-bound regressions pass and a fresh teacher
 masters 70/70. All native teacher metrics, codes and reward sequences reproduce
 the previous reports exactly. The merged initial actor reproduces the source's
