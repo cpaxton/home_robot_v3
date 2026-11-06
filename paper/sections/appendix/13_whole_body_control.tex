@@ -442,3 +442,14 @@ audits, including time-limit bootstrapping, find substantial critic calibration
 errors; critic-only warmup is a subsequent experiment, not a demonstrated fix.
 Complete case outcomes are retained in
 \texttt{paper/data/whole\_body\_control/mars\_refinement\_v1/}.
+
+A subsequent 24,576-transition experiment freezes the actor for 8,192 critic
+warmup transitions, then resumes PPO. Warmup preserves actor tensors and physical
+traces exactly and improves base value calibration, but the fixed final gives
+49/50 base tracking, 42/50 full base and only 5/16 full arm. It is rejected.
+The critic saturates on arm states; a separate fixed-target value regression
+supports testing constant return-unit normalization, without demonstrating a
+better policy. A teacher-base/learned-arm intervention passes 4/4 coupled cases,
+supporting coordinated base training with the preserved arm. These remain
+development diagnostics; all outcomes and provenance are retained in
+\texttt{paper/data/whole\_body\_control/mars\_critic\_calibration\_v1/}.

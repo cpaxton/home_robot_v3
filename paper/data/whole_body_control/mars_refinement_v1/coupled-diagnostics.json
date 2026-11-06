@@ -1,0 +1,521 @@
+{
+  "teacher": {
+    "complete": true,
+    "controller": "task_pose_teacher",
+    "population": "canonical",
+    "groups": {
+      "coupled/train": {
+        "cases": 2,
+        "admitted": 2,
+        "mastered": 2,
+        "tracking_and_settling_passed": 2,
+        "smoothness_passed": 2,
+        "failure_reasons": {},
+        "codes": {
+          "ok": 2
+        },
+        "all_pass": true
+      },
+      "coupled/validation": {
+        "cases": 2,
+        "admitted": 2,
+        "mastered": 2,
+        "tracking_and_settling_passed": 2,
+        "smoothness_passed": 2,
+        "failure_reasons": {},
+        "codes": {
+          "ok": 2
+        },
+        "all_pass": true
+      }
+    },
+    "all_pass": true,
+    "safety_promoted": false
+  },
+  "baseline": {
+    "complete": true,
+    "controller": "e7b425699510cc635485bdd8f59a5b25692fb165faf248aaecbc2707c0dbb883",
+    "population": "canonical",
+    "groups": {
+      "coupled/train": {
+        "cases": 2,
+        "admitted": 2,
+        "mastered": 0,
+        "tracking_and_settling_passed": 0,
+        "smoothness_passed": 2,
+        "failure_reasons": {
+          "tracking_timeout": 2,
+          "terminal_hold": 2
+        },
+        "codes": {
+          "tracking_timeout": 2
+        },
+        "all_pass": false
+      },
+      "coupled/validation": {
+        "cases": 2,
+        "admitted": 2,
+        "mastered": 0,
+        "tracking_and_settling_passed": 0,
+        "smoothness_passed": 2,
+        "failure_reasons": {
+          "mastery_tracking_envelope": 2,
+          "terminal_hold": 2
+        },
+        "codes": {
+          "mastery_tracking_envelope": 2
+        },
+        "all_pass": false
+      }
+    },
+    "all_pass": false,
+    "safety_promoted": false
+  },
+  "selector_ablation": {
+    "complete": true,
+    "controller": "diagnostic-selector-only:e7b425699510cc635485bdd8f59a5b25692fb165faf248aaecbc2707c0dbb883",
+    "population": "canonical",
+    "groups": {
+      "coupled/train": {
+        "cases": 2,
+        "admitted": 2,
+        "mastered": 0,
+        "tracking_and_settling_passed": 0,
+        "smoothness_passed": 2,
+        "failure_reasons": {
+          "tracking_timeout": 2,
+          "terminal_hold": 2
+        },
+        "codes": {
+          "tracking_timeout": 2
+        },
+        "all_pass": false
+      },
+      "coupled/validation": {
+        "cases": 2,
+        "admitted": 2,
+        "mastered": 0,
+        "tracking_and_settling_passed": 0,
+        "smoothness_passed": 2,
+        "failure_reasons": {
+          "mastery_tracking_envelope": 2,
+          "terminal_hold": 2
+        },
+        "codes": {
+          "mastery_tracking_envelope": 2
+        },
+        "all_pass": false
+      }
+    },
+    "all_pass": false,
+    "safety_promoted": false
+  },
+  "diagnostic": {
+    "ablation": "permit restoring heading selector with active hand when base yaw is constrained; all actual actor observations unchanged",
+    "source_actor_weights_sha256": "e7b425699510cc635485bdd8f59a5b25692fb165faf248aaecbc2707c0dbb883",
+    "script_sha256": "2f17fe3e8dbcab60867be9b02831aaa2215ce662210ef16d0299b1e87eb1a159",
+    "not_exported": true,
+    "safety_promoted": false
+  },
+  "cases": {
+    "teacher": [
+      {
+        "id": "train:coupled:forward_turn",
+        "code": "ok",
+        "mastered": true,
+        "failure_reasons": [],
+        "metrics": {
+          "peak_force_N": 0.49050000000000127,
+          "base_linear_jerk": 1.749571413473882,
+          "base_yaw_jerk": 2.7456393735686313,
+          "joint_jerk": 6.3347629766696,
+          "hand_position_error_m": 7.448707973003425e-05,
+          "hand_orientation_error_rad": 0.0001753505819377965,
+          "base_error_m": 0.0017850893799334887,
+          "base_heading_error_rad": 0.0002509007332841262,
+          "hold_drift_m": 1.4700176326751318e-05,
+          "settled_seconds": 8.84999999999999
+        }
+      },
+      {
+        "id": "train:coupled:reverse_turn",
+        "code": "ok",
+        "mastered": true,
+        "failure_reasons": [],
+        "metrics": {
+          "peak_force_N": 0.49050000000000127,
+          "base_linear_jerk": 3.1708166143269945,
+          "base_yaw_jerk": 11.481813775434349,
+          "joint_jerk": 7.496967633211564,
+          "hand_position_error_m": 0.0002292792237680533,
+          "hand_orientation_error_rad": 5.2788902528384286e-05,
+          "base_error_m": 0.0008268015504148002,
+          "base_heading_error_rad": 0.004892707163841086,
+          "hold_drift_m": 1.4568102821687165e-06,
+          "settled_seconds": 8.949999999999992
+        }
+      },
+      {
+        "id": "validation:coupled:forward_turn",
+        "code": "ok",
+        "mastered": true,
+        "failure_reasons": [],
+        "metrics": {
+          "peak_force_N": 0.49050000000000127,
+          "base_linear_jerk": 2.0705448526705164,
+          "base_yaw_jerk": 3.3092910283014363,
+          "joint_jerk": 7.538330936995462,
+          "hand_position_error_m": 8.334490264624003e-05,
+          "hand_orientation_error_rad": 3.573200893413663e-05,
+          "base_error_m": 0.0020901455541114467,
+          "base_heading_error_rad": 0.0012857578152455813,
+          "hold_drift_m": 1.7970106907455767e-05,
+          "settled_seconds": 8.899999999999991
+        }
+      },
+      {
+        "id": "validation:coupled:reverse_turn",
+        "code": "ok",
+        "mastered": true,
+        "failure_reasons": [],
+        "metrics": {
+          "peak_force_N": 0.49050000000000127,
+          "base_linear_jerk": 2.4475769131133416,
+          "base_yaw_jerk": 7.046836390690203,
+          "joint_jerk": 8.361888616761771,
+          "hand_position_error_m": 0.00012647344215476115,
+          "hand_orientation_error_rad": 2.8139232226296216e-05,
+          "base_error_m": 0.00040574001639295224,
+          "base_heading_error_rad": 0.00488262258299281,
+          "hold_drift_m": 1.6437545250963552e-06,
+          "settled_seconds": 8.999999999999993
+        }
+      }
+    ],
+    "baseline": [
+      {
+        "id": "train:coupled:forward_turn",
+        "code": "tracking_timeout",
+        "mastered": false,
+        "failure_reasons": [
+          "tracking_timeout",
+          "terminal_hold"
+        ],
+        "metrics": {
+          "peak_force_N": 0.49050000000000127,
+          "base_linear_jerk": 0.4304837221975959,
+          "base_yaw_jerk": 0.15629009537310862,
+          "joint_jerk": 0.7837105952681108,
+          "hand_position_error_m": 0.0012990481689114626,
+          "hand_orientation_error_rad": 0.0069006530458295854,
+          "base_error_m": 0.009373257189486055,
+          "base_heading_error_rad": 0.02072984014602025,
+          "hold_drift_m": 0.0,
+          "settled_seconds": 0
+        }
+      },
+      {
+        "id": "train:coupled:reverse_turn",
+        "code": "tracking_timeout",
+        "mastered": false,
+        "failure_reasons": [
+          "tracking_timeout",
+          "terminal_hold"
+        ],
+        "metrics": {
+          "peak_force_N": 0.49050000000000127,
+          "base_linear_jerk": 0.4615078903533574,
+          "base_yaw_jerk": 0.1461235008499064,
+          "joint_jerk": 0.9397631577326315,
+          "hand_position_error_m": 0.0018176122142305416,
+          "hand_orientation_error_rad": 0.004962706446204054,
+          "base_error_m": 0.008066647060880837,
+          "base_heading_error_rad": 0.02251961827285526,
+          "hold_drift_m": 0.0,
+          "settled_seconds": 0
+        }
+      },
+      {
+        "id": "validation:coupled:forward_turn",
+        "code": "mastery_tracking_envelope",
+        "mastered": false,
+        "failure_reasons": [
+          "mastery_tracking_envelope",
+          "terminal_hold"
+        ],
+        "metrics": {
+          "peak_force_N": 0.4905000000000012,
+          "base_linear_jerk": 0.4070664160835577,
+          "base_yaw_jerk": 0.16092459455409672,
+          "joint_jerk": 0.937209503539288,
+          "hand_position_error_m": 0.010146282107415666,
+          "hand_orientation_error_rad": 0.03234297534186301,
+          "base_error_m": 0.014885922356560173,
+          "base_heading_error_rad": 0.027767848369650076,
+          "hold_drift_m": 0.0,
+          "settled_seconds": 0
+        }
+      },
+      {
+        "id": "validation:coupled:reverse_turn",
+        "code": "mastery_tracking_envelope",
+        "mastered": false,
+        "failure_reasons": [
+          "mastery_tracking_envelope",
+          "terminal_hold"
+        ],
+        "metrics": {
+          "peak_force_N": 0.49050000000000116,
+          "base_linear_jerk": 0.28561041036499474,
+          "base_yaw_jerk": 0.13410659950620332,
+          "joint_jerk": 1.0420747862186768,
+          "hand_position_error_m": 0.009690684354928546,
+          "hand_orientation_error_rad": 0.031157109720107865,
+          "base_error_m": 0.015119710233725794,
+          "base_heading_error_rad": 0.027879504172646462,
+          "hold_drift_m": 0.0,
+          "settled_seconds": 0
+        }
+      }
+    ],
+    "selector_ablation": [
+      {
+        "id": "train:coupled:forward_turn",
+        "code": "tracking_timeout",
+        "mastered": false,
+        "failure_reasons": [
+          "tracking_timeout",
+          "terminal_hold"
+        ],
+        "metrics": {
+          "peak_force_N": 0.49050000000000127,
+          "base_linear_jerk": 0.25303831305192875,
+          "base_yaw_jerk": 0.6230182715318833,
+          "joint_jerk": 0.6830058070911393,
+          "hand_position_error_m": 0.0011542559428924409,
+          "hand_orientation_error_rad": 0.005715482120220043,
+          "base_error_m": 0.009672987858340296,
+          "base_heading_error_rad": 0.016365798028612384,
+          "hold_drift_m": 0.0,
+          "settled_seconds": 0
+        }
+      },
+      {
+        "id": "train:coupled:reverse_turn",
+        "code": "tracking_timeout",
+        "mastered": false,
+        "failure_reasons": [
+          "tracking_timeout",
+          "terminal_hold"
+        ],
+        "metrics": {
+          "peak_force_N": 0.49050000000000127,
+          "base_linear_jerk": 0.5403597571559623,
+          "base_yaw_jerk": 0.7103549106246618,
+          "joint_jerk": 0.8825461340875536,
+          "hand_position_error_m": 0.0012639543024185104,
+          "hand_orientation_error_rad": 0.005156070324296822,
+          "base_error_m": 0.011595833847835146,
+          "base_heading_error_rad": 0.021508950537210934,
+          "hold_drift_m": 0.0,
+          "settled_seconds": 0
+        }
+      },
+      {
+        "id": "validation:coupled:forward_turn",
+        "code": "mastery_tracking_envelope",
+        "mastered": false,
+        "failure_reasons": [
+          "mastery_tracking_envelope",
+          "terminal_hold"
+        ],
+        "metrics": {
+          "peak_force_N": 0.4905000000000012,
+          "base_linear_jerk": 0.3034716698108048,
+          "base_yaw_jerk": 0.8887047435759965,
+          "joint_jerk": 0.8819236946218715,
+          "hand_position_error_m": 0.010169487119282356,
+          "hand_orientation_error_rad": 0.0316716787939313,
+          "base_error_m": 0.014555160212498315,
+          "base_heading_error_rad": 0.023484122111759907,
+          "hold_drift_m": 0.0,
+          "settled_seconds": 0
+        }
+      },
+      {
+        "id": "validation:coupled:reverse_turn",
+        "code": "mastery_tracking_envelope",
+        "mastered": false,
+        "failure_reasons": [
+          "mastery_tracking_envelope",
+          "terminal_hold"
+        ],
+        "metrics": {
+          "peak_force_N": 0.49050000000000116,
+          "base_linear_jerk": 0.19212071408871992,
+          "base_yaw_jerk": 1.1487016088013065,
+          "joint_jerk": 1.0390814602700476,
+          "hand_position_error_m": 0.010067531539178975,
+          "hand_orientation_error_rad": 0.03134820249451799,
+          "base_error_m": 0.013472406949522982,
+          "base_heading_error_rad": 0.023933768237142702,
+          "hold_drift_m": 0.0,
+          "settled_seconds": 0
+        }
+      }
+    ]
+  },
+  "teacher_base_learned_arm": {
+    "summary": {
+      "complete": true,
+      "controller": "diagnostic-teacher-base:e7b425699510cc635485bdd8f59a5b25692fb165faf248aaecbc2707c0dbb883",
+      "population": "canonical",
+      "groups": {
+        "coupled/train": {
+          "cases": 2,
+          "admitted": 2,
+          "mastered": 2,
+          "tracking_and_settling_passed": 2,
+          "smoothness_passed": 2,
+          "failure_reasons": {},
+          "codes": {
+            "ok": 2
+          },
+          "all_pass": true
+        },
+        "coupled/validation": {
+          "cases": 2,
+          "admitted": 2,
+          "mastered": 2,
+          "tracking_and_settling_passed": 2,
+          "smoothness_passed": 2,
+          "failure_reasons": {},
+          "codes": {
+            "ok": 2
+          },
+          "all_pass": true
+        }
+      },
+      "all_pass": true,
+      "safety_promoted": false
+    },
+    "cases": [
+      {
+        "id": "train:coupled:forward_turn",
+        "code": "ok",
+        "mastered": true,
+        "failure_reasons": [],
+        "metrics": {
+          "peak_force_N": 0.49050000000000127,
+          "base_linear_jerk": 1.4212536613409736,
+          "base_yaw_jerk": 2.6821622872337523,
+          "joint_jerk": 1.0832046407722153,
+          "hand_position_error_m": 0.0006577690081607714,
+          "hand_orientation_error_rad": 0.004420288366859748,
+          "base_error_m": 0.0020077419218581818,
+          "base_heading_error_rad": 0.0013402528832232273,
+          "hold_drift_m": 4.10866424181323e-05,
+          "settled_seconds": 8.549999999999986
+        }
+      },
+      {
+        "id": "train:coupled:reverse_turn",
+        "code": "ok",
+        "mastered": true,
+        "failure_reasons": [],
+        "metrics": {
+          "peak_force_N": 0.4905000000000012,
+          "base_linear_jerk": 1.9523298120204435,
+          "base_yaw_jerk": 6.17127529305464,
+          "joint_jerk": 1.0326651632793808,
+          "hand_position_error_m": 0.00040593269953894865,
+          "hand_orientation_error_rad": 0.003613609979906727,
+          "base_error_m": 0.0016463120179036372,
+          "base_heading_error_rad": 0.004671154796574359,
+          "hold_drift_m": 1.830141382126928e-05,
+          "settled_seconds": 8.499999999999986
+        }
+      },
+      {
+        "id": "validation:coupled:forward_turn",
+        "code": "ok",
+        "mastered": true,
+        "failure_reasons": [],
+        "metrics": {
+          "peak_force_N": 0.4905000000000012,
+          "base_linear_jerk": 2.447168630425689,
+          "base_yaw_jerk": 2.3030243748941026,
+          "joint_jerk": 0.8247272751456299,
+          "hand_position_error_m": 0.0008682923907769726,
+          "hand_orientation_error_rad": 0.005172341951046289,
+          "base_error_m": 0.0022111610515846694,
+          "base_heading_error_rad": 0.000766103359304101,
+          "hold_drift_m": 2.2121454116769234e-05,
+          "settled_seconds": 7.89999999999998
+        }
+      },
+      {
+        "id": "validation:coupled:reverse_turn",
+        "code": "ok",
+        "mastered": true,
+        "failure_reasons": [],
+        "metrics": {
+          "peak_force_N": 0.49050000000000127,
+          "base_linear_jerk": 1.5050222519740977,
+          "base_yaw_jerk": 6.861737791991964,
+          "joint_jerk": 0.900069951586437,
+          "hand_position_error_m": 0.0005508671867346018,
+          "hand_orientation_error_rad": 0.004078686004294143,
+          "base_error_m": 0.0005114103386824701,
+          "base_heading_error_rad": 0.004815981474775882,
+          "hold_drift_m": 3.919984705215935e-06,
+          "settled_seconds": 8.249999999999982
+        }
+      }
+    ],
+    "diagnostic": {
+      "ablation": "learned arm retained; base commands replaced with measured-Jacobian teacher",
+      "teacher_actions_used": true,
+      "not_a_learned_policy_result": true,
+      "not_exported": true,
+      "source_actor_weights_sha256": "e7b425699510cc635485bdd8f59a5b25692fb165faf248aaecbc2707c0dbb883",
+      "script_sha256": "a5e559c02e661f9bdb43528e6b0bf89d5641ccd80bb287c3f855ae47f90bf3b6"
+    }
+  },
+  "implementation_revision": "ee9c5035",
+  "hardware_used": false,
+  "safety_promoted": false,
+  "conclusion": "Do not change the yaw selector based on these data. Base coordination with active hand needs training. The hybrid is a teacher-assisted diagnostic, not a learned-policy success.",
+  "artifacts": [
+    {
+      "path": "logs/eval/mars-coupled-selector-audit-v1/teacher.json.gz",
+      "sha256": "af9e4813e9994bf43569f7bff524430455afb4f7ae542b73ae112717a33da818",
+      "bytes": 740991
+    },
+    {
+      "path": "logs/eval/mars-coupled-selector-audit-v1/baseline.json.gz",
+      "sha256": "450388ef0d3ad0f3b529b4b9fe853f45a5ae856ffbaa979439a96ee4fff63f91",
+      "bytes": 488685
+    },
+    {
+      "path": "logs/eval/mars-coupled-selector-audit-v1/ablation.json.gz",
+      "sha256": "18ed78f22c0867d20a18197dfde9d3fed6a2d19b8c3a4208acc4b3e102e662b6",
+      "bytes": 485437
+    },
+    {
+      "path": "logs/eval/mars-coupled-base-authority-v1/report.json.gz",
+      "sha256": "5ebc7b58f47abe16869dd3217608693b341219deeac85b6f476b385e83399a88",
+      "bytes": 735176
+    },
+    {
+      "path": "logs/recovery/hand-accuracy-v1/coupled-selector-audit.py",
+      "sha256": "2f17fe3e8dbcab60867be9b02831aaa2215ce662210ef16d0299b1e87eb1a159",
+      "bytes": 2542
+    },
+    {
+      "path": "logs/recovery/hand-accuracy-v1/coupled-base-authority-audit.py",
+      "sha256": "a5e559c02e661f9bdb43528e6b0bf89d5641ccd80bb287c3f855ae47f90bf3b6",
+      "bytes": 1674
+    }
+  ]
+}

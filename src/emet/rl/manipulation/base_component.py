@@ -40,7 +40,7 @@ from emet.rl.manipulation.mastery_objective import (
     add_contract_reward_arguments,
     contract_reward_from_args,
 )
-from emet.rl.manipulation.policy import ManipulationPolicy, export
+from emet.rl.manipulation.policy import ManipulationPolicy, export, value_reward_scale
 from emet.rl.regression_gate import verify_regressions
 
 ROOT = Path(__file__).resolve().parents[4]
@@ -82,13 +82,16 @@ class RoleAdam(torch.optim.Adam):
 
 
 class BasePolicy(FeedbackActorCriticPolicy):
-    def __init__(self, *args, exploration_coefficient_std=0.5, critic_lr_multiplier=1.0, **kwargs):
+    def __init__(
+        self, *args, exploration_coefficient_std=0.5, critic_lr_multiplier=1.0, critic_reward_scale=1.0, **kwargs
+    ):
         if not np.isfinite(exploration_coefficient_std) or not 0 < exploration_coefficient_std <= 1:
             raise ValueError("exploration coefficient std must be in (0,1]")
         self.exploration_coefficient_std = exploration_coefficient_std
         if not np.isfinite(critic_lr_multiplier) or critic_lr_multiplier <= 0:
             raise ValueError("positive finite critic LR multiplier required")
         self.critic_lr_multiplier = critic_lr_multiplier
+        self.critic_reward_scale = value_reward_scale({"critic_reward_scale": critic_reward_scale})
         if (
             not kwargs.get("use_sde", False)
             or not kwargs.get("full_std", True)
@@ -258,6 +261,48 @@ class FrozenArmActions(gym.Wrapper):
         return self.last_observation, reward, done, truncated, info
 
 
+class TrainingRewardScale(gym.Wrapper):
+    """Constant positive units conversion, without clipping or reward reshaping.
+
+    Reward terms and physical evaluation remain in native units. PPO rewards and
+    critic predictions use scaled units; explicitly record both in diagnostics.
+    """
+
+    def __init__(self, env, scale):
+        super().__init__(env)
+        self.scale = value_reward_scale({"critic_reward_scale": scale})
+
+    def step(self, action):
+        obs, reward, done, truncated, info = self.env.step(action)
+        return (
+            obs,
+            reward * self.scale,
+            done,
+            truncated,
+            {
+                **info,
+                "native_training_reward": float(reward),
+                "training_reward_scale": self.scale,
+            },
+        )
+
+
+def stage_step_weights(stages, arm_fraction=None, coupled_fraction=None):
+    if arm_fraction is None and coupled_fraction is None:
+        return None
+    expected = {"base", "arm"} | ({"coupled"} if coupled_fraction is not None else set())
+    fractions = [arm_fraction] + ([] if coupled_fraction is None else [coupled_fraction])
+    if set(stages) != expected or any(v is None or not np.isfinite(v) or not 0 < v < 1 for v in fractions):
+        raise ValueError("positive arm/coupled fractions require exactly the selected base/arm[/coupled] stages")
+    if sum(fractions) >= 1:
+        raise ValueError("stage fractions must leave a positive base share")
+    return {
+        "base": 1 - sum(fractions),
+        "arm": arm_fraction,
+        **({"coupled": coupled_fraction} if coupled_fraction else {}),
+    }
+
+
 def initialize(model, normalizer, source, config, fingerprint):
     if (
         source.manifest["environment"] != json.loads(json.dumps(asdict(config)))
@@ -279,6 +324,10 @@ def initialize(model, normalizer, source, config, fingerprint):
                 raise ValueError("base component parameter shape differs: " + key)
             new[key] = old[key].clone()
     model.policy.load_state_dict(new)
+    with torch.no_grad():
+        ratio = model.policy.critic_reward_scale / source.critic_reward_scale
+        model.policy.value_net.weight.mul_(ratio)
+        model.policy.value_net.bias.mul_(ratio)
     for key, (mean, var) in source.normalization.items():
         stats = normalizer.obs_rms[key]
         stats.mean, stats.var = mean.copy(), var.copy()
@@ -365,6 +414,7 @@ def merge(model, normalizer, source, destination, config, fingerprint):
         export(source.model, normalizer, destination, config, fingerprint, steps=model.num_timesteps)
         path = Path(destination) / "manifest.json"
         manifest = json.loads(path.read_text())
+        manifest["critic_reward_scale"] = model.policy.critic_reward_scale
         manifest["component_training"] = {
             "scope": SCOPE,
             "optimizer_resume_supported": False,
@@ -380,11 +430,12 @@ def merge(model, normalizer, source, destination, config, fingerprint):
 def train(args, suite):
     verify_regressions(args.regression_receipt)
     teacher = read_report(args.preflight)
-    validate_preflight(teacher, suite, ["base", "arm"])
+    stages = getattr(args, "training_stages", ["base", "arm"])
+    evaluation_stages = ["base", "arm"] + (["coupled"] if "coupled" in stages else [])
+    validate_preflight(teacher, suite, evaluation_stages)
     source = ManipulationPolicy(args.source)
     torch.set_num_threads(1)
     args.output.mkdir(parents=True, exist_ok=False)
-    stages = getattr(args, "training_stages", ["base", "arm"])
     evaluation_every = getattr(args, "evaluation_every", 8192)
     objective_config = getattr(args, "contract_reward_config", None)
     schedule = getattr(args, "contract_schedule", ContractRewardSchedule())
@@ -393,19 +444,19 @@ def train(args, suite):
         raise ValueError("unknown initial admission mode")
     learning_rate = getattr(args, "learning_rate", 1e-4)
     exploration_std = getattr(args, "exploration_coefficient_std", 0.5)
+    reward_scale = value_reward_scale({"critic_reward_scale": getattr(args, "reward_scale", 1.0)})
     critic_multiplier = getattr(args, "critic_lr_multiplier", 1.0)
     warmup = CriticWarmup(getattr(args, "critic_warmup_steps", 0), getattr(args, "critic_warmup_epochs", 20))
     if warmup.steps >= args.steps:
         raise ValueError("critic warmup must leave at least one actor rollout")
+    weights = stage_step_weights(
+        stages, getattr(args, "arm_step_fraction", None), getattr(args, "coupled_step_fraction", None)
+    )
     base = MasteryEnv(suite, stages=stages, split="train", population="training")
-    arm_fraction = getattr(args, "arm_step_fraction", None)
-    if arm_fraction is not None:
-        if set(stages) != {"base", "arm"} or not np.isfinite(arm_fraction) or not 0 < arm_fraction < 1:
-            base.close()
-            raise ValueError("arm fraction in (0,1) requires both base and arm stages")
+    if weights is not None:
         base.sampler = TrainingCaseSampler(
             base.cases,
-            {"base": 1 - arm_fraction, "arm": arm_fraction},
+            weights,
             sampling="control_steps",
             primitive_weights=suite.get("training_primitive_weights"),
         )
@@ -414,6 +465,8 @@ def train(args, suite):
         if objective_config is None
         else TeacherContractReward(base, teacher, objective_config, fraction=schedule.fraction(0))
     )
+    if reward_scale != 1:
+        reward_env = TrainingRewardScale(reward_env, reward_scale)
     env = ExecutorCommandVecNormalize(
         DummyVecEnv([lambda: FrozenArmActions(reward_env, source)]), config=base.config, norm_reward=False
     )
@@ -437,6 +490,7 @@ def train(args, suite):
             policy_kwargs={
                 "exploration_coefficient_std": exploration_std,
                 "critic_lr_multiplier": critic_multiplier,
+                "critic_reward_scale": reward_scale,
                 "restoring_yaw_feedback": True,
                 "turn_xy_tolerance": base.config.base_xy_tolerance,
                 "features_extractor_class": GoalFeedbackFeatures,
@@ -460,6 +514,9 @@ def train(args, suite):
             "regression_receipt": json.loads(args.regression_receipt.read_text()),
             "steps": args.steps,
             "training_stages": stages,
+            "evaluation_stages": evaluation_stages,
+            "training_reward_scale": reward_scale,
+            "rollout_reward_terms_units": "native; sampled rewards and critic values use training_reward_scale",
             "training_stage_weights": base.sampler.weights,
             "effective_stage_probabilities": dict(zip(base.sampler.groups, base.sampler.probabilities, strict=True)),
             "evaluation_every": evaluation_every,
@@ -535,11 +592,12 @@ def train(args, suite):
                         "contract_schedule": record["contract_schedule"],
                         "initial_admission": admission_mode,
                         "critic_lr_multiplier": critic_multiplier,
+                        "training_reward_scale": reward_scale,
                         "critic_warmup_steps": warmup.steps,
                         "actor_unchanged_during_critic_warmup": warmup.actor_unchanged,
                     }
                     (directory / "actor/manifest.json").write_text(json.dumps(policy.manifest, indent=2) + "\n")
-                    report = evaluate_suite(suite, stages=["base", "arm"], policy=policy, teacher_report=teacher)
+                    report = evaluate_suite(suite, stages=evaluation_stages, policy=policy, teacher_report=teacher)
                 save_report(directory / "evaluation.json.gz", report)
                 summary = summarize(report)
                 (directory / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
@@ -573,7 +631,9 @@ def train(args, suite):
                 self.record_update()
                 if objective_config is not None:
                     env.env_method("set_reward_fraction", schedule.fraction(self.num_timesteps))
-                if self.num_timesteps and self.num_timesteps % evaluation_every == 0:
+                if self.num_timesteps and (
+                    self.num_timesteps % evaluation_every == 0 or self.num_timesteps == warmup.steps
+                ):
                     self.checkpoint(f"step-{self.num_timesteps}")
 
             def _on_rollout_end(self):
@@ -603,7 +663,7 @@ def train(args, suite):
         if admission_mode == "source_fidelity":
             with preserve_training_rng():
                 baseline = evaluate_suite(
-                    suite, stages=["base", "arm"], policy=source, teacher_report=teacher, population="admission"
+                    suite, stages=evaluation_stages, policy=source, teacher_report=teacher, population="admission"
                 )
             save_report(args.output / "source-baseline.json.gz", baseline)
             if any(
@@ -631,7 +691,7 @@ def train(args, suite):
         if baseline is not None:
             fidelity = {
                 "canonical": verify_source_fidelity(
-                    initial, baseline, expected_ids={c["id"] for c in select_cases(suite, ["base", "arm"], "all")}
+                    initial, baseline, expected_ids={c["id"] for c in select_cases(suite, evaluation_stages, "all")}
                 ),
                 "expanded_arm": verify_source_fidelity(
                     report,
@@ -648,7 +708,7 @@ def train(args, suite):
         with preserve_training_rng():
             expanded = evaluate_suite(
                 suite,
-                stages=["base", "arm"],
+                stages=evaluation_stages,
                 policy=ManipulationPolicy(args.output / "last/actor"),
                 teacher_report=teacher,
                 population="admission",
@@ -681,9 +741,11 @@ def main():
     parser.add_argument("--regression-receipt", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--steps", type=int, default=32768)
-    parser.add_argument("--training-stages", nargs="+", choices=["base", "arm"], default=["base", "arm"])
+    parser.add_argument("--training-stages", nargs="+", choices=["base", "arm", "coupled"], default=["base", "arm"])
     parser.add_argument("--evaluation-every", type=int, default=8192)
     parser.add_argument("--arm-step-fraction", type=float)
+    parser.add_argument("--coupled-step-fraction", type=float)
+    parser.add_argument("--reward-scale", type=float, default=1.0)
     parser.add_argument("--learning-rate", type=float, default=1e-4)
     parser.add_argument("--exploration-coefficient-std", type=float, default=0.5)
     parser.add_argument("--critic-lr-multiplier", type=float, default=1.0)
@@ -709,6 +771,8 @@ def main():
     if not np.isfinite(args.critic_lr_multiplier) or args.critic_lr_multiplier <= 0:
         parser.error("positive finite critic LR multiplier required")
     try:
+        stage_step_weights(args.training_stages, args.arm_step_fraction, args.coupled_step_fraction)
+        value_reward_scale({"critic_reward_scale": args.reward_scale})
         CriticWarmup(args.critic_warmup_steps, args.critic_warmup_epochs)
     except ValueError as exc:
         parser.error(str(exc))

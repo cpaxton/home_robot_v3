@@ -57,6 +57,16 @@ execution. The [hill-climb plan](../plans/mars_refinement_hillclimb.md) specifie
 the next critic-only warmup experiment, followed by coupled/dynamic targets and
 loaded TAMP acceptance cases.
 
+A subsequent diagnostic at `ee9c5035` reproduces the teacher's 4/4 and source's
+0/4. Allowing the existing restoring-heading selector with an active hand still
+passes 0/4, so this does not support changing that selector alone. Replacing
+only the base commands with the measured-Jacobian teacher, while retaining the
+learned arm, passes all four full gates. This is a teacher-assisted diagnostic,
+not a learned-policy result. It supports adding base coordination under active
+hand targets to training without first changing the arm function or loosening
+tracking tolerances. All cases, numeric metrics and ablation identities are in
+[coupled diagnostics](../../paper/data/whole_body_control/mars_refinement_v1/coupled-diagnostics.json).
+
 Passive SSH checks cannot currently reach Herman: its hostname does not resolve
 and the last-known IP has no route. A local copied-source test of the prepared
 Innate feedback patch passes conversion, valid-state and communication/missing-

@@ -118,3 +118,50 @@ coupled goals, mask combinations and dynamic target changes, then loaded TAMP
 plans and passive Herman interface validation. Hardware readiness additionally
 requires verified SI feedback, freshness, odometry/twist, watchdog and measured
 whole-body stop on the actual robot.
+
+## Coupled-goal curriculum and critic units
+
+The critic-warmup final preserves 49/50 base tracking and 42/50 full base but
+regresses to 5/16 full arm. Reject it; see the
+[complete report](../experiments/mars_critic_calibration_20261106.md). Its critic
+improves base-hold calibration while saturating on arm states. A fixed-target,
+fixed-batch value regression improves native-unit audit MSE from 791.57 to
+108.50 when rewards/critic units are scaled by 0.01. This is a training
+conditioning result, not improved control.
+
+The coupled teacher-base/learned-arm diagnostic passes 4/4, while removing the
+heading selector's hand exclusion still gives 0/4. Direct hand-to-base coefficient
+restoration recovers 14/16 arm cases, below the retained source's 15/16. Do not
+deploy either ad hoc ablation. Add the missing coordinated data while preserving
+rehearsal, rather than requiring perfect primitive jerk before exposing the
+controller to simultaneous goals.
+
+Next fixed final, starting from the same retained source:
+
+- 36,864 transitions: 4,096 critic-only warmup (20 epochs, lambda 1), then
+  32,768 ordinary PPO transitions (five epochs, lambda 0.95).
+- Base/arm/coupled control-step budgets 40/20/40. All base coefficients remain
+  trainable; no new hand-to-base mask, teacher action loss or runtime filter.
+  Learned arm/context/grip and normalization stay fixed for this diagnostic:
+  the teacher-base intervention shows that the preserved arm can execute these
+  four coupled references. Unfreeze arm/context later if evidence requires it.
+- Scale every training reward by constant positive 0.01, without clipping or
+  changing reward shape. Rescale the initial value head into these units.
+  Actor outputs, observations, physical limits and native evaluation are
+  unchanged. Save critic units in bundles and restore native units when a
+  generic trainer transfers them. This critic is not an infeasibility certificate.
+- Actor LR 3e-5, critic multiplier 10 (3e-4), coefficient std 0.1, seed 90.
+  Keep gamma 0.9975, batch/rollout 256, eight-tick resampling, clip 0.1 and KL 0.01.
+- Require fresh source-bound full regressions and teacher 70/70 (50 base,
+  16 arm, four coupled). Initial source fidelity now covers all 70. Record its
+  coupled failures; initial fidelity does not grant qualification.
+- Evaluate canonical 22 at zero, warmup boundary, every 8,192 and fixed final;
+  expanded 70 at final. Require exact warmup physical replay and repeat noisy
+  value audits in native units at warmup and final. Keep all results.
+
+A development candidate must preserve source base/arm tracking and full-pass
+counts, have zero recorded safety events, and strictly improve at least one
+stage's full-pass count. Passing any subset of coupled cases is progress, not
+completion. All 70 physical gates, dynamic masks/goal changes, load/disturbance
+coverage and integrated TAMP/agent execution remain required before simulator
+qualification, followed by actual Herman interface and bounded-motion gates.

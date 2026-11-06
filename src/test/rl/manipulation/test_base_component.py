@@ -14,8 +14,10 @@ from emet.rl.manipulation.base_component import (
     CriticWarmup,
     FrozenArmActions,
     RoleAdam,
+    TrainingRewardScale,
     initialize,
     merge,
+    stage_step_weights,
     verify_frozen,
     verify_source_fidelity,
 )
@@ -23,7 +25,7 @@ from emet.rl.manipulation.command_policy import ExecutorCommandVecNormalize, Exe
 from emet.rl.manipulation.env import ManipulationConfig
 from emet.rl.manipulation.feedback_policy import GoalFeedbackFeatures
 from emet.rl.manipulation.observation_layout import history_layout
-from emet.rl.manipulation.policy import ManipulationPolicy, export
+from emet.rl.manipulation.policy import ManipulationPolicy, export, value_reward_scale
 from emet.rl.manipulation.profiles import MARS
 
 
@@ -313,6 +315,110 @@ def test_invalid_critic_warmup_fails_closed(steps, epochs):
         CriticWarmup(steps, epochs)
 
 
+def test_scaled_critic_transfer_and_export_preserve_actor_and_native_values(setup, tmp_path):
+    _, env, source, _, _ = setup
+    model = PPO(
+        BasePolicy,
+        env,
+        device="cpu",
+        n_steps=8,
+        batch_size=8,
+        use_sde=True,
+        policy_kwargs={**kwargs(), "critic_reward_scale": 0.01},
+    )
+    initialize(model, env, source, config(), Toy.fingerprint)
+    obs = env.reset()
+    tensor = model.policy.obs_to_tensor(obs)[0]
+    with torch.no_grad():
+        expected = source.model.policy.predict_values(tensor)
+        torch.testing.assert_close(model.policy.predict_values(tensor) / 0.01, expected)
+    merged = merge(model, env, source, tmp_path / "scaled", config(), Toy.fingerprint)
+    assert merged.critic_reward_scale == 0.01
+    raw = {k: v[0] for k, v in env.get_original_obs().items()}
+    np.testing.assert_array_equal(merged(raw), source(raw))
+    model.save(tmp_path / "scaled.zip")
+    loaded = PPO.load(tmp_path / "scaled.zip", device="cpu")
+    assert loaded.policy.critic_reward_scale == 0.01
+    # Continuing in native reward units must undo the stored units conversion.
+    loaded.policy.critic_reward_scale = 1.0
+    initialize(loaded, env, merged, config(), Toy.fingerprint)
+    with torch.no_grad():
+        torch.testing.assert_close(loaded.policy.predict_values(tensor), expected)
+
+
+def test_reward_units_conversion_preserves_observations_flags_and_reward_ranking():
+    native, scaled = Toy(), TrainingRewardScale(Toy(), 0.01)
+    try:
+        a, _ = native.reset()
+        b, _ = scaled.reset()
+        for key in a:
+            np.testing.assert_array_equal(a[key], b[key])
+        for action in ([0.2] * 8, [-0.1] * 8):
+            a = native.step(action)
+            b = scaled.step(action)
+            assert b[1] == pytest.approx(a[1] * 0.01)
+            assert b[2:4] == a[2:4]
+            assert b[4] == {"native_training_reward": a[1], "training_reward_scale": 0.01}
+    finally:
+        native.close()
+        scaled.close()
+
+
+def test_ppo_uses_scaled_rollout_rewards_without_changing_frozen_arm(setup):
+    source = setup[2]
+    env = ExecutorCommandVecNormalize(
+        DummyVecEnv([lambda: FrozenArmActions(TrainingRewardScale(Toy(), 0.01), source)]),
+        config=config(),
+        norm_reward=False,
+    )
+    try:
+        model = PPO(
+            BasePolicy,
+            env,
+            device="cpu",
+            n_steps=8,
+            batch_size=8,
+            n_epochs=1,
+            use_sde=True,
+            policy_kwargs={**kwargs(), "critic_reward_scale": 0.01},
+        )
+        initialize(model, env, source, config(), Toy.fingerprint)
+        model.learn(16)
+        assert np.max(abs(model.rollout_buffer.rewards)) <= 0.01
+        assert np.isfinite(model.rollout_buffer.returns).all()
+        verify_frozen(model, source)
+    finally:
+        env.close()
+
+
+@pytest.mark.parametrize("value", [0, -1, float("nan"), float("inf"), None, "0.01", True, [0.01]])
+def test_malformed_critic_units_are_rejected(value):
+    with pytest.raises(ValueError, match="critic reward scale"):
+        value_reward_scale({"critic_reward_scale": value})
+
+
+def test_explicit_coupled_step_budget_preserves_rehearsal_shares():
+    assert stage_step_weights(["base", "arm"], 0.2) == {"base": 0.8, "arm": 0.2}
+    weights = stage_step_weights(["base", "arm", "coupled"], 0.2, 0.4)
+    assert weights == pytest.approx({"base": 0.4, "arm": 0.2, "coupled": 0.4})
+
+
+@pytest.mark.parametrize(
+    "stages,arm,coupled",
+    [
+        (["base"], 0.2, None),
+        (["base", "arm"], 0.2, 0.4),
+        (["base", "arm", "coupled"], 0.2, None),
+        (["base", "arm", "coupled"], None, 0.4),
+        (["base", "arm", "coupled"], 0.6, 0.4),
+        (["base", "arm", "coupled"], 0.2, float("nan")),
+    ],
+)
+def test_invalid_coupled_step_budgets_fail_closed(stages, arm, coupled):
+    with pytest.raises(ValueError):
+        stage_step_weights(stages, arm, coupled)
+
+
 def test_source_fidelity_records_known_failure_without_qualifying_it():
     from copy import deepcopy
 
@@ -346,7 +452,7 @@ def test_source_fidelity_records_known_failure_without_qualifying_it():
 
 
 @pytest.mark.sim
-@pytest.mark.parametrize("stages", [["base"], ["base", "arm"]])
+@pytest.mark.parametrize("stages", [["base"], ["base", "arm"], ["coupled"]])
 def test_base_component_runs_native_physics_and_preserves_arm_rows(tmp_path, stages):
     from pathlib import Path
 
@@ -382,6 +488,8 @@ def test_base_component_runs_native_physics_and_preserves_arm_rows(tmp_path, sta
                     break
             row = {"id": case["id"], "mastered": True, "admission": admission, "metrics": mastery_metrics(base, info)}
             reward_env = TeacherContractReward(base, {"cases": [row]})
+        if stages == ["coupled"]:
+            reward_env = TrainingRewardScale(base, 0.01)
         wrapper = FrozenArmActions(reward_env, source)
         component_env = ExecutorCommandVecNormalize(
             DummyVecEnv([lambda: wrapper]), config=base.config, norm_reward=False
@@ -395,13 +503,15 @@ def test_base_component_runs_native_physics_and_preserves_arm_rows(tmp_path, sta
             n_epochs=1,
             use_sde=True,
             sde_sample_freq=2,
-            policy_kwargs=params,
+            policy_kwargs={**params, "critic_reward_scale": 0.01 if stages == ["coupled"] else 1.0},
         )
         initialize(model, component_env, source, base.config, base.fingerprint)
         if stages == ["base"]:
             component_env.env_method("set_reward_fraction", 0)
             assert reward_env.next_fraction == 0
         model.learn(16)
+        if stages == ["coupled"]:
+            assert base.mastery_case["stage"] == "coupled"
         verify_frozen(model, source)
         if stages == ["base"]:
             columns = [*range(3, 12), *range(15, 24)]
@@ -413,5 +523,6 @@ def test_base_component_runs_native_physics_and_preserves_arm_rows(tmp_path, sta
         merged = merge(model, component_env, source, tmp_path / "actor", base.config, base.fingerprint)
         assert merged.model.action_space.shape == (8,) and merged.manifest["steps"] == 16
         assert merged.model.num_timesteps == 16
+        assert merged.critic_reward_scale == model.policy.critic_reward_scale
     finally:
         source_env.close()

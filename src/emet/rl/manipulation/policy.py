@@ -14,6 +14,19 @@ from torch import nn
 from emet.rl.manipulation.profiles import PROFILES
 
 
+def value_reward_scale(manifest):
+    """Units of the PPO critic only; actor outputs retain physical semantics."""
+    scale = manifest.get("critic_reward_scale", 1.0)
+    if (
+        isinstance(scale, (bool, np.bool_))
+        or not isinstance(scale, (int, float, np.integer, np.floating))
+        or not np.isfinite(scale)
+        or scale <= 0
+    ):
+        raise ValueError("positive finite critic reward scale required")
+    return float(scale)
+
+
 class ManipulationMLPFeatures(BaseFeaturesExtractor):
     """A small fixed history for a plain feed-forward controller."""
 
@@ -66,6 +79,9 @@ def export(model, normalizer, directory, env_config, fingerprint, *, steps, held
         "contract": PROFILES[env_config.robot].contract(env_config.action_mode),
         "fingerprint": fingerprint,
         "steps": steps,
+        "critic_reward_scale": value_reward_scale(
+            {"critic_reward_scale": getattr(model.policy, "critic_reward_scale", 1.0)}
+        ),
         "mean": stats.mean.tolist(),
         "var": stats.var.tolist(),
         "count": float(stats.count),
@@ -123,6 +139,7 @@ class ManipulationPolicy:
         if m.get("format") != "emet-manipulation-v1" or m.get("robot") not in PROFILES:
             raise ValueError("not a supported manipulation policy")
         self.robot = m["robot"]
+        self.critic_reward_scale = value_reward_scale(m)
         from emet.rl.manipulation.retention_training import GRASP_CONTEXT_CONTRACT
 
         context = m.get("environment", {}).get("retention_context", False)
