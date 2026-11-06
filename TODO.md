@@ -291,8 +291,14 @@ Accepted plan: [Mars controller integration](docs/plans/mars_controller_integrat
       reject the final (base42/50 full, arm14/88 vs source80/88, coupled4/8).
       Fresh full0/12,2/12,7/12; learned public-tool transfers0/3, stops confirmed.
       Preserve original70/94/122 subsets and all failures. See [complete report](docs/experiments/mars_translation_final_20261106.md).
-- [ ] Audit actual training returns against physical contract scores before
-      another PPO run. Require exact source/final native rollouts under the
+- [x] Audit actual training returns against physical contract scores before
+      another PPO run. All292 exact replays complete; all67 lost-full arm cases
+      earn lower final shaped return, and the weighted deterministic reward
+      rate declines6.52%. See [audit](docs/experiments/mars_objective_audit_20261106.md).
+- [ ] Complete the matched gain-bias learning-rate control300→1, preserving
+      all data/reward/physical settings and fixed262k final. Require self/parent
+      warmup equality, old-subset/fresh/TAMP acceptance and no automatic promotion.
+      The completed objective audit must not be treated as a PPO-causality proof. Require exact source/final native rollouts under the
       real terminal contract wrapper, term/discount accounting and all146 cases.
       Direct hand-to-base readout removal improves arm only29→32/64 and
       regresses coupled4→3/8: reject it as a standalone fix. Herman remains gated.

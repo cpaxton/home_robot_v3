@@ -548,3 +548,24 @@ or exploration is included. This can expose finite-horizon reward/contract
 misalignment, but cannot alone attribute a failure to PPO or critic bias.
 No further policy training, production readout change or hardware promotion
 is launched while this audit runs. Retain the stronger source.
+
+## Matched gain-bias update control
+
+The objective audit completes all292 exact rollouts. All67 arm cases losing
+full success earn lower final discounted shaped return; the deterministic
+training-budget average also declines0.251655→0.235242. This is not a full
+stochastic PPO/critic diagnosis. Local input probes find the yaw-rate feedback
+coefficient changing sign, with about90% of its direct-gain change coming from
+the state-independent bias. See the [audit](../experiments/mars_objective_audit_20261106.md).
+
+Start one matched control from the retained source in immutable2227f58a:
+change only gain-bias LR multiplier300→1 (bias LR9e-4→3e-6). Preserve actor LR,
+critic multiplier100, seed90, noise, data/sampling, reward/ramp,262144 transitions,
+4096 critic-only warmup and all physical settings. Reverify the unchanged
+source-bound1123 receipt and teacher146/146 plus frozen teacher12/12. Initial
+source-fidelity admission is mandatory. Require warmup physical cases to equal
+both this initialization and the previous matched trial. No controller hook,
+filter or teacher residual is exported. Use one CPU14 worker, offline W&B,
+a six-hour watchdog and queued serial9 public-tool/108 fresh audits. Preserve
+original70/94/122 groups separately; keep the source unless all development
+nonregression/strict-improvement gates pass. No automatic hardware promotion.
