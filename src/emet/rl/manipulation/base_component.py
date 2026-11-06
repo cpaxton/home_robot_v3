@@ -17,7 +17,7 @@ import torch
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.distributions import StateDependentNoiseDistribution
-from stable_baselines3.common.vec_env import DummyVecEnv
+from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
 
 from emet.rl.manipulation.carry_benchmark import digest, source_hashes
 from emet.rl.manipulation.command_policy import ExecutorCommandVecNormalize
@@ -340,6 +340,96 @@ def stage_step_weights(stages, arm_fraction=None, coupled_fraction=None):
     }
 
 
+def motion_rollout_size(num_envs, backend):
+    """Keep per-worker horizons fixed and count PPO transitions across worlds."""
+    if type(num_envs) is not int or not 1 <= num_envs <= 8 or backend not in {"dummy", "subproc"}:
+        raise ValueError("1-8 motion environments and dummy/subproc backend required")
+    return 256 * num_envs
+
+
+def make_motion_vec_env(
+    suite,
+    stages,
+    source_directory,
+    *,
+    train_arm=False,
+    num_envs=1,
+    backend="subproc",
+    stage_weights=None,
+    teacher=None,
+    objective=None,
+    schedule=ContractRewardSchedule(),
+    reward_scale=1.0,
+):
+    """Spawn independent physics and frozen-source inference inside each worker.
+
+    No live MuJoCo pointer, loaded Torch policy or simulator is serialized from
+    the parent. Single-worker and dummy execution use the same factory.
+    """
+    motion_rollout_size(num_envs, backend)
+    reward_scale = value_reward_scale({"critic_reward_scale": reward_scale})
+    if objective is not None and teacher is None:
+        raise ValueError("motion contract objective requires paired teacher evidence")
+    source_directory = str(Path(source_directory).resolve())
+
+    def factory():
+        torch.set_num_threads(1)
+        native = MasteryEnv(
+            suite, stages=stages, split="train", population="training", training_stage_weights=stage_weights
+        )
+        try:
+            if stage_weights is not None:
+                native.sampler = TrainingCaseSampler(
+                    native.cases,
+                    stage_weights,
+                    sampling="control_steps",
+                    primitive_weights=suite.get("training_primitive_weights"),
+                )
+            source = ManipulationPolicy(source_directory, robot="innate_mars", fingerprint=native.fingerprint)
+            wrapped = (
+                native
+                if objective is None
+                else TeacherContractReward(native, teacher, objective, fraction=schedule.fraction(0))
+            )
+            if reward_scale != 1:
+                wrapped = TrainingRewardScale(wrapped, reward_scale)
+            if train_arm:
+                from emet.rl.manipulation.whole_body import FrozenGripActions
+
+                return FrozenGripActions(wrapped, source)
+            return FrozenArmActions(wrapped, source)
+        except BaseException:
+            native.close()
+            raise
+
+    factories = [factory for _ in range(num_envs)]
+    return (
+        DummyVecEnv(factories)
+        if num_envs == 1 or backend == "dummy"
+        else SubprocVecEnv(factories, start_method="spawn")
+    )
+
+
+class MotionSamplingDiagnostics:
+    """Count starts and control steps for every worker, including auto resets."""
+
+    def __init__(self, num_envs):
+        self.steps, self.starts = Counter(), Counter()
+        self.first = [True] * num_envs
+        self.rollout = RolloutDiagnostics()
+
+    def add(self, actions, clipped, rewards, infos, dones):
+        for index, (action, request, reward, info, done) in enumerate(
+            zip(actions, clipped, rewards, infos, dones, strict=True)
+        ):
+            cid = info["mastery"]["case_id"]
+            self.steps[cid] += 1
+            if self.first[index]:
+                self.starts[cid] += 1
+            self.first[index] = bool(done)
+            self.rollout.add(cid, action, request, reward, info, done)
+
+
 def initialize(model, normalizer, source, config, fingerprint):
     if (
         source.manifest["environment"] != json.loads(json.dumps(asdict(config)))
@@ -480,17 +570,27 @@ def merge(model, normalizer, source, destination, config, fingerprint):
 
 
 def train(args, suite):
+    num_envs, backend = getattr(args, "num_envs", 1), getattr(args, "vec_backend", "subproc")
+    rollout_size = motion_rollout_size(num_envs, backend)
+    if (
+        args.steps <= 0
+        or args.steps % rollout_size
+        or getattr(args, "evaluation_every", 8192) <= 0
+        or getattr(args, "evaluation_every", 8192) % rollout_size
+        or getattr(args, "critic_warmup_steps", 0) % rollout_size
+    ):
+        raise ValueError("steps, evaluation interval and critic warmup must align to 256 * num_envs")
     verify_regressions(args.regression_receipt)
     teacher = read_report(args.preflight)
     stages = getattr(args, "training_stages", ["base", "arm"])
     train_arm = getattr(args, "train_arm", False)
     if getattr(args, "train_context", False) and not train_arm:
         raise ValueError("context adaptation requires joint motion training")
-    policy_type, action_wrapper = BasePolicy, FrozenArmActions
+    policy_type = BasePolicy
     if train_arm:
-        from emet.rl.manipulation.whole_body import FrozenGripActions, WholeBodyPolicy
+        from emet.rl.manipulation.whole_body import WholeBodyPolicy
 
-        policy_type, action_wrapper = WholeBodyPolicy, FrozenGripActions
+        policy_type = WholeBodyPolicy
     evaluation_stages = ["base", "arm"] + (["coupled"] if "coupled" in stages else [])
     validate_preflight(teacher, suite, evaluation_stages)
     source = ManipulationPolicy(args.source)
@@ -513,24 +613,29 @@ def train(args, suite):
     weights = stage_step_weights(
         stages, getattr(args, "arm_step_fraction", None), getattr(args, "coupled_step_fraction", None)
     )
-    base = MasteryEnv(suite, stages=stages, split="train", population="training", training_stage_weights=weights)
-    if weights is not None:
-        base.sampler = TrainingCaseSampler(
-            base.cases,
-            weights,
-            sampling="control_steps",
-            primitive_weights=suite.get("training_primitive_weights"),
-        )
-    reward_env = (
-        base
-        if objective_config is None
-        else TeacherContractReward(base, teacher, objective_config, fraction=schedule.fraction(0))
+    vector = make_motion_vec_env(
+        suite,
+        stages,
+        args.source,
+        train_arm=train_arm,
+        num_envs=num_envs,
+        backend=backend,
+        stage_weights=weights,
+        teacher=teacher,
+        objective=objective_config,
+        schedule=schedule,
+        reward_scale=reward_scale,
     )
-    if reward_scale != 1:
-        reward_env = TrainingRewardScale(reward_env, reward_scale)
-    env = ExecutorCommandVecNormalize(
-        DummyVecEnv([lambda: action_wrapper(reward_env, source)]), config=base.config, norm_reward=False
-    )
+    try:
+        configs, fingerprints = vector.get_attr("config"), vector.get_attr("fingerprint")
+        config, fingerprint = configs[0], fingerprints[0]
+        if any(c != config for c in configs) or any(f != fingerprint for f in fingerprints):
+            raise ValueError("motion workers disagree on robot configuration/model")
+        sampler = vector.get_attr("sampler")[0]
+        env = ExecutorCommandVecNormalize(vector, config=config, norm_reward=False)
+    except BaseException:
+        vector.close()
+        raise
     run = None
     sources = source_hashes()
     try:
@@ -556,17 +661,17 @@ def train(args, suite):
                 **({"arm_exploration_coefficient_std": args.arm_exploration_coefficient_std} if train_arm else {}),
                 **({"train_context": getattr(args, "train_context", False)} if train_arm else {}),
                 "restoring_yaw_feedback": True,
-                "turn_xy_tolerance": base.config.base_xy_tolerance,
+                "turn_xy_tolerance": config.base_xy_tolerance,
                 "features_extractor_class": GoalFeedbackFeatures,
                 "features_extractor_kwargs": {
                     "robot": "innate_mars",
                     "retention_context": True,
-                    "orientation_scale": base.config.feedback_orientation_scale,
+                    "orientation_scale": config.feedback_orientation_scale,
                 },
                 "net_arch": {"pi": [128, 128], "vf": [128, 128]},
             },
         )
-        initialize(model, env, source, base.config, base.fingerprint)
+        initialize(model, env, source, config, fingerprint)
         record = {
             "scope": "mars-whole-body-gsde-v1" if train_arm else SCOPE,
             "suite": suite,
@@ -581,9 +686,12 @@ def train(args, suite):
             "evaluation_stages": evaluation_stages,
             "training_reward_scale": reward_scale,
             "rollout_reward_terms_units": "native; sampled rewards and critic values use training_reward_scale",
-            "training_stage_weights": base.sampler.weights,
-            "effective_stage_probabilities": dict(zip(base.sampler.groups, base.sampler.probabilities, strict=True)),
+            "training_stage_weights": sampler.weights,
+            "effective_stage_probabilities": dict(zip(sampler.groups, sampler.probabilities, strict=True)),
             "evaluation_every": evaluation_every,
+            "num_envs": num_envs,
+            "vec_backend": "dummy" if num_envs == 1 else backend,
+            "rollout_transitions": rollout_size,
             "contract_reward": None if objective_config is None else asdict(objective_config),
             "contract_schedule": None if objective_config is None else asdict(schedule),
             "initial_admission": admission_mode,
@@ -631,10 +739,8 @@ def train(args, suite):
         class Audit(BaseCallback):
             def __init__(self):
                 super().__init__()
-                self.steps = Counter()
-                self.starts = Counter()
-                self.first = True
-                self.rollout = RolloutDiagnostics()
+                self.sampling = MotionSamplingDiagnostics(num_envs)
+                self.steps, self.starts = self.sampling.steps, self.sampling.starts
                 self.last_update = 0
 
             def record_update(self):
@@ -658,7 +764,7 @@ def train(args, suite):
                 directory.mkdir()
                 model.save(directory / "component.zip")
                 with preserve_training_rng():
-                    policy = merge(model, env, source, directory / "actor", base.config, base.fingerprint)
+                    policy = merge(model, env, source, directory / "actor", config, fingerprint)
                     policy.manifest["training_recipe"] = {
                         "run_sha256": digest(record),
                         "training_stages": stages,
@@ -686,19 +792,12 @@ def train(args, suite):
                 return report
 
             def _on_step(self):
-                info = self.locals["infos"][0]
-                cid = info["mastery"]["case_id"]
-                self.steps[cid] += 1
-                if self.first:
-                    self.starts[cid] += 1
-                self.first = bool(self.locals["dones"][0])
-                self.rollout.add(
-                    cid,
-                    self.locals["actions"][0],
-                    self.locals["clipped_actions"][0],
-                    self.locals["rewards"][0],
-                    info,
-                    self.locals["dones"][0],
+                self.sampling.add(
+                    self.locals["actions"],
+                    self.locals["clipped_actions"],
+                    self.locals["rewards"],
+                    self.locals["infos"],
+                    self.locals["dones"],
                 )
                 return True
 
@@ -726,7 +825,7 @@ def train(args, suite):
                     .reshape(7, model.policy.features_extractor.feedback_width)[: model.policy.motion_outputs]
                     .cpu()
                     .tolist(),
-                    "rollout_cases": self.rollout.record(),
+                    "rollout_cases": self.sampling.rollout.record(),
                     "requested_contract_fraction": schedule.fraction(self.num_timesteps) if objective_config else None,
                     "critic_warmup": warmup.active,
                     "actor_unchanged_during_critic_warmup": warmup.actor_unchanged,
@@ -735,7 +834,7 @@ def train(args, suite):
                     stream.write(json.dumps(values) + "\n")
                 if run:
                     run.log({"steps": self.num_timesteps, **{f"sampling/{k}": v for k, v in self.steps.items()}})
-                self.rollout = RolloutDiagnostics()
+                self.sampling.rollout = RolloutDiagnostics()
 
             def _on_training_end(self):
                 self.record_update()
@@ -825,6 +924,8 @@ def main():
     parser.add_argument("--regression-receipt", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--steps", type=int, default=32768)
+    parser.add_argument("--num-envs", type=int, default=1)
+    parser.add_argument("--vec-backend", choices=["dummy", "subproc"], default="subproc")
     parser.add_argument("--training-stages", nargs="+", choices=["base", "arm", "coupled"], default=["base", "arm"])
     parser.add_argument("--evaluation-every", type=int, default=8192)
     parser.add_argument("--arm-step-fraction", type=float)
@@ -849,10 +950,16 @@ def main():
     args = parser.parse_args()
     if args.train_context and not args.train_arm:
         parser.error("--train-context requires --train-arm")
-    if args.steps <= 0 or args.steps % 256:
-        parser.error("positive multiple of 256 steps required")
-    if args.evaluation_every <= 0 or args.evaluation_every % 256:
-        parser.error("evaluation interval must be a positive multiple of 256")
+    try:
+        rollout_size = motion_rollout_size(args.num_envs, args.vec_backend)
+    except ValueError as exc:
+        parser.error(str(exc))
+    if args.steps <= 0 or args.steps % rollout_size:
+        parser.error("steps must be a positive multiple of 256 * num_envs")
+    if args.evaluation_every <= 0 or args.evaluation_every % rollout_size:
+        parser.error("evaluation interval must be a positive multiple of 256 * num_envs")
+    if args.critic_warmup_steps % rollout_size:
+        parser.error("critic warmup must align to 256 * num_envs")
     if len(set(args.training_stages)) != len(args.training_stages):
         parser.error("duplicate training stages")
     try:

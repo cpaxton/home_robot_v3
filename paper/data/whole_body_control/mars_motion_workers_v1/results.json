@@ -1,0 +1,111 @@
+{
+  "complete": true,
+  "scope": "Independent-worker native/PPO/export plumbing validation only. Not controller performance, speedup, fixture or hardware qualification.",
+  "hardware_used": false,
+  "safety_promoted": false,
+  "source_revision": "f94f96c2 plus source hashes in each probe (parallel-motion implementation, subsequently committed).",
+  "host": "Caliban Jetson ARM, isolated RAM snapshot, one Torch/BLAS/OMP thread per process, CUDA hidden.",
+  "focused_tests": 68,
+  "focused_cases": "Two native dummy worlds exactly reproduce prior serial reset and three control ticks, actual base/whole PPO update, export parity, independent data, malformed rollout boundaries, and all-worker episode telemetry.",
+  "two_worker_probe": {
+    "complete": true,
+    "scope": "Bounded independent-worker/PPO plumbing probe, not controller qualification.",
+    "source": "New synthetic zero-mean actor created on this host, not the retained learned checkpoint.",
+    "backend": "spawn",
+    "workers": 2,
+    "worker_pids": [
+      1479494,
+      1479495
+    ],
+    "transitions": 64,
+    "steps_per_worker": [
+      32,
+      32
+    ],
+    "safety_flags": [],
+    "export_max_action_error": 0.0,
+    "elapsed_seconds_including_model_setup": 11.931814160197973,
+    "hardware_used": false,
+    "qualified": false,
+    "files": {
+      "/dev/shm/cpaxton-mars-hillclimb-20261106/motion-workers/probe.py": "009ac627f99f1e4fc10a284ad8b4bbbd1f7ccd8cdc36b0307461ef337444813e",
+      "src/emet/rl/manipulation/base_component.py": "0b6d48c2ea002983ee46bbcc69d4572defa415c9c2ac3f4f62e501dcb77a98bd",
+      "src/emet/rl/manipulation/whole_body.py": "66c8496679b3f57cfb1e48a2de29ec8bbed4d6ab7dc65b526564bb96ddfb3909"
+    }
+  },
+  "eight_worker_probe": {
+    "complete": true,
+    "scope": "Bounded independent-worker/PPO plumbing probe, not controller qualification.",
+    "source": "New synthetic zero-mean actor created on this host, not the retained learned checkpoint.",
+    "backend": "spawn",
+    "workers": 8,
+    "worker_pids": [
+      1479702,
+      1479703,
+      1479704,
+      1479705,
+      1479706,
+      1479707,
+      1479708,
+      1479709
+    ],
+    "transitions": 512,
+    "steps_per_worker": [
+      64,
+      64,
+      64,
+      64,
+      64,
+      64,
+      64,
+      64
+    ],
+    "safety_flags": [],
+    "export_max_action_error": 0.0,
+    "elapsed_seconds_including_model_setup": 16.677157571539283,
+    "hardware_used": false,
+    "qualified": false,
+    "files": {
+      "/dev/shm/cpaxton-mars-hillclimb-20261106/motion-workers/probe-eight.py": "0293843d83e703eb9747357dd490290280c0c3b3d2e039708942fa1bb7746e47",
+      "src/emet/rl/manipulation/base_component.py": "0b6d48c2ea002983ee46bbcc69d4572defa415c9c2ac3f4f62e501dcb77a98bd",
+      "src/emet/rl/manipulation/whole_body.py": "66c8496679b3f57cfb1e48a2de29ec8bbed4d6ab7dc65b526564bb96ddfb3909"
+    }
+  },
+  "full_regressions": {
+    "tests": 1095,
+    "passed": true,
+    "receipt": {
+      "path": "logs/recovery/hand-accuracy-v1/parallel-motion-full.receipt.json",
+      "sha256": "01bf1178586bc82321879c863c8c91d7ca9d6d10b60202b3fe08a8fbfdf87813",
+      "bytes": 199592
+    },
+    "xml_sha256": "9a00b1d70297486487e0eab2955cbb9f99ceb4166853976e4be25cc76319568d"
+  },
+  "artifacts": [
+    {
+      "path": "logs/recovery/hand-accuracy-v1/parallel-motion-focused.log",
+      "bytes": 80,
+      "sha256": "9ee20c71942e691226904f5b10ee3ec2cbef509fceddb28ac17de8dc7e2e5b55"
+    },
+    {
+      "path": "logs/recovery/hand-accuracy-v1/caliban-motion-spawn-probe.py",
+      "bytes": 4029,
+      "sha256": "009ac627f99f1e4fc10a284ad8b4bbbd1f7ccd8cdc36b0307461ef337444813e"
+    },
+    {
+      "path": "logs/recovery/hand-accuracy-v1/caliban-motion-spawn-eight.py",
+      "bytes": 4037,
+      "sha256": "0293843d83e703eb9747357dd490290280c0c3b3d2e039708942fa1bb7746e47"
+    },
+    {
+      "path": "logs/recovery/hand-accuracy-v1/caliban-motion-spawn-probe.log",
+      "bytes": 926,
+      "sha256": "5ad6514a4ecc368f35152932f92f0e00c8d6370045240c763bc9977475610d29"
+    },
+    {
+      "path": "logs/recovery/hand-accuracy-v1/caliban-motion-spawn-eight.log",
+      "bytes": 1059,
+      "sha256": "1c368b43bdf5eb580416704a12bd671e29532fe7177a543193d88eb1211ed7a6"
+    }
+  ]
+}

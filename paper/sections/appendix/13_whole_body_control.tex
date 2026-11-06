@@ -504,3 +504,22 @@ and coupled amplitudes: fresh teacher 122/122 and 1,080 regressions pass, with
 all 94 earlier teacher rollouts reproducing native metrics and rewards exactly.
 Longer scheduled refinement and optional context adaptation are subsequent
 experiments; no successful general controller or hardware qualification follows.
+
+
+Independent native worlds are supported by the motion trainer with all-worker
+transition telemetry and aligned rollout/warmup boundaries. Two- and eight-worker
+ARM plumbing probes update a synthetic actor and export matching actions; this
+is not a trained-policy qualification or throughput comparison. Exact frozen
+public-tool fixture portability remains an unpassed prerequisite for ARM
+training. The local policy trials remain serial and use immutable source.
+
+
+The 262,144-transition posture/scheduled-objective trial is rejected: base
+50/50 tracking and 40/50 full, arm 62/64 tracking and 7/64 full, coupled 2/8
+tracking/full. The source has 59/64 full arm; its original four coupled cases
+remain unsolved. Two independent twelve-case audits regress to 0/12 and 2/12
+full, and all three actual-checkpoint public-tool first transfers stop during
+pregrasp. All three joint-reference baselines complete the transfer. More
+transitions and expanded resets have not established whole-body stability.
+Full evidence is retained in
+\texttt{paper/data/whole\_body\_control/mars\_tamp\_postures\_v1/}.

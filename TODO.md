@@ -123,7 +123,12 @@ Accepted plan: [Mars controller integration](docs/plans/mars_controller_integrat
       Preserve original artifacts and branch history before publishing cleanup.
 - [x] Wire independent native worker count and per-worker rollout length into
       the mastery trainer, counting telemetry for every worker. Keep this unstable
-      workstation serial; use Caliban for bounded parallel probes.
+      workstation serial; use Caliban for bounded parallel probes. The current
+      seven-motion trainer now also supports1–8 workers with all-worker telemetry
+      and aligned rollout/warmup boundaries. Native two-world parity/PPO tests
+      and two/eight spawned-worker ARM plumbing probes pass; all1,095 fresh
+      regressions pass. Frozen-fixture portability remains required before scaling
+      a trained checkpoint. See [worker evidence](docs/experiments/mars_motion_workers_20261106.md).
 - [ ] Admit the GPU backend for PPO: short native/GPU Mars state-parity probes
       pass with no-slip physics intact; still require independent-world resets,
       loaded grasp/lift/placement and per-substep force/wheel parity, then batched
@@ -280,10 +285,14 @@ Accepted plan: [Mars controller integration](docs/plans/mars_controller_integrat
       control completed in an immutable checkout; procedural near-straight postures and
       coupled amplitudes pass 1,080 regressions and teacher122/122 (94 legacy
       physical cases exact). The smaller-step final is also rejected: arm40/40
-      tracking but20/40 full and zero public-tool transfers. A262k scheduled
-      posture trial is running; optional end-to-end context adaptation preserves
-      constant grip output and passes 1,085 fresh regressions; its paired teacher
-      is still running before a matched fixed-final trial. Keep both finals
+      tracking but20/40 full and zero public-tool transfers. The262k scheduled
+      posture final is rejected (base50/50 tracking40/50 full, arm62/64 tracking
+      7/64 full, coupled2/8 full); public-tool/fresh-pose tests continue; optional end-to-end context adaptation preserves
+      constant grip output and passes 1,085 fresh regressions plus teacher122/122
+      (all122 previous teacher cases physically exact); its matched trial starts
+      after complete serial post-tests. The rejected posture final has0/3
+      public-tool transfers and0/12,2/12 full fresh-audit passes; teacher/source
+      have12/12 on each. See [full report](docs/experiments/mars_tamp_postures_20261106.md). Keep both finals
       and actual public-tool/fresh-pose results; no hardware qualification.
       Require coupled
       dynamic-pose, loaded TAMP and real feedback/watchdog/stop acceptance before

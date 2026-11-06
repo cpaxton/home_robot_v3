@@ -369,5 +369,19 @@ This is still nearby free-space training, not contact/hardware qualification.
 
 Implementation validation: 1,085 fresh source-bound regressions pass, including
 actual context PPO updates, critic warmup, closed constant-grip export/reload
-and zero-error equilibrium. Fresh paired teacher replay is pending; the matched
-trial stays queued behind that gate and the prior candidate's serial tests.
+and zero-error equilibrium. Fresh paired teacher122/122 reproduces all122 prior
+native cases exactly. The matched trial stays queued behind completion of the
+prior candidate's serial tests.
+
+The prior posture trial's fixed final is rejected: base50/50 tracking40/50 full,
+arm62/64 tracking7/64 full and coupled2/8 full, versus source49/50 tracking42/50
+full, arm64/64 tracking59/64 full and coupled2/8 full. The base linear jerk gate fails
+on55 of64 arm cases. Three actual public-tool transfers all stop in pregrasp;
+their references succeed. Finish the separately declared fresh audits as well.
+Do not infer that more transitions or broader resets solved the stability gap.
+The context trial remains an isolated matched test, with no automatic promotion.
+
+The current trainer's independent-worker path has separate native two-world
+parity/PPO/export tests and bounded two/eight-worker ARM spawn probes. Keep
+this workstation serial and qualify exact ARM fixtures before scaling the
+learned checkpoint. See [protocol and evidence](../experiments/mars_motion_workers_20261106.md).
