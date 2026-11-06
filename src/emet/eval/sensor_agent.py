@@ -75,7 +75,7 @@ def build_sensor_agent(robot, model_config, output, *, max_images):
     params.set("floor_evidence", dict(robot.navigation.map.parameters["floor_evidence"]))
     params.set("motion_planner/obstacle_map_mode", "physical")
     params.set("eqa/habitat_perfect_nav", False)
-    params.set("eqa/agentic_decision_policy", "grounded_v2")
+    params.set("eqa/agentic_decision_policy", "model_final")
     params.set("eqa/agentic_verify", True)
     params.set("eqa_vl/eqa_max_images", max_images)
     params.set("eqa_vl/answer_max_new_tokens", 2048)
@@ -87,6 +87,8 @@ def build_sensor_agent(robot, model_config, output, *, max_images):
         manipulation_only=True,
         eqa=True,
         defer_eqa_vllm=True,
+        use_instance_graph=False,
+        use_sensor_perception=True,
         log=str(output / "memory"),
         apply_harness_profile=False,
     )

@@ -10,6 +10,8 @@ acceptance is not evidence of answering or manipulation success.
 - Arms: production `LazyGraphController` + `AgenticEQAExecutor`, and the adapted
   native GraphEQA planner/graph. Alternate first arm by question index; serial
   child processes, one CPU core and one GPU lease. RL has priority.
+- The production agent uses `model_final`: the final model answer wins;
+  earlier assessment letters cannot replace it. Instance streaming is off.
 - Identical renderer scene/spawn, RGB-D calibration, circular 0.1 m body,
   RGB-D odometry, primitive controller and physical footprint sweep checks.
   No ground-truth pose, labels, object hints or navmesh routes enter either

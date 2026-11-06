@@ -73,6 +73,7 @@ def run(args):
             return json.load(response)
 
     with (args.output / "server.log").open("w") as log:
+        child = None
         server = subprocess.Popen(
             [sys.executable, "-c", server_code, str(args.port)],
             cwd=root,
@@ -161,19 +162,29 @@ def run(args):
                         "360",
                     ]
                 env.update(PYTHONPATH=str(root / "src"), LD_LIBRARY_PATH=str(habitat / "lib"))
-            result = subprocess.run(
+            child = subprocess.Popen(
                 command,
                 cwd=root if active_ids else args.fork,
                 env=env,
-                check=False,
-                timeout=(len(active_ids) * 2400 if paired_ids else 1800) if active_ids else 600,
                 pass_fds=(lock_fd,),
+                start_new_session=True,
             )
-            manifest.update(status="passed" if result.returncode == 0 else "failed", returncode=result.returncode)
-        except Exception as exc:
-            manifest.update(status="failed", error=f"{type(exc).__name__}: {exc}")
+            returncode = child.wait(timeout=(len(active_ids) * 2400 if paired_ids else 1800) if active_ids else 600)
+            manifest.update(status="passed" if returncode == 0 else "failed", returncode=returncode)
+        except BaseException as exc:
+            manifest.update(
+                status="interrupted" if isinstance(exc, KeyboardInterrupt) else "failed",
+                error=f"{type(exc).__name__}: {exc}",
+            )
             raise
         finally:
+            if child is not None and child.poll() is None:
+                os.killpg(child.pid, signal.SIGTERM)
+                try:
+                    child.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    os.killpg(child.pid, signal.SIGKILL)
+                    child.wait(timeout=10)
             if server.poll() is None:
                 os.killpg(server.pid, signal.SIGTERM)
                 try:
