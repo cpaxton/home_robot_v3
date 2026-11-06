@@ -526,3 +526,25 @@ budgets; record exact old-context replay and every failure. This is a causal
 readout experiment with unchanged weights, not an exported policy or production
 filter. Any useful result still needs an ordinary implementation, fresh full
 gates and actual TAMP/fresh-case tests before adoption.
+
+## Completed translation run and next objective audit
+
+The fixed262k translation final is rejected: full base42/50, arm14/88 versus
+source80/88, coupled4/8 versus2/8. Arm tracking remains84/88, but base jerk
+fails70 arm cases. Fresh full passes are0/12,2/12,7/12 versus source12/12,
+12/12,11/12. Learned public-tool transfers remain0/3; all failed stops confirm.
+See [complete results](../experiments/mars_translation_final_20261106.md).
+The paired constrained-base readout diagnostic gives only29→32 full arm and
+4→3 coupled, with all122 baseline cases exact: reject as a standalone fix.
+
+Do not repeat the same PPO recipe or add scale without diagnosis. A new
+paired objective audit runs in immutable2227f58a onCPU15. Replay all146 source
+and final cases with the actual TeacherContractReward wrapper at full fraction,
+using the run's weights and gamma. Require exact actions, native rewards,
+poses, episode lengths and contract outcomes against saved evaluations.
+Record discounted/undiscounted native and shaped returns and every reward term,
+with training and validation cases distinct. No learned-value bootstrap, GAE
+or exploration is included. This can expose finite-horizon reward/contract
+misalignment, but cannot alone attribute a failure to PPO or critic bias.
+No further policy training, production readout change or hardware promotion
+is launched while this audit runs. Retain the stronger source.

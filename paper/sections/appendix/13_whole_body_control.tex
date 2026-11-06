@@ -561,3 +561,11 @@ Positive geometric clearance alone does not qualify loaded retention.
 
 The 36\,mm pinch candidate also trips the conservative wheel-unloading guard
 once with a confirmed measured stop; it is rejected without relaxing the gate.
+
+The translation-coverage 262,144-transition final also regresses: arm tracking
+84/88 but only 14/88 full passes, versus source 80/88 full, with 70 base-jerk
+failures. Coupled full passes improve 2/8 to 4/8 but public-tool transfers
+remain 0/3. A paired hand-to-base readout intervention improves the earlier
+context final only from 29/64 to 32/64 full arm and regresses coupled 4/8 to
+3/8. Neither result is promoted; finite-horizon training-return alignment is
+being audited before further optimization.

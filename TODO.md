@@ -287,15 +287,15 @@ Accepted plan: [Mars controller integration](docs/plans/mars_controller_integrat
       creep before calibrating physical parameters. See [fit evidence](docs/experiments/mars_grasp_fit_20261106.md).
       Keep grasp/placement planning fixes separate from learned tracking; no
       candidate is qualified by static clearance alone.
-- [ ] Complete the orientation-preserving hand-translation refinement and all
-      held-out/public-tool tests: [protocol and coverage](docs/experiments/mars_tamp_translation_20261106.md).
-      Preserve122 prior cases; add24 speed-bounded translations and12 disjoint
-      frozen audit inputs. All1,123 fresh regressions, teacher146/146 (old122exact) and
-      fresh teacher12/12 pass; the fixed262k trial runs after an unchanged-recipe
-      retry of offline W&B socket startup, with final post-tests queued; keep source if arm/base stability regresses.
-      Corrected runtime now confirms all six integrated fault stops, but loaded
-      Cartesian reference retention still fails0/3. Grasp-priority diagnostics,
-      agent integration and Herman feedback/qualification remain open.
+- [x] Complete the orientation-preserving translation262k trial and full post-tests:
+      reject the final (base42/50 full, arm14/88 vs source80/88, coupled4/8).
+      Fresh full0/12,2/12,7/12; learned public-tool transfers0/3, stops confirmed.
+      Preserve original70/94/122 subsets and all failures. See [complete report](docs/experiments/mars_translation_final_20261106.md).
+- [ ] Audit actual training returns against physical contract scores before
+      another PPO run. Require exact source/final native rollouts under the
+      real terminal contract wrapper, term/discount accounting and all146 cases.
+      Direct hand-to-base readout removal improves arm only29→32/64 and
+      regresses coupled4→3/8: reject it as a standalone fix. Herman remains gated.
 - [ ] Continue the [Mars refinement hill climb](docs/plans/mars_refinement_hillclimb.md):
       retain the stronger 49/50 base-tracking, 15/16 full-arm source; both quieter
       mixed refinements reach 50/50 base tracking but regress arm smoothness.
