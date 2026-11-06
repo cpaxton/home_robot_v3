@@ -220,7 +220,8 @@ class MarsNativeTableAdapter(NativeTableAdapter):
         data["policy_calls"] = self.robot.policy_calls if learned else 0
         if reference_callable:
             data["reference_controller_calls"] = self.robot.policy_calls
-        data["policy_admission"] = getattr(self.robot.policy, "admission", None)
+        key = "reference_settings_admission" if reference_callable else "policy_admission"
+        data[key] = getattr(self.robot.policy, "admission", None)
         data["execution_ik_calls"] = self.execution_ik_calls
         data["stop_confirmed"] = self.robot.stop_confirmed
         data["base_motion"] = "coordinated"
