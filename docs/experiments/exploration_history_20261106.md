@@ -115,3 +115,46 @@ and RNG. Original failures remain original outcomes; this is not an additional
 independent scene or an accuracy comparison. Preserve both replay drivers and
 their hashes with the artifacts. Full active agents will also need their map
 sampling stream isolated from model inference before making strict pairing claims.
+
+### Seeded check result
+
+Job `20261106_070407_e1d7c1`, source `3666a9b9`, completes inference-free
+collection with the same q2 rejection after 126 frames (40.91 seconds). It is
+retained separately at `q2-seed0/`, not pooled into the three-scene outcome.
+Replaying its saved packets with the saved CPU RNG state produces **identical
+final obstacle and explored masks**. The original route also passes admission
+at frame 79 in this exact replay.
+
+At frame 99 the diagnostic cell changes from observed to unknown despite
+retaining 24 points within the floor band: two points at -30.52 and -31.48 mm
+fall just beyond its -30 mm lower boundary. No drop/raised flag is set for that
+cell. This confirms the classification mechanism on a reproducible realization,
+without establishing that the physical floor is safe or that odometry is exact.
+The exact replay took 9.10 seconds on CPU 12, without rendering or inference.
+Its first launch hit the Habitat environment's existing libstdc++ import-order
+conflict; using the collection driver's import order resolves that setup error.
+Both setup logs and the final driver are retained, not benchmark task rows.
+
+The output retains `floor-diagnostic/result.json` for the original non-exact
+replay and `q2-seed0/floor-replay/result.json` for the exact seeded replay, with
+driver hashes. The repo's `paper/data/exploration_history_20261106/summary.json`
+records the source-linked aggregate and figure hashes. Seven new contracts and
+34 existing packet/navigation contracts pass (41 tests); pre-commit checks pass.
+
+## Next physical gates
+
+Before an active paired evaluation, replay this floor-conflict case alongside
+clear floor, true drops, raised obstacles and missing depth. Assess measured
+support, pose/calibration uncertainty, and what a bounded fresh inspection can
+recover; do not mark conflicting returns as missing sensor data or erase them
+with a visited disk. Preserve hard terrain/occupied-space rejection.
+
+For the q6 turn, separate odometry drift from physical base displacement through
+an independent scorer-side audit. Keep simulator state out of agent inputs.
+Use the same measured executor, pose basis, footprint, map sampling and action
+budget for the existing emet agent and GraphEQA adaptation. These are physical
+contract gates, not reasons to tune Qwen answers or force its movement.
+
+The histories, including failed attempts, are available for predeclared frozen
+image-selection comparisons. They do not yet demonstrate useful target views,
+full EQA improvement, small OVMM acceptance or a matched active baseline result.

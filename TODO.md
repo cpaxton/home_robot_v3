@@ -24,6 +24,12 @@
       not prerequisites for accepting the existing GraphEQA connection.
       First collect broader task-independent trajectories: the frozen pilot's
       initial/arrival packets do not adequately cover the requested targets.
+      The bounded q2/q6/q12 collection now saves 486 frames; completed legs are
+      0/2, 1/2, 2/2. Failures expose a floor-conflict classification and a turn
+      drift guard. A separate seeded q2 check reproduces its final map exactly;
+      earlier unseeded collections cannot. Resolve/audit these physical gates
+      with hazards preserved before active pairing. Evidence/figures:
+      `docs/experiments/exploration_history_20261106.md`.
 - [ ] Record effective generation config, RNG/seed policy and environment versions
       in paper-run manifests. Qwen's checkpoint defaults enable sampling at 0.7;
       an unseeded one-call contrast does not establish a stable prompt effect.

@@ -28,6 +28,12 @@ the final two-case live check has zero successful answers. The connection is
 qualified; task failures remain results, and matched evaluation is separate work.
 No answer/action override is added.
 
+**Task-independent acquisition (2026-11-06):** [RGB-D history and physical gates](exploration_history_20261106.md)
+records 486 frames across three development scenes; 0/2, 1/2 and 2/2 frontier
+legs complete. Floor-conflict and odometry-turn guards remain explicit failures.
+Saving geometry sampling RNG makes a separate q2 map replay exact. Source-linked
+panels and hashes are retained; no answer model runs and no EQA gain is claimed.
+
 **Frozen paired answering (2026-11-03):** [Three answer paths on identical PNG packets](frozen_eqa_comparison_20261103.md)
 records 36 planned trials with matched output allowances and counted helper calls.
 Images-only / GraphEQA / emet packet answer counts are 0/12, 1/12, 1/12 on four
