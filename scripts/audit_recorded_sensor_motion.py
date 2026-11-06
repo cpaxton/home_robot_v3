@@ -51,17 +51,28 @@ def run(args):
     import magnum as mn
 
     camera = sensor.sim.get_agent(0).scene_node.subtree_sensors["depth"].render_camera
-    ray_errors = []
-    for u, v in ((0, 0), (319, 239), (639, 479)):
+    ray_errors, center_ray_errors = [], []
+    for u, v in ((0, 0), (319, 239), (638, 478)):
         ray = camera.unproject(mn.Vector2i(u, v), False)
         gl_direction = np.asarray(camera.camera_matrix)[:3, :3] @ np.asarray(ray.direction)
         cv_direction = gl_direction * [1, -1, -1]
         cv_direction /= cv_direction[2]
         ray_errors.append(float(np.max(np.abs(cv_direction - np.linalg.inv(sensor.k) @ [u, v, 1]))))
+        # Native unproject consumes integer viewport boundary coordinates.
+        # Unnormalized rays are affine on the unit-depth plane: average the
+        # opposite boundaries to obtain the raster sample at (u+.5, v+.5).
+        opposite = camera.unproject(mn.Vector2i(u + 1, v + 1), False)
+        center_gl = np.asarray(camera.camera_matrix)[:3, :3] @ (
+            (np.asarray(ray.direction) + np.asarray(opposite.direction)) / 2
+        )
+        center_cv = center_gl * [1, -1, -1]
+        center_cv /= center_cv[2]
+        center_ray_errors.append(float(np.max(np.abs(center_cv - np.linalg.inv(sensor.k) @ [u, v, 1]))))
     result.update(
         projection_matrix=np.asarray(camera.projection_matrix).tolist(),
         intrinsics=sensor.k.tolist(),
-        native_unprojection_max_ray_error=max(ray_errors),
+        native_boundary_vs_pixel_center_ray_error=max(ray_errors),
+        native_raster_center_max_ray_error=max(center_ray_errors),
     )
     previous_true, previous_estimated, segment = None, None, None
     try:
@@ -120,6 +131,8 @@ def run(args):
         result["status"] = (
             "matched_renderer_replay" if result["matched_rgb_frames"] == len(rows) else "renderer_mismatch"
         )
+        if max(center_ray_errors) > 1e-5:
+            result["status"] = "renderer_calibration_mismatch"
     except Exception as exc:
         result.update(status="failed", error=f"{type(exc).__name__}: {exc}")
     finally:
