@@ -37,6 +37,10 @@ def scene_binding(index):
 
 
 def run(args):
+    import torch
+
+    if args.seed < 0:
+        raise ValueError("Use a nonnegative acquisition seed")
     if validated_gpu_lock_fd() is None:
         raise RuntimeError("Rendering requires emet jobs --gpu-exclusive --cpu-safe")
     root = Path(__file__).resolve().parents[1]
@@ -61,6 +65,8 @@ def run(args):
         "navmesh_route_input": False,
         "renderer_collision_filter": "Habitat internal navmesh motor filter, not a planner input",
         "model_calls": 0,
+        "acquisition_seed": args.seed,
+        "seed_scope": "numpy and torch CPU acquisition; no model inference or cross-platform determinism claim",
         "scorer_read": False,
         "status": "running",
     }
@@ -109,7 +115,18 @@ def run(args):
         raw_sensor = SensorOnlyHabitat(
             habitat_sensor_config(hm3d_scene_glb_path(scene)), load_scene_init_poses()[(scene, floor)]
         )
+        np.random.seed(args.seed)
+        torch.manual_seed(args.seed)
         navigation = ObservedSpaceNavigation()
+        # SparseVoxelMap randomly subsamples geometry. Preserve the exact CPU
+        # stream before its first update; source/packet hashes alone cannot
+        # reconstruct an unseeded cloud. No model runs in this collector.
+        rng_path = args.output / "mapping_rng_state.npy"
+        np.save(rng_path, torch.get_rng_state().numpy())
+        manifest.update(
+            mapping_rng_sha256=sha256(rng_path), point_update_threshold=navigation.map.point_update_threshold
+        )
+        path.write_text(json.dumps(manifest, indent=2) + "\n")
         sensor = RecordedSensor(raw_sensor, record, max_primitives=args.max_primitives, max_seconds=args.max_seconds)
         manifest.update(
             collect_history(sensor, navigation, event, max_legs=args.max_legs, leg_distance_m=args.leg_distance_m)
@@ -152,6 +169,7 @@ def run(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--question-id", type=int, required=True, help="Existing development scene/spawn index only")
+    parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--max-primitives", type=int, default=200)
     parser.add_argument("--max-seconds", type=float, default=240)
