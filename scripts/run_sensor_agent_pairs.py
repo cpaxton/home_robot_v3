@@ -88,7 +88,7 @@ def run(args):
                         env={**os.environ, "PYTHONPATH": str(root / "src")},
                         stdout=log,
                         stderr=subprocess.STDOUT,
-                        timeout=args.max_seconds + 300,
+                        timeout=args.max_seconds,
                         pass_fds=(lock_fd,),
                         check=False,
                     )

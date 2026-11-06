@@ -13,7 +13,10 @@ acceptance is not evidence of answering or manipulation success.
 - The production agent uses `model_final`: the final model answer wins;
   earlier assessment letters cannot replace it. Instance streaming is off.
 - Identical renderer scene/spawn, RGB-D calibration, circular 0.1 m body,
-  RGB-D odometry, primitive controller and physical footprint sweep checks.
+  RGB-D odometry, dense navigation geometry, primitive controller and physical
+  footprint sweep checks. Production A* uses that qualified geometry; its
+  semantic voxel/graph memory remains independent. No extra clearance padding
+  is added on top of the mandatory full-footprint checks.
   No ground-truth pose, labels, object hints or navmesh routes enter either
   planner. The renderer retains its internal collision filter.
 - Both start with a 360 degree panorama and stationary floor calibration.
@@ -73,5 +76,33 @@ No model weights, environments or episode evidence were deleted.
 
 ## Results
 
-Pending live qualification; CPU boundary checks pass. Do not treat this
-protocol document as a completed paired evaluation.
+The first completed six-arm attempt, source `72957d9b`, is retained under
+`~/runs/emet/sensor-active-pairs-20261106-r4/`. It exposed a binding defect:
+the production planner consulted the sparse semantic map, which rejected the
+stationary starting footprint even though the qualified dense navigation map
+retained occupied-footprint support. All three emet episodes completed with
+`model_final`, but motion requests were rejected before translation.
+
+Both agents scored 0/3 in this failed qualification attempt. GraphEQA completed
+q2/q12 and retained a q6 output-length failure; emet completed 3/3. The original
+scoring compared raw answers with letters. Rechecking using the existing exact
+choice-text/letter normalizer changes no correctness flags in this attempt;
+it does recognize emet's q6 `Next to TV` as D and q12 `None` as C. Raw model
+answers remain unchanged.
+
+Repairs bind production A* to the same dense navigation space, acquire a real
+fresh frame for synchronous clients instead of waiting for a nonexistent recv
+thread, and normalize answers only in scoring. The original artifacts remain
+untouched. This attempt establishes neither useful target coverage nor answer
+quality; rerun before interpreting any agent comparison.
+
+Earlier startup attempts are also retained:
+
+- `sensor-active-pairs-20261106-q2-r1`: cached environment lacks Flash Attention;
+  subsequent runs explicitly use SDPA for both arms, without reinstalling it.
+- `...q2-r2`: stopped to correct the final-answer policy before task scoring.
+- `...q2-r3`: emet controller initialization failed on its unused manipulation
+  socket's `None` address; reference q2 retained an output-length failure.
+
+CPU boundary and production-controller checks pass. Live requalification is
+pending; none of the above is an OVMM or manipulation acceptance result.

@@ -6,10 +6,9 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from emet.eval.grapheqa_navigation import predicted_camera_pose
+from emet.eval.grapheqa_navigation import ObservedSpaceNavigation, predicted_camera_pose
 from emet.eval.grapheqa_sensor import command_camera_pose
 from emet.eval.sensor_robot_client import SensorRobotClient
-from emet.robots.footprint import CircularFootprint
 
 
 class Sensor:
@@ -35,7 +34,8 @@ class Sensor:
 
 
 def robot():
-    nav = SimpleNamespace(footprint=CircularFootprint(0.1), update=lambda frame: None)
+    nav = ObservedSpaceNavigation()
+    nav.update = lambda frame: None
     return SensorRobotClient(Sensor(), nav)
 
 
@@ -85,6 +85,16 @@ def test_supported_head_motion_uses_bounded_measured_steps():
     assert client._seq_id > 1
 
 
+def test_synchronous_post_motion_wait_acquires_real_fresh_frame(monkeypatch):
+    from emet.controller.dynamem import look
+
+    client = robot()
+    before = client._seq_id
+    monkeypatch.setattr(look.time, "sleep", lambda _: pytest.fail("Must acquire, not wait for a nonexistent receiver"))
+    look.wait_post_motion_obs(client, timeout=1)
+    assert client._seq_id > before
+
+
 def test_sensor_body_does_not_pretend_manipulation_is_supported():
     with pytest.raises(NotImplementedError, match="no manipulator"):
         robot().move_to_manip_posture()
@@ -122,7 +132,6 @@ def test_factory_keeps_production_agent_and_model_final_contract(tmp_path, monke
     monkeypatch.setattr(stack, "build_memory_agent", build)
     monkeypatch.setattr(sensor_agent, "AuditedPNGClient", lambda **kwargs: remote)
     client = robot()
-    client.navigation.map = SimpleNamespace(parameters={"floor_evidence": {"enabled": True, "reference_z_m": 0}})
     agent, transport = sensor_agent.build_sensor_agent(
         client, {"base_url": "http://localhost/v1", "name": "qwen"}, tmp_path, max_images=4
     )
@@ -134,6 +143,12 @@ def test_factory_keeps_production_agent_and_model_final_contract(tmp_path, monke
     assert captured["parameters"].get("eqa/habitat_perfect_nav") is False
     assert agent.graph_memory.eqa_client._vl is remote
     assert agent.voxel_map.eqa_client is agent.graph_memory.eqa_client
+    assert agent.space is client.navigation.space
+    assert agent.planner.space is client.navigation.space
+    assert agent.planner.min_clearance_m == 0
+    ObservedSpaceNavigation.update(client.navigation, client.sensor.last)
+    agent.planner.reset()
+    assert agent.space.is_valid(client.get_base_pose())
 
 
 def test_production_controller_initializes_without_a_manipulation_server(tmp_path, monkeypatch):
@@ -144,7 +159,6 @@ def test_production_controller_initializes_without_a_manipulation_server(tmp_pat
     monkeypatch.setattr("emet.perception.encoders.siglip_encoder.get_shared_mask_siglip_encoder", lambda **kwargs: None)
     monkeypatch.setattr(sensor_agent, "AuditedPNGClient", lambda **kwargs: object())
     client = robot()
-    client.navigation.map = SimpleNamespace(parameters={"floor_evidence": {"enabled": True, "reference_z_m": 0}})
     agent, _ = sensor_agent.build_sensor_agent(
         client, {"base_url": "http://localhost/v1", "name": "qwen"}, tmp_path, max_images=4
     )
@@ -152,6 +166,7 @@ def test_production_controller_initializes_without_a_manipulation_server(tmp_pat
         assert type(agent).__name__ == "LazyGraphController"
         assert agent._use_instance_memory is False
         assert agent.parameters.get("eqa/agentic_decision_policy") == "model_final"
+        assert agent.space is client.navigation.space
     finally:
         context = agent.manip_socket.context
         agent.manip_socket.close(linger=0)

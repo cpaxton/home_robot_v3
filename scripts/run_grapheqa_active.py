@@ -301,8 +301,12 @@ def run(args):
                 stream.write(json.dumps(row) + "\n")
             print(json.dumps(row), flush=True)
     # Scorer-side only, after every controller request and motion has completed.
+    from emet.eval.frozen_eqa import semantic_choice
+
     for row in rows:
-        row["correct"] = row.get("answer") == questions[row["question_id"]].answer_letter if row["complete"] else None
+        question = questions[row["question_id"]]
+        row["normalized_answer"] = semantic_choice(row.get("answer"), question.choices)
+        row["correct"] = row["normalized_answer"] == question.answer_letter if row["complete"] else None
     (args.output / "scored_results.json").write_text(json.dumps(rows, indent=2) + "\n")
     manifest.update(
         status="complete" if all(row["complete"] for row in rows) else "incomplete_or_failed",

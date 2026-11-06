@@ -152,6 +152,8 @@ def run(args):
                 ]
                 if not paired_ids:
                     command += [
+                        "--agent",
+                        args.active_agent,
                         "--seed",
                         "0",
                         "--max-primitives",
@@ -205,6 +207,7 @@ if __name__ == "__main__":
     mode.add_argument("--active-question-ids", nargs="+", type=int)
     mode.add_argument("--paired-active-question-ids", nargs="+", type=int)
     parser.add_argument("--max-decisions", type=int, default=4)
+    parser.add_argument("--active-agent", choices=("grapheqa", "emet"), default="grapheqa")
     parser.add_argument("--max-images", type=int, choices=range(1, 17), default=1)
     parser.add_argument("--answers", type=Path)
     parser.add_argument("--output", required=True, type=Path)

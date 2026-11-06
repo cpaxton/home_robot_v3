@@ -55,6 +55,12 @@ class SensorRobotClient(AbstractRobotClient):
             raise RuntimeError("RGB-D tracking lost; no measured base pose")
         return base_xyt(pose)
 
+    def wait_for_fresh_observation(self, *, timeout):
+        """Synchronous renderers acquire on demand rather than in a recv thread."""
+        if not np.isfinite(timeout) or timeout <= 0:
+            raise ValueError("Positive observation timeout required")
+        return self.get_observation()
+
     def move_base_to(self, xyt, relative=False, blocking=True, **kwargs):
         goal = np.asarray(getattr(xyt, "xyt", xyt), dtype=float)
         if goal.shape != (3,) or not np.isfinite(goal).all():

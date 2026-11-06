@@ -427,6 +427,10 @@ def wait_post_motion_obs(robot, timeout: float) -> None:
     the previous heading. Stretch has no ``wait_for_obs``; both clients expose
     ``_seq_id`` from the recv thread — wait until that increments.
     """
+    fresh_capture = getattr(robot, "wait_for_fresh_observation", None)
+    if callable(fresh_capture):
+        fresh_capture(timeout=timeout)
+        return
     if hasattr(robot, "wait_for_obs"):
         robot.wait_for_obs(timeout=timeout)
     prev = getattr(robot, "_seq_id", None)
