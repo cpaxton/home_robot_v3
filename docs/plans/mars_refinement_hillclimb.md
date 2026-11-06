@@ -433,3 +433,36 @@ The corrected-runtime full gate passes all1,113 source-bound regressions.
 Fresh teacher replay, compatibility export and integrated retest remain in
 progress; the grasp-priority diagnostic waits behind them. Full regression
 success does not qualify loaded carry or hardware execution.
+
+## Translate while preserving hand orientation
+
+The corrected-runtime teacher reproduces all122 previous cases exactly, and
+all six integrated reference/source fault stops now confirm. Retention still
+fails in the three matched Cartesian reference transfers. The initialized
+source repeats all56 saved actions exactly; its256-transition smoke final is
+not selected. The90-episode grasp-priority diagnostic now runs separately.
+
+The context trial's fixed262k final reaches base50/50 tracking42/50 full,
+arm63/64 tracking29/64 full and coupled4/8 tracking/full. This improves over
+frozen-context refinement but regresses arm stability from the retained59/64.
+All three actual public-tool attempts still fail before grasp. Keep the source;
+finish the two frozen-pose audits and publish the complete negative result.
+
+A new reference audit finds that constant-orientation training translations
+are shorter and slower than actual TAMP pregrasp. See the
+[coverage expansion](../experiments/mars_tamp_translation_20261106.md).
+The next fixed-final262k trial changes the declared distribution and includes
+the separately tested stop latch. Keep the prior context recipe:4096 critic
+warmup, actor3e-6, critic multiplier100, gain/bias multiplier300, coefficient
+noise0.1 base/0.03 arm, reward scale0.01, contract ramp32768 after4096,
+jerk/peak weights0.1/0.2, terminal bonus10, seed90,30/50/20 step budgets.
+Use one local worker onCPU14 after the context post-tests exit. Require a fresh
+source-bound full gate, physical teacher146/146 and unchanged old122 rollouts.
+Require source fidelity and exact warmup behavior. Keep grip and normalization
+fixed; no teacher residual, new runtime filter or relaxed physical gates.
+Evaluate canonical22 every32768, expanded146 at final, three separately frozen
+12-case audits and three actual Cartesian public-tool transfers. Teacher/source
+must see identical inputs; compare execution modes explicitly. Retain every
+failed admission. A candidate must preserve source tracking/full counts on all
+prior groups and improve a full-pass count; report added-case and integration
+failures separately. No automatic promotion or hardware use.

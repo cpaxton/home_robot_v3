@@ -29,7 +29,12 @@ keeps all failures, measurements and artifact/source hashes.
 
 All 1,113 fresh source-bound branch regressions pass at `e6401542`. Because control source
 identity changes, old checkpoint execution evidence remains bound to its old
-runtime; do not rewrite training provenance to admit it. Fresh regression/teacher
-checks and a declared source-fidelity initialization audit precede an integrated
-retest under the corrected runtime. The ongoing context-training comparison
+runtime; do not rewrite training provenance to admit it. The teacher reproduces all122 earlier cases exactly. A declared256-transition
+source-fidelity smoke audit archives its preselected initialized actor; all56
+saved input actions remain exactly equal. Its trained final is not selected.
+The subsequent six complete public-tool replays confirm every failed stop: all
+three analytic references still fail retention at lift/preplace, and the
+initialized learned source fails tracking (56/250/56 calls). All remain0/3
+transfers. Stopping is fixed; grasp retention and learned approach tracking
+are not. The ongoing context-training comparison
 continues in its immutable earlier checkout. No hardware is used or qualified.

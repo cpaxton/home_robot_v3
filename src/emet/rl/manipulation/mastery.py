@@ -133,6 +133,14 @@ def load_suite(path=SUITE):
                 raise ValueError("extra arm start requires five finite nearby joint coordinates") from error
             if posture.shape != (5,) or not np.isfinite(posture).all() or np.any(abs(posture) > 1):
                 raise ValueError("extra arm start requires five finite nearby joint coordinates")
+        if "minimum_duration_s" in case:
+            duration = case["minimum_duration_s"]
+            if (
+                type(duration) not in (int, float)
+                or not np.isfinite(duration)
+                or not 0 < duration <= cfg.horizon - suite["gate"]["terminal_hold_s"]
+            ):
+                raise ValueError("extra arm minimum duration must be finite, positive and leave terminal hold")
         ids.add(case["id"])
     if not np.isfinite(suite["reference"]["loaded_time_scale"]) or suite["reference"]["loaded_time_scale"] < 1:
         raise ValueError("loaded references may only slow down")
@@ -526,7 +534,10 @@ class MasteryEnv(ManipulationEnv):
                 np.r_[p.base_acceleration, p.base_yaw_acceleration, p.acceleration] * 0.35,
                 np.r_[p.base_acceleration, p.base_yaw_acceleration, p.acceleration] * 2,
             )
-            path = slow_path(path, max(1.0, self.suite["reference"]["minimum_duration_s"] / path.end))
+            minimum = case.get("minimum_duration_s", self.suite["reference"]["minimum_duration_s"])
+            # The compiler's speed/acceleration/jerk bounds always apply. This
+            # reset-only extra-case option can add time, never speed up its path.
+            path = slow_path(path, max(1.0, minimum / path.end))
         if path.end + self.suite["gate"]["terminal_hold_s"] > self.config.horizon:
             return self.reject("reference_exceeds_horizon", initial)
         reference = MasteryReference(self, path, loaded=loaded)

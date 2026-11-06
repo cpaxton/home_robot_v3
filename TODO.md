@@ -278,6 +278,14 @@ Accepted plan: [Mars controller integration](docs/plans/mars_controller_integrat
       stop resets in0.10/0.25/0.20s, with original thresholds. Fresh full-source
       gates and an initialized-source compatibility audit precede integrated
       retesting. Do not claim retention fixed or hardware ready.
+- [ ] Complete the orientation-preserving hand-translation refinement and all
+      held-out/public-tool tests: [protocol and coverage](docs/experiments/mars_tamp_translation_20261106.md).
+      Preserve122 prior cases; add24 speed-bounded translations and12 disjoint
+      frozen audit inputs. Require fresh full regressions and teacher146/146
+      before the fixed262k trial; keep source if arm/base stability regresses.
+      Corrected runtime now confirms all six integrated fault stops, but loaded
+      Cartesian reference retention still fails0/3. Grasp-priority diagnostics,
+      agent integration and Herman feedback/qualification remain open.
 - [ ] Continue the [Mars refinement hill climb](docs/plans/mars_refinement_hillclimb.md):
       retain the stronger 49/50 base-tracking, 15/16 full-arm source; both quieter
       mixed refinements reach 50/50 base tracking but regress arm smoothness.
