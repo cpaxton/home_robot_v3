@@ -83,3 +83,12 @@ or relaxed clearance is introduced. Retain interrupted-motion events as well.
 Repeat all three scenes at the resulting frozen source, with the same seed/order.
 The scorer also checks native raster-centre rays by averaging opposite viewport
 boundary rays on the unit-depth plane; do not confuse those two conventions.
+
+The first centre-ray oracle at `b35ba00f` uses the wrong Y boundary and fails
+before q2 launches (job `20261106_080022_ed2f5e`). The native routine first
+converts Y with `height-v-1`, so the opposite queries are `(u,v)` and `(u+1,v-1)`.
+This is explicit in the [native implementation](https://github.com/facebookresearch/habitat-sim/blob/main/src/esp/gfx/RenderCamera.cpp).
+An independent CPU test pins that convention. The oracle is corrected without
+changing sensor calibration or navigation. A 1e-4 unit-depth ray tolerance
+accommodates native float32 far-plane unprojection (<0.02 pixel here); the
+half-pixel convention error is much larger. Preserve the failed oracle result.

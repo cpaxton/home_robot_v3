@@ -52,16 +52,16 @@ def run(args):
 
     camera = sensor.sim.get_agent(0).scene_node.subtree_sensors["depth"].render_camera
     ray_errors, center_ray_errors = [], []
-    for u, v in ((0, 0), (319, 239), (638, 478)):
+    for u, v in ((0, 1), (319, 239), (638, 478)):
         ray = camera.unproject(mn.Vector2i(u, v), False)
         gl_direction = np.asarray(camera.camera_matrix)[:3, :3] @ np.asarray(ray.direction)
         cv_direction = gl_direction * [1, -1, -1]
         cv_direction /= cv_direction[2]
         ray_errors.append(float(np.max(np.abs(cv_direction - np.linalg.inv(sensor.k) @ [u, v, 1]))))
-        # Native unproject consumes integer viewport boundary coordinates.
-        # Unnormalized rays are affine on the unit-depth plane: average the
-        # opposite boundaries to obtain the raster sample at (u+.5, v+.5).
-        opposite = camera.unproject(mn.Vector2i(u + 1, v + 1), False)
+        # Native unproject flips viewport Y with height-v-1, then normalizes
+        # integer boundaries. Opposite queries (u,v) and (u+1,v-1) therefore
+        # enclose the array pixel centre. Rays are affine at unit depth.
+        opposite = camera.unproject(mn.Vector2i(u + 1, v - 1), False)
         center_gl = np.asarray(camera.camera_matrix)[:3, :3] @ (
             (np.asarray(ray.direction) + np.asarray(opposite.direction)) / 2
         )
@@ -131,7 +131,10 @@ def run(args):
         result["status"] = (
             "matched_renderer_replay" if result["matched_rgb_frames"] == len(rows) else "renderer_mismatch"
         )
-        if max(center_ray_errors) > 1e-5:
+        # Native unproject transforms far-plane points in float32. This unit-
+        # depth tolerance is <.02 pixel at this focal length, well below the
+        # .5-pixel convention error, and is unrelated to motion tolerances.
+        if max(center_ray_errors) > 1e-4:
             result["status"] = "renderer_calibration_mismatch"
     except Exception as exc:
         result.update(status="failed", error=f"{type(exc).__name__}: {exc}")
