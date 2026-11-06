@@ -278,11 +278,18 @@ Accepted plan: [Mars controller integration](docs/plans/mars_controller_integrat
       stop resets in0.10/0.25/0.20s, with original thresholds. Fresh full-source
       gates and an initialized-source compatibility audit precede integrated
       retesting. Do not claim retention fixed or hardware ready.
+- [ ] Repair full-volume Mars grasp fit: height priorities fail0/30 each over90
+      diagnostic episodes. Open-pad overlap is verified against recorded FK;
+      test axial pinch depth36/38mm after exact baseline replays, preserving
+      geometry, loads, object poses and all guards. See [fit evidence](docs/experiments/mars_grasp_fit_20261106.md).
+      Keep grasp/placement planning fixes separate from learned tracking; no
+      candidate is qualified by static clearance alone.
 - [ ] Complete the orientation-preserving hand-translation refinement and all
       held-out/public-tool tests: [protocol and coverage](docs/experiments/mars_tamp_translation_20261106.md).
       Preserve122 prior cases; add24 speed-bounded translations and12 disjoint
-      frozen audit inputs. Require fresh full regressions and teacher146/146
-      before the fixed262k trial; keep source if arm/base stability regresses.
+      frozen audit inputs. All1,123 fresh regressions, teacher146/146 (old122exact) and
+      fresh teacher12/12 pass; the fixed262k trial runs after an unchanged-recipe
+      retry of offline W&B socket startup, with final post-tests queued; keep source if arm/base stability regresses.
       Corrected runtime now confirms all six integrated fault stops, but loaded
       Cartesian reference retention still fails0/3. Grasp-priority diagnostics,
       agent integration and Herman feedback/qualification remain open.

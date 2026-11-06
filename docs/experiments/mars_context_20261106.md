@@ -18,6 +18,14 @@ final; teacher and retained source pass12/12 tracking/full on each. No recorded
 unsafe-contact, wheel-lift, invalid-physics or retention flag trips in these
 free-space audits. They do not establish loaded safety.
 
+The arm-case median measured base jerk rises from0.133 to0.239 m/s³
+(maximum0.328→0.612); median hold drift rises from0.040 to0.111 mm.
+Median terminal hand position error remains very small,0.036→0.026 mm, while
+one final case stops at10.24 mm. These are measured simulator quantities and
+benchmark thresholds, not robot damage ratings. The rejected final has a
+stability regression and a real path-tracking failure; its full-pass count does
+not mean half the reaches suffer large position errors.
+
 All three actual archived-checkpoint public-tool first transfers fail pregrasp
 at the Cartesian tracking envelope after53/73/53 learned calls. All three
 measured stops confirm. The separate joint/legacy references succeed3/3;

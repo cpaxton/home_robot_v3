@@ -32,9 +32,13 @@ remains 3 s. Retiming always respects the existing physical speed, acceleration
 and jerk bounds; the option can only slow a compiled path. Caliban's isolated
 geometry preview admits 24/24, with excursions 4.89–25.32 mm and joint velocity
 at most 0.15 rad/s. This uses a mixed development snapshot for reset/FK geometry
-only and is explicitly ineligible for qualification. The nine static tests
-and the native derivative-bound test pass; a fresh full-source regression gate
-and 146-case physical teacher preflight must still pass locally.
+only and is explicitly ineligible for qualification. All1,123 fresh source-bound local regressions now pass, including the nine
+static tests and native derivative-bound test. The physical teacher passes
+146/146, reproducing every previous122-case metric, reward, code and
+reset/reference identity exactly. The separate frozen translation teacher
+passes12/12. [Preflight evidence](../../paper/data/whole_body_control/mars_tamp_translation_audit_v1/preflight.json)
+keeps every case and source/report digest. This establishes achievable teacher
+references under the admitted simulator, not learned-policy success.
 
 Twelve additional continuous-posture translation inputs were frozen before
 training, with disjoint seeds 34400000–34400011. Preserve their failed admission
@@ -53,3 +57,26 @@ older twelve-case audits, the new twelve-case audit, and actual public-tool
 first transfers. Keep every intermediate without selecting one on validation.
 No automatic promotion and no hardware motion. Loaded-grasp planning remains
 a separate diagnostic; free-space training is not a retention qualification.
+
+The first training entrypoint stops before source admission or any PPO update:
+offline W&B cannot open its local IPC socket inside the sandbox. Preserve its
+output and error separately; retry the unchanged recipe with local socket
+access and caches under `/tmp`. The receipt and both teacher reports are
+reverified against the same immutable source before retry. Offline W&B now
+starts successfully; source-fidelity initialization precedes optimization.
+The final-test supervisor is restarted with the same inputs after archiving its
+upstream-failure state. There is no checkpoint selection or recipe change.
+
+The complete target plot is generated at
+`logs/eval/mars-tamp-translation-v1-teacher/targets.svg`. To inspect one case
+without running a simulator, use the existing report plotter:
+
+```bash
+PYTHONPATH=src .venv/bin/python -m emet.rl.manipulation.mastery plot \
+  --preflight logs/eval/mars-tamp-translation-v1-teacher/report.json.gz \
+  --case-id train:arm:tamp_translation_A_elbow_translate_positive \
+  --output logs/eval/mars-translation-A-preview
+```
+
+Use a fresh output directory. Visualization sub-selection never changes an
+admission, training or final evaluation gate.

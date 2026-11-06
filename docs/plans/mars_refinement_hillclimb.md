@@ -430,9 +430,10 @@ safety. The existing end-to-end context comparison keeps its fixed final and
 all post-tests; no intermediate is chosen to replace the retained source.
 
 The corrected-runtime full gate passes all1,113 source-bound regressions.
-Fresh teacher replay, compatibility export and integrated retest remain in
-progress; the grasp-priority diagnostic waits behind them. Full regression
-success does not qualify loaded carry or hardware execution.
+Teacher122/122 reproduces all old cases exactly; compatibility initialization
+repeats all56 saved input actions exactly, and all six integrated failed stops
+confirm. Retention and learned tracking still fail. Full regression success
+does not qualify loaded carry or hardware execution.
 
 ## Translate while preserving hand orientation
 
@@ -468,3 +469,29 @@ must see identical inputs; compare execution modes explicitly. Retain every
 failed admission. A candidate must preserve source tracking/full counts on all
 prior groups and improve a full-pass count; report added-case and integration
 failures separately. No automatic promotion or hardware use.
+
+The complete90-episode height-priority diagnostic gives0/30 transfers for each
+priority. Reject a height-only change; see the
+[full fit diagnosis](../experiments/mars_grasp_fit_20261106.md). A static full-pad
+box check finds overlap at the existing30mm axial pinch point in all24 available
+measured-open grasp frames; native recorded FK verifies the analytic geometry
+at machine precision. The next planning-only comparison tests36mm/38mm on all30
+cases each after three exact baseline replays. Keep all guards, geometry and
+force/torque/friction parameters fixed; this diagnostic is not canonical
+qualification and must not silently replace the controller or grasp planner.
+
+Translation revision2227f58a now passes all1,123 fresh regressions, teacher146/146
+with old122 native cases exact, and fresh teacher12/12. Offline W&B's first
+startup is denied its sandbox IPC socket before any PPO update; preserve the
+failed output and retry the same recipe with local socket access and task-owned
+`/tmp` caches. Reverify source-bound receipts/reports; do not skip the initial
+source-fidelity or warmup identity checks. The retry is running in the immutable
+checkout, with the fixed-final post-tests queued behind it. No promotion.
+
+The pad-geometry native crosscheck passes56 recorded states at machine
+precision. All three nominal30mm baseline replays are physically exact; the
+36mm/38mm all-case comparison is running. Three read-only contact probes are
+queued afterward to record actual solved pad/object forces, frames, friction
+and contact positions. Require their physical traces to match the saved
+baseline exactly; keep raw contact data ignored. Do not infer success or
+change force/friction limits from static clearance.
