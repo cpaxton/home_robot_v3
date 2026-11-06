@@ -289,6 +289,10 @@ class TrainingRewardScale(gym.Wrapper):
 
 def stage_step_weights(stages, arm_fraction=None, coupled_fraction=None):
     if arm_fraction is None and coupled_fraction is None:
+        if set(stages) == {"coupled"}:
+            return {"coupled": 1.0}
+        if "coupled" in stages:
+            raise ValueError("mixed coupled training requires explicit arm/coupled fractions")
         return None
     expected = {"base", "arm"} | ({"coupled"} if coupled_fraction is not None else set())
     fractions = [arm_fraction] + ([] if coupled_fraction is None else [coupled_fraction])
@@ -452,7 +456,7 @@ def train(args, suite):
     weights = stage_step_weights(
         stages, getattr(args, "arm_step_fraction", None), getattr(args, "coupled_step_fraction", None)
     )
-    base = MasteryEnv(suite, stages=stages, split="train", population="training")
+    base = MasteryEnv(suite, stages=stages, split="train", population="training", training_stage_weights=weights)
     if weights is not None:
         base.sampler = TrainingCaseSampler(
             base.cases,

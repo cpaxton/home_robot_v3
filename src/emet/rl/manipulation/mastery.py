@@ -396,12 +396,19 @@ class MasteryReference(TaskPoseTrajectory):
 class MasteryEnv(ManipulationEnv):
     """Reset-only case selection and path generation; full actor action space."""
 
-    def __init__(self, suite=None, *, stages=("base",), split="train", population="canonical"):
+    def __init__(
+        self, suite=None, *, stages=("base",), split="train", population="canonical", training_stage_weights=None
+    ):
         self.suite = load_suite() if suite is None else suite
         self.cases = select_cases(self.suite, stages, split, population=population)
+        if training_stage_weights is not None and population != "training":
+            raise ValueError("stage weight overrides are training-only")
+        weights = self.suite.get("training_stage_weights") if population == "training" else None
+        if training_stage_weights is not None:
+            weights = training_stage_weights
         self.sampler = TrainingCaseSampler(
             self.cases,
-            self.suite.get("training_stage_weights") if population == "training" else None,
+            weights,
             sampling=self.suite.get("training_sampling", "episodes") if population == "training" else "episodes",
             primitive_weights=self.suite.get("training_primitive_weights") if population == "training" else None,
         )

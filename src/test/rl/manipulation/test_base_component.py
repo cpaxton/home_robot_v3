@@ -401,6 +401,9 @@ def test_explicit_coupled_step_budget_preserves_rehearsal_shares():
     assert stage_step_weights(["base", "arm"], 0.2) == {"base": 0.8, "arm": 0.2}
     weights = stage_step_weights(["base", "arm", "coupled"], 0.2, 0.4)
     assert weights == pytest.approx({"base": 0.4, "arm": 0.2, "coupled": 0.4})
+    assert stage_step_weights(["coupled"]) == {"coupled": 1.0}
+    with pytest.raises(ValueError, match="explicit"):
+        stage_step_weights(["base", "arm", "coupled"])
 
 
 @pytest.mark.parametrize(
@@ -461,7 +464,9 @@ def test_base_component_runs_native_physics_and_preserves_arm_rows(tmp_path, sta
     spec = load_suite(
         Path(__file__).resolve().parents[4] / "configs/benchmarks/mars_tracking_mastery_command_history_v1.json"
     )
-    base = MasteryEnv(spec, stages=stages, split="train", population="training")
+    base = MasteryEnv(
+        spec, stages=stages, split="train", population="training", training_stage_weights=stage_step_weights(stages)
+    )
     source_env = ExecutorCommandVecNormalize(DummyVecEnv([lambda: base]), config=base.config, norm_reward=False)
     params = kwargs()
     params["features_extractor_kwargs"]["orientation_scale"] = base.config.feedback_orientation_scale
