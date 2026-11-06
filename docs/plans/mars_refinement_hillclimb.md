@@ -165,3 +165,32 @@ stage's full-pass count. Passing any subset of coupled cases is progress, not
 completion. All 70 physical gates, dynamic masks/goal changes, load/disturbance
 coverage and integrated TAMP/agent execution remain required before simulator
 qualification, followed by actual Herman interface and bounded-motion gates.
+
+## Gain-bias optimizer units: matched follow-up
+
+The normalized coupled final is rejected: base 49/50 tracking, 38/50 full;
+arm 16/16 tracking, 5/16 full; coupled 0/4 tracking/full. Fresh regressions pass
+1,041 and teacher 70/70; initial full transfer and warmup are physically exact.
+See the [complete report](../experiments/mars_coupled_units_20261106.md).
+
+General yaw gain biases move from approximately 0.00457 to 0.00651/0.00699,
+despite 32,768 actor transitions. The restoring-turn head's biases remain near
+2.0, while context readout changes can affect the arm's base reactions. Test
+gain-parameter learning units before adding policy structure or another long
+unchanged run.
+
+Repeat the preceding 36,864-transition recipe from the same retained source,
+changing only `--gain-bias-lr-multiplier 1000`: effective gain-bias LR 0.03,
+other actor readout/noise LR 3e-5 and critic LR 3e-4. The actor context stays
+frozen. Keep the same seed, 4k warmup,
+40/20/40 step budgets, reward scale 0.01, exploration, evaluation cadence and
+fixed final. The optimizer preserves all LR ratios under SB3 schedules and
+reload, and frozen arm rows remain unchanged. Log the full base gain-bias
+vectors per rollout. Initial mean action, inference architecture and safety
+limits are unchanged. Fresh full regressions and teacher 70/70 are required.
+
+Apply the same physical nonregression selection gate and retain every failure.
+Do not select an intermediate validation checkpoint. Quarter-amplitude training
+parents pass 2/2 under the source; half and three-quarter parents fail tracking.
+This establishes an easier curriculum starting point for a later experiment,
+without changing any canonical goal or threshold.

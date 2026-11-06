@@ -289,6 +289,43 @@ def test_critic_warmup_keeps_mean_and_noise_exact_then_restores_actor_updates(se
     verify_frozen(loaded, source)
 
 
+def test_gain_bias_role_uses_its_own_units_and_survives_ppo_reload(setup, tmp_path):
+    _, env, source, _, _ = setup
+    model = PPO(
+        BasePolicy,
+        env,
+        device="cpu",
+        n_steps=8,
+        batch_size=8,
+        n_epochs=1,
+        learning_rate=3e-5,
+        use_sde=True,
+        policy_kwargs={**kwargs(), "critic_lr_multiplier": 10, "gain_bias_lr_multiplier": 1000},
+    )
+    initialize(model, env, source, config(), Toy.fingerprint)
+    groups = model.policy.optimizer.param_groups
+    assert [(g["role"], g["lr_scale"]) for g in groups] == [("actor", 1), ("critic", 10), ("gain_bias", 1000)]
+    selected = [model.policy.action_net.turn_gain.bias, model.policy.value_net.bias, model.policy.action_net.gain.bias]
+    before = [p.detach().clone() for p in selected]
+    for p in selected:
+        p.grad = torch.zeros_like(p)
+        p.grad[0] = 1
+    model.policy.optimizer.step()
+    changes = [float(abs(p[0].detach() - old[0])) for p, old in zip(selected, before, strict=True)]
+    assert changes == pytest.approx([3e-5, 3e-4, 3e-2], rel=0.01)
+    verify_frozen(model, source)
+    model.save(tmp_path / "gain-bias.zip")
+    loaded = PPO.load(tmp_path / "gain-bias.zip", env=env, device="cpu")
+    assert loaded.policy.gain_bias_lr_multiplier == 1000
+    assert [(g["role"], g["lr_scale"]) for g in loaded.policy.optimizer.param_groups] == [
+        ("actor", 1),
+        ("critic", 10),
+        ("gain_bias", 1000),
+    ]
+    loaded.learn(16)
+    verify_frozen(loaded, source)
+
+
 def test_warmup_transition_uses_original_ppo_targets_and_epochs(setup):
     model = setup[0]
 

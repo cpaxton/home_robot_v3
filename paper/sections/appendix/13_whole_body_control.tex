@@ -453,3 +453,14 @@ better policy. A teacher-base/learned-arm intervention passes 4/4 coupled cases,
 supporting coordinated base training with the preserved arm. These remain
 development diagnostics; all outcomes and provenance are retained in
 \texttt{paper/data/whole\_body\_control/mars\_critic\_calibration\_v1/}.
+
+Constant training reward scale 0.01 and 40/20/40 base/arm/coupled step budgets
+are then tested for 36,864 transitions. The fixed final retains 49/50 base and
+16/16 arm tracking, but full passes regress to 38/50 and 5/16; coupled remains
+0/4. Teacher 70/70 and 1,041 source-bound regressions pass; initial 70-case
+transfer and warmup replay are exact. The source is retained. A separate
+quarter-amplitude training-parent probe passes 2/2, motivating a possible later
+curriculum; it does not relax the canonical benchmark. General feedback-gain
+optimization units are a subsequent experiment, not a demonstrated fix.
+All outcomes are in
+\texttt{paper/data/whole\_body\_control/mars\_coupled\_units\_v1/}.

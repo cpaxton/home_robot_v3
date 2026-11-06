@@ -83,7 +83,13 @@ class RoleAdam(torch.optim.Adam):
 
 class BasePolicy(FeedbackActorCriticPolicy):
     def __init__(
-        self, *args, exploration_coefficient_std=0.5, critic_lr_multiplier=1.0, critic_reward_scale=1.0, **kwargs
+        self,
+        *args,
+        exploration_coefficient_std=0.5,
+        critic_lr_multiplier=1.0,
+        critic_reward_scale=1.0,
+        gain_bias_lr_multiplier=1.0,
+        **kwargs,
     ):
         if not np.isfinite(exploration_coefficient_std) or not 0 < exploration_coefficient_std <= 1:
             raise ValueError("exploration coefficient std must be in (0,1]")
@@ -91,6 +97,9 @@ class BasePolicy(FeedbackActorCriticPolicy):
         if not np.isfinite(critic_lr_multiplier) or critic_lr_multiplier <= 0:
             raise ValueError("positive finite critic LR multiplier required")
         self.critic_lr_multiplier = critic_lr_multiplier
+        if not np.isfinite(gain_bias_lr_multiplier) or gain_bias_lr_multiplier <= 0:
+            raise ValueError("positive finite gain-bias LR multiplier required")
+        self.gain_bias_lr_multiplier = gain_bias_lr_multiplier
         self.critic_reward_scale = value_reward_scale({"critic_reward_scale": critic_reward_scale})
         if (
             not kwargs.get("use_sde", False)
@@ -135,22 +144,33 @@ class BasePolicy(FeedbackActorCriticPolicy):
         self._actor_parameter_names = tuple(
             name for name, parameter in self.named_parameters() if parameter.requires_grad and not self.is_critic(name)
         )
-        if self.critic_lr_multiplier == 1:
+        if self.critic_lr_multiplier == 1 and self.gain_bias_lr_multiplier == 1:
             self.optimizer = self.optimizer_class(
                 [p for p in self.parameters() if p.requires_grad], lr=lr_schedule(1), **self.optimizer_kwargs
             )
         else:
             if self.optimizer_class is not torch.optim.Adam:
                 raise ValueError("role-scaled base training requires Adam")
+
+            def role(name):
+                if self.is_critic(name):
+                    return "critic"
+                if self.gain_bias_lr_multiplier != 1 and name == "action_net.gain.bias":
+                    return "gain_bias"
+                return "actor"
+
+            scales = {"actor": 1.0, "critic": self.critic_lr_multiplier}
+            if self.gain_bias_lr_multiplier != 1:
+                scales["gain_bias"] = self.gain_bias_lr_multiplier
             groups = [
                 {
                     "params": [
-                        p for name, p in self.named_parameters() if p.requires_grad and self.is_critic(name) == critic
+                        p for name, p in self.named_parameters() if p.requires_grad and role(name) == group_role
                     ],
-                    "role": "critic" if critic else "actor",
-                    "lr_scale": self.critic_lr_multiplier if critic else 1.0,
+                    "role": group_role,
+                    "lr_scale": scale,
                 }
-                for critic in (False, True)
+                for group_role, scale in scales.items()
             ]
             self.optimizer = RoleAdam(groups, lr=lr_schedule(1), **self.optimizer_kwargs)
 
@@ -208,6 +228,7 @@ class CriticWarmup(BaseCallback):
         self.model.rollout_buffer.gae_lambda = self.model.gae_lambda
         self.logger.record("train/critic_warmup", int(warmup))
         self.logger.record("train/critic_lr_multiplier", self.model.policy.critic_lr_multiplier)
+        self.logger.record("train/gain_bias_lr_multiplier", self.model.policy.gain_bias_lr_multiplier)
 
     def verify_actor(self):
         current = dict(self.model.policy.named_parameters())
@@ -450,6 +471,7 @@ def train(args, suite):
     exploration_std = getattr(args, "exploration_coefficient_std", 0.5)
     reward_scale = value_reward_scale({"critic_reward_scale": getattr(args, "reward_scale", 1.0)})
     critic_multiplier = getattr(args, "critic_lr_multiplier", 1.0)
+    gain_bias_multiplier = getattr(args, "gain_bias_lr_multiplier", 1.0)
     warmup = CriticWarmup(getattr(args, "critic_warmup_steps", 0), getattr(args, "critic_warmup_epochs", 20))
     if warmup.steps >= args.steps:
         raise ValueError("critic warmup must leave at least one actor rollout")
@@ -495,6 +517,7 @@ def train(args, suite):
                 "exploration_coefficient_std": exploration_std,
                 "critic_lr_multiplier": critic_multiplier,
                 "critic_reward_scale": reward_scale,
+                "gain_bias_lr_multiplier": gain_bias_multiplier,
                 "restoring_yaw_feedback": True,
                 "turn_xy_tolerance": base.config.base_xy_tolerance,
                 "features_extractor_class": GoalFeedbackFeatures,
@@ -537,6 +560,7 @@ def train(args, suite):
             "ppo": {
                 "learning_rate": learning_rate,
                 "critic_lr_multiplier": critic_multiplier,
+                "gain_bias_lr_multiplier": gain_bias_multiplier,
                 "critic_warmup_steps": warmup.steps,
                 "critic_warmup_epochs": warmup.epochs,
                 "critic_warmup_gae_lambda": 1.0,
@@ -596,6 +620,7 @@ def train(args, suite):
                         "contract_schedule": record["contract_schedule"],
                         "initial_admission": admission_mode,
                         "critic_lr_multiplier": critic_multiplier,
+                        "gain_bias_lr_multiplier": gain_bias_multiplier,
                         "training_reward_scale": reward_scale,
                         "critic_warmup_steps": warmup.steps,
                         "actor_unchanged_during_critic_warmup": warmup.actor_unchanged,
@@ -647,6 +672,10 @@ def train(args, suite):
                     "sampling_steps": dict(self.steps),
                     "sampling_starts": dict(self.starts),
                     "sde_coefficients": model.policy.log_std.detach().exp().cpu().tolist(),
+                    "base_gain_bias": model.policy.action_net.gain.bias.detach()
+                    .reshape(7, model.policy.features_extractor.feedback_width)[:2]
+                    .cpu()
+                    .tolist(),
                     "rollout_cases": self.rollout.record(),
                     "requested_contract_fraction": schedule.fraction(self.num_timesteps) if objective_config else None,
                     "critic_warmup": warmup.active,
@@ -753,6 +782,7 @@ def main():
     parser.add_argument("--learning-rate", type=float, default=1e-4)
     parser.add_argument("--exploration-coefficient-std", type=float, default=0.5)
     parser.add_argument("--critic-lr-multiplier", type=float, default=1.0)
+    parser.add_argument("--gain-bias-lr-multiplier", type=float, default=1.0)
     parser.add_argument("--critic-warmup-steps", type=int, default=0)
     parser.add_argument("--critic-warmup-epochs", type=int, default=20)
     parser.add_argument("--initial-admission", choices=["strict", "source_fidelity"], default="strict")
@@ -774,6 +804,8 @@ def main():
         parser.error("positive finite learning rate required")
     if not np.isfinite(args.critic_lr_multiplier) or args.critic_lr_multiplier <= 0:
         parser.error("positive finite critic LR multiplier required")
+    if not np.isfinite(args.gain_bias_lr_multiplier) or args.gain_bias_lr_multiplier <= 0:
+        parser.error("positive finite gain-bias LR multiplier required")
     try:
         stage_step_weights(args.training_stages, args.arm_step_fraction, args.coupled_step_fraction)
         value_reward_scale({"critic_reward_scale": args.reward_scale})

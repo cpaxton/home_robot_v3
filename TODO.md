@@ -264,8 +264,10 @@ Accepted plan: [Mars controller integration](docs/plans/mars_controller_integrat
       retain the stronger 49/50 base-tracking, 15/16 full-arm source; both quieter
       mixed refinements reach 50/50 base tracking but regress arm smoothness.
       Critic-only warmup improves base value calibration but regresses full arm
-      to 5/16; retain that negative result. Test constant critic/reward units and
-      a 40/20/40 base/arm/coupled control-step curriculum, then require coupled
+      to 5/16; return-unit conditioning plus 40/20/40 coordination training also
+      remains 0/4 coupled. Preserve both negative reports. Test gain-bias optimizer
+      units in a matched run; quarter-amplitude parents offer a later curriculum.
+      Require coupled
       dynamic-pose, loaded TAMP and real feedback/watchdog/stop acceptance before
       hardware motion. Primitive success alone does not close this gate.
 - [x] Add a frozen small Mars mastery suite: 13 training / 13 nearby validation

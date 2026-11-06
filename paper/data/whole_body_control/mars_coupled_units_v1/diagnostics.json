@@ -1,0 +1,810 @@
+{
+  "implementation_revision": "d7764fc6",
+  "hardware_used": false,
+  "safety_promoted": false,
+  "inactive_goal_normalization": {
+    "hardware_used": false,
+    "inference": "Computed exact normalized inactive goal fields from exported statistics; control.observe() zeros these fields before normalization. No physics or policy update.",
+    "rows": [
+      {
+        "field": "inactive_hand_goal",
+        "columns": 9,
+        "normalized_inactive_zero_l2": 82.02026536433091,
+        "abs_mean": 9.956068285825255,
+        "fraction_at_clip": 0.4444444444444444,
+        "last_token": [
+          -20.0,
+          9.037137404014135,
+          -20.0,
+          -20.0,
+          -0.01474240602950561,
+          -0.00034649709261814484,
+          -20.0,
+          -0.256827807215564,
+          -0.29469274302734255
+        ]
+      },
+      {
+        "field": "inactive_hand_target_token",
+        "columns": 10,
+        "normalized_inactive_zero_l2": 82.02026536433091,
+        "abs_mean": 8.96046145724273,
+        "fraction_at_clip": 0.4,
+        "last_token": [
+          -20.0,
+          9.037137404014135,
+          -20.0,
+          -20.0,
+          -0.01474240602950561,
+          -0.00034649709261814484,
+          -20.0,
+          -0.256827807215564,
+          -0.29469274302734255,
+          -0.0
+        ]
+      }
+    ]
+  },
+  "training_parent_amplitudes": {
+    "complete": true,
+    "hardware_used": false,
+    "safety_promoted": false,
+    "scope": "Only two training parents scaled. No canonical targets/thresholds changed, no policy training or checkpoint selected.",
+    "script_sha256": "ddddf713d64d6a757f0fa04255ade367ea9ff4cd0367bc0ac7770610915c2eea",
+    "rows": [
+      {
+        "scale": 0.25,
+        "suite": {
+          "format": "mars-tracking-mastery-v2",
+          "scope": "Diagnostic scaled training-parent coupled paths; not canonical qualification",
+          "robot": "innate_mars",
+          "config": {
+            "robot": "innate_mars",
+            "scenario": "reach",
+            "horizon": 12,
+            "randomization_scale": 0,
+            "payload_mass_kg": 0.05,
+            "payload_object": "object1",
+            "action_mode": "direct_velocity",
+            "trajectory_preview": true,
+            "tracking_reward": true,
+            "tracking_precision": 4,
+            "retention_context": true,
+            "categorical_features_unscaled": true,
+            "feedback_policy": true,
+            "feedback_orientation_scale": 0.15,
+            "wheel_feedback_gain": 0.5,
+            "physical_wheel_slew": true,
+            "whole_body_settling": true,
+            "goal_gated_settling": true,
+            "endpoint_motion_weight": 0.25,
+            "body_motion_weight": 0.25,
+            "pose_progress_weight": 1,
+            "fixed_base_contract": true,
+            "fixed_base_xy_tolerance": 0.005,
+            "base_xy_tolerance": 0.005,
+            "base_heading_tolerance": 0.01,
+            "hand_position_tolerance": 0.003,
+            "hand_orientation_tolerance": 0.02,
+            "balanced_grasp_setup": true,
+            "support_half_width": 0.04,
+            "contact_cone": "elliptic",
+            "contact_impratio": 3,
+            "reach_hold_probability": 1,
+            "jerk_limited_lift_reference": true,
+            "grasp_lift_payload_object": "object1",
+            "precision_tracking_reward": true,
+            "terminal_hold_seconds": 2.0,
+            "normalized_jerk_weight": 0.1,
+            "wheel_jerk_limits": null,
+            "command_smoothness_weight": 0.1,
+            "base_turn_progress_guard": true,
+            "restoring_yaw_feedback": true,
+            "hand_gated_base_reward": true
+          },
+          "stages": [
+            "base",
+            "arm",
+            "coupled",
+            "loaded"
+          ],
+          "reference": {
+            "minimum_duration_s": 3.0,
+            "loaded_time_scale": 1.1,
+            "hand_position_tube_m": 0.01,
+            "hand_orientation_tube_rad": 0.1,
+            "base_position_tube_m": 0.015,
+            "base_heading_tube_rad": 0.08
+          },
+          "gate": {
+            "terminal_hold_s": 2.0,
+            "hold_drift_m": 0.003,
+            "smoothness_ratio": 1.25,
+            "force_floor_N": 1.0,
+            "base_linear_jerk_floor_m_s3": 0.1,
+            "base_yaw_jerk_floor_rad_s3": 0.5,
+            "joint_jerk_floor_rad_s3": 1.0
+          },
+          "training": {
+            "steps": 16384,
+            "seed": 90,
+            "learning_rate": 0.0001,
+            "discount": 0.9975,
+            "base_exploration_std": 0.03,
+            "arm_exploration_std": 0.1
+          },
+          "cases": [
+            {
+              "id": "train:coupled:forward_turn@coupled_scale:0.25",
+              "split": "train",
+              "stage": "coupled",
+              "reset_seed": 34000009,
+              "travel_m": 0.00375,
+              "turn_rad": 0.00625,
+              "arm_delta": [
+                0.0,
+                -0.00625,
+                0.01,
+                -0.00375,
+                0.01
+              ]
+            },
+            {
+              "id": "train:coupled:reverse_turn@coupled_scale:0.25",
+              "split": "train",
+              "stage": "coupled",
+              "reset_seed": 34000010,
+              "travel_m": -0.00375,
+              "turn_rad": -0.00625,
+              "arm_delta": [
+                0.0,
+                0.00625,
+                -0.01,
+                0.00375,
+                -0.01
+              ]
+            }
+          ],
+          "safety_promoted": false,
+          "training_population": {
+            "format": "base-posture-yaw-scales-v1",
+            "yaw_magnitudes": [
+              0.02,
+              0.04,
+              0.06
+            ]
+          },
+          "training_stage_weights": {
+            "base": 0.25,
+            "arm": 0.75
+          },
+          "arm_training_scales": [
+            0.25,
+            0.5,
+            1.0
+          ],
+          "training_sampling": "control_steps",
+          "training_primitive_weights": {
+            "base": {
+              "hold": 0.05,
+              "forward": 0.4,
+              "reverse": 0.4,
+              "yaw_left": 0.075,
+              "yaw_right": 0.075
+            }
+          },
+          "training_policy": "executor_mask_v1"
+        },
+        "teacher": {
+          "complete": true,
+          "controller": "task_pose_teacher",
+          "population": "canonical",
+          "groups": {
+            "coupled/train": {
+              "cases": 2,
+              "admitted": 2,
+              "mastered": 2,
+              "tracking_and_settling_passed": 2,
+              "smoothness_passed": 2,
+              "failure_reasons": {},
+              "codes": {
+                "ok": 2
+              },
+              "all_pass": true
+            }
+          },
+          "all_pass": true,
+          "safety_promoted": false
+        },
+        "source": {
+          "complete": true,
+          "controller": "e7b425699510cc635485bdd8f59a5b25692fb165faf248aaecbc2707c0dbb883",
+          "population": "canonical",
+          "groups": {
+            "coupled/train": {
+              "cases": 2,
+              "admitted": 2,
+              "mastered": 2,
+              "tracking_and_settling_passed": 2,
+              "smoothness_passed": 2,
+              "failure_reasons": {},
+              "codes": {
+                "ok": 2
+              },
+              "all_pass": true
+            }
+          },
+          "all_pass": true,
+          "safety_promoted": false
+        },
+        "cases": [
+          {
+            "id": "train:coupled:forward_turn@coupled_scale:0.25",
+            "code": "ok",
+            "mastered": true,
+            "tracking_and_settling_pass": true,
+            "failure_reasons": [],
+            "metrics": {
+              "peak_force_N": 0.49050000000000127,
+              "base_linear_jerk": 0.31031900881668933,
+              "base_yaw_jerk": 0.11420041958039306,
+              "joint_jerk": 0.6959465649272103,
+              "hand_position_error_m": 0.0005358183222146886,
+              "hand_orientation_error_rad": 0.0015214052758929883,
+              "base_error_m": 0.001942589257628675,
+              "base_heading_error_rad": 0.005094424866917168,
+              "hold_drift_m": 0.0012564045121903264,
+              "settled_seconds": 8.999999999999993
+            }
+          },
+          {
+            "id": "train:coupled:reverse_turn@coupled_scale:0.25",
+            "code": "ok",
+            "mastered": true,
+            "tracking_and_settling_pass": true,
+            "failure_reasons": [],
+            "metrics": {
+              "peak_force_N": 0.49050000000000127,
+              "base_linear_jerk": 0.20787563519477298,
+              "base_yaw_jerk": 0.08975661598538756,
+              "joint_jerk": 0.7929168828919512,
+              "hand_position_error_m": 0.0003550258910816466,
+              "hand_orientation_error_rad": 0.001515982166683783,
+              "base_error_m": 0.002838473297865166,
+              "base_heading_error_rad": 0.0061590599243449146,
+              "hold_drift_m": 0.0006149620097105978,
+              "settled_seconds": 8.999999999999993
+            }
+          }
+        ]
+      },
+      {
+        "scale": 0.5,
+        "suite": {
+          "format": "mars-tracking-mastery-v2",
+          "scope": "Diagnostic scaled training-parent coupled paths; not canonical qualification",
+          "robot": "innate_mars",
+          "config": {
+            "robot": "innate_mars",
+            "scenario": "reach",
+            "horizon": 12,
+            "randomization_scale": 0,
+            "payload_mass_kg": 0.05,
+            "payload_object": "object1",
+            "action_mode": "direct_velocity",
+            "trajectory_preview": true,
+            "tracking_reward": true,
+            "tracking_precision": 4,
+            "retention_context": true,
+            "categorical_features_unscaled": true,
+            "feedback_policy": true,
+            "feedback_orientation_scale": 0.15,
+            "wheel_feedback_gain": 0.5,
+            "physical_wheel_slew": true,
+            "whole_body_settling": true,
+            "goal_gated_settling": true,
+            "endpoint_motion_weight": 0.25,
+            "body_motion_weight": 0.25,
+            "pose_progress_weight": 1,
+            "fixed_base_contract": true,
+            "fixed_base_xy_tolerance": 0.005,
+            "base_xy_tolerance": 0.005,
+            "base_heading_tolerance": 0.01,
+            "hand_position_tolerance": 0.003,
+            "hand_orientation_tolerance": 0.02,
+            "balanced_grasp_setup": true,
+            "support_half_width": 0.04,
+            "contact_cone": "elliptic",
+            "contact_impratio": 3,
+            "reach_hold_probability": 1,
+            "jerk_limited_lift_reference": true,
+            "grasp_lift_payload_object": "object1",
+            "precision_tracking_reward": true,
+            "terminal_hold_seconds": 2.0,
+            "normalized_jerk_weight": 0.1,
+            "wheel_jerk_limits": null,
+            "command_smoothness_weight": 0.1,
+            "base_turn_progress_guard": true,
+            "restoring_yaw_feedback": true,
+            "hand_gated_base_reward": true
+          },
+          "stages": [
+            "base",
+            "arm",
+            "coupled",
+            "loaded"
+          ],
+          "reference": {
+            "minimum_duration_s": 3.0,
+            "loaded_time_scale": 1.1,
+            "hand_position_tube_m": 0.01,
+            "hand_orientation_tube_rad": 0.1,
+            "base_position_tube_m": 0.015,
+            "base_heading_tube_rad": 0.08
+          },
+          "gate": {
+            "terminal_hold_s": 2.0,
+            "hold_drift_m": 0.003,
+            "smoothness_ratio": 1.25,
+            "force_floor_N": 1.0,
+            "base_linear_jerk_floor_m_s3": 0.1,
+            "base_yaw_jerk_floor_rad_s3": 0.5,
+            "joint_jerk_floor_rad_s3": 1.0
+          },
+          "training": {
+            "steps": 16384,
+            "seed": 90,
+            "learning_rate": 0.0001,
+            "discount": 0.9975,
+            "base_exploration_std": 0.03,
+            "arm_exploration_std": 0.1
+          },
+          "cases": [
+            {
+              "id": "train:coupled:forward_turn@coupled_scale:0.5",
+              "split": "train",
+              "stage": "coupled",
+              "reset_seed": 34000009,
+              "travel_m": 0.0075,
+              "turn_rad": 0.0125,
+              "arm_delta": [
+                0.0,
+                -0.0125,
+                0.02,
+                -0.0075,
+                0.02
+              ]
+            },
+            {
+              "id": "train:coupled:reverse_turn@coupled_scale:0.5",
+              "split": "train",
+              "stage": "coupled",
+              "reset_seed": 34000010,
+              "travel_m": -0.0075,
+              "turn_rad": -0.0125,
+              "arm_delta": [
+                0.0,
+                0.0125,
+                -0.02,
+                0.0075,
+                -0.02
+              ]
+            }
+          ],
+          "safety_promoted": false,
+          "training_population": {
+            "format": "base-posture-yaw-scales-v1",
+            "yaw_magnitudes": [
+              0.02,
+              0.04,
+              0.06
+            ]
+          },
+          "training_stage_weights": {
+            "base": 0.25,
+            "arm": 0.75
+          },
+          "arm_training_scales": [
+            0.25,
+            0.5,
+            1.0
+          ],
+          "training_sampling": "control_steps",
+          "training_primitive_weights": {
+            "base": {
+              "hold": 0.05,
+              "forward": 0.4,
+              "reverse": 0.4,
+              "yaw_left": 0.075,
+              "yaw_right": 0.075
+            }
+          },
+          "training_policy": "executor_mask_v1"
+        },
+        "teacher": {
+          "complete": true,
+          "controller": "task_pose_teacher",
+          "population": "canonical",
+          "groups": {
+            "coupled/train": {
+              "cases": 2,
+              "admitted": 2,
+              "mastered": 2,
+              "tracking_and_settling_passed": 2,
+              "smoothness_passed": 2,
+              "failure_reasons": {},
+              "codes": {
+                "ok": 2
+              },
+              "all_pass": true
+            }
+          },
+          "all_pass": true,
+          "safety_promoted": false
+        },
+        "source": {
+          "complete": true,
+          "controller": "e7b425699510cc635485bdd8f59a5b25692fb165faf248aaecbc2707c0dbb883",
+          "population": "canonical",
+          "groups": {
+            "coupled/train": {
+              "cases": 2,
+              "admitted": 2,
+              "mastered": 0,
+              "tracking_and_settling_passed": 0,
+              "smoothness_passed": 2,
+              "failure_reasons": {
+                "tracking_timeout": 2,
+                "terminal_hold": 2
+              },
+              "codes": {
+                "tracking_timeout": 2
+              },
+              "all_pass": false
+            }
+          },
+          "all_pass": false,
+          "safety_promoted": false
+        },
+        "cases": [
+          {
+            "id": "train:coupled:forward_turn@coupled_scale:0.5",
+            "code": "tracking_timeout",
+            "mastered": false,
+            "tracking_and_settling_pass": false,
+            "failure_reasons": [
+              "tracking_timeout",
+              "terminal_hold"
+            ],
+            "metrics": {
+              "peak_force_N": 0.4905000000000012,
+              "base_linear_jerk": 0.47649000511399875,
+              "base_yaw_jerk": 0.12782167764412156,
+              "joint_jerk": 0.9869671045310142,
+              "hand_position_error_m": 0.0007813974480692905,
+              "hand_orientation_error_rad": 0.0031665628369470667,
+              "base_error_m": 0.004088064681462752,
+              "base_heading_error_rad": 0.010366122903021323,
+              "hold_drift_m": 0.0,
+              "settled_seconds": 0
+            }
+          },
+          {
+            "id": "train:coupled:reverse_turn@coupled_scale:0.5",
+            "code": "tracking_timeout",
+            "mastered": false,
+            "tracking_and_settling_pass": false,
+            "failure_reasons": [
+              "tracking_timeout",
+              "terminal_hold"
+            ],
+            "metrics": {
+              "peak_force_N": 0.49050000000000127,
+              "base_linear_jerk": 0.4257720654385048,
+              "base_yaw_jerk": 0.12356791355695035,
+              "joint_jerk": 0.7838078744242372,
+              "hand_position_error_m": 0.0008623618133671943,
+              "hand_orientation_error_rad": 0.002866393933290148,
+              "base_error_m": 0.00514240556070652,
+              "base_heading_error_rad": 0.01186489403234811,
+              "hold_drift_m": 0.0,
+              "settled_seconds": 0
+            }
+          }
+        ]
+      },
+      {
+        "scale": 0.75,
+        "suite": {
+          "format": "mars-tracking-mastery-v2",
+          "scope": "Diagnostic scaled training-parent coupled paths; not canonical qualification",
+          "robot": "innate_mars",
+          "config": {
+            "robot": "innate_mars",
+            "scenario": "reach",
+            "horizon": 12,
+            "randomization_scale": 0,
+            "payload_mass_kg": 0.05,
+            "payload_object": "object1",
+            "action_mode": "direct_velocity",
+            "trajectory_preview": true,
+            "tracking_reward": true,
+            "tracking_precision": 4,
+            "retention_context": true,
+            "categorical_features_unscaled": true,
+            "feedback_policy": true,
+            "feedback_orientation_scale": 0.15,
+            "wheel_feedback_gain": 0.5,
+            "physical_wheel_slew": true,
+            "whole_body_settling": true,
+            "goal_gated_settling": true,
+            "endpoint_motion_weight": 0.25,
+            "body_motion_weight": 0.25,
+            "pose_progress_weight": 1,
+            "fixed_base_contract": true,
+            "fixed_base_xy_tolerance": 0.005,
+            "base_xy_tolerance": 0.005,
+            "base_heading_tolerance": 0.01,
+            "hand_position_tolerance": 0.003,
+            "hand_orientation_tolerance": 0.02,
+            "balanced_grasp_setup": true,
+            "support_half_width": 0.04,
+            "contact_cone": "elliptic",
+            "contact_impratio": 3,
+            "reach_hold_probability": 1,
+            "jerk_limited_lift_reference": true,
+            "grasp_lift_payload_object": "object1",
+            "precision_tracking_reward": true,
+            "terminal_hold_seconds": 2.0,
+            "normalized_jerk_weight": 0.1,
+            "wheel_jerk_limits": null,
+            "command_smoothness_weight": 0.1,
+            "base_turn_progress_guard": true,
+            "restoring_yaw_feedback": true,
+            "hand_gated_base_reward": true
+          },
+          "stages": [
+            "base",
+            "arm",
+            "coupled",
+            "loaded"
+          ],
+          "reference": {
+            "minimum_duration_s": 3.0,
+            "loaded_time_scale": 1.1,
+            "hand_position_tube_m": 0.01,
+            "hand_orientation_tube_rad": 0.1,
+            "base_position_tube_m": 0.015,
+            "base_heading_tube_rad": 0.08
+          },
+          "gate": {
+            "terminal_hold_s": 2.0,
+            "hold_drift_m": 0.003,
+            "smoothness_ratio": 1.25,
+            "force_floor_N": 1.0,
+            "base_linear_jerk_floor_m_s3": 0.1,
+            "base_yaw_jerk_floor_rad_s3": 0.5,
+            "joint_jerk_floor_rad_s3": 1.0
+          },
+          "training": {
+            "steps": 16384,
+            "seed": 90,
+            "learning_rate": 0.0001,
+            "discount": 0.9975,
+            "base_exploration_std": 0.03,
+            "arm_exploration_std": 0.1
+          },
+          "cases": [
+            {
+              "id": "train:coupled:forward_turn@coupled_scale:0.75",
+              "split": "train",
+              "stage": "coupled",
+              "reset_seed": 34000009,
+              "travel_m": 0.01125,
+              "turn_rad": 0.018750000000000003,
+              "arm_delta": [
+                0.0,
+                -0.018750000000000003,
+                0.03,
+                -0.01125,
+                0.03
+              ]
+            },
+            {
+              "id": "train:coupled:reverse_turn@coupled_scale:0.75",
+              "split": "train",
+              "stage": "coupled",
+              "reset_seed": 34000010,
+              "travel_m": -0.01125,
+              "turn_rad": -0.018750000000000003,
+              "arm_delta": [
+                0.0,
+                0.018750000000000003,
+                -0.03,
+                0.01125,
+                -0.03
+              ]
+            }
+          ],
+          "safety_promoted": false,
+          "training_population": {
+            "format": "base-posture-yaw-scales-v1",
+            "yaw_magnitudes": [
+              0.02,
+              0.04,
+              0.06
+            ]
+          },
+          "training_stage_weights": {
+            "base": 0.25,
+            "arm": 0.75
+          },
+          "arm_training_scales": [
+            0.25,
+            0.5,
+            1.0
+          ],
+          "training_sampling": "control_steps",
+          "training_primitive_weights": {
+            "base": {
+              "hold": 0.05,
+              "forward": 0.4,
+              "reverse": 0.4,
+              "yaw_left": 0.075,
+              "yaw_right": 0.075
+            }
+          },
+          "training_policy": "executor_mask_v1"
+        },
+        "teacher": {
+          "complete": true,
+          "controller": "task_pose_teacher",
+          "population": "canonical",
+          "groups": {
+            "coupled/train": {
+              "cases": 2,
+              "admitted": 2,
+              "mastered": 2,
+              "tracking_and_settling_passed": 2,
+              "smoothness_passed": 2,
+              "failure_reasons": {},
+              "codes": {
+                "ok": 2
+              },
+              "all_pass": true
+            }
+          },
+          "all_pass": true,
+          "safety_promoted": false
+        },
+        "source": {
+          "complete": true,
+          "controller": "e7b425699510cc635485bdd8f59a5b25692fb165faf248aaecbc2707c0dbb883",
+          "population": "canonical",
+          "groups": {
+            "coupled/train": {
+              "cases": 2,
+              "admitted": 2,
+              "mastered": 0,
+              "tracking_and_settling_passed": 0,
+              "smoothness_passed": 2,
+              "failure_reasons": {
+                "tracking_timeout": 2,
+                "terminal_hold": 2
+              },
+              "codes": {
+                "tracking_timeout": 2
+              },
+              "all_pass": false
+            }
+          },
+          "all_pass": false,
+          "safety_promoted": false
+        },
+        "cases": [
+          {
+            "id": "train:coupled:forward_turn@coupled_scale:0.75",
+            "code": "tracking_timeout",
+            "mastered": false,
+            "tracking_and_settling_pass": false,
+            "failure_reasons": [
+              "tracking_timeout",
+              "terminal_hold"
+            ],
+            "metrics": {
+              "peak_force_N": 0.49050000000000127,
+              "base_linear_jerk": 0.438095624113716,
+              "base_yaw_jerk": 0.1416306490950002,
+              "joint_jerk": 1.0104210097428705,
+              "hand_position_error_m": 0.0010523434483382828,
+              "hand_orientation_error_rad": 0.004927091016910033,
+              "base_error_m": 0.006618046488307701,
+              "base_heading_error_rad": 0.015557152264830497,
+              "hold_drift_m": 0.0,
+              "settled_seconds": 0
+            }
+          },
+          {
+            "id": "train:coupled:reverse_turn@coupled_scale:0.75",
+            "code": "tracking_timeout",
+            "mastered": false,
+            "tracking_and_settling_pass": false,
+            "failure_reasons": [
+              "tracking_timeout",
+              "terminal_hold"
+            ],
+            "metrics": {
+              "peak_force_N": 0.49050000000000127,
+              "base_linear_jerk": 0.42983491112755884,
+              "base_yaw_jerk": 0.1177779767808228,
+              "joint_jerk": 0.8338006208167311,
+              "hand_position_error_m": 0.0015046533177387113,
+              "hand_orientation_error_rad": 0.0038753297652557497,
+              "base_error_m": 0.006492745955298079,
+              "base_heading_error_rad": 0.017080417633400354,
+              "hold_drift_m": 0.0,
+              "settled_seconds": 0
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "gain_bias_learning": {
+    "source": {
+      "artifact": {
+        "path": "logs/manipulation/mars-base-curriculum-legacy-v1-seed90/last/component.zip",
+        "sha256": "93a261901f244b7dd7a5850a2c5b50d57d8475f9a98294592235c2da8dff6046",
+        "bytes": 1899265
+      },
+      "forward_current_future": [
+        0.013921324163675308,
+        0.014119697734713554
+      ],
+      "yaw_current_future": [
+        0.0045718965120613575,
+        0.0045718965120613575
+      ],
+      "yaw_damping": -0.0022885333746671677,
+      "positive_turn_head_bias": [
+        2.000278949737549,
+        2.0006868839263916,
+        0.9923115372657776
+      ]
+    },
+    "final": {
+      "artifact": {
+        "path": "logs/manipulation/mars-coupled-units-v3-seed90/last/component.zip",
+        "sha256": "e320428211e056fd3cc3abb013a2169307d72c613378a3a959da138cc6beb7f8",
+        "bytes": 1905122
+      },
+      "forward_current_future": [
+        0.013728521764278412,
+        0.014644634909927845
+      ],
+      "yaw_current_future": [
+        0.0065108612179756165,
+        0.0069917943328619
+      ],
+      "yaw_damping": 0.0011592807713896036,
+      "positive_turn_head_bias": [
+        2.0002739429473877,
+        2.000699996948242,
+        0.992375910282135
+      ]
+    },
+    "interpretation": "General feedback-gain bias parameters barely move in 32768 actor transitions. This motivates a matched optimizer-unit experiment, not proof of cause or policy success."
+  },
+  "artifacts": [
+    {
+      "path": "logs/recovery/hand-accuracy-v1/coupled-amplitude-audit.py",
+      "sha256": "ddddf713d64d6a757f0fa04255ade367ea9ff4cd0367bc0ac7770610915c2eea",
+      "bytes": 1934
+    },
+    {
+      "path": "logs/manipulation/mars-base-curriculum-legacy-v1-seed90/last/actor/manifest.json",
+      "sha256": "fb0df2c1f737017e208d2849a7cc2523aaa3a0d60a73f71871bbc623603345a1",
+      "bytes": 217349
+    }
+  ]
+}
