@@ -263,7 +263,11 @@ class ObservedSpaceNavigation:
 
     def plan(self, target_xyz, *, object_target):
         from emet.motion.base_goal_rank import plan_grid_multi_goal
-        from emet.motion.navigation_sweep import differential_drive_waypoints, validate_navigation_sweep
+        from emet.motion.navigation_sweep import (
+            differential_drive_waypoints,
+            shortcut_navigation_route,
+            validate_navigation_sweep,
+        )
 
         target = np.asarray(target_xyz, dtype=float)
         if target.shape != (3,) or not np.isfinite(target).all():
@@ -293,6 +297,9 @@ class ObservedSpaceNavigation:
         # objects instead retain a distinct standoff target to face.
         final_heading = np.arctan2(target[1] - current[1], target[0] - current[0]) if object_target else current[2]
         route.extend(differential_drive_waypoints(current, np.r_[current[:2], final_heading]))
+        route = shortcut_navigation_route(self.space, self.pose, route)
+        if not route:
+            return [], "no_admitted_drive_shortcut"
         valid, reason = validate_navigation_sweep(self.space, self.pose, route)
         return (route, "ok") if valid else ([], reason)
 

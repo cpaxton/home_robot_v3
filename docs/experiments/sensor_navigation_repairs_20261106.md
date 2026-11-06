@@ -55,3 +55,31 @@ motion, model downloads, environment rebuilds or full benchmark sweep.
 Passing this gate qualifies the bounded sensor/navigation collector, not full
 EQA/OVMM quality. The subsequent paired active comparison still uses the existing
 agent and must match pose, footprint, perception, map sampling and motion budgets.
+
+## First live repair check
+
+Job `20261106_075142_875ea8`, source `d48e516c`, reproduces every one of the
+176 original q6 RGB frames in the scorer replay. The simulator base never
+translates during its turns. The old turn residual is therefore an odometry
+error, not actual creep. Native `unproject` addresses integer viewport boundaries;
+its half-pixel difference from array-centred rays is recorded explicitly.
+
+Fresh q2 passes the old floor blockage and reaches the same first target
+(-0.5,-0.05) m with 0.050 mm position residual relative to odometry. It then
+exhausts 200 primitives during its second leg (202 frames, 69.20 s). This remains
+a failed full collection. The floor repair is useful but does not close the gate.
+
+The grid route introduces many turn-drive-turn operations around small lattice
+steps. Add a shared geometric shortcut operation: a direct drive segment replaces
+a grid subpath only after checking the full turn/translation footprint sweep.
+Keep the exact terminal XYT, the 0.2 m route-segment bound and fresh per-primitive
+checks. Obstacles and unknown cells can force retention of the original corners.
+The collector ranks paths by translation length instead of waypoint count so
+compression cannot change its distance metric. Partial legs now clip the last
+admitted segment to the full 0.75 m allowance rather than discarding that segment.
+The 200/240 budgets and observation scans stay fixed; no shorter-distance gate
+or relaxed clearance is introduced. Retain interrupted-motion events as well.
+
+Repeat all three scenes at the resulting frozen source, with the same seed/order.
+The scorer also checks native raster-centre rays by averaging opposite viewport
+boundary rays on the unit-depth plane; do not confuse those two conventions.

@@ -97,6 +97,33 @@ def validate_navigation_sweep(space, start, waypoints, *, linear_step_m=0.025, a
     return True, None
 
 
+def shortcut_navigation_route(space, start, waypoints, *, max_translation_m=0.2):
+    """Remove grid stair steps only when the complete drive/turn sweep is valid.
+
+    Preserve the exact terminal XYT and bounded drive segments. Each shortcut
+    uses the same continuous footprint/unknown-space checker as execution;
+    obstacle corners, unknown floor and turns are never skipped unchecked.
+    """
+    if not waypoints:
+        return []
+    accepted, _ = validate_navigation_sweep(space, start, waypoints)
+    if not accepted:
+        return []
+    result, current, index = [], np.asarray(start, dtype=float), 0
+    while index < len(waypoints):
+        for end in range(len(waypoints) - 1, index - 1, -1):
+            candidate = differential_drive_waypoints(current, waypoints[end], max_translation_m=max_translation_m)
+            accepted, _ = validate_navigation_sweep(space, current, candidate)
+            if accepted:
+                result.extend(candidate)
+                current = np.asarray(candidate[-1])
+                index = end + 1
+                break
+        else:
+            return []
+    return result
+
+
 @dataclass
 class RouteExecutionResult:
     success: bool

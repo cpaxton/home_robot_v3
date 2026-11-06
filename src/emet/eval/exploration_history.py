@@ -64,11 +64,19 @@ def route_prefix(route, start, max_distance_m):
         raise ValueError("A positive finite leg distance is required")
     if not route:
         return [], 0.0
-    prefix, distance, previous = [], 0.0, np.asarray(start)[:2]
+    prefix, distance, previous = [], 0.0, np.asarray(start, dtype=float)
     for waypoint in route:
-        current = np.asarray(waypoint)[:2]
-        increment = float(np.linalg.norm(current - previous))
+        current = np.asarray(waypoint, dtype=float)
+        increment = float(np.linalg.norm(current[:2] - previous[:2]))
         if distance + increment > max_distance_m + 1e-9:
+            fraction = (max_distance_m - distance) / increment
+            if fraction > 0:
+                clipped = previous + fraction * (current - previous)
+                clipped[2] = previous[2] + fraction * np.arctan2(
+                    np.sin(current[2] - previous[2]), np.cos(current[2] - previous[2])
+                )
+                prefix.append(clipped.tolist())
+                distance = max_distance_m
             break
         prefix.append(waypoint)
         distance += increment
@@ -110,13 +118,27 @@ def collect_history(sensor, navigation, event, *, max_legs=2, leg_distance_m=0.7
             prefix, distance = route_prefix(route, navigation.pose, leg_distance_m)
             event({"stage": "proposal", "leg": leg, "target": point, "reason": reason, "prefix_distance_m": distance})
             if prefix and distance > 0:
-                proposals.append((len(route), index, point, prefix))
+                route_distance = float(
+                    np.linalg.norm(np.diff(np.array([navigation.pose, *route])[:, :2], axis=0), axis=1).sum()
+                )
+                proposals.append((route_distance, index, point, prefix))
         if not proposals:
             return {"status": "no_admitted_frontier", "completed_legs": leg}
         _, _, target, route = min(proposals, key=lambda item: item[:2])
         attempted.append(np.asarray(target))
         event({"stage": "motion_started", "leg": leg, "target": target, "route": route})
-        receipt = executor.execute(route)
+        try:
+            receipt = executor.execute(route)
+        except CollectionBudgetExceeded as exc:
+            event(
+                {
+                    "stage": "motion_interrupted",
+                    "leg": leg,
+                    "reason": str(exc),
+                    "current_pose": navigation.pose.tolist(),
+                }
+            )
+            raise
         event({"stage": "motion_finished", "leg": leg, "receipt": receipt})
         if not receipt["success"]:
             return {"status": "motion_failed", "completed_legs": leg, "reason": receipt["reason"]}

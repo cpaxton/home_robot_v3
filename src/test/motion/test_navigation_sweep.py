@@ -137,6 +137,44 @@ def test_drive_compression_keeps_corner_and_bounds_translation():
     assert np.linalg.norm(np.diff(np.vstack(([0, 0, 0], compressed))[:, :2], axis=0), axis=1).max() <= 0.2 + 1e-8
 
 
+def test_checked_shortcut_removes_grid_stair_turns_and_keeps_exact_terminal_pose():
+    from emet.motion.navigation_sweep import shortcut_navigation_route
+
+    space = SimpleNamespace(is_valid=lambda pose: True)
+    route = [[0.1, 0, 0], [0.1, 0.1, np.pi / 2], [0.2, 0.1, 0], [0.3, 0.1, 0]]
+    short = shortcut_navigation_route(space, [0, 0, 0], route)
+    np.testing.assert_allclose(short[-1], route[-1])
+    assert validate_navigation_sweep(space, [0, 0, 0], short)[0]
+    drive_yaws = [
+        p[2]
+        for a, p in zip([[0, 0, 0], *short], short, strict=False)
+        if np.linalg.norm(np.asarray(p)[:2] - np.asarray(a)[:2]) > 1e-8
+    ]
+    assert np.allclose(drive_yaws, np.arctan2(0.1, 0.3))
+    assert np.linalg.norm(np.diff(np.array([[0, 0, 0], *short])[:, :2], axis=0), axis=1).max() <= 0.2 + 1e-8
+
+
+@pytest.mark.parametrize("reason", ["occupied_footprint", "unobserved_footprint"])
+def test_shortcut_does_not_cut_through_obstacles_or_unknown_floor(reason):
+    from emet.motion.navigation_sweep import shortcut_navigation_route
+
+    space = SimpleNamespace(
+        is_valid=lambda p: not (0.35 < p[0] < 0.65 and 0.35 < p[1] < 0.65), last_validity={"reason": reason}
+    )
+    start, route = [0, 0, 0], [[0, 1, np.pi / 2], [1, 1, 0]]
+    assert not validate_navigation_sweep(space, start, [[1, 1, 0]])[0]
+    short = shortcut_navigation_route(space, start, route)
+    assert short and validate_navigation_sweep(space, start, short)[0]
+    assert any(abs(p[0]) < 1e-8 and p[1] > 0.9 for p in short)
+
+
+def test_shortcut_rejects_a_route_whose_required_drive_turn_is_unsafe():
+    from emet.motion.navigation_sweep import shortcut_navigation_route
+
+    space = SimpleNamespace(is_valid=lambda pose: abs(pose[2]) < 0.5)
+    assert not shortcut_navigation_route(space, [0, 0, 0], [[0, 0.5, 0]])
+
+
 @pytest.mark.parametrize("proposal", [[[0.2, 0, 0]], [[0.2, 0.2, 0], [0.2, 0, 0]], [[0.1, 0, 0]]])
 def test_route_proposal_requires_fresh_sweep_and_correct_endpoint(proposal):
     from types import SimpleNamespace

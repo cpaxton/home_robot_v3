@@ -12,8 +12,9 @@ from emet.eval.exploration_history import CollectionBudgetExceeded, RecordedSens
 def test_route_prefix_counts_path_length_not_endpoint_distance_and_keeps_turns():
     route = [[0, 0, 1], [0.3, 0, 1], [0.3, 0.3, 1], [0, 0.3, 1]]
     prefix, distance = route_prefix(route, [0, 0, 0], 0.65)
-    assert prefix == route[:3]
-    assert distance == pytest.approx(0.6)
+    assert prefix[:3] == route[:3]
+    np.testing.assert_allclose(prefix[-1], [0.25, 0.3, 1])
+    assert distance == pytest.approx(0.65)
     assert route_prefix([], None, 1) == ([], 0.0)
     with pytest.raises(ValueError):
         route_prefix(route, [0, 0, 0], np.nan)
@@ -116,6 +117,49 @@ def test_failed_measured_route_stops_collection_without_an_automatic_retry(monke
     assert result["status"] == "motion_failed" and result["reason"] == "collision"
     assert len(calls) == 1
     assert events[-1]["stage"] == "motion_finished"
+
+
+def test_frontier_distance_ranking_is_independent_of_waypoint_count(monkeypatch):
+    raw, events = Sensor(), []
+    sensor = RecordedSensor(raw, lambda *args: None, max_primitives=100, max_seconds=10)
+    nav = navigation([[1, 0, 0], [0.5, 0, 0]])
+    nav.pose = np.zeros(3)
+    nav.plan = lambda point, **kwargs: (
+        [[1, 0, 0]] if point[0] == 1 else [[x, 0, 0] for x in np.linspace(0.05, 0.5, 10)],
+        "ok",
+    )
+
+    class Executor:
+        def __init__(self, *args):
+            pass
+
+        def execute(self, route):
+            return {"success": False, "reason": "test_stop"}
+
+    monkeypatch.setattr("emet.eval.exploration_history.HabitatMotionExecutor", Executor)
+    collect_history(sensor, nav, events.append)
+    selected = next(event for event in events if event["stage"] == "motion_started")
+    assert selected["target"] == [0.5, 0, 0]
+
+
+def test_interrupted_route_keeps_its_leg_and_measured_pose(monkeypatch):
+    raw, events = Sensor(), []
+    sensor = RecordedSensor(raw, lambda *args: None, max_primitives=100, max_seconds=10)
+    nav = navigation([[1, 0, 0]])
+    nav.pose = np.zeros(3)
+    nav.plan = lambda *args, **kwargs: ([[0.5, 0, 0]], "ok")
+
+    class Executor:
+        def __init__(self, *args):
+            pass
+
+        def execute(self, route):
+            raise CollectionBudgetExceeded("test limit")
+
+    monkeypatch.setattr("emet.eval.exploration_history.HabitatMotionExecutor", Executor)
+    with pytest.raises(CollectionBudgetExceeded):
+        collect_history(sensor, nav, events.append)
+    assert events[-1] == {"stage": "motion_interrupted", "leg": 0, "reason": "test limit", "current_pose": [0, 0, 0]}
 
 
 def test_scene_selection_never_reads_task_or_scorer_columns(monkeypatch, tmp_path):
