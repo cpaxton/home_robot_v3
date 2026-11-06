@@ -8,7 +8,17 @@
   "before_regressions_expected_failures": 6,
   "focused_after_existing_and_new": 52,
   "final_fault_file_tests_passed": 7,
-  "full_regressions": "pending",
+  "full_regressions": {
+    "tests": 1113,
+    "passed": true,
+    "implementation_revision": "e6401542",
+    "receipt": {
+      "path": "logs/recovery/hand-accuracy-v1/fault-stop-full.receipt.json",
+      "sha256": "d8c9ac673e2342eac8c382cc84a3d3e9abe86bbf9008f1d7448bd47f92cc7678",
+      "bytes": 202904
+    },
+    "xml_sha256": "dd54d1a10949e65c6eabf6bc40812d0c235c4a98e6d5b6fce15fba527f58d823"
+  },
   "loaded_reset_replay": {
     "complete": true,
     "scope": "Measure three diagnostic loaded stop resets, not complete TAMP transfers.",

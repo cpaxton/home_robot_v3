@@ -20,14 +20,14 @@ including binding the reset-state bytes into the source regression receipt.
 | right,20g,seed0 | Unconfirmed | 0.20s | 0rad |
 
 The original 0.75s stop budget and measured speed thresholds stay unchanged.
-All six floating-base velocity DOFs and arm velocities are checked; grip remains
-closed and release unauthorized. These are diagnostic qpos/qvel/ctrl resets
+All six floating-base velocity DOFs and arm velocities are checked; the closed-grip command remains
+in force and release stays unauthorized. These are diagnostic qpos/qvel/ctrl resets
 from the first faults in the matched Cartesian experiment, not complete
 integration-state replays or successful transfers. The retention failures
 remain open. [Compact evidence](../../paper/data/whole_body_control/mars_fault_stop_v1/results.json)
 keeps all failures, measurements and artifact/source hashes.
 
-The full branch regression gate must pass before merge. Because control source
+All 1,113 fresh source-bound branch regressions pass at `e6401542`. Because control source
 identity changes, old checkpoint execution evidence remains bound to its old
 runtime; do not rewrite training provenance to admit it. Fresh regression/teacher
 checks and a declared source-fidelity initialization audit precede an integrated

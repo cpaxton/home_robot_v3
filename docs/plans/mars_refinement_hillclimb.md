@@ -385,3 +385,51 @@ The current trainer's independent-worker path has separate native two-world
 parity/PPO/export tests and bounded two/eight-worker ARM spawn probes. Keep
 this workstation serial and qualify exact ARM fixtures before scaling the
 learned checkpoint. See [protocol and evidence](../experiments/mars_motion_workers_20261106.md).
+
+## Match execution modes before further loaded training
+
+The explicit Cartesian/jerk-limited reference now shares the checkpoint's
+admitted actuator settings and initial state. All three cases pass pregrasp
+but breach retention at lift/preplace with about 2 mm hand tracking; learned
+tracking still fails earlier. The joint/legacy reference's success is retained
+as a separate mode. Analytic calls cannot be reported as learned-policy calls.
+See [matched evidence](../experiments/mars_matched_reference_20261106.md).
+
+Repeated fault stops also rebase the arm hold target. Latch the first arm/grip
+target instead, keep release unauthorized and retain a finite grip command if
+jaw feedback fails. All six new behavior tests reject the previous code;
+three diagnostic loaded resets now confirm within 0.10/0.25/0.20 s under the
+unchanged 0.75 s budget. This fixes stopping, not retention or full transfers.
+
+Fresh full regressions and teacher122 replay run in immutable `e6401542`.
+Then declare a **source compatibility audit**, not a new policy candidate:
+256 smoke-training transitions with initialized step-zero actor preselected
+before updates; require source-fidelity admission and exact replay of all56
+saved source inputs. Preserve the smoke final but do not select it. Archive the
+actual new-source initialization evidence before rerunning three matched
+reference/source transfers. Do not rewrite old checkpoints' training provenance.
+
+After that audit, run an explicitly labeled planning-only diagnostic on all30
+frozen public-tool cases for each of three priorities: existing lower pinch,
+center first, and horizontal pinch 0.25 object-height above center first.
+Only proposal order changes; retain the original alternatives, IK/collision
+budgets, continuous physics, objects, goals, force/retention/wheel/stop limits
+and reference compilation. Use a fresh serial subprocess per episode to bound
+native memory. Retain every rejection/failure and mark the in-memory planning
+intervention **ineligible for canonical qualification**. A promising option
+still needs a real implementation, full regressions and integrated replay.
+Do not tune friction or torque simply to conceal an unstable grasp.
+
+Keep CPU14 for the declared context trial and its serial tests; CPU15 runs the
+corrected-runtime gates, compatibility audit and planning diagnostic in order.
+No hardware motion or automatic promotion. Once the Cartesian loaded baseline
+is reliable, expand training with actual oracle trajectory snippets and loaded
+resets while retaining original nearby tracking/settling gates. More free-space
+transitions alone have not established either grasp stability or whole-body
+safety. The existing end-to-end context comparison keeps its fixed final and
+all post-tests; no intermediate is chosen to replace the retained source.
+
+The corrected-runtime full gate passes all1,113 source-bound regressions.
+Fresh teacher replay, compatibility export and integrated retest remain in
+progress; the grasp-priority diagnostic waits behind them. Full regression
+success does not qualify loaded carry or hardware execution.
