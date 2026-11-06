@@ -1,0 +1,408 @@
+{
+  "scope": "sensor/navigation gate, not EQA or OVMM task performance",
+  "status": "passed",
+  "runtime_source_commit": "818066c9b75f0b75a38773d78691b7e98c046bdb",
+  "budgets": {
+    "max_primitives": 200,
+    "max_seconds": 240,
+    "max_legs": 2,
+    "leg_distance_m": 0.75
+  },
+  "cases": [
+    {
+      "case": "q2",
+      "status": "passed",
+      "frames": 140,
+      "attempted_primitives": 137,
+      "wall_s": 48.697223796043545,
+      "estimated_camera_path_m": 1.5220293627595676,
+      "legs": [
+        {
+          "leg": 0,
+          "planned_distance_m": 0.75,
+          "position_residual_m": 0.0030773388886710254,
+          "yaw_residual_rad": 0.0005977283362521013
+        },
+        {
+          "leg": 1,
+          "planned_distance_m": 0.75,
+          "position_residual_m": 0.0022623557273615752,
+          "yaw_residual_rad": 0.006683481760213716
+        }
+      ],
+      "manifest_sha256": "81e2a0c5e9c66b6c4f01dab9380ed884acf2a304e4481cdd67967eebe4925943",
+      "frames_sha256": "65b9caa3f29e780c74a1e063108843c24db1301348ad94f9051cc2f5426bd011"
+    },
+    {
+      "case": "q6",
+      "status": "passed",
+      "frames": 141,
+      "attempted_primitives": 138,
+      "wall_s": 48.979014897951856,
+      "estimated_camera_path_m": 1.5200193283568921,
+      "legs": [
+        {
+          "leg": 0,
+          "planned_distance_m": 0.75,
+          "position_residual_m": 0.0020854153180711295,
+          "yaw_residual_rad": 7.970548666724753e-05
+        },
+        {
+          "leg": 1,
+          "planned_distance_m": 0.7500000000000001,
+          "position_residual_m": 0.02419286960250875,
+          "yaw_residual_rad": 0.0004734412230207319
+        }
+      ],
+      "manifest_sha256": "5369cdcce6f8152d34f6850ece3095c6d8eaeb33bfab98b4c0baaf1e50069eca",
+      "frames_sha256": "d17917af52d1376b09138d2bd91f1c269de0c4c9e8a9ce54eee93a20bf89f3b6"
+    },
+    {
+      "case": "q12",
+      "status": "passed",
+      "frames": 142,
+      "attempted_primitives": 139,
+      "wall_s": 50.65063685004134,
+      "estimated_camera_path_m": 1.5201880178180678,
+      "legs": [
+        {
+          "leg": 0,
+          "planned_distance_m": 0.75,
+          "position_residual_m": 0.013687633113633512,
+          "yaw_residual_rad": 0.0006905653196561669
+        },
+        {
+          "leg": 1,
+          "planned_distance_m": 0.75,
+          "position_residual_m": 0.0004244928663217705,
+          "yaw_residual_rad": 0.0018904760247091532
+        }
+      ],
+      "manifest_sha256": "6e60f683edca4c45fa156f57c70bedbdc12ef850b9cc27dc721e277bf6d2674b",
+      "frames_sha256": "76c12aca44e9edcb729bb2b0e7b3871485123da43e64ba6a987cf243f3d5090f"
+    }
+  ],
+  "fixed_turn_control": {
+    "status": "passed_navigation_gate",
+    "source_commit": "818066c9b75f0b75a38773d78691b7e98c046bdb",
+    "question_id": 6,
+    "pose_source": "rgbd_odometry_command_initialized_no_simulator_pose",
+    "routing": "observed_floor_shared_grid_search_and_sweep",
+    "model_calls": 0,
+    "requested_turn_deg": 180.0,
+    "tests": [
+      {
+        "case": "reachable_translation",
+        "success": true,
+        "reason": "ok",
+        "current_pose": [
+          -0.20028207864704156,
+          0.2835357569451229,
+          2.18697465943304
+        ],
+        "goal_pose": [
+          -0.19908307508280615,
+          0.28375174785473084,
+          2.186886747372282
+        ],
+        "position_residual_m": 0.0012183027620761967,
+        "yaw_residual_rad": 8.791206075775548e-05,
+        "replans": 0,
+        "events": [
+          {
+            "phase": "navigation_route_reuse",
+            "accepted": true,
+            "reason": null
+          },
+          {
+            "phase": "navigation",
+            "command": [
+              0.0013753873757908555,
+              0.0006276217820962262,
+              2.186886747372282
+            ],
+            "measured": [
+              0.00480567168846515,
+              0.007029940211337432,
+              2.1825070214122055
+            ],
+            "position_residual_m": 0.007263369172442011,
+            "yaw_residual_rad": 0.00437972596007663,
+            "controller_success": true,
+            "controller_result": {
+              "reason": "ok"
+            },
+            "replan": 0
+          },
+          {
+            "phase": "navigation",
+            "command": [
+              -0.09885384385350765,
+              0.14218968481841351,
+              2.186886747372282
+            ],
+            "measured": [
+              -0.10004287848436996,
+              0.14220920202492635,
+              2.1867640840442957
+            ],
+            "position_residual_m": 0.0011891948010061008,
+            "yaw_residual_rad": 0.00012266332798649415,
+            "controller_success": true,
+            "controller_result": {
+              "reason": "ok"
+            },
+            "replan": 0
+          },
+          {
+            "phase": "navigation",
+            "command": [
+              -0.19908307508280615,
+              0.28375174785473084,
+              2.186886747372282
+            ],
+            "measured": [
+              -0.20028207864704156,
+              0.2835357569451229,
+              2.18697465943304
+            ],
+            "position_residual_m": 0.0012183027620761967,
+            "yaw_residual_rad": 8.791206075775548e-05,
+            "controller_success": true,
+            "controller_result": {
+              "reason": "ok"
+            },
+            "replan": 0
+          }
+        ]
+      },
+      {
+        "case": "turn_to_view",
+        "success": true,
+        "reason": "ok",
+        "current_pose": [
+          -0.19975701235750531,
+          0.28119573787900715,
+          -0.9546185780245316
+        ],
+        "goal_pose": [
+          -0.20028207864704156,
+          0.2835357569451229,
+          5.328567313022833
+        ],
+        "position_residual_m": 0.002398204294507161,
+        "yaw_residual_rad": 5.838677778806502e-07,
+        "replans": 0,
+        "events": [
+          {
+            "phase": "navigation_route_reuse",
+            "accepted": true,
+            "reason": null
+          },
+          {
+            "phase": "navigation",
+            "command": [
+              -0.20028207864704156,
+              0.2835357569451229,
+              5.328567313022833
+            ],
+            "measured": [
+              -0.19975701235750531,
+              0.28119573787900715,
+              -0.9546185780245316
+            ],
+            "position_residual_m": 0.002398204294507161,
+            "yaw_residual_rad": 5.838677778806502e-07,
+            "controller_success": true,
+            "controller_result": {
+              "reason": "ok"
+            },
+            "replan": 0
+          }
+        ]
+      },
+      {
+        "case": "unknown_goal_rejected_before_motion",
+        "success": true,
+        "reason": "no_valid_goals"
+      }
+    ],
+    "floor_calibration": {
+      "reference_z_m": -0.12595213751082546,
+      "support_points": 286,
+      "height_spread_m": 0.0005693465608562209,
+      "timestamp_ns": 917258633576005
+    },
+    "frontiers": [
+      [
+        0.35000000000000003,
+        1.3,
+        0.0
+      ],
+      [
+        -0.6000000000000001,
+        0.8500000000000001,
+        0.0
+      ],
+      [
+        0.9500000000000001,
+        0.4,
+        0.0
+      ],
+      [
+        1.25,
+        -2.0,
+        0.0
+      ],
+      [
+        2.25,
+        -1.05,
+        0.0
+      ],
+      [
+        1.4500000000000002,
+        -0.35000000000000003,
+        0.0
+      ],
+      [
+        0.55,
+        -1.3,
+        0.0
+      ],
+      [
+        0.35000000000000003,
+        -0.75,
+        0.0
+      ]
+    ],
+    "primitive_count": 58
+  },
+  "scorer_only_calibration": {
+    "scorer_only": true,
+    "agent_or_model_calls": 0,
+    "source_commit": "355bd05f807923ae44680292c2154eb7e809ef69",
+    "recorded_source_commit": "6a2a0aefd7ec172755313b528eb7cf59e730e42c",
+    "frames_sha256": "42d6fde78463dd5898c56b6308f09394a1b9ebf792739c930ef70f021a53ccc8",
+    "driver_sha256": "8a5b1aeafc2ca18d158643494347273e205f5c30ec6ada5030e90282493a4163",
+    "turn_segments": [
+      {
+        "start_sequence": 1,
+        "end_sequence": 10,
+        "actions": 9,
+        "max_true_base_displacement_m": 0.0,
+        "max_estimated_camera_displacement_m": 0.005769004389529181
+      },
+      {
+        "start_sequence": 16,
+        "end_sequence": 101,
+        "actions": 85,
+        "max_true_base_displacement_m": 0.0,
+        "max_estimated_camera_displacement_m": 0.019492884507064216
+      },
+      {
+        "start_sequence": 102,
+        "end_sequence": 114,
+        "actions": 12,
+        "max_true_base_displacement_m": 0.0,
+        "max_estimated_camera_displacement_m": 0.00544316736879851
+      },
+      {
+        "start_sequence": 115,
+        "end_sequence": 116,
+        "actions": 1,
+        "max_true_base_displacement_m": 0.0,
+        "max_estimated_camera_displacement_m": 0.0005311780475008768
+      },
+      {
+        "start_sequence": 119,
+        "end_sequence": 120,
+        "actions": 1,
+        "max_true_base_displacement_m": 0.0,
+        "max_estimated_camera_displacement_m": 0.0002594601538161901
+      },
+      {
+        "start_sequence": 121,
+        "end_sequence": 122,
+        "actions": 1,
+        "max_true_base_displacement_m": 0.0,
+        "max_estimated_camera_displacement_m": 0.0003290974367267429
+      },
+      {
+        "start_sequence": 127,
+        "end_sequence": 176,
+        "actions": 49,
+        "max_true_base_displacement_m": 0.0,
+        "max_estimated_camera_displacement_m": 0.021415132337244232
+      }
+    ],
+    "matched_rgb_frames": 176,
+    "planned_frames": 176,
+    "status": "matched_renderer_replay",
+    "projection_matrix": [
+      [
+        0.5773502588272095,
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.7698003053665161,
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0,
+        -1.0000200271606445,
+        -0.02000020071864128
+      ],
+      [
+        0.0,
+        0.0,
+        -1.0,
+        0.0
+      ]
+    ],
+    "intrinsics": [
+      [
+        184.75208282470703,
+        0.0,
+        319.5
+      ],
+      [
+        0.0,
+        184.75207328796387,
+        239.5
+      ],
+      [
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "native_boundary_vs_pixel_center_ray_error": 0.002723031401466347,
+    "native_raster_center_max_ray_error": 6.739333707095341e-06
+  },
+  "ordinary_client_preflight": {
+    "ok": true,
+    "message": "Habitat EGL OK (WindowlessContext + one RGB frame)",
+    "scene_glb": "/home/cpaxton/.cache/habitat_eqa/hm3d/scene_datasets/hm3d/train/00025-ixTj1aTMup2/ixTj1aTMup2.basis.glb",
+    "rgb_shape": [
+      480,
+      640,
+      3
+    ],
+    "error": null
+  },
+  "ordinary_client_preflight_log_sha256": "1c98b1cad0cd68d6480a8e6499076b7f010965637c5785e49d05689a1a1929e1",
+  "validator_sha256": "7f6ce6a1ed44f2fa1c3b3e0e100cd7112206256f773e3113c1ec081813dac301",
+  "figures": {
+    "q12.pdf": "f1385bfcebee528e943b9225a8defed2c68222f78fa09ffb58d8446fcfc30863",
+    "q12.png": "db130b4e8c28af169a2056ff7917bda1bb43c6edf06c564d871ef86f7a8ad360",
+    "q2.pdf": "34aec9d8b51ab15e5bfa662bbedb38f072de2ee59540190e6ff12b773060c7d1",
+    "q2.png": "3910e7d8d7ebc9579a3dcfe07971fb0cfd7c5f3de6914173fdc1fc2eee480d98",
+    "q6.pdf": "149bfb6729b9912937ebd6faf3207abc3d3b3140e2cbec8da5a6e722c227c715",
+    "q6.png": "e6ed84be5ff1c8be1c979c9bb57cffc9418a069d7249f2da1f5cc5cd6f78969f"
+  }
+}

@@ -116,3 +116,75 @@ same 200 actions, 240 seconds, two prefixes and all fixed scans. Also run the
 independent q6 `check_grapheqa_navigation.py --turn-deg 180` gate: fresh translation,
 fixed half-turn, and unknown-goal rejection. New frontier choices must not be
 used as a substitute for proving that the original turning capability works.
+
+## Acceptance result: all bounded navigation gates pass
+
+All three effort-policy runs use frozen `818066c9`, seed 0, the same calibrated
+camera/body/map, 200 attempted primitives, 240 seconds and the complete scans.
+The raw results remain under `/home/cpaxton/runs/emet/sensor-nav-repairs-20261106/`.
+
+| Scene | Complete legs / 2 | All scans | Actions / 200 | Frames | Wall s |
+| --- | --- | --- | --- | --- | --- |
+| q2 | 2 | yes | 137 | 140 | 48.70 |
+| q6 | 2 | yes | 138 | 141 | 48.98 |
+| q12 | 2 | yes | 139 | 142 | 50.65 |
+
+Jobs: `20261106_081902_30dd25`, `20261106_082100_42c048`, and
+`20261106_082246_8ece00`. All **423** frames have accepted registration and zero
+reported collisions. Six planned prefixes each stay within 0.75 m. Maximum
+measured arrival residuals are **24.19 mm** and **0.383 degrees**, within the
+unchanged 25 mm / 3 degree route tolerances. These are relative to odometry,
+not ground-truth localization accuracy.
+
+The independent q6 control passes fresh translation, the fixed 180-degree turn,
+and unknown-goal rejection before motion. The turn finishes with 2.40 mm position
+residual and 5.84e-7 rad yaw residual, using 58 motion primitives across the
+execution controls. Its scorer-only reconstruction matches all 176 original RGB
+frames and records zero true base displacement during turns. No simulator state
+enters an agent or model input.
+
+The final CPU regression run has **167 passing pytest tests**, with one Habitat
+configuration test skipped only because the root interpreter lacks Habitat-Sim.
+That exact test function also passes standalone in the existing Habitat
+interpreter (using the root's installed pure-Python pytest module; no install or
+environment rebuild). An additional 32 extracted-acceptance tests pass. Coverage
+includes actual MuJoCo ray controls for floor/drop/raised surfaces, continuous
+sweeps, obstacle/unknown rejection, calibrated rays, blocked motion, head arrival,
+route efficiency, evidence packets and collector budgets.
+
+The ordinary Habitat client also passes the existing full EQA-import-stack +
+rendered-frame preflight at `bec398ac`, job `20261106_082811_b729cf`, with semantic
+sensors explicitly disabled. The first direct invocation omitted the existing
+Habitat launcher's library path and hit a CXXABI import-order error. Repeating
+with `LD_LIBRARY_PATH=/path/to/habitat-env/lib` (as already used by
+`scripts/install_habitat.sh` and acceptance runners) passes. Both logs remain;
+no environment was rebuilt and no import-order workaround was added to inference.
+
+### Recomputable evidence and figures
+
+`paper/data/sensor_navigation_repairs_20261106/summary.json` records the validated
+matrix, controls, source pins and artifact/figure hashes. Its adjacent
+`validate.py` checks raw packet hashes, source/policy/budgets, every action and
+tracking ledger, six measured arrivals, initial and arrival scans, renderer
+oracle and ordinary-client preflight. It rejects both the original floor failure
+and the later distance-policy budget failure as negative controls.
+
+```bash
+.venv/bin/python paper/data/sensor_navigation_repairs_20261106/validate.py \
+  --root /path/to/sensor-nav-repairs-20261106 --output /tmp/navigation-summary.json
+```
+
+The `figures/` directory contains question-labelled uniform raw-RGB / estimated
+map-path panels as PNG/PDF. Question captions are added only by offline analysis;
+the collector never receives them. Manual inspection of all three confirms
+visible movement and varied headings. It also shows the limits: q2 remains in
+the living room, q6 does not provide an unambiguous ladder view, and q12 does not
+enter the bedroom. The final q12 scan includes a nearby wall. These are human
+observations, not ground-truth visibility annotations.
+
+This closes the bounded navigation/collection gate. It does **not** establish
+better EQA answers, target-view coverage, OVMM success, or full matched-agent
+acceptance. Calibration-only replay, route execution and exploration-policy
+changes are separate evidence. Keep the earlier failures and controls in the
+record. Next bind the existing agent to the common physical/input contract for
+task-conditioned acquisition and paired active evaluation.

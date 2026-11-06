@@ -1,5 +1,9 @@
 # Task-independent RGB-D history pilot
 
+Follow-up: the [navigation repair acceptance](sensor_navigation_repairs_20261106.md)
+now passes all three bounded collections and the fixed-turn/unknown-goal controls.
+The failed initial attempts below remain unchanged historical evidence.
+
 The [November 3 frozen answering pilot](frozen_eqa_comparison_20261103.md)
 qualified three answer paths but exposed limited target coverage. The next
 development step is better acquisition, without tuning GraphEQA's model or
