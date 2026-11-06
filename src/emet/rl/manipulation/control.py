@@ -493,25 +493,33 @@ class ManipulationControl:
         self.stopped = False
 
     def stop(self):
+        """Latch one measured hold target; repeated fault receipts cannot rebase it."""
+        first_stop = not self.stopped
         self.stopped = True
         self.arm_holding = False
         self.holding = False
-        measured = self.positions()
-        # Corrupt feedback must not turn a stop into a NaN actuator command.
-        self.target = np.where(np.isfinite(measured), measured, self.target)
+        if first_stop:
+            measured = self.positions()
+            # Corrupt feedback must not turn a stop into a NaN actuator command.
+            self.target = np.where(np.isfinite(measured), measured, self.target)
         self.velocity[:] = 0
         self.base_command[:] = 0
         self.base_velocity_integral[:] = 0
         self.base_bias_compensation_enabled = False
         self.last_action[:] = 0
-        measured_grip = float(self.data.qpos[self.grip_q])
-        if self.release_authorized:
-            # Freeze an authorized release at its measured position on fault.
-            self.grip_reference = measured_grip
-            self.grip_target = measured_grip
+        if first_stop:
+            if self.release_authorized:
+                # Freeze release once. Invalid feedback retains the last finite
+                # command; subsequent references/stops cannot open the jaw more.
+                measured_grip = float(self.data.qpos[self.grip_q])
+                frozen_grip = measured_grip if np.isfinite(measured_grip) else self.grip_target
+                self.grip_reference = self.grip_target = frozen_grip
+            else:
+                # Discard residual grip relaxation and return to the phase target.
+                self.grip_target = self.grip_reference
         else:
-            # Discard residual grip relaxation and return to the phase target.
-            self.grip_target = self.grip_reference
+            # References arriving after a fault cannot revise the latched grip.
+            self.grip_reference = self.grip_target
         self.release_authorized = False
         self.apply()
 

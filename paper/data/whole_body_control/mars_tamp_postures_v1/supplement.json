@@ -1,0 +1,32 @@
+{
+  "scope": "Publication supplement; no new rollout, selection or qualification.",
+  "hardware_used": false,
+  "post_test_recovery": "The first successful reference episode was written before a logging KeyError on absent failure_at. Resume retains that episode and runs the other five, then all 72 fresh audit episodes. Success legitimately has no failure_at; logging now uses get. Original failed log retained.",
+  "artifacts": [
+    {
+      "path": "logs/recovery/hand-accuracy-v1/tamp-posture-post-tests-worker.log",
+      "bytes": 1121,
+      "sha256": "feee9ee14e21705cae1bc0793db3b581ca6847504be940a671d743a16f9469d3"
+    },
+    {
+      "path": "logs/recovery/hand-accuracy-v1/tamp-posture-post-tests-worker-v2.log",
+      "bytes": 5522,
+      "sha256": "ccbdd92da9a17099c31178f6627d8c8305718f84d9937e2334092470694e251a"
+    },
+    {
+      "path": "logs/recovery/hand-accuracy-v1/tamp-posture-post-tests.py",
+      "bytes": 5702,
+      "sha256": "ed8300bad349322768733c20ee857dc7ef00236a40b2418900fa13820958bbf7"
+    },
+    {
+      "path": "logs/recovery/hand-accuracy-v1/motion-coupling-audit.py",
+      "bytes": 2777,
+      "sha256": "fbd09c6c31aa7ad33f30353dc39a63125494c1d59f586b274146ff71b0ed0732"
+    },
+    {
+      "path": "logs/recovery/hand-accuracy-v1/motion-coupling-audit.json",
+      "bytes": 32628,
+      "sha256": "a1ceda325e5fe0493dc80bbbf99b7b51d9d7e8a4842988e2d5e4eb30ed067358"
+    }
+  ]
+}

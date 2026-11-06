@@ -40,6 +40,21 @@ def test_files(root):
     return sorted(files)
 
 
+def test_sources(root):
+    """Bind helper/package/fixture code as well as collected test modules."""
+    paths = set(test_files(root))
+    for target in REGRESSION_TARGETS:
+        path = root / target
+        if path.is_dir():
+            paths.update(path.rglob("*.py"))
+    for path in list(paths):
+        for parent in path.parents:
+            if not parent.is_relative_to(root / "src/test"):
+                break
+            paths.update(p for name in ("conftest.py", "__init__.py") if (p := parent / name).is_file())
+    return sorted(paths)
+
+
 def source_state(root):
     from emet.rl.manipulation.carry_benchmark import source_hashes
 
@@ -49,7 +64,7 @@ def source_state(root):
         + list((root / "src/emet_core/emet/core").rglob("*.py"))
         + list((root / "src/emet/controller/task/tamp").rglob("*.py"))
         + list((root / "src/emet/agent").rglob("*.py"))
-        + test_files(root)
+        + test_sources(root)
         + [
             root / "src/test/conftest.py",
             root / "pyproject.toml",
@@ -84,6 +99,11 @@ def source_state(root):
             root / "configs/benchmarks/mars_tracking_mastery_arm_to_whole_body_v1.json",
             root / "configs/benchmarks/mars_tracking_mastery_step_budget_v1.json",
             root / "configs/benchmarks/mars_tracking_mastery_command_history_v1.json",
+            root / "configs/benchmarks/mars_tracking_mastery_full_arm_v1.json",
+            root / "configs/benchmarks/mars_tracking_mastery_tamp_postures_v1.json",
+            root / "configs/benchmarks/mars_tracking_mastery_tamp_translation_v1.json",
+            root / "paper/data/whole_body_control/mars_tamp_translation_audit_v1/cases.json",
+            root / "paper/data/whole_body_control/mars_matched_reference_v1/stop-cases.json",
         ]
     )
     for path in paths:

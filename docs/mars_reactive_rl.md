@@ -11,6 +11,17 @@ package is limited to simulation, training, and offline TAMP regression; no live
 Stretch command adapter is provided. Hardware publishers and perception adapters
 are follow-on work, and no learned policy is claimed to beat the baseline.
 
+Current whole-body learning status (November 3): the paired
+[base curriculum comparison](experiments/mars_contract_curriculum_20261103.md)
+passes 1,005 fresh regressions and reproduces the 66/66 teacher. Native-reward
+base-only training reaches 49/50 base tracking, 42/50 full base and 15/16 full arm
+passes. The first aligned reward reaches 48/50, 41/50 and 12/16 respectively;
+both retain 16/16 arm tracking. Neither actor is promoted. The
+[curriculum plan](plans/mars_contract_curriculum.md) specifies the remaining
+reward refinement and gated coordinated/loaded stages. The bounded diagnostic CLI is
+`python -m emet.rl.manipulation.base_component --help`;
+its exported inference bundle remains one eight-output actor.
+
 ## Start with base-only control
 
 The CLI now defaults to `--task base --architecture mlp`: two 64-unit hidden

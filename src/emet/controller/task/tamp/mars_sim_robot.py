@@ -76,12 +76,16 @@ class MarsSimRobot:
         record_observations=False,
         arm_execution="joint",
         arm_reference="legacy",
+        task_pose_reference=False,
     ):
-        from emet.rl.manipulation.tamp_policy import CheckpointTampPolicy
+        from emet.rl.manipulation.tamp_policy import CheckpointTampPolicy, TaskPoseTampReference
 
+        if type(task_pose_reference) is not bool or (task_pose_reference and arm_execution != "cartesian"):
+            raise ValueError("task-pose reference requires explicit Cartesian execution")
+        backend = TaskPoseTampReference if task_pose_reference else CheckpointTampPolicy
         return cls(
             env,
-            policy=CheckpointTampPolicy(directory, env, evidence=evidence),
+            policy=backend(directory, env, evidence=evidence),
             timing=timing,
             record_observations=record_observations,
             arm_execution=arm_execution,
@@ -185,7 +189,9 @@ class MarsSimRobot:
                     # only explicit arm/trajectory targets activate inference.
                     action_source = "executor_terminal_hold" if self.servo.holding else "executor_idle_hold"
                 elif self.policy is not None:
-                    action_source = "policy"
+                    action_source = (
+                        "analytic_reference" if getattr(self.policy, "is_reference_controller", False) else "policy"
+                    )
                     started = time.monotonic()
                     try:
                         self.policy_calls += 1
@@ -240,7 +246,7 @@ class MarsSimRobot:
                     "failure": self.failure,
                     "controller": self.controller_name,
                     "action_source": action_source,
-                    "policy_calls": self.policy_calls,
+                    **self.inference_counts,
                     "policy_inference_s": inference_s,
                     "normalized_action": action.tolist(),
                     "base": self.servo.base_pose().tolist(),
@@ -289,6 +295,14 @@ class MarsSimRobot:
                     "ctrl": self.data.ctrl.copy().tolist(),
                 }
         self.refresh()
+
+    @property
+    def inference_counts(self):
+        reference = bool(getattr(self.policy, "is_reference_controller", False))
+        return {
+            "policy_calls": 0 if reference else self.policy_calls,
+            "reference_controller_calls": self.policy_calls if reference else 0,
+        }
 
     @property
     def controller_name(self):

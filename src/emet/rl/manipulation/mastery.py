@@ -21,6 +21,15 @@ from emet.rl.manipulation.carry_benchmark import digest, source_hashes
 from emet.rl.manipulation.dynamic_trajectory import ArmTrajectory, Segment
 from emet.rl.manipulation.env import ManipulationConfig, ManipulationEnv
 from emet.rl.manipulation.jerk_reference import compile_joint_path, polynomial_peaks
+from emet.rl.manipulation.mastery_objective import (
+    ContractRewardSchedule,
+    TeacherContractReward,
+    add_contract_reward_arguments,
+    contract_reward_from_args,
+    mastery_metrics,
+    smoothness_budgets,
+    tracking_contract_passes,
+)
 from emet.rl.manipulation.tracking import TaskFrameFK, TaskPoseTrajectory
 
 ROOT = Path(__file__).resolve().parents[4]
@@ -93,18 +102,59 @@ def load_suite(path=SUITE):
         counts[split, stage] != n for split in seeds for stage, n in zip(STAGES, (5, 4, 2, 2), strict=True)
     ):
         raise ValueError("expected disjoint 13-case train/validation partitions")
+    extras = suite.get("extra_training_cases", [])
+    if not isinstance(extras, list):
+        raise ValueError("extra training cases must be a list")
+    for case in extras:
+        if (
+            not isinstance(case, dict)
+            or case.get("stage") != "arm"
+            or case.get("split") != "train"
+            or not isinstance(case.get("id"), str)
+            or not case["id"].startswith("train:arm:")
+            or "@" in case["id"]
+            or case["id"] in ids
+            or type(case.get("reset_seed")) is not int
+            or case["reset_seed"] not in seeds["train"]
+            or case.get("travel_m") != 0
+            or case.get("turn_rad") != 0
+        ):
+            raise ValueError("extra arm cases require unique training IDs and existing training reset seeds")
+        try:
+            delta = np.asarray(case["arm_delta"], dtype=float)
+        except (KeyError, TypeError, ValueError) as error:
+            raise ValueError("extra arm delta must have five finite nearby joint displacements") from error
+        if delta.shape != (5,) or not np.isfinite(delta).all() or np.any(abs(delta) > 0.2):
+            raise ValueError("extra arm delta must have five finite nearby joint displacements")
+        if "arm_start" in case:
+            try:
+                posture = np.asarray(case["arm_start"], dtype=float)
+            except (TypeError, ValueError) as error:
+                raise ValueError("extra arm start requires five finite nearby joint coordinates") from error
+            if posture.shape != (5,) or not np.isfinite(posture).all() or np.any(abs(posture) > 1):
+                raise ValueError("extra arm start requires five finite nearby joint coordinates")
+        if "minimum_duration_s" in case:
+            duration = case["minimum_duration_s"]
+            if (
+                type(duration) not in (int, float)
+                or not np.isfinite(duration)
+                or not 0 < duration <= cfg.horizon - suite["gate"]["terminal_hold_s"]
+            ):
+                raise ValueError("extra arm minimum duration must be finite, positive and leave terminal hold")
+        ids.add(case["id"])
     if not np.isfinite(suite["reference"]["loaded_time_scale"]) or suite["reference"]["loaded_time_scale"] < 1:
         raise ValueError("loaded references may only slow down")
-    scales = suite.get("arm_training_scales")
-    if scales is not None and (
-        suite["format"] != "mars-tracking-mastery-v2"
-        or not isinstance(scales, list)
-        or not scales
-        or any(type(x) not in (int, float) or not np.isfinite(x) or not 0 < x <= 1 for x in scales)
-        or scales != sorted(set(scales))
-        or scales[-1] != 1
-    ):
-        raise ValueError("arm training scales require ordered unique positive amplitudes through 1")
+    for stage in ("arm", "coupled"):
+        scales = suite.get(f"{stage}_training_scales")
+        if scales is not None and (
+            suite["format"] != "mars-tracking-mastery-v2"
+            or not isinstance(scales, list)
+            or not scales
+            or any(type(x) not in (int, float) or not np.isfinite(x) or not 0 < x <= 1 for x in scales)
+            or scales != sorted(set(scales))
+            or scales[-1] != 1
+        ):
+            raise ValueError(f"{stage} training scales require ordered unique positive amplitudes through 1")
     weights = suite.get("training_stage_weights")
     if weights is not None and (
         not isinstance(weights, dict)
@@ -127,7 +177,9 @@ def load_suite(path=SUITE):
         if sampling != "control_steps" or not isinstance(primitive_weights, dict) or not primitive_weights:
             raise ValueError("primitive weights require control-step sampling")
         for stage, values in primitive_weights.items():
-            expected = {primitive_name(c) for c in suite["cases"] if c["stage"] == stage and c["split"] == "train"}
+            expected = {
+                primitive_name(c) for c in [*suite["cases"], *extras] if c["stage"] == stage and c["split"] == "train"
+            }
             if (
                 not expected
                 or not isinstance(values, dict)
@@ -178,6 +230,8 @@ def select_cases(suite, stages, split, *, population="canonical"):
     if population == "training" and split != "train":
         raise ValueError("training population requires the training split")
     cases = list(suite["cases"])
+    if population != "canonical":
+        cases.extend(suite.get("extra_training_cases", []))
     if population != "canonical" and "training_population" in suite:
         base = [c for c in cases if c["stage"] == "base" and c["split"] == "train"]
         for primitive in base:
@@ -204,15 +258,17 @@ def select_cases(suite, stages, split, *, population="canonical"):
                             }
                         )
     if population != "canonical":
-        for case in suite["cases"]:
-            if case["stage"] == "arm" and case["split"] == "train":
-                for scale in suite.get("arm_training_scales", []):
+        for case in list(cases):
+            if case["stage"] in {"arm", "coupled"} and case["split"] == "train":
+                for scale in suite.get(f"{case['stage']}_training_scales", []):
                     if scale != 1:
                         cases.append(
                             {
                                 **case,
                                 "id": case["id"] + f"@amplitude:{scale:g}",
                                 "arm_delta": (np.asarray(case["arm_delta"]) * scale).tolist(),
+                                "travel_m": case["travel_m"] * scale,
+                                "turn_rad": case["turn_rad"] * scale,
                             }
                         )
     return [c for c in cases if c["stage"] in stages and (split == "all" or c["split"] == split)]
@@ -387,12 +443,19 @@ class MasteryReference(TaskPoseTrajectory):
 class MasteryEnv(ManipulationEnv):
     """Reset-only case selection and path generation; full actor action space."""
 
-    def __init__(self, suite=None, *, stages=("base",), split="train", population="canonical"):
+    def __init__(
+        self, suite=None, *, stages=("base",), split="train", population="canonical", training_stage_weights=None
+    ):
         self.suite = load_suite() if suite is None else suite
         self.cases = select_cases(self.suite, stages, split, population=population)
+        if training_stage_weights is not None and population != "training":
+            raise ValueError("stage weight overrides are training-only")
+        weights = self.suite.get("training_stage_weights") if population == "training" else None
+        if training_stage_weights is not None:
+            weights = training_stage_weights
         self.sampler = TrainingCaseSampler(
             self.cases,
-            self.suite.get("training_stage_weights") if population == "training" else None,
+            weights,
             sampling=self.suite.get("training_sampling", "episodes") if population == "training" else "episodes",
             primitive_weights=self.suite.get("training_primitive_weights") if population == "training" else None,
         )
@@ -401,6 +464,34 @@ class MasteryEnv(ManipulationEnv):
         self.mastery_admission = None
         self.case_visits = Counter()
         super().__init__(ManipulationConfig(**self.suite["config"]))
+
+    def _initial_arm_posture(self, sampled):
+        """Start a free-space arm case before ordinary fixture settling/admission.
+
+        This is benchmark-owned reset data, never a runtime command or private
+        joint reference in observations. Default cases preserve their RNG draws
+        and exact initialization. Loaded/frozen fixtures cannot use this hook.
+        """
+        if self.mastery_case is None or "arm_start" not in self.mastery_case:
+            return super()._initial_arm_posture(sampled)
+        if (
+            self.mastery_case["stage"] != "arm"
+            or self.scenario != "reach"
+            or self.profile.robot != "innate_mars"
+            or self.config.hold_pregrasp_fixture
+            or self.grasp_lift_trial
+        ):
+            raise ValueError("arm start is restricted to free-space Mars arm reset cases")
+        posture = np.asarray(self.mastery_case["arm_start"], dtype=float)
+        if (
+            posture.shape != (5,)
+            or not np.isfinite(posture).all()
+            or np.any(abs(posture) > 1)
+            or np.any(posture < self.control.limits[:, 0] + 0.02)
+            or np.any(posture > self.control.limits[:, 1] - 0.02)
+        ):
+            raise ValueError("arm start exceeds finite joint-margin limits")
+        return posture.copy()
 
     def reset(self, *, seed=None, options=None):
         if seed is not None:
@@ -443,7 +534,10 @@ class MasteryEnv(ManipulationEnv):
                 np.r_[p.base_acceleration, p.base_yaw_acceleration, p.acceleration] * 0.35,
                 np.r_[p.base_acceleration, p.base_yaw_acceleration, p.acceleration] * 2,
             )
-            path = slow_path(path, max(1.0, self.suite["reference"]["minimum_duration_s"] / path.end))
+            minimum = case.get("minimum_duration_s", self.suite["reference"]["minimum_duration_s"])
+            # The compiler's speed/acceleration/jerk bounds always apply. This
+            # reset-only extra-case option can add time, never speed up its path.
+            path = slow_path(path, max(1.0, minimum / path.end))
         if path.end + self.suite["gate"]["terminal_hold_s"] > self.config.horizon:
             return self.reject("reference_exceeds_horizon", initial)
         reference = MasteryReference(self, path, loaded=loaded)
@@ -673,18 +767,7 @@ def evaluate_suite(suite, *, stages=STAGES, policy=None, teacher_report=None, po
                     )
                     if done or truncated:
                         break
-            metrics = {
-                "peak_force_N": float(info["peak_contact_force"]),
-                "base_linear_jerk": float(env.peak_base_axis_jerk[0]),
-                "base_yaw_jerk": float(env.peak_base_axis_jerk[1]),
-                "joint_jerk": float(np.max(env.peak_joint_jerk)),
-                "hand_position_error_m": info["ee_position_error"],
-                "hand_orientation_error_rad": info["ee_orientation_error"],
-                "base_error_m": info["base_goal_error"],
-                "base_heading_error_rad": info["base_heading_error_rad"],
-                "hold_drift_m": env.peak_hold_drift,
-                "settled_seconds": env.settle_time,
-            }
+            metrics = mastery_metrics(env, info)
             smooth = bool(row["admitted"])
             failures = []
             if not row["admitted"]:
@@ -703,25 +786,13 @@ def evaluate_suite(suite, *, stages=STAGES, policy=None, teacher_report=None, po
                     or row["admission"]["reference_sha256"] != reference["admission"]["reference_sha256"]
                 ):
                     raise ValueError("teacher/policy initial state or reference differs")
-                floors = {
-                    "peak_force_N": suite["gate"]["force_floor_N"],
-                    "base_linear_jerk": suite["gate"]["base_linear_jerk_floor_m_s3"],
-                    "base_yaw_jerk": suite["gate"]["base_yaw_jerk_floor_rad_s3"],
-                    "joint_jerk": suite["gate"]["joint_jerk_floor_rad_s3"],
-                }
-                smooth_failures = [
-                    k
-                    for k in floors
-                    if metrics[k] > max(floors[k], suite["gate"]["smoothness_ratio"] * reference["metrics"][k])
-                ]
+                budgets = smoothness_budgets(suite, reference["metrics"])
+                smooth_failures = [k for k in budgets if metrics[k] > budgets[k]]
                 smooth = not smooth_failures
                 failures += ["smoothness/" + k for k in smooth_failures]
             passed = (
                 row["admitted"]
-                and info.get("is_success", False)
-                and env.settle_time + 1e-8 >= suite["gate"]["terminal_hold_s"]
-                and env.peak_hold_drift <= suite["gate"]["hold_drift_m"]
-                and not env.path_failed
+                and tracking_contract_passes(info, metrics, suite["gate"], path_failed=env.path_failed)
                 and smooth
             )
             row.update(
@@ -823,6 +894,9 @@ class RolloutDiagnostics:
                 "reward_sum": 0.0,
                 "reward_terms_sum": Counter(),
                 "terminal_codes": Counter(),
+                "contract_terminals": Counter(),
+                "contract_fraction_sum": 0.0,
+                "contract_steps": 0,
                 "action_sum": np.zeros_like(action, dtype=float),
                 "action_square_sum": np.zeros_like(action, dtype=float),
                 "action_clipped_count": np.zeros_like(action, dtype=int),
@@ -834,11 +908,16 @@ class RolloutDiagnostics:
         row = self.cases[case_id]
         row["steps"] += 1
         row["reward_sum"] += float(reward)
+        if "fraction" in info.get("contract_reward", {}):
+            row["contract_fraction_sum"] += info["contract_reward"]["fraction"]
+            row["contract_steps"] += 1
         row["reward_terms_sum"].update(
             info.get("reward_terms", {"initialization_penalty": 20.0} if info["initialization_failed"] else {})
         )
         if done:
             row["terminal_codes"][info["code"]] += 1
+            if "contract_reward" in info:
+                row["contract_terminals"]["passed" if info["contract_reward"]["terminal_pass"] else "failed"] += 1
         row["action_sum"] += action
         row["action_square_sum"] += action**2
         row["action_clipped_count"] += action != clipped_action
@@ -858,6 +937,10 @@ class RolloutDiagnostics:
                 "reward_mean": row["reward_sum"] / n,
                 "reward_terms_sum": dict(row["reward_terms_sum"]),
                 "terminal_codes": dict(row["terminal_codes"]),
+                "contract_terminals": dict(row["contract_terminals"]),
+                "contract_fraction_mean": (
+                    row["contract_fraction_sum"] / row["contract_steps"] if row["contract_steps"] else None
+                ),
                 "action_mean": mean.tolist(),
                 "action_std": np.sqrt(np.maximum(0, row["action_square_sum"] / n - mean**2)).tolist(),
                 "action_clipped_fraction": (row["action_clipped_count"] / n).tolist(),
@@ -869,18 +952,29 @@ class RolloutDiagnostics:
         return result
 
 
-def make_training_vec_env(suite, stages, *, num_envs=1, backend="subproc"):
+def make_training_vec_env(
+    suite, stages, *, num_envs=1, backend="subproc", teacher=None, contract_reward=None, contract_schedule=None
+):
     """Independent native-physics worlds; no simulator/model shared across workers."""
     from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
 
     if type(num_envs) is not int or not 1 <= num_envs <= 64 or backend not in {"dummy", "subproc"}:
         raise ValueError("1-64 environments and dummy/subproc backend required")
+    if contract_reward is not None and teacher is None:
+        raise ValueError("contract reward requires paired teacher evidence")
 
     def factory():
         import torch
 
         torch.set_num_threads(1)
-        return MasteryEnv(suite, stages=stages, split="train", population="training")
+        env = MasteryEnv(suite, stages=stages, split="train", population="training")
+        return (
+            env
+            if contract_reward is None
+            else TeacherContractReward(
+                env, teacher, contract_reward, fraction=contract_schedule.fraction(0) if contract_schedule else 1.0
+            )
+        )
 
     factories = [factory for _ in range(num_envs)]
     return (
@@ -909,6 +1003,8 @@ def train(args, suite):
     num_envs = getattr(args, "num_envs", 1)
     backend = getattr(args, "vec_backend", "subproc")
     rollout_steps = getattr(args, "rollout_steps", 256)
+    objective_config = getattr(args, "contract_reward_config", None)
+    schedule = getattr(args, "contract_schedule", ContractRewardSchedule())
     if type(num_envs) is not int or not 1 <= num_envs <= 64:
         raise ValueError("1-64 environments required")
     rollout_size = num_envs * rollout_steps
@@ -921,7 +1017,15 @@ def train(args, suite):
 
         policy_class, normalizer_class = ExecutorFeedbackPolicy, ExecutorCommandVecNormalize
     normalizer = normalizer_class(
-        make_training_vec_env(suite, args.stages, num_envs=num_envs, backend=backend),
+        make_training_vec_env(
+            suite,
+            args.stages,
+            num_envs=num_envs,
+            backend=backend,
+            teacher=teacher,
+            contract_reward=objective_config,
+            contract_schedule=schedule,
+        ),
         config=cfg,
         norm_reward=False,
         clip_obs=20,
@@ -1003,6 +1107,8 @@ def train(args, suite):
             "teacher_action_loss": False,
             "audit_initial_admission": getattr(args, "audit_initial_admission", False),
             "command_smoothness_warmup_steps": getattr(args, "command_smoothness_warmup", 0),
+            "contract_reward": asdict(objective_config) if objective_config is not None else None,
+            "contract_schedule": asdict(schedule) if objective_config is not None else None,
             "safety_promoted": False,
         }
         (out / "run.json").write_text(json.dumps(record, indent=2) + "\n")
@@ -1109,6 +1215,15 @@ def train(args, suite):
                     normalizer.get_attr("fingerprint")[0],
                     steps=self.num_timesteps,
                 )
+                manifest_path = destination / "manifest.json"
+                manifest = json.loads(manifest_path.read_text())
+                manifest["training_recipe"] = {
+                    "run_sha256": digest(record),
+                    "training_stages": args.stages,
+                    "contract_reward": record["contract_reward"],
+                    "contract_schedule": record["contract_schedule"],
+                }
+                manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
                 with preserve_training_rng():
                     report = evaluate_suite(
                         suite, stages=args.stages, policy=ManipulationPolicy(destination), teacher_report=teacher
@@ -1144,6 +1259,8 @@ def train(args, suite):
 
             def _on_rollout_start(self):
                 self.record_update()
+                if objective_config is not None:
+                    normalizer.env_method("set_reward_fraction", schedule.fraction(self.num_timesteps))
                 warmup = getattr(args, "command_smoothness_warmup", 0)
                 fraction = min(1.0, self.num_timesteps / warmup) if warmup else 1.0
                 normalizer.env_method("set_command_smoothness_fraction", fraction)
@@ -1214,7 +1331,13 @@ def main():
     )
     parser.add_argument("--wandb-mode", choices=["disabled", "offline"], default="disabled")
     parser.add_argument("--audit-initial-admission", action="store_true")
+    add_contract_reward_arguments(parser)
     args = parser.parse_args()
+    try:
+        args.contract_reward_config = contract_reward_from_args(args)
+        args.contract_schedule = ContractRewardSchedule(args.contract_warmup_steps, args.contract_ramp_steps)
+    except ValueError as exc:
+        parser.error(str(exc))
     if args.stages is None:
         args.stages = ["base"] if args.command == "train" else list(STAGES)
     import torch

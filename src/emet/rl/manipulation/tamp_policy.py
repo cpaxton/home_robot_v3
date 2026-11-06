@@ -198,3 +198,35 @@ class CheckpointTampPolicy:
             (self.directory / "policy.zip").read_bytes()
         ) != self.admission["weights_sha256"]:
             raise ValueError("checkpoint changed during execution")
+
+
+class TaskPoseTampReference:
+    """Explicit privileged baseline with the checkpoint's admitted execution settings.
+
+    The checkpoint is loaded only to apply and verify the same settings. Its
+    learned actor is never called. This simulator reference is not a learned
+    policy, fallback, feasibility certificate or hardware backend.
+    """
+
+    controller_name = "task_pose_reference"
+    is_reference_controller = True
+
+    def __init__(self, directory, env, *, evidence):
+        self.settings = CheckpointTampPolicy(directory, env, evidence=evidence)
+        self.env, self.calls = env, 0
+        self.admission = {
+            "reference_controller": True,
+            "privileged_measured_jacobian": True,
+            "matched_checkpoint_settings": self.settings.admission,
+            "simulation_only": True,
+            "safety_promoted": False,
+        }
+
+    def __call__(self, observation):
+        from emet.rl.manipulation.command_runtime import task_pose_teacher_action
+
+        self.calls += 1
+        return task_pose_teacher_action(self.env.control)
+
+    def verify_unchanged(self):
+        self.settings.verify_unchanged()

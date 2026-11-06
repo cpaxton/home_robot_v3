@@ -1,0 +1,1740 @@
+{
+  "complete": true,
+  "scope": "Offline return/terminal-peak audit; excludes unrecorded dense jerk costs.",
+  "not_a_training_or_policy_rollout": true,
+  "dense_cost_omitted": true,
+  "hardware_used": false,
+  "summary": {
+    "base": {
+      "cases": 50,
+      "final_native_return_higher": 33,
+      "final_bonus_peak_return_higher": 34,
+      "source_full": 42,
+      "final_full": 42,
+      "source_native_mean": 26.032259412389568,
+      "final_native_mean": 27.34455384693756
+    },
+    "arm": {
+      "cases": 40,
+      "final_native_return_higher": 8,
+      "final_bonus_peak_return_higher": 1,
+      "source_full": 37,
+      "final_full": 4,
+      "source_native_mean": 103.69505066452487,
+      "final_native_mean": 85.92250509693531
+    },
+    "coupled": {
+      "cases": 4,
+      "final_native_return_higher": 1,
+      "final_bonus_peak_return_higher": 1,
+      "source_full": 0,
+      "final_full": 0,
+      "source_native_mean": 5.411045231549518,
+      "final_native_mean": -1.235016012388495
+    }
+  },
+  "cases": [
+    {
+      "id": "train:base:hold",
+      "stage": "base",
+      "source_full": false,
+      "final_full": false,
+      "source": {
+        "native_return": 33.66805000331368,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 1.5979647814859135,
+        "bonus_peak_only_return_at_weight_point2": 23.3484570470165
+      },
+      "final": {
+        "native_return": 34.67552335231549,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 2.247631626242654,
+        "bonus_peak_only_return_at_weight_point2": 24.225997027066956
+      }
+    },
+    {
+      "id": "train:base:forward",
+      "stage": "base",
+      "source_full": true,
+      "final_full": true,
+      "source": {
+        "native_return": 27.544217398749122,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 27.544217398749122
+      },
+      "final": {
+        "native_return": 28.65049772874881,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 28.65049772874881
+      }
+    },
+    {
+      "id": "train:base:reverse",
+      "stage": "base",
+      "source_full": true,
+      "final_full": true,
+      "source": {
+        "native_return": 28.933655650359157,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 28.933655650359157
+      },
+      "final": {
+        "native_return": 30.619991679110313,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 30.619991679110313
+      }
+    },
+    {
+      "id": "train:base:yaw_left",
+      "stage": "base",
+      "source_full": true,
+      "final_full": true,
+      "source": {
+        "native_return": 24.873729605806105,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 24.873729605806105
+      },
+      "final": {
+        "native_return": 24.92997112188798,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 24.92997112188798
+      }
+    },
+    {
+      "id": "train:base:yaw_right",
+      "stage": "base",
+      "source_full": true,
+      "final_full": true,
+      "source": {
+        "native_return": 25.298869249409574,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 25.298869249409574
+      },
+      "final": {
+        "native_return": 24.811156741658994,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 24.811156741658994
+      }
+    },
+    {
+      "id": "train:arm:pitch_up",
+      "stage": "arm",
+      "source_full": true,
+      "final_full": false,
+      "source": {
+        "native_return": 109.24921138223468,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 109.24921138223468
+      },
+      "final": {
+        "native_return": 67.38002897534136,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 3.733159094990861,
+        "bonus_peak_only_return_at_weight_point2": 56.633397156343186
+      }
+    },
+    {
+      "id": "train:arm:pitch_down",
+      "stage": "arm",
+      "source_full": true,
+      "final_full": false,
+      "source": {
+        "native_return": 107.33303738232145,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 107.33303738232145
+      },
+      "final": {
+        "native_return": 96.56310169728287,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.09668016272118463,
+        "bonus_peak_only_return_at_weight_point2": 86.54376566473864
+      }
+    },
+    {
+      "id": "train:arm:roll_left",
+      "stage": "arm",
+      "source_full": true,
+      "final_full": false,
+      "source": {
+        "native_return": 106.63179206896926,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 106.63179206896926
+      },
+      "final": {
+        "native_return": 96.42943763131886,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.8349045221770373,
+        "bonus_peak_only_return_at_weight_point2": 86.26245672688346
+      }
+    },
+    {
+      "id": "train:arm:roll_right",
+      "stage": "arm",
+      "source_full": true,
+      "final_full": false,
+      "source": {
+        "native_return": 109.9726786987153,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 109.9726786987153
+      },
+      "final": {
+        "native_return": 98.95750738467434,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.003924387147032249,
+        "bonus_peak_only_return_at_weight_point2": 88.95672250724493
+      }
+    },
+    {
+      "id": "train:coupled:forward_turn",
+      "stage": "coupled",
+      "source_full": false,
+      "final_full": false,
+      "source": {
+        "native_return": 25.944913199619727,
+        "removed_bonus": 0.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 25.944913199619727
+      },
+      "final": {
+        "native_return": -15.950941115773194,
+        "removed_bonus": 0.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": -15.950941115773194
+      }
+    },
+    {
+      "id": "train:coupled:reverse_turn",
+      "stage": "coupled",
+      "source_full": false,
+      "final_full": false,
+      "source": {
+        "native_return": 26.362452827955142,
+        "removed_bonus": 0.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 26.362452827955142
+      },
+      "final": {
+        "native_return": 15.05421248762373,
+        "removed_bonus": 0.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 15.05421248762373
+      }
+    },
+    {
+      "id": "validation:base:hold",
+      "stage": "base",
+      "source_full": false,
+      "final_full": false,
+      "source": {
+        "native_return": 33.642620547999265,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 1.578305448315184,
+        "bonus_peak_only_return_at_weight_point2": 23.326959458336226
+      },
+      "final": {
+        "native_return": 34.92005906232507,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.6833423731771522,
+        "bonus_peak_only_return_at_weight_point2": 24.78339058768964
+      }
+    },
+    {
+      "id": "validation:base:forward",
+      "stage": "base",
+      "source_full": false,
+      "final_full": true,
+      "source": {
+        "native_return": -19.193424624334856,
+        "removed_bonus": 0.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": -19.193424624334856
+      },
+      "final": {
+        "native_return": 26.57340141586665,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 26.57340141586665
+      }
+    },
+    {
+      "id": "validation:base:reverse",
+      "stage": "base",
+      "source_full": true,
+      "final_full": true,
+      "source": {
+        "native_return": 27.23465951328479,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 27.23465951328479
+      },
+      "final": {
+        "native_return": 28.94410522286137,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 28.94410522286137
+      }
+    },
+    {
+      "id": "validation:base:yaw_left",
+      "stage": "base",
+      "source_full": true,
+      "final_full": true,
+      "source": {
+        "native_return": 24.169846588039224,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 24.169846588039224
+      },
+      "final": {
+        "native_return": 24.231749467344827,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 24.231749467344827
+      }
+    },
+    {
+      "id": "validation:base:yaw_right",
+      "stage": "base",
+      "source_full": true,
+      "final_full": true,
+      "source": {
+        "native_return": 24.573127576563454,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 24.573127576563454
+      },
+      "final": {
+        "native_return": 24.06205867654628,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 24.06205867654628
+      }
+    },
+    {
+      "id": "validation:arm:pitch_up",
+      "stage": "arm",
+      "source_full": true,
+      "final_full": false,
+      "source": {
+        "native_return": 109.61585933426721,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 109.61585933426721
+      },
+      "final": {
+        "native_return": 63.17921680777182,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 3.66380982150648,
+        "bonus_peak_only_return_at_weight_point2": 52.446454843470526
+      }
+    },
+    {
+      "id": "validation:arm:pitch_down",
+      "stage": "arm",
+      "source_full": true,
+      "final_full": false,
+      "source": {
+        "native_return": 109.09808477954444,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 109.09808477954444
+      },
+      "final": {
+        "native_return": 95.67219539845537,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.01025262788637038,
+        "bonus_peak_only_return_at_weight_point2": 85.6701448728781
+      }
+    },
+    {
+      "id": "validation:arm:roll_left",
+      "stage": "arm",
+      "source_full": true,
+      "final_full": false,
+      "source": {
+        "native_return": 109.34495395072987,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 109.34495395072987
+      },
+      "final": {
+        "native_return": 93.86103443167464,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.8268390594705,
+        "bonus_peak_only_return_at_weight_point2": 83.69566661978054
+      }
+    },
+    {
+      "id": "validation:arm:roll_right",
+      "stage": "arm",
+      "source_full": true,
+      "final_full": false,
+      "source": {
+        "native_return": 105.82601218830742,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 105.82601218830742
+      },
+      "final": {
+        "native_return": 94.10363471919209,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.9207128537459801,
+        "bonus_peak_only_return_at_weight_point2": 83.91949214844288
+      }
+    },
+    {
+      "id": "validation:coupled:forward_turn",
+      "stage": "coupled",
+      "source_full": false,
+      "final_full": false,
+      "source": {
+        "native_return": -15.754830918866581,
+        "removed_bonus": 0.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": -15.754830918866581
+      },
+      "final": {
+        "native_return": -16.72546879343212,
+        "removed_bonus": 0.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": -16.72546879343212
+      }
+    },
+    {
+      "id": "validation:coupled:reverse_turn",
+      "stage": "coupled",
+      "source_full": false,
+      "final_full": false,
+      "source": {
+        "native_return": -14.90835418251022,
+        "removed_bonus": 0.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": -14.90835418251022
+      },
+      "final": {
+        "native_return": 12.682133372027605,
+        "removed_bonus": 0.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 12.682133372027605
+      }
+    },
+    {
+      "id": "train:arm:shoulder_left",
+      "stage": "arm",
+      "source_full": true,
+      "final_full": false,
+      "source": {
+        "native_return": 109.02090008219507,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 109.02090008219507
+      },
+      "final": {
+        "native_return": -9.53492231724096,
+        "removed_bonus": 0.0,
+        "terminal_peak_excess": 0.9284684157249856,
+        "bonus_peak_only_return_at_weight_point2": -9.720616000385958
+      }
+    },
+    {
+      "id": "train:arm:shoulder_right",
+      "stage": "arm",
+      "source_full": true,
+      "final_full": false,
+      "source": {
+        "native_return": 102.28175585409545,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 102.28175585409545
+      },
+      "final": {
+        "native_return": 64.69879461506788,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 1.021027711420862,
+        "bonus_peak_only_return_at_weight_point2": 54.49458907278371
+      }
+    },
+    {
+      "id": "train:arm:elbow_up",
+      "stage": "arm",
+      "source_full": true,
+      "final_full": true,
+      "source": {
+        "native_return": 85.02476129940185,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 85.02476129940185
+      },
+      "final": {
+        "native_return": 71.99210481006732,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 71.99210481006732
+      }
+    },
+    {
+      "id": "train:arm:elbow_down",
+      "stage": "arm",
+      "source_full": false,
+      "final_full": false,
+      "source": {
+        "native_return": 78.16006217420242,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.14406170323328205,
+        "bonus_peak_only_return_at_weight_point2": 68.13124983355577
+      },
+      "final": {
+        "native_return": -11.884975635225505,
+        "removed_bonus": 0.0,
+        "terminal_peak_excess": 2.6299908594043933,
+        "bonus_peak_only_return_at_weight_point2": -12.410973807106384
+      }
+    },
+    {
+      "id": "train:arm:wrist_up",
+      "stage": "arm",
+      "source_full": true,
+      "final_full": false,
+      "source": {
+        "native_return": 89.03561327045747,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 89.03561327045747
+      },
+      "final": {
+        "native_return": 72.10082900854344,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.003424572720526875,
+        "bonus_peak_only_return_at_weight_point2": 62.10014409399934
+      }
+    },
+    {
+      "id": "train:arm:wrist_down",
+      "stage": "arm",
+      "source_full": true,
+      "final_full": false,
+      "source": {
+        "native_return": 87.90041621671062,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 87.90041621671062
+      },
+      "final": {
+        "native_return": -10.248970327617831,
+        "removed_bonus": 0.0,
+        "terminal_peak_excess": 0.30604783422972726,
+        "bonus_peak_only_return_at_weight_point2": -10.310179894463777
+      }
+    },
+    {
+      "id": "train:arm:translate_down",
+      "stage": "arm",
+      "source_full": false,
+      "final_full": false,
+      "source": {
+        "native_return": 76.81208033356334,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0011291704500342448,
+        "bonus_peak_only_return_at_weight_point2": 66.81185449947334
+      },
+      "final": {
+        "native_return": 72.59177476374691,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.001231856142712262,
+        "bonus_peak_only_return_at_weight_point2": 62.59152839251837
+      }
+    },
+    {
+      "id": "train:arm:translate_up",
+      "stage": "arm",
+      "source_full": true,
+      "final_full": true,
+      "source": {
+        "native_return": 77.6590678515918,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 77.6590678515918
+      },
+      "final": {
+        "native_return": 81.78475134106777,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 81.78475134106777
+      }
+    },
+    {
+      "id": "train:base:hold@posture:forward",
+      "stage": "base",
+      "source_full": false,
+      "final_full": false,
+      "source": {
+        "native_return": 33.81637919190235,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 2.380229306007893,
+        "bonus_peak_only_return_at_weight_point2": 23.34033333070077
+      },
+      "final": {
+        "native_return": 34.91807067044889,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 3.7842386685919953,
+        "bonus_peak_only_return_at_weight_point2": 24.161222936730493
+      }
+    },
+    {
+      "id": "train:base:hold@posture:reverse",
+      "stage": "base",
+      "source_full": false,
+      "final_full": false,
+      "source": {
+        "native_return": 33.52446163686724,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 1.8487828296684508,
+        "bonus_peak_only_return_at_weight_point2": 23.154705070933545
+      },
+      "final": {
+        "native_return": 35.050331885916975,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 2.10913119112481,
+        "bonus_peak_only_return_at_weight_point2": 24.628505647692013
+      }
+    },
+    {
+      "id": "train:base:hold@posture:yaw_left",
+      "stage": "base",
+      "source_full": false,
+      "final_full": false,
+      "source": {
+        "native_return": 33.51995180572644,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 2.482107620339772,
+        "bonus_peak_only_return_at_weight_point2": 23.023530281658488
+      },
+      "final": {
+        "native_return": 34.672474013197196,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 1.7251671549525724,
+        "bonus_peak_only_return_at_weight_point2": 24.32744058220668
+      }
+    },
+    {
+      "id": "train:base:hold@posture:yaw_right",
+      "stage": "base",
+      "source_full": false,
+      "final_full": false,
+      "source": {
+        "native_return": 33.42180083665814,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 1.2425120725261052,
+        "bonus_peak_only_return_at_weight_point2": 23.17329842215292
+      },
+      "final": {
+        "native_return": 34.75236627675177,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 1.0967080878393927,
+        "bonus_peak_only_return_at_weight_point2": 24.533024659183894
+      }
+    },
+    {
+      "id": "train:base:forward@posture:hold",
+      "stage": "base",
+      "source_full": true,
+      "final_full": true,
+      "source": {
+        "native_return": 27.158384130078076,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 27.158384130078076
+      },
+      "final": {
+        "native_return": 28.36748609683386,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 28.36748609683386
+      }
+    },
+    {
+      "id": "train:base:forward@posture:reverse",
+      "stage": "base",
+      "source_full": true,
+      "final_full": true,
+      "source": {
+        "native_return": 26.668849830382534,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 26.668849830382534
+      },
+      "final": {
+        "native_return": 27.827193508558462,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 27.827193508558462
+      }
+    },
+    {
+      "id": "train:base:forward@posture:yaw_left",
+      "stage": "base",
+      "source_full": true,
+      "final_full": true,
+      "source": {
+        "native_return": 27.268296991121534,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 27.268296991121534
+      },
+      "final": {
+        "native_return": 28.284537239918997,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 28.284537239918997
+      }
+    },
+    {
+      "id": "train:base:forward@posture:yaw_right",
+      "stage": "base",
+      "source_full": true,
+      "final_full": true,
+      "source": {
+        "native_return": 26.890927274333354,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 26.890927274333354
+      },
+      "final": {
+        "native_return": 28.039984100384466,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 28.039984100384466
+      }
+    },
+    {
+      "id": "train:base:reverse@posture:hold",
+      "stage": "base",
+      "source_full": true,
+      "final_full": true,
+      "source": {
+        "native_return": 29.06728779535061,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 29.06728779535061
+      },
+      "final": {
+        "native_return": 30.39726079781661,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 30.39726079781661
+      }
+    },
+    {
+      "id": "train:base:reverse@posture:forward",
+      "stage": "base",
+      "source_full": true,
+      "final_full": true,
+      "source": {
+        "native_return": 29.652440515340768,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 29.652440515340768
+      },
+      "final": {
+        "native_return": 31.206701835070902,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 31.206701835070902
+      }
+    },
+    {
+      "id": "train:base:reverse@posture:yaw_left",
+      "stage": "base",
+      "source_full": true,
+      "final_full": true,
+      "source": {
+        "native_return": 29.23541739160815,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 29.23541739160815
+      },
+      "final": {
+        "native_return": 30.706230226370035,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 30.706230226370035
+      }
+    },
+    {
+      "id": "train:base:reverse@posture:yaw_right",
+      "stage": "base",
+      "source_full": true,
+      "final_full": true,
+      "source": {
+        "native_return": 29.027904945289933,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 29.027904945289933
+      },
+      "final": {
+        "native_return": 30.421023582968854,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 30.421023582968854
+      }
+    },
+    {
+      "id": "train:base:yaw_left@posture:hold",
+      "stage": "base",
+      "source_full": true,
+      "final_full": true,
+      "source": {
+        "native_return": 24.866802572688204,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 24.866802572688204
+      },
+      "final": {
+        "native_return": 24.938074129205624,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 24.938074129205624
+      }
+    },
+    {
+      "id": "train:base:yaw_left@posture:hold@yaw:0.02",
+      "stage": "base",
+      "source_full": true,
+      "final_full": true,
+      "source": {
+        "native_return": 28.472855772020903,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 28.472855772020903
+      },
+      "final": {
+        "native_return": 28.458011819234734,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 28.458011819234734
+      }
+    },
+    {
+      "id": "train:base:yaw_left@posture:hold@yaw:0.06",
+      "stage": "base",
+      "source_full": true,
+      "final_full": true,
+      "source": {
+        "native_return": 22.74639674386791,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 22.74639674386791
+      },
+      "final": {
+        "native_return": 22.940526606687715,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 22.940526606687715
+      }
+    },
+    {
+      "id": "train:base:yaw_left@posture:forward",
+      "stage": "base",
+      "source_full": true,
+      "final_full": true,
+      "source": {
+        "native_return": 24.845739130792733,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 24.845739130792733
+      },
+      "final": {
+        "native_return": 24.893700513589575,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 24.893700513589575
+      }
+    },
+    {
+      "id": "train:base:yaw_left@posture:forward@yaw:0.02",
+      "stage": "base",
+      "source_full": true,
+      "final_full": false,
+      "source": {
+        "native_return": 28.461153402611053,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 28.461153402611053
+      },
+      "final": {
+        "native_return": 28.434928005014118,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.00010480184836803019,
+        "bonus_peak_only_return_at_weight_point2": 18.434907044644444
+      }
+    },
+    {
+      "id": "train:base:yaw_left@posture:forward@yaw:0.06",
+      "stage": "base",
+      "source_full": true,
+      "final_full": true,
+      "source": {
+        "native_return": 22.820147305431124,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 22.820147305431124
+      },
+      "final": {
+        "native_return": 22.87440368818255,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 22.87440368818255
+      }
+    },
+    {
+      "id": "train:base:yaw_left@posture:reverse",
+      "stage": "base",
+      "source_full": true,
+      "final_full": true,
+      "source": {
+        "native_return": 24.92604970763179,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 24.92604970763179
+      },
+      "final": {
+        "native_return": 24.96899290725011,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 24.96899290725011
+      }
+    },
+    {
+      "id": "train:base:yaw_left@posture:reverse@yaw:0.02",
+      "stage": "base",
+      "source_full": true,
+      "final_full": true,
+      "source": {
+        "native_return": 28.492162597022094,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 28.492162597022094
+      },
+      "final": {
+        "native_return": 28.49928991130163,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 28.49928991130163
+      }
+    },
+    {
+      "id": "train:base:yaw_left@posture:reverse@yaw:0.06",
+      "stage": "base",
+      "source_full": true,
+      "final_full": true,
+      "source": {
+        "native_return": 22.893712961093332,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 22.893712961093332
+      },
+      "final": {
+        "native_return": 22.950247933849628,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 22.950247933849628
+      }
+    },
+    {
+      "id": "train:base:yaw_left@posture:yaw_left@yaw:0.02",
+      "stage": "base",
+      "source_full": true,
+      "final_full": true,
+      "source": {
+        "native_return": 28.46096932795844,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 28.46096932795844
+      },
+      "final": {
+        "native_return": 28.45996841726416,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 28.45996841726416
+      }
+    },
+    {
+      "id": "train:base:yaw_left@posture:yaw_left@yaw:0.06",
+      "stage": "base",
+      "source_full": true,
+      "final_full": true,
+      "source": {
+        "native_return": 22.70711601447212,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 22.70711601447212
+      },
+      "final": {
+        "native_return": 22.952633656721428,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 22.952633656721428
+      }
+    },
+    {
+      "id": "train:base:yaw_left@posture:yaw_right",
+      "stage": "base",
+      "source_full": true,
+      "final_full": true,
+      "source": {
+        "native_return": 24.89609449725373,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 24.89609449725373
+      },
+      "final": {
+        "native_return": 24.936967542423528,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 24.936967542423528
+      }
+    },
+    {
+      "id": "train:base:yaw_left@posture:yaw_right@yaw:0.02",
+      "stage": "base",
+      "source_full": true,
+      "final_full": true,
+      "source": {
+        "native_return": 28.48494379941115,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 28.48494379941115
+      },
+      "final": {
+        "native_return": 28.475341905863438,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 28.475341905863438
+      }
+    },
+    {
+      "id": "train:base:yaw_left@posture:yaw_right@yaw:0.06",
+      "stage": "base",
+      "source_full": true,
+      "final_full": true,
+      "source": {
+        "native_return": 22.743684745929958,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 22.743684745929958
+      },
+      "final": {
+        "native_return": 22.931751335188096,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 22.931751335188096
+      }
+    },
+    {
+      "id": "train:base:yaw_right@posture:hold",
+      "stage": "base",
+      "source_full": false,
+      "final_full": true,
+      "source": {
+        "native_return": 25.27844727121169,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0002742414656589087,
+        "bonus_peak_only_return_at_weight_point2": 15.278392422918557
+      },
+      "final": {
+        "native_return": 24.832365898936605,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 24.832365898936605
+      }
+    },
+    {
+      "id": "train:base:yaw_right@posture:hold@yaw:0.02",
+      "stage": "base",
+      "source_full": true,
+      "final_full": true,
+      "source": {
+        "native_return": 28.38094707313541,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 28.38094707313541
+      },
+      "final": {
+        "native_return": 28.29211572725359,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 28.29211572725359
+      }
+    },
+    {
+      "id": "train:base:yaw_right@posture:hold@yaw:0.06",
+      "stage": "base",
+      "source_full": true,
+      "final_full": true,
+      "source": {
+        "native_return": 22.49330320026941,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 22.49330320026941
+      },
+      "final": {
+        "native_return": 22.64385109945959,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 22.64385109945959
+      }
+    },
+    {
+      "id": "train:base:yaw_right@posture:forward",
+      "stage": "base",
+      "source_full": true,
+      "final_full": true,
+      "source": {
+        "native_return": 25.30669464785922,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 25.30669464785922
+      },
+      "final": {
+        "native_return": 24.827615461667904,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 24.827615461667904
+      }
+    },
+    {
+      "id": "train:base:yaw_right@posture:forward@yaw:0.02",
+      "stage": "base",
+      "source_full": true,
+      "final_full": false,
+      "source": {
+        "native_return": 28.389661030582904,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 28.389661030582904
+      },
+      "final": {
+        "native_return": 28.21657594808966,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0006144736757163205,
+        "bonus_peak_only_return_at_weight_point2": 18.216453053354517
+      }
+    },
+    {
+      "id": "train:base:yaw_right@posture:forward@yaw:0.06",
+      "stage": "base",
+      "source_full": true,
+      "final_full": true,
+      "source": {
+        "native_return": 22.538174913733936,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 22.538174913733936
+      },
+      "final": {
+        "native_return": 22.654947303318725,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 22.654947303318725
+      }
+    },
+    {
+      "id": "train:base:yaw_right@posture:reverse",
+      "stage": "base",
+      "source_full": true,
+      "final_full": true,
+      "source": {
+        "native_return": 25.27446479164798,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 25.27446479164798
+      },
+      "final": {
+        "native_return": 24.84490988283731,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 24.84490988283731
+      }
+    },
+    {
+      "id": "train:base:yaw_right@posture:reverse@yaw:0.02",
+      "stage": "base",
+      "source_full": true,
+      "final_full": true,
+      "source": {
+        "native_return": 28.34964697533633,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 28.34964697533633
+      },
+      "final": {
+        "native_return": 28.175649722255066,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 28.175649722255066
+      }
+    },
+    {
+      "id": "train:base:yaw_right@posture:reverse@yaw:0.06",
+      "stage": "base",
+      "source_full": true,
+      "final_full": true,
+      "source": {
+        "native_return": 22.721794673430207,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 22.721794673430207
+      },
+      "final": {
+        "native_return": 22.484777516433912,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 22.484777516433912
+      }
+    },
+    {
+      "id": "train:base:yaw_right@posture:yaw_left",
+      "stage": "base",
+      "source_full": true,
+      "final_full": true,
+      "source": {
+        "native_return": 25.303902713836873,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 25.303902713836873
+      },
+      "final": {
+        "native_return": 24.82715009140211,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 24.82715009140211
+      }
+    },
+    {
+      "id": "train:base:yaw_right@posture:yaw_left@yaw:0.02",
+      "stage": "base",
+      "source_full": true,
+      "final_full": true,
+      "source": {
+        "native_return": 28.347387167605095,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 28.347387167605095
+      },
+      "final": {
+        "native_return": 28.333307692287292,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 28.333307692287292
+      }
+    },
+    {
+      "id": "train:base:yaw_right@posture:yaw_left@yaw:0.06",
+      "stage": "base",
+      "source_full": true,
+      "final_full": true,
+      "source": {
+        "native_return": 22.540349329679923,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 22.540349329679923
+      },
+      "final": {
+        "native_return": 22.710831777768245,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 22.710831777768245
+      }
+    },
+    {
+      "id": "train:base:yaw_right@posture:yaw_right@yaw:0.02",
+      "stage": "base",
+      "source_full": true,
+      "final_full": true,
+      "source": {
+        "native_return": 28.34848947559194,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 28.34848947559194
+      },
+      "final": {
+        "native_return": 28.201043817325836,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 28.201043817325836
+      }
+    },
+    {
+      "id": "train:base:yaw_right@posture:yaw_right@yaw:0.06",
+      "stage": "base",
+      "source_full": true,
+      "final_full": true,
+      "source": {
+        "native_return": 22.52442492352432,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 22.52442492352432
+      },
+      "final": {
+        "native_return": 22.40553733316313,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 22.40553733316313
+      }
+    },
+    {
+      "id": "train:arm:pitch_up@amplitude:0.25",
+      "stage": "arm",
+      "source_full": true,
+      "final_full": false,
+      "source": {
+        "native_return": 113.50590805905881,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 113.50590805905881
+      },
+      "final": {
+        "native_return": 112.89769170515916,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0399013388505598,
+        "bonus_peak_only_return_at_weight_point2": 102.88971143738905
+      }
+    },
+    {
+      "id": "train:arm:pitch_up@amplitude:0.5",
+      "stage": "arm",
+      "source_full": true,
+      "final_full": false,
+      "source": {
+        "native_return": 112.24893425817478,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 112.24893425817478
+      },
+      "final": {
+        "native_return": 108.20100101886564,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.14249353798854103,
+        "bonus_peak_only_return_at_weight_point2": 98.17250231126793
+      }
+    },
+    {
+      "id": "train:arm:pitch_down@amplitude:0.25",
+      "stage": "arm",
+      "source_full": true,
+      "final_full": false,
+      "source": {
+        "native_return": 113.28724719293216,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 113.28724719293216
+      },
+      "final": {
+        "native_return": 111.08933217229436,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 2.219925847016866,
+        "bonus_peak_only_return_at_weight_point2": 100.64534700289099
+      }
+    },
+    {
+      "id": "train:arm:pitch_down@amplitude:0.5",
+      "stage": "arm",
+      "source_full": true,
+      "final_full": false,
+      "source": {
+        "native_return": 112.05202683439855,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 112.05202683439855
+      },
+      "final": {
+        "native_return": 105.93480159287267,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.010924284713465848,
+        "bonus_peak_only_return_at_weight_point2": 95.93261673592998
+      }
+    },
+    {
+      "id": "train:arm:roll_left@amplitude:0.25",
+      "stage": "arm",
+      "source_full": true,
+      "final_full": false,
+      "source": {
+        "native_return": 111.57089769143373,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 111.57089769143373
+      },
+      "final": {
+        "native_return": 112.47604193866519,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0011572086568012452,
+        "bonus_peak_only_return_at_weight_point2": 102.47581049693383
+      }
+    },
+    {
+      "id": "train:arm:roll_left@amplitude:0.5",
+      "stage": "arm",
+      "source_full": true,
+      "final_full": false,
+      "source": {
+        "native_return": 109.56740719650738,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 109.56740719650738
+      },
+      "final": {
+        "native_return": 107.86075950117882,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 1.1970656077045105,
+        "bonus_peak_only_return_at_weight_point2": 97.62134637963791
+      }
+    },
+    {
+      "id": "train:arm:roll_right@amplitude:0.25",
+      "stage": "arm",
+      "source_full": false,
+      "final_full": false,
+      "source": {
+        "native_return": 114.64347121689269,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.001922470640913554,
+        "bonus_peak_only_return_at_weight_point2": 104.64308672276451
+      },
+      "final": {
+        "native_return": 112.08241058836391,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.015987763757362883,
+        "bonus_peak_only_return_at_weight_point2": 102.07921303561244
+      }
+    },
+    {
+      "id": "train:arm:roll_right@amplitude:0.5",
+      "stage": "arm",
+      "source_full": true,
+      "final_full": false,
+      "source": {
+        "native_return": 112.89287108032279,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 112.89287108032279
+      },
+      "final": {
+        "native_return": 107.79392834661367,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.022638195946647066,
+        "bonus_peak_only_return_at_weight_point2": 97.78940070742433
+      }
+    },
+    {
+      "id": "train:arm:shoulder_left@amplitude:0.25",
+      "stage": "arm",
+      "source_full": true,
+      "final_full": false,
+      "source": {
+        "native_return": 113.01548034783741,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 113.01548034783741
+      },
+      "final": {
+        "native_return": 104.88827756192383,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.12031962419591391,
+        "bonus_peak_only_return_at_weight_point2": 94.86421363708465
+      }
+    },
+    {
+      "id": "train:arm:shoulder_left@amplitude:0.5",
+      "stage": "arm",
+      "source_full": true,
+      "final_full": false,
+      "source": {
+        "native_return": 111.09408663898361,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 111.09408663898361
+      },
+      "final": {
+        "native_return": 82.13816800935626,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.5791139497060989,
+        "bonus_peak_only_return_at_weight_point2": 72.02234521941504
+      }
+    },
+    {
+      "id": "train:arm:shoulder_right@amplitude:0.25",
+      "stage": "arm",
+      "source_full": true,
+      "final_full": false,
+      "source": {
+        "native_return": 113.43683294859488,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 113.43683294859488
+      },
+      "final": {
+        "native_return": 103.47649990410831,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0026389346835287153,
+        "bonus_peak_only_return_at_weight_point2": 93.47597211717161
+      }
+    },
+    {
+      "id": "train:arm:shoulder_right@amplitude:0.5",
+      "stage": "arm",
+      "source_full": true,
+      "final_full": true,
+      "source": {
+        "native_return": 110.31839349425228,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 110.31839349425228
+      },
+      "final": {
+        "native_return": 86.8776143827106,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 86.8776143827106
+      }
+    },
+    {
+      "id": "train:arm:elbow_up@amplitude:0.25",
+      "stage": "arm",
+      "source_full": true,
+      "final_full": false,
+      "source": {
+        "native_return": 109.00431377544622,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 109.00431377544622
+      },
+      "final": {
+        "native_return": 103.84034166484795,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.11877583191125973,
+        "bonus_peak_only_return_at_weight_point2": 93.8165864984657
+      }
+    },
+    {
+      "id": "train:arm:elbow_up@amplitude:0.5",
+      "stage": "arm",
+      "source_full": true,
+      "final_full": false,
+      "source": {
+        "native_return": 101.82261058754472,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 101.82261058754472
+      },
+      "final": {
+        "native_return": 92.19625061686357,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.3651467135652591,
+        "bonus_peak_only_return_at_weight_point2": 82.12322127415051
+      }
+    },
+    {
+      "id": "train:arm:elbow_down@amplitude:0.25",
+      "stage": "arm",
+      "source_full": true,
+      "final_full": false,
+      "source": {
+        "native_return": 106.61141046154637,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 106.61141046154637
+      },
+      "final": {
+        "native_return": 107.4409661998505,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.47641291300902666,
+        "bonus_peak_only_return_at_weight_point2": 97.34568361724868
+      }
+    },
+    {
+      "id": "train:arm:elbow_down@amplitude:0.5",
+      "stage": "arm",
+      "source_full": true,
+      "final_full": false,
+      "source": {
+        "native_return": 100.43313773416014,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 100.43313773416014
+      },
+      "final": {
+        "native_return": 58.07567888644551,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 4.3776143070973115,
+        "bonus_peak_only_return_at_weight_point2": 47.20015602502605
+      }
+    },
+    {
+      "id": "train:arm:wrist_up@amplitude:0.25",
+      "stage": "arm",
+      "source_full": true,
+      "final_full": true,
+      "source": {
+        "native_return": 108.34416997927806,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 108.34416997927806
+      },
+      "final": {
+        "native_return": 107.53758082241309,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 107.53758082241309
+      }
+    },
+    {
+      "id": "train:arm:wrist_up@amplitude:0.5",
+      "stage": "arm",
+      "source_full": true,
+      "final_full": false,
+      "source": {
+        "native_return": 101.82251974615926,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 101.82251974615926
+      },
+      "final": {
+        "native_return": 97.40364325758375,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.563596795702213,
+        "bonus_peak_only_return_at_weight_point2": 87.29092389844331
+      }
+    },
+    {
+      "id": "train:arm:wrist_down@amplitude:0.25",
+      "stage": "arm",
+      "source_full": true,
+      "final_full": false,
+      "source": {
+        "native_return": 107.38504378779243,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 107.38504378779243
+      },
+      "final": {
+        "native_return": 108.66561073063528,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 1.2320591216468677,
+        "bonus_peak_only_return_at_weight_point2": 98.41919890630591
+      }
+    },
+    {
+      "id": "train:arm:wrist_down@amplitude:0.5",
+      "stage": "arm",
+      "source_full": true,
+      "final_full": false,
+      "source": {
+        "native_return": 100.5017219323729,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 100.5017219323729
+      },
+      "final": {
+        "native_return": 63.090992801428484,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 3.6551315633553556,
+        "bonus_peak_only_return_at_weight_point2": 52.359966488757415
+      }
+    },
+    {
+      "id": "train:arm:translate_down@amplitude:0.25",
+      "stage": "arm",
+      "source_full": true,
+      "final_full": false,
+      "source": {
+        "native_return": 101.52358348139498,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 101.52358348139498
+      },
+      "final": {
+        "native_return": 104.40345998471372,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.23287544649551517,
+        "bonus_peak_only_return_at_weight_point2": 94.35688489541462
+      }
+    },
+    {
+      "id": "train:arm:translate_down@amplitude:0.5",
+      "stage": "arm",
+      "source_full": true,
+      "final_full": false,
+      "source": {
+        "native_return": 92.30793962560317,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 92.30793962560317
+      },
+      "final": {
+        "native_return": 92.59717606653628,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.010316199790211922,
+        "bonus_peak_only_return_at_weight_point2": 82.59511282657823
+      }
+    },
+    {
+      "id": "train:arm:translate_up@amplitude:0.25",
+      "stage": "arm",
+      "source_full": true,
+      "final_full": false,
+      "source": {
+        "native_return": 103.68654052410042,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 103.68654052410042
+      },
+      "final": {
+        "native_return": 107.98789234328437,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 1.1836602706811283,
+        "bonus_peak_only_return_at_weight_point2": 97.75116028914815
+      }
+    },
+    {
+      "id": "train:arm:translate_up@amplitude:0.5",
+      "stage": "arm",
+      "source_full": true,
+      "final_full": false,
+      "source": {
+        "native_return": 93.7591911188993,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.0,
+        "bonus_peak_only_return_at_weight_point2": 93.7591911188993
+      },
+      "final": {
+        "native_return": 100.29854047657786,
+        "removed_bonus": 10.0,
+        "terminal_peak_excess": 0.07351712426615808,
+        "bonus_peak_only_return_at_weight_point2": 90.28383705172462
+      }
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "logs/recovery/hand-accuracy-v1/whole-body-reward-ranking.json",
+      "sha256": "5ef6b2f6ccef2aec93609c387a64e303e6c4dc294d3345a922ce5dd09166c580"
+    },
+    {
+      "path": "logs/recovery/hand-accuracy-v1/whole-body-reward-ranking.py",
+      "sha256": "367c57162e56455a1b77ec6622964ab2983538de517dcea1b43acbca43cb341f"
+    }
+  ]
+}
