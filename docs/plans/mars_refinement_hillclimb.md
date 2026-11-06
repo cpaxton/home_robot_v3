@@ -254,3 +254,14 @@ Next bounded experiment, declared before training:
   loaded grasp/lift/transport/place and measured-stop tests. Passive Herman
   feedback/velocity/watchdog validation remains a separate prerequisite. No
   hardware motion is authorized by this experiment.
+
+A separate diagnostic audit is frozen before this run starts:
+[`mars_full_arm_audit_v1/cases.json`](../../paper/data/whole_body_control/mars_full_arm_audit_v1/cases.json),
+SHA256 `63f76483b2ab7048512a268459d034ceeaaeaa898193b048a1beb4c01ef00985`.
+It uses 12 new reset seeds (`34200000`–`34200011`), eight 1.15-amplitude new arm
+parents and four unseen coordinated joint combinations, all converted to FK
+pose paths under the same limits and thresholds. None enter training. After the
+initial-fidelity audit frees CPU15, replay teacher/source and then the fixed
+final, preserving every admission/execution failure and plotting targets. Do not
+choose another checkpoint or tune this run from these audit outcomes. These are
+extra exploratory development checks, separate from the frozen canonical gate.
