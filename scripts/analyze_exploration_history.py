@@ -6,6 +6,7 @@
 import argparse
 import hashlib
 import json
+import textwrap
 from pathlib import Path
 
 import numpy as np
@@ -15,7 +16,7 @@ def sha256(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def analyze(source, output):
+def analyze(source, output, *, question_text=None):
     import matplotlib
 
     matplotlib.use("Agg")
@@ -108,14 +109,15 @@ def analyze(source, output):
     ax.set(xlabel="Local X (m)", ylabel="Local Y (m)", title="Observed map and estimated camera path")
     ax.set_aspect("equal")
     ax.legend()
-    fig.suptitle(
-        f"{source.name}: {manifest['status']} | {len(records)} frames | {outcome['estimated_camera_path_m']:.2f} m estimated camera path",
-        fontsize=14,
-    )
+    title = f"{source.name}: {manifest['status']} | {len(records)} frames | {outcome['estimated_camera_path_m']:.2f} m estimated camera path"
+    if question_text:
+        title = textwrap.fill(question_text, 120) + "\n" + title
+        outcome["human_audit_question"] = question_text
+    fig.suptitle(title, fontsize=12)
     fig.text(
         0.02,
         0.015,
-        "Uniformly sampled raw RGB; not target-selected. Gray: unknown, white: observed, dark: obstacle/hazard. No global pose or target annotations.",
+        "Human audit only; question was not used by collector. Uniform RGB. Gray: unknown, white: observed, dark: obstacle/hazard; estimated pose.",
         fontsize=9,
     )
     fig.tight_layout(rect=[0, 0.03, 1, 0.96])
@@ -130,5 +132,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--question-text", help="Optional human-audit caption; never read by the collection policy")
     args = parser.parse_args()
-    analyze(args.source, args.output)
+    analyze(args.source, args.output, question_text=args.question_text)
