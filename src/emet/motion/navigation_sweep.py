@@ -112,7 +112,11 @@ def shortcut_navigation_route(space, start, waypoints, *, max_translation_m=0.2)
     result, current, index = [], np.asarray(start, dtype=float), 0
     while index < len(waypoints):
         for end in range(len(waypoints) - 1, index - 1, -1):
-            candidate = differential_drive_waypoints(current, waypoints[end], max_translation_m=max_translation_m)
+            target = np.asarray(waypoints[end], dtype=float).copy()
+            if end < len(waypoints) - 1:
+                delta = target[:2] - current[:2]
+                target[2] = np.arctan2(delta[1], delta[0]) if np.linalg.norm(delta) > 1e-8 else current[2]
+            candidate = differential_drive_waypoints(current, target, max_translation_m=max_translation_m)
             accepted, _ = validate_navigation_sweep(space, current, candidate)
             if accepted:
                 result.extend(candidate)

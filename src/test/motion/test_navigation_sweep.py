@@ -175,6 +175,18 @@ def test_shortcut_rejects_a_route_whose_required_drive_turn_is_unsafe():
     assert not shortcut_navigation_route(space, [0, 0, 0], [[0, 0.5, 0]])
 
 
+def test_shortcut_keeps_corner_travel_heading_without_a_grid_yaw_round_trip():
+    from emet.motion.navigation_sweep import shortcut_navigation_route
+
+    space = SimpleNamespace(is_valid=lambda p: not (0.35 < p[0] < 0.65 and 0.35 < p[1] < 0.65))
+    # The old grid heading pi is steering metadata, not a task constraint.
+    route = [[0, 1, np.pi], [1, 1, 0]]
+    short = shortcut_navigation_route(space, [0, 0, 0], route)
+    assert short and validate_navigation_sweep(space, [0, 0, 0], short)[0]
+    assert max(abs(p[2]) for p in short) <= np.pi / 2 + 1e-8
+    np.testing.assert_allclose(short[-1], route[-1])
+
+
 @pytest.mark.parametrize("proposal", [[[0.2, 0, 0]], [[0.2, 0.2, 0], [0.2, 0, 0]], [[0.1, 0, 0]]])
 def test_route_proposal_requires_fresh_sweep_and_correct_endpoint(proposal):
     from types import SimpleNamespace
