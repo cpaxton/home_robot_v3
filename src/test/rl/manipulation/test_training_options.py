@@ -1,3 +1,4 @@
+import json
 from types import SimpleNamespace
 
 import gymnasium as gym
@@ -162,6 +163,22 @@ def test_mlp_ppo_update_and_bundle_roundtrip_without_demonstrations(tmp_path, pr
                 "test-only-fingerprint",
                 "mlp",
             )
+        manifest_path = tmp_path / "manifest.json"
+        original_manifest = json.loads(manifest_path.read_text())
+        for metadata, message in (
+            ({"critic_reward_scale": 0.01}, "native critic reward units"),
+            ({"component_training": {"optimizer_resume_supported": False}}, "fresh optimizer"),
+        ):
+            manifest_path.write_text(json.dumps({**original_manifest, **metadata}))
+            with pytest.raises(ValueError, match=message):
+                resume_training(
+                    tmp_path,
+                    env,
+                    ManipulationConfig(robot="innate_mars", action_mode="direct_velocity", trajectory_preview=preview),
+                    "test-only-fingerprint",
+                    "mlp",
+                )
+        manifest_path.write_text(json.dumps(original_manifest))
         if preview:
             with pytest.raises(ValueError):
                 loaded({"history": obs["history"]})
