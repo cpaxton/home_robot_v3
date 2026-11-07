@@ -199,7 +199,7 @@ def run(self) -> AgenticEQAResult:
             self._unused_detection_hypothesis() is not None
         )
         if (
-            self.decision_policy != "grounded_v2"
+            self.decision_policy == "legacy"
             and self._prefer_explore
             and not skip_prefer_explore
             and self.mode == "answer"
@@ -227,7 +227,7 @@ def run(self) -> AgenticEQAResult:
         # Close-map stay: keep approaching this XY until aimed-close or escape.
         stay_hyp = self._close_map_stay_hypothesis()
         if (
-            self.decision_policy != "grounded_v2"
+            self.decision_policy == "legacy"
             and stay_hyp is not None
             and self.mode == "answer"
             and calls
@@ -251,7 +251,7 @@ def run(self) -> AgenticEQAResult:
         # Mapping-pose graph views are not objects: rewrite to an unused proposal.
         unused_det = self._unused_detection_hypothesis()
         if (
-            self.decision_policy != "grounded_v2"
+            self.decision_policy == "legacy"
             and unused_det is not None
             and self.mode == "answer"
             and calls
@@ -280,7 +280,7 @@ def run(self) -> AgenticEQAResult:
                 }
         # Leave/ABSENT explore-only loops: after a streak of frontiers, force a close look.
         if (
-            self.decision_policy != "grounded_v2"
+            self.decision_policy == "legacy"
             and self.mode == "answer"
             and calls
             and calls[0][0] == "explore_frontier"
@@ -323,7 +323,11 @@ def run(self) -> AgenticEQAResult:
                     "selected": selected_calls,
                     "executed": calls,
                 }
-        eligible_calls = redirect_rejected_candidates(self.agent, calls)
+        # Invalid references are reported by dispatch. Model-final policy
+        # must not silently replace the requested tool or its target.
+        eligible_calls = (
+            redirect_rejected_candidates(self.agent, calls) if self.decision_policy != "model_final" else calls
+        )
         if eligible_calls != calls:
             calls = eligible_calls
             picked_by = f"{picked_by}+rejected_candidate"
