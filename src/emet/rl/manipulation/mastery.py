@@ -76,6 +76,8 @@ def load_suite(path=SUITE):
         raise ValueError("reference and gate scales must be positive and finite")
     ids, seeds, counts = set(), {"train": set(), "validation": set()}, Counter()
     for case in suite["cases"]:
+        if "supported_fixture" in case:
+            raise ValueError("supported fixtures are restricted to extra training arm cases")
         if (
             case["stage"] not in STAGES
             or case["split"] not in seeds
@@ -126,6 +128,15 @@ def load_suite(path=SUITE):
             raise ValueError("extra arm delta must have five finite nearby joint displacements") from error
         if delta.shape != (5,) or not np.isfinite(delta).all() or np.any(abs(delta) > 0.2):
             raise ValueError("extra arm delta must have five finite nearby joint displacements")
+        if "supported_fixture" in case and (
+            type(case["supported_fixture"]) is not bool
+            or (
+                case["supported_fixture"]
+                and (cfg.scenario != "reach" or cfg.reach_hold_probability != 1 or not cfg.balanced_grasp_setup
+                     or "arm_start" in case)
+            )
+        ):
+            raise ValueError("supported fixture requires a balanced, deterministic open-jaw reach reset without arm_start")
         if "arm_start" in case:
             try:
                 posture = np.asarray(case["arm_start"], dtype=float)
@@ -507,6 +518,10 @@ class MasteryEnv(ManipulationEnv):
         self.mastery_scratch = None
         loaded = case["stage"] == "loaded"
         cfg = ManipulationConfig(**self.suite["config"])
+        if case.get("supported_fixture", False):
+            # Reuse the existing supported/open-jaw initialization, with no
+            # pregrasp task state machine, closure, lift or release during tracking.
+            cfg = replace(cfg, hold_pregrasp_fixture=True)
         self.config = (
             replace(cfg, scenario="carry", reach_hold_probability=0, grasp_lift_probability=1) if loaded else cfg
         )
@@ -601,7 +616,11 @@ class MasteryEnv(ManipulationEnv):
     def update_witness(self):
         if self.mastery_reference is not None and not self.control.stopped:
             _, q = self.mastery_reference.coordinates(self.control.trajectory_elapsed())
-            self.control.set_reference(q, phase="carry" if self.mastery_case["stage"] == "loaded" else "reach")
+            phase = (
+                "carry" if self.mastery_case["stage"] == "loaded"
+                else "pregrasp" if self.mastery_case.get("supported_fixture", False) else "reach"
+            )
+            self.control.set_reference(q, phase=phase)
 
     def step(self, action):
         self.update_witness()

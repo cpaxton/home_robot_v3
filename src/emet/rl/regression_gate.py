@@ -102,7 +102,9 @@ def source_state(root):
             root / "configs/benchmarks/mars_tracking_mastery_full_arm_v1.json",
             root / "configs/benchmarks/mars_tracking_mastery_tamp_postures_v1.json",
             root / "configs/benchmarks/mars_tracking_mastery_tamp_translation_v1.json",
+            root / "configs/benchmarks/mars_tracking_mastery_supported_v1.json",
             root / "paper/data/whole_body_control/mars_tamp_translation_audit_v1/cases.json",
+            root / "paper/data/whole_body_control/mars_supported_contact_audit_v1/cases.json",
             root / "paper/data/whole_body_control/mars_matched_reference_v1/stop-cases.json",
         ]
     )

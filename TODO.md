@@ -378,6 +378,16 @@ Accepted plan: [Mars controller integration](docs/plans/mars_controller_integrat
 - [ ] Audit peak-jerk failure timing and measured/commanded channels against the
       integrated smoothness reward before another extension or stage expansion.
       Record mode-radius changes explicitly in restoring-head weight transfers.
+- [x] Finish the matched gain-bias LR300-to-1 control and all post-tests: full
+      arm14/88→68/88 but below source80/88; public learned transfers remain0/3.
+      Preserve the source. See the [completed report](docs/experiments/mars_bias_control_20261107.md).
+- [x] Reproduce the pregrasp gap with supported open-jaw tracking probes:
+      teacher2/2, both learned actors0/2, while all pass the free-space version.
+      Preserve phase/jaw-input interventions, including the deadline failure.
+- [ ] Admit and train the bounded supported-contact curriculum: preserve all146
+      earlier cases, add18 contact cases, reserve12.5% of total control steps
+      for them, and freeze12 new-seed audit cases before optimization. Require
+      fresh regressions/teacher/source/warmup gates; no hardware qualification.
 - [ ] Master the five base cases first, then add arm, coupled and loaded cases
       while retaining earlier rehearsal. Keep stage IDs out of actor input and
       require both complete splits before restoring the broad distribution.
