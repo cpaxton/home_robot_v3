@@ -129,3 +129,23 @@ partial-motion failure when the primitive budget expires, and permit fresh
 camera context after the motion cap (the wall deadline remains enforced).
 Five real-dispatch rewrite reproductions cover legacy and model-final modes;
 partial motion/head-budget tests preserve measured pose without extra motion.
+
+### Grid-coordinate audit
+
+Follow-up `sensor-active-pairs-20261107-r6`, source `23376423`, confirms that
+q2 now reaches final model reasoning at the 200-primitive cap. The selected
+`explore_frontier(toward="bathroom")` is dispatched unchanged, and the final
+request retains 13 conversation messages including the actual tool results.
+The model's `White` answer remains wrong; the harness does not replace it.
+
+Auditing that context caught another binding error: a near frontier became
+approximately `[-38, -36]` m because production semantic-grid conversion used
+1024 cells at 0.1 m while navigation used 256 at 0.05 m. The active batch was
+interrupted and its waiting S0/Molmo checks cancelled before admission. No
+aggregate comparison is claimed for that incomplete cohort.
+
+The controller now honors explicit `grid_size` and `grid_resolution` parameters
+(defaults preserved). The sensor binding supplies the shared geometry's values
+and rejects any resolution/size/origin mismatch before creating model transport.
+A real-controller test checks a navigation-cell/semantic-world round trip;
+another reproduces the old grid mismatch and requires startup failure.

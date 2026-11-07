@@ -74,6 +74,8 @@ def build_sensor_agent(robot, model_config, output, *, max_images):
     params.set("pad_obstacles", 0)
     params.set("add_local_radius_points", False)
     params.set("filters/smooth_kernel_size", 0)
+    params.set("grid_resolution", robot.navigation.map.grid_resolution)
+    params.set("grid_size", list(robot.navigation.map.grid_size))
     params.set("floor_evidence", dict(robot.navigation.map.parameters["floor_evidence"]))
     params.set("motion_planner/obstacle_map_mode", "physical")
     params.set("eqa/habitat_perfect_nav", False)
@@ -99,6 +101,13 @@ def build_sensor_agent(robot, model_config, output, *, max_images):
     # geometry as the reference. Otherwise the sparse semantic cadence loses
     # under-footprint floor returns and rejects the safe stationary spawn.
     # Footprint sweeps remain mandatory; there is no extra clearance padding.
+    geometry, semantic = robot.navigation.map, agent.voxel_map
+    if (
+        geometry.grid_resolution != semantic.grid_resolution
+        or list(geometry.grid_size) != list(semantic.grid_size)
+        or not np.array_equal(geometry.grid_origin.cpu().numpy(), semantic.grid_origin.cpu().numpy())
+    ):
+        raise ValueError("Navigation and semantic grids must share resolution, size and origin")
     agent.space = robot.navigation.space
     agent.planner = AStar(agent.space, min_clearance_m=0.0, clearance_cost_weight=0.0)
     agent._min_clearance_m = 0.0
@@ -122,6 +131,9 @@ def build_sensor_agent(robot, model_config, output, *, max_images):
                 "footprint_radius_m": robot.navigation.footprint.radius,
                 "additional_clearance_m": 0.0,
                 "footprint_sweep_required": True,
+                "grid_resolution_m": geometry.grid_resolution,
+                "grid_size": list(geometry.grid_size),
+                "grid_origin": geometry.grid_origin.cpu().tolist(),
             },
             indent=2,
         )

@@ -151,7 +151,15 @@ def test_factory_keeps_production_agent_and_model_final_contract(tmp_path, monke
     from emet.eval import sensor_agent, stack
 
     captured = {}
-    production = SimpleNamespace(graph_memory=SimpleNamespace(), voxel_map=SimpleNamespace(), sensor_builder=None)
+    client = robot()
+    grid = client.navigation.map
+    production = SimpleNamespace(
+        graph_memory=SimpleNamespace(),
+        voxel_map=SimpleNamespace(
+            grid_size=grid.grid_size, grid_resolution=grid.grid_resolution, grid_origin=grid.grid_origin
+        ),
+        sensor_builder=None,
+    )
 
     def build(**kwargs):
         captured.update(kwargs)
@@ -160,7 +168,6 @@ def test_factory_keeps_production_agent_and_model_final_contract(tmp_path, monke
     remote = object()
     monkeypatch.setattr(stack, "build_memory_agent", build)
     monkeypatch.setattr(sensor_agent, "AuditedPNGClient", lambda **kwargs: remote)
-    client = robot()
     agent, transport = sensor_agent.build_sensor_agent(
         client, {"base_url": "http://localhost/v1", "name": "qwen"}, tmp_path, max_images=4
     )
@@ -196,7 +203,26 @@ def test_production_controller_initializes_without_a_manipulation_server(tmp_pat
         assert agent._use_instance_memory is False
         assert agent.parameters.get("eqa/agentic_decision_policy") == "model_final"
         assert agent.space is client.navigation.space
+        assert agent.voxel_map.grid_resolution == client.navigation.map.grid_resolution
+        np.testing.assert_array_equal(agent.voxel_map.grid_origin, client.navigation.map.grid_origin)
+        xy = np.array([0.4, 2.0])
+        cell = agent.space.voxel_map.xy_to_grid_coords(xy)
+        np.testing.assert_allclose(agent.voxel_map.grid_coords_to_xy(cell), xy, atol=1e-6)
     finally:
         context = agent.manip_socket.context
         agent.manip_socket.close(linger=0)
         context.term()
+
+
+def test_grid_mismatch_fails_before_any_model_transport_is_created(tmp_path, monkeypatch):
+    import torch
+
+    from emet.eval import sensor_agent, stack
+
+    wrong_grid = SimpleNamespace(grid_resolution=0.1, grid_size=[1024, 1024], grid_origin=torch.tensor([512, 512, 0]))
+    monkeypatch.setattr(stack, "build_memory_agent", lambda **kwargs: SimpleNamespace(voxel_map=wrong_grid))
+    monkeypatch.setattr(sensor_agent, "AuditedPNGClient", lambda **kwargs: pytest.fail("Grid must be checked first"))
+    with pytest.raises(ValueError, match="grids must share"):
+        sensor_agent.build_sensor_agent(
+            robot(), {"base_url": "http://localhost/v1", "name": "qwen"}, tmp_path, max_images=4
+        )
