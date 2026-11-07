@@ -149,3 +149,78 @@ The controller now honors explicit `grid_size` and `grid_resolution` parameters
 and rejects any resolution/size/origin mismatch before creating model transport.
 A real-controller test checks a navigation-cell/semantic-world round trip;
 another reproduces the old grid mismatch and requires startup failure.
+
+### Completed paired pilot, November 7
+
+Frozen source `9ff8521f`, GraphEQA fork `5f3fc51a`; job
+`20261107_094117_faaa5a`. All six episodes completed normally. Both agents
+scored **0/3** on this deliberately hard q2/q6/q12 development slice. No answer
+quality, benchmark parity or superiority is established. The historical EQA
+accuracy used a different body/localization/budget protocol and is not a paired
+control for this pilot.
+
+| Question | emet raw answer | Native GraphEQA raw answer | emet estimated camera path | emet / reference model calls |
+| --- | --- | --- | --- | --- |
+| 2 | White | D | 2.94 m | 41 / 4 |
+| 6 | By the dining table | C | 3.27 m | 44 / 4 |
+| 12 | One | C | 2.46 m | 33 / 1 |
+
+All emet final answers came from `model_final`, selected tool actions were
+dispatched without rewrites, and final dialogue retained actual tool results.
+There were no reported collisions. Native GraphEQA made no forward-motion
+requests beyond its stationary startup panorama. Its approximately 1.5–2.5 cm
+estimated camera path is odometry drift, not useful exploration. The production
+agent reached the 200-primitive cap on q2/q6 and used 141 on q12; startup and
+gaze count toward that allowance. Calls are not equalized: emet used 118 model
+calls versus nine for the reference across the three cases.
+
+Manual inspection of the recorded frames identifies inadequate target context:
+q2 ends at an entry mat rather than a shower rug; q12 remains outside the
+bedroom with insufficient views for counting. The q6 thin upright object and
+its room relation are ambiguous in the saved final view, so do not label that
+case a definite localization or model-reasoning failure without further audit.
+This is a completed bounded diagnostic, not useful task-quality acceptance.
+
+Raw run and reproducible post-hoc analysis:
+`~/runs/emet/sensor-active-pairs-20261107-r7/`. Its `analysis/` directory retains
+the analyzer, summary, six PNG/PDF question/trajectory/view panels, ledger and
+model-trace hashes. The map backgrounds project recorded RGB-D points using
+estimated camera poses; they are neither planner occupancy maps nor ground truth.
+Gold question/answer labels enter scoring and post-hoc visualization only.
+
+### OVMM timing failure and common simulator repair
+
+The S0 attempt at `sensor-stack-ovmm-s0-20261107-r2` did not qualify either arm.
+Main reached the 1500 s wall cap; the candidate was interrupted for diagnosis.
+The robot stayed upright and moved, but simulation advanced at about 0.03 times
+wall time under the loaded one-core protocol. A temporary CPU-affinity probe
+also makes this cohort unsuitable for paired acceptance. Keep both failures in
+the run manifest. No Molmo result was obtained from the cancelled queued jobs.
+
+The physics loop hashed compiled mesh geometry on every tick despite already
+hashing it at model load. On the actual S0 scene the hash median was 6.88 ms,
+versus 1.65 ms for `mj_step`, at a 2 ms simulation timestep. The repair caches
+the fingerprint per loaded model and refreshes it when the model is replaced;
+live qpos, qvel and timestamps remain fresh every tick. Model-identity, native
+adapter and ground-truth-action tests passed (34 tests).
+
+Full RGB-D bridge controls, with no model and no motion, sampled ten seconds
+after startup in serial (`stretch-clock-20261107-r1` and `-r2`):
+
+| CPU allocation | main `cd169673` | repaired `1bd00ad1` |
+| --- | --- | --- |
+| Logical CPU 12 | 0.0406x | 0.1653x |
+| Safe physical-core pool 12,14,20,21 | 0.1656x | 0.6054x |
+
+Both clocks advanced and minimum body-up dot world-z exceeded 0.99999. The
+Stretch physics source differs only by this cache repair, but these short idle
+controls do not establish loaded-agent throughput or task success. Shutdown
+logs include manager-connection errors after deliberate process-group teardown;
+these occur after sampling and are not model/physics failures.
+
+The next paired find pilot uses **main plus the shared simulator repair**
+(`35fbabf7`) versus the research candidate, with identical safe CPU pool and
+existing model/physics/budgets. Do not label that baseline unmodified main.
+Keep the prior timeouts separate, inspect loaded RTF and measured receipts,
+and retain every planned S0/Molmo failure. These are find-only checks, not
+pick/place or long-horizon manipulation acceptance.

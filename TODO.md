@@ -18,20 +18,27 @@
       these exclude collection/navigation and are not full-agent results. Packet
       audit, question/view/path panels, source pins and limits:
       `docs/experiments/frozen_eqa_comparison_20261103.md`.
-- [ ] Run the active paired baseline comparison after matching emet's estimated-pose
-      basis, footprint, perception and motion budgets; retain matched-history
-      image-only controls. Stronger-model comparisons are optional ablations,
-      not prerequisites for accepting the existing GraphEQA connection.
-      First collect broader task-independent trajectories: the frozen pilot's
-      initial/arrival packets do not adequately cover the requested targets.
-      The bounded q2/q6/q12 physical gates now pass at `818066c9`: six arrivals,
-      all prescribed scans, 423 accepted frames, 137/138/139 of 200 actions.
-      Fixed half-turn/unknown-goal controls and ordinary Habitat preflight pass.
-      Pixel-centre calibration, checked route shortcuts and motion-effort
-      acquisition resolve the observed failures; retain distance-only failures.
-      No task-quality gain is established. Remaining: common agent frame/body,
-      perception/budget wiring and sampling isolation from model inference.
-      Evidence/limits: `docs/experiments/sensor_navigation_repairs_20261106.md`.
+- [x] Complete the first bounded sensor-only active EQA pair: q2/q6/q12 at
+      `9ff8521f`, all six episodes finish, both agents 0/3. Shared estimated-pose
+      body, navigation geometry and motion budgets are wired; sampling is isolated
+      from geometry updates. No task-quality improvement is established. Manual
+      image audit shows inadequate target context; emet translates 2.46–3.27 m
+      while native GraphEQA requests no forward motion. Preserve the 118 versus
+      nine model-call imbalance: this is a whole-system diagnostic, not an
+      isolated graph ablation. Report/figures:
+      `docs/experiments/active_sensor_agent_pilot_20261106.md`.
+- [ ] Requalify small S0/Molmo find checks after the common Stretch clock repair.
+      Old main timed out at ~0.03x under the loaded one-core protocol. Cache the
+      native compiled-model hash per model; 34 targeted tests pass and the idle
+      full bridge improves 0.166x -> 0.605x on four safe physical cores. Use
+      main+shared repair versus candidate with identical allocation, preserve
+      failed rows, and measure loaded RTF before interpreting object search.
+      Neither EQA nor find-only results qualify pick/place.
+- [ ] Follow the diagnostic EQA cohort with broader target-covering trajectories,
+      matched-history image-only controls and predeclared task budgets. Retain
+      model-final answers, raw context and failed actions; do not tune the
+      reference baseline until it succeeds. Stronger-model comparisons remain
+      optional ablations, not prerequisites for accepting the connection.
 - [ ] Record effective generation config, RNG/seed policy and environment versions
       in paper-run manifests. Qwen's checkpoint defaults enable sampling at 0.7;
       an unseeded one-call contrast does not establish a stable prompt effect.
