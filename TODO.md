@@ -27,13 +27,23 @@
       nine model-call imbalance: this is a whole-system diagnostic, not an
       isolated graph ablation. Report/figures:
       `docs/experiments/active_sensor_agent_pilot_20261106.md`.
-- [ ] Requalify small S0/Molmo find checks after the common Stretch clock repair.
+- [ ] Finish small S0/Molmo find qualification after the common Stretch clock repair.
       Old main timed out at ~0.03x under the loaded one-core protocol. Cache the
       native compiled-model hash per model; 34 targeted tests pass and the idle
       full bridge improves 0.166x -> 0.605x on four safe physical cores. Use
       main+shared repair versus candidate with identical allocation, preserve
       failed rows, and measure loaded RTF before interpreting object search.
-      Neither EQA nor find-only results qualify pick/place.
+      Repaired S0 completes both arms: cylinder found, destination missing
+      (1/2 phases each; 573/412 s; no superiority established). Molmo initially
+      fails wrapper discovery; retry through the installed Python 3.11 override
+      after cached scene merge preflight. Neither EQA nor find-only results
+      qualify pick/place.
+- [ ] Diagnose S0 candidate waypoint timeout (sequence 27) at healthy ~0.58x
+      simulator rate; preserve measured terminal pose in failed receipts before
+      attributing the failure to control versus contact. Separately test the
+      exploration arrival head policy: hardcoded level pitch produces empty
+      sky/floor in the table scene, losing a previously visible target. Retain
+      image/command context and avoid task-specific pitch rules.
 - [ ] Follow the diagnostic EQA cohort with broader target-covering trajectories,
       matched-history image-only controls and predeclared task budgets. Retain
       model-final answers, raw context and failed actions; do not tune the

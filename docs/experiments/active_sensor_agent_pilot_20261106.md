@@ -224,3 +224,53 @@ existing model/physics/budgets. Do not label that baseline unmodified main.
 Keep the prior timeouts separate, inspect loaded RTF and measured receipts,
 and retain every planned S0/Molmo failure. These are find-only checks, not
 pick/place or long-horizon manipulation acceptance.
+
+### Repaired S0 pair and Molmo preflight
+
+`~/runs/emet/sensor-stack-ovmm-clockfixed-20261107-r4/` compares baseline
+`35fbabf7` (main plus common clock repair) with candidate `8fd04851`. Both
+S0 episodes complete, find the cylinder, and fail destination localization:
+**one of two find phases per arm; zero complete S0 successes**. Episode wall
+times are 572.65 and 412.19 s respectively. This single stochastic pair does
+not establish a quality or runtime advantage. Loaded baseline clock samples
+measure about 0.49–0.58x, and candidate reported RTF remains around 0.58x at
+a later waypoint failure.
+
+The baseline destination trace identifies a weak voxel proposal on the floor.
+Its subsequent view contains only a clipped sliver of the actual blue object;
+Qwen reports visual presence, but measured-mask selection abstains. Frontier
+arrival explicitly commands `look_ahead` (level tilt) in `agentic/explore.py`,
+and the saved frame then contains sky and empty floor rather than the table.
+Measured body-up exceeds 0.99999: this is not a robot fall. The post-hoc
+`analysis/s0_baseline_context_audit.png` / `.pdf` show all three raw views,
+and retain the plotting source.
+
+Candidate navigation also has a genuine timeout after the speed repair:
+sequence 27 fails with `motion deadline exceeded`, followed by an investigate
+arrival at approximately `[-1.279, -0.053, -2.102]`. The failed receipt supplies
+a resolved goal, not a measured terminal pose, so do not interpret that goal
+as proof of arrival. The current trace does not isolate collision, tracking,
+or controller convergence as its cause. Preserve it for a targeted navigation
+reproduction rather than relaxing tolerances. A short read-only measured-motion
+diagnostic is retained separately from agent input.
+
+Both planned Molmo arms fail **before simulation** because the worktrees do not
+find the separately installed wrapper; neither is a model failure or task
+acceptance. The existing Python 3.11 environment imports the required APIs,
+and cached kitchen/RBY1 scene merging passes with installation disabled. The
+retry uses the supported `MOLMOSPACES_PYTHON` override; no installation or
+asset download is needed. The source-freezing guard correctly rejects an
+untracked environment symlink, so the explicit override is preferable.
+
+An additional startup-only attempt (`...clockfixed-20261107-r3`) is retained
+with explicit interrupted/not-started rows. Its new control worktree lacked
+YOLOE/mobileclip links and downloaded duplicates before interruption; both
+files were SHA-256 checked against existing cached weights and replaced with
+links, recovering the duplicate space. VLM-pilot preflight now requires and
+hashes all three SAM2/YOLOE/mobileclip assets (ten script tests pass).
+
+Follow-up hypotheses, not conclusions: preserve task-relevant head pitch or
+let the model request a better view after clipping; check whether the legacy
+router's hierarchical INVESTIGATE/EXPLORE wording discourages the already
+exposed bounded rotation tools. Keep those tests separate from this frozen
+whole-system pair. Do not alter answers or weaken geometry admission.
