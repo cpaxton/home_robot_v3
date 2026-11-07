@@ -33,17 +33,20 @@ def grounding_assets(roots, arms, backend):
         return {}
     assets = {}
     for arm in arms:
-        checkpoint = roots[arm] / "sam2.1_hiera_small.pt"
-        if not checkpoint.is_file():
-            raise RuntimeError(
-                f"Missing SAM2 checkpoint: {checkpoint}. Link verified local weights "
-                "before running VLM/SAM2 acceptance; no in-episode downloads."
-            )
-        with checkpoint.open("rb") as stream:
-            digest = hashlib.sha256()
-            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-                digest.update(chunk)
-        assets[arm] = {"path": str(checkpoint.resolve()), "sha256": digest.hexdigest()}
+        assets[arm] = {}
+        # YOLOE supplies proposals even when final grounding uses VLM/SAM2.
+        for name in ("sam2.1_hiera_small.pt", "yoloe-v8l-seg.pt", "mobileclip_blt.ts"):
+            checkpoint = roots[arm] / name
+            if not checkpoint.is_file():
+                raise RuntimeError(
+                    f"Missing grounding weight: {checkpoint}. Link verified local weights "
+                    "before running VLM/SAM2 acceptance; no in-episode downloads."
+                )
+            with checkpoint.open("rb") as stream:
+                digest = hashlib.sha256()
+                for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                    digest.update(chunk)
+            assets[arm][name] = {"path": str(checkpoint.resolve()), "sha256": digest.hexdigest()}
     return assets
 
 

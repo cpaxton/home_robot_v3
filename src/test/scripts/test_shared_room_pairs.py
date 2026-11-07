@@ -61,9 +61,22 @@ def test_only_selected_arms_require_assets_and_record_resolved_hash(tmp_path):
     source.write_bytes(b"fixture")
     candidate = tmp_path / "candidate"
     candidate.mkdir()
-    (candidate / "sam2.1_hiera_small.pt").symlink_to(source)
+    names = ("sam2.1_hiera_small.pt", "yoloe-v8l-seg.pt", "mobileclip_blt.ts")
+    for name in names:
+        (candidate / name).symlink_to(source)
     result = assets()({"main": tmp_path / "absent", "candidate": candidate}, ["candidate"], "vlm")
-    assert result == {"candidate": {"path": str(source), "sha256": hashlib.sha256(b"fixture").hexdigest()}}
+    assert result == {
+        "candidate": {name: {"path": str(source), "sha256": hashlib.sha256(b"fixture").hexdigest()} for name in names}
+    }
+
+
+@pytest.mark.parametrize("missing", ["yoloe-v8l-seg.pt", "mobileclip_blt.ts"])
+def test_vlm_preflight_requires_cached_proposal_weights(tmp_path, missing):
+    for name in ("sam2.1_hiera_small.pt", "yoloe-v8l-seg.pt", "mobileclip_blt.ts"):
+        if name != missing:
+            (tmp_path / name).write_bytes(b"fixture")
+    with pytest.raises(RuntimeError, match=missing):
+        assets()({"candidate": tmp_path}, ["candidate"], "vlm")
 
 
 def test_explicit_model_authority_is_written_to_room_config_and_manifest(tmp_path, monkeypatch):
