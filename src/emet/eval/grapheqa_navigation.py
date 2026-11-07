@@ -20,6 +20,10 @@ TRANSLATION_STEP_M = 0.1
 ROTATION_STEP_DEG = 5.0
 
 
+class CollectionBudgetExceeded(RuntimeError):
+    """The declared sensor acquisition/motion allowance has expired."""
+
+
 def base_xyt(camera_pose):
     """Local Z-up heading from the calibrated forward optical axis."""
     return np.array([*camera_pose[:2, 3], np.arctan2(camera_pose[1, 2], camera_pose[0, 2])])
@@ -369,7 +373,11 @@ class HabitatMotionExecutor:
             if not valid:
                 reason = rejection
                 break
-            frame = self.sensor.step(action, amount)
+            try:
+                frame = self.sensor.step(action, amount)
+            except CollectionBudgetExceeded:
+                reason = "motion_budget_exhausted"
+                break
             self.primitive_count += 1
             if frame["camera_pose"] is None:
                 reason = "tracking_lost"

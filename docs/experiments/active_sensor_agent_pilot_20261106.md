@@ -106,3 +106,26 @@ Earlier startup attempts are also retained:
 
 CPU boundary and production-controller checks pass. Live requalification is
 pending; none of the above is an OVMM or manipulation acceptance result.
+
+### Shared-geometry smoke, November 7
+
+Job `20261107_092510_3ca19a`, source `e721687f`, is retained at
+`~/runs/emet/sensor-emet-q2-20261107-r5/`. Sharing dense planning geometry
+restored translation: 37 forward commands, with successive measured route
+chunks progressing from the spawn into the entryway. The saved last image
+(`active/q2/frame-00241.png`) shows an entry mat by a closed door and console,
+**not** the requested bathroom rug. The view assessment correctly reported a
+visible rug that did not yet answer the question.
+
+The next model request was `explore_frontier(toward="bathroom")`. The loop
+silently replaced it with `investigate(obs_id=-2000000)` through its legacy
+`close_map_stay` rule. The same candidate consumed the remaining motion
+allowance. At 200 primitives the sensor raised through the loop, preventing
+the final model answer. This is retained as an incomplete smoke, not a wrong
+answer or a passing EQA episode.
+
+Repairs keep the legacy action rewrites out of `model_final`, return a measured
+partial-motion failure when the primitive budget expires, and permit fresh
+camera context after the motion cap (the wall deadline remains enforced).
+Five real-dispatch rewrite reproductions cover legacy and model-final modes;
+partial motion/head-budget tests preserve measured pose without extra motion.

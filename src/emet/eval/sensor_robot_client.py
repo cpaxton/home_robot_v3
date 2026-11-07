@@ -12,7 +12,12 @@ import numpy as np
 
 from emet.core.interfaces import Observations
 from emet.core.robot import AbstractRobotClient, ControlMode
-from emet.eval.grapheqa_navigation import ROTATION_STEP_DEG, HabitatMotionExecutor, base_xyt
+from emet.eval.grapheqa_navigation import (
+    ROTATION_STEP_DEG,
+    CollectionBudgetExceeded,
+    HabitatMotionExecutor,
+    base_xyt,
+)
 from emet.utils.geometry import xyt_base_to_global
 
 
@@ -96,9 +101,12 @@ class SensorRobotClient(AbstractRobotClient):
         if abs(head_pan) > 1e-6 or not np.deg2rad(-65) <= head_tilt <= np.deg2rad(-15):
             return False
         while abs(delta := head_tilt - self.get_pan_tilt()[1]) > np.deg2rad(0.1):
-            frame = self.sensor.step(
-                "look_up" if delta > 0 else "look_down", min(ROTATION_STEP_DEG, abs(np.rad2deg(delta)))
-            )
+            try:
+                frame = self.sensor.step(
+                    "look_up" if delta > 0 else "look_down", min(ROTATION_STEP_DEG, abs(np.rad2deg(delta)))
+                )
+            except CollectionBudgetExceeded:
+                return False
             self.navigation.update(frame)
             self._seq_id = frame["sequence"]
         return True

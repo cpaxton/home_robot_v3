@@ -21,6 +21,7 @@ class Sensor:
             "camera_K": np.eye(3),
             "sequence": 1,
             "timestamp_ns": 12,
+            "collided": False,
         }
 
     def capture(self):
@@ -98,6 +99,34 @@ def test_synchronous_post_motion_wait_acquires_real_fresh_frame(monkeypatch):
 def test_sensor_body_does_not_pretend_manipulation_is_supported():
     with pytest.raises(NotImplementedError, match="no manipulator"):
         robot().move_to_manip_posture()
+
+
+def test_motion_cap_returns_partial_receipt_and_keeps_final_camera_available():
+    from emet.eval.exploration_history import RecordedSensor
+    from emet.eval.grapheqa_navigation import HabitatMotionExecutor
+
+    raw = Sensor()
+    sensor = RecordedSensor(raw, lambda *args: None, max_primitives=1, max_seconds=10)
+    navigation = SimpleNamespace(space=SimpleNamespace(is_valid=lambda pose: True), update=lambda frame: None)
+    executor = HabitatMotionExecutor(sensor, navigation)
+    assert executor.move_base_to([0, 0.3, np.pi / 2], blocking=True, world_frame=True, timeout=10) is False
+    assert executor._command_receipt["result"]["reason"] == "motion_budget_exhausted"
+    assert sensor.primitive_count == 1 and len(raw.actions) == 1
+    before = sensor.last["sequence"]
+    frame = sensor.capture()
+    assert frame["sequence"] > before
+    np.testing.assert_allclose(frame["camera_pose"][:2, 3], [0, 0.1], atol=1e-12)
+
+
+def test_head_cap_preserves_partial_measured_pose_without_more_motion():
+    from emet.eval.exploration_history import RecordedSensor
+
+    client = robot()
+    client.sensor = RecordedSensor(client.sensor, lambda *args: None, max_primitives=1, max_seconds=10)
+    assert client.head_to(0, np.deg2rad(-45)) is False
+    assert client.sensor.primitive_count == 1
+    assert np.isclose(client.get_pan_tilt()[1], np.deg2rad(-35))
+    assert client.get_observation() is not None
 
 
 def test_navigation_sampling_does_not_share_model_cpu_rng(monkeypatch):

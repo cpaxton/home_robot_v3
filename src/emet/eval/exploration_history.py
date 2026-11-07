@@ -10,12 +10,13 @@ import time
 
 import numpy as np
 
-from emet.eval.grapheqa_navigation import ROTATION_STEP_DEG, TRANSLATION_STEP_M, HabitatMotionExecutor
+from emet.eval.grapheqa_navigation import (
+    ROTATION_STEP_DEG,
+    TRANSLATION_STEP_M,
+    CollectionBudgetExceeded,
+    HabitatMotionExecutor,
+)
 from emet.motion.navigation_sweep import drive_route_effort
-
-
-class CollectionBudgetExceeded(RuntimeError):
-    """A declared acquisition budget expired before another action started."""
 
 
 class RecordedSensor:
@@ -40,8 +41,8 @@ class RecordedSensor:
     def last(self):
         return self.sensor.last
 
-    def check_budget(self):
-        if self.primitive_count >= self.max_primitives or self.clock() - self.started >= self.max_seconds:
+    def check_budget(self, *, motion=True):
+        if (motion and self.primitive_count >= self.max_primitives) or self.clock() - self.started >= self.max_seconds:
             raise CollectionBudgetExceeded("Declared collection budget exhausted")
 
     def step(self, action, amount=None):
@@ -53,7 +54,9 @@ class RecordedSensor:
         return frame
 
     def capture(self):
-        self.check_budget()
+        # A motion cap must not suppress the fresh final camera context.
+        # The wall deadline still applies to all acquisitions.
+        self.check_budget(motion=False)
         frame = self.sensor.capture()
         self.record(frame, None)
         return frame
