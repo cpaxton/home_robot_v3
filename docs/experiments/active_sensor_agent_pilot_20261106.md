@@ -274,3 +274,76 @@ let the model request a better view after clipping; check whether the legacy
 router's hierarchical INVESTIGATE/EXPLORE wording discourages the already
 exposed bounded rotation tools. Keep those tests separate from this frozen
 whole-system pair. Do not alter answers or weaken geometry admission.
+
+### Completed Molmo retry and frozen-frame provider diagnostic
+
+Molmo retry `sensor-stack-molmo-20261107-r5`, baseline `35fbabf7` versus
+candidate `cda26c8b`, completes both arms normally through the explicit installed
+wrapper override. Both localize the bowl and fail the microwave destination.
+
+| Find episode | Baseline object / destination | Candidate object / destination | Baseline / candidate reported episode wall seconds |
+| --- | --- | --- | --- |
+| S0 cylinder / blue cube | pass / fail | pass / fail | 572.65 / 412.19 |
+| Molmo bowl / microwave | pass / fail | pass / fail | 173.05 / 142.54 |
+
+Each arm has **zero of two complete tasks, two of four successful find phases**.
+These are the existing production find harness, physical simulated base drive,
+local learned segmentation and local Qwen8B int4; they do not qualify pick/place
+or establish the sensor-only localization protocol of the Habitat comparison.
+Reported episode times are the harness metrics, not end-to-end invocation cost.
+No superiority is established from these single stochastic pairs. Preserve the
+earlier two Molmo wrapper failures separately; they remain unqualified rows.
+
+Manual inspection shows a visible bowl, stove and microwave in the kitchen.
+The cached learned proposals for the microwave instead contain the blue coffee
+maker; Qwen explicitly identifies and rejects that mismatch. A saved-frame
+provider diagnostic (`cached-grounding-providers-20261107-r1`) compares those
+fixed supported masks with the existing Qwen-box/SAM2 provider, without changing
+pixels, depth, depth thresholds or final surface verification. Three repeats
+per method across four declared view/query cases yield 24/24 completed attempts:
+
+| Saved case | Cached support accepted | Qwen-box/SAM2 accepted |
+| --- | --- | --- |
+| Visible Molmo bowl | 3/3 | 0/3 |
+| Visible Molmo microwave | 0/3 | 0/3 |
+| Partially clipped S0 blue object | 0/3 | 0/3 |
+| Absent extinguisher in kitchen image | 0/3 | 0/3 |
+
+Acceptance here is only the measured-mask selection boundary, not a correctness
+score, instance admission or live find success. The repeats share pixels and
+are correlated. The replay reuses the retained support masks rather than reruns
+YOLOE, and alternates method order; it does not control the separately served
+model RNG. The absent query is a post-hoc visual negative control; its audit
+label never enters the model request.
+
+The microwave Qwen boxes are visually appropriate in all three repeats. SAM2
+produces 2066–2534 measured pixels, but **zero within the 2.5 m depth limit**;
+their median depths are 3.331–3.347 m. Thus this alternative is stopped by range,
+not missing semantic recognition or a missing mask. Qwen-box/SAM2 also misses
+the clearly visible bowl in all three repeats, while cached proposals retain
+it. Do not switch providers globally or widen manipulation admission based on
+this diagnostic. The accepted cached bowl mask was manually inspected and
+covers the bowl rather than counter support.
+
+The replay script, cases, source/model descriptor, exact HTTP requests and
+responses, RGB-D records, supported-mask panels and complete result rows are
+retained alongside that run. Source-linked result extracts are under
+`paper/data/ovmm_find_pilot_20261107/`.
+
+A diagnostic-only repair now reports out-of-range proposal support explicitly
+and preserves the VLM geometry failure at the controller boundary instead of
+calling every failure “target absent or ambiguous.” Existing visual presence
+and geometry-admission fields remain separate; no range limit, semantic check,
+instance budget, model answer or fallback policy changes. Grounding/replay
+checks pass (67 tests), as do verification/visual-consumer/query-handoff/mask
+proposal checks (44 tests). The latter exposed a pre-existing bare-constructor
+fixture missing `_manip_mode`; the fixture now matches visual-servo construction
+and a regression confirms physical mode still requires the guarded TAMP adapter.
+
+Remaining acceptance work is explicit: retain useful arrival context, explain
+why geometry was rejected, acquire a closer safe view when appropriate, and
+reproduce the remaining S0 waypoint timeout with measured terminal diagnostics.
+Better tools are tested; useful destination search and complete manipulation
+remain unproven. Keep per-episode measured simulation duration and invocation
+overhead in the next paper-run manifest rather than inferring them from a
+short idle RTF probe.

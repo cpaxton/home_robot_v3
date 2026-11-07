@@ -36,8 +36,10 @@
       Repaired S0 completes both arms: cylinder found, destination missing
       (1/2 phases each; 573/412 s; no superiority established). Molmo initially
       fails wrapper discovery; retry through the installed Python 3.11 override
-      after cached scene merge preflight. Neither EQA nor find-only results
-      qualify pick/place.
+      after cached scene merge preflight. Molmo retry completes both arms, bowl
+      found and microwave missing (1/2 phases each; 173/143 s). Both arms are
+      0/2 complete find tasks across S0/Molmo; task acceptance remains red.
+      Neither EQA nor find-only results qualify pick/place.
 - [ ] Diagnose S0 candidate waypoint timeout (sequence 27) at healthy ~0.58x
       simulator rate; preserve measured terminal pose in failed receipts before
       attributing the failure to control versus contact. Separately test the
@@ -49,6 +51,16 @@
       model-final answers, raw context and failed actions; do not tune the
       reference baseline until it succeeds. Stronger-model comparisons remain
       optional ablations, not prerequisites for accepting the connection.
+- [ ] Recover the visible Molmo microwave with a safe closer view. Cached masks
+      cover the coffee maker; Qwen-box/SAM2 finds the microwave but its median
+      depth is 3.34 m, beyond the unchanged 2.5 m support limit. Range failures
+      now remain distinct from object absence. The alternative provider loses
+      the bowl control 0/3 versus 3/3 cached; retain multiple opt-in providers,
+      preserve semantic rejections and avoid a global provider/depth default flip.
+      Offline diagnostic: 24/24 attempts complete; no task-quality gain claimed.
+- [ ] Emit actual per-episode simulation duration, model inference cost and
+      invocation overhead in paper-run manifests. Clock probes and reported
+      episode wall metrics alone do not measure complete task simulation time.
 - [ ] Record effective generation config, RNG/seed policy and environment versions
       in paper-run manifests. Qwen's checkpoint defaults enable sampling at 0.7;
       an unseeded one-call contrast does not establish a stable prompt effect.
