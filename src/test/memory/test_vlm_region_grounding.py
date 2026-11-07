@@ -31,6 +31,8 @@ def test_far_proposal_reports_range_without_admitting_geometry_or_semantics():
     )
     assert not audit["valid"] and np.all(mask == -1)
     assert audit["failure_kind"] == "no_supported_surfaces"
+    assert "supported depth range (2.5 m maximum)" in audit["reason"]
+    assert "absent" not in audit["reason"]
     support = audit["depth_support"]
     assert support["max_depth_m"] == 2.5
     assert support["proposals"][0] == {
@@ -42,6 +44,26 @@ def test_far_proposal_reports_range_without_admitting_geometry_or_semantics():
         "median_depth_m": 3.4,
     }
     client.assert_not_called()
+
+
+@pytest.mark.parametrize("depth_value", [np.nan, 0.0, 0.1])
+def test_unknown_or_near_depth_is_not_reported_as_beyond_max(depth_value):
+    from emet.memory.vlm_region_grounding import select_supported_region
+
+    depth = np.full((40, 40), depth_value)
+    _, mask, audit = select_supported_region(
+        np.zeros((40, 40, 3), dtype=np.uint8),
+        depth,
+        "microwave",
+        "microwave",
+        client=Mock(),
+        min_depth=0.25,
+        max_depth=2.5,
+        strategy="depth_candidates",
+        proposal_masks=[np.ones(depth.shape, dtype=bool)],
+    )
+    assert not audit["valid"] and np.all(mask == -1)
+    assert audit["reason"] == "no supported surfaces; another view is needed"
 
 
 def test_proposal_range_feedback_preserves_semantic_rejection():

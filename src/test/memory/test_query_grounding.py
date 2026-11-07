@@ -68,6 +68,40 @@ def test_current_view_without_verifier_reports_unavailable_not_absent():
     assert not agent.graph_memory.get_nodes()
 
 
+def test_far_surface_reason_survives_controller_and_visual_feedback():
+    from emet.memory.graph_eqa.agentic.verify import verification_feedback
+    from emet.memory.vlm_region_grounding import select_supported_region
+
+    agent = controller()
+    agent.parameters["query_memory"] = {"grounding_backend": "vlm", "region_strategy": "depth_candidates"}
+    agent.voxel_map.max_depth = 2.5
+    agent.voxel_map.observations[-1].depth[:] = 3.4
+    frame = agent.voxel_map.observations[-1]
+    client = Mock()
+    _, _, audit = select_supported_region(
+        frame.rgb,
+        frame.depth,
+        "microwave",
+        "Where is the microwave?",
+        client=client,
+        min_depth=0.1,
+        max_depth=2.5,
+        strategy="depth_candidates",
+        proposal_masks=[np.ones(frame.depth.shape, dtype=bool)],
+    )
+    # Exercise promotion/feedback with the real external-proposal range audit,
+    # without loading the GPU segmentation model that supplies those masks.
+    agent.ground_vlm_frame = Mock(return_value=(frame, [], [], audit))
+    result = agent.ground_query_view("microwave", source_obs_id=2, target_description="Where is the microwave?")
+    feedback = verification_feedback("CANDIDATE", {"ok": True, "present": True}, {"view_obs_id": 123, **result}, 123)
+    assert feedback["status"] == "VISUAL_PRESENT"
+    assert feedback["geometry"]["status"] == "not_admitted"
+    assert "supported depth range (2.5 m maximum)" in feedback["geometry"]["reason"]
+    assert not result["ok"] and not agent.query_candidates.records
+    assert not agent.graph_memory.get_nodes()
+    client.assert_not_called()
+
+
 def test_budget_exhaustion_releases_only_new_unadmitted_candidate():
     agent = controller()
     existing = agent.propose_query_candidate("plate", [2, 2, 2], {"source_obs_id": 1})

@@ -348,6 +348,17 @@ def select_candidate_surface(
     if not regions:
         audit["reason"] = "no supported surfaces; another view is needed"
         audit["failure_kind"] = "no_supported_surfaces"
+        support = audit.get("depth_support", {})
+        proposals = support.get("proposals", [])
+        if (
+            proposals
+            and len(proposals) == support.get("proposal_count")
+            and all(p["measured_pixels"] > 0 and p["beyond_max_pixels"] == p["measured_pixels"] for p in proposals)
+        ):
+            audit["reason"] = (
+                f"proposed surfaces exceed the supported depth range ({max_depth:g} m maximum); "
+                "no object geometry admitted; a closer or different view is needed"
+            )
         return parsed, mask, audit
     prompt = (
         f"Select a measured surface of {target!r}. Image 1 is the original reference, NOT a candidate. "

@@ -266,13 +266,14 @@ class LazyGraphController(DynagraphController):
                 and getattr(self.graph_memory, "eqa_client", None) is None
             ):
                 return {"ok": False, "reason": "semantic verification unavailable", "cache_path": cache_path}
+            reason = "target absent or ambiguous"
+            if backend == "vlm":
+                reason = verification.get("reason") or "surface geometry not admitted"
             if handle is not None:
-                self.query_candidates.reject(
-                    handle, observation_revision=len(vm.observations), reason="target absent or ambiguous"
-                )
+                self.query_candidates.reject(handle, observation_revision=len(vm.observations), reason=reason)
             return {
                 "ok": False,
-                "reason": "target absent or ambiguous",
+                "reason": reason,
                 "cache_path": cache_path,
                 "n_detections": len(detections),
                 "matching_ids": matching_ids,
