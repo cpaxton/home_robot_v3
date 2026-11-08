@@ -384,10 +384,17 @@ Accepted plan: [Mars controller integration](docs/plans/mars_controller_integrat
 - [x] Reproduce the pregrasp gap with supported open-jaw tracking probes:
       teacher2/2, both learned actors0/2, while all pass the free-space version.
       Preserve phase/jaw-input interventions, including the deadline failure.
-- [ ] Admit and train the bounded supported-contact curriculum: preserve all146
+- [x] Admit and train the bounded supported-contact curriculum: preserve all146
       earlier cases, add18 contact cases, reserve12.5% of total control steps
       for them, and freeze12 new-seed audit cases before optimization. Require
       fresh regressions/teacher/source/warmup gates; no hardware qualification.
+- [x] Complete the supported-contact final and all post-tests: fresh contact
+      full3/12→9/12, but earlier arm full80/88→63/88 and learned public tools0/3.
+      Retain source; all1,138 regressions and teacher164/164/fresh12/12 pass.
+      See the [complete report](docs/experiments/mars_supported_contact_20261108.md).
+- [ ] Prevent base jerk regression during arm learning and close the actual
+      pregrasp transfer gap before another broad training extension. Keep all
+      earlier tasks, supported-contact audits and full public-tool failures visible.
 - [ ] Master the five base cases first, then add arm, coupled and loaded cases
       while retaining earlier rehearsal. Keep stage IDs out of actor input and
       require both complete splits before restoring the broad distribution.
