@@ -798,6 +798,16 @@ Branch `feature/agent-world-model`. Phases 1–3 + Phase 4 helpers are **landed*
 - [x] Repeat-failure metrics helpers (`attempt_metrics.summarize_repeat_failures`) + unit tests.
 - [ ] GPU deltas vs pinned baselines on HM-EQA agentic arm + OVMM find (via `emet jobs`; ledger opt-in). Report repeat-nav-failure / wasted-rounds deltas; never by flipping pinned configs.
 
+### Persistent interaction memory (proposed 2026-11-11)
+
+See [the interaction-memory plan](docs/plans/2026-11-11_interaction_memory.md) for contracts and acceptance gates.
+
+- [ ] M1: link attempts to bounded action-window views; versioned persistence, restart/reset isolation, eviction and legacy-import fixtures.
+- [ ] M2: shadow interaction analyzer with uncertain provenance-backed claims; held-out failed-grasp/locked/occluded/change diagnostics.
+- [ ] M3: entity/interaction/temporal retrieval with per-source budgets, packet traces, old-evidence recall and same-label instance tests.
+- [ ] M4: independently gated dynamic invalidation/retry scheduling; never renew physical evidence or let failed attempts unlock themselves.
+- [ ] Freeze model × memory comparisons (Qwen/GPT), complete-sequence task splits, assistance tiers, budgets and promotion margins before live runs.
+
 ### Docs (this branch)
 - [x] Canonical [docs/attempt_ledger.md](docs/attempt_ledger.md) + links from README doc map, `AGENT_RUN.md`, `graph_eqa.md`, `dynagraph.md`, `evaluation.md`, `emet_config.md`, `environment_variables.md`, `motion_planning.md`, `ovmm_full_benchmark.md`, plan index.
 

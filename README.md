@@ -352,6 +352,7 @@ Use this outline when updating docs or finding the right page. Prefer editing th
 | [graph_object_fusion.md](docs/graph_object_fusion.md) | How detections become/merge graph nodes (gates, labels, growth, SigLIP appearance, lazy-graph ingest) |
 | [lazy_graph.md](docs/lazy_graph.md) | LazyGraph: Qwen-only commits on nav arrival; HM-EQA `--method lazy_graph` |
 | [attempt_ledger.md](docs/attempt_ledger.md) | Opt-in action-outcome ledger (nav/verify/manip attempts in graph memory) |
+| [Interaction-memory plan](docs/plans/2026-11-11_interaction_memory.md) | Proposed cross-task interaction beliefs, keyframe retrieval, and matched GPT/Qwen evaluation |
 | [eqa.md](docs/eqa.md) | Embodied QA overview (older Stretch path + pointers) |
 | [AGENT_RUN.md](docs/AGENT_RUN.md) | Discord/CHAT vs Habitat `EQA_EPISODE`; skill packs |
 | [Agent tools](docs/agent_tools.md) | Complete CHAT and EQA tool index, requirements, and reference links |
