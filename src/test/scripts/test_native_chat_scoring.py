@@ -87,3 +87,19 @@ def test_discovery_only_stop_and_explicit_new_turn_are_compliant():
     assert evidence['failure_stop_compliant'] is True
     assert evidence['failure_cases'] == 0 and evidence['discovery_only_cases'] == 1
     assert evidence['failure_boundaries'][0]['unexpected_tools'] == []
+
+
+def test_physical_goal_alone_cannot_turn_partial_execution_into_completion():
+    from emet.eval.native_chat_scoring import completion_receipt
+    assert not completion_receipt([response('execute_task_plan', status='partial',
+        code='verification_failed', data={'completed_steps': 1})], multi_step=True)
+    assert not completion_receipt([response('plan_task', data={'goal_verified': True})], multi_step=True)
+    assert completion_receipt([response('execute_task_plan', data={'goal_verified': True})], multi_step=True)
+
+
+def test_primitive_completion_requires_both_named_objects_and_place_receipts():
+    from emet.eval.native_chat_scoring import completion_receipt
+    rows = [response('execute_pick_place_plan', data={'object_name': name, 'completed_ops': ['grasp','place']})
+            for name in ('red cylinder','blue cube')]
+    assert completion_receipt(rows, multi_step=False)
+    assert not completion_receipt(rows[:1], multi_step=False)

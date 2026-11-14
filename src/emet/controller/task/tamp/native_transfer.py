@@ -48,17 +48,17 @@ def validate_native_task_config(config):
 
 
 class NativeTableTransferProvider(RegionTransferProvider):
-    def __init__(self, robot, config, *, adapter=None, planning_ik_budget=2048, diagnostic_state=False):
+    def __init__(self, robot, config, *, adapter=None, planning_ik_budget=2048, diagnostic_state=False, native_policy='legacy'):
         validate_native_task_config(config)
         if type(planning_ik_budget) is not int or planning_ik_budget <= 0:
             raise ValueError('invalid_planning_ik_budget')
-        self.adapter = adapter if adapter is not None else NativeTableAdapter(robot)
+        self.adapter = adapter if adapter is not None else NativeTableAdapter(robot, policy=native_policy)
         if self.adapter.input_mode != 'privileged':
             raise ValueError('native_transfer_requires_privileged_inputs')
         self.roles, self.support, self.reset_id = dict(config['objects']), config['support_body'], config['reset_id']
         self._revision, self._reference = 0, None
         self.diagnostic_state = bool(diagnostic_state)
-        self._profile = fingerprint({'robot': 'stretch', 'interface': 'native_arm_to', 'config': config})
+        self._profile = fingerprint({'robot': 'stretch', 'interface': 'native_arm_to', 'config': config, 'native_policy': getattr(self.adapter, 'policy', 'legacy')})
         self._ik_remaining, self.motion_evidence, self._motion_cache = planning_ik_budget, [], {}
         model = self.adapter.model
         self._robot_ids = body_subtree(model, 'base_link')
@@ -76,6 +76,9 @@ class NativeTableTransferProvider(RegionTransferProvider):
             self._object_ids[role] = bid
         regions = tuple(TransferRegion(row['name'], tuple(tuple(v) for v in row['bounds'])) for row in config['regions'])
         super().__init__(regions, observe=self._observe_native, transfer=self._transfer_native, input_mode='privileged')
+
+    def describe(self):
+        return {**super().describe(), 'native_motion_policy': getattr(self.adapter, 'policy', 'legacy')}
 
     def _observe_native(self):
         with self.adapter.lock:

@@ -16,7 +16,7 @@ from pathlib import Path
 import mujoco
 
 from emet.config.sim_launch_config import load_sim_launch_config_from_path
-from emet.eval.native_chat_scoring import failure_boundaries, integration_evidence
+from emet.eval.native_chat_scoring import completion_receipt, failure_boundaries, integration_evidence
 from emet.eval.native_table_live import live_table_robot
 from emet.eval.native_table_scoring import goal_predicates, load_placement_regions
 from emet.simulation.mujoco_server_stretch import default_scene_xml_path
@@ -32,6 +32,7 @@ def main():
     parser.add_argument('--placement-regions', type=Path, required=True)
     parser.add_argument('--native-task-config', type=Path)
     parser.add_argument('--task-instruction')
+    parser.add_argument('--native-policy', choices=('legacy', 'bounded_release'), default='legacy')
     parser.add_argument('--reject-first', action='store_true', help='Request one invalid-plan call, then a separate authorized task turn')
     args = parser.parse_args()
     if bool(args.native_task_config) != bool(args.task_instruction):
@@ -80,7 +81,8 @@ def main():
            '--state-only-sim', '--max-tool-rounds', '12', '--no-discord', '--no-vl-camera',
            '--headless', '--debug-tools', '--port-offset', str(config.port_offset),
            '--llm', f'openai@{args.base_url}#{args.remote_model}',
-           '--set', 'agent.manip_mode=physical', '--set', 'agent.tamp_inputs=privileged']
+           '--set', 'agent.manip_mode=physical', '--set', 'agent.tamp_inputs=privileged',
+           '--set', f'agent.native_tamp_policy={args.native_policy}']
     if args.native_task_config:
         cli += ["--native-task-config", str(args.native_task_config.resolve())]
     for command in commands:
@@ -112,17 +114,22 @@ def main():
         envelopes = []
         for row in outcomes:
             try:
-                envelopes.append(json.loads(row.split('] ', 1)[1]))
+                parsed = json.loads(row.split('] ', 1)[1])
+                if isinstance(parsed, dict):
+                    envelopes.append(parsed)
             except (ValueError, IndexError):
                 pass
         rejection_seen = any(e.get('code') == 'unknown_plan' for e in envelopes)
-        result = {'task_passed': rc == 0 and stable and not any(r['satisfied'] for r in initial.values()),
+        physical_goals = rc == 0 and stable and not any(r['satisfied'] for r in initial.values())
+        receipt_complete = completion_receipt(envelopes, multi_step=args.native_task_config is not None)
+        result = {'physical_goals_satisfied': physical_goals, 'execution_completion_verified': receipt_complete,
+                  'task_passed': physical_goals and receipt_complete,
                   'agent_integration': integration_evidence(rows),
                   'cli_exit_code': rc, 'failure_boundaries': failure_boundaries(rows),
                   'requested_rejection_observed': rejection_seen if args.reject_first else None,
                   'final_predicates': goal_predicates(robot, goals), 'tool_outcomes': envelopes,
                   'audit_commands': len(audit), 'forbidden_commands': sum(bool(r.get('forbidden')) for r in audit)}
-        result['passed'] = result['task_passed'] and bool(audit) and result['forbidden_commands'] == 0 and (
+        result['passed'] = result['task_passed'] and result['agent_integration']['result_contracts_valid'] is True and bool(audit) and result['forbidden_commands'] == 0 and (
             not args.reject_first or rejection_seen) and not any(
                 row['unexpected_tools'] for row in result['failure_boundaries'])
         (out / 'summary.json').write_text(json.dumps(result, indent=2))

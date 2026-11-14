@@ -1,0 +1,371 @@
+{
+  "schema_version": 1,
+  "scope": "fixed development pilot; not held-out or reference-certified benchmark",
+  "execution": "simulation_live_async",
+  "robot": "stretch",
+  "inputs": "privileged",
+  "cameras": false,
+  "model": "Qwen/Qwen3-VL-8B-Instruct",
+  "sampling": "server defaults; not independently pinned",
+  "status": "frozen_development_pilot",
+  "source_sha": "d4a05983ebc1b22615e656945e598bf70656e6cf",
+  "inference_endpoint_role": "caliban",
+  "evaluator": "scripts/eval_native_chat_session.py",
+  "reference_replays_per_case": 0,
+  "goal_tolerances": "unchanged native_table_scoring defaults",
+  "max_tool_rounds": 12,
+  "cli_timeout_s": 900,
+  "initial_object_positions": {
+    "object1": [
+      -0.02,
+      -0.55,
+      0.6
+    ],
+    "object2": [
+      -0.02,
+      -0.7,
+      0.6
+    ]
+  },
+  "scene_template": "src/emet/assets/robot/scene.xml",
+  "prior_control_report": "docs/experiments/tamp_main_integration_20261022.md",
+  "fixture_provenance": "prior main-integration fixture; model signature checked by live scorer against packaged model; only object initial positions differ",
+  "cases": [
+    {
+      "case_id": "two-goal-control",
+      "family": "two-goal",
+      "initial_x_shift_m": 0.0,
+      "instruction": "move red cylinder to cylinder goal; move blue cube to cube goal",
+      "task": {
+        "schema_version": 1,
+        "input_mode": "privileged",
+        "robot": "stretch",
+        "reset_id": "stretch-realism-20261101:two-goal-control",
+        "support_body": "table",
+        "objects": {
+          "red cylinder": "object2",
+          "blue cube": "object1"
+        },
+        "regions": [
+          {
+            "name": "cylinder goal",
+            "bounds": [
+              [
+                -0.08,
+                -0.86
+              ],
+              [
+                0.08,
+                -0.76
+              ]
+            ]
+          },
+          {
+            "name": "cube goal",
+            "bounds": [
+              [
+                -0.08,
+                -0.75
+              ],
+              [
+                0.08,
+                -0.62
+              ]
+            ]
+          }
+        ]
+      },
+      "final_regions_object2_then_object1": [
+        [
+          [
+            -0.08,
+            -0.86
+          ],
+          [
+            0.08,
+            -0.76
+          ]
+        ],
+        [
+          [
+            -0.08,
+            -0.75
+          ],
+          [
+            0.08,
+            -0.62
+          ]
+        ]
+      ],
+      "seed": 0,
+      "port_offset": 1840
+    },
+    {
+      "case_id": "swap-control",
+      "family": "wide-destination-swap",
+      "initial_x_shift_m": 0.0,
+      "instruction": "swap blue cube and red cylinder",
+      "task": {
+        "schema_version": 1,
+        "input_mode": "privileged",
+        "robot": "stretch",
+        "reset_id": "stretch-realism-20261101:swap-control",
+        "support_body": "table",
+        "objects": {
+          "red cylinder": "object2",
+          "blue cube": "object1"
+        },
+        "regions": [
+          {
+            "name": "cube home",
+            "bounds": [
+              [
+                -0.08,
+                -0.605
+              ],
+              [
+                0.08,
+                -0.5
+              ]
+            ]
+          },
+          {
+            "name": "cylinder home",
+            "bounds": [
+              [
+                -0.08,
+                -0.75
+              ],
+              [
+                0.08,
+                -0.62
+              ]
+            ]
+          },
+          {
+            "name": "buffer forward",
+            "bounds": [
+              [
+                -0.09,
+                -1.05
+              ],
+              [
+                0.09,
+                -0.77
+              ]
+            ]
+          },
+          {
+            "name": "buffer right",
+            "bounds": [
+              [
+                0.14,
+                -0.75
+              ],
+              [
+                0.28,
+                -0.59
+              ]
+            ]
+          }
+        ]
+      },
+      "final_regions_object2_then_object1": [
+        [
+          [
+            -0.08,
+            -0.605
+          ],
+          [
+            0.08,
+            -0.5
+          ]
+        ],
+        [
+          [
+            -0.08,
+            -0.75
+          ],
+          [
+            0.08,
+            -0.62
+          ]
+        ]
+      ],
+      "seed": 0,
+      "port_offset": 1850
+    },
+    {
+      "case_id": "two-goal-shift",
+      "family": "two-goal",
+      "initial_x_shift_m": 0.015,
+      "instruction": "move red cylinder to cylinder goal; move blue cube to cube goal",
+      "task": {
+        "schema_version": 1,
+        "input_mode": "privileged",
+        "robot": "stretch",
+        "reset_id": "stretch-realism-20261101:two-goal-shift",
+        "support_body": "table",
+        "objects": {
+          "red cylinder": "object2",
+          "blue cube": "object1"
+        },
+        "regions": [
+          {
+            "name": "cylinder goal",
+            "bounds": [
+              [
+                -0.08,
+                -0.86
+              ],
+              [
+                0.08,
+                -0.76
+              ]
+            ]
+          },
+          {
+            "name": "cube goal",
+            "bounds": [
+              [
+                -0.08,
+                -0.75
+              ],
+              [
+                0.08,
+                -0.62
+              ]
+            ]
+          }
+        ]
+      },
+      "final_regions_object2_then_object1": [
+        [
+          [
+            -0.08,
+            -0.86
+          ],
+          [
+            0.08,
+            -0.76
+          ]
+        ],
+        [
+          [
+            -0.08,
+            -0.75
+          ],
+          [
+            0.08,
+            -0.62
+          ]
+        ]
+      ],
+      "seed": 0,
+      "port_offset": 1860
+    },
+    {
+      "case_id": "swap-shift",
+      "family": "wide-destination-swap",
+      "initial_x_shift_m": 0.015,
+      "instruction": "swap blue cube and red cylinder",
+      "task": {
+        "schema_version": 1,
+        "input_mode": "privileged",
+        "robot": "stretch",
+        "reset_id": "stretch-realism-20261101:swap-shift",
+        "support_body": "table",
+        "objects": {
+          "red cylinder": "object2",
+          "blue cube": "object1"
+        },
+        "regions": [
+          {
+            "name": "cube home",
+            "bounds": [
+              [
+                -0.08,
+                -0.605
+              ],
+              [
+                0.08,
+                -0.5
+              ]
+            ]
+          },
+          {
+            "name": "cylinder home",
+            "bounds": [
+              [
+                -0.08,
+                -0.75
+              ],
+              [
+                0.08,
+                -0.62
+              ]
+            ]
+          },
+          {
+            "name": "buffer forward",
+            "bounds": [
+              [
+                -0.09,
+                -1.05
+              ],
+              [
+                0.09,
+                -0.77
+              ]
+            ]
+          },
+          {
+            "name": "buffer right",
+            "bounds": [
+              [
+                0.14,
+                -0.75
+              ],
+              [
+                0.28,
+                -0.59
+              ]
+            ]
+          }
+        ]
+      },
+      "final_regions_object2_then_object1": [
+        [
+          [
+            -0.08,
+            -0.605
+          ],
+          [
+            0.08,
+            -0.5
+          ]
+        ],
+        [
+          [
+            -0.08,
+            -0.75
+          ],
+          [
+            0.08,
+            -0.62
+          ]
+        ]
+      ],
+      "seed": 0,
+      "port_offset": 1870
+    }
+  ],
+  "executable_registry": false,
+  "execution_target": "simulation",
+  "hardware_trials_enabled": false,
+  "attachments_or_pose_teleports_during_execution": false,
+  "collision_scope": "sampled_arm_and_payload",
+  "full_scene_collision_integrity_qualified": false,
+  "observed_execution_qualified": false,
+  "initial_state_certificate": false
+}
