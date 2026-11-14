@@ -67,3 +67,22 @@ Review the shared policy/config integration as one cohesive change on the
 existing branch. Broader qualification, observed full-arm/contact sources,
 navigation/exploration and household native bindings remain distinct acceptance
 gates; do not make claims for them from stationary privileged success.
+
+## Common simulator clock repair
+
+At source `4a4a63ad`, both regression tasks and their two boundary checks pass.
+An offline local diagnostic measures median model-fingerprint hashing at 7.025 ms
+versus 2.718 ms for a physics step under the current load. Existing PR #228 caches
+the compiled-model fingerprint and refreshes it on model replacement, retaining
+per-tick qpos/qvel/timestamps. It is merged into this feature branch before the
+complete qualification run. The completed pair is preserved separately; the
+remaining eight old-launch jobs are explicitly cancelled (some began startup).
+They are interruptions, not task successes or expected rejections.
+
+Rerun the entire unchanged ten-case population on one new frozen source after
+repair validation. Do not combine its task scores with the initial pair.
+Preserve cancellation/transition records and the paired offline callback check
+under `.tamp-runs/native-qualification-20261113/`; the complete replacement run
+uses `.tamp-runs/native-qualification-clock-20261113/`. This repair changes
+throughput, not physics parameters or task acceptance. The RGBD GPU throughput
+probe from #228 is not rerun here; native CPU qualification remains camera-free.

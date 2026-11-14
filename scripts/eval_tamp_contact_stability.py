@@ -93,6 +93,7 @@ def prepare(args, pilot, case, out):
     for name in ('scripts/eval_tamp_contact_stability.py', 'src/emet/eval/contact_stability.py',
                  'src/emet/motion/release.py', 'src/emet/controller/task/tamp/native_policy.py',
                  'src/emet/controller/task/tamp/native_transfer.py',
+                 'src/emet/simulation/stretch_mujoco/mujoco_server.py',
                  'src/emet/controller/task/tamp/native_adapter.py',
                  'src/emet/controller/manipulation/physical_pick_place.py'):
         path = REPO / name
