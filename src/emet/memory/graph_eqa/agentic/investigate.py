@@ -170,8 +170,18 @@ def _tool_investigate(
             "obs_id": oid,
         }
     prior_visits = int(self._nav_to_obs_counts.get(oid, 0))
-    if self.action_progress_mode == "enforce" and approach_index is not None:
-        next_ap = int(approach_index) % PLACE_APPROACH_SAMPLES
+    if approach_index is not None and (
+        isinstance(approach_index, bool)
+        or not isinstance(approach_index, int)
+        or not 0 <= approach_index < PLACE_APPROACH_SAMPLES
+    ):
+        return {
+            "ok": False,
+            "status": "invalid_tool_arguments",
+            "error": f"approach_index must be an integer in 0..{PLACE_APPROACH_SAMPLES - 1}",
+        }
+    if approach_index is not None and (self.action_progress_mode == "enforce" or self.decision_policy == "model_final"):
+        next_ap = approach_index
     else:
         next_ap = self._next_approach_index(oid, prefer=approach_index)
     # Exhausted orbit samples / stall — not bare "nav failed". Close+ABSENT alone

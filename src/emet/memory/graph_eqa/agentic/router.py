@@ -361,12 +361,14 @@ def _route_tool_calls(self) -> tuple[list[tuple[str, dict[str, Any]]], str, dict
     Returns (tool_calls, picked_by, router_meta) where router_meta feeds the offline tuner.
     """
     meta: dict[str, Any] = {"raw_reply_chars": 0, "parse_ok": False, "tool_calls": []}
-    if getattr(self, "_unchanged_inspections", 0) >= 2:
+    if self.decision_policy != "model_final" and getattr(self, "_unchanged_inspections", 0) >= 2:
         tool, args = self._fallback_tool()
         self._append_trace({"event": "inspection_no_progress", "tool": tool, "args": args})
         return [(tool, args)], "inspection_no_progress", meta
     gm = self.graph_memory
     client = self.eqa_client
+    if self.decision_policy == "model_final" and self._router_enabled and client is None:
+        raise RuntimeError("Model-final coordinator requires an available VLM client")
     if not self._router_enabled or client is None:
         if self.decision_policy == "grounded_v2":
             state = build_state_message(self)
@@ -473,7 +475,7 @@ def _route_tool_calls(self) -> tuple[list[tuple[str, dict[str, Any]]], str, dict
     except TypeError:
         from emet.llms.graph_eqa_vlm import GraphEQAVLMClient
 
-        if isinstance(client, GraphEQAVLMClient):
+        if self.decision_policy == "model_final" or isinstance(client, GraphEQAVLMClient):
             raise  # Never silently retry an episode call without its dialogue.
         try:
             reply = client(
@@ -486,6 +488,8 @@ def _route_tool_calls(self) -> tuple[list[tuple[str, dict[str, Any]]], str, dict
             tool, args = self._fallback_tool()
             return [(tool, args)], "fallback", meta
     except Exception as e:
+        if self.decision_policy == "model_final":
+            raise
         _logger.warning(f"agentic router VLM call failed: {e}")
         tool, args = self._fallback_tool()
         return [(tool, args)], "fallback", meta
@@ -619,6 +623,19 @@ def _route_tool_calls(self) -> tuple[list[tuple[str, dict[str, Any]]], str, dict
             }
         )
     if not calls:
+        if self.decision_policy == "model_final":
+            # Preserve the dialogue and report a bad selection; never turn a
+            # malformed/unknown response into an unrequested physical action.
+            self._conversation.record_tool_result(
+                "router_validation",
+                {},
+                {
+                    "ok": False,
+                    "status": "NO_VALID_TOOL_CALLS",
+                    "error": "No available tool was selected. Choose a declared tool, or explicitly submit/finish if ready.",
+                },
+            )
+            return [], "model_action_rejected", meta
         tool, args = self._fallback_tool()
         meta["fallback_after_rejection"] = bool(rejected_calls)
         meta["tool_calls"] = [tool]
@@ -694,7 +711,12 @@ def _recover_failed_router_motion(self, *, tool: str, out: dict[str, Any]) -> bo
     Redirect invalid evidence ids to the best listed place card and force one
     exploration step when a selected place is exhausted or unusable.
     """
-    if out.get("ok") or self.mode != "answer" or self._n_nav + self._n_explore >= self.max_nav_steps:
+    if (
+        self.decision_policy == "model_final"
+        or out.get("ok")
+        or self.mode != "answer"
+        or self._n_nav + self._n_explore >= self.max_nav_steps
+    ):
         return False
     status = str(out.get("status") or "")
     if tool == "explore_frontier" and status == "DETECTIONS_REMAIN":

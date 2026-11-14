@@ -9,6 +9,90 @@ import pytest
 from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
 
 
+@pytest.mark.parametrize(
+    "status",
+    [
+        "OBS_NOT_IN_EVIDENCE",
+        "NOT_INVESTIGATE_CARD",
+        "CAMERA_POSE_PLACE",
+        "NAV_LOOP_BLOCKED",
+        "STATION_OBS_NOT_PLACE",
+        "DETECTIONS_REMAIN",
+    ],
+)
+def test_model_final_returns_rejections_without_unselected_navigation(status):
+    from unittest.mock import Mock
+
+    agent = SimpleNamespace(
+        parameters={"eqa": {"agentic_decision_policy": "model_final"}}, graph_memory=None, robot=None
+    )
+    ex = AgenticEQAExecutor(agent, "Find the target", router=False)
+    ex.handle_tool = Mock(side_effect=AssertionError("Unselected tool executed"))
+    tool = "explore_frontier" if status == "DETECTIONS_REMAIN" else "investigate"
+    assert not ex._recover_failed_router_motion(tool=tool, out={"ok": False, "status": status, "listed_obs_ids": [13]})
+    ex.handle_tool.assert_not_called()
+
+
+@pytest.mark.parametrize("value", [-1, 4, True, 1.5, "0"])
+def test_investigate_rejects_invalid_explicit_approach_before_navigation(value):
+    from unittest.mock import Mock
+
+    agent = SimpleNamespace(
+        parameters={"eqa": {"agentic_decision_policy": "model_final"}},
+        graph_memory=None,
+        robot=None,
+        navigate_to_target_pose=Mock(),
+    )
+    ex = AgenticEQAExecutor(agent, "Find the target", router=False)
+    out = ex._tool_investigate(13, approach_index=value)
+    assert not out["ok"] and out["status"] == "invalid_tool_arguments"
+    agent.navigate_to_target_pose.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        "{}",
+        '{"tool_calls":[{"name":"invented","arguments":{}}]}',
+        RuntimeError("server unavailable"),
+        TypeError("inference bug"),
+        '{"tool_calls":[{"name":"look_around","arguments":{}}]}',
+    ],
+)
+def test_model_final_router_never_falls_back_or_drops_dialogue(monkeypatch, reply):
+    from unittest.mock import Mock
+
+    from emet.memory.graph_eqa.agentic import router
+
+    client = Mock(side_effect=reply) if isinstance(reply, Exception) else Mock(return_value=reply)
+    gm = SimpleNamespace(eqa_client=client)
+    agent = SimpleNamespace(parameters={"eqa": {"agentic_decision_policy": "model_final"}}, graph_memory=gm, robot=None)
+    ex = AgenticEQAExecutor(agent, "Find the target", router=True)
+    ex._unchanged_inspections = 2
+    ex._ensure_router_prompt = lambda: None
+    ex._system_prompt = "system"
+    ex._tool_names = {"look_around"}
+    ex._refresh_graph_room_estimate = lambda: None
+    ex._room_visual_pack = lambda: ([], [], "")
+    ex._robot_xyt_world = lambda: None
+    ex._append_trace = lambda row: None
+    ex._fallback_tool = Mock(side_effect=AssertionError("Unselected fallback action"))
+    monkeypatch.setattr(router, "build_state_message", lambda executor: "actual state")
+    if isinstance(reply, Exception):
+        with pytest.raises(type(reply), match=str(reply)):
+            ex._route_tool_calls()
+    else:
+        calls, selected_by, meta = ex._route_tool_calls()
+        if "look_around" in reply:
+            assert calls == [("look_around", {})]
+        else:
+            assert calls == [] and selected_by == "model_action_rejected"
+            assert "NO_VALID_TOOL_CALLS" in str(ex._conversation.messages[-1])
+    ex._fallback_tool.assert_not_called()
+    client.assert_called_once()
+    assert client.call_args.kwargs["conversation"] is ex._conversation
+
+
 @pytest.mark.parametrize("policy", ["legacy", "model_final"])
 def test_positive_assessment_does_not_stop_model_final_coordinator(policy):
     from unittest.mock import Mock
@@ -72,9 +156,9 @@ def test_failed_investigation_reports_current_evidence_without_claiming_arrival(
     ex._hypotheses = [NavHypothesis(phrase="bowl", obs_id=-3_000_000, xyz=np.ones(3), score=1, source="voxel")]
     ex._investigate_hypotheses = lambda: ex._hypotheses
     ex._hypothesis_nav_blocked = lambda oid: False
-    ex._next_approach_index = lambda *a, **kw: 0
+    ex._next_approach_index = Mock(return_value=2)
     ex._unused_detection_hypothesis = lambda: None
-    ex._investigate_target_xyz = lambda *a: np.ones(3)
+    ex._investigate_target_xyz = Mock(return_value=np.ones(3))
     ex._investigate_arrival_look_at_xy = lambda *a: (1, 1)
     ex._robot_xyt = lambda: np.zeros(3)
     ex._robot_xyt_world = lambda: np.zeros(3)
@@ -88,7 +172,9 @@ def test_failed_investigation_reports_current_evidence_without_claiming_arrival(
     ex.handle_tool = Mock(return_value={"ok": True, "visual": {"present": True}, "geometry": {"status": "admitted"}})
     if capture_state == "assessment_error":
         ex.handle_tool.side_effect = RuntimeError("model unavailable")
-    out = ex._tool_investigate(-3_000_000)
+    out = ex._tool_investigate(-3_000_000, approach_index=0)
+    ex._next_approach_index.assert_not_called()
+    ex._investigate_target_xyz.assert_called_once_with(-3_000_000, 0)
     assert not out["ok"] and not out["nav_progress"] and not out["nav_finished"]
     assert out["nav_outcome"] == "no_target"
     ex._tool_capture_and_update.assert_called_once()

@@ -38,7 +38,7 @@ that proposes the wrong object. The existing opt-in providers remain separate.
 
 ## Contract validation
 
-246 tests pass across CHAT/HTTP history, tool dispatch/rendering, controller
+268 tests pass across CHAT/HTTP history, tool dispatch/rendering, controller
 grounding, visual consumers, EQA room/navigation, relative motion and CPU MuJoCo
 geometry. The HTTP test uses controlled transport and robot observations: it
 checks that a partial move's resulting image, original image and measured
@@ -172,3 +172,32 @@ automatic stop. Normal budget finalization still invokes the final answer model.
 Run the frozen head once more as candidate-only `closer-view-molmo-20261113-r4`
 to verify that this completion handoff reaches the actual model. These diagnostics
 are development evidence; a broader matched EQA/find pilot remains a merge gate.
+
+### Completion check and remaining legacy routing audit
+
+Candidate `8e407214` in `closer-view-molmo-20261113-r4` completes both find
+phases (query/episode 122.48/172.10 s). It keeps processing coordinator turns
+after the bowl assessment instead of the old immediate automatic submission.
+This is a task pass on one development scene, not a benchmark gain.
+
+Its microwave trace also contains an inherited post-error `nav_loop_redirect`:
+after the model selects an invalid observation ID, a legacy helper selects and
+executes another navigation tool. The resulting evidence is recorded, but the
+extra action was not chosen by the coordinator. Consequently this pass does not
+qualify the intended fully model-selected recovery contract. Earlier statements
+that no automatic high-level retry remained were too broad.
+
+The follow-up restricts that post-error helper to legacy policies. Model-final
+also no longer substitutes an action on unchanged inspections, missing/failed
+model inference, or malformed/unknown tool calls. Inference errors propagate;
+invalid selections produce structured feedback in the retained dialogue and no
+physical action. Explicit deterministic routing remains available when requested.
+Explicit approach indices are validated and preserved in model-final mode;
+omission still authorizes choosing the next unused approach.
+
+Contract tests cover all redirect statuses, inference/TypeError failure without
+dropping conversation, invalid/no-action replies, unchanged inspections, and
+explicit approach selection. The next candidate-only run is
+`closer-view-molmo-20261113-r5`, with the same model/provider/budgets. Preserve
+the assisted pass independently; do not count it as evidence for this stricter
+policy. No further provider, threshold or task-budget tuning is included.
