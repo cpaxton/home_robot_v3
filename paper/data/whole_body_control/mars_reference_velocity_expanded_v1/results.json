@@ -1,0 +1,1500 @@
+{
+  "format": "mars-reference-velocity-expanded-result-v1",
+  "implementation_revision": "7e13a80b118dbee625bb42512709c188f068da88",
+  "training_job_id": "20261113_222537_67bb0f",
+  "diagnostic_job_id": "20261114_084052_614a1b",
+  "scope": "fixed-final legacy MLP representation comparison; all candidates rejected",
+  "seeds": [
+    90,
+    91,
+    92
+  ],
+  "training_steps_per_run": 16384,
+  "total_training_transitions": 98304,
+  "source_weights_sha256": "e7b425699510cc635485bdd8f59a5b25692fb165faf248aaecbc2707c0dbb883",
+  "source_manifest_sha256": "fb0df2c1f737017e208d2849a7cc2523aaa3a0d60a73f71871bbc623603345a1",
+  "full_regressions": 1165,
+  "orchestration_tests": 2,
+  "runs": [
+    {
+      "variant": "baseline",
+      "seed": 90,
+      "initial": {
+        "base/train": {
+          "cases": 45,
+          "mastered": 39,
+          "tracking_and_settling_passed": 45,
+          "smoothness_passed": 39,
+          "failure_reasons": {
+            "smoothness/base_linear_jerk": 5,
+            "smoothness/joint_jerk": 1
+          }
+        },
+        "base/validation": {
+          "cases": 5,
+          "mastered": 3,
+          "tracking_and_settling_passed": 4,
+          "smoothness_passed": 4,
+          "failure_reasons": {
+            "smoothness/base_linear_jerk": 1,
+            "mastery_tracking_envelope": 1,
+            "terminal_hold": 1
+          }
+        },
+        "arm/train": {
+          "cases": 60,
+          "mastered": 55,
+          "tracking_and_settling_passed": 60,
+          "smoothness_passed": 55,
+          "failure_reasons": {
+            "smoothness/base_linear_jerk": 5
+          }
+        },
+        "arm/validation": {
+          "cases": 4,
+          "mastered": 4,
+          "tracking_and_settling_passed": 4,
+          "smoothness_passed": 4,
+          "failure_reasons": {}
+        },
+        "coupled/train": {
+          "cases": 6,
+          "mastered": 2,
+          "tracking_and_settling_passed": 2,
+          "smoothness_passed": 6,
+          "failure_reasons": {
+            "tracking_timeout": 4,
+            "terminal_hold": 4
+          }
+        },
+        "coupled/validation": {
+          "cases": 2,
+          "mastered": 0,
+          "tracking_and_settling_passed": 0,
+          "smoothness_passed": 2,
+          "failure_reasons": {
+            "mastery_tracking_envelope": 2,
+            "terminal_hold": 2
+          }
+        }
+      },
+      "final": {
+        "base/train": {
+          "cases": 45,
+          "mastered": 38,
+          "tracking_and_settling_passed": 45,
+          "smoothness_passed": 38,
+          "failure_reasons": {
+            "smoothness/base_linear_jerk": 5,
+            "smoothness/joint_jerk": 2
+          }
+        },
+        "base/validation": {
+          "cases": 5,
+          "mastered": 4,
+          "tracking_and_settling_passed": 5,
+          "smoothness_passed": 4,
+          "failure_reasons": {
+            "smoothness/base_linear_jerk": 1
+          }
+        },
+        "arm/train": {
+          "cases": 60,
+          "mastered": 36,
+          "tracking_and_settling_passed": 60,
+          "smoothness_passed": 36,
+          "failure_reasons": {
+            "smoothness/base_linear_jerk": 24
+          }
+        },
+        "arm/validation": {
+          "cases": 4,
+          "mastered": 2,
+          "tracking_and_settling_passed": 4,
+          "smoothness_passed": 2,
+          "failure_reasons": {
+            "smoothness/base_linear_jerk": 2
+          }
+        },
+        "coupled/train": {
+          "cases": 6,
+          "mastered": 2,
+          "tracking_and_settling_passed": 2,
+          "smoothness_passed": 6,
+          "failure_reasons": {
+            "tracking_timeout": 4,
+            "terminal_hold": 4
+          }
+        },
+        "coupled/validation": {
+          "cases": 2,
+          "mastered": 0,
+          "tracking_and_settling_passed": 0,
+          "smoothness_passed": 2,
+          "failure_reasons": {
+            "mastery_tracking_envelope": 1,
+            "terminal_hold": 2,
+            "tracking_timeout": 1
+          }
+        }
+      }
+    },
+    {
+      "variant": "baseline",
+      "seed": 91,
+      "initial": {
+        "base/train": {
+          "cases": 45,
+          "mastered": 39,
+          "tracking_and_settling_passed": 45,
+          "smoothness_passed": 39,
+          "failure_reasons": {
+            "smoothness/base_linear_jerk": 5,
+            "smoothness/joint_jerk": 1
+          }
+        },
+        "base/validation": {
+          "cases": 5,
+          "mastered": 3,
+          "tracking_and_settling_passed": 4,
+          "smoothness_passed": 4,
+          "failure_reasons": {
+            "smoothness/base_linear_jerk": 1,
+            "mastery_tracking_envelope": 1,
+            "terminal_hold": 1
+          }
+        },
+        "arm/train": {
+          "cases": 60,
+          "mastered": 55,
+          "tracking_and_settling_passed": 60,
+          "smoothness_passed": 55,
+          "failure_reasons": {
+            "smoothness/base_linear_jerk": 5
+          }
+        },
+        "arm/validation": {
+          "cases": 4,
+          "mastered": 4,
+          "tracking_and_settling_passed": 4,
+          "smoothness_passed": 4,
+          "failure_reasons": {}
+        },
+        "coupled/train": {
+          "cases": 6,
+          "mastered": 2,
+          "tracking_and_settling_passed": 2,
+          "smoothness_passed": 6,
+          "failure_reasons": {
+            "tracking_timeout": 4,
+            "terminal_hold": 4
+          }
+        },
+        "coupled/validation": {
+          "cases": 2,
+          "mastered": 0,
+          "tracking_and_settling_passed": 0,
+          "smoothness_passed": 2,
+          "failure_reasons": {
+            "mastery_tracking_envelope": 2,
+            "terminal_hold": 2
+          }
+        }
+      },
+      "final": {
+        "base/train": {
+          "cases": 45,
+          "mastered": 40,
+          "tracking_and_settling_passed": 45,
+          "smoothness_passed": 40,
+          "failure_reasons": {
+            "smoothness/base_linear_jerk": 5,
+            "smoothness/joint_jerk": 2
+          }
+        },
+        "base/validation": {
+          "cases": 5,
+          "mastered": 3,
+          "tracking_and_settling_passed": 4,
+          "smoothness_passed": 4,
+          "failure_reasons": {
+            "smoothness/base_linear_jerk": 1,
+            "mastery_tracking_envelope": 1,
+            "terminal_hold": 1
+          }
+        },
+        "arm/train": {
+          "cases": 60,
+          "mastered": 19,
+          "tracking_and_settling_passed": 60,
+          "smoothness_passed": 19,
+          "failure_reasons": {
+            "smoothness/base_linear_jerk": 41
+          }
+        },
+        "arm/validation": {
+          "cases": 4,
+          "mastered": 0,
+          "tracking_and_settling_passed": 4,
+          "smoothness_passed": 0,
+          "failure_reasons": {
+            "smoothness/base_linear_jerk": 4
+          }
+        },
+        "coupled/train": {
+          "cases": 6,
+          "mastered": 2,
+          "tracking_and_settling_passed": 2,
+          "smoothness_passed": 6,
+          "failure_reasons": {
+            "tracking_timeout": 4,
+            "terminal_hold": 4
+          }
+        },
+        "coupled/validation": {
+          "cases": 2,
+          "mastered": 0,
+          "tracking_and_settling_passed": 0,
+          "smoothness_passed": 2,
+          "failure_reasons": {
+            "mastery_tracking_envelope": 2,
+            "terminal_hold": 2
+          }
+        }
+      }
+    },
+    {
+      "variant": "baseline",
+      "seed": 92,
+      "initial": {
+        "base/train": {
+          "cases": 45,
+          "mastered": 39,
+          "tracking_and_settling_passed": 45,
+          "smoothness_passed": 39,
+          "failure_reasons": {
+            "smoothness/base_linear_jerk": 5,
+            "smoothness/joint_jerk": 1
+          }
+        },
+        "base/validation": {
+          "cases": 5,
+          "mastered": 3,
+          "tracking_and_settling_passed": 4,
+          "smoothness_passed": 4,
+          "failure_reasons": {
+            "smoothness/base_linear_jerk": 1,
+            "mastery_tracking_envelope": 1,
+            "terminal_hold": 1
+          }
+        },
+        "arm/train": {
+          "cases": 60,
+          "mastered": 55,
+          "tracking_and_settling_passed": 60,
+          "smoothness_passed": 55,
+          "failure_reasons": {
+            "smoothness/base_linear_jerk": 5
+          }
+        },
+        "arm/validation": {
+          "cases": 4,
+          "mastered": 4,
+          "tracking_and_settling_passed": 4,
+          "smoothness_passed": 4,
+          "failure_reasons": {}
+        },
+        "coupled/train": {
+          "cases": 6,
+          "mastered": 2,
+          "tracking_and_settling_passed": 2,
+          "smoothness_passed": 6,
+          "failure_reasons": {
+            "tracking_timeout": 4,
+            "terminal_hold": 4
+          }
+        },
+        "coupled/validation": {
+          "cases": 2,
+          "mastered": 0,
+          "tracking_and_settling_passed": 0,
+          "smoothness_passed": 2,
+          "failure_reasons": {
+            "mastery_tracking_envelope": 2,
+            "terminal_hold": 2
+          }
+        }
+      },
+      "final": {
+        "base/train": {
+          "cases": 45,
+          "mastered": 37,
+          "tracking_and_settling_passed": 45,
+          "smoothness_passed": 37,
+          "failure_reasons": {
+            "smoothness/base_linear_jerk": 6,
+            "smoothness/joint_jerk": 3
+          }
+        },
+        "base/validation": {
+          "cases": 5,
+          "mastered": 4,
+          "tracking_and_settling_passed": 5,
+          "smoothness_passed": 4,
+          "failure_reasons": {
+            "smoothness/base_linear_jerk": 1
+          }
+        },
+        "arm/train": {
+          "cases": 60,
+          "mastered": 28,
+          "tracking_and_settling_passed": 60,
+          "smoothness_passed": 28,
+          "failure_reasons": {
+            "smoothness/base_linear_jerk": 32
+          }
+        },
+        "arm/validation": {
+          "cases": 4,
+          "mastered": 0,
+          "tracking_and_settling_passed": 4,
+          "smoothness_passed": 0,
+          "failure_reasons": {
+            "smoothness/base_linear_jerk": 4
+          }
+        },
+        "coupled/train": {
+          "cases": 6,
+          "mastered": 3,
+          "tracking_and_settling_passed": 3,
+          "smoothness_passed": 6,
+          "failure_reasons": {
+            "tracking_timeout": 3,
+            "terminal_hold": 3
+          }
+        },
+        "coupled/validation": {
+          "cases": 2,
+          "mastered": 0,
+          "tracking_and_settling_passed": 0,
+          "smoothness_passed": 2,
+          "failure_reasons": {
+            "mastery_tracking_envelope": 1,
+            "terminal_hold": 2,
+            "tracking_timeout": 1
+          }
+        }
+      }
+    },
+    {
+      "variant": "velocity",
+      "seed": 90,
+      "initial": {
+        "base/train": {
+          "cases": 45,
+          "mastered": 40,
+          "tracking_and_settling_passed": 45,
+          "smoothness_passed": 40,
+          "failure_reasons": {
+            "smoothness/base_linear_jerk": 5
+          }
+        },
+        "base/validation": {
+          "cases": 5,
+          "mastered": 3,
+          "tracking_and_settling_passed": 4,
+          "smoothness_passed": 4,
+          "failure_reasons": {
+            "smoothness/base_linear_jerk": 1,
+            "mastery_tracking_envelope": 1,
+            "terminal_hold": 1
+          }
+        },
+        "arm/train": {
+          "cases": 60,
+          "mastered": 56,
+          "tracking_and_settling_passed": 60,
+          "smoothness_passed": 56,
+          "failure_reasons": {
+            "smoothness/base_linear_jerk": 4
+          }
+        },
+        "arm/validation": {
+          "cases": 4,
+          "mastered": 4,
+          "tracking_and_settling_passed": 4,
+          "smoothness_passed": 4,
+          "failure_reasons": {}
+        },
+        "coupled/train": {
+          "cases": 6,
+          "mastered": 2,
+          "tracking_and_settling_passed": 2,
+          "smoothness_passed": 6,
+          "failure_reasons": {
+            "tracking_timeout": 4,
+            "terminal_hold": 4
+          }
+        },
+        "coupled/validation": {
+          "cases": 2,
+          "mastered": 0,
+          "tracking_and_settling_passed": 0,
+          "smoothness_passed": 2,
+          "failure_reasons": {
+            "mastery_tracking_envelope": 2,
+            "terminal_hold": 2
+          }
+        }
+      },
+      "final": {
+        "base/train": {
+          "cases": 45,
+          "mastered": 38,
+          "tracking_and_settling_passed": 45,
+          "smoothness_passed": 38,
+          "failure_reasons": {
+            "smoothness/base_linear_jerk": 6,
+            "smoothness/joint_jerk": 2
+          }
+        },
+        "base/validation": {
+          "cases": 5,
+          "mastered": 3,
+          "tracking_and_settling_passed": 4,
+          "smoothness_passed": 4,
+          "failure_reasons": {
+            "smoothness/base_linear_jerk": 1,
+            "mastery_tracking_envelope": 1,
+            "terminal_hold": 1
+          }
+        },
+        "arm/train": {
+          "cases": 60,
+          "mastered": 22,
+          "tracking_and_settling_passed": 59,
+          "smoothness_passed": 22,
+          "failure_reasons": {
+            "smoothness/base_linear_jerk": 38,
+            "tracking_timeout": 1,
+            "terminal_hold": 1
+          }
+        },
+        "arm/validation": {
+          "cases": 4,
+          "mastered": 3,
+          "tracking_and_settling_passed": 4,
+          "smoothness_passed": 3,
+          "failure_reasons": {
+            "smoothness/base_linear_jerk": 1
+          }
+        },
+        "coupled/train": {
+          "cases": 6,
+          "mastered": 2,
+          "tracking_and_settling_passed": 2,
+          "smoothness_passed": 6,
+          "failure_reasons": {
+            "tracking_timeout": 4,
+            "terminal_hold": 4
+          }
+        },
+        "coupled/validation": {
+          "cases": 2,
+          "mastered": 0,
+          "tracking_and_settling_passed": 0,
+          "smoothness_passed": 2,
+          "failure_reasons": {
+            "mastery_tracking_envelope": 1,
+            "terminal_hold": 2,
+            "tracking_timeout": 1
+          }
+        }
+      }
+    },
+    {
+      "variant": "velocity",
+      "seed": 91,
+      "initial": {
+        "base/train": {
+          "cases": 45,
+          "mastered": 40,
+          "tracking_and_settling_passed": 45,
+          "smoothness_passed": 40,
+          "failure_reasons": {
+            "smoothness/base_linear_jerk": 5
+          }
+        },
+        "base/validation": {
+          "cases": 5,
+          "mastered": 3,
+          "tracking_and_settling_passed": 4,
+          "smoothness_passed": 4,
+          "failure_reasons": {
+            "smoothness/base_linear_jerk": 1,
+            "mastery_tracking_envelope": 1,
+            "terminal_hold": 1
+          }
+        },
+        "arm/train": {
+          "cases": 60,
+          "mastered": 56,
+          "tracking_and_settling_passed": 60,
+          "smoothness_passed": 56,
+          "failure_reasons": {
+            "smoothness/base_linear_jerk": 4
+          }
+        },
+        "arm/validation": {
+          "cases": 4,
+          "mastered": 4,
+          "tracking_and_settling_passed": 4,
+          "smoothness_passed": 4,
+          "failure_reasons": {}
+        },
+        "coupled/train": {
+          "cases": 6,
+          "mastered": 2,
+          "tracking_and_settling_passed": 2,
+          "smoothness_passed": 6,
+          "failure_reasons": {
+            "tracking_timeout": 4,
+            "terminal_hold": 4
+          }
+        },
+        "coupled/validation": {
+          "cases": 2,
+          "mastered": 0,
+          "tracking_and_settling_passed": 0,
+          "smoothness_passed": 2,
+          "failure_reasons": {
+            "mastery_tracking_envelope": 2,
+            "terminal_hold": 2
+          }
+        }
+      },
+      "final": {
+        "base/train": {
+          "cases": 45,
+          "mastered": 39,
+          "tracking_and_settling_passed": 45,
+          "smoothness_passed": 39,
+          "failure_reasons": {
+            "smoothness/base_linear_jerk": 5,
+            "smoothness/joint_jerk": 2
+          }
+        },
+        "base/validation": {
+          "cases": 5,
+          "mastered": 3,
+          "tracking_and_settling_passed": 4,
+          "smoothness_passed": 4,
+          "failure_reasons": {
+            "smoothness/base_linear_jerk": 1,
+            "mastery_tracking_envelope": 1,
+            "terminal_hold": 1
+          }
+        },
+        "arm/train": {
+          "cases": 60,
+          "mastered": 36,
+          "tracking_and_settling_passed": 60,
+          "smoothness_passed": 36,
+          "failure_reasons": {
+            "smoothness/base_linear_jerk": 24
+          }
+        },
+        "arm/validation": {
+          "cases": 4,
+          "mastered": 2,
+          "tracking_and_settling_passed": 4,
+          "smoothness_passed": 2,
+          "failure_reasons": {
+            "smoothness/base_linear_jerk": 2
+          }
+        },
+        "coupled/train": {
+          "cases": 6,
+          "mastered": 2,
+          "tracking_and_settling_passed": 2,
+          "smoothness_passed": 6,
+          "failure_reasons": {
+            "tracking_timeout": 4,
+            "terminal_hold": 4
+          }
+        },
+        "coupled/validation": {
+          "cases": 2,
+          "mastered": 0,
+          "tracking_and_settling_passed": 0,
+          "smoothness_passed": 2,
+          "failure_reasons": {
+            "mastery_tracking_envelope": 1,
+            "terminal_hold": 2,
+            "tracking_timeout": 1
+          }
+        }
+      }
+    },
+    {
+      "variant": "velocity",
+      "seed": 92,
+      "initial": {
+        "base/train": {
+          "cases": 45,
+          "mastered": 40,
+          "tracking_and_settling_passed": 45,
+          "smoothness_passed": 40,
+          "failure_reasons": {
+            "smoothness/base_linear_jerk": 5
+          }
+        },
+        "base/validation": {
+          "cases": 5,
+          "mastered": 3,
+          "tracking_and_settling_passed": 4,
+          "smoothness_passed": 4,
+          "failure_reasons": {
+            "smoothness/base_linear_jerk": 1,
+            "mastery_tracking_envelope": 1,
+            "terminal_hold": 1
+          }
+        },
+        "arm/train": {
+          "cases": 60,
+          "mastered": 56,
+          "tracking_and_settling_passed": 60,
+          "smoothness_passed": 56,
+          "failure_reasons": {
+            "smoothness/base_linear_jerk": 4
+          }
+        },
+        "arm/validation": {
+          "cases": 4,
+          "mastered": 4,
+          "tracking_and_settling_passed": 4,
+          "smoothness_passed": 4,
+          "failure_reasons": {}
+        },
+        "coupled/train": {
+          "cases": 6,
+          "mastered": 2,
+          "tracking_and_settling_passed": 2,
+          "smoothness_passed": 6,
+          "failure_reasons": {
+            "tracking_timeout": 4,
+            "terminal_hold": 4
+          }
+        },
+        "coupled/validation": {
+          "cases": 2,
+          "mastered": 0,
+          "tracking_and_settling_passed": 0,
+          "smoothness_passed": 2,
+          "failure_reasons": {
+            "mastery_tracking_envelope": 2,
+            "terminal_hold": 2
+          }
+        }
+      },
+      "final": {
+        "base/train": {
+          "cases": 45,
+          "mastered": 40,
+          "tracking_and_settling_passed": 45,
+          "smoothness_passed": 40,
+          "failure_reasons": {
+            "smoothness/base_linear_jerk": 5,
+            "smoothness/joint_jerk": 1
+          }
+        },
+        "base/validation": {
+          "cases": 5,
+          "mastered": 4,
+          "tracking_and_settling_passed": 5,
+          "smoothness_passed": 4,
+          "failure_reasons": {
+            "smoothness/base_linear_jerk": 1
+          }
+        },
+        "arm/train": {
+          "cases": 60,
+          "mastered": 18,
+          "tracking_and_settling_passed": 60,
+          "smoothness_passed": 18,
+          "failure_reasons": {
+            "smoothness/base_linear_jerk": 42
+          }
+        },
+        "arm/validation": {
+          "cases": 4,
+          "mastered": 4,
+          "tracking_and_settling_passed": 4,
+          "smoothness_passed": 4,
+          "failure_reasons": {}
+        },
+        "coupled/train": {
+          "cases": 6,
+          "mastered": 2,
+          "tracking_and_settling_passed": 2,
+          "smoothness_passed": 6,
+          "failure_reasons": {
+            "tracking_timeout": 4,
+            "terminal_hold": 4
+          }
+        },
+        "coupled/validation": {
+          "cases": 2,
+          "mastered": 0,
+          "tracking_and_settling_passed": 0,
+          "smoothness_passed": 2,
+          "failure_reasons": {
+            "mastery_tracking_envelope": 1,
+            "terminal_hold": 2,
+            "tracking_timeout": 1
+          }
+        }
+      }
+    }
+  ],
+  "source_artifacts": {
+    "logs/manipulation/reference-velocity-expanded-v1/comparison/results.json": {
+      "bytes": 55354,
+      "sha256": "85c20fa054f1843784ec882ea0ddc3421fa2f3256df130fd83dc48e95c594c53"
+    },
+    "logs/manipulation/reference-velocity-expanded-v1/channel-diagnostic-v1/results.json": {
+      "bytes": 34538,
+      "sha256": "4820b425a3ad1e910a63d63ebb51f3411fc505df0bb0e2f8ec28b2ace9f4274d"
+    },
+    "logs/manipulation/reference-velocity-expanded-v1/channel-diagnostic-v1/diagnose.py": {
+      "bytes": 6405,
+      "sha256": "d28b33bea01e87806c647bb845a9a37e7888d9b40d970c71fe44f2cb849d4d8e"
+    }
+  },
+  "diagnostic": {
+    "plan": {
+      "scope": "in-memory causal diagnostic, not canonical qualification or an exportable actor",
+      "created_unix": 1794663594.7781632,
+      "runtime": "/tmp/mars-reference-velocity-expanded-7e13a80b",
+      "variants": [
+        "baseline",
+        "velocity"
+      ],
+      "seed": 90,
+      "case_ids": [
+        "train:arm:pitch_down",
+        "train:arm:wrist_down",
+        "train:arm:near_straight_A_translate_up",
+        "train:arm:near_straight_B_translate_up"
+      ],
+      "selection": "training-only cases passed by both own initial anchors and failed by both seed90 finals; diverse original and near-straight primitives",
+      "modes": [
+        "initial",
+        "final",
+        "final_with_initial_base",
+        "final_with_initial_arm"
+      ],
+      "maximum_rollouts": 32,
+      "maximum_seconds": 900,
+      "cpu": 15,
+      "cuda_visible_devices": "",
+      "threads": 1,
+      "training_steps": 0,
+      "actor_exports": false,
+      "hardware_used": false,
+      "safety_promoted": false
+    },
+    "script_sha256": "d28b33bea01e87806c647bb845a9a37e7888d9b40d970c71fe44f2cb849d4d8e",
+    "results": [
+      {
+        "variant": "baseline",
+        "mode": "initial",
+        "mastered": 4,
+        "tracking_and_settling": 4,
+        "cases": [
+          {
+            "id": "train:arm:pitch_down",
+            "mastered": true,
+            "tracking_and_settling_pass": true,
+            "failure_reasons": [],
+            "metrics": {
+              "peak_force_N": 0.49050000000000127,
+              "base_linear_jerk": 0.13410828025675953,
+              "base_yaw_jerk": 0.09560832952856119,
+              "joint_jerk": 1.103944277116612,
+              "hand_position_error_m": 1.7597841939842342e-05,
+              "hand_orientation_error_rad": 4.66222258316619e-05,
+              "base_error_m": 8.2371262121633e-05,
+              "base_heading_error_rad": 0.00010128199910374933,
+              "hold_drift_m": 6.919171399096395e-05,
+              "settled_seconds": 8.999999999999993
+            }
+          },
+          {
+            "id": "train:arm:wrist_down",
+            "mastered": true,
+            "tracking_and_settling_pass": true,
+            "failure_reasons": [],
+            "metrics": {
+              "peak_force_N": 0.49050000000000127,
+              "base_linear_jerk": 0.1870696998219637,
+              "base_yaw_jerk": 0.09330144741446708,
+              "joint_jerk": 1.0542138694143244,
+              "hand_position_error_m": 0.00019815391250952916,
+              "hand_orientation_error_rad": 0.0018809438165924538,
+              "base_error_m": 1.9099533007420526e-05,
+              "base_heading_error_rad": 2.7089151090613217e-05,
+              "hold_drift_m": 1.923640059176698e-05,
+              "settled_seconds": 8.999999999999993
+            }
+          },
+          {
+            "id": "train:arm:near_straight_A_translate_up",
+            "mastered": true,
+            "tracking_and_settling_pass": true,
+            "failure_reasons": [],
+            "metrics": {
+              "peak_force_N": 0.4905000000000012,
+              "base_linear_jerk": 0.1731891667290414,
+              "base_yaw_jerk": 0.0443785860837001,
+              "joint_jerk": 0.7643382566452722,
+              "hand_position_error_m": 0.000986177743674756,
+              "hand_orientation_error_rad": 0.009722211381005005,
+              "base_error_m": 5.9024808808960185e-05,
+              "base_heading_error_rad": 9.169815729389696e-06,
+              "hold_drift_m": 1.4136301489982116e-05,
+              "settled_seconds": 6.149999999999986
+            }
+          },
+          {
+            "id": "train:arm:near_straight_B_translate_up",
+            "mastered": true,
+            "tracking_and_settling_pass": true,
+            "failure_reasons": [],
+            "metrics": {
+              "peak_force_N": 0.49050000000000127,
+              "base_linear_jerk": 0.20631900850647908,
+              "base_yaw_jerk": 0.0852429178134044,
+              "joint_jerk": 0.8053213607999293,
+              "hand_position_error_m": 0.0007051504133534955,
+              "hand_orientation_error_rad": 0.006543723305351381,
+              "base_error_m": 1.2282014887909033e-05,
+              "base_heading_error_rad": 9.725068506419212e-05,
+              "hold_drift_m": 1.0068074680758047e-05,
+              "settled_seconds": 6.999999999999983
+            }
+          }
+        ]
+      },
+      {
+        "variant": "baseline",
+        "mode": "final",
+        "mastered": 0,
+        "tracking_and_settling": 4,
+        "cases": [
+          {
+            "id": "train:arm:pitch_down",
+            "mastered": false,
+            "tracking_and_settling_pass": true,
+            "failure_reasons": [
+              "smoothness/base_linear_jerk"
+            ],
+            "metrics": {
+              "peak_force_N": 0.4905000000000012,
+              "base_linear_jerk": 0.27206828477273365,
+              "base_yaw_jerk": 0.1277199865641343,
+              "joint_jerk": 1.100875153474438,
+              "hand_position_error_m": 3.9429282552283625e-05,
+              "hand_orientation_error_rad": 0.000244785894289021,
+              "base_error_m": 0.00041888732828279987,
+              "base_heading_error_rad": 0.000695463320410916,
+              "hold_drift_m": 5.6990721414874055e-05,
+              "settled_seconds": 8.999999999999993
+            }
+          },
+          {
+            "id": "train:arm:wrist_down",
+            "mastered": false,
+            "tracking_and_settling_pass": true,
+            "failure_reasons": [
+              "smoothness/base_linear_jerk"
+            ],
+            "metrics": {
+              "peak_force_N": 0.49050000000000127,
+              "base_linear_jerk": 0.503505710574002,
+              "base_yaw_jerk": 0.12477100914923961,
+              "joint_jerk": 1.0529034471264291,
+              "hand_position_error_m": 0.0003834242383890543,
+              "hand_orientation_error_rad": 0.0037511551683736127,
+              "base_error_m": 0.00039589747141533546,
+              "base_heading_error_rad": 0.0006418292208591642,
+              "hold_drift_m": 0.00028123297644347384,
+              "settled_seconds": 8.74999999999999
+            }
+          },
+          {
+            "id": "train:arm:near_straight_A_translate_up",
+            "mastered": false,
+            "tracking_and_settling_pass": true,
+            "failure_reasons": [
+              "smoothness/base_linear_jerk"
+            ],
+            "metrics": {
+              "peak_force_N": 0.4905000000000012,
+              "base_linear_jerk": 0.3463992156274238,
+              "base_yaw_jerk": 0.07603004117239659,
+              "joint_jerk": 0.8114850378496752,
+              "hand_position_error_m": 0.001600264589523748,
+              "hand_orientation_error_rad": 0.018630872040627088,
+              "base_error_m": 0.001260420972153729,
+              "base_heading_error_rad": 0.0023930115760857555,
+              "hold_drift_m": 2.2916973247144614e-05,
+              "settled_seconds": 2.3
+            }
+          },
+          {
+            "id": "train:arm:near_straight_B_translate_up",
+            "mastered": false,
+            "tracking_and_settling_pass": true,
+            "failure_reasons": [
+              "smoothness/base_linear_jerk"
+            ],
+            "metrics": {
+              "peak_force_N": 0.4905000000000013,
+              "base_linear_jerk": 0.39127304935767165,
+              "base_yaw_jerk": 0.09006361014360367,
+              "joint_jerk": 0.8240979500858947,
+              "hand_position_error_m": 0.001101157140481174,
+              "hand_orientation_error_rad": 0.01080461131799944,
+              "base_error_m": 0.0008100769379823043,
+              "base_heading_error_rad": 0.0010606922643890278,
+              "hold_drift_m": 0.00013153122867678305,
+              "settled_seconds": 5.799999999999987
+            }
+          }
+        ]
+      },
+      {
+        "variant": "baseline",
+        "mode": "final_with_initial_base",
+        "mastered": 4,
+        "tracking_and_settling": 4,
+        "cases": [
+          {
+            "id": "train:arm:pitch_down",
+            "mastered": true,
+            "tracking_and_settling_pass": true,
+            "failure_reasons": [],
+            "metrics": {
+              "peak_force_N": 0.49050000000000127,
+              "base_linear_jerk": 0.13418568030256206,
+              "base_yaw_jerk": 0.09624041194107244,
+              "joint_jerk": 1.0430725842237292,
+              "hand_position_error_m": 1.8429256735919432e-05,
+              "hand_orientation_error_rad": 3.555776769115116e-05,
+              "base_error_m": 0.00015938413210569684,
+              "base_heading_error_rad": 8.528927513694069e-05,
+              "hold_drift_m": 0.00010237050831122305,
+              "settled_seconds": 8.999999999999993
+            }
+          },
+          {
+            "id": "train:arm:wrist_down",
+            "mastered": true,
+            "tracking_and_settling_pass": true,
+            "failure_reasons": [],
+            "metrics": {
+              "peak_force_N": 0.49050000000000127,
+              "base_linear_jerk": 0.13381247502313676,
+              "base_yaw_jerk": 0.09422851183227623,
+              "joint_jerk": 1.0520891989511187,
+              "hand_position_error_m": 0.00021848855005908544,
+              "hand_orientation_error_rad": 0.0021041340963406123,
+              "base_error_m": 7.729438939331781e-05,
+              "base_heading_error_rad": 2.1378709963536597e-05,
+              "hold_drift_m": 3.4295841918783357e-05,
+              "settled_seconds": 8.999999999999993
+            }
+          },
+          {
+            "id": "train:arm:near_straight_A_translate_up",
+            "mastered": true,
+            "tracking_and_settling_pass": true,
+            "failure_reasons": [],
+            "metrics": {
+              "peak_force_N": 0.4905000000000012,
+              "base_linear_jerk": 0.1459066766035007,
+              "base_yaw_jerk": 0.0449678835775999,
+              "joint_jerk": 0.8138077518816647,
+              "hand_position_error_m": 0.0012462829586590727,
+              "hand_orientation_error_rad": 0.01234136118754181,
+              "base_error_m": 0.00021417300485439234,
+              "base_heading_error_rad": 1.2296387518835777e-05,
+              "hold_drift_m": 7.039830951059993e-05,
+              "settled_seconds": 5.04999999999999
+            }
+          },
+          {
+            "id": "train:arm:near_straight_B_translate_up",
+            "mastered": true,
+            "tracking_and_settling_pass": true,
+            "failure_reasons": [],
+            "metrics": {
+              "peak_force_N": 0.49050000000000127,
+              "base_linear_jerk": 0.15467369264496786,
+              "base_yaw_jerk": 0.08401391257571023,
+              "joint_jerk": 0.8031301872625352,
+              "hand_position_error_m": 0.000893363326418294,
+              "hand_orientation_error_rad": 0.00873506194436704,
+              "base_error_m": 5.883298457102127e-05,
+              "base_heading_error_rad": 9.606193013270755e-05,
+              "hold_drift_m": 1.9161823854593827e-05,
+              "settled_seconds": 6.349999999999985
+            }
+          }
+        ]
+      },
+      {
+        "variant": "baseline",
+        "mode": "final_with_initial_arm",
+        "mastered": 0,
+        "tracking_and_settling": 4,
+        "cases": [
+          {
+            "id": "train:arm:pitch_down",
+            "mastered": false,
+            "tracking_and_settling_pass": true,
+            "failure_reasons": [
+              "smoothness/base_linear_jerk"
+            ],
+            "metrics": {
+              "peak_force_N": 0.4905000000000012,
+              "base_linear_jerk": 0.3053990642315833,
+              "base_yaw_jerk": 0.1270529934511571,
+              "joint_jerk": 1.0983380967370309,
+              "hand_position_error_m": 3.882879349774721e-05,
+              "hand_orientation_error_rad": 0.00024371467963575668,
+              "base_error_m": 0.0004686673017932646,
+              "base_heading_error_rad": 0.0007198944375570553,
+              "hold_drift_m": 5.0287196329370745e-05,
+              "settled_seconds": 8.999999999999993
+            }
+          },
+          {
+            "id": "train:arm:wrist_down",
+            "mastered": false,
+            "tracking_and_settling_pass": true,
+            "failure_reasons": [
+              "smoothness/base_linear_jerk"
+            ],
+            "metrics": {
+              "peak_force_N": 0.49050000000000127,
+              "base_linear_jerk": 0.4057084830807732,
+              "base_yaw_jerk": 0.12383409943330856,
+              "joint_jerk": 1.0550763386538768,
+              "hand_position_error_m": 0.00030530159458330795,
+              "hand_orientation_error_rad": 0.003156386361085831,
+              "base_error_m": 0.00028597952885481764,
+              "base_heading_error_rad": 0.0006571369349953177,
+              "hold_drift_m": 0.0003624726423614002,
+              "settled_seconds": 8.74999999999999
+            }
+          },
+          {
+            "id": "train:arm:near_straight_A_translate_up",
+            "mastered": false,
+            "tracking_and_settling_pass": true,
+            "failure_reasons": [
+              "smoothness/base_linear_jerk"
+            ],
+            "metrics": {
+              "peak_force_N": 0.4905000000000012,
+              "base_linear_jerk": 0.41682988386006636,
+              "base_yaw_jerk": 0.06222275360570628,
+              "joint_jerk": 0.7988459684086952,
+              "hand_position_error_m": 0.0012729138255626051,
+              "hand_orientation_error_rad": 0.013333801216818555,
+              "base_error_m": 0.0013688041803370686,
+              "base_heading_error_rad": 0.0014449668286760373,
+              "hold_drift_m": 0.0002625971272768013,
+              "settled_seconds": 5.299999999999989
+            }
+          },
+          {
+            "id": "train:arm:near_straight_B_translate_up",
+            "mastered": false,
+            "tracking_and_settling_pass": true,
+            "failure_reasons": [
+              "smoothness/base_linear_jerk"
+            ],
+            "metrics": {
+              "peak_force_N": 0.49050000000000127,
+              "base_linear_jerk": 0.3497852022272403,
+              "base_yaw_jerk": 0.08488340221223314,
+              "joint_jerk": 0.9139847562205524,
+              "hand_position_error_m": 0.0008813318667984814,
+              "hand_orientation_error_rad": 0.008382953447070888,
+              "base_error_m": 0.000884749857164781,
+              "base_heading_error_rad": 0.0004618568669018941,
+              "hold_drift_m": 0.00017748741063007981,
+              "settled_seconds": 6.649999999999984
+            }
+          }
+        ]
+      },
+      {
+        "variant": "velocity",
+        "mode": "initial",
+        "mastered": 4,
+        "tracking_and_settling": 4,
+        "cases": [
+          {
+            "id": "train:arm:pitch_down",
+            "mastered": true,
+            "tracking_and_settling_pass": true,
+            "failure_reasons": [],
+            "metrics": {
+              "peak_force_N": 0.49050000000000127,
+              "base_linear_jerk": 0.13831002878178722,
+              "base_yaw_jerk": 0.09560832722574006,
+              "joint_jerk": 1.0997266493464426,
+              "hand_position_error_m": 6.964041102977654e-06,
+              "hand_orientation_error_rad": 2.5603880925686783e-05,
+              "base_error_m": 1.7855211909953e-05,
+              "base_heading_error_rad": 8.753837536476993e-05,
+              "hold_drift_m": 1.3069299988505723e-05,
+              "settled_seconds": 8.999999999999993
+            }
+          },
+          {
+            "id": "train:arm:wrist_down",
+            "mastered": true,
+            "tracking_and_settling_pass": true,
+            "failure_reasons": [],
+            "metrics": {
+              "peak_force_N": 0.49050000000000127,
+              "base_linear_jerk": 0.15984407776590784,
+              "base_yaw_jerk": 0.09330144555563802,
+              "joint_jerk": 1.0542138692606595,
+              "hand_position_error_m": 0.00020552238999033422,
+              "hand_orientation_error_rad": 0.0019005267293074725,
+              "base_error_m": 6.724702136313049e-05,
+              "base_heading_error_rad": 1.941036743869154e-05,
+              "hold_drift_m": 3.092167868308957e-05,
+              "settled_seconds": 8.999999999999993
+            }
+          },
+          {
+            "id": "train:arm:near_straight_A_translate_up",
+            "mastered": true,
+            "tracking_and_settling_pass": true,
+            "failure_reasons": [],
+            "metrics": {
+              "peak_force_N": 0.4905000000000012,
+              "base_linear_jerk": 0.1692922333524531,
+              "base_yaw_jerk": 0.046809313932749674,
+              "joint_jerk": 0.7324087647237166,
+              "hand_position_error_m": 0.000991706203497999,
+              "hand_orientation_error_rad": 0.009699760477959755,
+              "base_error_m": 8.245172192535398e-05,
+              "base_heading_error_rad": 1.4516971316307341e-05,
+              "hold_drift_m": 3.124570338041727e-05,
+              "settled_seconds": 6.149999999999986
+            }
+          },
+          {
+            "id": "train:arm:near_straight_B_translate_up",
+            "mastered": true,
+            "tracking_and_settling_pass": true,
+            "failure_reasons": [],
+            "metrics": {
+              "peak_force_N": 0.49050000000000127,
+              "base_linear_jerk": 0.15426711264187898,
+              "base_yaw_jerk": 0.08524243321494929,
+              "joint_jerk": 0.6452938201769696,
+              "hand_position_error_m": 0.0007005614027897849,
+              "hand_orientation_error_rad": 0.0066884059412646805,
+              "base_error_m": 8.869581017360864e-05,
+              "base_heading_error_rad": 9.854091621853488e-05,
+              "hold_drift_m": 3.330290347782042e-05,
+              "settled_seconds": 6.999999999999983
+            }
+          }
+        ]
+      },
+      {
+        "variant": "velocity",
+        "mode": "final",
+        "mastered": 0,
+        "tracking_and_settling": 3,
+        "cases": [
+          {
+            "id": "train:arm:pitch_down",
+            "mastered": false,
+            "tracking_and_settling_pass": true,
+            "failure_reasons": [
+              "smoothness/base_linear_jerk"
+            ],
+            "metrics": {
+              "peak_force_N": 0.49050000000000127,
+              "base_linear_jerk": 0.368672684796843,
+              "base_yaw_jerk": 0.0869236313771754,
+              "joint_jerk": 1.0692419138750215,
+              "hand_position_error_m": 2.7657058897573382e-05,
+              "hand_orientation_error_rad": 8.112142613201043e-05,
+              "base_error_m": 0.00033295549593803355,
+              "base_heading_error_rad": 0.0001735331668769849,
+              "hold_drift_m": 0.00016236481722779598,
+              "settled_seconds": 8.999999999999993
+            }
+          },
+          {
+            "id": "train:arm:wrist_down",
+            "mastered": false,
+            "tracking_and_settling_pass": true,
+            "failure_reasons": [
+              "smoothness/base_linear_jerk"
+            ],
+            "metrics": {
+              "peak_force_N": 0.49050000000000127,
+              "base_linear_jerk": 0.4050683063697034,
+              "base_yaw_jerk": 0.09316121415495204,
+              "joint_jerk": 1.0483672001227706,
+              "hand_position_error_m": 0.00031633783301454344,
+              "hand_orientation_error_rad": 0.003434698740014554,
+              "base_error_m": 0.00016144354965946247,
+              "base_heading_error_rad": 0.0015594065178463896,
+              "hold_drift_m": 0.0006121268255315429,
+              "settled_seconds": 8.549999999999986
+            }
+          },
+          {
+            "id": "train:arm:near_straight_A_translate_up",
+            "mastered": false,
+            "tracking_and_settling_pass": false,
+            "failure_reasons": [
+              "tracking_timeout",
+              "terminal_hold",
+              "smoothness/base_linear_jerk"
+            ],
+            "metrics": {
+              "peak_force_N": 0.4905000000000012,
+              "base_linear_jerk": 0.5506779932075307,
+              "base_yaw_jerk": 0.07206718924683726,
+              "joint_jerk": 0.7937037605505521,
+              "hand_position_error_m": 0.0015927824746195455,
+              "hand_orientation_error_rad": 0.01956888630023326,
+              "base_error_m": 0.002248751001695097,
+              "base_heading_error_rad": 0.0019089823780108657,
+              "hold_drift_m": 0.0,
+              "settled_seconds": 0.5499999999999999
+            }
+          },
+          {
+            "id": "train:arm:near_straight_B_translate_up",
+            "mastered": false,
+            "tracking_and_settling_pass": true,
+            "failure_reasons": [
+              "smoothness/base_linear_jerk"
+            ],
+            "metrics": {
+              "peak_force_N": 0.4905000000000012,
+              "base_linear_jerk": 0.5103080628857628,
+              "base_yaw_jerk": 0.08643114883902236,
+              "joint_jerk": 0.8005197020746438,
+              "hand_position_error_m": 0.0014309502112617588,
+              "hand_orientation_error_rad": 0.015624133248769864,
+              "base_error_m": 0.002126834767852523,
+              "base_heading_error_rad": 0.0016822197174538088,
+              "hold_drift_m": 9.047925508752592e-05,
+              "settled_seconds": 3.599999999999995
+            }
+          }
+        ]
+      },
+      {
+        "variant": "velocity",
+        "mode": "final_with_initial_base",
+        "mastered": 4,
+        "tracking_and_settling": 4,
+        "cases": [
+          {
+            "id": "train:arm:pitch_down",
+            "mastered": true,
+            "tracking_and_settling_pass": true,
+            "failure_reasons": [],
+            "metrics": {
+              "peak_force_N": 0.4905000000000012,
+              "base_linear_jerk": 0.13399682699340681,
+              "base_yaw_jerk": 0.0939828139012791,
+              "joint_jerk": 1.0285980471756533,
+              "hand_position_error_m": 2.1933016516574636e-05,
+              "hand_orientation_error_rad": 4.540991901262553e-05,
+              "base_error_m": 0.0001727123159431682,
+              "base_heading_error_rad": 8.416945675268628e-05,
+              "hold_drift_m": 0.00011293360743716765,
+              "settled_seconds": 8.999999999999993
+            }
+          },
+          {
+            "id": "train:arm:wrist_down",
+            "mastered": true,
+            "tracking_and_settling_pass": true,
+            "failure_reasons": [],
+            "metrics": {
+              "peak_force_N": 0.49050000000000127,
+              "base_linear_jerk": 0.1338923562825814,
+              "base_yaw_jerk": 0.09186229260978868,
+              "joint_jerk": 1.0441083612681374,
+              "hand_position_error_m": 0.0002504537673431393,
+              "hand_orientation_error_rad": 0.0023834847206631263,
+              "base_error_m": 0.00011589392078720344,
+              "base_heading_error_rad": 2.2317470953651507e-05,
+              "hold_drift_m": 6.29302123295894e-05,
+              "settled_seconds": 8.999999999999993
+            }
+          },
+          {
+            "id": "train:arm:near_straight_A_translate_up",
+            "mastered": true,
+            "tracking_and_settling_pass": true,
+            "failure_reasons": [],
+            "metrics": {
+              "peak_force_N": 0.49050000000000127,
+              "base_linear_jerk": 0.13704544025304163,
+              "base_yaw_jerk": 0.04530021739680007,
+              "joint_jerk": 0.8110745562336082,
+              "hand_position_error_m": 0.0010895594391203277,
+              "hand_orientation_error_rad": 0.011145206888172584,
+              "base_error_m": 0.000210097470732787,
+              "base_heading_error_rad": 1.6886394141726012e-05,
+              "hold_drift_m": 7.806820263923803e-05,
+              "settled_seconds": 5.399999999999989
+            }
+          },
+          {
+            "id": "train:arm:near_straight_B_translate_up",
+            "mastered": true,
+            "tracking_and_settling_pass": true,
+            "failure_reasons": [],
+            "metrics": {
+              "peak_force_N": 0.4905000000000012,
+              "base_linear_jerk": 0.09663199445648789,
+              "base_yaw_jerk": 0.08426227911408762,
+              "joint_jerk": 0.7547315372757565,
+              "hand_position_error_m": 0.0007999316539459267,
+              "hand_orientation_error_rad": 0.008026974123535835,
+              "base_error_m": 4.37919225308954e-05,
+              "base_heading_error_rad": 9.333550460790619e-05,
+              "hold_drift_m": 1.3677386845615613e-05,
+              "settled_seconds": 6.399999999999985
+            }
+          }
+        ]
+      },
+      {
+        "variant": "velocity",
+        "mode": "final_with_initial_arm",
+        "mastered": 0,
+        "tracking_and_settling": 4,
+        "cases": [
+          {
+            "id": "train:arm:pitch_down",
+            "mastered": false,
+            "tracking_and_settling_pass": true,
+            "failure_reasons": [
+              "smoothness/base_linear_jerk"
+            ],
+            "metrics": {
+              "peak_force_N": 0.49050000000000127,
+              "base_linear_jerk": 0.3770507881955464,
+              "base_yaw_jerk": 0.08856017415483086,
+              "joint_jerk": 1.1199477238317312,
+              "hand_position_error_m": 2.5358186724244597e-05,
+              "hand_orientation_error_rad": 6.389965072493487e-05,
+              "base_error_m": 0.0003272369598329826,
+              "base_heading_error_rad": 0.00018667241330497242,
+              "hold_drift_m": 0.0001433565201271913,
+              "settled_seconds": 8.999999999999993
+            }
+          },
+          {
+            "id": "train:arm:wrist_down",
+            "mastered": false,
+            "tracking_and_settling_pass": true,
+            "failure_reasons": [
+              "smoothness/base_linear_jerk"
+            ],
+            "metrics": {
+              "peak_force_N": 0.49050000000000127,
+              "base_linear_jerk": 0.4168809494140272,
+              "base_yaw_jerk": 0.08632163780499316,
+              "joint_jerk": 1.0828125862526612,
+              "hand_position_error_m": 0.0002652408699952417,
+              "hand_orientation_error_rad": 0.002935299801735012,
+              "base_error_m": 0.00011514789134107812,
+              "base_heading_error_rad": 0.0015842745297847253,
+              "hold_drift_m": 0.0006043989215566832,
+              "settled_seconds": 8.599999999999987
+            }
+          },
+          {
+            "id": "train:arm:near_straight_A_translate_up",
+            "mastered": false,
+            "tracking_and_settling_pass": true,
+            "failure_reasons": [
+              "smoothness/base_linear_jerk"
+            ],
+            "metrics": {
+              "peak_force_N": 0.49050000000000127,
+              "base_linear_jerk": 0.5702788882043538,
+              "base_yaw_jerk": 0.0645174957960414,
+              "joint_jerk": 0.7623782050069298,
+              "hand_position_error_m": 0.0015424121203130548,
+              "hand_orientation_error_rad": 0.016157902076825572,
+              "base_error_m": 0.0022694476877109927,
+              "base_heading_error_rad": 0.001670930567781876,
+              "hold_drift_m": 0.00020840867306980525,
+              "settled_seconds": 4.199999999999993
+            }
+          },
+          {
+            "id": "train:arm:near_straight_B_translate_up",
+            "mastered": false,
+            "tracking_and_settling_pass": true,
+            "failure_reasons": [
+              "smoothness/base_linear_jerk"
+            ],
+            "metrics": {
+              "peak_force_N": 0.49050000000000127,
+              "base_linear_jerk": 0.5178191748606938,
+              "base_yaw_jerk": 0.08088513734629335,
+              "joint_jerk": 0.81867606101415,
+              "hand_position_error_m": 0.0013272014635726558,
+              "hand_orientation_error_rad": 0.012827586445683848,
+              "base_error_m": 0.0021081100750378772,
+              "base_heading_error_rad": 0.0014624334069638257,
+              "hold_drift_m": 0.00020945314849073963,
+              "settled_seconds": 5.399999999999989
+            }
+          }
+        ]
+      }
+    ],
+    "unmodified_replication_cases": 16,
+    "all_unmodified_pass_flags_match": true,
+    "max_unmodified_peak_jerk_abs_delta": 0.0
+  },
+  "hardware_used": false,
+  "safety_promoted": false,
+  "decision": "reject_all_final_candidates",
+  "matched_initial_final_cases": 732,
+  "cross_variant_initial_state_and_reference_match_cases": 122,
+  "limitations": [
+    "One near-threshold initial full-pass difference between variants is retained; each final compared with its own measured anchor.",
+    "Diagnostic selects four training failures from the first declared seed, not held-out validation or an unbiased sample.",
+    "Action-source restoration uses two frozen learned policies in memory; no exportable single actor or canonical qualification.",
+    "No frozen-base/context retraining experiment has been run."
+  ],
+  "next_hypothesis": "Freeze the retained base action function including actor context and wheel exploration during arm adaptation; preserve limits and compare all base/arm/coupled cases."
+}

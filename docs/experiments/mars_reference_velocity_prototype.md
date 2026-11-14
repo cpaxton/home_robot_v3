@@ -176,5 +176,80 @@ taskset -c 14 env PYTHONPATH=src CUDA_VISIBLE_DEVICES='' MUJOCO_GL=disable \
   --learning-rate 1e-5 --arm-std 0.03 --output /path/to/fresh/expanded-experiment
 ```
 
-This section declares the protocol, not a completed result. Live phase and
-completion are recorded separately by the managed job and its supervisor.
+This protocol was declared before the run. The completed results follow.
+
+## Expanded experiment result: continuation regresses smoothness
+
+All six fixed-final runs completed, for 98,304 training transitions. The fresh
+source-bound gate passed 1165 tests and the orchestration checks passed 2/2.
+Teacher admission passed all 122 selected base/arm/coupled cases for each
+variant. No candidate is promoted.
+
+| Variant | Seed | Arm tracking/settling | Arm all gates | Base all gates | Coupled all gates |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Baseline, initial | all | 64/64 | 59/64 | 42/50 | 2/8 |
+| Velocity, initial | all | 64/64 | 60/64 | 43/50 | 2/8 |
+| Baseline, final | 90 | 64/64 | 38/64 | 42/50 | 2/8 |
+| Baseline, final | 91 | 64/64 | 19/64 | 43/50 | 2/8 |
+| Baseline, final | 92 | 64/64 | 28/64 | 41/50 | 3/8 |
+| Velocity, final | 90 | 63/64 | 25/64 | 41/50 | 2/8 |
+| Velocity, final | 91 | 64/64 | 38/64 | 42/50 | 2/8 |
+| Velocity, final | 92 | 64/64 | 22/64 | 44/50 | 2/8 |
+
+Initial and final reset/reference hashes match for all 732 case pairs. The
+initial base/arm full-pass counts differ by one case across representations;
+retain that measured difference and compare each final with its own anchor.
+This is not an initial performance gain attributable to feedforward.
+
+Base-linear jerk explains the arm full-pass losses: baseline final arm jerk
+misses are 26/45/36 across seeds, versus 5 initially; velocity has 39/26/42,
+versus 4 initially. Tracking mostly survives, but continuation degrades the
+combined contract in both representations. The evidence does not support more
+training with this unchanged setup or adoption of the velocity treatment.
+
+The [compact result and provenance](../../paper/data/whole_body_control/mars_reference_velocity_expanded_v1/results.json)
+include per-seed train/validation groups and failures. Full traces/checkpoints
+remain in `logs/manipulation/reference-velocity-expanded-v1/comparison/`.
+
+## Channel-restoration diagnostic: preserve the learned base function
+
+A separate 32-rollout, zero-training intervention uses the first declared seed
+(90) and four **training-only** cases both initial actors passed and both finals
+failed: pitch down, wrist down, and near-straight A/B upward translation. It
+retains each variant's own initial anchor to avoid mixing representations.
+
+For fully constrained base goals with an active hand, evaluate the final actor
+with only its two base commands replaced by its initial actor's commands on the
+same live observation. The reciprocal intervention replaces only the five arm
+commands. Gripper commands, inputs, targets, native execution limits, timing,
+teacher budgets and checkpoint files are unchanged.
+
+| Commands used | Baseline all gates | Velocity all gates |
+| --- | ---: | ---: |
+| Initial actor | 4/4 | 4/4 |
+| Final actor | 0/4 | 0/4 |
+| Final arm, initial base | 4/4 | 4/4 |
+| Final base, initial arm | 0/4 | 0/4 |
+
+All 16 unmodified initial/final replays reproduce their prior full-pass flags
+and peak base-linear jerk exactly (maximum jerk difference zero), with matching
+reset/reference hashes. Restoring the initial base commands also recovers the
+velocity actor's selected tracking-timeout case. Restoring the initial arm
+commands recovers tracking there, but leaves all four jerk failures.
+
+This implicates the changed learned base function in these selected regressions.
+It does not isolate base readout weights from shared actor-context changes, nor
+establish generalization: these cases were selected after observing training
+failures. The two-policy in-memory intervention is **not** an exportable single
+actor or canonical qualification. No policy is changed, exported or promoted.
+The exact intervention script hash, case metrics and replay checks are retained
+in the compact result. Full diagnostic artifacts are in
+`logs/manipulation/reference-velocity-expanded-v1/channel-diagnostic-v1/`.
+
+The next justified training hypothesis is to freeze the retained base function
+**including the shared actor context**, train only arm feedback/feedforward
+coefficients, and suppress wheel exploration during arm adaptation while
+preserving the existing base mean commands. Freezing base readout weights alone
+would still allow shared-context changes to alter the base function. This next
+training experiment has not been run; it must retain the full base/arm/coupled
+and smoothness gates. Axis-angle remains a separate untrained option.
