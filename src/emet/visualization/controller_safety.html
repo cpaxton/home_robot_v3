@@ -1,0 +1,70 @@
+<!-- Copyright (c) Chris Paxton 2026
+Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root). -->
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Controller safety evidence</title>
+<style>
+body { font: 16px/1.5 system-ui, sans-serif; color: #222; background: #fff; margin: 24px auto; max-width: 1200px; padding: 0 16px; }
+h1, h2 { line-height: 1.2; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; vertical-align: top; }
+th { background: #f3f3f3; }
+.scroll { overflow-x: auto; }
+label { display: block; margin: 16px 0; }
+select { font: inherit; max-width: 100%; padding: 8px; }
+.plot svg { width: 100%; height: auto; }
+.plot { max-width: 900px; }
+pre { white-space: pre-wrap; overflow-wrap: anywhere; background: #f5f5f5; padding: 12px; }
+summary { cursor: pointer; }
+</style>
+<main>
+<h1>Controller safety evidence</h1>
+<p>Archived simulator evaluations. Cohorts remain separate: matching seeds alone do not establish matching models, controllers, or initial states. These results do not measure hardware safety or combined base–arm performance.</p>
+<p>Rates show observed events / evaluated episodes and 95% Wilson intervals. Safety outcomes exclude failed initializations; task success includes them as failures. Missing or unsupported outcomes remain unknown. Zero observed failures is not proof of zero risk.</p>
+<p>Intervals assume independent trials. Repeated seed/case identities and missing identities are flagged without deleting records; record counts are not independent-evidence counts.</p>
+<div class="scroll">
+<table>
+<caption>Per-scenario outcomes. Force cutoffs reflect each evaluation’s experimental limits.</caption>
+<thead><tr><th>Cohort</th><th>Attempts</th><th>Setup failed</th><th>Task success</th><th>Unsafe contact</th><th>Wheel lift</th><th>Retention lost</th><th>Invalid physics</th></tr></thead>
+<tbody><!--SUMMARY--></tbody>
+</table>
+</div>
+<h2>Inspect individual episodes</h2>
+<label>Cohort <select id="cohort"></select></label>
+<p id="force-definition" aria-live="polite"></p>
+<div role="img" aria-label="Episode duration versus peak contact force; circles show success, crosses failure, triangles unknown outcome."><!--PLOTS--></div>
+<p>The plot shows episode aggregates, not a force timeline. Setup failures and missing force/time pairs are omitted. Joint and jerk measurements may mix prismatic and revolute coordinates; inspect their source contract before comparing them.</p>
+<label>Episode <select id="episode"></select></label>
+<pre id="details" aria-live="polite"></pre>
+<details><summary>Selected report provenance and evaluation configuration</summary><pre id="provenance"></pre></details>
+<p>Workspace coverage and synchronized 3D replay require additional pose/contact traces. They cannot be reconstructed from these episode summaries.</p>
+</main>
+<script>
+const cohorts = /*REPORT_DATA*/ null;
+const cohortSelect = document.getElementById('cohort');
+const episodeSelect = document.getElementById('episode');
+cohorts.forEach((cohort, i) => cohortSelect.add(new Option(cohort.name, String(i))));
+function showEpisode() {
+  const row = cohorts[Number(cohortSelect.value)].rows[Number(episodeSelect.value)];
+  document.getElementById('details').textContent = JSON.stringify(row, null, 2);
+}
+function showCohort() {
+  const index = Number(cohortSelect.value);
+  document.querySelectorAll('.plot').forEach((plot, i) => { plot.hidden = i !== index; });
+  episodeSelect.replaceChildren();
+  cohorts[index].rows.forEach((row, i) => {
+    const outcome = row.initialization_failed === true ? 'setup failed' : row.is_success === true ? 'success' : row.is_success === false ? 'failure' : 'unknown';
+    episodeSelect.add(new Option(`Seed ${row.seed ?? 'unknown'} · ${outcome} · ${row.code ?? 'no reason recorded'}`, String(i)));
+  });
+  document.getElementById('provenance').textContent = JSON.stringify(cohorts[index].source, null, 2);
+  const source = cohorts[index].source;
+  document.getElementById('force-definition').textContent = 'Force metric: ' + (source.measurement_definitions.peak_contact_force ?? source.force_definition) + '. Check the evaluator contract before comparing cohorts.';
+  showEpisode();
+}
+cohortSelect.addEventListener('change', showCohort);
+episodeSelect.addEventListener('change', showEpisode);
+showCohort();
+</script>
+</html>

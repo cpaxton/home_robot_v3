@@ -32,6 +32,7 @@ setuptools.setup(
             "config/**/*.yaml",
             "perception/*.tsv",
             "assets/**/*",
+            "visualization/*.html",
         ]
     },
     install_requires=[
