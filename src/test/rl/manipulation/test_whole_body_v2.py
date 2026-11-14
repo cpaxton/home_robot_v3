@@ -113,8 +113,8 @@ def test_grouped_returns_bootstrap_truncation_and_do_not_cross_episode_boundarie
 def test_separate_advantage_normalization_removes_reward_unit_scaling():
     torch.manual_seed(21)
     a = torch.randn(100, 3)
-    first, _ = combine_advantages(a)
-    second, _ = combine_advantages(a * torch.tensor([1.0, 1000.0, 0.02]))
+    first, _ = combine_advantages(a, normalization="per_head")
+    second, _ = combine_advantages(a * torch.tensor([1.0, 1000.0, 0.02]), normalization="per_head")
     torch.testing.assert_close(first, second)
 
 

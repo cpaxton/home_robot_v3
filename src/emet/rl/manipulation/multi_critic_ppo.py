@@ -36,15 +36,30 @@ def grouped_gae(rewards, values, next_values, terminated, episode_end, ticks, *,
     return advantage.astype(np.float32), (advantage + values).astype(np.float32)
 
 
-def combine_advantages(advantages, weights=(1.0, 1.0, 1.0)):
+def combine_advantages(advantages, weights=(1.0, 1.0, 1.0), *, normalization="shared"):
+    """Preserve reward coefficients by whitening the weighted sum once.
+
+    GAE is linear across heads with shared clocks and termination. Thus the
+    raw weighted sum represents the specified total reward. Whitening each
+    head first instead changes that objective and removes positive within-head
+    reward scales. Keep that historical mode explicit for paired experiments.
+    The second return contains the weighted contribution from each head.
+    """
     a = torch.as_tensor(advantages)
     weights = torch.as_tensor(weights, dtype=a.dtype, device=a.device)
     if a.ndim != 2 or a.shape[1] != 3 or len(a) < 2 or weights.shape != (3,) or not torch.isfinite(a).all():
         raise ValueError("at least two finite three-group advantages required")
     if not torch.isfinite(weights).all() or (weights < 0).any() or not (weights > 0).any():
         raise ValueError("nonnegative finite advantage weights required")
-    normalized = (a - a.mean(0)) / a.std(0, unbiased=False).clamp_min(1e-6)
-    return (normalized * weights).sum(-1), normalized
+    if normalization not in {"shared", "per_head"}:
+        raise ValueError("advantage normalization must be shared or per_head")
+    centered = a - a.mean(0)
+    if normalization == "per_head":
+        components = centered / a.std(0, unbiased=False).clamp_min(1e-6) * weights
+    else:
+        combined = (a * weights).sum(-1)
+        components = centered * weights / combined.std(unbiased=False).clamp_min(1e-6)
+    return components.sum(-1), components
 
 
 @dataclass
@@ -60,6 +75,7 @@ class PPOConfig:
     max_grad_norm: float = 0.5
     target_kl: float = 0.02
     advantage_weights: tuple = (1.0, 1.0, 1.0)
+    advantage_normalization: str = "shared"
 
     def __post_init__(self):
         vals = [self.learning_rate, self.critic_learning_rate, self.clip, self.max_grad_norm, self.target_kl]
@@ -69,7 +85,7 @@ class PPOConfig:
             raise ValueError("positive PPO epochs and batch size at least two required")
         if not np.isfinite(self.entropy_weight) or self.entropy_weight < 0:
             raise ValueError("nonnegative entropy weight required")
-        combine_advantages(torch.zeros((2, 3)), self.advantage_weights)
+        combine_advantages(torch.zeros((2, 3)), self.advantage_weights, normalization=self.advantage_normalization)
 
 
 class MultiCriticPPO:
@@ -81,6 +97,34 @@ class MultiCriticPPO:
                 {"params": policy.critics.parameters(), "lr": config.critic_learning_rate},
             ]
         )
+
+    def actor_gradient_diagnostics(self, ratio, components):
+        """First minibatch: unclipped actor gradients per head, excluding entropy.
+
+        Includes exploration log_std. This observes derivatives without writing
+        parameter.grad or changing the subsequent PPO clipping/update.
+        """
+        parameters = [p for p in [*self.policy.actor.parameters(), self.policy.log_std] if p.requires_grad]
+        losses = -(ratio[:, None] * components).mean(0)
+        gradients = []
+        for index in range(3):
+            derivative = torch.autograd.grad(losses[index], parameters, retain_graph=True, allow_unused=True)
+            gradients.append(
+                torch.cat(
+                    [
+                        torch.zeros_like(p).flatten() if g is None else g.detach().flatten()
+                        for p, g in zip(parameters, derivative, strict=True)
+                    ]
+                )
+            )
+        matrix = torch.stack(gradients)
+        norms = matrix.norm(dim=1)
+        cosines = (matrix @ matrix.T) / (norms[:, None] * norms[None, :]).clamp_min(1e-12)
+        return {
+            "actor_gradient_norm_by_head": norms.tolist(),
+            "actor_gradient_cosines": cosines.tolist(),
+            "gradient_diagnostics": "first_minibatch_unclipped_no_entropy",
+        }
 
     def update(self, rollout):
         cfg = self.config
@@ -97,9 +141,11 @@ class MultiCriticPPO:
             gamma=cfg.gamma,
             lam=cfg.gae_lambda,
         )
-        advantage, normalized = combine_advantages(torch.from_numpy(advantages), cfg.advantage_weights)
+        advantage, normalized = combine_advantages(
+            torch.from_numpy(advantages), cfg.advantage_weights, normalization=cfg.advantage_normalization
+        )
         targets = torch.from_numpy(targets)
-        logs, stop = [], False
+        logs, stop, gradient_stats, grad_norms = [], False, {}, []
         for _ in range(cfg.epochs):
             for indices in torch.randperm(len(actions)).split(cfg.batch_size):
                 if len(indices) < 2:
@@ -117,25 +163,56 @@ class MultiCriticPPO:
                     raise RuntimeError("nonfinite multi-critic PPO loss")
                 with torch.no_grad():
                     kl = ((ratio - 1) - (log - old_log[indices])).mean().item()
-                logs.append([actor_loss.item(), *value_losses.detach().tolist(), kl])
+                clipped = ((ratio - 1).abs() > cfg.clip).float().mean().item()
+                logs.append([actor_loss.item(), *value_losses.detach().tolist(), kl, clipped])
                 if kl > 1.5 * cfg.target_kl:
                     stop = True
                     break
+                if not gradient_stats:
+                    gradient_stats = self.actor_gradient_diagnostics(ratio, normalized[indices])
                 self.optimizer.zero_grad()
                 loss.backward()
-                torch.nn.utils.clip_grad_norm_(
+                norm = torch.nn.utils.clip_grad_norm_(
                     [*self.policy.actor.parameters(), self.policy.log_std], cfg.max_grad_norm
                 )
+                grad_norms.append(float(norm))
                 for critic in self.policy.critics:
                     torch.nn.utils.clip_grad_norm_(critic.parameters(), cfg.max_grad_norm)
                 self.optimizer.step()
             if stop:
                 break
         avg = np.mean(logs, axis=0)
+        rewards = np.asarray(rollout["rewards"])
+        raw_values = np.asarray(rollout["values"])
+        discount = cfg.gamma ** np.asarray(rollout["ticks"], dtype=float)
+        td = (
+            rewards
+            + discount[:, None] * (~np.asarray(rollout["terminated"], dtype=bool))[:, None] * rollout["next_values"]
+            - raw_values
+        )
         return {
             "actor_loss": float(avg[0]),
             "critic_losses": avg[1:4].tolist(),
             "approx_kl": float(avg[4]),
+            "clip_fraction": float(avg[5]),
+            "actor_gradient_norm_pre_clip": float(np.mean(grad_norms)) if grad_norms else 0.0,
+            "optimizer_steps": len(grad_norms),
+            "raw_reward_mean": rewards.mean(0).tolist(),
+            "raw_reward_std": rewards.std(0).tolist(),
+            "raw_value_mean": raw_values.mean(0).tolist(),
+            "raw_value_std": raw_values.std(0).tolist(),
+            "raw_td_mean": td.mean(0).tolist(),
+            "raw_td_std": td.std(0).tolist(),
+            "advantage_mean": np.mean(advantages, axis=0).tolist(),
             "advantage_std": np.std(advantages, axis=0).tolist(),
+            "zero_reward_heads": np.all(rewards == 0, axis=0).tolist(),
+            "combined_advantage_mean": float(advantage.mean()),
+            "combined_advantage_std": float(advantage.std(unbiased=False)),
+            "head_contribution_std": normalized.std(0, unbiased=False).tolist(),
             "advantage_correlation": torch.nan_to_num(torch.corrcoef(normalized.T)).tolist(),
+            "advantage_normalization": cfg.advantage_normalization,
+            "combined_tracking_correlation": float(
+                torch.nan_to_num(torch.corrcoef(torch.stack([advantage, normalized[:, 0]]))[0, 1])
+            ),
+            **gradient_stats,
         }

@@ -15,7 +15,7 @@ import numpy as np
 import torch
 
 from emet.rl.manipulation.carry_benchmark import source_hashes
-from emet.rl.manipulation.multi_critic_ppo import MultiCriticPPO, PPOConfig
+from emet.rl.manipulation.multi_critic_ppo import MultiCriticPPO, PPOConfig, grouped_gae
 from emet.rl.manipulation.whole_body_actor import MultiCriticPolicy
 
 DEFAULT_SUITE = Path("configs/benchmarks/mars_whole_body_v2_development.json")
@@ -227,12 +227,28 @@ def require_preflight(path, suite_path):
     return report
 
 
-def make_environment(suite_path):
+def make_environment(suite_path, *, basic_cases=None):
     from emet.rl.manipulation.mastery import MasteryEnv
     from emet.rl.manipulation.tamp_primitive_env import TampPrimitiveEnv
     from emet.rl.manipulation.whole_body_env import ControlStepMixture, GeneralTrackingEnv
 
     suite, general = load_development(suite_path)
+    if basic_cases is not None:
+        from emet.rl.manipulation.basic_learning import load_basic_learning
+
+        spec, selected, _ = load_basic_learning(basic_cases, general)
+        native = MasteryEnv(
+            selected,
+            stages=("base", "arm"),
+            split="train",
+            population="training",
+            training_stage_weights=spec["training_stage_weights"],
+        )
+        try:
+            return ControlStepMixture({"general": GeneralTrackingEnv(native)}, [1.0])
+        except BaseException:
+            native.close()
+            raise
     native = MasteryEnv(
         general,
         stages=suite["general_stages"],
@@ -257,10 +273,34 @@ def tensor_observation(obs):
     return {k: torch.from_numpy(np.asarray(v, dtype=np.float32))[None] for k, v in obs.items()}
 
 
+def arrays_digest(arrays):
+    state = hashlib.sha256()
+    for name, value in sorted(arrays.items()):
+        array = np.ascontiguousarray(value)
+        state.update(name.encode() + b"\0" + str(array.shape).encode() + array.dtype.str.encode())
+        state.update(array.tobytes())
+    return state.hexdigest()
+
+
+def policy_state_digest(policy):
+    return arrays_digest({name: value.detach().cpu().numpy() for name, value in policy.state_dict().items()})
+
+
 def collect_rollout(env, model, observation, steps, *, episode_callback=None):
     """Bootstrap timeouts; never propagate GAE across resets/primitive boundaries."""
     collected = {
-        k: [] for k in ("actions", "log_prob", "rewards", "values", "next_values", "terminated", "episode_end", "ticks")
+        k: []
+        for k in (
+            "actions",
+            "log_prob",
+            "rewards",
+            "values",
+            "next_values",
+            "terminated",
+            "episode_end",
+            "ticks",
+            "case_ids",
+        )
     }
     observations = {k: [] for k in observation}
     for _ in range(steps):
@@ -284,6 +324,7 @@ def collect_rollout(env, model, observation, steps, *, episode_callback=None):
             "terminated": terminated,
             "episode_end": terminated or truncated,
             "ticks": info["elapsed_control_ticks"],
+            "case_ids": info.get("case_id") or info.get("mastery", {}).get("case_id", "unknown"),
         }
         for k, v in entries.items():
             collected[k].append(v)
@@ -311,7 +352,12 @@ def train(args):
     torch.set_num_threads(1)
     output = Path(args.output)
     output.mkdir(parents=True, exist_ok=False)
-    config = PPOConfig(learning_rate=args.learning_rate, epochs=args.epochs, batch_size=args.batch_size)
+    config = PPOConfig(
+        learning_rate=args.learning_rate,
+        epochs=args.epochs,
+        batch_size=args.batch_size,
+        advantage_normalization=args.advantage_normalization,
+    )
     policy = MultiCriticPolicy(privileged=not args.no_privileged_critic)
     learner = MultiCriticPPO(policy, config)
     metadata = {
@@ -330,6 +376,8 @@ def train(args):
         "privileged_critic": not args.no_privileged_critic,
         "actor_inputs": ["history", "preview", "motion"],
         "full_pick_place_qualified": False,
+        "basic_cases_sha256": digest(args.basic_cases) if args.basic_cases else None,
+        "training_family_scope": "basic_general_only" if args.basic_cases else "general_tamp_50_50_ticks",
     }
     write_json(output / "run.json", metadata)
     run = None
@@ -346,9 +394,64 @@ def train(args):
                 config=metadata,
                 settings=wandb.Settings(disable_git=True, save_code=False),
             )
-        env = make_environment(args.suite)
+        env = make_environment(args.suite, basic_cases=args.basic_cases)
         native = env.environments["general"].unwrapped
+        initial_bundle = export_actor(
+            policy.actor,
+            output / "initial/actor",
+            native.config,
+            native.fingerprint,
+            steps=0,
+            training={"scope": "initial_before_ppo", "seed": args.seed},
+        )
+        metadata.update(
+            initial_actor_weights_sha256=initial_bundle.manifest["weights_sha256"],
+            initial_policy_state_sha256=policy_state_digest(policy),
+            initial_action_std=policy.log_std.detach().exp().tolist(),
+        )
+        if args.basic_cases:
+            from emet.rl.manipulation.basic_learning import load_basic_learning
+            from emet.rl.manipulation.mastery import evaluate_suite, read_report, save_report, summarize
+            from emet.rl.manipulation.whole_body_bundle import WholeBodyBundle
+
+            _, general = load_development(args.suite)
+            spec, _, evaluation_suite = load_basic_learning(args.basic_cases, general)
+            teacher = read_report(Path(args.preflight).parent / "general-teacher.json.gz")
+            write_json(output / "basic-cases.json", spec)
+
+            def evaluate_basic(label, directory):
+                report = evaluate_suite(
+                    evaluation_suite, stages=("base", "arm"), policy=WholeBodyBundle(directory), teacher_report=teacher
+                )
+                save_report(output / f"{label}-evaluation.json.gz", report)
+                write_json(output / f"{label}-evaluation-summary.json", summarize(report))
+
+            evaluate_basic("initial", output / "initial/actor")
+            # Baseline measurement must not change the paired PPO random stream.
+            np.random.seed(args.seed)
+            torch.manual_seed(args.seed)
         observation, _ = env.reset(seed=args.seed)
+        numpy_rng = np.random.get_state()
+        numpy_state = [numpy_rng[0], numpy_rng[1].tolist(), *numpy_rng[2:]]
+        initial_state = output / "initial/training.pt"
+        torch.save(
+            {
+                "policy": policy.state_dict(),
+                "optimizer": learner.optimizer.state_dict(),
+                "torch_rng": torch.get_rng_state(),
+                "numpy_rng": numpy_state,
+            },
+            initial_state,
+        )
+        metadata.update(
+            initial_training_state_sha256=digest(initial_state),
+            rollout_rng_sha256=hashlib.sha256(torch.get_rng_state().numpy().tobytes()).hexdigest(),
+            initial_numpy_rng_sha256=hashlib.sha256(json.dumps(numpy_state).encode()).hexdigest(),
+            initial_optimizer_sha256=hashlib.sha256(
+                json.dumps(learner.optimizer.state_dict(), sort_keys=True).encode()
+            ).hexdigest(),
+        )
+        write_json(output / "run.json", metadata)
         episodes, decisions, ticks = [], 0, 0
 
         def episode(info):
@@ -362,8 +465,10 @@ def train(args):
                     "wheel_lift",
                     "retention_lost",
                     "invalid_physics",
+                    "unsafe_contact",
                 )
             }
+            summary["case_id"] = info.get("case_id") or info.get("mastery", {}).get("case_id")
             episodes.append(summary)
             with (output / "episodes.jsonl").open("a") as stream:
                 stream.write(json.dumps(summary, allow_nan=False) + "\n")
@@ -372,6 +477,30 @@ def train(args):
             rollout, observation = collect_rollout(
                 env, policy, observation, min(args.rollout_steps, args.steps - decisions), episode_callback=episode
             )
+            if args.basic_cases and not np.all(rollout["ticks"] == 1):
+                raise RuntimeError("basic C1 training requires one physical tick per decision")
+            if decisions == 0:
+                flattened = {"obs/" + k: v for k, v in rollout["observations"].items()}
+                flattened.update({k: v for k, v in rollout.items() if k != "observations"})
+                raw_advantage, _ = grouped_gae(
+                    rollout["rewards"],
+                    rollout["values"],
+                    rollout["next_values"],
+                    rollout["terminated"],
+                    rollout["episode_end"],
+                    rollout["ticks"],
+                    gamma=config.gamma,
+                    lam=config.gae_lambda,
+                )
+                np.savez_compressed(output / "first-rollout.npz", **flattened, raw_advantage=raw_advantage)
+                metadata["first_rollout"] = {
+                    "arrays_sha256": arrays_digest(flattened),
+                    "observations_sha256": arrays_digest(rollout["observations"]),
+                    "actions_sha256": arrays_digest({"actions": rollout["actions"]}),
+                    "rewards_sha256": arrays_digest({"rewards": rollout["rewards"]}),
+                    "raw_gae_sha256": arrays_digest({"raw_gae": raw_advantage}),
+                }
+                write_json(output / "run.json", metadata)
             stats = learner.update(rollout)
             decisions += len(rollout["ticks"])
             ticks += int(rollout["ticks"].sum())
@@ -381,6 +510,7 @@ def train(args):
                 "mixture": env.ledger(),
                 **stats,
                 "reward_group_means": rollout["rewards"].mean(0).tolist(),
+                "case_sequence": rollout["case_ids"].tolist(),
             }
             with (output / "updates.jsonl").open("a") as stream:
                 stream.write(json.dumps(row, allow_nan=False) + "\n")
@@ -393,6 +523,7 @@ def train(args):
                 }
                 scalar.update({f"critic/{i}": v for i, v in enumerate(stats["critic_losses"])})
                 scalar.update({f"ticks/{name}": v["control_ticks"] for name, v in env.ledger().items()})
+                scalar["combined_tracking_correlation"] = stats["combined_tracking_correlation"]
                 run.log(scalar, step=decisions)
             print("UPDATE", json.dumps(row, allow_nan=False), flush=True)
             # A crash loses at most one rollout. This is training state only;
@@ -415,7 +546,12 @@ def train(args):
             raise RuntimeError("sources changed while training")
         verify_regressions(args.regression_receipt)
         training = {
-            "algorithm": "direct_multi_critic_ppo_v1",
+            "algorithm": "direct_multi_critic_ppo_v2",
+            "advantage_normalization": config.advantage_normalization,
+            "basic_cases_sha256": metadata["basic_cases_sha256"],
+            "training_family_scope": metadata["training_family_scope"],
+            "initial_actor_weights_sha256": metadata["initial_actor_weights_sha256"],
+            "initial_policy_state_sha256": metadata["initial_policy_state_sha256"],
             "decision_steps": decisions,
             "control_ticks": ticks,
             "mixture": env.ledger(),
@@ -428,6 +564,8 @@ def train(args):
         export_actor(
             policy.actor, output / "last/actor", native.config, native.fingerprint, steps=decisions, training=training
         )
+        if args.basic_cases:
+            evaluate_basic("final", output / "last/actor")
         write_json(
             output / "summary.json",
             {**training, "episodes": len(episodes), "complete": True, "safety_promoted": False, "hardware_used": False},
@@ -453,6 +591,8 @@ def main():
     parser.add_argument("--epochs", type=int, default=5)
     parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--no-privileged-critic", action="store_true")
+    parser.add_argument("--advantage-normalization", choices=("shared", "per_head"), default="shared")
+    parser.add_argument("--basic-cases", type=Path, help="explicit small general-only diagnostic case manifest")
     parser.add_argument("--wandb-mode", choices=("offline", "disabled"), default="offline")
     args = parser.parse_args()
     if args.command == "preflight":
