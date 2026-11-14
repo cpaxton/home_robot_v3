@@ -1027,6 +1027,15 @@ def train(args, suite):
     from emet.rl.regression_gate import verify_regressions
 
     verify_regressions(args.regression_receipt)
+    arm_adaptation_only = getattr(args, "arm_adaptation_only", False)
+    if arm_adaptation_only and (
+        args.stages != ["arm"]
+        or not args.initialize_from
+        or not getattr(args, "freeze_normalization", False)
+        or suite.get("training_policy") != "executor_mask_v1"
+        or getattr(args, "initialize_arm_from", None)
+    ):
+        raise ValueError("arm adaptation requires arm-only stages, source bundle, frozen normalization and executor masks")
     teacher = read_report(args.preflight)
     validate_preflight(teacher, suite, args.stages)
     out = Path(args.output)
@@ -1048,6 +1057,10 @@ def train(args, suite):
         from emet.rl.manipulation.command_policy import ExecutorCommandVecNormalize, ExecutorFeedbackPolicy
 
         policy_class, normalizer_class = ExecutorFeedbackPolicy, ExecutorCommandVecNormalize
+    if arm_adaptation_only:
+        from emet.rl.manipulation.arm_adaptation import ArmAdaptationPolicy
+
+        policy_class = ArmAdaptationPolicy
     normalizer = normalizer_class(
         make_training_vec_env(
             suite,
@@ -1080,11 +1093,7 @@ def train(args, suite):
                 "restoring_yaw_feedback": cfg.restoring_yaw_feedback,
                 "turn_xy_tolerance": cfg.base_xy_tolerance,
                 "features_extractor_class": GoalFeedbackFeatures,
-                "features_extractor_kwargs": {
-                    "robot": cfg.robot,
-                    "retention_context": True,
-                    "orientation_scale": cfg.feedback_orientation_scale,
-                },
+                "features_extractor_kwargs": GoalFeedbackFeatures.kwargs_for(cfg),
                 "net_arch": {"pi": [128, 128], "vf": [128, 128]},
             },
         )
@@ -1113,6 +1122,7 @@ def train(args, suite):
         with torch.no_grad():
             model.policy.log_std[:2].fill_(np.log(args.base_std))
             model.policy.log_std[2:].fill_(np.log(args.arm_std))
+        frozen_function = model.policy.frozen_function_state() if arm_adaptation_only else None
         record = {
             "suite": suite,
             "suite_sha256": digest(suite),
@@ -1128,6 +1138,9 @@ def train(args, suite):
             "initialization": initialization,
             "normalization_frozen": getattr(args, "freeze_normalization", False),
             "executor_action_mask": suite.get("training_policy") == "executor_mask_v1",
+            "arm_adaptation_only": arm_adaptation_only,
+            "base_actor_context_and_grip_frozen": arm_adaptation_only,
+            "base_grip_sampling": "deterministic learned means" if arm_adaptation_only else "ordinary executor mask",
             "base_std": args.base_std,
             "arm_std": args.arm_std,
             "learning_rate": args.learning_rate,
@@ -1238,6 +1251,8 @@ def train(args, suite):
             def checkpoint(self, label):
                 if sources != source_hashes():
                     raise RuntimeError("training sources changed")
+                if frozen_function is not None:
+                    model.policy.assert_frozen_function(frozen_function)
                 destination = out / label
                 export(
                     self.model,
@@ -1254,6 +1269,7 @@ def train(args, suite):
                     "training_stages": args.stages,
                     "contract_reward": record["contract_reward"],
                     "contract_schedule": record["contract_schedule"],
+                    "arm_adaptation_only": arm_adaptation_only,
                 }
                 manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
                 with preserve_training_rng():
@@ -1290,6 +1306,8 @@ def train(args, suite):
                 self.last = self.num_timesteps
 
             def _on_rollout_start(self):
+                if frozen_function is not None:
+                    model.policy.assert_frozen_function(frozen_function)
                 self.record_update()
                 if objective_config is not None:
                     normalizer.env_method("set_reward_fraction", schedule.fraction(self.num_timesteps))
@@ -1300,6 +1318,8 @@ def train(args, suite):
                     self.checkpoint(f"step-{self.num_timesteps}")
 
             def _on_training_end(self):
+                if frozen_function is not None:
+                    model.policy.assert_frozen_function(frozen_function)
                 self.record_update()
 
         audit = Audit()
@@ -1345,6 +1365,10 @@ def main():
     parser.add_argument("--initialize-arm-from", type=Path, help="training-only final arm component checkpoint")
     parser.add_argument("--arm-evidence", type=Path, help="checksummed component evidence required for transfer")
     parser.add_argument("--freeze-normalization", action="store_true")
+    parser.add_argument(
+        "--arm-adaptation-only", action="store_true",
+        help="train only arm gains/exploration and critic; freeze actor context/base/grip and use deterministic base/grip sampling",
+    )
     parser.add_argument("--steps", type=int, default=16384)
     parser.add_argument("--seed", type=int, default=90)
     parser.add_argument("--num-envs", type=int, default=1)

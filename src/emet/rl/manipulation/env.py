@@ -141,6 +141,8 @@ class ManipulationConfig:
     feedback_policy: bool = False
     restoring_yaw_feedback: bool = False
     feedback_orientation_scale: float = 1.0
+    feedback_orientation_error: str = "rotation6"
+    feedback_reference_velocity: bool = False
     wheel_feedback_gain: float = 2.0
     physical_wheel_slew: bool = False
     wheel_jerk_limits: tuple[float, float] | None = None
@@ -223,6 +225,13 @@ class ManipulationConfig:
             raise ValueError("feedback orientation scale must be in [0.05, 1] rad")
         if self.feedback_orientation_scale != 1 and not self.feedback_policy:
             raise ValueError("orientation feedback scaling requires the feedback policy")
+        if self.feedback_orientation_error not in {"rotation6", "rotvec"}:
+            raise ValueError("feedback orientation error must be rotation6 or rotvec")
+        if type(self.feedback_reference_velocity) is not bool or (
+            (self.feedback_reference_velocity or self.feedback_orientation_error != "rotation6")
+            and not self.feedback_policy
+        ):
+            raise ValueError("reference velocity and rotvec features require the feedback policy")
         if type(self.whole_body_settling) is not bool:
             raise ValueError("whole-body settling must be boolean")
         if type(self.fixed_base_contract) is not bool or (self.fixed_base_contract and self.robot != "innate_mars"):

@@ -113,6 +113,7 @@ def transfer_arm_component(model, normalizer, directory, evidence, config, finge
         or not isinstance(model.policy.features_extractor, GoalFeedbackFeatures)
         or not isinstance(model.policy.action_net, FeedbackAction)
         or source.policy.features_extractor.orientation_scale != model.policy.features_extractor.orientation_scale
+        or source.policy.features_extractor.orientation_error != model.policy.features_extractor.orientation_error
         or source.policy.features_extractor.feedback_width != model.policy.features_extractor.feedback_width
     ):
         raise ValueError("incompatible component actor/feature contract")

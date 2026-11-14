@@ -114,6 +114,14 @@ def transfer_actor(model, normalizer, directory, config, fingerprint, *, prior_c
     ):
         raise ValueError("transfer observation/action semantics mismatch")
     source, target = old.model.policy.state_dict(), model.policy.state_dict()
+    velocity_added = False
+    if isinstance(old.model.policy.features_extractor, GoalFeedbackFeatures) and not new_feedback_head:
+        old_features, new_features = old.model.policy.features_extractor, model.policy.features_extractor
+        if old_features.orientation_error != new_features.orientation_error:
+            raise ValueError("orientation representation changes require training from scratch")
+        if old_features.reference_velocity and not new_features.reference_velocity:
+            raise ValueError("cannot remove learned reference velocity features during transfer")
+        velocity_added = new_features.reference_velocity and not old_features.reference_velocity
     old_shape, new_shape = old.mean.shape, normalizer.obs_rms["history"].mean.shape
     old_restoring = getattr(old.model.policy, "restoring_yaw_feedback", False)
     new_restoring = getattr(model.policy, "restoring_yaw_feedback", False)
@@ -128,7 +136,17 @@ def transfer_actor(model, normalizer, directory, config, fingerprint, *, prior_c
     for name, value in source.items():
         if new_feedback_head and name.startswith("action_net."):
             continue
-        if value.shape == target[name].shape:
+        if velocity_added and name in {"action_net.gain.weight", "action_net.gain.bias"}:
+            # Extra columns initially have no influence. Keep the original
+            # gain normalization and the final measured-velocity tail intact.
+            old_width, new_width = old_features.feedback_width, new_features.feedback_width
+            rows = model.action_space.shape[0] - 1
+            expanded = torch.zeros_like(target[name]).reshape(rows, new_width, -1)
+            original = value.reshape(rows, old_width, -1)
+            expanded[:, :24] = original[:, :24]
+            expanded[:, 33:] = original[:, 24:]
+            target[name] = expanded.reshape(target[name].shape)
+        elif value.shape == target[name].shape:
             target[name] = value.clone()
         elif name.endswith("project.weight") and value.shape[1] == old_shape[1]:
             target[name].zero_()
@@ -140,7 +158,15 @@ def transfer_actor(model, normalizer, directory, config, fingerprint, *, prior_c
                 value[:, : steps * old_shape[1]].reshape(value.shape[0], steps, old_shape[1])
             )
             tail = value[:, steps * old_shape[1] :]
-            expanded[:, steps * new_shape[1] : steps * new_shape[1] + tail.shape[1]] = tail
+            if velocity_added:
+                # Preview context precedes the feedback tail. Insert the new
+                # reference signals after its two pose-error samples.
+                split = tail.shape[1] - old_features.feedback_width + 24
+                start = steps * new_shape[1]
+                expanded[:, start : start + split] = tail[:, :split]
+                expanded[:, start + split + 9 :] = tail[:, split:]
+            else:
+                expanded[:, steps * new_shape[1] : steps * new_shape[1] + tail.shape[1]] = tail
             target[name] = expanded
         else:
             raise ValueError(f"unsupported transfer parameter: {name}")
@@ -195,6 +221,7 @@ def transfer_actor(model, normalizer, directory, config, fingerprint, *, prior_c
             "function_preserving": old_restoring == new_restoring,
         },
         "feedback_orientation_scale_change": scale_change,
+        "feedback_reference_velocity_added": velocity_added,
         "wheel_feedback_gain_change": {
             "from": manifest["environment"].get("wheel_feedback_gain", 2.0),
             "to": config.wheel_feedback_gain,

@@ -58,8 +58,8 @@ class ArmOnlyActions(gym.ActionWrapper):
 
 
 class ArmMean(FeedbackAction):
-    def __init__(self, context_width, feedback_width):
-        super().__init__(context_width, feedback_width, 6)
+    def __init__(self, context_width, feedback_width, *, normalization_width=None):
+        super().__init__(context_width, feedback_width, 6, normalization_width=normalization_width)
 
     def forward(self, latent):
         return super().forward(latent)[:, :5]
@@ -79,7 +79,8 @@ class ArmPolicy(MultiInputActorCriticPolicy):
 
     def _build(self, lr_schedule):
         super()._build(lr_schedule)
-        self.action_net = ArmMean(self.mlp_extractor.context_width, self.features_extractor.feedback_width).to(
+        self.action_net = ArmMean(self.mlp_extractor.context_width, self.features_extractor.feedback_width,
+                                 normalization_width=self.features_extractor.normalization_width).to(
             self.device
         )
         self.optimizer = self.optimizer_class(self.parameters(), lr=lr_schedule(1), **self.optimizer_kwargs)
@@ -247,11 +248,7 @@ def train(args, suite):
             clip_range=0.2,
             policy_kwargs={
                 "features_extractor_class": GoalFeedbackFeatures,
-                "features_extractor_kwargs": {
-                    "robot": "innate_mars",
-                    "retention_context": True,
-                    "orientation_scale": cfg.feedback_orientation_scale,
-                },
+                "features_extractor_kwargs": GoalFeedbackFeatures.kwargs_for(cfg),
                 "net_arch": {"pi": [128, 128], "vf": [128, 128]},
             },
         )

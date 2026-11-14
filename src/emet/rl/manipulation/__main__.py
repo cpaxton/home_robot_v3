@@ -78,6 +78,10 @@ def resume_training(directory, env, config, fingerprint, architecture):
         )
         or bundle.manifest.get("environment", {}).get("feedback_orientation_scale", 1.0)
         != config.feedback_orientation_scale
+        or bundle.manifest.get("environment", {}).get("feedback_orientation_error", "rotation6")
+        != config.feedback_orientation_error
+        or bundle.manifest.get("environment", {}).get("feedback_reference_velocity", False)
+        != config.feedback_reference_velocity
         or bundle.manifest.get("environment", {}).get("wheel_feedback_gain", 2.0) != config.wheel_feedback_gain
         or bundle.manifest.get("environment", {}).get("physical_wheel_slew", False) != config.physical_wheel_slew
         or bundle.manifest.get("environment", {}).get("base_turn_progress_guard", False)
@@ -675,6 +679,8 @@ def train(args):
         feedback_policy=args.feedback_policy,
         restoring_yaw_feedback=args.restoring_yaw_feedback,
         feedback_orientation_scale=args.feedback_orientation_scale,
+        feedback_orientation_error=args.feedback_orientation_error,
+        feedback_reference_velocity=args.feedback_reference_velocity,
         wheel_feedback_gain=args.wheel_feedback_gain,
         physical_wheel_slew=args.physical_wheel_slew,
         whole_body_settling=args.whole_body_settling,
@@ -826,11 +832,7 @@ def train(args):
                         {
                             "restoring_yaw_feedback": config.restoring_yaw_feedback,
                             "turn_xy_tolerance": config.base_xy_tolerance,
-                            "features_extractor_kwargs": {
-                                "robot": config.robot,
-                                "retention_context": config.retention_context,
-                                "orientation_scale": config.feedback_orientation_scale,
-                            },
+                            "features_extractor_kwargs": GoalFeedbackFeatures.kwargs_for(config),
                         }
                         if config.feedback_policy
                         else {}
@@ -1024,6 +1026,8 @@ def main():
     p.add_argument("--feedback-policy", action="store_true")
     p.add_argument("--restoring-yaw-feedback", action="store_true")
     p.add_argument("--feedback-orientation-scale", type=float, default=1.0)
+    p.add_argument("--feedback-orientation-error", choices=("rotation6", "rotvec"), default="rotation6")
+    p.add_argument("--feedback-reference-velocity", action="store_true")
     p.add_argument("--wheel-feedback-gain", type=float, default=2.0)
     p.add_argument("--physical-wheel-slew", action="store_true")
     p.add_argument("--base-turn-progress-guard", action="store_true")
