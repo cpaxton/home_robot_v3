@@ -9,6 +9,59 @@ import pytest
 from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
 
 
+@pytest.mark.parametrize("capture_state", ["fresh", "unchanged", "capture_error", "assessment_error"])
+def test_failed_investigation_reports_current_evidence_without_claiming_arrival(capture_state):
+    from unittest.mock import Mock
+
+    import numpy as np
+
+    from emet.controller.habitat_nav import NavOutcome
+    from emet.memory.graph_eqa.graph_memory import NavHypothesis
+
+    agent = SimpleNamespace(
+        parameters={"eqa": {"agentic_decision_policy": "model_final"}},
+        graph_memory=None,
+        robot=None,
+        navigate_to_target_pose=Mock(return_value=NavOutcome.NO_TARGET),
+    )
+    ex = AgenticEQAExecutor(agent, "Where is the bowl?", router=False)
+    ex._target_phrase = "bowl"
+    ex._hypotheses = [NavHypothesis(phrase="bowl", obs_id=-3_000_000, xyz=np.ones(3), score=1, source="voxel")]
+    ex._investigate_hypotheses = lambda: ex._hypotheses
+    ex._hypothesis_nav_blocked = lambda oid: False
+    ex._next_approach_index = lambda *a, **kw: 0
+    ex._unused_detection_hypothesis = lambda: None
+    ex._investigate_target_xyz = lambda *a: np.ones(3)
+    ex._investigate_arrival_look_at_xy = lambda *a: (1, 1)
+    ex._robot_xyt = lambda: np.zeros(3)
+    ex._robot_xyt_world = lambda: np.zeros(3)
+    for name in ("_begin_policy_approach", "_mark_approach_tried", "_attach_gt", "_append_trace", "_policy_approached"):
+        setattr(ex, name, Mock())
+    ex._apply_close_map_after_approach = Mock(return_value=SimpleNamespace(as_dict=lambda: {}))
+    cap = {"ok": False, "status": "NO_NEW_OBS"} if capture_state == "unchanged" else {"ok": True, "obs_id": 42}
+    ex._tool_capture_and_update = Mock(return_value=cap)
+    if capture_state == "capture_error":
+        ex._tool_capture_and_update.side_effect = RuntimeError("camera disconnected")
+    ex.handle_tool = Mock(return_value={"ok": True, "visual": {"present": True}, "geometry": {"status": "admitted"}})
+    if capture_state == "assessment_error":
+        ex.handle_tool.side_effect = RuntimeError("model unavailable")
+    out = ex._tool_investigate(-3_000_000)
+    assert not out["ok"] and not out["nav_progress"] and not out["nav_finished"]
+    assert out["nav_outcome"] == "no_target"
+    ex._tool_capture_and_update.assert_called_once()
+    if capture_state in {"fresh", "assessment_error"}:
+        ex.handle_tool.assert_called_once_with("verify_siglip", {"phrase": "bowl", "obs_id": 42})
+        assert out["capture"] == cap
+        if capture_state == "assessment_error":
+            assert out["verify"]["status"] == "assessment_failed"
+        else:
+            assert out["verify"]["visual"]["present"]
+    else:
+        ex.handle_tool.assert_not_called()
+        assert out["verify"] is None
+        assert not out["capture"]["ok"]
+
+
 @pytest.mark.parametrize("policy", ["legacy", "model_final"])
 def test_per_round_state_respects_decision_policy(policy):
     from emet.memory.graph_eqa.agentic.tools import build_state_message

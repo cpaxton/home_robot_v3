@@ -395,6 +395,22 @@ def _tool_investigate(
     self._attach_gt(row, target)
     self._append_trace(row)
     if not nav_progress:
+        # A rejected route does not invalidate the camera's actual view. Match
+        # exploration feedback: acquire at the measured pose, without aiming at
+        # the intended arrival or claiming that navigation succeeded.
+        verify_out = None
+        try:
+            cap = self._tool_capture_and_update()
+        except Exception as exc:
+            cap = {"ok": False, "status": "capture_failed", "error": str(exc)[:200]}
+        if cap.get("ok") and cap.get("obs_id") is not None and self.mode == "answer":
+            try:
+                self._policy_approached(hypothesis_id, int(cap["obs_id"]))
+                verify_out = self.handle_tool(
+                    "verify_siglip", {"phrase": self._siglip_phrase(phrase), "obs_id": int(cap["obs_id"])}
+                )
+            except Exception as exc:
+                verify_out = {"ok": False, "status": "assessment_failed", "error": str(exc)[:200]}
         close_map = self._apply_close_map_after_approach(
             oid,
             hyp=hyp,
@@ -411,8 +427,8 @@ def _tool_investigate(
             "nav_finished": bool(finished),
             "nav_status_code": status,
             "nav_note": note,
-            "capture": None,
-            "verify": None,
+            "capture": cap,
+            "verify": verify_out,
             "close_map": close_map.as_dict(),
         }
 

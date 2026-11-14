@@ -38,7 +38,7 @@ that proposes the wrong object. The existing opt-in providers remain separate.
 
 ## Contract validation
 
-240 tests pass across CHAT/HTTP history, tool dispatch/rendering, controller
+244 tests pass across CHAT/HTTP history, tool dispatch/rendering, controller
 grounding, visual consumers, EQA room/navigation, relative motion and CPU MuJoCo
 geometry. The HTTP test uses controlled transport and robot observations: it
 checks that a partial move's resulting image, original image and measured
@@ -112,3 +112,34 @@ Exact requests confirm the conflicting legacy stop instructions in candidate
 per-round state. The next frozen pair tests their removal with identical
 model, scan, budget, provider and range settings. Preserve this mixed result
 separately; do not relabel it as a successful recovery qualification.
+
+## Repeat and failed-investigation feedback repair
+
+Run `closer-view-molmo-20261113-r2` freezes the same baseline and candidate
+`b8728dcf`, with the state/completion correction. Both episodes complete;
+main again passes bowl/fails microwave (query/episode 93.78/143.18 s), while
+the candidate fails both (100.93/150.70 s). Exact candidate requests confirm
+the legacy no-submit/limited-choice instructions are absent. This is a red
+task-quality gate, not a successful correction or a runtime win.
+
+The initial bowl is plainly visible in the manually checked candidate image.
+Both arms first choose an investigation whose planner returns `no_target`.
+That tool returns no capture or assessment on failure. Main subsequently
+chooses exploration, which captures/assesses even when navigation fails and
+thereby admits the bowl. The candidate instead spends rounds on floor/motion
+recovery without obtaining that object admission. Its first failure is not
+evidence that the model could not see the bowl.
+
+Make failed investigation consistent with failed exploration: acquire a real
+new view at the measured current pose and return its explicit assessment
+alongside the unchanged navigation failure. Do not aim as if the intended
+arrival happened, repeat motion, synthesize object coordinates, or assess a
+stale/nonadvancing capture. Capture/model errors remain separate fields and
+cannot mask the original navigation receipt. Four new regressions cover fresh,
+nonadvancing, disconnected-camera and failed-assessment outcomes.
+
+The follow-up is one **candidate-only** Molmo diagnostic with unchanged model,
+provider and budgets, retained separately as `closer-view-molmo-20261113-r3`.
+Its purpose is to check this missing feedback path. It is not a new paired
+comparison and cannot establish superiority over main. Broader EQA and complete
+pick/place acceptance remain outstanding.
