@@ -157,6 +157,35 @@ Rules:
 - Choose one valid action. The executor applies valid choices unchanged.
 - Do not output reasoning."""
 
+_EQA_FORMAT_BLOCK_MODEL_FINAL = """\
+# Response format
+Respond with ONLY a JSON object:
+{"current_room": "<room or unknown>", "in_target_area": true|false, "tool_calls": [{"name": "<tool>", "arguments": {...}}], "message": ""}
+
+Rules:
+- Choose the next observation or action from the images, dialogue and measured
+  tool outcomes. Tool descriptions define the available capabilities; there is
+  no required INVESTIGATE/EXPLORE sequence.
+- Current-room labels describe where the robot is now, not where it wants to go.
+  Use unknown when the current room cannot be established from evidence.
+- Graph labels, detector proposals and retrieval scores are search hints.
+  A missing graph label is not proof that an object is absent.
+- Visual presence and admitted object geometry are separate. A rejected mask
+  or depth limit does not erase positive visual evidence. Unverified image
+  proposals and their bearings are observation cues, never object positions,
+  free-space evidence or permission for manipulation.
+- If another view is needed, choose an available sensing or bounded movement
+  tool. Read its actual measured progress, rejection, capture and verification
+  before deciding the next dependent action. Do not keep retrying an unchanged
+  failed move. Historical image bearings belong to their source capture.
+- Choose one next action when later actions depend on its result. The executor
+  must validate motion and geometry independently of model confidence.
+- You decide the final answer from the available evidence. For multiple-choice
+  questions use the exact option text. For object-localization tasks, visible
+  presence alone does not establish the required metric geometry.
+- Do not invent observations, measured effects, or successful execution.
+"""
+
 # Back-compat alias (canonical).
 _EQA_FORMAT_BLOCK = _EQA_FORMAT_BLOCK_CANONICAL
 
@@ -337,7 +366,10 @@ def build_graph_eqa_system_prompt(
     """Fixed routing system prompt (identity + tools + format). Keep byte-stable per mode."""
     tools_block = get_tool_descriptions_for_prompt(tools)
     policy = str(room_policy or "canonical").strip().lower()
-    if str(decision_policy or "legacy").strip().lower() == "grounded_v2":
+    policy_name = str(decision_policy or "legacy").strip().lower()
+    if policy_name == "model_final":
+        fmt = _EQA_FORMAT_BLOCK_MODEL_FINAL
+    elif policy_name == "grounded_v2":
         fmt = _EQA_FORMAT_BLOCK_GROUNDED
     else:
         fmt = _EQA_FORMAT_BLOCK_LLM if policy == "llm" else _EQA_FORMAT_BLOCK_CANONICAL
@@ -349,7 +381,13 @@ def build_graph_eqa_system_prompt(
             "These use validated navigation and do not grant object localization. "
             "Read measured movement, rejection reasons and the new capture before retrying.\n"
         )
-    return f"{_EQA_IDENTITY}\n\n{tools_block}\n\n{fmt}{movement}"
+    identity = (
+        "You are a robot answering questions or finding objects in a home. "
+        "Use the available images, dialogue, memory and tool feedback to decide what to do next."
+        if policy_name == "model_final"
+        else _EQA_IDENTITY
+    )
+    return f"{identity}\n\n{tools_block}\n\n{fmt}{movement}"
 
 
 def _graph_stats_line(gm: Any) -> str:

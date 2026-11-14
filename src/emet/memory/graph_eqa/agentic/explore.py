@@ -9,7 +9,6 @@ from __future__ import annotations
 import math
 import os
 import re
-import time
 from pathlib import Path
 from typing import Any
 
@@ -586,8 +585,7 @@ def _tool_explore_frontier(self, toward: str = "", *, frontier_id: str = "") -> 
     start = self._robot_xyt_world()
     if start is None:
         start = np.array([0.0, 0.0, 0.0])
-    # Arrival should face the frontier so the arrival RGB looks into
-    # uncovered space (tilt 0 via look_ahead), not at the floor.
+    # Face the frontier in yaw; preserve the task/head posture through arrival.
     target_theta: float | None = None
     if frontier_xyz is not None:
         try:
@@ -680,38 +678,9 @@ def _tool_explore_frontier(self, toward: str = "", *, frontier_id: str = "") -> 
             _logger.warning(f"explore no-progress goal block failed: {exc}")
     if motion_progress:
         self._refresh_room_after_motion()
-        # Face frontier and capture at arrival with a level head (look_ahead
-        # tilt 0) so arrival RGB carries SigLIP features — not a
-        # pre-move sweep and not look_front (-30°).
-        robot = getattr(agent, "robot", None)
-        if robot is not None:
-            try:
-                la = getattr(robot, "look_ahead", None)
-                if callable(la):
-                    try:
-                        la(blocking=True, timeout=10.0)
-                    except TypeError:
-                        la(blocking=True)
-                else:
-                    head_to = getattr(robot, "head_to", None)
-                    if callable(head_to):
-                        from emet.motion.constants import look_ahead
-
-                        try:
-                            head_to(float(look_ahead[0]), float(look_ahead[1]), blocking=True)
-                        except TypeError:
-                            head_to(float(look_ahead[0]), float(look_ahead[1]))
-                from emet.controller.dynamem.constants import DYNAMEM_HEAD_SETTLE_S
-
-                time.sleep(float(DYNAMEM_HEAD_SETTLE_S))
-                wait_obs = getattr(robot, "wait_for_obs", None)
-                if callable(wait_obs):
-                    try:
-                        wait_obs(timeout=5.0)
-                    except TypeError:
-                        wait_obs()
-            except Exception as exc:  # noqa: BLE001
-                _logger.warning(f"explore arrival look_ahead failed: {exc}")
+        # Navigation/floor inspection already own gaze and observation freshness.
+        # Keep that task view instead of forcing a level head: an arbitrary
+        # reset can remove a visible target from the arrival image entirely.
     cap = self._tool_capture_and_update()
     look_retry = False
     # After a successful explore nav, a mid-floor / already-mapped goal often yields

@@ -58,6 +58,12 @@
       the bowl control 0/3 versus 3/3 cached; retain multiple opt-in providers,
       preserve semantic rejections and avoid a global provider/depth default flip.
       Offline diagnostic: 24/24 attempts complete; no task-quality gain claimed.
+      Coordinator-visible recovery now preserves task gaze, source-bound image
+      proposal bearings, nested geometry feedback and camera observations across
+      CHAT tool rounds; 233 contract/CPU geometry checks pass. The central model
+      chooses the next sensing/movement action; no automatic approach or depth
+      relaxation. Complete the frozen live Molmo pair before claiming recovery.
+      Plan: `docs/experiments/closer_view_feedback_20261113.md`.
 - [ ] Emit actual per-episode simulation duration, model inference cost and
       invocation overhead in paper-run manifests. Clock probes and reported
       episode wall metrics alone do not measure complete task simulation time.
