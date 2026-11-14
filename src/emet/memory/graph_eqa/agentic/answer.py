@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 from typing import Any
 
@@ -161,7 +162,9 @@ def _forced_answer_fallback(
     if not self._force_answer and self._confirmed_vlm_answer_evidence() is None:
         return self._abstain_unverified(reason=reason)
 
-    out = self._do_submit_answer(prefer_answer=prefer_answer)
+    # Legacy fallback preferences are not explicit coordinator commits. At a
+    # model-final budget boundary, ask the final model to read the evidence.
+    out = self._do_submit_answer(prefer_answer="" if self.decision_policy == "model_final" else prefer_answer)
     if self.decision_policy == "model_final":
         decision = getattr(self, "_final_answer_decision", None)
         self._append_trace(
@@ -853,7 +856,6 @@ def _do_submit_answer(self, prefer_answer: str = "") -> dict[str, Any]:
 
     agent = self.agent
     gm = self.graph_memory
-    release_siglip_for_vlm(agent)
     discord_text = ""
     confidence = False
     relevant_images: list[Any] = []
@@ -861,7 +863,24 @@ def _do_submit_answer(self, prefer_answer: str = "") -> dict[str, Any]:
     query_ans = ""
     answer_source = "prefer"
     force_obs_ids: list[int] | None = None
-    if gm is not None and hasattr(gm, "query_answer"):
+    explicit_model_answer = self.decision_policy == "model_final" and bool(prefer)
+    if explicit_model_answer:
+        # submit_answer is a commit, not an unannounced request for another
+        # model to replace the coordinator's explicit answer. Geometry admission
+        # and manipulation permissions remain independent of this text.
+        answer, answer_source = prefer, "model_final"
+        confidence = bool(self._verified)
+        discord_text = f"Answer:{answer}\nConfidence:{confidence}\n[submit_source:{answer_source}]"
+        if gm is not None:
+            # Do not let a previous query/episode's raw answer masquerade as
+            # this submission in Habitat exports. The original coordinator
+            # response remains in the episode dialogue/request trace.
+            gm.last_eqa_raw = "[coordinator_submit]\n" + json.dumps(
+                {"answer": answer, "confidence": confidence, "source": "coordinator_submit"}
+            )
+            gm.last_eqa_parsed = ("", answer, confidence, "", "explicit coordinator submission")
+    elif gm is not None and hasattr(gm, "query_answer"):
+        release_siglip_for_vlm(agent)
         # Prefer verified observation as Image 1 (query_answer must honor force_obs_ids;
         # setting last_eqa_obs_ids alone was overwritten by diversified selection).
         confirmed_evidence = self._confirmed_vlm_answer_evidence()
@@ -919,17 +938,6 @@ def _do_submit_answer(self, prefer_answer: str = "") -> dict[str, Any]:
             confidence = False
         if self.decision_policy == "model_final":
             answer, answer_source = (query_ans or "Unknown"), "model_final"
-            letter = self._mcq_letter_from_text(answer)
-            self._final_answer_decision = FinalAnswerDecision(
-                answer=answer,
-                answer_text=answer,
-                source=answer_source,
-                # The current answer schema supplies boolean confidence, not
-                # a calibrated scalar probability.
-                confidence=float(bool(confidence)),
-                choice_index=ord(letter) - ord("A") if letter else None,
-            )
-            self._answer_provenance = answer_source
         else:
             answer, answer_source = self._resolve_submit_answer_text(
                 prefer_answer=prefer,
@@ -957,12 +965,16 @@ def _do_submit_answer(self, prefer_answer: str = "") -> dict[str, Any]:
         answer_source = "query"
         if self.decision_policy == "model_final":
             answer_source = self._answer_provenance = "model_final"
-            self._final_answer_decision = FinalAnswerDecision(
-                answer=answer,
-                answer_text=answer,
-                source=answer_source,
-                confidence=0.0,
-            )
+    if self.decision_policy == "model_final":
+        letter = self._mcq_letter_from_text(answer)
+        self._answer_provenance = "model_final"
+        self._final_answer_decision = FinalAnswerDecision(
+            answer=answer,
+            answer_text=answer,
+            source="model_final",
+            confidence=float(bool(confidence)),
+            choice_index=ord(letter) - ord("A") if letter else None,
+        )
     if self.decision_policy != "model_final":
         confidence = self._downgrade_unattached_count_none(str(answer or ""), bool(confidence))
     self._append_trace(
@@ -975,6 +987,7 @@ def _do_submit_answer(self, prefer_answer: str = "") -> dict[str, Any]:
             "answer_source": answer_source,
             "query_answer": query_ans or None,
             "prefer_answer": prefer or None,
+            "submission_mode": "explicit" if explicit_model_answer else "model_query",
             "vlm_suggested": (None if self._last_vlm_assess is None else self._last_vlm_assess.get("suggested_answer")),
             "answerable": self._evidence_policy.state == AgenticState.ANSWER,
             "answerability_probability": (

@@ -160,7 +160,8 @@ EQA_SKILL_SPECS: tuple[SkillSpec, ...] = (
         modes=frozenset({AgentMode.EQA_EPISODE}),
         description=(
             "Submit the final semantic answer text. For MCQ questions, use the selected "
-            "option text without its letter label. Completion follows the active episode policy. "
+            "option text without its letter label. In model-final mode a supplied answer is committed; "
+            "omit it to request a final model read of the evidence. Completion follows the active episode policy. "
             "For localization tasks, a semantic answer cannot replace admitted object geometry."
         ),
         parameters={
