@@ -48,10 +48,12 @@ class NativeTableAdapter:
     policy = 'legacy'
     payload_binding = 'preserve'
     release_limits = None
+    pregrasp_fallback_offset_m = None
 
     def __init__(self, robot, *, model=None, policy='legacy'):
         selected = native_policy(policy)
         self.policy, self.payload_binding, self.release_limits = selected.name, selected.payload_binding, selected.release_limits
+        self.pregrasp_fallback_offset_m = selected.pregrasp_fallback_offset_m
         if policy == 'bounded_release':
             self.grasp_yaw_offsets = FINE_GRASP_YAWS
         if model is None:
@@ -223,7 +225,7 @@ class NativeTableAdapter:
         self.planning_ik_calls += 1
         return executor.plan_pose(target, rotation, ordered_groups=ordered_groups)
 
-    def _grasp_candidates(self, executor, before, point, frames, pinch_offset, obj):
+    def _grasp_candidates(self, executor, before, point, frames, pinch_offset, obj, *, approach_offset=(0., .08, .04)):
         for frame, grasp_height in frames:
             for yaw in self.grasp_yaw_offsets:
                 self.data.qpos[:] = before
@@ -233,7 +235,7 @@ class NativeTableAdapter:
                 rotation = np.array([[c, -sn, 0], [sn, c, 0], [0, 0, 1]]) @ frame
                 grasp = point - rotation @ pinch_offset + [0, 0, grasp_height]
                 executor.grasp_targets = [(grasp + delta, rotation) for delta in
-                                          ([0, .08, .04], [0, 0, 0], [0, 0, .17])]
+                                          (approach_offset, [0, 0, 0], [0, 0, .17])]
                 _, error = executor.plan_gripper_open()
                 if error:
                     self._record_rejection('gripper_open', error, executor)
@@ -249,6 +251,14 @@ class NativeTableAdapter:
                     paths.append(path)
                 if len(paths) == 3:
                     yield rotation, paths
+
+    def _grasp_options(self, executor, before, point, frames, pinch_offset, obj):
+        # Preserve every existing candidate and the common IK budget before
+        # trying a collision-checked vertical approach. No grasp is executed here.
+        yield from self._grasp_candidates(executor, before, point, frames, pinch_offset, obj)
+        if self.pregrasp_fallback_offset_m is not None:
+            yield from self._grasp_candidates(executor, before, point, frames, pinch_offset, obj,
+                                             approach_offset=self.pregrasp_fallback_offset_m)
 
     def plan(self, task_ref='', object_name='', receptacle_name='', placement_region=None):
         with self.lock:
@@ -321,7 +331,7 @@ class NativeTableAdapter:
                         for fraction in ((0.,) if pitch == np.pi / 12 else (0., .25, .4)):
                             frames.append((frame, fraction * height))
                     frames.extend([(home_rotation, 0.), (rotation, 0.)])
-                    for rotation, paths in self._grasp_candidates(executor, before, point, frames, pinch_offset, obj):
+                    for rotation, paths in self._grasp_options(executor, before, point, frames, pinch_offset, obj):
                         executor.grasp_paths = paths
                         lifted = self.data.qpos.copy()
                         # Reuse the placement stack's obstacle-subtracted support search.

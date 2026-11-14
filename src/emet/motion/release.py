@@ -30,12 +30,14 @@ class ReleaseLimits:
     offsets_m: tuple[float, ...] = (0.003, 0.01, 0.02)
     max_adjustments: int = 2
     height_joint: str = "joint_lift"
+    open_settle_timeout_s: float = 3.0
 
     def __post_init__(self):
-        values = [self.max_raise_m, self.max_drop_m, self.clearance_m, *self.offsets_m]
+        values = [self.max_raise_m, self.max_drop_m, self.clearance_m, self.open_settle_timeout_s, *self.offsets_m]
         if (
             not np.isfinite(values).all()
             or min(values) < 0
+            or self.open_settle_timeout_s <= 0
             or type(self.max_adjustments) is not int
             or self.max_adjustments < 0
             or not self.offsets_m
@@ -361,10 +363,14 @@ def wait_native_open(executor):
     if ex.input_mode != "privileged":
         return PhysicalMotionResult(False, "native_execution_unavailable", "release")
     scratch = mujoco.MjData(ex.model)
-    active = ex._settling_window(3.0)
     released = ex.released_collision
+    # Planning and the opening ACK may advance native time. Anchor the phase
+    # budget to fresh post-command feedback, not the saved placement snapshot.
+    ex.synchronize(ex.data)
+    active = ex._settling_window(released.limits.open_settle_timeout_s)
     stable_since = None
     last_reason = "gripper_open_tracking_failed"
+    evidence = {}
     while active():
         ex.synchronize(ex.data)
         mujoco.mj_copyData(scratch, ex.model, ex.data)
@@ -391,13 +397,22 @@ def wait_native_open(executor):
             np.linalg.norm(scratch.qvel[dof : dof + 3]) <= 0.01
             and np.linalg.norm(scratch.qvel[dof + 3 : dof + 6]) <= 0.1
         )
-        if (
-            arrived
-            and not touching
-            and supported
-            and settled
-            and not released.configuration_collides(ex.model, scratch)
-        ):
+        geometry_clear = (
+            not released.configuration_collides(ex.model, scratch)
+            if arrived and not touching and supported and settled
+            else None
+        )
+        evidence = {
+            "arrived": arrived,
+            "fingertip_contact": bool(touching),
+            "supported": bool(supported),
+            "settled": bool(settled),
+            "geometry_clear": geometry_clear,
+            "linear_speed_m_s": float(np.linalg.norm(scratch.qvel[dof : dof + 3])),
+            "angular_speed_rad_s": float(np.linalg.norm(scratch.qvel[dof + 3 : dof + 6])),
+            "timeout_s": released.limits.open_settle_timeout_s,
+        }
+        if geometry_clear:
             if stable_since is None:
                 stable_since = ex._motion_time()
             if ex._motion_time() - stable_since >= 0.1:
@@ -415,4 +430,5 @@ def wait_native_open(executor):
         if arrived:
             last_reason = "release_verify_failed"
         time.sleep(0.05)
+    ex.event(phase="release_check", reason=last_reason, **evidence)
     return PhysicalMotionResult(False, last_reason, "release")

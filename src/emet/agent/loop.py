@@ -652,6 +652,22 @@ def run_agent_with_robot(
     camera_debug = env_agent_camera_debug()
     if parameters is None:
         parameters = get_parameters(agent_config, robot=robot)
+    _merge_chat_agent_manip_parameters(
+        parameters,
+        agent_config=agent_config,
+        robot=robot,
+        agent_section=agent_section,
+    )
+
+    native_tamp_policy = parameters.get("agent", {}).get("native_tamp_policy", "legacy")
+    if native_tamp_policy not in ("legacy", "bounded_release"):
+        raise ValueError("invalid_native_tamp_policy")
+    if native_tamp_policy != "legacy":
+        from emet.simulation.sim_manipulation import resolve_agent_manip_mode
+        configured = parameters.get("agent", {})
+        mode = resolve_agent_manip_mode(config_mode=configured.get("manip_mode"), visual_servo=bool(kwargs.get("visual_servo", False)))
+        if mode != "physical" or configured.get("tamp_inputs", "observed") != "privileged":
+            raise ValueError("native_tamp_policy requires physical mode with privileged simulation inputs")
     if embodied_overlay is None:
         embodied_overlay = load_embodied_agent_overlay(agent_config)
     memory_backend = normalize_memory_backend(memory_backend)
@@ -719,12 +735,6 @@ def run_agent_with_robot(
             "Start the server with the same robot: emet serve mujoco --robot <name>"
         )
 
-    _merge_chat_agent_manip_parameters(
-        parameters,
-        agent_config=agent_config,
-        robot=robot,
-        agent_section=agent_section,
-    )
 
     executor = DynamemTaskExecutor(
         robot_client,
@@ -835,10 +845,6 @@ def run_agent_with_robot(
             voxel_map=executor.agent.get_voxel_map(),
         )
     voxel_memory_backend = get_memory_backend("dynamem", voxel_map=executor.agent.get_voxel_map())
-    native_tamp_policy = parameters.get("agent", {}).get("native_tamp_policy", "legacy")
-    if native_tamp_policy != "legacy" and (executor._manip_mode != "physical" or executor._tamp_inputs != "privileged"):
-        robot_client.stop()
-        raise ValueError("native_tamp_policy requires physical mode with privileged simulation inputs")
     if native_task_config is not None:
         from emet.controller.task.tamp.native_transfer import NativeTableTransferProvider
         from emet.controller.task.tamp.task_session import TaskSession

@@ -111,6 +111,8 @@ def test_bounded_release_protocol_and_constructor_wiring(runner, monkeypatch, tm
         "offsets_m": [0.003, 0.01, 0.02],
         "max_adjustments": 2,
         "tracking_reserve": "positive_command_fk_minus_measured_ee_z",
+        "height_joint": "joint_lift",
+        "open_settle_timeout_s": 3.0,
     }
     assert "src/emet/motion/release.py" in protocol["source_sha256"]
 
@@ -154,6 +156,7 @@ def test_shared_native_policy_prepare_records_effective_policy(runner, monkeypat
     assert protocol["native_policy"] == "bounded_release"
     assert protocol["policy"] == "fine_yaw" and protocol["payload_binding"] == "verified_lift"
     assert protocol["release_policy"] == "bounded"
+    assert protocol["release_limits"]["open_settle_timeout_s"] == 12.0
 
 
 @pytest.mark.parametrize(

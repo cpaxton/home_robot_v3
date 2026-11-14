@@ -148,3 +148,10 @@ invalidated when the configured policy changes, and multi-step scene bindings
 include the policy identity. Task JSON remains the same versioned goal/scene
 contract; motion-policy options are not new LLM tools or object-specific features.
 See [qualification protocol](../plans/2026-11-13_native_tamp_qualification.md).
+
+The November 13 follow-up keeps existing grasp candidates first and adds a
+collision-checked vertical pregrasp only after they fail, sharing the original
+IK cap. The native policy permits up to 12 simulated seconds for measured
+supported settling before retreat, matching the existing native verifier budget;
+this changes the wait budget, not the speed, collision or retention criteria.
+Invalid policy/mode/input combinations are rejected before starting the client.

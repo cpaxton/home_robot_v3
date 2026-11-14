@@ -16,7 +16,7 @@ from pathlib import Path
 import mujoco
 
 from emet.config.sim_launch_config import load_sim_launch_config_from_path
-from emet.eval.native_chat_scoring import failure_boundaries, integration_evidence
+from emet.eval.native_chat_scoring import completion_receipt, failure_boundaries, integration_evidence
 from emet.eval.native_table_live import live_table_robot
 from emet.eval.native_table_scoring import goal_predicates, load_placement_regions
 from emet.simulation.mujoco_server_stretch import default_scene_xml_path
@@ -114,17 +114,22 @@ def main():
         envelopes = []
         for row in outcomes:
             try:
-                envelopes.append(json.loads(row.split('] ', 1)[1]))
+                parsed = json.loads(row.split('] ', 1)[1])
+                if isinstance(parsed, dict):
+                    envelopes.append(parsed)
             except (ValueError, IndexError):
                 pass
         rejection_seen = any(e.get('code') == 'unknown_plan' for e in envelopes)
-        result = {'task_passed': rc == 0 and stable and not any(r['satisfied'] for r in initial.values()),
+        physical_goals = rc == 0 and stable and not any(r['satisfied'] for r in initial.values())
+        receipt_complete = completion_receipt(envelopes, multi_step=args.native_task_config is not None)
+        result = {'physical_goals_satisfied': physical_goals, 'execution_completion_verified': receipt_complete,
+                  'task_passed': physical_goals and receipt_complete,
                   'agent_integration': integration_evidence(rows),
                   'cli_exit_code': rc, 'failure_boundaries': failure_boundaries(rows),
                   'requested_rejection_observed': rejection_seen if args.reject_first else None,
                   'final_predicates': goal_predicates(robot, goals), 'tool_outcomes': envelopes,
                   'audit_commands': len(audit), 'forbidden_commands': sum(bool(r.get('forbidden')) for r in audit)}
-        result['passed'] = result['task_passed'] and bool(audit) and result['forbidden_commands'] == 0 and (
+        result['passed'] = result['task_passed'] and result['agent_integration']['result_contracts_valid'] is True and bool(audit) and result['forbidden_commands'] == 0 and (
             not args.reject_first or rejection_seen) and not any(
                 row['unexpected_tools'] for row in result['failure_boundaries'])
         (out / 'summary.json').write_text(json.dumps(result, indent=2))

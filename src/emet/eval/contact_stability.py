@@ -43,7 +43,7 @@ class ContactTrace:
 
     def record(self, obj, executor, row, *, motion_phase=None):
         phase = row.get('phase', '')
-        if phase not in self.phases and phase not in ('release_adjustment', 'release_adjustment_complete', 'release_open_verified') and not phase.startswith(('grasp_replan', 'release_plan')):
+        if phase not in self.phases and phase not in ('release_adjustment', 'release_adjustment_complete', 'release_open_verified', 'release_check') and not phase.startswith(('grasp_replan', 'release_plan')):
             return
         start = time.monotonic()
         data = executor.data

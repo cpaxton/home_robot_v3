@@ -222,3 +222,11 @@ The [household experiment plan](plans/2026-10-18_household_agent_tamp.md) select
 RoboCasa365 composites and MolmoSpaces episode specifications for the next gate.
 Its JSON protocol is design-only; kitchen native-contact integration and the
 expanded household sweep are not yet completed.
+
+The [November 13 native qualification](experiments/tamp_native_qualification_20261113.md)
+expands the population to eight task candidates and four interface-boundary
+checks. Its first complete run passes 1/8 tasks and all four boundary checks,
+exposing a too-short release-settling budget and restrictive pregrasp approaches.
+The shared opt-in policy now has bounded fixes under developmental replay;
+these results do not replace the earlier agent baseline or qualify observed
+navigation/exploration. See the [qualification plan](plans/2026-11-13_native_tamp_qualification.md).

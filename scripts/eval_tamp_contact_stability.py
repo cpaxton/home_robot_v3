@@ -17,6 +17,7 @@ import subprocess
 import time
 import traceback
 import xml.etree.ElementTree as ET
+from dataclasses import asdict
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -75,6 +76,15 @@ def prepare_fixture(output, initial_positions, shift, quaternions=None):
     return fixture / 'scene.xml'
 
 
+
+def effective_release_limits(args):
+    if args.native_policy is not None:
+        return native_policy(args.native_policy).release_limits
+    if args.release_policy == 'bounded':
+        return ReleaseLimits(args.max_release_raise, args.max_release_drop, clearance_m=args.release_clearance)
+    return None
+
+
 def prepare(args, pilot, case, out):
     validate_native_task_config(case['task'])
     scene = prepare_fixture(out, case.get('initial_object_positions', pilot['initial_object_positions']), case['initial_x_shift_m'], case.get('initial_object_quaternions'))
@@ -101,15 +111,14 @@ def prepare(args, pilot, case, out):
         hashes[name] = sha256(path)
     protocol = {'case_id': case['case_id'], 'instruction': case['instruction'], 'task': case['task'],
                 'policy': args.policy, 'native_policy': args.native_policy,
+                'native_policy_config': asdict(native_policy(args.native_policy)) if args.native_policy else None,
                 'scenario': case.get('scenario', 'task'), 'case': case,
                 'grasp_yaw_offsets_rad': GRASP_POLICIES.get(args.policy),
                 'payload_binding': args.payload_binding,
                 'payload_reference_changes_at_verified_lift': args.payload_binding == 'verified_lift',
                 'release_policy': args.release_policy,
-                'release_limits': {'max_raise_m': args.max_release_raise, 'max_drop_m': args.max_release_drop,
-                                   'clearance_m': args.release_clearance,
-                                   'offsets_m': list(ReleaseLimits(args.max_release_raise, args.max_release_drop).offsets_m),
-                                   'max_adjustments': 2, 'tracking_reserve': 'positive_command_fk_minus_measured_ee_z'} if args.release_policy == 'bounded' else None,
+                'release_limits': {**asdict(effective_release_limits(args)),
+                                   'tracking_reserve': 'positive_command_fk_minus_measured_ee_z'} if effective_release_limits(args) else None,
                 'source_sha': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=REPO, text=True).strip(),
                 'source_dirty': bool(subprocess.check_output(['git', 'status', '--porcelain'], cwd=REPO, text=True)),
                 'source_sha256': hashes, 'case_file_sha256': sha256(args.case_file),
@@ -177,8 +186,7 @@ def run(args, pilot, case, out, result):
             adapter = TracedNativeAdapter(robot, model=model, trace=trace, policy=args.policy if args.native_policy is None else None,
                                           native_policy=args.native_policy or 'legacy',
                                           payload_binding=args.payload_binding,
-                                          release_limits=ReleaseLimits(args.max_release_raise, args.max_release_drop,
-                                              clearance_m=args.release_clearance) if args.release_policy == 'bounded' else None)
+                                          release_limits=effective_release_limits(args))
             provider = NativeTableTransferProvider(robot, case['task'], adapter=adapter)
             session = TaskSession(provider)
             tools = {t.name: t for t in get_tools({'robot': robot, 'manip_mode': 'physical',

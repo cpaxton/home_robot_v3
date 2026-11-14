@@ -211,15 +211,18 @@ def test_falling_payload_volume_rejects_an_obstacle_below_it():
 
 
 @pytest.mark.parametrize("lingering_contact", (False, True))
-def test_open_ack_requires_measured_joint_arrival_and_contact_release(monkeypatch, lingering_contact):
+@pytest.mark.parametrize("initial_clock", (0.0, 20.0))
+def test_open_ack_requires_measured_joint_arrival_and_contact_release(monkeypatch, lingering_contact, initial_clock):
     ex = rig()
     ex.use_sim_time = True
-    ex.released_collision = SimpleNamespace(obj="payload", support="table", configuration_collides=lambda *args: False)
+    ex.released_collision = SimpleNamespace(
+        obj="payload", support="table", limits=ReleaseLimits(0.04, 0.04), configuration_collides=lambda *args: False
+    )
     ticks = [0]
 
     def synchronize(data):
         ticks[0] += 1
-        data.time = ticks[0] * 0.05
+        data.time = initial_clock + ticks[0] * 0.05
         if ticks[0] >= 4:
             data.qpos[ex.model.joint("left").qposadr[0]] = 0.02
             data.qpos[ex.model.joint("right").qposadr[0]] = 0.02
@@ -290,3 +293,33 @@ def test_invalid_limits_rejected(kwargs):
     values.update(kwargs)
     with pytest.raises(ValueError, match="invalid_release_limits"):
         ReleaseLimits(**values)
+
+
+@pytest.mark.parametrize("timeout,success", [(3.0, False), (12.0, True)])
+def test_open_support_wait_keeps_motion_limits_until_late_settling(monkeypatch, timeout, success):
+    ex = rig()
+    ex.use_sim_time = True
+    ex.released_collision = SimpleNamespace(
+        obj="payload",
+        support="table",
+        limits=ReleaseLimits(0.04, 0.04, open_settle_timeout_s=timeout),
+        configuration_collides=lambda *args: False,
+    )
+    dof = int(ex.model.jnt_dofadr[ex.model.body("payload").jntadr[0]])
+    addr = int(ex.model.jnt_qposadr[ex.model.body("payload").jntadr[0]])
+
+    def synchronize(data):
+        data.time += 0.05
+        for name in ("left", "right"):
+            data.qpos[ex.model.joint(name).qposadr[0]] = 0.02
+        data.qpos[addr + 2] = 0.0199
+        data.qvel[dof] = 0.02 if data.time < 5.8 else 0.0
+        mujoco.mj_kinematics(ex.model, data)
+
+    ex.synchronize = synchronize
+    monkeypatch.setattr("emet.motion.release.time.sleep", lambda _: None)
+    result = wait_native_open(ex)
+    assert result.success is success
+    if success:
+        assert ex.data.time >= 5.9
+    ex.command_joints.assert_not_called()

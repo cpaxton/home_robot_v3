@@ -416,3 +416,28 @@ def test_policy_change_invalidates_cached_native_handles(native):
     assert current is not old and current.policy == 'bounded_release'
     assert current.execute('old')['code'] == 'unknown_plan'
     robot.arm_to.assert_not_called()
+
+
+def test_bounded_grasp_fallback_preserves_old_order_and_budget():
+    adapter = object.__new__(NativeTableAdapter)
+    adapter.policy, adapter.planning_ik_calls, adapter.max_planning_ik_calls = 'bounded_release', 0, 2
+    adapter.pregrasp_fallback_offset_m = (0., 0., .08)
+    seen = []
+    def candidates(*args, approach_offset=(0., .08, .04)):
+        adapter._plan_candidate_pose(SimpleNamespace(plan_pose=lambda *a, **k: ([], None)), None, None)
+        seen.append(approach_offset)
+        yield approach_offset, []
+    adapter._grasp_candidates = candidates
+    assert len(list(adapter._grasp_options(None, None, None, None, None, None))) == 2
+    assert seen == [(0., .08, .04), (0., 0., .08)]
+    assert adapter.planning_ik_calls == adapter.max_planning_ik_calls == 2
+    with pytest.raises(ValueError, match='no_plan_within_budget'):
+        list(adapter._grasp_options(None, None, None, None, None, None))
+
+
+def test_legacy_grasp_search_has_no_extra_approach():
+    adapter = object.__new__(NativeTableAdapter)
+    adapter._grasp_candidates = Mock(return_value=iter([(object(), [])]))
+    assert len(list(adapter._grasp_options(None, None, None, None, None, None))) == 1
+    assert adapter._grasp_candidates.call_count == 1
+    assert not adapter._grasp_candidates.call_args.kwargs

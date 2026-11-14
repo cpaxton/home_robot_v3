@@ -27,11 +27,18 @@ class NativePolicy:
     name: str
     payload_binding: str = "preserve"
     release_limits: ReleaseLimits | None = None
+    pregrasp_fallback_offset_m: tuple[float, float, float] | None = None
 
 
 def native_policy(name):
     require_native_policy(name)
-    return NativePolicy(name) if name == "legacy" else NativePolicy(name, "verified_lift", ReleaseLimits(0.04, 0.04))
+    return (
+        NativePolicy(name)
+        if name == "legacy"
+        else NativePolicy(
+            name, "verified_lift", ReleaseLimits(0.04, 0.04, open_settle_timeout_s=12.0), (0.0, 0.0, 0.08)
+        )
+    )
 
 
 def bind_loaded_payload(adapter, plan, *, rebind=True):

@@ -86,3 +86,22 @@ under `.tamp-runs/native-qualification-20261113/`; the complete replacement run
 uses `.tamp-runs/native-qualification-clock-20261113/`. This repair changes
 throughput, not physics parameters or task acceptance. The RGBD GPU throughput
 probe from #228 is not rerun here; native CPU qualification remains camera-free.
+
+## Completed qualification and selected follow-up
+
+The complete `cbfebe35` population passes 1/8 tasks, 4/18 transfers and 4/4
+no-command boundary checks. All 290 affected regressions pass. Five release
+failures expose the arbitrary three-second supported-settle budget; read-only
+telemetry reaches quiet support after 5.776 s. Use the existing native verifier's
+12-second budget, fresh post-command clock anchoring, unchanged motion/geometry
+limits and explicit last-check evidence. Two planning failures have private
+collision-checked plans through an 80 mm vertical pregrasp fallback after the
+existing candidates, under the unchanged shared 256-call IK cap.
+
+`configs/eval/tamp_native_followup_20261113.json` freezes a development replay of
+the entire unchanged population. These cases have now informed fixes and are not
+held-out evidence. Retain the complete failed qualification, every intermediate
+probe, and interrupted source-transition attempts. After native replay, run the
+actual agent through Caliban on the original four two-goal/swap pilot cases.
+Final agent pass requires both independently measured goals and a successful
+public execution receipt; a later settled object cannot erase a partial result.
