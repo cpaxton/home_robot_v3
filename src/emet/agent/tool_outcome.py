@@ -54,11 +54,31 @@ class ToolOutcome:
         # Actionable details must reach the model, not just the trace ledger.
         details = {
             key: self.payload[key]
-            for key in ("manipulation", "navigation", "observation", "recovery_tools", "suggested_action")
+            for key in (
+                "manipulation",
+                "navigation",
+                "observation",
+                "recovery_tools",
+                "suggested_action",
+                "capture",
+                "camera_motion",
+                "visual",
+                "geometry",
+                "task_view",
+            )
             if key in self.payload
         }
         if self.tool in {"rotate_base", "move_forward"} and "data" in self.payload:
             details["motion"] = self.payload["data"]
+        verification = self.payload.get("verify")
+        if isinstance(verification, dict):
+            # Keep acquisition/geometry failures visible to the coordinator
+            # without copying auxiliary prompts or embedding vectors.
+            details["verify"] = {
+                key: verification[key]
+                for key in ("ok", "status", "obs_id", "view_id", "visual", "geometry")
+                if key in verification
+            }
         if details:
             bits.append(json.dumps(details, default=str))
         return " ".join(bits)

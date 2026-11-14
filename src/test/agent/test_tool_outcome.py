@@ -6,10 +6,43 @@
 
 from __future__ import annotations
 
+import json
+
 import numpy as np
 
 from emet.agent.tool_outcome import ToolOutcome, maybe_record_tool_attempt
 from emet.memory.graph_eqa.graph_memory import GraphEQAMemory, GraphNode
+
+
+def test_chat_render_preserves_capture_and_grounding_failure_separately():
+    verification = {
+        "ok": True,
+        "status": "VISUAL_PRESENT",
+        "obs_id": 8,
+        "visual": {"present": True},
+        "geometry": {
+            "admitted": False,
+            "reason": "outside_depth_range",
+            "depth_support": {"view": {"source_obs_id": 8}, "median_depth_m": 3.34},
+        },
+        "raw": "auxiliary prompt and embedding details",
+    }
+    outcome = ToolOutcome.coerce(
+        "explore_frontier",
+        {
+            "ok": False,
+            "status": "navigation_incomplete",
+            "capture": {"ok": True, "obs_id": 8},
+            "verify": verification,
+        },
+    )
+    text = outcome.render()
+    details = json.loads(text[text.index("{") :])
+    assert details["capture"] == {"ok": True, "obs_id": 8}
+    assert details["verify"]["visual"]["present"] is True
+    assert details["verify"]["geometry"] == verification["geometry"]
+    assert "auxiliary prompt" not in text
+    assert outcome.ok is False
 
 
 def test_tool_outcome_coerce_and_render():

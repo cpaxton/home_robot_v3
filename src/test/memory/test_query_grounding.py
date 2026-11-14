@@ -97,6 +97,11 @@ def test_far_surface_reason_survives_controller_and_visual_feedback():
     assert feedback["status"] == "VISUAL_PRESENT"
     assert feedback["geometry"]["status"] == "not_admitted"
     assert "supported depth range (2.5 m maximum)" in feedback["geometry"]["reason"]
+    # Bind proposal cues to the captured view, not a historical retrieval anchor.
+    assert feedback["geometry"]["depth_support"]["view"]["source_obs_id"] == 2
+    assert feedback["geometry"]["depth_support"]["proposals"][0]["base_yaw_delta_deg"] is None
+    stale = verification_feedback("CANDIDATE", {"ok": True, "present": True}, {"view_obs_id": 123, **result}, 124)
+    assert stale["geometry"] == {"status": "not_attempted"}
     assert not result["ok"] and not agent.query_candidates.records
     assert not agent.graph_memory.get_nodes()
     client.assert_not_called()

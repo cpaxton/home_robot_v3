@@ -188,7 +188,7 @@ class LazyGraphController(DynagraphController):
             fusion = GraphObjectFusion(fusion_config_from_sources(parameters=self.parameters))
         if not fusion.config.use_instance_nodes or not fusion.config.enabled:
             return {"ok": False, "reason": "instance admission/fusion disabled"}
-        from emet.memory.query_grounding import cache_grounding_record, select_query_detections
+        from emet.memory.query_grounding import cache_grounding_record, proposal_view_context, select_query_detections
 
         backend = (self.parameters.get("query_memory", {}) or {}).get("grounding_backend", "yoloe")
         client = getattr(self.graph_memory, "eqa_client", None)
@@ -206,6 +206,10 @@ class LazyGraphController(DynagraphController):
             )
         else:
             raise ValueError(f"Unknown query grounding backend: {backend}")
+        if verification.get("depth_support") is not None:
+            verification["depth_support"] = proposal_view_context(
+                verification["depth_support"], observation_frame, source_obs_id=len(vm.observations)
+            )
         admitted, _ = filter_detections_for_graph_admission(detections, config=fusion.config)
         import os
         from dataclasses import asdict

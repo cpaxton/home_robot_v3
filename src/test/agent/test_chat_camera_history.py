@@ -131,3 +131,75 @@ def test_actual_chat_continues_sensing_then_motion_within_budget(monkeypatch):
     assert actions == ["scan", ("move", 0.2)]
     assert len(requests) == 3
     assert goal in requests[1] and "Do not call any more tools" not in requests[1]
+
+
+def test_chat_recovery_preserves_history_and_shows_resulting_camera(monkeypatch):
+    """The HTTP follow-up contains both views and measured partial-motion feedback."""
+    import copy
+
+    import numpy as np
+
+    robot = setup_chat_loop(monkeypatch)
+    robot.get_observation.side_effect = [
+        SimpleNamespace(rgb=np.full((4, 6, 3), value, dtype=np.uint8)) for value in (40, 160)
+    ]
+    requests = []
+    replies = iter(
+        [
+            {"tool_calls": [{"name": "move_forward", "arguments": {"meters": 0.2}}], "message": ""},
+            {"tool_calls": [], "message": "The robot stopped short; the target is still visible."},
+        ]
+    )
+
+    def create(**kwargs):
+        requests.append(copy.deepcopy(kwargs["messages"]))
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content=json.dumps(next(replies)), tool_calls=None))]
+        )
+
+    client = OpenaiClient("sys", model="emet", base_url="http://127.0.0.1:9/v1")
+    client._openai = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+    monkeypatch.setattr(loop, "get_llm_client", lambda *a, **kw: client)
+
+    def move(meters):
+        assert meters == 0.2
+        return {
+            "schema_version": 1,
+            "tool": "move_forward",
+            "status": "partial",
+            "code": "motion_incomplete",
+            "message": "Stopped before the requested endpoint.",
+            "data": {"measured_distance_m": 0.08, "requested_distance_m": meters},
+        }
+
+    monkeypatch.setattr(
+        loop,
+        "get_tools",
+        lambda ctx: [
+            Tool(
+                name="move_forward",
+                description="move",
+                parameters={"type": "object", "properties": {}},
+                func=move,
+                returns_info=True,
+            )
+        ],
+    )
+    loop.run_agent_with_robot(
+        discord=False,
+        use_llm=True,
+        commands=["Move closer to inspect the object."],
+        robot_client=robot,
+        device="cpu",
+        max_tool_rounds=2,
+        vl_include_camera=True,
+        thinking_status=False,
+    )
+    assert len(requests) == 2
+    before = requests[0][-1]["content"]
+    after = requests[1][-1]["content"]
+    assert requests[1][1]["content"] == before
+    assert before[1]["image_url"] != after[1]["image_url"]
+    text = after[0]["text"]
+    assert "Earlier images in the dialogue are historical" in text
+    assert "motion_incomplete" in text and '"measured_distance_m": 0.08' in text

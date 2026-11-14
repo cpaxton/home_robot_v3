@@ -304,7 +304,11 @@ def _dispatch_tool_calls(
         try:
             result = tool.func(**args) if args else tool.func()
             outcome = ToolOutcome.coerce(name, result)
-            if isinstance(result, ToolOutcome) or (isinstance(result, dict) and "ok" in result):
+            structured_result = isinstance(result, dict) and ("ok" in result or "schema_version" in result)
+            parsed_envelope = (
+                name in TAMP_TOOLS or name in {"rotate_base", "move_forward"}
+            ) and outcome.status != "invalid_tool_result"
+            if isinstance(result, ToolOutcome) or structured_result or parsed_envelope:
                 result_str = outcome.render()
             else:
                 result_str = f"[{name}] {result}" if result is not None else f"[{name}] ok"
@@ -1222,7 +1226,7 @@ def run_agent_with_robot(
             for _round in range(max_tool_rounds):
                 cam_image = None
                 followup_round = _round > 0
-                if vl_include_camera and _round == 0 and hasattr(robot_client, "get_observation"):
+                if vl_include_camera and hasattr(robot_client, "get_observation"):
                     obs = robot_client.get_observation()
                     if obs is not None and getattr(obs, "rgb", None) is not None:
                         from emet.llms.vl_image import downsample_rgb_hwc, eqa_vl_image_kwargs
@@ -1235,6 +1239,12 @@ def run_agent_with_robot(
                             max_side=img_kw["image_max_side"],
                             max_pixels=img_kw["image_max_pixels"],
                         )
+                        if followup_round:
+                            current_input += (
+                                "\n\nThe attached head-camera image is the observation for this tool round. "
+                                "Earlier images in the dialogue are historical; compare them with this observation "
+                                "and the measured tool feedback before choosing another action."
+                            )
                         if verbose_tools:
                             cr = np.asarray(cam_image)
                             print(
@@ -1246,7 +1256,7 @@ def run_agent_with_robot(
                             from emet.agent.camera_debug import print_camera_frame_diagnostics
 
                             print_camera_frame_diagnostics(
-                                "VL first-turn (rgb passed to chat LLM)",
+                                f"VL tool round {_round + 1} (rgb passed to chat LLM)",
                                 cam_image,
                                 force=True,
                             )
