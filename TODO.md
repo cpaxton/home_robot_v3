@@ -61,26 +61,17 @@
       Coordinator-visible recovery now preserves task gaze, source-bound image
       proposal bearings, nested geometry feedback and camera observations across
       CHAT tool rounds; 268 contract/CPU geometry checks pass. The central model
-      chooses the next sensing/movement action; no automatic approach or depth
-      relaxation. First frozen pair is mixed: main bowl pass/microwave fail,
-      candidate bowl fail/microwave pass (appropriate mask at 0.969 m). Both are
-      still 1/2 phases, no complete task. Live context exposed legacy stop rules
-      persisting in model-final state/tool descriptions/handlers; remove them
-      consistently and repeat the frozen pair before claiming recovery.
-      Repeat remains red: main 1/2 phases, candidate 0/2. Failed investigation
-      omitted capture/assessment despite a visible bowl; now return fresh
-      current-view feedback alongside the unchanged route failure. Verify this
-      path in the candidate-only diagnostic before a broader matched pilot.
-      Candidate-only check restores bowl admission (1/2 phases); microwave
-      approach is still blocked by unknown floor/clearance and view loss.
-      Remove the remaining auxiliary-assessment automatic stop in model-final
-      mode and verify the explicit coordinator completion handoff. Keep the
-      broader matched EQA/find gate pending; no system superiority is established.
-      Stopping check passes both find phases but still uses an inherited
-      post-error navigation redirect. Keep that assisted result separate; disable
-      model-final action substitutions on rejected IDs, inference failures and
-      invalid replies, preserve explicit approach indices, and run the strict
-      coordinator diagnostic before accepting this behavior.
+      chooses sensing, movement and stopping in model-final mode: legacy
+      automatic stops, navigation redirects and inference-failure action
+      substitutions are disabled. Explicit approach indices and dialogue survive.
+      Failed investigation now returns fresh current-view evidence alongside the
+      unchanged navigation failure. Strict live check restores bowl admission
+      (1/2 phases); all 10 executions match model selections. The microwave is
+      visible at 3.304 m after all three nav steps are spent, so the model's
+      correct semantic location still lacks admitted geometry. An earlier 2/2
+      pass used legacy post-error navigation and is retained separately.
+      Freeze the strict candidate for a broader matched EQA/find pilot; any
+      larger horizon must apply to both arms. No system superiority is claimed.
       Plan: `docs/experiments/closer_view_feedback_20261113.md`.
 - [ ] Emit actual per-episode simulation duration, model inference cost and
       invocation overhead in paper-run manifests. Clock probes and reported

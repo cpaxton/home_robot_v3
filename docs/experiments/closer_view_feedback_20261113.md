@@ -201,3 +201,57 @@ explicit approach selection. The next candidate-only run is
 `closer-view-molmo-20261113-r5`, with the same model/provider/budgets. Preserve
 the assisted pass independently; do not count it as evidence for this stricter
 policy. No further provider, threshold or task-budget tuning is included.
+
+### Strict coordinator result
+
+Run `closer-view-molmo-20261113-r5`, source `2b8b29f7`, completes normally:
+bowl pass, microwave fail (query/episode 117.42/167.27 s). The task gate correctly
+remains red. All ten recorded executions match the model's selections; there
+are no action rewrites or post-error navigation redirects. Ten saved requests
+preserve history and omit the legacy stopping/limited-choice instructions.
+The microwave phase ends with an explicit model-selected `submit_answer`.
+
+Manual inspection of the first and final microwave coordinator images shows
+the target visible above the stove. The model turns, moves 0.5 m and turns back,
+then requests a new look. The final auxiliary assessment correctly reports
+visual presence, while geometry is rejected at median depth **3.304 m** with
+zero of 3,577 measured proposal pixels inside the unchanged 2.5 m support range.
+The coordinator receives that reason, source-bound calibration/bearing and
+positive visual result in its actual dialogue. At that point the rendered
+state reports **nav used 3/3**. It submits the correct semantic relationship
+instead of obtaining a target-specific closer view. Geometry remains absent;
+the semantic answer cannot authorize manipulation.
+
+Measured receipts report about 81.48 degrees for the requested 90-degree turns
+and 0.430 m for the requested 0.5 m drive, accepted under the existing configured
+tolerances. Those tolerances are unchanged. The feedback exposes actual progress;
+`ok` must not be interpreted as an exact requested pose or object approach.
+The successful motions did not produce a materially closer microwave view.
+
+The live audit, requests, receipts, RGB-D/grounding records and 268-test XML are
+retained under that run, including `analysis/strict_coordinator_audit.json`.
+No model/provider/depth/budget tuning followed this diagnostic. The strict
+handoff is qualified on this development case; useful closer-view recovery and
+system superiority are not. Freeze this version before a broader matched EQA
+and small-OVMM pilot. A larger horizon, if tested, must be declared for both
+arms rather than assigned only to the candidate. Full pick/place and hardware
+acceptance are outside these find-only results.
+
+## Resulting task flow
+
+1. Retain calibrated current images separately from search hypotheses and
+   admitted object geometry. The coordinator gets current view, history,
+   relevant memory cards and measured action feedback.
+2. The coordinator selects a tool and arguments. Executors validate capabilities,
+   budgets, floor/footprint clearance and geometry; a rejected request does not
+   authorize a replacement high-level action in model-final mode.
+3. Return captures and explicit visual/geometry outcomes, including after failed
+   investigation. Auxiliary perception can supply evidence, not a final answer
+   override or an automatic model-final stopping decision.
+4. EQA uses the final model answer with retained context. OVMM find additionally
+   requires an admitted object ID/geometry; a viewpoint or semantic relationship
+   cannot replace that geometry. Existing manipulation/TAMP execution still
+   validates its own fresh target and motion plan.
+5. The coordinator chooses completion or continues within the declared budget.
+   Budget finalization calls the final answer model. Legacy policies remain
+   available explicitly; their recovery behavior must be named in comparisons.
