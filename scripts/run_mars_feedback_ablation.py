@@ -43,6 +43,7 @@ def main():
     parser.add_argument("--learning-rate", type=float, default=1e-4)
     parser.add_argument("--arm-std", type=float, default=0.1)
     parser.add_argument("--source", type=Path)
+    parser.add_argument("--arm-adaptation-only", action="store_true")
     args = parser.parse_args()
     if args.steps <= 0 or args.steps % 256 or len(set(args.variants)) != len(args.variants):
         parser.error("positive steps divisible by 256 and unique variants required")
@@ -50,6 +51,8 @@ def main():
         parser.error("unique paired seeds required")
     if args.source and any(VARIANTS[v][0] != "rotation6" for v in args.variants):
         parser.error("checkpoint continuation supports the baseline/velocity pair; rotvec requires scratch training")
+    if args.arm_adaptation_only and (not args.source or args.stages != ["arm"]):
+        parser.error("arm adaptation requires a source checkpoint and arm-only training stages")
 
     # Set this before importing Torch/SB3, including in the coordinator process.
     os.environ.update(CUDA_VISIBLE_DEVICES="", OMP_NUM_THREADS="1", OPENBLAS_NUM_THREADS="1", MKL_NUM_THREADS="1")
@@ -93,6 +96,7 @@ def main():
         "initialization": "scratch" if args.source is None else str(args.source.resolve()),
         "executor_action_mask": suite.get("training_policy") == "executor_mask_v1",
         "source_manifest_sha256": source_manifest_hash,
+        "arm_adaptation_only": args.arm_adaptation_only,
         "complete": False,
         "safety_promoted": False,
         "runs": [],
@@ -159,6 +163,8 @@ def main():
                 ]
                 if args.source:
                     command += ["--initialize-from", str(args.source.resolve()), "--freeze-normalization"]
+                if args.arm_adaptation_only:
+                    command += ["--arm-adaptation-only"]
                 print(f"Training {variant}, seed {seed}, {args.steps} transitions", flush=True)
                 subprocess.run(command, cwd=ROOT, env=environment, stdout=log, stderr=subprocess.STDOUT, check=True)
                 run = {

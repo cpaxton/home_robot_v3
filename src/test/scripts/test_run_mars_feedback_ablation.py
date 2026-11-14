@@ -86,8 +86,11 @@ def fake_child(command, *, cwd, env, stdout, stderr, check):
         (destination / "summary.json").write_text(json.dumps(summary))
 
 
-def test_expanded_evaluation_preserves_masks_and_checks_both_checkpoints(monkeypatch, tmp_path):
+@pytest.mark.parametrize("arm_adaptation", [False, True])
+def test_expanded_evaluation_preserves_masks_and_checks_both_checkpoints(monkeypatch, tmp_path, arm_adaptation):
     runner, output, _ = prepare(monkeypatch, tmp_path, source=True)
+    if arm_adaptation:
+        monkeypatch.setattr(sys, "argv", [*sys.argv, "--arm-adaptation-only"])
     monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0")
     calls = []
 
@@ -101,6 +104,7 @@ def test_expanded_evaluation_preserves_masks_and_checks_both_checkpoints(monkeyp
     assert result["complete"] and result["executor_action_mask"]
     assert result["evaluation_stages"] == ["base", "arm"]
     assert result["evaluation_population"] == "admission"
+    assert result["arm_adaptation_only"] == arm_adaptation
     assert len(result["runs"]) == 4
     assert all("expanded_initial" in run and "expanded_final" in run for run in result["runs"])
     assert len([c for c in calls if c[3] == "preflight"]) == 2
@@ -118,6 +122,7 @@ def test_expanded_evaluation_preserves_masks_and_checks_both_checkpoints(monkeyp
         )
         if command[3] == "train":
             assert "--freeze-normalization" in command
+            assert ("--arm-adaptation-only" in command) == arm_adaptation
         if command[3] == "evaluate":
             assert command[command.index("--population") + 1] == "admission"
     assert json.loads((output / "velocity-suite.json").read_text())["config"]["feedback_reference_velocity"]

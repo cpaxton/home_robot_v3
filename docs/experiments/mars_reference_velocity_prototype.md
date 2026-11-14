@@ -253,3 +253,43 @@ preserving the existing base mean commands. Freezing base readout weights alone
 would still allow shared-context changes to alter the base function. This next
 training experiment has not been run; it must retain the full base/arm/coupled
 and smoothness gates. Axis-angle remains a separate untrained option.
+
+## Frozen-base/context arm-adaptation pilot
+
+The opt-in `--arm-adaptation-only` mode now implements that hypothesis. It keeps
+one eight-output feedback actor. Actor-context parameters, base gain rows,
+restoring-yaw parameters and gripper parameters are frozen. Only the five arm
+gain rows, arm exploration scales, and critic are trainable. The original
+normalization is frozen too. Exact protected-tensor checks run at rollout,
+checkpoint and training-end boundaries; a violation stops the run.
+
+Base/gripper sampling uses their learned deterministic means. Those commands
+are not zeroed or filtered. PPO likelihood and entropy use the active arm
+marginal; deterministic base/gripper channels contribute no policy gradient.
+The underlying Gaussian scale tensor still stores frozen base/gripper entries,
+so those entries are not effective sampling standard deviations. Runtime
+deterministic means use the ordinary actor path. No second actor or teacher is
+invoked, and no new task/physics inputs or thresholds are introduced.
+
+The mode requires an initialized source bundle, arm-only training stages,
+executor masks and frozen normalization. It defaults off. Weight decay is
+rejected because it would move gradient-masked base rows. The focused
+adaptation/executor/orchestration checks pass **22/22**, including actual PPO
+updates, bitwise preservation of base/grip means and context tensors, continued
+arm/critic learning, deterministic wheel requests, checkpoint transfer, and
+optimizer/export/load round-trips with both feature widths.
+
+The first declared pilot uses **two runs**, baseline and reference velocity,
+**seed 90**, **16,384 transitions each / 32,768 total**. It retains the earlier
+source, TAMP-postures training population, LR `1e-5`, arm standard deviation
+`0.03`, rewards, limits, and full 122-case initial/final evaluation. This compares
+with the completed unfrozen seed-90 controls; it is a deliberately bounded test,
+not a new three-seed claim. No automatic extension, retry, best-checkpoint
+selection, or promotion is permitted. More seeds are a separate decision.
+
+A fresh full source-bound regression gate and current-source teacher admission
+must pass before PPO. Use CPU15 for checks and one CPU14 worker for training,
+CUDA hidden, rendering disabled and one numerical thread, with an isolated
+runtime and coordinated reservations. Add `--arm-adaptation-only` to the
+expanded-runner command, with `--seeds 90 --steps 16384`. This section records
+the implementation and launch protocol; a completed training result is pending.
