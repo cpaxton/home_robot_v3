@@ -87,3 +87,37 @@ that breakdown. Initial/final comparisons measure this small learning setup;
 source comparisons are a reference, not an equal-training-budget ablation.
 Both outcomes are retained even if neither works. No automatic retry, extra
 seed, budget extension, policy promotion or hardware motion follows this pair.
+
+## Recorded attempt (2026-11-14)
+
+Immutable implementation `e0d8df02`, managed job `20261114_092650_d2cc46`:
+the fresh source-bound regression run passes **1,187/1,187**, with zero skips,
+errors or failures. Teacher admission again passes 164/164 general cases and
+5/6 TAMP pregrasp, retaining the already declared object-motion challenge.
+
+The historical `per_head` control completes **4,096 decisions / 4,096 physical
+ticks**, with 16 PPO updates. On the twelve development diagnostic cases, its
+initial full/tracking counts are 2/12 and 2/12; final counts are **0/12 and
+1/12**. These results concern the small cold-start diagnostic, not the retained
+source or a full general-controller qualification.
+
+The `shared` candidate records its initial evaluation and first **256
+unoptimized rollout ticks**, then stops **before its first optimizer update**:
+`paired PPO settings differ beyond normalization scheme`. Every checked
+initial-state and first-rollout hash matches the control, including observations,
+actions, rewards and raw GAE. The serialized PPO settings also match apart
+from the intended normalization option. The check compares serialized
+`advantage_weights` as a JSON list with the current in-memory Python tuple,
+which produces a false mismatch.
+
+This is a real orchestration correctness bug, not a behavioral qualification
+failure. Preserve the incomplete attempt; **no paired normalization conclusion
+is available**. Repair and test the serialized/in-memory comparison before a
+declared recovery. No retry, extension or promotion has occurred. The separate
+PR #232 adaptation job remains queued because CPU14 has not been released.
+
+[Compact attempt evidence](../../paper/data/whole_body_control/mars_whole_body_advantage_pair_v1/attempt.json)
+records outcome groups, matching hashes and artifact checksums. Raw logs,
+checkpoints and first-rollout arrays remain under the ignored
+`logs/manipulation/mars-whole-body-advantage-pair-v1/` directory. The original
+retained checkpoint remains unchanged; no hardware was used.

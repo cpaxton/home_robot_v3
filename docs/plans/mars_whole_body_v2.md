@@ -11,6 +11,18 @@ only 2/164 full general cases and 0/6 TAMP pregrasp. Reject it and retain the
 original source. The independent jaw-unit trial also completes and is rejected.
 Further scale is conditional on diagnosing the measured learning failures.
 
+The [controlled normalization diagnostic](mars_whole_body_advantage_pair.md)
+subsequently passed 1,187 regressions and the unchanged teacher admission.
+Its historical-normalization control completed 4,096 decisions; the candidate
+stopped before its first update on a settings serialization mismatch. No paired
+normalization conclusion is available. The optional legacy-MLP work in
+[PR #232](https://github.com/cpaxton/home_robot_v3/pull/232) is a separate
+experiment and is not required to run this prototype.
+
+Correct experimental code can merge with measured behavioral limitations.
+Passing all performance gates is a checkpoint-promotion decision, separate
+from implementation correctness and from permission to test real hardware.
+
 ## Controller and reference contract
 
 Keep one masked SE(2) base target, one SE(3) target per supported hand, and the

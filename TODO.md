@@ -414,6 +414,19 @@ Accepted plan: [Mars controller integration](docs/plans/mars_controller_integrat
       and paired source/general/TAMP audit. Pregrasp is not full pick/place.
       All 1,170 regressions pass, but final full 2/164 and pregrasp 0/6.
       Preserve repaired harness failures and [complete report](docs/experiments/mars_whole_body_validation_20261113.md).
+- [x] Audit per-critic advantage scaling and implement the bounded
+      [normalization diagnostic](docs/plans/mars_whole_body_advantage_pair.md).
+      Full source-bound regressions 1,187/1,187; original teacher admission
+      retained. Historical control completes 4,096 decisions; shared candidate
+      stops before its first update on JSON-list/Python-tuple settings comparison.
+      No completed paired result or policy improvement claim.
+- [ ] Repair and test the serialized/in-memory settings comparison before
+      resuming the controlled normalization experiment. Preserve the incomplete
+      attempt and verify exact initial state/first rollout; no silent retry.
+- [ ] Evaluate the opt-in frozen-base/shared-context arm-adaptation pilot in
+      [PR #232](https://github.com/cpaxton/home_robot_v3/pull/232). Software checks
+      pass; training awaits CPU14 release. Preview velocity alone did not improve
+      the completed comparison; retain the original checkpoint.
 - [ ] Fix cold-start exploration/completion learning and audit per-critic
       advantages before scaling v2. Keep retained-source comparisons and all
       measured safety/precision gates; add the missing mask/observability strata.

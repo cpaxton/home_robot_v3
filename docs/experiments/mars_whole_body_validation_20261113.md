@@ -5,6 +5,11 @@ and corrected paired evaluation are complete at immutable `a29da15d`. Reject
 the pilot and retain source `e7b42569…`. The independently completed jaw-unit
 curriculum at `0fba6121` is also rejected. Neither candidate is hardware ready.
 
+This report records the completed first pilot, not the latest running job.
+The later [normalization comparison and its current blocker](../plans/mars_whole_body_advantage_pair.md#recorded-attempt-2026-11-14)
+are tracked separately. Correct experimental code may merge with documented
+performance limitations; the rejection here applies to checkpoint promotion.
+
 ## Fresh implementation and teacher checks
 
 All **1,170** source-bound regressions pass with zero failures, errors or skips.
