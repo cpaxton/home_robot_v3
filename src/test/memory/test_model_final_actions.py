@@ -9,6 +9,45 @@ import pytest
 from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
 
 
+@pytest.mark.parametrize("policy", ["legacy", "model_final"])
+def test_per_round_state_respects_decision_policy(policy):
+    from emet.memory.graph_eqa.agentic.tools import build_state_message
+
+    agent = SimpleNamespace(parameters={"eqa": {"agentic_decision_policy": policy}}, graph_memory=None, robot=None)
+    ex = AgenticEQAExecutor(agent, "Where is the microwave?", router=False)
+    ex._recent_actions = ["measured failed motion"]
+    ex._last_capture_status = "OK"
+    ex._close_map_stay_hypothesis = lambda: SimpleNamespace(obs_id=3)
+    ex._close_look_required = True
+    ex._prefer_explore = True
+    text = build_state_message(ex)
+    assert "Recent actions: measured failed motion" in text and "Last capture: OK" in text
+    for instruction in [
+        "do NOT submit_answer",
+        "Choose: inspect_graph",
+        "do not explore away yet",
+        "Prefer explore_frontier once",
+        "Question needs a CLOSE LOOK",
+    ]:
+        assert (instruction in text) is (policy == "legacy")
+
+
+@pytest.mark.parametrize("policy", ["legacy", "model_final"])
+@pytest.mark.parametrize("mode", ["answer", "explore"])
+def test_model_final_can_stop_before_legacy_verification_or_coverage_gate(policy, mode):
+    from unittest.mock import Mock
+
+    agent = SimpleNamespace(parameters={"eqa": {"agentic_decision_policy": policy}}, graph_memory=None, robot=None)
+    ex = AgenticEQAExecutor(agent, "Where is the rug?" if mode == "answer" else None, router=False)
+    ex._do_submit_answer = Mock(return_value={"ok": True, "answer": "model answer"})
+    ex._do_finish = Mock(return_value={"ok": True, "answer": "model summary"})
+    ex._explore_done = lambda: False
+    out = ex._tool_submit_answer("model answer") if mode == "answer" else ex._tool_finish("model summary")
+    handler = ex._do_submit_answer if mode == "answer" else ex._do_finish
+    assert bool(out["ok"]) is (policy == "model_final")
+    assert handler.called is (policy == "model_final")
+
+
 def test_model_final_prompt_allows_observation_recovery_without_a_fixed_tool_sequence():
     from emet.memory.graph_eqa.agentic.tools import build_graph_eqa_system_prompt
 

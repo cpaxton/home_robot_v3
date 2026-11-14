@@ -439,7 +439,7 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
     if (observation or {}).get("ok") and current.get("footprint_after", {}).get("pose_valid"):
         text += (
             "\nPrevious navigation attempt was rejected for unknown floor. Fresh sensing has now made "
-            "that checked footprint valid. Retry investigate or explore through the normal planner; "
+            "that checked footprint valid. Replan with an available navigation/movement tool; "
             "do not repeat floor captures to resolve this old rejection. The route is NOT certified."
         )
         return text + "\nCurrent recovery observation: " + json.dumps(observation)
@@ -487,6 +487,7 @@ def _build_state_message(executor: AgenticEQAExecutor) -> str:
     from emet.memory.graph_eqa.spatial.room_clusters import room_leave_needed
 
     policy = str(getattr(executor, "room_policy", "canonical") or "canonical").strip().lower()
+    legacy_guidance = getattr(executor, "decision_policy", "legacy") != "model_final"
     gm = executor.graph_memory
     lines: list[str] = []
     if getattr(executor, "mode", "answer") == "explore":
@@ -596,7 +597,7 @@ def _build_state_message(executor: AgenticEQAExecutor) -> str:
         f"vlm_answerable={executor._verified}"
     )
     pending = getattr(executor, "_pending_answerable", None) or None
-    if pending and not getattr(executor, "_verified", False):
+    if legacy_guidance and pending and not getattr(executor, "_verified", False):
         answer_text = str(pending.get("answer_text") or "").strip()
         if len(answer_text) == 1 and answer_text.upper() in "ABCDE":
             answer_text = ""
@@ -609,7 +610,7 @@ def _build_state_message(executor: AgenticEQAExecutor) -> str:
             f"pending_answer={answer_text} (need confirm — re-investigate another view or "
             "wait for phrase corroboration; do not submit yet)"
         )
-    if getattr(executor, "_close_look_required", False):
+    if legacy_guidance and getattr(executor, "_close_look_required", False):
         source = str(getattr(executor, "_close_look_source", "") or "")
         lines.append(
             "Question needs a CLOSE LOOK (reading a clock/display/label, counting, "
@@ -617,7 +618,7 @@ def _build_state_message(executor: AgenticEQAExecutor) -> str:
             "explore_frontier" + (f" [{source}]" if source else "")
         )
     stay_fn = getattr(executor, "_close_map_stay_hypothesis", None)
-    if callable(stay_fn):
+    if legacy_guidance and callable(stay_fn):
         stay_hyp = stay_fn()
         if stay_hyp is not None:
             lines.append(
@@ -625,7 +626,8 @@ def _build_state_message(executor: AgenticEQAExecutor) -> str:
                 "until aimed close or the cell is unreachable — do not explore away yet."
             )
     if (
-        not getattr(executor, "_verified", False)
+        legacy_guidance
+        and not getattr(executor, "_verified", False)
         and bool(getattr(executor, "_no_early_unverified", True))
         and int(getattr(executor, "_round", 0) or 0) < int(getattr(executor, "max_rounds", 8) or 8) - 1
     ):
@@ -636,7 +638,7 @@ def _build_state_message(executor: AgenticEQAExecutor) -> str:
     recent_actions = list(getattr(executor, "_recent_actions", None) or [])
     if recent_actions:
         lines.append("Recent actions: " + " | ".join(recent_actions))
-    if getattr(executor, "_prefer_explore", False):
+    if legacy_guidance and getattr(executor, "_prefer_explore", False):
         unused_fn = getattr(executor, "_unused_detection_hypothesis", None)
         unused = unused_fn() if callable(unused_fn) else None
         hold_fn = getattr(executor, "_hold_detections_before_explore", None)
@@ -665,7 +667,7 @@ def _build_state_message(executor: AgenticEQAExecutor) -> str:
         question=str(getattr(executor, "question", "") or ""),
         in_target_area=ita if isinstance(ita, bool) else None,
     )
-    if leave:
+    if legacy_guidance and leave:
         here = last_room or graph_room or "unknown"
         lines.append(
             f"Not in a useful place yet (here: {here}) — explore_frontier to leave, "
@@ -679,13 +681,15 @@ def _build_state_message(executor: AgenticEQAExecutor) -> str:
         last = loop_flags[-1]
         lines.append(
             f"NAV_LOOP: obs_id={last.get('obs_id')} visits={last.get('visits')} "
-            f"status={last.get('status')} — pick another investigate card or explore_frontier"
+            f"status={last.get('status')}"
+            + (" — pick another investigate card or explore_frontier" if legacy_guidance else "")
         )
-    lines.append(
-        "Choose: inspect_graph to query detections, investigate(obs_id) for a closer look "
-        "at a listed detection/place (prefer room-relevant cards), OR explore_frontier to "
-        "grow coverage / change rooms (location MCQ may explore even if a keyword proposal is listed)."
-    )
+    if legacy_guidance:
+        lines.append(
+            "Choose: inspect_graph to query detections, investigate(obs_id) for a closer look "
+            "at a listed detection/place (prefer room-relevant cards), OR explore_frontier to "
+            "grow coverage / change rooms (location MCQ may explore even if a keyword proposal is listed)."
+        )
     from emet.memory.graph_eqa.agentic.place import _investigate_hypotheses
 
     # Render the same eligible set used by action selection, not stale recall.
@@ -761,7 +765,7 @@ def _build_state_message(executor: AgenticEQAExecutor) -> str:
                 f"{room_bit}{label_bit}{sim_bit}{conf_bit}{yoloe_bit}{cm_bit} {bits}"
             )
     else:
-        lines.append("Investigate: (none — explore or look_around first)")
+        lines.append("Investigate: (none — explore or look_around first)" if legacy_guidance else "Investigate: (none)")
     if exp:
         lines.append("Explore (frontiers — coverage only; not investigate targets):")
         for h in exp:

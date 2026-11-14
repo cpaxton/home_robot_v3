@@ -36,6 +36,8 @@ _logger = Logger(__name__)
 def _tool_submit_answer(self, answer: str) -> dict[str, Any]:
     if self.mode == "explore":
         return {"ok": False, "error": "submit_answer unavailable in explore mode — use finish"}
+    if self.decision_policy == "model_final":
+        return self._do_submit_answer(prefer_answer=answer)
     nav_exhausted = self._n_nav + self._n_explore >= self.max_nav_steps
     if self._verified and self._evidence_policy.state != AgenticState.ANSWER:
         if nav_exhausted or self._round >= self.max_rounds - 1:
@@ -69,7 +71,7 @@ def _tool_submit_answer(self, answer: str) -> dict[str, Any]:
 def _tool_finish(self, summary: str) -> dict[str, Any]:
     if self.mode != "explore":
         return {"ok": False, "error": "finish unavailable in answer mode — use submit_answer"}
-    if not self._explore_done() and self._round < self.max_rounds - 1:
+    if self.decision_policy != "model_final" and not self._explore_done() and self._round < self.max_rounds - 1:
         return {
             "ok": False,
             "error": "exploration not finished — frontiers remain and nav budget left",

@@ -135,9 +135,10 @@ EQA_SKILL_SPECS: tuple[SkillSpec, ...] = (
         name="verify_siglip",
         modes=frozenset({AgentMode.EQA_EPISODE}),
         description=(
-            "Cheap visual check + multimodal VLM assess: does 'phrase' match the current "
-            "camera view / stored view obs_id? Returns PRESENT / CANDIDATE / ABSENT as a "
-            "proposal; only VLM answerable unlocks submit_answer."
+            "Assess 'phrase' in the current camera view or stored view obs_id. Reports retrieval "
+            "proposal scores separately from explicit VLM visual presence and current-view "
+            "object geometry admission when available. A missing proposal is not absence; "
+            "positive visual presence alone is not admitted object geometry."
         ),
         parameters={
             "type": "object",
@@ -159,8 +160,8 @@ EQA_SKILL_SPECS: tuple[SkillSpec, ...] = (
         modes=frozenset({AgentMode.EQA_EPISODE}),
         description=(
             "Submit the final semantic answer text. For MCQ questions, use the selected "
-            "option text without its letter label. Rejected until VLM "
-            "assess marks the view answerable (or the round budget is exhausted)."
+            "option text without its letter label. Completion follows the active episode policy. "
+            "For localization tasks, a semantic answer cannot replace admitted object geometry."
         ),
         parameters={
             "type": "object",
@@ -173,8 +174,8 @@ EQA_SKILL_SPECS: tuple[SkillSpec, ...] = (
         name="finish",
         modes=frozenset({AgentMode.EQA_EPISODE}),
         description=(
-            "End exploration with a short summary of what was mapped. Only allowed once "
-            "frontiers are exhausted or the exploration budget is used."
+            "End exploration with a short summary of what was mapped and what remains unresolved. "
+            "Completion follows the active episode policy."
         ),
         parameters={
             "type": "object",

@@ -38,7 +38,7 @@ that proposes the wrong object. The existing opt-in providers remain separate.
 
 ## Contract validation
 
-233 tests pass across CHAT/HTTP history, tool dispatch/rendering, controller
+240 tests pass across CHAT/HTTP history, tool dispatch/rendering, controller
 grounding, visual consumers, EQA room/navigation, relative motion and CPU MuJoCo
 geometry. The HTTP test uses controlled transport and robot observations: it
 checks that a partial move's resulting image, original image and measured
@@ -49,6 +49,14 @@ is not presented as current geometry. Lint and whitespace checks pass.
 The CPU ray controls demonstrate the existing range boundary (3.4 m rejected,
 2.2 m supported) and preserve a blocked-route negative control. They do not
 qualify the real robot controller or demonstrate language-model recovery.
+
+The first live context audit exposed remaining legacy rules in per-round state,
+tool descriptions and direct submit/finish handlers, despite the model-final
+system prompt allowing model-selected actions. The follow-up removes those
+contradictions in `model_final`: it preserves measured action/capture history,
+allows the model to request completion, and leaves legacy completion gates in
+their own policy. Localization still requires independent admitted geometry;
+an early semantic answer cannot certify a manipulation target.
 
 ## Live development gate
 
@@ -78,3 +86,29 @@ cross-repository sensor-validator entry point and source hash are documented;
 there is no runtime compatibility handshake yet. Rebuilding scene context per
 packet remains a profiling follow-up, not a correctness repair. These changes
 do not claim to fix the reference planner's empty plans or benchmark accuracy.
+
+## First live pair: mixed, not accepted
+
+Run `~/runs/emet/closer-view-molmo-20261113-r1/` freezes baseline `35fbabf7`
+and candidate `d4d52cbf`, before the per-round-state/completion correction.
+Both episodes complete normally; the driver exits 1 because the task gates fail.
+
+| Arm | Bowl | Microwave | Complete task | Reported query / episode wall seconds |
+| --- | --- | --- | --- | --- |
+| Main + common clock repair | pass | fail | fail | 263.01 / 369.90 |
+| Coordinator recovery candidate | fail | pass | fail | 136.63 / 189.46 |
+
+Both retain 1/2 find phases. The candidate reaches a clear microwave view and
+admits an appropriate mask with 21,574 supported pixels at median depth 0.969 m,
+all within the unchanged 2.5 m gate. The accepted isolated mask was manually
+checked against the target. Its geometry succeeds after the preceding bowl
+phase has moved the robot; this is not proof that the model deliberately used
+the new bearing metadata to close a range rejection. The bowl failure prevents
+an end-to-end task improvement claim. Initialization/cache effects and different
+model-selected trajectories also prevent attributing the runtime difference to
+the repair alone. A single stochastic pair does not establish superiority.
+
+Exact requests confirm the conflicting legacy stop instructions in candidate
+per-round state. The next frozen pair tests their removal with identical
+model, scan, budget, provider and range settings. Preserve this mixed result
+separately; do not relabel it as a successful recovery qualification.
