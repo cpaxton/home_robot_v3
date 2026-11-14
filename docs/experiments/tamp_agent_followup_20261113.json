@@ -1,0 +1,321 @@
+{
+  "schema_version": 1,
+  "source_commit": "c4fa16687aebb256eefc676d334f10ef22a70662",
+  "scope": "Actual run agent CLI; privileged stationary simulated Stretch; original four development pilot cases; no cameras, exploration, hardware or held-out claim",
+  "native_policy": "bounded_release",
+  "model": "remote Caliban Qwen/Qwen3-VL-8B-Instruct",
+  "sampling": "server defaults; not independently pinned",
+  "initial_state_certificate": false,
+  "previous_agent_baseline": "docs/experiments/tamp_stretch_realism_20261101.json",
+  "cases": [
+    {
+      "id": "two-goal-control",
+      "job_id": "20261113_202613_501cf4",
+      "family": "two-goal",
+      "initial_x_shift_m": 0.0,
+      "passed": true,
+      "task_passed": true,
+      "physical_goals_satisfied": true,
+      "execution_completion_verified": true,
+      "cli_exit_code": 0,
+      "completed_transfers": 2,
+      "declared_transfers": 2,
+      "execution_code": "ok",
+      "final_goals_satisfied": {
+        "object2": true,
+        "object1": true
+      },
+      "audit_commands": 507,
+      "forbidden_commands": 0,
+      "llm_calls": 6,
+      "llm_wall_time_s": 50.81128981290385,
+      "agent_integration": {
+        "tamp_calls": 4,
+        "outcome_counts": {
+          "ok": 3,
+          "error": 1,
+          "partial": 0,
+          "invalid": 0
+        },
+        "code_counts": {
+          "unknown_plan": 1,
+          "ok": 3
+        },
+        "result_contracts_valid": true,
+        "failure_stop_compliant": true,
+        "failure_cases": 1,
+        "discovery_only_cases": 0,
+        "stop_boundary_cases": 1,
+        "failure_boundaries": [
+          {
+            "tool": "execute_pick_place_plan",
+            "code": "unknown_plan",
+            "unexpected_tools": [],
+            "boundary_kind": "failure"
+          }
+        ],
+        "unassessed": [
+          "task_interpretation",
+          "goal_coverage",
+          "physical_recovery",
+          "observed_grounding",
+          "navigation",
+          "exploration"
+        ]
+      },
+      "requested_rejection_observed": true,
+      "artifacts": [
+        {
+          "path": ".tamp-runs/agent-followup-20261113/episodes/two-goal-control/protocol.json",
+          "sha256": "52437cf8a4253e9f43f717e25a52bd316dca1063a95fd12fbc59f0a5f7421d2a"
+        },
+        {
+          "path": ".tamp-runs/agent-followup-20261113/episodes/two-goal-control/summary.json",
+          "sha256": "f2628d63441fddde11aae28201356b17d5896948816fdf1e174414c8f2678b1e"
+        },
+        {
+          "path": ".tamp-runs/agent-followup-20261113/episodes/two-goal-control/actuation.jsonl",
+          "sha256": "37640a35c5f35de22b4c48aca0a4f563eb7780f7d9b1cab58974aec0c5cb9470"
+        },
+        {
+          "path": ".tamp-runs/agent-followup-20261113/episodes/two-goal-control/logs/chat/chat_2026-11-13_20-32-53.jsonl",
+          "sha256": "315f62e5ac881a94d375649cb46e0cdef9ad4d75715e0a0e2f72607373a2551d"
+        }
+      ]
+    },
+    {
+      "id": "swap-control",
+      "job_id": "20261113_202614_2183e8",
+      "family": "wide-destination-swap",
+      "initial_x_shift_m": 0.0,
+      "passed": true,
+      "task_passed": true,
+      "physical_goals_satisfied": true,
+      "execution_completion_verified": true,
+      "cli_exit_code": 0,
+      "completed_transfers": 3,
+      "declared_transfers": 3,
+      "execution_code": "ok",
+      "final_goals_satisfied": {
+        "object2": true,
+        "object1": true
+      },
+      "audit_commands": 726,
+      "forbidden_commands": 0,
+      "llm_calls": 4,
+      "llm_wall_time_s": 38.31634522927925,
+      "agent_integration": {
+        "tamp_calls": 3,
+        "outcome_counts": {
+          "ok": 3,
+          "error": 0,
+          "partial": 0,
+          "invalid": 0
+        },
+        "code_counts": {
+          "ok": 3
+        },
+        "result_contracts_valid": true,
+        "failure_stop_compliant": null,
+        "failure_cases": 0,
+        "discovery_only_cases": 0,
+        "stop_boundary_cases": 0,
+        "failure_boundaries": [],
+        "unassessed": [
+          "task_interpretation",
+          "goal_coverage",
+          "physical_recovery",
+          "observed_grounding",
+          "navigation",
+          "exploration"
+        ]
+      },
+      "requested_rejection_observed": null,
+      "artifacts": [
+        {
+          "path": ".tamp-runs/agent-followup-20261113/episodes/swap-control/protocol.json",
+          "sha256": "288b4edabccd6c87179c3a7c60fd89bbed5afc723de77137abbb9e16be1066b7"
+        },
+        {
+          "path": ".tamp-runs/agent-followup-20261113/episodes/swap-control/summary.json",
+          "sha256": "3483d555ba809f6cff5c2975bd908f7aa6ac285c7d2dc6537adb83749e8ad2d8"
+        },
+        {
+          "path": ".tamp-runs/agent-followup-20261113/episodes/swap-control/actuation.jsonl",
+          "sha256": "93e01a81d079a1f40956260466076a5133138c62580b94457eca7ebf81df6495"
+        },
+        {
+          "path": ".tamp-runs/agent-followup-20261113/episodes/swap-control/logs/chat/chat_2026-11-13_20-32-54.jsonl",
+          "sha256": "32963cd4b18d6e98f0847dd5ca6d87b733dc265c010a22b62e39f4c216f08a7d"
+        }
+      ]
+    },
+    {
+      "id": "two-goal-shift",
+      "job_id": "20261113_202614_2453d1",
+      "family": "two-goal",
+      "initial_x_shift_m": 0.015,
+      "passed": true,
+      "task_passed": true,
+      "physical_goals_satisfied": true,
+      "execution_completion_verified": true,
+      "cli_exit_code": 0,
+      "completed_transfers": 2,
+      "declared_transfers": 2,
+      "execution_code": "ok",
+      "final_goals_satisfied": {
+        "object2": true,
+        "object1": true
+      },
+      "audit_commands": 539,
+      "forbidden_commands": 0,
+      "llm_calls": 4,
+      "llm_wall_time_s": 34.671279398025945,
+      "agent_integration": {
+        "tamp_calls": 3,
+        "outcome_counts": {
+          "ok": 3,
+          "error": 0,
+          "partial": 0,
+          "invalid": 0
+        },
+        "code_counts": {
+          "ok": 3
+        },
+        "result_contracts_valid": true,
+        "failure_stop_compliant": null,
+        "failure_cases": 0,
+        "discovery_only_cases": 0,
+        "stop_boundary_cases": 0,
+        "failure_boundaries": [],
+        "unassessed": [
+          "task_interpretation",
+          "goal_coverage",
+          "physical_recovery",
+          "observed_grounding",
+          "navigation",
+          "exploration"
+        ]
+      },
+      "requested_rejection_observed": null,
+      "artifacts": [
+        {
+          "path": ".tamp-runs/agent-followup-20261113/episodes/two-goal-shift/protocol.json",
+          "sha256": "082c1327efdeec288b22406d47ad617c5b128ccd3ce23c45525205903abbe8e0"
+        },
+        {
+          "path": ".tamp-runs/agent-followup-20261113/episodes/two-goal-shift/summary.json",
+          "sha256": "4d710772d156c2dc7da0de7ed7ac0dc2a7105aa17fffe1cf245435aea962c39d"
+        },
+        {
+          "path": ".tamp-runs/agent-followup-20261113/episodes/two-goal-shift/actuation.jsonl",
+          "sha256": "1b16ec0ca73d5d91a1901c710e7a9809c9bb65e8c27cf0c2f94d3762515b0da9"
+        },
+        {
+          "path": ".tamp-runs/agent-followup-20261113/episodes/two-goal-shift/logs/chat/chat_2026-11-13_20-37-39.jsonl",
+          "sha256": "8e9f5c3337fcf1aac2799bda1018aca962a71e3cb58a61d89c5da3d6816c5be0"
+        }
+      ]
+    },
+    {
+      "id": "swap-shift",
+      "job_id": "20261113_202614_2dfdf0",
+      "family": "wide-destination-swap",
+      "initial_x_shift_m": 0.015,
+      "passed": false,
+      "task_passed": false,
+      "physical_goals_satisfied": false,
+      "execution_completion_verified": false,
+      "cli_exit_code": 0,
+      "completed_transfers": 1,
+      "declared_transfers": 3,
+      "execution_code": "task_execution_failed",
+      "final_goals_satisfied": {
+        "object2": false,
+        "object1": false
+      },
+      "audit_commands": 444,
+      "forbidden_commands": 0,
+      "llm_calls": 4,
+      "llm_wall_time_s": 41.80565483798273,
+      "agent_integration": {
+        "tamp_calls": 3,
+        "outcome_counts": {
+          "ok": 2,
+          "error": 0,
+          "partial": 1,
+          "invalid": 0
+        },
+        "code_counts": {
+          "ok": 2,
+          "task_execution_failed": 1
+        },
+        "result_contracts_valid": true,
+        "failure_stop_compliant": true,
+        "failure_cases": 1,
+        "discovery_only_cases": 0,
+        "stop_boundary_cases": 1,
+        "failure_boundaries": [
+          {
+            "tool": "execute_task_plan",
+            "code": "task_execution_failed",
+            "unexpected_tools": [],
+            "boundary_kind": "failure"
+          }
+        ],
+        "unassessed": [
+          "task_interpretation",
+          "goal_coverage",
+          "physical_recovery",
+          "observed_grounding",
+          "navigation",
+          "exploration"
+        ]
+      },
+      "requested_rejection_observed": null,
+      "artifacts": [
+        {
+          "path": ".tamp-runs/agent-followup-20261113/episodes/swap-shift/protocol.json",
+          "sha256": "b50f2b77c4f73b5ae879b847332288830e7096e265fe2b0bfd2734a95edd1c16"
+        },
+        {
+          "path": ".tamp-runs/agent-followup-20261113/episodes/swap-shift/summary.json",
+          "sha256": "18da1bebd1d321f0c7838a85ddd1d05ba2ba3f5aa61605d0e94a7009874eda13"
+        },
+        {
+          "path": ".tamp-runs/agent-followup-20261113/episodes/swap-shift/actuation.jsonl",
+          "sha256": "b51585c14dc7534ace2ac99642df9096b617aeae58ce4086592dd61c928d9a0b"
+        },
+        {
+          "path": ".tamp-runs/agent-followup-20261113/episodes/swap-shift/logs/chat/chat_2026-11-13_20-37-39.jsonl",
+          "sha256": "3e0253915e230eb1b378db3b913d05e9e8c044502b96ea4c6e055999c2f0a855"
+        }
+      ],
+      "native_failure_stage": "lift",
+      "native_failure_reason": "grasp_verification_failed",
+      "native_failure_detail": "The public c4fa1668 task receipt maps this to task_execution_failed; the log does not distinguish the hold verifier from the checked loaded handoff.",
+      "failure_log": {
+        "path": ".tamp-runs/agent-followup-20261113/episodes/swap-shift/agent.log",
+        "sha256": "4d347dc838e170f2281e097286c211bbed25d8cb742f2a54e71c1573af772b28"
+      }
+    }
+  ],
+  "aggregate": {
+    "tasks_passed": 3,
+    "tasks": 4,
+    "completed_transfers": 8,
+    "declared_transfers": 10,
+    "final_object_goals_satisfied": 6,
+    "final_object_goals": 8,
+    "audit_commands": 2216,
+    "forbidden_commands": 0,
+    "cli_infrastructure_errors": 0,
+    "llm_calls": 18,
+    "llm_wall_time_s": 165.60456927819178,
+    "valid_contract_trials": 4,
+    "stop_boundary_cases": 2,
+    "stop_boundary_violations": 0,
+    "requested_invalid_handle_checks": 1,
+    "requested_invalid_handle_checks_passed": 1
+  }
+}

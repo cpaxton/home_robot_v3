@@ -1,0 +1,681 @@
+{
+  "schema_version": 1,
+  "source_commit": "c4fa16687aebb256eefc676d334f10ef22a70662",
+  "protocol": "configs/eval/tamp_native_followup_20261113.json",
+  "scope": "Development replay after qualification failures; identical eight positive tasks and four boundary checks; no held-out or agent claim",
+  "hardware_trials": false,
+  "llm_calls": 0,
+  "prior_qualification": "docs/experiments/tamp_native_qualification_20261113.json",
+  "cases": [
+    {
+      "id": "control",
+      "population": "regression",
+      "scenario": "invalid_then_task",
+      "job_id": "20261113_201903_55e152",
+      "run_status": "complete",
+      "task_passed": true,
+      "code": "ok",
+      "status": "ok",
+      "completed_transfers": 2,
+      "declared_transfers": 2,
+      "boundary_checks": [
+        {
+          "tool": "execute_task_plan",
+          "code": "unknown_plan",
+          "status": "error",
+          "expected_codes": [
+            "unknown_plan"
+          ],
+          "no_commands": true,
+          "passed": true
+        }
+      ],
+      "audit_commands": 528,
+      "forbidden_commands": 0,
+      "wall_time_s": 163.46281365607865,
+      "final_goals_satisfied": {
+        "object2": true,
+        "object1": true
+      },
+      "last_motion_phase": null,
+      "last_motion_event": {
+        "phase": "release_open_verified",
+        "controller_success": true,
+        "source": "simulator_ground_truth_debug",
+        "supported": true,
+        "settled": true,
+        "stable_interval_s": 0.1
+      },
+      "artifacts": [
+        {
+          "path": ".tamp-runs/native-followup-20261113/episodes/control/protocol.json",
+          "sha256": "2f340d9089284e11d34625785bae48da103b1a28fcb68b5e90d1a45f042a7f74"
+        },
+        {
+          "path": ".tamp-runs/native-followup-20261113/episodes/control/summary.json",
+          "sha256": "4b576076eda3416895de282543276271ae5b0a733fcd4f031ae531fea896fb34"
+        },
+        {
+          "path": ".tamp-runs/native-followup-20261113/episodes/control/initial.json",
+          "sha256": "78b1dec71ad75aaa2836ff4bb99cbdbcb7ac2988da9a7aee7d8eace78560bb80"
+        },
+        {
+          "path": ".tamp-runs/native-followup-20261113/episodes/control/contact.jsonl",
+          "sha256": "a2ed39dd47b8a020b66c40dc623ff593f1dbf6810daa30473100f80f149a8487"
+        },
+        {
+          "path": ".tamp-runs/native-followup-20261113/episodes/control/actuation.jsonl",
+          "sha256": "522012cc533da9f10020e37022627be014f7575b019a97ba5d0c3b7517d80bac"
+        }
+      ]
+    },
+    {
+      "id": "shift15",
+      "population": "regression",
+      "scenario": "reuse_plan",
+      "job_id": "20261113_201903_02642b",
+      "run_status": "complete",
+      "task_passed": true,
+      "code": "ok",
+      "status": "ok",
+      "completed_transfers": 2,
+      "declared_transfers": 2,
+      "boundary_checks": [
+        {
+          "tool": "execute_task_plan",
+          "code": "unknown_plan",
+          "status": "error",
+          "expected_codes": [
+            "unknown_plan"
+          ],
+          "no_commands": true,
+          "passed": true
+        }
+      ],
+      "audit_commands": 534,
+      "forbidden_commands": 0,
+      "wall_time_s": 156.26871839095838,
+      "final_goals_satisfied": {
+        "object2": true,
+        "object1": true
+      },
+      "last_motion_phase": null,
+      "last_motion_event": {
+        "phase": "release_open_verified",
+        "controller_success": true,
+        "source": "simulator_ground_truth_debug",
+        "supported": true,
+        "settled": true,
+        "stable_interval_s": 0.1
+      },
+      "artifacts": [
+        {
+          "path": ".tamp-runs/native-followup-20261113/episodes/shift15/protocol.json",
+          "sha256": "65065b7b67cde7d1555c8d0fa5366bbbf12b39725178bde9a01c5d80c6c86d7c"
+        },
+        {
+          "path": ".tamp-runs/native-followup-20261113/episodes/shift15/summary.json",
+          "sha256": "2edb9d982c33f572b9e7c140cd31218c3c5a62feb8c078f38fbc4d3fad7410d2"
+        },
+        {
+          "path": ".tamp-runs/native-followup-20261113/episodes/shift15/initial.json",
+          "sha256": "59b92fc89e165f0ad074fce4cf6d2c8f36395c57a9f209ab7d3cd12c1b979839"
+        },
+        {
+          "path": ".tamp-runs/native-followup-20261113/episodes/shift15/contact.jsonl",
+          "sha256": "215a509ed1131ddd9c596ecf9787e6237644cee3d0e9dd463c553c8d60eff0bb"
+        },
+        {
+          "path": ".tamp-runs/native-followup-20261113/episodes/shift15/actuation.jsonl",
+          "sha256": "eba0057337f759ad9494b5a4cd0fd08691c3cb674183b0aee8cd408ce48f05ea"
+        }
+      ]
+    },
+    {
+      "id": "left30",
+      "population": "candidate",
+      "scenario": "task",
+      "job_id": "20261113_201904_8aa143",
+      "run_status": "complete",
+      "task_passed": false,
+      "code": "verification_failed",
+      "status": "partial",
+      "completed_transfers": 0,
+      "declared_transfers": 2,
+      "boundary_checks": [],
+      "audit_commands": 249,
+      "forbidden_commands": 0,
+      "wall_time_s": 120.3728588570375,
+      "final_goals_satisfied": {
+        "object2": false,
+        "object1": false
+      },
+      "last_motion_phase": null,
+      "last_motion_event": {
+        "phase": "release_check",
+        "reason": "release_verify_failed",
+        "arrived": true,
+        "fingertip_contact": false,
+        "supported": true,
+        "settled": false,
+        "geometry_clear": null,
+        "linear_speed_m_s": 0.11922245212318004,
+        "angular_speed_rad_s": 2.8144645565097486,
+        "timeout_s": 12.0
+      },
+      "artifacts": [
+        {
+          "path": ".tamp-runs/native-followup-20261113/episodes/left30/protocol.json",
+          "sha256": "eb8a5d1fb91f9d17a2e93997fc7fc613529636ad559b197054d572e5dd47af60"
+        },
+        {
+          "path": ".tamp-runs/native-followup-20261113/episodes/left30/summary.json",
+          "sha256": "50f75bb1a35473a7a23f43ef6c70e6a5a86c9d3eae17bf60006ccdc8de9bbf8a"
+        },
+        {
+          "path": ".tamp-runs/native-followup-20261113/episodes/left30/initial.json",
+          "sha256": "7af3706f8df9d5c160845d16b96e93e42dbb846fe7eac75f27218c5e150d7ecb"
+        },
+        {
+          "path": ".tamp-runs/native-followup-20261113/episodes/left30/contact.jsonl",
+          "sha256": "a79240838c95089538caf3c8452df2d96ad834fb46d81714e1f3db93c692c13a"
+        },
+        {
+          "path": ".tamp-runs/native-followup-20261113/episodes/left30/actuation.jsonl",
+          "sha256": "b9a3c0f7254779eb59071b66c332d483b4878ce3f3588e14fc34cfdcba05dcf1"
+        }
+      ]
+    },
+    {
+      "id": "right30",
+      "population": "candidate",
+      "scenario": "task",
+      "job_id": "20261113_201904_999c09",
+      "run_status": "complete",
+      "task_passed": false,
+      "code": "payload_not_retained",
+      "status": "partial",
+      "completed_transfers": 1,
+      "declared_transfers": 2,
+      "boundary_checks": [],
+      "audit_commands": 421,
+      "forbidden_commands": 0,
+      "wall_time_s": 172.30666307895444,
+      "final_goals_satisfied": {
+        "object2": true,
+        "object1": false
+      },
+      "last_motion_phase": "lift",
+      "last_motion_event": {
+        "phase": "payload_retention",
+        "accepted": false,
+        "reason": "payload_not_retained",
+        "translation_residual_m": 0.0019770613394560895,
+        "rotation_residual_rad": 0.10131012879623337,
+        "translation_tolerance_m": 0.02,
+        "rotation_tolerance_rad": 0.1
+      },
+      "artifacts": [
+        {
+          "path": ".tamp-runs/native-followup-20261113/episodes/right30/protocol.json",
+          "sha256": "efc49be9d4c0e3674369055cee2e880d763a6672ebbd54d12f0c221c03df0eb5"
+        },
+        {
+          "path": ".tamp-runs/native-followup-20261113/episodes/right30/summary.json",
+          "sha256": "924fee7b9c970540379c6e76faba60b375ef0965f5b8b1088bb47db25f8ac2e0"
+        },
+        {
+          "path": ".tamp-runs/native-followup-20261113/episodes/right30/initial.json",
+          "sha256": "7420930fe1c7f0105173bba6725f2b9dccc876e5c069975ecb239b16c9edb6de"
+        },
+        {
+          "path": ".tamp-runs/native-followup-20261113/episodes/right30/contact.jsonl",
+          "sha256": "6ef6e71b85c2ee719723c028ca4fafa1516bdbe067e44bd0ab06aa5a8d31eb58"
+        },
+        {
+          "path": ".tamp-runs/native-followup-20261113/episodes/right30/actuation.jsonl",
+          "sha256": "c905db9dd13cf9351e98f4f4cd24c11b6a3429a757a2341a2f6583eb319560ae"
+        }
+      ]
+    },
+    {
+      "id": "back12-yaw",
+      "population": "candidate",
+      "scenario": "task",
+      "job_id": "20261113_201904_9e04cf",
+      "run_status": "complete",
+      "task_passed": true,
+      "code": "ok",
+      "status": "ok",
+      "completed_transfers": 2,
+      "declared_transfers": 2,
+      "boundary_checks": [],
+      "audit_commands": 528,
+      "forbidden_commands": 0,
+      "wall_time_s": 158.18730307696387,
+      "final_goals_satisfied": {
+        "object2": true,
+        "object1": true
+      },
+      "last_motion_phase": null,
+      "last_motion_event": {
+        "phase": "release_open_verified",
+        "controller_success": true,
+        "source": "simulator_ground_truth_debug",
+        "supported": true,
+        "settled": true,
+        "stable_interval_s": 0.1
+      },
+      "artifacts": [
+        {
+          "path": ".tamp-runs/native-followup-20261113/episodes/back12-yaw/protocol.json",
+          "sha256": "a286dbb569970bea7472af321cbd981296430e4e8e57f9020f2e33363d8f6008"
+        },
+        {
+          "path": ".tamp-runs/native-followup-20261113/episodes/back12-yaw/summary.json",
+          "sha256": "2c603aa7149a54c53ffd9ccb7a2ffc0d95125519f7df175724e90d275cea7a57"
+        },
+        {
+          "path": ".tamp-runs/native-followup-20261113/episodes/back12-yaw/initial.json",
+          "sha256": "9f8cf8cb07ec1610d6f802427b21dd2cf8bc81a3f578a6a6b008d0e525e7ef97"
+        },
+        {
+          "path": ".tamp-runs/native-followup-20261113/episodes/back12-yaw/contact.jsonl",
+          "sha256": "d54b25d25a8e2484479909c4351f7e08a6dd5bc3cd38bbd57ca2f35f7a7f0ecb"
+        },
+        {
+          "path": ".tamp-runs/native-followup-20261113/episodes/back12-yaw/actuation.jsonl",
+          "sha256": "1d7ce5f5837eafb69931ff6bc28694330b9b162830eec2b18d8821275605cc66"
+        }
+      ]
+    },
+    {
+      "id": "front12-yaw",
+      "population": "candidate",
+      "scenario": "task",
+      "job_id": "20261113_201905_3eb4c8",
+      "run_status": "complete",
+      "task_passed": false,
+      "code": "payload_not_retained",
+      "status": "partial",
+      "completed_transfers": 1,
+      "declared_transfers": 2,
+      "boundary_checks": [],
+      "audit_commands": 433,
+      "forbidden_commands": 0,
+      "wall_time_s": 137.2288369270973,
+      "final_goals_satisfied": {
+        "object2": true,
+        "object1": false
+      },
+      "last_motion_phase": "lift",
+      "last_motion_event": {
+        "phase": "payload_retention",
+        "accepted": false,
+        "reason": "payload_not_retained",
+        "translation_residual_m": 0.0022977243622633982,
+        "rotation_residual_rad": 0.10041925132480614,
+        "translation_tolerance_m": 0.02,
+        "rotation_tolerance_rad": 0.1
+      },
+      "artifacts": [
+        {
+          "path": ".tamp-runs/native-followup-20261113/episodes/front12-yaw/protocol.json",
+          "sha256": "18113add02911807433bfdfd5f416d01b13ed4d155a5f09cbea48ca947d000ce"
+        },
+        {
+          "path": ".tamp-runs/native-followup-20261113/episodes/front12-yaw/summary.json",
+          "sha256": "27389c8a1cf78f3ae9ac7dba6ad6930db785a3d9e0cad8300b4183acd5f86289"
+        },
+        {
+          "path": ".tamp-runs/native-followup-20261113/episodes/front12-yaw/initial.json",
+          "sha256": "2d9fd4e6bc33a8a2a1ab5073c05f311dc0d7cb059d7cf6ed855dca6cf0882d7f"
+        },
+        {
+          "path": ".tamp-runs/native-followup-20261113/episodes/front12-yaw/contact.jsonl",
+          "sha256": "933cd4edb6869e9f2810ffe7aa8f6ec52046d4bc1a214950d4c923cc6d674555"
+        },
+        {
+          "path": ".tamp-runs/native-followup-20261113/episodes/front12-yaw/actuation.jsonl",
+          "sha256": "9c0b90442f7ed523546d802e076d98930d56fa4e28e9c4eca43a890ba557b46f"
+        }
+      ]
+    },
+    {
+      "id": "swap-left10",
+      "population": "candidate",
+      "scenario": "task",
+      "job_id": "20261113_201905_acd2f4",
+      "run_status": "complete",
+      "task_passed": true,
+      "code": "ok",
+      "status": "ok",
+      "completed_transfers": 3,
+      "declared_transfers": 3,
+      "boundary_checks": [],
+      "audit_commands": 681,
+      "forbidden_commands": 0,
+      "wall_time_s": 225.20632813102566,
+      "final_goals_satisfied": {
+        "object2": true,
+        "object1": true
+      },
+      "last_motion_phase": null,
+      "last_motion_event": {
+        "phase": "release_open_verified",
+        "controller_success": true,
+        "source": "simulator_ground_truth_debug",
+        "supported": true,
+        "settled": true,
+        "stable_interval_s": 0.1
+      },
+      "artifacts": [
+        {
+          "path": ".tamp-runs/native-followup-20261113/episodes/swap-left10/protocol.json",
+          "sha256": "518db9b7d2fea911527763a5f9c20bca1092ec547702384b2e237906746ce6ba"
+        },
+        {
+          "path": ".tamp-runs/native-followup-20261113/episodes/swap-left10/summary.json",
+          "sha256": "1cd49c6aa7f70cea9cd5f480139f334f46bf2926738a0a3637ad698f52dce489"
+        },
+        {
+          "path": ".tamp-runs/native-followup-20261113/episodes/swap-left10/initial.json",
+          "sha256": "6f93796afb23c4b31033fc0a195f2f09b84f147f05bfcaaacff359746b9ff50e"
+        },
+        {
+          "path": ".tamp-runs/native-followup-20261113/episodes/swap-left10/contact.jsonl",
+          "sha256": "f32c9300c631a369c7d460b9c24fcc9fbd900ba72ef31834880a53acdf16c04e"
+        },
+        {
+          "path": ".tamp-runs/native-followup-20261113/episodes/swap-left10/actuation.jsonl",
+          "sha256": "3946c59f91053fe8be15b28e1cbd825898d2b0c8f1dac9b2b4d6e780912994c2"
+        }
+      ]
+    },
+    {
+      "id": "swap-right25",
+      "population": "candidate",
+      "scenario": "task",
+      "job_id": "20261113_201905_340626",
+      "run_status": "complete",
+      "task_passed": false,
+      "code": "joint_bounds",
+      "status": "partial",
+      "completed_transfers": 0,
+      "declared_transfers": 3,
+      "boundary_checks": [],
+      "audit_commands": 279,
+      "forbidden_commands": 0,
+      "wall_time_s": 178.15398561698385,
+      "final_goals_satisfied": {
+        "object2": false,
+        "object1": false
+      },
+      "last_motion_phase": null,
+      "last_motion_event": {
+        "phase": "release_open_verified",
+        "controller_success": true,
+        "source": "simulator_ground_truth_debug",
+        "supported": true,
+        "settled": true,
+        "stable_interval_s": 0.1
+      },
+      "artifacts": [
+        {
+          "path": ".tamp-runs/native-followup-20261113/episodes/swap-right25/protocol.json",
+          "sha256": "10036d8debcce44298ac9ccffc98b979893890c376963850180b662827a83c3a"
+        },
+        {
+          "path": ".tamp-runs/native-followup-20261113/episodes/swap-right25/summary.json",
+          "sha256": "a92bdf957056ef58760a30ac5a7c887492aad7d1b26e27636b9aefbc1e84498d"
+        },
+        {
+          "path": ".tamp-runs/native-followup-20261113/episodes/swap-right25/initial.json",
+          "sha256": "a19172d8065695d43aa2643a355eb95c06b39bc9f95ecde73073c03843fce3c2"
+        },
+        {
+          "path": ".tamp-runs/native-followup-20261113/episodes/swap-right25/contact.jsonl",
+          "sha256": "db0832944764ddf8757b1a7b71df7be57c373b862a1e22e16bf5d866d3cd6ad0"
+        },
+        {
+          "path": ".tamp-runs/native-followup-20261113/episodes/swap-right25/actuation.jsonl",
+          "sha256": "c095b6654ca8d019f58e94a8570dee4bd894e23ec1f2907aa22ae88c2b7f3968"
+        }
+      ]
+    },
+    {
+      "id": "stale-head-plan",
+      "population": "expected_rejection",
+      "scenario": "stale_plan",
+      "job_id": "20261113_201905_e6a540",
+      "run_status": "complete",
+      "task_passed": false,
+      "code": "stale_task_plan",
+      "status": "error",
+      "completed_transfers": 0,
+      "declared_transfers": 0,
+      "boundary_checks": [
+        {
+          "tool": "execute_task_plan",
+          "code": "stale_task_plan",
+          "status": "error",
+          "expected_codes": [
+            "stale_task_plan"
+          ],
+          "no_commands": true,
+          "passed": true
+        }
+      ],
+      "audit_commands": 3,
+      "forbidden_commands": 0,
+      "wall_time_s": 44.95671823201701,
+      "final_goals_satisfied": {
+        "object2": false,
+        "object1": false
+      },
+      "last_motion_phase": null,
+      "last_motion_event": {},
+      "artifacts": [
+        {
+          "path": ".tamp-runs/native-followup-20261113/episodes/stale-head-plan/protocol.json",
+          "sha256": "218f416149d06f36c0502b5d9471573ab6d52ff10fbba5d68b0e14f7974cc7f5"
+        },
+        {
+          "path": ".tamp-runs/native-followup-20261113/episodes/stale-head-plan/summary.json",
+          "sha256": "b2c92e86bbdb8bfaebdd2e46a19b190740826daa775fcf15edb34e4fd9ef0ab8"
+        },
+        {
+          "path": ".tamp-runs/native-followup-20261113/episodes/stale-head-plan/initial.json",
+          "sha256": "99e3f9d9fd135805bc3267244c06f52cf334d1089f634c7a49252e8d0e9c0fe9"
+        },
+        {
+          "path": ".tamp-runs/native-followup-20261113/episodes/stale-head-plan/contact.jsonl",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": ".tamp-runs/native-followup-20261113/episodes/stale-head-plan/actuation.jsonl",
+          "sha256": "9f7638d6ad44d2ebed3643506c5ae87a6d190628e85c7e84a729004ed8e23f26"
+        }
+      ]
+    },
+    {
+      "id": "occupied-placement",
+      "population": "expected_rejection",
+      "scenario": "blocked_placement",
+      "job_id": "20261113_201905_428539",
+      "run_status": "complete",
+      "task_passed": false,
+      "code": "no_plan_within_budget",
+      "status": "error",
+      "completed_transfers": 0,
+      "declared_transfers": 0,
+      "boundary_checks": [
+        {
+          "tool": "plan_pick_place",
+          "code": "no_plan_within_budget",
+          "status": "error",
+          "expected_codes": [
+            "no_collision_free_placement",
+            "no_plan_within_budget"
+          ],
+          "no_commands": true,
+          "passed": true
+        }
+      ],
+      "audit_commands": 2,
+      "forbidden_commands": 0,
+      "wall_time_s": 47.9877058591228,
+      "final_goals_satisfied": {
+        "object2": false,
+        "object1": false
+      },
+      "last_motion_phase": null,
+      "last_motion_event": {},
+      "artifacts": [
+        {
+          "path": ".tamp-runs/native-followup-20261113/episodes/occupied-placement/protocol.json",
+          "sha256": "d9b806aa5e0f5a790c74df7c1728e73518b9f2d41a503b1d8f878a64213feac9"
+        },
+        {
+          "path": ".tamp-runs/native-followup-20261113/episodes/occupied-placement/summary.json",
+          "sha256": "91eaccd2c836883762bb19e855a8ba83a5f7cb1015bbb5913e51f8ef0c50c80b"
+        },
+        {
+          "path": ".tamp-runs/native-followup-20261113/episodes/occupied-placement/initial.json",
+          "sha256": "11febb8ef186e2649f824207f36cda3a4e98b11471731fbe4784a772e6d81e48"
+        },
+        {
+          "path": ".tamp-runs/native-followup-20261113/episodes/occupied-placement/contact.jsonl",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": ".tamp-runs/native-followup-20261113/episodes/occupied-placement/actuation.jsonl",
+          "sha256": "399a245c6128c6e1fad240356f25b567ff873fa3b812656ea2301a30c478d636"
+        }
+      ]
+    }
+  ],
+  "aggregate": {
+    "positive_tasks_passed": 4,
+    "positive_task_candidates": 8,
+    "completed_transfers": 11,
+    "declared_transfers": 18,
+    "boundary_checks_passed": 4,
+    "declared_boundary_checks": 4,
+    "boundary_checks_observed": 4,
+    "audit_commands": 3658,
+    "forbidden_commands": 0,
+    "infrastructure_errors": 0
+  },
+  "regression": {
+    "tests": 299,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "junit": {
+      "path": ".tamp-runs/native-followup-20261113/regression/current-source.xml",
+      "sha256": "01857cce6fcc505f944b12af9e497638bd6b59785fa26c0f8aa97b2eeb7fad1b"
+    }
+  },
+  "full_config_regression": {
+    "tests": 133,
+    "failures": 1,
+    "errors": 0,
+    "skipped": 1,
+    "junit": {
+      "path": ".tamp-runs/native-followup-20261113/config-regression/results.xml",
+      "sha256": "aa99ce1a035ea2269ce2d045f83fae063908310bedeae73c18aa9b5597fb9141"
+    }
+  },
+  "main_regression_reproduction": {
+    "main_commit": "cd169673ba69c5e8f63dbda4c0bcab25d373e339",
+    "tests": 1,
+    "failures": 1,
+    "failure": "assert 1.4634869868131006 < 0.2",
+    "artifact": {
+      "path": ".tamp-runs/native-followup-20261113/config-regression/main-reproduction.xml",
+      "sha256": "916f3be4e584205f1225d1ec1a990f783cbbb3d463fbe08aafb435214c4535b5"
+    },
+    "unchanged_paths": [
+      "src/test/config/test_navigation_posture_stability.py",
+      "src/emet/robots/rby1.py",
+      "src/emet/simulation/mujoco_stationary_control.py",
+      "src/emet/simulation/mujoco_server.py",
+      "src/emet/assets/robot"
+    ]
+  },
+  "joint_limit_diagnostic": {
+    "data": {
+      "source": "read-only last measured release snapshot; not an additional physical task",
+      "sim_time": 115.57399999991205,
+      "event": {
+        "phase": "release_open_verified",
+        "controller_success": true,
+        "source": "simulator_ground_truth_debug",
+        "supported": true,
+        "settled": true,
+        "stable_interval_s": 0.1
+      },
+      "violations": [
+        {
+          "joint": "joint_arm_l3",
+          "q": 0.13000696774125214,
+          "limits": [
+            0.0,
+            0.13
+          ],
+          "beyond_limit": 6.967741252139614e-06
+        },
+        {
+          "joint": "joint_arm_l2",
+          "q": 0.13000873029682486,
+          "limits": [
+            0.0,
+            0.13
+          ],
+          "beyond_limit": 8.730296824854822e-06
+        },
+        {
+          "joint": "joint_arm_l1",
+          "q": 0.13000733337545595,
+          "limits": [
+            0.0,
+            0.13
+          ],
+          "beyond_limit": 7.33337545594237e-06
+        }
+      ]
+    },
+    "artifact": {
+      "path": ".tamp-runs/native-followup-20261113/joint_limit_diagnostic.json",
+      "sha256": "b8ffa0bd1126d105bd665339f46a1188c9c9d342547e4ffb870e11fd33223c57"
+    }
+  },
+  "joint_margin_planning_probe": {
+    "data": [
+      {
+        "case": "swap-right25",
+        "object": "red cylinder",
+        "region": "buffer forward",
+        "joint_arm_margin_m": 0.0005,
+        "planning_only": true,
+        "model_limits_changed": false,
+        "status": "ok",
+        "code": "ok",
+        "ik_calls": 102,
+        "rejections": {
+          "pregrasp:ik_failed": 88,
+          "grasp:collision": 3,
+          "pregrasp:collision": 1,
+          "preplace:ik_failed": 1
+        },
+        "wall_s": 9.959151456132531,
+        "commands": 0
+      }
+    ],
+    "artifact": {
+      "path": ".tamp-runs/native-followup-20261113/joint_margin_planning_probe.json",
+      "sha256": "968280daa6313df44e656434f339a1525f7a43119a44275034342d495587222b"
+    }
+  }
+}

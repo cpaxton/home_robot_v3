@@ -194,9 +194,8 @@ nominal corrections can leave the measured opening invalid. The opt-in follow-up
 uses that measured offset as a search reserve, under explicit raise/drop limits;
 it still requires fresh geometry, measured opening and final support checks.
 With exact shape extents and support settling, the latest separate native pair
-passes 2/2 development tasks (4/4 transfers); the profile remains opt-in and the
-actual-agent 2/4 baseline is unchanged.
-Broader native placements and actual-agent repeats remain the next acceptance gate.
+passes 2/2 development tasks (4/4 transfers). These historical native results
+remain separate from the broader November 13 gate below; the profile stays opt-in.
 
 | Topic | Reference |
 | --- | --- |
@@ -227,6 +226,19 @@ The [November 13 native qualification](experiments/tamp_native_qualification_202
 expands the population to eight task candidates and four interface-boundary
 checks. Its first complete run passes 1/8 tasks and all four boundary checks,
 exposing a too-short release-settling budget and restrictive pregrasp approaches.
-The shared opt-in policy now has bounded fixes under developmental replay;
-these results do not replace the earlier agent baseline or qualify observed
-navigation/exploration. See the [qualification plan](plans/2026-11-13_native_tamp_qualification.md).
+The [unchanged-population development replay](experiments/tamp_native_followup_20261113.md)
+passes 4/8 tasks, 11/18 transfers and all four boundary checks after settling and
+pregrasp fixes. It retains release-motion, cube-retention and joint-limit failures.
+The policy is shared by the production primitive tools, task provider and diagnostic
+wrapper, with an explicit opt-in setting documented in the
+[task-plan API](api/tamp_task_plans.md#native-motion-policy). These native scores
+do not qualify observed navigation/exploration. See the
+[qualification plan](plans/2026-11-13_native_tamp_qualification.md).
+
+The separate [November 13 actual-agent repeat](experiments/tamp_agent_followup_20261113.md)
+uses Caliban and the production `run agent` CLI: **3/4 tasks, 8/10 transfers**,
+with valid JSON in all four trials and correct stops at both failure boundaries.
+The shifted two-goal task now passes; the shifted swap fails native cube lift
+verification. The earlier 2/4 baseline remains recorded separately. These are
+familiar development cases; broader native robustness and the observed
+exploration/manipulation chain remain unqualified.

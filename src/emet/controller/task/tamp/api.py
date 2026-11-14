@@ -189,6 +189,7 @@ def failure_code(message: str) -> str:
             ("ik_failed", "ik_failed"),
             ("planning_failed", "planning_failed"),
             ("verify_failed", "verification_failed"),
+            ("verification_failed", "verification_failed"),
         ):
             if part.endswith(suffix):
                 return code

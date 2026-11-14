@@ -105,3 +105,28 @@ probe, and interrupted source-transition attempts. After native replay, run the
 actual agent through Caliban on the original four two-goal/swap pilot cases.
 Final agent pass requires both independently measured goals and a successful
 public execution receipt; a later settled object cannot erase a partial result.
+
+## Completed development replay
+
+Source `c4fa1668` passes 4/8 native tasks, 11/18 declared transfers and all four
+no-command boundary checks. The fresh affected suite passes 299 tests. Full
+configuration coverage finds one assertion failure reproduced identically on
+main and one missing cached-MJCF skip; see the
+[complete replay report](../experiments/tamp_native_followup_20261113.md).
+
+The remaining cases expose post-release cylinder motion, cube rotation beyond
+the retention bound, and measured arm joints just beyond extension limits
+before retreat. Reserve achievable joint-limit margins and certify a real
+escape path instead of clamping a measured configuration. Preserve the original
+bound and contact evidence when improving grasp/release stability. After those
+fixes, freeze new untouched layouts, then repeat the actual agent through the
+same production interface. Four familiar agent pilot successes alone would
+not establish broader native robustness. Observed self-occupancy, contact
+admission and exploration remain a separate next gate.
+
+The [actual Caliban agent repeat](../experiments/tamp_agent_followup_20261113.md)
+is complete: 3/4 tasks, 8/10 transfers, 6/8 final goals, 18 inference calls,
+2,216 audited commands, no forbidden commands or infrastructure failures.
+All four trials have valid result contracts and both stop boundaries are
+compliant. The shifted swap fails native lift verification after one transfer;
+the historical 2/4 pilot is not rescored.

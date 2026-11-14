@@ -283,3 +283,56 @@ green marks verified opening and supported stillness. Task labels are complete
 native task outcomes; only the first cylinder is plotted.}
 \label{fig:tamp_release_search}
 \end{figure}
+
+\paragraph{Broader shared-policy gate and actual agent repeat.}
+The November~13 gate uses one opt-in native policy shared by production tools
+and the diagnostic wrapper. It preserves the default policy and requires
+explicit physical mode with privileged simulation inputs. Eight native task
+candidates perturb initial X/Y positions and cube yaw, including buffered swaps;
+four separate boundary checks exercise invalid handles, consumed handles,
+stale plans after measured head motion, and occupied placement targets.
+At \texttt{cbfebe35}, the complete prospective population passes 1/8 tasks,
+4/18 declared transfers and 4/4 boundary checks. Per-tick scene hashing is cached
+outside the physics callback; a private 100-step comparison has bit-identical
+state/contact results. Faster execution does not certify task success.
+Measured failure evidence motivates anchoring release waits to fresh feedback,
+matching the existing 12~s native verifier budget, and trying an 80~mm vertical
+pregrasp after the existing candidates fail under the same 256-call IK cap.
+The unchanged population at \texttt{c4fa1668} then passes 4/8 tasks,
+11/18 transfers and 4/4 boundary checks. Because these
+cases informed the fixes, this replay is developmental, not held-out acceptance.
+Remaining failures include persistent post-release cylinder motion, cube rotation
+beyond the unchanged 0.1~rad retention bound, and a joint-bound rejection after
+release before retreat. Supported final objects alone do not complete a failed
+execution receipt.
+
+A separate repeat uses the actual \texttt{run agent} CLI with remote Caliban
+Qwen3-VL-8B inference on the original four development cases. The LLM discovers
+roles, requests a task plan and executes the returned handle; the experiment
+does not script the transfers. It passes 3/4 complete tasks and
+8/10 declared transfers, with 6/8 independently verified
+final object goals. All 4/4 trials satisfy the result contract;
+2 stop boundaries have no later dispatch before a new user turn.
+One trial explicitly requests an invalid-handle rejection, then separately
+authorizes a new task. Across both new cohorts, audited commands contain no
+forbidden attachment or pose-teleport commands. These are single live trials
+per condition with server-default sampling and independently evolving startup
+states, not exact reset pairs or manipulation reliability estimates.
+The original 2/4 agent result remains recorded separately. Figures and manifests
+preserve cohort identity, source hashes, receipts and failure cases:
+\path{docs/experiments/tamp_native_followup_20261113.json} and
+\path{docs/experiments/tamp_agent_followup_20261113.json}.
+This gate does not qualify observed grounding, navigation, exploration, household
+native adapters or hardware sensors.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/tamp_qualification_20261113.pdf}
+\caption{Native and actual-agent development cohorts remain separate.
+Cell counts show completed transfers; green additionally requires a successful
+complete-task receipt and independent physical goals. Native replay uses the
+same eight candidates after evidence-driven fixes. Agent repeats use the same
+four earlier development tasks through production tools. A single trial per
+cell does not establish held-out reliability; failures remain in the denominator.}
+\label{fig:tamp_qualification}
+\end{figure}
