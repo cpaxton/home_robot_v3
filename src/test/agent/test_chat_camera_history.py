@@ -72,8 +72,55 @@ def test_live_chat_session_preserves_earlier_user_turn_and_camera(monkeypatch):
     factory.assert_not_called()
     robot.stop.assert_called_once()
     assert [m["role"] for m in requests[1]] == ["system", "user", "assistant", "user"]
-    assert requests[1][1]["content"][0]["text"] == "Observe this"
+    assert requests[1][1]["content"][0]["text"].startswith("Observe this\n\n")
     assert requests[1][1]["content"][1]["type"] == "image_url"
+
+
+def test_chat_session_trims_real_http_history_and_labels_cached_acquisition(monkeypatch):
+    import copy
+
+    import numpy as np
+
+    robot = setup_chat_loop(monkeypatch)
+    robot.get_observation.return_value = SimpleNamespace(
+        rgb=np.full((4, 6, 3), 80, dtype=np.uint8),
+        _seq_id=17,
+        image_timing={"head_cam_left": {"timestamp_ns": 123, "clock_domain": "fixture"}},
+    )
+    requests = []
+
+    def create(**kwargs):
+        requests.append(copy.deepcopy(kwargs["messages"]))
+        return SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(content='{"tool_calls": [], "message": "done"}', tool_calls=None)
+                )
+            ]
+        )
+
+    client = OpenaiClient("current system", model="emet", base_url="http://127.0.0.1:9/v1", max_history_length=8)
+    client._openai = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+    monkeypatch.setattr(loop, "get_llm_client", lambda *a, **kw: client)
+    monkeypatch.setattr(loop, "get_tools", lambda ctx: [])
+    turns = iter([*[f"inspect {i}" for i in range(8)], "Unrelated: help me write a poem.", None])
+    loop.run_agent_with_robot(
+        discord=False,
+        use_llm=True,
+        robot_client=robot,
+        input_reader=lambda _: next(turns),
+        device="cpu",
+        vl_include_camera=True,
+        thinking_status=False,
+    )
+    assert len(requests) == 9 and all(len(messages) <= 8 for messages in requests)
+    assert all(messages[0] == {"role": "system", "content": "current system"} for messages in requests)
+    assert len(client.get_history()) <= 8
+    text = requests[-1][-1]["content"][0]["text"]
+    assert text.startswith("Unrelated: help me write a poem.")
+    assert "may be cached" in text and "freshness is unverified" in text
+    assert '"frame_sequence": 17' in text and '"timestamp_ns": 123' in text
+    assert "inspect 0" not in str(requests[-1])
 
 
 def test_actual_chat_continues_sensing_then_motion_within_budget(monkeypatch):

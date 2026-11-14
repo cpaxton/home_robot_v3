@@ -135,6 +135,59 @@ def test_openai_client_reset_context_clears_history(monkeypatch) -> None:
     assert comps.calls[1][1]["content"] == "two"
 
 
+@pytest.mark.parametrize("preserve", [1, 50])
+def test_history_is_bounded_before_http_and_after_reply_even_when_prefix_fills_limit(monkeypatch, preserve):
+    monkeypatch.setattr("emet.llms.openai_client.OpenAI", _FakeOpenAI)
+    client = OpenaiClient("sys", model="emet", base_url="http://fixture/v1", history_preserve=preserve)
+    for index in range(35):
+        client(f"turn {index}")
+        sent = client._openai.chat.completions.calls[-1]
+        assert len(sent) <= 50 and len(client.get_history()) <= 50
+        assert sent[0] == {"role": "system", "content": "sys"}
+        assert sent[-1] == {"role": "user", "content": f"turn {index}"}
+
+
+def test_transient_capability_failure_is_retried_instead_of_cached_as_support(monkeypatch):
+    import httpx
+    from openai import OpenAI
+
+    requests = []
+
+    def handle(request):
+        requests.append(request.method)
+        if len(requests) == 1:
+            return httpx.Response(503, json={"error": "temporary discovery failure"})
+        return httpx.Response(
+            200,
+            json={
+                "object": "list",
+                "data": [
+                    {
+                        "id": "fixture",
+                        "object": "model",
+                        "created": 1,
+                        "owned_by": "fixture",
+                        "capabilities": {"native_tools": False},
+                    }
+                ],
+            },
+        )
+
+    sdk = OpenAI(
+        base_url="http://fixture/v1",
+        api_key="unused",
+        max_retries=0,
+        http_client=httpx.Client(transport=httpx.MockTransport(handle)),
+    )
+    monkeypatch.setattr("emet.llms.openai_client.OpenAI", lambda **kw: sdk)
+    client = OpenaiClient("sys", model="fixture", base_url="http://fixture/v1")
+    assert client.supports_native_tools  # Compatibility default, no discovered claim.
+    assert client._native_tools_supported is None
+    assert not client.supports_native_tools
+    assert not client.supports_native_tools
+    assert requests == ["GET", "GET"]
+
+
 def test_chat_camera_keyword_reaches_http_payload_and_survives_followup(monkeypatch):
     """Use the real CHAT call boundary, not a hand-assembled multimodal input."""
     from emet.agent.loop import _call_llm

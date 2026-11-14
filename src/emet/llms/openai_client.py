@@ -76,7 +76,9 @@ class OpenaiClient(AbstractLLMClient):
         self.api_key = resolve_openai_api_key(api_key)
         self.keep_history = bool(keep_history)
         self.max_history_length = max(2, int(max_history_length))
-        self.history_preserve = max(0, min(int(history_preserve), self.max_history_length))
+        # Always leave room for the newest request; hist[-0:] would retain the
+        # whole history and defeat the bound when preserve == max length.
+        self.history_preserve = max(0, min(int(history_preserve), self.max_history_length - 1))
         if self.base_url is None and self.model not in self.model_choices:
             print("Your GPT model:", self.model)
             print("Below are some recommended GPT models:")

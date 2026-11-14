@@ -1239,12 +1239,19 @@ def run_agent_with_robot(
                             max_side=img_kw["image_max_side"],
                             max_pixels=img_kw["image_max_pixels"],
                         )
-                        if followup_round:
-                            current_input += (
-                                "\n\nThe attached head-camera image is the observation for this tool round. "
-                                "Earlier images in the dialogue are historical; compare them with this observation "
-                                "and the measured tool feedback before choosing another action."
+                        sequence = getattr(obs, "_seq_id", None)
+                        timing = getattr(obs, "image_timing", None)
+                        current_input += (
+                            "\n\nAttached head-camera image: latest available frame; it may be cached. "
+                            "Acquisition freshness is unverified by this loop. "
+                            "Earlier images in the dialogue are historical. Camera metadata: "
+                            + json.dumps(
+                                {
+                                    "frame_sequence": sequence if isinstance(sequence, int) else None,
+                                    "image_timing": timing if isinstance(timing, dict) else None,
+                                }
                             )
+                        )
                         if verbose_tools:
                             cr = np.asarray(cam_image)
                             print(
