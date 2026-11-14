@@ -53,6 +53,7 @@ def _worker(connection, case, oracle, arm_reference, initial_settle_s):
             def __init__(self):
                 self.pending, self.ticks = False, 0
                 self.reward = np.zeros(3, dtype=np.float32)
+                self.tick_rewards = []
                 self.meter = RewardMeter(env)
                 self.start = float(env.data.time)
                 self.motion = np.zeros(9, dtype=np.float32)
@@ -74,6 +75,7 @@ def _worker(connection, case, oracle, arm_reference, initial_settle_s):
                     "case_id": case["id"],
                     "reward_terms": self.meter.last_terms.copy(),
                     "elapsed_control_ticks": max(1, self.ticks),
+                    "reward_group_ticks": np.asarray(self.tick_rewards, dtype=np.float32).reshape(-1, 3),
                     "primitive": "pregrasp",
                     "simulation_only": True,
                     "actor_action_applied": self.pending,
@@ -92,6 +94,7 @@ def _worker(connection, case, oracle, arm_reference, initial_settle_s):
                 if action.shape != (8,) or not np.isfinite(action).all() or np.any(abs(action) > 1):
                     raise ValueError("invalid training actor action")
                 self.reward[:] = 0
+                self.tick_rewards.clear()
                 self.ticks = 0
                 self.pending = True
                 self.motion = reference_velocity(env.control)
@@ -100,7 +103,9 @@ def _worker(connection, case, oracle, arm_reference, initial_settle_s):
             def after_step(self):
                 if self.pending:
                     motion = np.zeros(9) if env.control.holding or env.control.stopped else self.motion
-                    self.reward += self.meter.tick(env.control.last_action.copy(), motion)
+                    reward = self.meter.tick(env.control.last_action.copy(), motion)
+                    self.reward += reward
+                    self.tick_rewards.append(reward.copy())
                     self.ticks += 1
 
         bridge = Bridge()
@@ -174,13 +179,22 @@ def _worker(connection, case, oracle, arm_reference, initial_settle_s):
                     reason = "pregrasp_complete" if success else "terminal_motion_unsettled"
         robot.stop_and_confirm("training_primitive_complete" if success else reason)
         success &= robot.stop_confirmed is True
-        bridge.reward[0] += 2.0 if success else -10.0
+        bonus = 2.0 if success else -10.0
+        bridge.reward[0] += bonus
+        if not bridge.tick_rewards:
+            # A rejected initialization has the existing one-tick transition
+            # convention, even when no actor command reached physics.
+            bridge.tick_rewards.append(np.zeros(3, dtype=np.float32))
+        # Completion is observed after the final physical tick, just as in
+        # GeneralTrackingEnv. Keep its credit at that tick when bundling holds.
+        bridge.tick_rewards[-1][0] += bonus
         info = {
             "case_id": case["id"],
             "primitive_success": bool(success),
             "code": reason,
             "stop_confirmed": robot.stop_confirmed,
             "elapsed_control_ticks": max(1, bridge.ticks),
+            "reward_group_ticks": np.asarray(bridge.tick_rewards, dtype=np.float32),
             "actor_action_applied": bridge.pending,
             "reward_terms": bridge.meter.last_terms.copy(),
             "initialization_failed": not bridge.pending,

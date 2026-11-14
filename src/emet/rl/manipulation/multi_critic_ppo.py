@@ -6,7 +6,30 @@ import numpy as np
 import torch
 
 
+def discount_tick_rewards(rewards, *, gamma):
+    """Return sum(gamma**j * r[j]) for one variable-duration decision.
+
+    Rewards are earned after each physical control tick. Continuation starts
+    after all ticks and is discounted separately by gamma**ticks in GAE.
+    """
+    rewards = np.asarray(rewards, dtype=np.float64)
+    if (
+        rewards.ndim != 2
+        or rewards.shape[1] != 3
+        or len(rewards) == 0
+        or not np.isfinite(rewards).all()
+        or not 0 < gamma <= 1
+    ):
+        raise ValueError("finite per-tick three-group rewards and gamma in (0,1] required")
+    if len(rewards) == 1:
+        # Preserve existing one-tick values bitwise, including signed zeros.
+        return rewards[0].astype(np.float32)
+    discounts = gamma ** np.arange(len(rewards), dtype=np.float64)
+    return np.sum(discounts[:, None] * rewards, axis=0).astype(np.float32)
+
+
 def grouped_gae(rewards, values, next_values, terminated, episode_end, ticks, *, gamma=0.9975, lam=0.95):
+    """GAE over decisions whose rewards are already discounted within ticks."""
     arrays = [np.asarray(x) for x in (rewards, values, next_values)]
     rewards, values, next_values = arrays
     n = len(rewards)
@@ -128,6 +151,8 @@ class MultiCriticPPO:
 
     def update(self, rollout):
         cfg = self.config
+        if rollout.get("reward_discount", cfg.gamma) != cfg.gamma:
+            raise ValueError("rollout tick reward discount must match PPO gamma")
         obs = {k: torch.as_tensor(v, dtype=torch.float32) for k, v in rollout["observations"].items()}
         actions = torch.as_tensor(rollout["actions"], dtype=torch.float32)
         old_log = torch.as_tensor(rollout["log_prob"], dtype=torch.float32)

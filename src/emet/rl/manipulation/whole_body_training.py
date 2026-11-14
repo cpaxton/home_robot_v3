@@ -15,7 +15,7 @@ import numpy as np
 import torch
 
 from emet.rl.manipulation.carry_benchmark import source_hashes
-from emet.rl.manipulation.multi_critic_ppo import MultiCriticPPO, PPOConfig, grouped_gae
+from emet.rl.manipulation.multi_critic_ppo import MultiCriticPPO, PPOConfig, discount_tick_rewards, grouped_gae
 from emet.rl.manipulation.whole_body_actor import MultiCriticPolicy
 
 DEFAULT_SUITE = Path("configs/benchmarks/mars_whole_body_v2_development.json")
@@ -312,8 +312,10 @@ def verify_initial_pair(reference, current):
         raise ValueError("paired PPO settings differ beyond normalization scheme")
 
 
-def collect_rollout(env, model, observation, steps, *, episode_callback=None):
-    """Bootstrap timeouts; never propagate GAE across resets/primitive boundaries."""
+def collect_rollout(env, model, observation, steps, *, episode_callback=None, gamma=PPOConfig.gamma):
+    """Discount bundled ticks, bootstrap timeouts and keep reset boundaries."""
+    if not 0 < gamma <= 1:
+        raise ValueError("tick reward discount gamma must be in (0,1]")
     collected = {
         k: []
         for k in (
@@ -337,6 +339,26 @@ def collect_rollout(env, model, observation, steps, *, episode_callback=None):
             action = distribution.sample() * model.actor.action_mask(tensors)
             log, _, values = model.evaluate(tensors, action)
         next_obs, _, terminated, truncated, info = env.step(action[0].numpy())
+        ticks = info["elapsed_control_ticks"]
+        if (
+            isinstance(ticks, (bool, np.bool_))
+            or not np.isscalar(ticks)
+            or not np.isfinite(ticks)
+            or ticks <= 0
+            or int(ticks) != ticks
+        ):
+            raise ValueError("positive integer physical control ticks required")
+        tick_rewards = info.get("reward_group_ticks")
+        if tick_rewards is None:
+            if ticks != 1:
+                raise ValueError("multi-tick transitions require individual tick rewards")
+            tick_rewards = np.asarray(info["reward_groups"])[None]
+        tick_rewards = np.asarray(tick_rewards)
+        if tick_rewards.shape != (ticks, 3):
+            raise ValueError("one three-group reward per elapsed control tick required")
+        if not np.allclose(tick_rewards.sum(0, dtype=np.float64), info["reward_groups"], rtol=1e-5, atol=1e-6):
+            raise ValueError("tick rewards must sum to the reported undiscounted groups")
+        rewards = discount_tick_rewards(tick_rewards, gamma=gamma)
         with torch.no_grad():
             next_values = model.values(tensor_observation(next_obs))[0].numpy()
         for k, v in observation.items():
@@ -344,12 +366,12 @@ def collect_rollout(env, model, observation, steps, *, episode_callback=None):
         entries = {
             "actions": action[0].numpy(),
             "log_prob": log.item(),
-            "rewards": info["reward_groups"],
+            "rewards": rewards,
             "values": values[0].numpy(),
             "next_values": next_values,
             "terminated": terminated,
             "episode_end": terminated or truncated,
-            "ticks": info["elapsed_control_ticks"],
+            "ticks": ticks,
             "case_ids": info.get("case_id") or info.get("mastery", {}).get("case_id", "unknown"),
         }
         for k, v in entries.items():
@@ -363,6 +385,7 @@ def collect_rollout(env, model, observation, steps, *, episode_callback=None):
     return {
         **{k: np.asarray(v) for k, v in collected.items()},
         "observations": {k: np.asarray(v) for k, v in observations.items()},
+        "reward_discount": float(gamma),
     }, observation
 
 
@@ -399,6 +422,7 @@ def train(args):
         "hardware_used": False,
         "safety_promoted": False,
         "teacher_actions_in_loss": False,
+        "reward_timing": "per_control_tick_discounted_within_decision",
         "privileged_critic": not args.no_privileged_critic,
         "actor_inputs": ["history", "preview", "motion"],
         "full_pick_place_qualified": False,
@@ -501,13 +525,21 @@ def train(args):
 
         while decisions < args.steps:
             rollout, observation = collect_rollout(
-                env, policy, observation, min(args.rollout_steps, args.steps - decisions), episode_callback=episode
+                env,
+                policy,
+                observation,
+                min(args.rollout_steps, args.steps - decisions),
+                episode_callback=episode,
+                gamma=config.gamma,
             )
             if args.basic_cases and not np.all(rollout["ticks"] == 1):
                 raise RuntimeError("basic C1 training requires one physical tick per decision")
             if decisions == 0:
                 flattened = {"obs/" + k: v for k, v in rollout["observations"].items()}
-                flattened.update({k: v for k, v in rollout.items() if k != "observations"})
+                # Gamma is already recorded in run.json's PPO configuration.
+                # Keep discount metadata outside the numeric rollout payload,
+                # preserving the existing one-tick array/hash schema.
+                flattened.update({k: v for k, v in rollout.items() if k not in {"observations", "reward_discount"}})
                 raw_advantage, _ = grouped_gae(
                     rollout["rewards"],
                     rollout["values"],
