@@ -43,6 +43,7 @@ from emet.rl.manipulation.mastery_objective import (
     add_contract_reward_arguments,
     contract_reward_from_args,
 )
+from emet.rl.manipulation.normalization_schedule import GripNormalizationSchedule, validate_grip_floor
 from emet.rl.manipulation.policy import ManipulationPolicy, export, validate_critic_reward_scale
 from emet.rl.regression_gate import verify_regressions
 
@@ -598,6 +599,8 @@ def train(args, suite):
     train_arm = getattr(args, "train_arm", False)
     if getattr(args, "train_context", False) and not train_arm:
         raise ValueError("context adaptation requires joint motion training")
+    if getattr(args, "grip_normalization_floor", 0) and not (train_arm and getattr(args, "train_context", False)):
+        raise ValueError("grip normalization curriculum requires trainable motion and context")
     policy_type = BasePolicy
     if train_arm:
         from emet.rl.manipulation.whole_body import WholeBodyPolicy
@@ -684,6 +687,13 @@ def train(args, suite):
             },
         )
         initialize(model, env, source, config, fingerprint)
+        grip_floor = validate_grip_floor(getattr(args, "grip_normalization_floor", 0.0), env.profile)
+        grip_schedule = (
+            GripNormalizationSchedule(
+                env, minimum_std=grip_floor, warmup_steps=warmup.steps,
+                ramp_steps=getattr(args, "grip_normalization_ramp_steps", 32768),
+            ) if grip_floor else None
+        )
         record = {
             "scope": "mars-whole-body-gsde-v1" if train_arm else SCOPE,
             "suite": suite,
@@ -708,7 +718,8 @@ def train(args, suite):
             "contract_schedule": None if objective_config is None else asdict(schedule),
             "initial_admission": admission_mode,
             "seed": 90,
-            "frozen_normalization": True,
+            "frozen_normalization": grip_schedule is None,
+            "grip_normalization_schedule": None if grip_schedule is None else grip_schedule.record(),
             "frozen_actor_context_and_arm": not train_arm,
             "frozen_actor_context_and_grip": not getattr(args, "train_context", False),
             "frozen_grip_head": True,
@@ -761,7 +772,7 @@ def train(args, suite):
                 values = {
                     k: float(v) if np.isfinite(v) else None
                     for k, v in model.logger.name_to_value.items()
-                    if k.startswith("train/") and np.isscalar(v)
+                    if k.startswith(("train/", "normalization/")) and np.isscalar(v)
                 }
                 with (args.output / "updates.jsonl").open("a") as stream:
                     stream.write(json.dumps({"steps": self.num_timesteps, **values}, allow_nan=False) + "\n")
@@ -788,6 +799,7 @@ def train(args, suite):
                         "training_reward_scale": reward_scale,
                         "critic_warmup_steps": warmup.steps,
                         "actor_unchanged_during_critic_warmup": warmup.actor_unchanged,
+                        "grip_normalization_schedule": None if grip_schedule is None else grip_schedule.record(),
                     }
                     (directory / "actor/manifest.json").write_text(json.dumps(policy.manifest, indent=2) + "\n")
                     report = evaluate_suite(suite, stages=evaluation_stages, policy=policy, teacher_report=teacher)
@@ -841,6 +853,7 @@ def train(args, suite):
                     "requested_contract_fraction": schedule.fraction(self.num_timesteps) if objective_config else None,
                     "critic_warmup": warmup.active,
                     "actor_unchanged_during_critic_warmup": warmup.actor_unchanged,
+                    "grip_normalization_fraction": None if grip_schedule is None else grip_schedule.fraction,
                 }
                 with (args.output / "metrics.jsonl").open("a") as stream:
                     stream.write(json.dumps(values) + "\n")
@@ -898,7 +911,7 @@ def train(args, suite):
                 "qualification_granted": False,
             }
             (args.output / "initial-fidelity.json").write_text(json.dumps(fidelity, indent=2) + "\n")
-        model.learn(args.steps, callback=[warmup, audit])
+        model.learn(args.steps, callback=[warmup, *([grip_schedule] if grip_schedule is not None else []), audit])
         final = audit.checkpoint("last")
         with preserve_training_rng():
             expanded = evaluate_suite(
@@ -914,6 +927,7 @@ def train(args, suite):
                 {
                     "steps": model.num_timesteps,
                     "actor_unchanged_during_critic_warmup": warmup.actor_unchanged,
+                    "grip_normalization_schedule": None if grip_schedule is None else grip_schedule.record(),
                     "canonical": summarize(final),
                     "expanded": summarize(expanded),
                     "safety_promoted": False,
@@ -943,6 +957,9 @@ def main():
     parser.add_argument("--arm-step-fraction", type=float)
     parser.add_argument("--coupled-step-fraction", type=float)
     parser.add_argument("--reward-scale", type=float, default=1.0)
+    parser.add_argument("--grip-normalization-floor", type=float, default=0.0,
+                        help="opt-in physical jaw standard-deviation floor, ramped after critic warmup")
+    parser.add_argument("--grip-normalization-ramp-steps", type=int, default=32768)
     parser.add_argument(
         "--train-arm", action="store_true", help="train all seven motion rates; retain executor gripper"
     )
@@ -962,7 +979,14 @@ def main():
     args = parser.parse_args()
     if args.train_context and not args.train_arm:
         parser.error("--train-context requires --train-arm")
+    if args.grip_normalization_floor and not args.train_context:
+        parser.error("--grip-normalization-floor requires --train-arm and --train-context")
     try:
+        from emet.rl.manipulation.profiles import MARS
+
+        validate_grip_floor(args.grip_normalization_floor, MARS)
+        if args.grip_normalization_ramp_steps <= 0:
+            raise ValueError("positive grip normalization ramp steps required")
         rollout_size = motion_rollout_size(args.num_envs, args.vec_backend)
     except ValueError as exc:
         parser.error(str(exc))

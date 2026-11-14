@@ -395,6 +395,15 @@ Accepted plan: [Mars controller integration](docs/plans/mars_controller_integrat
 - [ ] Prevent base jerk regression during arm learning and close the actual
       pregrasp transfer gap before another broad training extension. Keep all
       earlier tasks, supported-contact audits and full public-tool failures visible.
+- [x] Replay all114 arm/coupled cases exactly and isolate wheel readout/shared
+      context effects: restoring old wheel feedback helps free-space smoothness
+      but loses contact/coupled passes. Reject both in-memory interventions.
+- [x] Audit actual jaw-input clipping and hidden activation saturation against
+      six exact supported-training replays. Reject static jaw rescaling alone.
+      See [feedback/unit diagnosis](docs/experiments/mars_feedback_units_20261113.md).
+- [ ] Test opt-in jaw-unit curriculum after exact critic warmup, with physical
+      std floor0.087275rad, a32768-step geometric ramp and the unchanged262k final.
+      Require fresh regression/teacher/source gates and all existing post-tests.
 - [ ] Master the five base cases first, then add arm, coupled and loaded cases
       while retaining earlier rehearsal. Keep stage IDs out of actor input and
       require both complete splits before restoring the broad distribution.
