@@ -100,7 +100,7 @@ def test_positive_assessment_does_not_stop_model_final_coordinator(policy):
     from emet.memory.graph_eqa.agentic.policy import AgenticState
 
     agent = SimpleNamespace(parameters={"eqa": {"agentic_decision_policy": policy}}, graph_memory=None, robot=None)
-    ex = AgenticEQAExecutor(agent, "Where is the bowl?", router=False, max_rounds=4)
+    ex = AgenticEQAExecutor(agent, "Where is the bowl?", router=False, max_rounds=4, max_nav_steps=0)
     ex._voxel_eqa_client = SimpleNamespace()
     ex._extract_vlm_target = lambda: None
     ex._frontier_pick_out_dir = lambda: None
@@ -128,6 +128,12 @@ def test_positive_assessment_does_not_stop_model_final_coordinator(policy):
     ex.handle_tool = dispatch
     result = ex.run()
     assert result.answer == "model answer"
+    # Explicit completion need not be budget-forced, even when no navigation
+    # allowance remains. The distinction must survive the final summary flush.
+    assert not result.budget_hit
+    status = agent._agentic_eqa_summary["budget_status"]
+    assert status["navigation_exhausted"] and status["navigation_limit"] == 0
+    assert status["navigation_used"] == 0 and status["round_limit"] == 4
     if policy == "model_final":
         assert dispatched == ["look_around", "look_around", "submit_answer"]
         ex._do_submit_answer.assert_not_called()  # No automatic submission outside selected dispatch.

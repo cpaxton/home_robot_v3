@@ -19,6 +19,18 @@ from emet.utils.logger import Logger
 _logger = Logger(__name__)
 
 
+def _budget_status(executor, rounds_used):
+    """Resource exhaustion is separate from whether it forced finalization."""
+    used = executor._n_nav + executor._n_explore
+    return {
+        "round_limit": executor.max_rounds,
+        "rounds_used": rounds_used,
+        "navigation_limit": executor.max_nav_steps,
+        "navigation_used": used,
+        "navigation_exhausted": used >= executor.max_nav_steps,
+    }
+
+
 def redirect_rejected_candidates(agent, calls):
     """Rejected query handles cannot consume another router round as a no-op.
 
@@ -454,6 +466,7 @@ def run(self) -> AgenticEQAResult:
     salvage_cf = str(result.salvage_counterfactual_letter or "")
     prev_summary = getattr(self.agent, "_agentic_eqa_summary", None)
     summary = dict(prev_summary) if isinstance(prev_summary, dict) else {}
+    budget_status = _budget_status(self, result.n_rounds)
     summary.update(
         {
             "answer": result.answer,
@@ -465,6 +478,7 @@ def run(self) -> AgenticEQAResult:
             "answer_confidence": result.answer_confidence,
             "decision_rounds": result.decision_rounds,
             "budget_hit": result.budget_hit,
+            "budget_status": budget_status,
             "decision_policy": self.decision_policy,
             "effective_state_contract": self._effective_state_contract_knobs(),
             "router_action_allowlists": {
@@ -494,6 +508,7 @@ def run(self) -> AgenticEQAResult:
             "n_explore": result.n_explore,
             "wall_s": result.wall_s,
             "budget_hit": result.budget_hit,
+            "budget_status": budget_status,
             "tools": result.tool_log,
             "salvage_counterfactual_letter": salvage_cf,
             "answer_provenance": result.answer_provenance,
@@ -596,6 +611,7 @@ def _flush_trace_to_agent(self, result: AgenticEQAResult) -> None:
         "n_nav": result.n_nav,
         "n_explore": result.n_explore,
         "budget_hit": result.budget_hit,
+        "budget_status": _budget_status(self, result.n_rounds),
         "tools": list(result.tool_log),
         "salvage_counterfactual_letter": salvage_cf,
         "scored_policy": "model_final" if self.decision_policy == "model_final" else "no_salvage",

@@ -134,3 +134,46 @@ def test_untracked_selected_source_aborts_before_manifest_or_launch(tmp_path, mo
             run(args)
         launch.assert_not_called()
     assert not args.output.exists()
+
+
+@pytest.mark.parametrize("rounds,moves", [(6, 3), (12, 8)])
+def test_budget_parameters_reach_both_arm_invocations_and_frozen_manifest(tmp_path, monkeypatch, rounds, moves):
+    import json
+
+    root = Path(__file__).resolve().parents[3]
+    with patch.object(sys, "path", [str(root / "scripts"), *sys.path]):
+        run = runpy.run_path(str(root / "scripts/run_shared_room_pairs.py"))["run"]
+    monkeypatch.setitem(run.__globals__, "git", lambda root, *args: "frozen" if args[0] == "rev-parse" else "")
+    monkeypatch.setitem(run.__globals__, "validate_record", lambda *args: None)
+    commands = []
+
+    def launch(command, **kwargs):
+        commands.append(command)
+        out = Path(command[command.index("--output-dir") + 1])
+        out.mkdir()
+        (out / "fixture_lazy_graph.json").write_text(
+            json.dumps({"find_object_success": True, "find_recep_success": True})
+        )
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(run.__globals__["subprocess"], "run", launch)
+    args = SimpleNamespace(
+        main=root,
+        candidate=root,
+        output=tmp_path / "out",
+        arms=["main", "candidate"],
+        grounding_backend="yoloe",
+        decision_policy="model_final",
+        episodes=["fixture"],
+        seed=0,
+        scan_steps=4,
+        max_rounds=rounds,
+        max_nav_steps=moves,
+    )
+    assert run(args) == 0
+    assert len(commands) == 2
+    for command in commands:
+        assert command[command.index("--agentic-max-rounds") + 1] == str(rounds)
+        assert command[command.index("--agentic-max-nav-steps") + 1] == str(moves)
+    manifest = json.loads((args.output / "manifest.json").read_text())
+    assert manifest["max_rounds_per_phase"] == rounds and manifest["max_nav_steps_per_phase"] == moves

@@ -58,7 +58,7 @@ case "${1:?eqa or room}" in
             timeout --signal=TERM --kill-after=20s 1500s "${EMET_PY:-$ROOT/.venv/bin/python}" -m emet.cli ovmm find \
                 --episodes configs/ovmm/find_phase_episodes.yaml --backend lazy_graph --query-driven-memory \
                 --episode-id "$episode" --seed "${DEV_SEED:-0}" --mapping-rotate-steps 4 \
-                --agentic-max-rounds 6 --agentic-max-nav-steps 3 --no-scene-cache --output-dir "$out"
+                --no-scene-cache --output-dir "$out"
             "${EMET_PY:-$ROOT/.venv/bin/python}" "$DRIVER_ROOT/scripts/check_acceptance_metrics.py" room "$out/${episode}_lazy_graph.json"
         done
         "${EMET_PY:-$ROOT/.venv/bin/python}" scripts/score_ovmm.py "$out"

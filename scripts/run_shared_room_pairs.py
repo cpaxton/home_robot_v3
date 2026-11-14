@@ -54,6 +54,10 @@ def run(args):
     candidate_policy = getattr(args, "candidate_decision_policy", None)
     shared_episodes = getattr(args, "episodes_file", None)
     floor_reference = getattr(args, "floor_reference_z", None)
+    max_rounds = getattr(args, "max_rounds", 12)
+    max_nav_steps = getattr(args, "max_nav_steps", 8)
+    if max_rounds < 1 or max_nav_steps < 0:
+        raise ValueError("max_rounds must be positive and max_nav_steps must be nonnegative")
     roots = {"main": args.main.resolve(), "candidate": args.candidate.resolve()}
     assets = grounding_assets(roots, args.arms, args.grounding_backend)
     revisions = {name: git(root, "rev-parse", "HEAD") for name, root in roots.items()}
@@ -68,6 +72,9 @@ def run(args):
         "shared_episodes_sha256": hashlib.sha256(shared_episodes.read_bytes()).hexdigest() if shared_episodes else None,
         "seed": args.seed,
         "scan_steps": args.scan_steps,
+        "max_rounds_per_phase": max_rounds,
+        "max_nav_steps_per_phase": max_nav_steps,
+        "episode_timeout_s": 1500,
         "arms": args.arms,
         "grounding_backend": args.grounding_backend,
         "decision_policy": getattr(args, "decision_policy", "legacy"),
@@ -160,9 +167,9 @@ def run(args):
                 "--mapping-rotate-steps",
                 str(args.scan_steps),
                 "--agentic-max-rounds",
-                "6",
+                str(max_rounds),
                 "--agentic-max-nav-steps",
-                "3",
+                str(max_nav_steps),
                 "--no-scene-cache",
                 "--port-offset",
                 str(700 + index * 10 + (arm == "candidate") * 2),
@@ -230,6 +237,12 @@ if __name__ == "__main__":
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--episodes-file", type=Path, help="Same frozen task registry for both arms.")
     parser.add_argument("--scan-steps", type=int, choices=(4, 8), default=4)
+    parser.add_argument(
+        "--max-rounds", type=int, default=12, help="Decision rounds per find phase, including finalization."
+    )
+    parser.add_argument(
+        "--max-nav-steps", type=int, default=8, help="Navigation/movement calls per find phase, shared by both arms."
+    )
     parser.add_argument("--arms", nargs="+", choices=("main", "candidate"), default=["main", "candidate"])
     parser.add_argument("--grounding-backend", choices=("yoloe", "vlm"), default="yoloe")
     parser.add_argument("--decision-policy", choices=("legacy", "model_final"), default="legacy")

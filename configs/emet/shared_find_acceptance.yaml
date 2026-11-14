@@ -15,6 +15,8 @@ mapping:
     whole_object_box: false
     recover_proposals_with_vlm: true
   eqa:
+    agentic_max_tool_rounds: 12
+    agentic_max_nav_steps: 8
     agentic_verify: true
     collect_agentic_trace: true
     vl_family: qwen3_vl

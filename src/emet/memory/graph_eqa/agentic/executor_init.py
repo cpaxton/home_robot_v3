@@ -389,7 +389,7 @@ def _handle_relative_motion(self, args: dict[str, Any]) -> dict[str, Any]:
     from emet.controller.task.tamp.api import response
 
     name = args["_tool_name"]
-    if self._n_nav >= self.max_nav_steps:
+    if self._n_nav + self._n_explore >= self.max_nav_steps:
         out = response(name, code="navigation_budget_exhausted")
     else:
         key = "meters" if name == "move_forward" else "degrees"

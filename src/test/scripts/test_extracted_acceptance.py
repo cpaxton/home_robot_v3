@@ -212,6 +212,8 @@ def test_acceptance_config_survives_runtime_profile(monkeypatch, robot):
     assert params.get("query_memory")["grounding_backend"] == "vlm"
     assert params.get("query_memory")["mask_backend"] == "yoloe_sam2"
     assert params.get("eqa")["collect_agentic_trace"] is True
+    assert params.get("eqa")["agentic_max_tool_rounds"] == 12
+    assert params.get("eqa")["agentic_max_nav_steps"] == 8
     assert params.get("eqa")["vl_hf_model_id"] == "Qwen/Qwen3-VL-8B-Instruct"
 
 
