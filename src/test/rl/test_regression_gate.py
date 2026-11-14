@@ -101,3 +101,20 @@ def test_malformed_xml_syntax_fails_closed(tmp_path):
     path.write_text('<testsuite')
     with pytest.raises(RuntimeError, match='malformed regression XML'):
         gate.check_xml(path, tmp_path)
+
+
+def test_support_and_ancestor_fixture_sources_are_bound_without_becoming_test_modules(tmp_path, monkeypatch):
+    suite = tmp_path / "src/test/example"
+    suite.mkdir(parents=True)
+    paths = [suite / "test_gate.py", suite / "_helpers.py", suite / "__init__.py",
+             suite / "conftest.py", suite.parent / "conftest.py"]
+    for path in paths:
+        path.write_text("# source\n")
+    unrelated = tmp_path / "src/test/unselected/conftest.py"
+    unrelated.parent.mkdir()
+    unrelated.write_text("# unrelated\n")
+    monkeypatch.setattr(gate, "REGRESSION_TARGETS", ("src/test/example",))
+    assert gate.test_files(tmp_path) == [suite / "test_gate.py"]
+    assert set(gate.test_sources(tmp_path)) == set(paths)
+    monkeypatch.setattr(gate, "REGRESSION_TARGETS", ("src/test/example/test_gate.py",))
+    assert set(gate.test_sources(tmp_path)) == set(paths) - {suite / "_helpers.py"}

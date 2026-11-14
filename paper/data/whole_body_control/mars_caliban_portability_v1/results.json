@@ -1,0 +1,173 @@
+{
+  "complete": true,
+  "implementation_revision": "01c1d2be",
+  "scope": "Compute-host validation and one frozen model/state numeric transport probe; not policy/hardware qualification.",
+  "hardware_used": false,
+  "qualified_training_launched": false,
+  "source_files_verified": 3232,
+  "full_regressions": {
+    "tests": 1080,
+    "passed": 1077,
+    "failed": 3,
+    "failures": [
+      {
+        "id": "test_public_tools_complete_frozen_20g_transfer_with_supported_release",
+        "cause": "Exact frozen fixture binding differs under native ARM recompilation/settling."
+      },
+      {
+        "id": "test_agent_cannot_replace_frozen_stage_region_or_reset_physics",
+        "cause": "Early frozen fixture rejection prevents the downstream mutation check."
+      },
+      {
+        "id": "test_gzip_ignore_overrides_paper_data_negation_and_index_has_no_traces",
+        "cause": "Archive was not a Git repository."
+      }
+    ]
+  },
+  "git_context_repair": {
+    "scope": "git init only in isolated RAM snapshot; empty index, no fabricated source commit. Snapshot manifest remains source provenance.",
+    "focused_rerun_passed": true,
+    "full_gate_rerun": false
+  },
+  "teacher": {
+    "complete": true,
+    "controller": "task_pose_teacher",
+    "population": "admission",
+    "groups": {
+      "base/train": {
+        "cases": 45,
+        "admitted": 45,
+        "mastered": 45,
+        "tracking_and_settling_passed": 45,
+        "smoothness_passed": 45,
+        "failure_reasons": {},
+        "codes": {
+          "ok": 45
+        },
+        "all_pass": true
+      },
+      "base/validation": {
+        "cases": 5,
+        "admitted": 5,
+        "mastered": 5,
+        "tracking_and_settling_passed": 5,
+        "smoothness_passed": 5,
+        "failure_reasons": {},
+        "codes": {
+          "ok": 5
+        },
+        "all_pass": true
+      },
+      "arm/train": {
+        "cases": 60,
+        "admitted": 60,
+        "mastered": 60,
+        "tracking_and_settling_passed": 60,
+        "smoothness_passed": 60,
+        "failure_reasons": {},
+        "codes": {
+          "ok": 60
+        },
+        "all_pass": true
+      },
+      "arm/validation": {
+        "cases": 4,
+        "admitted": 4,
+        "mastered": 4,
+        "tracking_and_settling_passed": 4,
+        "smoothness_passed": 4,
+        "failure_reasons": {},
+        "codes": {
+          "ok": 4
+        },
+        "all_pass": true
+      },
+      "coupled/train": {
+        "cases": 6,
+        "admitted": 6,
+        "mastered": 6,
+        "tracking_and_settling_passed": 6,
+        "smoothness_passed": 6,
+        "failure_reasons": {},
+        "codes": {
+          "ok": 6
+        },
+        "all_pass": true
+      },
+      "coupled/validation": {
+        "cases": 2,
+        "admitted": 2,
+        "mastered": 2,
+        "tracking_and_settling_passed": 2,
+        "smoothness_passed": 2,
+        "failure_reasons": {},
+        "codes": {
+          "ok": 2
+        },
+        "all_pass": true
+      }
+    },
+    "all_pass": true,
+    "safety_promoted": false
+  },
+  "model_state_probe": {
+    "complete": true,
+    "scope": "Exact model/state transport probe; no policy inference, physics integration or changed acceptance gates.",
+    "mujoco": "3.5.0",
+    "model_signature": "805e6b34c8ab1e13c603fbdf747cd1e9c8dd0843aff3fee7e2bd4d7f5bcd91ca",
+    "model_signature_exact": true,
+    "state_errors": {
+      "initial_qpos": 0.0,
+      "source_qpos": 0.0,
+      "source_qvel": 0.0,
+      "source_ctrl": 0.0,
+      "source_support": 0.0,
+      "destination_support": 0.0,
+      "witness_hand": 1.1102230246251565e-16
+    },
+    "passes_unchanged_frozen_checks": true,
+    "controller_initialization_before_state_restore": true,
+    "policy_executed": false,
+    "physics_integrated": false,
+    "hardware_used": false,
+    "qualified": false
+  },
+  "qualification_note": "Probe recomputes only the numeric fields listed in state_errors plus the full model signature, not the complete admission protocol. No integration, policy inference or portable-loader implementation; both frozen public-tool failures still block qualification. The failed first probe is preserved: controller construction after state restoration overwrote ctrl by 0.00646; the second constructs control first.",
+  "artifacts": [
+    {
+      "path": "logs/recovery/hand-accuracy-v1/caliban-hillclimb-v1/full.log",
+      "bytes": 4258,
+      "sha256": "9f24a30c9c0719f0d6a556f32421e781ac3c3c6cd2e6e698769669fb30deaeab"
+    },
+    {
+      "path": "logs/recovery/hand-accuracy-v1/caliban-hillclimb-v1/git-context-focused.log",
+      "bytes": 80,
+      "sha256": "423b1d0e014eb1eab96f4420f7b344c2615be505dd574b756ac884826ca74f2d"
+    },
+    {
+      "path": "logs/recovery/hand-accuracy-v1/probe-frozen-mjb-caliban.log",
+      "bytes": 621,
+      "sha256": "4bdd372005ac14b09502a524aba7233820f8c729a24d04d1b026d6a3b15fa9bc"
+    },
+    {
+      "path": "logs/recovery/hand-accuracy-v1/probe-frozen-mjb-caliban-v2.log",
+      "bytes": 716,
+      "sha256": "9df18f4bd120d9b5debc9b75910dc5cacb1fc0146b1881f870422b04f2a178e3"
+    },
+    {
+      "path": "logs/recovery/hand-accuracy-v1/probe-frozen-mjb-export.py",
+      "bytes": 2532,
+      "sha256": "f204b916cb654fde17ee56f3322e529fbefa854aa9203e9bca6138fddddba4f3"
+    },
+    {
+      "path": "logs/recovery/hand-accuracy-v1/probe-frozen-mjb-read-v2.py",
+      "bytes": 2369,
+      "sha256": "68821edbde4dd83ae2aa80230cdae8939deee4c52af2b9e1b371d07c36bd8761"
+    },
+    {
+      "path": "logs/eval/mars-tamp-postures-caliban-v1-teacher/report.json.gz",
+      "bytes": 16406943,
+      "sha256": "bb3f5e655102f805dcfd429287928f2a28c2e363f781ccc24fa5948b00d883ca"
+    }
+  ]
+}

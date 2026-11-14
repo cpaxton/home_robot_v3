@@ -1,0 +1,1295 @@
+{
+  "format": "mars-whole-body-validation-status-v1",
+  "hardware_used": false,
+  "safety_promoted": false,
+  "jaw_trial": {
+    "implementation_revision": "0fba6121",
+    "training_complete": true,
+    "fixed_steps": 262144,
+    "decision": "reject_fixed_final_retain_source",
+    "all_164_reset_reference_pairs_match": true,
+    "results": {
+      "retained_source": {
+        "base": {
+          "attempts": 50,
+          "admitted": 50,
+          "tracking": 49,
+          "full": 42,
+          "smooth": 43,
+          "failure_reasons": {
+            "smoothness/base_linear_jerk": 6,
+            "mastery_tracking_envelope": 1,
+            "terminal_hold": 1,
+            "smoothness/joint_jerk": 1
+          },
+          "safety_flags": {}
+        },
+        "arm": {
+          "attempts": 88,
+          "admitted": 88,
+          "tracking": 87,
+          "full": 80,
+          "smooth": 81,
+          "failure_reasons": {
+            "smoothness/base_linear_jerk": 7,
+            "tracking_timeout": 1,
+            "terminal_hold": 1
+          },
+          "safety_flags": {}
+        },
+        "coupled": {
+          "attempts": 8,
+          "admitted": 8,
+          "tracking": 2,
+          "full": 2,
+          "smooth": 8,
+          "failure_reasons": {
+            "tracking_timeout": 4,
+            "terminal_hold": 6,
+            "mastery_tracking_envelope": 2
+          },
+          "safety_flags": {}
+        },
+        "supported": {
+          "attempts": 18,
+          "admitted": 18,
+          "tracking": 12,
+          "full": 12,
+          "smooth": 18,
+          "failure_reasons": {
+            "tracking_timeout": 4,
+            "terminal_hold": 6,
+            "mastery_tracking_envelope": 2
+          },
+          "safety_flags": {}
+        }
+      },
+      "previous_contact_final": {
+        "base": {
+          "attempts": 50,
+          "admitted": 50,
+          "tracking": 50,
+          "full": 43,
+          "smooth": 43,
+          "failure_reasons": {
+            "smoothness/base_linear_jerk": 6,
+            "smoothness/joint_jerk": 3
+          },
+          "safety_flags": {}
+        },
+        "arm": {
+          "attempts": 88,
+          "admitted": 88,
+          "tracking": 87,
+          "full": 63,
+          "smooth": 64,
+          "failure_reasons": {
+            "smoothness/base_linear_jerk": 24,
+            "mastery_tracking_envelope": 1,
+            "terminal_hold": 1
+          },
+          "safety_flags": {}
+        },
+        "coupled": {
+          "attempts": 8,
+          "admitted": 8,
+          "tracking": 3,
+          "full": 3,
+          "smooth": 8,
+          "failure_reasons": {
+            "tracking_timeout": 3,
+            "terminal_hold": 5,
+            "mastery_tracking_envelope": 2
+          },
+          "safety_flags": {}
+        },
+        "supported": {
+          "attempts": 18,
+          "admitted": 18,
+          "tracking": 16,
+          "full": 16,
+          "smooth": 18,
+          "failure_reasons": {
+            "mastery_tracking_envelope": 2,
+            "terminal_hold": 2
+          },
+          "safety_flags": {}
+        }
+      },
+      "jaw_schedule_final": {
+        "base": {
+          "attempts": 50,
+          "admitted": 50,
+          "tracking": 50,
+          "full": 40,
+          "smooth": 40,
+          "failure_reasons": {
+            "smoothness/base_linear_jerk": 8,
+            "smoothness/joint_jerk": 2
+          },
+          "safety_flags": {}
+        },
+        "arm": {
+          "attempts": 88,
+          "admitted": 88,
+          "tracking": 87,
+          "full": 53,
+          "smooth": 54,
+          "failure_reasons": {
+            "smoothness/base_linear_jerk": 34,
+            "tracking_timeout": 1,
+            "terminal_hold": 1
+          },
+          "safety_flags": {}
+        },
+        "coupled": {
+          "attempts": 8,
+          "admitted": 8,
+          "tracking": 2,
+          "full": 2,
+          "smooth": 8,
+          "failure_reasons": {
+            "tracking_timeout": 4,
+            "terminal_hold": 6,
+            "mastery_tracking_envelope": 2
+          },
+          "safety_flags": {}
+        },
+        "supported": {
+          "attempts": 18,
+          "admitted": 18,
+          "tracking": 16,
+          "full": 4,
+          "smooth": 4,
+          "failure_reasons": {
+            "smoothness/peak_force_N": 11,
+            "tracking_timeout": 2,
+            "terminal_hold": 2,
+            "smoothness/base_linear_jerk": 5,
+            "smoothness/joint_jerk": 1
+          },
+          "safety_flags": {}
+        }
+      }
+    },
+    "artifacts": {
+      "retained_source": {
+        "path": "logs/manipulation/mars-grip-schedule-v1-seed90/source-baseline.json.gz",
+        "sha256": "6a111098f6440728a7985a16795b023ef77764021ff6f5e5b1e084686a17de48",
+        "bytes": 24843644
+      },
+      "previous_contact_final": {
+        "path": "logs/manipulation/mars-supported-contact-v1-seed90/final-expanded.json.gz",
+        "sha256": "ffbf37bc49ac8354de2c608e8ad26522abdb93cc03ad57794139c2e179dd520a",
+        "bytes": 24810835
+      },
+      "jaw_schedule_final": {
+        "path": "logs/manipulation/mars-grip-schedule-v1-seed90/final-expanded.json.gz",
+        "sha256": "7bd65a6935888001a653a1ae63bd4a55fff51817ff95fd9c7d3cd6b086c5109f",
+        "bytes": 25240953
+      }
+    },
+    "post_tests": {
+      "phase": "complete",
+      "hardware_used": false,
+      "safety_promoted": false,
+      "supervisor_sha256": "f579387b035f0ccf040a241e38fafe401cf6166493e27905fecb8595376cdf42",
+      "returncode": 0
+    },
+    "public_tools": {
+      "complete": true,
+      "artifact": {
+        "path": "logs/eval/mars-grip-schedule-post-tests-v1/public-tools.json.gz",
+        "sha256": "588dacdc1ea5455c2d22231bfea07472b22ba9045a570df83049e626f6b4cacd",
+        "bytes": 65138463
+      },
+      "episodes": [
+        {
+          "case_id": "left:20g:0",
+          "comparison_label": "joint_reference",
+          "success": true,
+          "policy_calls": 0,
+          "reference_controller_calls": 0,
+          "robot_failure": null,
+          "stop_confirmed": null,
+          "arm_execution": "joint",
+          "arm_reference": "legacy"
+        },
+        {
+          "case_id": "left:20g:0",
+          "comparison_label": "matched_task_pose_reference",
+          "success": false,
+          "policy_calls": 0,
+          "reference_controller_calls": 352,
+          "robot_failure": "retention_lost",
+          "stop_confirmed": true,
+          "arm_execution": "cartesian",
+          "arm_reference": "jerk_limited"
+        },
+        {
+          "case_id": "left:20g:0",
+          "comparison_label": "fixed_final",
+          "success": false,
+          "policy_calls": 230,
+          "reference_controller_calls": 0,
+          "robot_failure": "cartesian_tracking_timeout",
+          "stop_confirmed": true,
+          "arm_execution": "cartesian",
+          "arm_reference": "jerk_limited"
+        },
+        {
+          "case_id": "left:50g:0",
+          "comparison_label": "joint_reference",
+          "success": true,
+          "policy_calls": 0,
+          "reference_controller_calls": 0,
+          "robot_failure": null,
+          "stop_confirmed": null,
+          "arm_execution": "joint",
+          "arm_reference": "legacy"
+        },
+        {
+          "case_id": "left:50g:0",
+          "comparison_label": "matched_task_pose_reference",
+          "success": false,
+          "policy_calls": 0,
+          "reference_controller_calls": 237,
+          "robot_failure": "retention_lost",
+          "stop_confirmed": true,
+          "arm_execution": "cartesian",
+          "arm_reference": "jerk_limited"
+        },
+        {
+          "case_id": "left:50g:0",
+          "comparison_label": "fixed_final",
+          "success": false,
+          "policy_calls": 102,
+          "reference_controller_calls": 0,
+          "robot_failure": "cartesian_path_tracking_envelope",
+          "stop_confirmed": true,
+          "arm_execution": "cartesian",
+          "arm_reference": "jerk_limited"
+        },
+        {
+          "case_id": "right:20g:0",
+          "comparison_label": "joint_reference",
+          "success": true,
+          "policy_calls": 0,
+          "reference_controller_calls": 0,
+          "robot_failure": null,
+          "stop_confirmed": null,
+          "arm_execution": "joint",
+          "arm_reference": "legacy"
+        },
+        {
+          "case_id": "right:20g:0",
+          "comparison_label": "matched_task_pose_reference",
+          "success": false,
+          "policy_calls": 0,
+          "reference_controller_calls": 368,
+          "robot_failure": "retention_lost",
+          "stop_confirmed": true,
+          "arm_execution": "cartesian",
+          "arm_reference": "jerk_limited"
+        },
+        {
+          "case_id": "right:20g:0",
+          "comparison_label": "fixed_final",
+          "success": false,
+          "policy_calls": 230,
+          "reference_controller_calls": 0,
+          "robot_failure": "cartesian_tracking_timeout",
+          "stop_confirmed": true,
+          "arm_execution": "cartesian",
+          "arm_reference": "jerk_limited"
+        }
+      ]
+    },
+    "fresh_audits": {
+      "near_straight_fresh-fixed_final-summary": {
+        "artifact": {
+          "path": "logs/eval/mars-grip-schedule-post-tests-v1/near_straight_fresh-fixed_final-summary.json",
+          "sha256": "73263ad27ee6d7876576efbead2c3d774bdc82245bffd1096e858401e621ada7",
+          "bytes": 512
+        },
+        "cases": 12,
+        "admitted": 12,
+        "mastered": 5,
+        "tracking_and_settling_passed": 12
+      },
+      "near_straight_fresh-source-summary": {
+        "artifact": {
+          "path": "logs/eval/mars-grip-schedule-post-tests-v1/near_straight_fresh-source-summary.json",
+          "sha256": "9e4ea0b95164fdfaf608b78c603daa18dfb32d11b27c754493aee792aacde4a0",
+          "bytes": 464
+        },
+        "cases": 12,
+        "admitted": 12,
+        "mastered": 12,
+        "tracking_and_settling_passed": 12
+      },
+      "near_straight_fresh-teacher-summary": {
+        "artifact": {
+          "path": "logs/eval/mars-grip-schedule-post-tests-v1/near_straight_fresh-teacher-summary.json",
+          "sha256": "e76b33f95c8abeaa8ea0d74026cde46008d6de940f9200afbfa1699ca9a2b41a",
+          "bytes": 417
+        },
+        "cases": 12,
+        "admitted": 12,
+        "mastered": 12,
+        "tracking_and_settling_passed": 12
+      },
+      "old_fresh-fixed_final-summary": {
+        "artifact": {
+          "path": "logs/eval/mars-grip-schedule-post-tests-v1/old_fresh-fixed_final-summary.json",
+          "sha256": "73263ad27ee6d7876576efbead2c3d774bdc82245bffd1096e858401e621ada7",
+          "bytes": 512
+        },
+        "cases": 12,
+        "admitted": 12,
+        "mastered": 5,
+        "tracking_and_settling_passed": 12
+      },
+      "old_fresh-source-summary": {
+        "artifact": {
+          "path": "logs/eval/mars-grip-schedule-post-tests-v1/old_fresh-source-summary.json",
+          "sha256": "9e4ea0b95164fdfaf608b78c603daa18dfb32d11b27c754493aee792aacde4a0",
+          "bytes": 464
+        },
+        "cases": 12,
+        "admitted": 12,
+        "mastered": 12,
+        "tracking_and_settling_passed": 12
+      },
+      "old_fresh-teacher-summary": {
+        "artifact": {
+          "path": "logs/eval/mars-grip-schedule-post-tests-v1/old_fresh-teacher-summary.json",
+          "sha256": "e76b33f95c8abeaa8ea0d74026cde46008d6de940f9200afbfa1699ca9a2b41a",
+          "bytes": 417
+        },
+        "cases": 12,
+        "admitted": 12,
+        "mastered": 12,
+        "tracking_and_settling_passed": 12
+      },
+      "supported_fresh-fixed_final-summary": {
+        "artifact": {
+          "path": "logs/eval/mars-grip-schedule-post-tests-v1/supported_fresh-fixed_final-summary.json",
+          "sha256": "36c869d2e4e7b113753e20d4f7b34c2b82d3c9e9abe180c1435a891ea8555128",
+          "bytes": 679
+        },
+        "cases": 12,
+        "admitted": 12,
+        "mastered": 4,
+        "tracking_and_settling_passed": 10
+      },
+      "supported_fresh-source-summary": {
+        "artifact": {
+          "path": "logs/eval/mars-grip-schedule-post-tests-v1/supported_fresh-source-summary.json",
+          "sha256": "1adf7660d8c6f8f1919d64cbc4e1d2e063f59a5321ee850f1699ebec98f0d1e8",
+          "bytes": 638
+        },
+        "cases": 12,
+        "admitted": 12,
+        "mastered": 3,
+        "tracking_and_settling_passed": 5
+      },
+      "supported_fresh-teacher-summary": {
+        "artifact": {
+          "path": "logs/eval/mars-grip-schedule-post-tests-v1/supported_fresh-teacher-summary.json",
+          "sha256": "e76b33f95c8abeaa8ea0d74026cde46008d6de940f9200afbfa1699ca9a2b41a",
+          "bytes": 417
+        },
+        "cases": 12,
+        "admitted": 12,
+        "mastered": 12,
+        "tracking_and_settling_passed": 12
+      },
+      "translation_fresh-fixed_final-summary": {
+        "artifact": {
+          "path": "logs/eval/mars-grip-schedule-post-tests-v1/translation_fresh-fixed_final-summary.json",
+          "sha256": "47324cda69c63edc030c53fcc991bfe6ff39eab5ed54adc5b2322a5f89256f37",
+          "bytes": 512
+        },
+        "cases": 12,
+        "admitted": 12,
+        "mastered": 8,
+        "tracking_and_settling_passed": 12
+      },
+      "translation_fresh-source-summary": {
+        "artifact": {
+          "path": "logs/eval/mars-grip-schedule-post-tests-v1/translation_fresh-source-summary.json",
+          "sha256": "8c803281b8b1b5989544aad47be7b87c9ea88797f67d8e8432cd5dffca4e3d30",
+          "bytes": 514
+        },
+        "cases": 12,
+        "admitted": 12,
+        "mastered": 11,
+        "tracking_and_settling_passed": 12
+      },
+      "translation_fresh-teacher-summary": {
+        "artifact": {
+          "path": "logs/eval/mars-grip-schedule-post-tests-v1/translation_fresh-teacher-summary.json",
+          "sha256": "e76b33f95c8abeaa8ea0d74026cde46008d6de940f9200afbfa1699ca9a2b41a",
+          "bytes": 417
+        },
+        "cases": 12,
+        "admitted": 12,
+        "mastered": 12,
+        "tracking_and_settling_passed": 12
+      }
+    }
+  },
+  "v2": {
+    "implementation_revision": "a29da15d",
+    "state": {
+      "phase": "complete",
+      "pid": 4117091,
+      "implementation_revision": "a29da15d",
+      "immutable_checkout": "/tmp/mars-whole-body-v2-runtime-a29da15d",
+      "cpu_lane": 15,
+      "hardware_used": false,
+      "safety_promoted": false,
+      "recovery": "restore real frozen Git inventory; no test skips or source edits",
+      "script_sha256": "ca65df113b6e90d4f7254590894413c7c1b743a799632635bdebfc478e2509bb",
+      "fixed_decision_steps": 8192,
+      "regression_tests": 1170,
+      "general_teacher_cases": 164,
+      "tamp_teacher_successes": 5,
+      "tamp_teacher_attempts": 6,
+      "returncode": 0,
+      "repair": "guard spawned script; preserve valid general runs; rerun same12 TAMP episodes",
+      "repair_script_sha256": "7c23e1bca992e34fdedafdff765783dd10642dee1748700b07c89254046d5142",
+      "paired_repair_complete": true,
+      "outcome_summary": {
+        "retained_source": {
+          "tamp_successes": 0,
+          "tamp_attempts": 6
+        },
+        "v2_final": {
+          "tamp_successes": 0,
+          "tamp_attempts": 6
+        }
+      }
+    },
+    "teacher_state": {
+      "phase": "complete",
+      "pid": 4033446,
+      "implementation_revision": "a29da15d",
+      "cpu_lane": 14,
+      "hardware_used": false,
+      "safety_promoted": false,
+      "returncode": 0
+    },
+    "original_failed_setup": {
+      "phase": "failed",
+      "implementation_revision": "a29da15d",
+      "pid": 3892926,
+      "immutable_checkout": "/tmp/mars-whole-body-v2-runtime-a29da15d",
+      "hardware_used": false,
+      "safety_promoted": false,
+      "fixed_decision_steps": 8192,
+      "cpu_lane": 15,
+      "supervisor_sha256": "97933f9afba5bf00b629bdd4197dedd4135d6e3e5a77335f4430ff251b528d0c",
+      "command": [
+        "/tmp/mars-whole-body-v2-runtime-a29da15d/.venv/bin/python",
+        "-u",
+        "-m",
+        "emet.rl.regression_gate",
+        "--output",
+        "/tmp/mars-whole-body-v2-runtime-a29da15d/logs/recovery/whole-body-v2/full.xml"
+      ],
+      "child_pid": 3892985,
+      "error": "RuntimeError('fresh_regressions exit 1')"
+    },
+    "full_regressions": {
+      "artifact": {
+        "path": "logs/recovery/whole-body-v2/retry-git-index/full.receipt.json",
+        "sha256": "dc06ae688257ec145fe1573e07d7f051b8433cd5a6f653531e02680e9e9a7c2d",
+        "bytes": 214332
+      },
+      "tests": 1170,
+      "returncode": 0,
+      "zero_failures_errors_skips": true
+    },
+    "teacher_preflight": {
+      "artifact": {
+        "path": "logs/eval/mars-whole-body-v2-preflight/preflight.json",
+        "sha256": "268b20a91d33a9e609420cd13c450eb4fdb834e2985821e766f2a833686cfa77",
+        "bytes": 321632
+      },
+      "general_cases": 164,
+      "ready_for_experimental_training": true,
+      "tamp_successes": 5,
+      "tamp_attempts": 6,
+      "tamp_all_success": false,
+      "tamp_outcomes": [
+        {
+          "id": "development:left:20g:0",
+          "success": true,
+          "code": "pregrasp_complete",
+          "stop_confirmed": true,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          },
+          "initialization_failed": false
+        },
+        {
+          "id": "development:right:50g:1",
+          "success": true,
+          "code": "pregrasp_complete",
+          "stop_confirmed": true,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          },
+          "initialization_failed": false
+        },
+        {
+          "id": "development:left:50g:2",
+          "success": false,
+          "code": "object_changed_replan",
+          "stop_confirmed": true,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          },
+          "initialization_failed": false
+        },
+        {
+          "id": "development:right:20g:3",
+          "success": true,
+          "code": "pregrasp_complete",
+          "stop_confirmed": true,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          },
+          "initialization_failed": false
+        },
+        {
+          "id": "audit:left:20g:0",
+          "success": true,
+          "code": "pregrasp_complete",
+          "stop_confirmed": true,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          },
+          "initialization_failed": false
+        },
+        {
+          "id": "audit:right:50g:1",
+          "success": true,
+          "code": "pregrasp_complete",
+          "stop_confirmed": true,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          },
+          "initialization_failed": false
+        }
+      ]
+    },
+    "training": {
+      "artifact": {
+        "path": "logs/manipulation/mars-whole-body-v2-pilot-seed90/summary.json",
+        "sha256": "5dacb18a0b164982ca6c974b6e15c91ddea64e0eb08aafa7ddef7a3b0c5eb851",
+        "bytes": 21805
+      },
+      "algorithm": "direct_multi_critic_ppo_v1",
+      "decision_steps": 8192,
+      "control_ticks": 8795,
+      "mixture": {
+        "general": {
+          "control_ticks": 4350,
+          "episodes": 99,
+          "requested_fraction": 0.5
+        },
+        "tamp": {
+          "control_ticks": 4445,
+          "episodes": 68,
+          "requested_fraction": 0.5
+        }
+      },
+      "source_hashes_identity": {
+        "entries": 202,
+        "sha256": "e24d617d64dab7cc5d06e9a46a3480d49785d60cd32dd4df0724b8a5d96f6822"
+      },
+      "preflight_sha256": "268b20a91d33a9e609420cd13c450eb4fdb834e2985821e766f2a833686cfa77",
+      "privileged_critic": true,
+      "teacher_actions_in_loss": false,
+      "full_pick_place_qualified": false,
+      "episodes": 166,
+      "complete": true,
+      "safety_promoted": false,
+      "hardware_used": false
+    },
+    "paired": {
+      "artifact": {
+        "path": "logs/eval/mars-whole-body-v2-paired/summary.json",
+        "sha256": "54ea59dec75bf04688c572cc864635bee4bcde6a42715c58939e007fed67d95e",
+        "bytes": 34222
+      },
+      "training": {
+        "algorithm": "direct_multi_critic_ppo_v1",
+        "decision_steps": 8192,
+        "control_ticks": 8795,
+        "mixture": {
+          "general": {
+            "control_ticks": 4350,
+            "episodes": 99,
+            "requested_fraction": 0.5
+          },
+          "tamp": {
+            "control_ticks": 4445,
+            "episodes": 68,
+            "requested_fraction": 0.5
+          }
+        },
+        "source_hashes_identity": {
+          "entries": 202,
+          "sha256": "e24d617d64dab7cc5d06e9a46a3480d49785d60cd32dd4df0724b8a5d96f6822"
+        },
+        "preflight_sha256": "268b20a91d33a9e609420cd13c450eb4fdb834e2985821e766f2a833686cfa77",
+        "privileged_critic": true,
+        "teacher_actions_in_loss": false,
+        "full_pick_place_qualified": false,
+        "episodes": 166,
+        "complete": true,
+        "safety_promoted": false,
+        "hardware_used": false
+      },
+      "variants": {
+        "retained_source": {
+          "general": {
+            "complete": true,
+            "controller": "e7b425699510cc635485bdd8f59a5b25692fb165faf248aaecbc2707c0dbb883",
+            "population": "admission",
+            "groups": {
+              "base/train": {
+                "cases": 45,
+                "admitted": 45,
+                "mastered": 39,
+                "tracking_and_settling_passed": 45,
+                "smoothness_passed": 39,
+                "failure_reasons": {
+                  "smoothness/base_linear_jerk": 5,
+                  "smoothness/joint_jerk": 1
+                },
+                "codes": {
+                  "ok": 45
+                },
+                "all_pass": false
+              },
+              "base/validation": {
+                "cases": 5,
+                "admitted": 5,
+                "mastered": 3,
+                "tracking_and_settling_passed": 4,
+                "smoothness_passed": 4,
+                "failure_reasons": {
+                  "smoothness/base_linear_jerk": 1,
+                  "mastery_tracking_envelope": 1,
+                  "terminal_hold": 1
+                },
+                "codes": {
+                  "ok": 4,
+                  "mastery_tracking_envelope": 1
+                },
+                "all_pass": false
+              },
+              "arm/train": {
+                "cases": 102,
+                "admitted": 102,
+                "mastered": 88,
+                "tracking_and_settling_passed": 95,
+                "smoothness_passed": 95,
+                "failure_reasons": {
+                  "smoothness/base_linear_jerk": 7,
+                  "tracking_timeout": 5,
+                  "terminal_hold": 7,
+                  "mastery_tracking_envelope": 2
+                },
+                "codes": {
+                  "ok": 95,
+                  "tracking_timeout": 5,
+                  "mastery_tracking_envelope": 2
+                },
+                "all_pass": false
+              },
+              "arm/validation": {
+                "cases": 4,
+                "admitted": 4,
+                "mastered": 4,
+                "tracking_and_settling_passed": 4,
+                "smoothness_passed": 4,
+                "failure_reasons": {},
+                "codes": {
+                  "ok": 4
+                },
+                "all_pass": true
+              },
+              "coupled/train": {
+                "cases": 6,
+                "admitted": 6,
+                "mastered": 2,
+                "tracking_and_settling_passed": 2,
+                "smoothness_passed": 6,
+                "failure_reasons": {
+                  "tracking_timeout": 4,
+                  "terminal_hold": 4
+                },
+                "codes": {
+                  "tracking_timeout": 4,
+                  "ok": 2
+                },
+                "all_pass": false
+              },
+              "coupled/validation": {
+                "cases": 2,
+                "admitted": 2,
+                "mastered": 0,
+                "tracking_and_settling_passed": 0,
+                "smoothness_passed": 2,
+                "failure_reasons": {
+                  "mastery_tracking_envelope": 2,
+                  "terminal_hold": 2
+                },
+                "codes": {
+                  "mastery_tracking_envelope": 2
+                },
+                "all_pass": false
+              }
+            },
+            "all_pass": false,
+            "safety_promoted": false
+          },
+          "tamp_successes": 0,
+          "tamp_attempts": 6,
+          "tamp_outcomes": [
+            {
+              "id": "development:left:20g:0",
+              "success": false,
+              "code": "cartesian_tracking_timeout",
+              "stop_confirmed": true,
+              "safety_flags": {
+                "wheel_lift": false,
+                "invalid_physics": false,
+                "unsafe_contact": false,
+                "retention_lost": false
+              },
+              "initialization_failed": false
+            },
+            {
+              "id": "development:right:50g:1",
+              "success": false,
+              "code": "cartesian_tracking_timeout",
+              "stop_confirmed": true,
+              "safety_flags": {
+                "wheel_lift": false,
+                "invalid_physics": false,
+                "unsafe_contact": false,
+                "retention_lost": false
+              },
+              "initialization_failed": false
+            },
+            {
+              "id": "development:left:50g:2",
+              "success": false,
+              "code": "operation_failed",
+              "stop_confirmed": true,
+              "safety_flags": {
+                "wheel_lift": false,
+                "invalid_physics": false,
+                "unsafe_contact": false,
+                "retention_lost": false
+              },
+              "initialization_failed": false
+            },
+            {
+              "id": "development:right:20g:3",
+              "success": false,
+              "code": "cartesian_path_tracking_envelope",
+              "stop_confirmed": true,
+              "safety_flags": {
+                "wheel_lift": false,
+                "invalid_physics": false,
+                "unsafe_contact": false,
+                "retention_lost": false
+              },
+              "initialization_failed": false
+            },
+            {
+              "id": "audit:left:20g:0",
+              "success": false,
+              "code": "cartesian_path_tracking_envelope",
+              "stop_confirmed": true,
+              "safety_flags": {
+                "wheel_lift": false,
+                "invalid_physics": false,
+                "unsafe_contact": false,
+                "retention_lost": false
+              },
+              "initialization_failed": false
+            },
+            {
+              "id": "audit:right:50g:1",
+              "success": false,
+              "code": "cartesian_tracking_timeout",
+              "stop_confirmed": true,
+              "safety_flags": {
+                "wheel_lift": false,
+                "invalid_physics": false,
+                "unsafe_contact": false,
+                "retention_lost": false
+              },
+              "initialization_failed": false
+            }
+          ]
+        },
+        "v2_final": {
+          "general": {
+            "complete": true,
+            "controller": "f595d497991d5a317ba3475f1a333c55b47d83de498e86d7f3feb580b0474739",
+            "population": "admission",
+            "groups": {
+              "base/train": {
+                "cases": 45,
+                "admitted": 45,
+                "mastered": 2,
+                "tracking_and_settling_passed": 5,
+                "smoothness_passed": 35,
+                "failure_reasons": {
+                  "smoothness/base_linear_jerk": 2,
+                  "smoothness/joint_jerk": 9,
+                  "mastery_tracking_envelope": 10,
+                  "terminal_hold": 40,
+                  "tracking_timeout": 30
+                },
+                "codes": {
+                  "ok": 5,
+                  "mastery_tracking_envelope": 10,
+                  "tracking_timeout": 30
+                },
+                "all_pass": false
+              },
+              "base/validation": {
+                "cases": 5,
+                "admitted": 5,
+                "mastered": 0,
+                "tracking_and_settling_passed": 1,
+                "smoothness_passed": 3,
+                "failure_reasons": {
+                  "smoothness/base_linear_jerk": 1,
+                  "mastery_tracking_envelope": 2,
+                  "terminal_hold": 4,
+                  "tracking_timeout": 2,
+                  "smoothness/joint_jerk": 1
+                },
+                "codes": {
+                  "ok": 1,
+                  "mastery_tracking_envelope": 2,
+                  "tracking_timeout": 2
+                },
+                "all_pass": false
+              },
+              "arm/train": {
+                "cases": 102,
+                "admitted": 102,
+                "mastered": 0,
+                "tracking_and_settling_passed": 0,
+                "smoothness_passed": 45,
+                "failure_reasons": {
+                  "mastery_tracking_envelope": 102,
+                  "terminal_hold": 102,
+                  "smoothness/base_linear_jerk": 57,
+                  "smoothness/base_yaw_jerk": 3,
+                  "smoothness/peak_force_N": 4,
+                  "smoothness/joint_jerk": 1
+                },
+                "codes": {
+                  "mastery_tracking_envelope": 102
+                },
+                "all_pass": false
+              },
+              "arm/validation": {
+                "cases": 4,
+                "admitted": 4,
+                "mastered": 0,
+                "tracking_and_settling_passed": 0,
+                "smoothness_passed": 3,
+                "failure_reasons": {
+                  "mastery_tracking_envelope": 4,
+                  "terminal_hold": 4,
+                  "smoothness/base_linear_jerk": 1
+                },
+                "codes": {
+                  "mastery_tracking_envelope": 4
+                },
+                "all_pass": false
+              },
+              "coupled/train": {
+                "cases": 6,
+                "admitted": 6,
+                "mastered": 0,
+                "tracking_and_settling_passed": 0,
+                "smoothness_passed": 6,
+                "failure_reasons": {
+                  "mastery_tracking_envelope": 6,
+                  "terminal_hold": 6
+                },
+                "codes": {
+                  "mastery_tracking_envelope": 6
+                },
+                "all_pass": false
+              },
+              "coupled/validation": {
+                "cases": 2,
+                "admitted": 2,
+                "mastered": 0,
+                "tracking_and_settling_passed": 0,
+                "smoothness_passed": 2,
+                "failure_reasons": {
+                  "mastery_tracking_envelope": 2,
+                  "terminal_hold": 2
+                },
+                "codes": {
+                  "mastery_tracking_envelope": 2
+                },
+                "all_pass": false
+              }
+            },
+            "all_pass": false,
+            "safety_promoted": false
+          },
+          "tamp_successes": 0,
+          "tamp_attempts": 6,
+          "tamp_outcomes": [
+            {
+              "id": "development:left:20g:0",
+              "success": false,
+              "code": "cartesian_path_tracking_envelope",
+              "stop_confirmed": true,
+              "safety_flags": {
+                "wheel_lift": false,
+                "invalid_physics": false,
+                "unsafe_contact": false,
+                "retention_lost": false
+              },
+              "initialization_failed": false
+            },
+            {
+              "id": "development:right:50g:1",
+              "success": false,
+              "code": "cartesian_path_tracking_envelope",
+              "stop_confirmed": true,
+              "safety_flags": {
+                "wheel_lift": false,
+                "invalid_physics": false,
+                "unsafe_contact": false,
+                "retention_lost": false
+              },
+              "initialization_failed": false
+            },
+            {
+              "id": "development:left:50g:2",
+              "success": false,
+              "code": "operation_failed",
+              "stop_confirmed": true,
+              "safety_flags": {
+                "wheel_lift": false,
+                "invalid_physics": false,
+                "unsafe_contact": false,
+                "retention_lost": false
+              },
+              "initialization_failed": false
+            },
+            {
+              "id": "development:right:20g:3",
+              "success": false,
+              "code": "cartesian_path_tracking_envelope",
+              "stop_confirmed": true,
+              "safety_flags": {
+                "wheel_lift": false,
+                "invalid_physics": false,
+                "unsafe_contact": false,
+                "retention_lost": false
+              },
+              "initialization_failed": false
+            },
+            {
+              "id": "audit:left:20g:0",
+              "success": false,
+              "code": "cartesian_path_tracking_envelope",
+              "stop_confirmed": true,
+              "safety_flags": {
+                "wheel_lift": false,
+                "invalid_physics": false,
+                "unsafe_contact": false,
+                "retention_lost": false
+              },
+              "initialization_failed": false
+            },
+            {
+              "id": "audit:right:50g:1",
+              "success": false,
+              "code": "cartesian_path_tracking_envelope",
+              "stop_confirmed": true,
+              "safety_flags": {
+                "wheel_lift": false,
+                "invalid_physics": false,
+                "unsafe_contact": false,
+                "retention_lost": false
+              },
+              "initialization_failed": false
+            }
+          ]
+        }
+      },
+      "hardware_used": false,
+      "safety_promoted": false,
+      "full_pick_place_qualified": false,
+      "instrumentation_repair": {
+        "script_sha256": "7c23e1bca992e34fdedafdff765783dd10642dee1748700b07c89254046d5142",
+        "initial_invalid_evidence": "logs/recovery/whole-body-v2/initial-invalid-paired"
+      },
+      "complete": true
+    },
+    "breakdown": {
+      "retained_source": {
+        "general": {
+          "base": {
+            "attempts": 50,
+            "full": 42,
+            "tracking": 49
+          },
+          "arm": {
+            "attempts": 88,
+            "full": 80,
+            "tracking": 87
+          },
+          "coupled": {
+            "attempts": 8,
+            "full": 2,
+            "tracking": 2
+          },
+          "supported": {
+            "attempts": 18,
+            "full": 12,
+            "tracking": 12
+          }
+        },
+        "general_safety_flags": {},
+        "tamp": [
+          {
+            "id": "development:left:20g:0",
+            "success": false,
+            "code": "cartesian_tracking_timeout",
+            "stop_confirmed": true,
+            "safety_flags": {
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "unsafe_contact": false,
+              "retention_lost": false
+            }
+          },
+          {
+            "id": "development:right:50g:1",
+            "success": false,
+            "code": "cartesian_tracking_timeout",
+            "stop_confirmed": true,
+            "safety_flags": {
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "unsafe_contact": false,
+              "retention_lost": false
+            }
+          },
+          {
+            "id": "development:left:50g:2",
+            "success": false,
+            "code": "operation_failed",
+            "stop_confirmed": true,
+            "safety_flags": {
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "unsafe_contact": false,
+              "retention_lost": false
+            }
+          },
+          {
+            "id": "development:right:20g:3",
+            "success": false,
+            "code": "cartesian_path_tracking_envelope",
+            "stop_confirmed": true,
+            "safety_flags": {
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "unsafe_contact": false,
+              "retention_lost": false
+            }
+          },
+          {
+            "id": "audit:left:20g:0",
+            "success": false,
+            "code": "cartesian_path_tracking_envelope",
+            "stop_confirmed": true,
+            "safety_flags": {
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "unsafe_contact": false,
+              "retention_lost": false
+            }
+          },
+          {
+            "id": "audit:right:50g:1",
+            "success": false,
+            "code": "cartesian_tracking_timeout",
+            "stop_confirmed": true,
+            "safety_flags": {
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "unsafe_contact": false,
+              "retention_lost": false
+            }
+          }
+        ]
+      },
+      "v2_final": {
+        "general": {
+          "base": {
+            "attempts": 50,
+            "full": 2,
+            "tracking": 6
+          },
+          "arm": {
+            "attempts": 88,
+            "full": 0,
+            "tracking": 0
+          },
+          "coupled": {
+            "attempts": 8,
+            "full": 0,
+            "tracking": 0
+          },
+          "supported": {
+            "attempts": 18,
+            "full": 0,
+            "tracking": 0
+          }
+        },
+        "general_safety_flags": {},
+        "tamp": [
+          {
+            "id": "development:left:20g:0",
+            "success": false,
+            "code": "cartesian_path_tracking_envelope",
+            "stop_confirmed": true,
+            "safety_flags": {
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "unsafe_contact": false,
+              "retention_lost": false
+            }
+          },
+          {
+            "id": "development:right:50g:1",
+            "success": false,
+            "code": "cartesian_path_tracking_envelope",
+            "stop_confirmed": true,
+            "safety_flags": {
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "unsafe_contact": false,
+              "retention_lost": false
+            }
+          },
+          {
+            "id": "development:left:50g:2",
+            "success": false,
+            "code": "operation_failed",
+            "stop_confirmed": true,
+            "safety_flags": {
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "unsafe_contact": false,
+              "retention_lost": false
+            }
+          },
+          {
+            "id": "development:right:20g:3",
+            "success": false,
+            "code": "cartesian_path_tracking_envelope",
+            "stop_confirmed": true,
+            "safety_flags": {
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "unsafe_contact": false,
+              "retention_lost": false
+            }
+          },
+          {
+            "id": "audit:left:20g:0",
+            "success": false,
+            "code": "cartesian_path_tracking_envelope",
+            "stop_confirmed": true,
+            "safety_flags": {
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "unsafe_contact": false,
+              "retention_lost": false
+            }
+          },
+          {
+            "id": "audit:right:50g:1",
+            "success": false,
+            "code": "cartesian_path_tracking_envelope",
+            "stop_confirmed": true,
+            "safety_flags": {
+              "wheel_lift": false,
+              "invalid_physics": false,
+              "unsafe_contact": false,
+              "retention_lost": false
+            }
+          }
+        ]
+      }
+    },
+    "training_episodes": {
+      "completed": 166,
+      "successes": 0,
+      "terminal_codes": {
+        "mastery_tracking_envelope": 94,
+        "cartesian_tracking_timeout": 4,
+        "transport_tracking_timeout": 10,
+        "tracking_timeout": 2,
+        "cartesian_path_tracking_envelope": 41,
+        "object_changed_replan": 5,
+        "fixed_base_contract_violation": 3,
+        "operation_failed": 1,
+        "wheel_lift": 6
+      },
+      "wheel_lift_episodes": 6,
+      "artifact": {
+        "path": "logs/manipulation/mars-whole-body-v2-pilot-seed90/episodes.jsonl",
+        "sha256": "ab97157e24c71a7fe144e5bfb2a09772d3cb29d013dec29455e16bef2311a70d",
+        "bytes": 31841
+      }
+    },
+    "decision": "reject_pilot_retain_source"
+  }
+}

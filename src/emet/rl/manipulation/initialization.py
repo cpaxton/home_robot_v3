@@ -162,6 +162,12 @@ def transfer_actor(model, normalizer, directory, config, fingerprint, *, prior_c
                 values[:, angular] *= ratio
             scale_change = {"from": old_scale, "to": new_scale, "function_preserving": True}
     model.policy.load_state_dict(target)
+    # Ordinary trainers consume native rewards. A scaled-critic inference bundle
+    # must not silently seed their value function in different units.
+    target_scale = getattr(model.policy, "critic_reward_scale", 1.0)
+    with torch.no_grad():
+        model.policy.value_net.weight.mul_(target_scale / old.critic_reward_scale)
+        model.policy.value_net.bias.mul_(target_scale / old.critic_reward_scale)
     for key, (mean, var) in old.normalization.items():
         stats = normalizer.obs_rms[key]
         stats.mean.fill(0)
@@ -180,6 +186,7 @@ def transfer_actor(model, normalizer, directory, config, fingerprint, *, prior_c
         "control_contract_changes": contract_changes,
         "source_manifest_sha256": hashlib.sha256((Path(directory) / "manifest.json").read_bytes()).hexdigest(),
         "optimizer_restored": False,
+        "critic_reward_scale_change": {"from": old.critic_reward_scale, "to": target_scale},
         "executor_action_mask_change": {"from": old_executor_mask, "to": new_executor_mask},
         "feedback_mean_head_reinitialized": new_feedback_head,
         "restoring_yaw_feedback_change": {

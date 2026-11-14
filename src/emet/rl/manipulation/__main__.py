@@ -53,6 +53,10 @@ class PhaseLearningRate:
 def resume_training(directory, env, config, fingerprint, architecture):
     """Restore PPO optimizer and observation statistics after bundle validation."""
     bundle = ManipulationPolicy(directory, robot=config.robot, fingerprint=fingerprint)
+    if bundle.manifest.get("component_training", {}).get("optimizer_resume_supported") is False:
+        raise ValueError("component inference exports require a fresh optimizer; use training transfer")
+    if bundle.critic_reward_scale != 1.0:
+        raise ValueError("exact resume requires native critic reward units; use training transfer")
     expected = ManipulationHistoryFeatures if architecture == "history" else ManipulationMLPFeatures
     if config.feedback_policy:
         from emet.rl.manipulation.feedback_policy import GoalFeedbackFeatures
@@ -145,6 +149,10 @@ def initialize_retention_context(model, env, directory, config, fingerprint):
         else:
             raise ValueError(f"unsupported retention warm-start parameter: {name}")
     model.policy.load_state_dict(target)
+    with torch.no_grad():
+        ratio = getattr(model.policy, "critic_reward_scale", 1.0) / old.critic_reward_scale
+        model.policy.value_net.weight.mul_(ratio)
+        model.policy.value_net.bias.mul_(ratio)
     for key, (mean, var) in old.normalization.items():
         stats = env.obs_rms[key]
         if key == "history":
