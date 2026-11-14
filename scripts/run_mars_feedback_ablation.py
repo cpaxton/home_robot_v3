@@ -1,3 +1,7 @@
+# Copyright (c) Chris Paxton 2026
+#
+# Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
+
 """Run paired simulator pilots through the existing mastery training gates.
 
 The four variants share cases, seeds, budgets, PPO settings and physical gates.
@@ -7,6 +11,7 @@ start from one checkpoint; reference columns then start with zero influence.
 
 import argparse
 import copy
+import hashlib
 import json
 import os
 import subprocess
@@ -31,6 +36,8 @@ def main():
     )
     parser.add_argument("--variants", choices=VARIANTS, nargs="+", default=list(VARIANTS))
     parser.add_argument("--stages", choices=("base", "arm", "coupled"), nargs="+", default=["arm"])
+    parser.add_argument("--evaluation-stages", choices=("base", "arm", "coupled"), nargs="+")
+    parser.add_argument("--evaluation-population", choices=("canonical", "admission"), default="canonical")
     parser.add_argument("--steps", type=int, default=4096)
     parser.add_argument("--seeds", type=int, nargs="+", default=[90])
     parser.add_argument("--learning-rate", type=float, default=1e-4)
@@ -44,30 +51,48 @@ def main():
     if args.source and any(VARIANTS[v][0] != "rotation6" for v in args.variants):
         parser.error("checkpoint continuation supports the baseline/velocity pair; rotvec requires scratch training")
 
+    # Set this before importing Torch/SB3, including in the coordinator process.
+    os.environ.update(CUDA_VISIBLE_DEVICES="", OMP_NUM_THREADS="1", OPENBLAS_NUM_THREADS="1", MKL_NUM_THREADS="1")
+    os.environ.setdefault("MUJOCO_GL", "disable")
+
     from emet.rl.manipulation.mastery import load_suite
     from emet.rl.regression_gate import verify_regressions
 
     verify_regressions(args.regression_receipt)
     suite = load_suite(args.suite)
+    source_manifest_hash = None
     if args.source:
         from emet.rl.manipulation.policy import ManipulationPolicy
 
         source = ManipulationPolicy(args.source)
+        source_manifest_hash = hashlib.sha256((args.source / "manifest.json").read_bytes()).hexdigest()
         if callable(getattr(source.model.policy, "executor_mask", None)):
             # A continuation must retain the source's executor action masks.
             suite["training_policy"] = "executor_mask_v1"
     args.output = args.output.resolve()
     args.output.mkdir(parents=True, exist_ok=False)
     environment = dict(
-        os.environ, PYTHONPATH=str(ROOT / "src"), MUJOCO_GL="egl", OMP_NUM_THREADS="1", OPENBLAS_NUM_THREADS="1"
+        os.environ,
+        PYTHONPATH=str(ROOT / "src"),
+        MUJOCO_GL=os.environ.get("MUJOCO_GL", "disable"),
+        CUDA_VISIBLE_DEVICES="",
+        OMP_NUM_THREADS="1",
+        OPENBLAS_NUM_THREADS="1",
+        MKL_NUM_THREADS="1",
     )
+    evaluation_stages = args.evaluation_stages or args.stages
+    preflight_stages = list(dict.fromkeys([*args.stages, *evaluation_stages]))
+    expanded_evaluation = args.evaluation_stages is not None or args.evaluation_population != "canonical"
     result = {
         "scope": "paired feedback architecture pilot; unchanged mastery acceptance gates",
         "steps_per_variant_seed": args.steps,
         "seeds": args.seeds,
         "stages": args.stages,
+        "evaluation_stages": evaluation_stages,
+        "evaluation_population": args.evaluation_population,
         "initialization": "scratch" if args.source is None else str(args.source.resolve()),
         "executor_action_mask": suite.get("training_policy") == "executor_mask_v1",
+        "source_manifest_sha256": source_manifest_hash,
         "complete": False,
         "safety_promoted": False,
         "runs": [],
@@ -89,7 +114,7 @@ def main():
                     "--suite",
                     str(suite_path),
                     "--stages",
-                    *args.stages,
+                    *preflight_stages,
                     "--output",
                     str(teacher_directory),
                 ],
@@ -100,6 +125,11 @@ def main():
                 check=True,
             )
             for seed in args.seeds:
+                if (
+                    args.source
+                    and hashlib.sha256((args.source / "manifest.json").read_bytes()).hexdigest() != source_manifest_hash
+                ):
+                    raise RuntimeError("source checkpoint changed during the paired experiment")
                 destination = args.output / f"{variant}-seed-{seed}"
                 command = [
                     *prefix,
@@ -131,15 +161,43 @@ def main():
                     command += ["--initialize-from", str(args.source.resolve()), "--freeze-normalization"]
                 print(f"Training {variant}, seed {seed}, {args.steps} transitions", flush=True)
                 subprocess.run(command, cwd=ROOT, env=environment, stdout=log, stderr=subprocess.STDOUT, check=True)
-                result["runs"].append(
-                    {
-                        "variant": variant,
-                        "seed": seed,
-                        "command": command,
-                        "initial": json.loads((destination / "step-0/summary.json").read_text()),
-                        "final": json.loads((destination / "last/summary.json").read_text()),
-                    }
-                )
+                run = {
+                    "variant": variant,
+                    "seed": seed,
+                    "command": command,
+                    "initial": json.loads((destination / "step-0/summary.json").read_text()),
+                    "final": json.loads((destination / "last/summary.json").read_text()),
+                }
+                if expanded_evaluation:
+                    for label, key in [("step-0", "expanded_initial"), ("last", "expanded_final")]:
+                        evaluation = destination / f"{label}-{args.evaluation_population}-evaluation"
+                        evaluation_command = [
+                            *prefix,
+                            "evaluate",
+                            "--suite",
+                            str(suite_path),
+                            "--stages",
+                            *evaluation_stages,
+                            "--policy",
+                            str(destination / label),
+                            "--preflight",
+                            str(teacher_path),
+                            "--population",
+                            args.evaluation_population,
+                            "--output",
+                            str(evaluation),
+                        ]
+                        print(f"Evaluating {variant}, seed {seed}, {label}, {args.evaluation_population}", flush=True)
+                        subprocess.run(
+                            evaluation_command,
+                            cwd=ROOT,
+                            env=environment,
+                            stdout=log,
+                            stderr=subprocess.STDOUT,
+                            check=True,
+                        )
+                        run[key] = json.loads((evaluation / "summary.json").read_text())
+                result["runs"].append(run)
                 (args.output / "results.json").write_text(json.dumps(result, indent=2) + "\n")
     result["complete"] = True
     (args.output / "results.json").write_text(json.dumps(result, indent=2) + "\n")

@@ -131,3 +131,50 @@ whether explicit velocity helps the harder expanded-arm or TAMP distribution.
 The rotvec option passed geometry/PPO/export tests but was not trained in this
 continuation pair; comparing orientation representations requires the scratch
 four-way experiment. Neither checkpoint is promoted.
+
+## Expanded paired experiment protocol
+
+The next bounded experiment compares baseline and reference velocity on
+`mars_tracking_mastery_tamp_postures_v1.json`, using the same retained source
+checkpoint as the pilot. It trains the arm stage for **16,384 transitions per
+variant and seed**, with paired seeds **90, 91, 92**, LR `1e-5`, arm exploration
+standard deviation `0.03`, frozen normalization, and unchanged executor masks.
+The budget is six serial runs / 98,304 total training transitions. It uses only
+the final checkpoint for the declared comparison, with no automatic extension,
+restart, best-checkpoint selection, or promotion.
+
+Teacher preflight covers the full admission population for base, arm and
+coupled stages. Initial and final actor snapshots are evaluated on that same
+population; training still uses only its declared training split. Added
+near-straight arm postures are training/development cases, not new held-out
+validation cases. Report canonical validation separately. Base and coupled
+readouts check regressions outside the arm training stage. A useful treatment
+must improve tracking across paired seeds without trading away smoothness or
+the existing validation/base behavior. Keep failed and stopped cases in the
+denominators and compare tracking errors over matching time coverage.
+
+On Olympia, training/evaluation is one worker pinned to CPU14, with CUDA hidden,
+rendering disabled, and one Torch/BLAS/OMP/MKL thread. Focused and full regression
+tests use CPU15 before training starts. The managed supervisor waits for the
+existing CPU14/15 workloads to exit, uses a separate immutable runtime checkout,
+copies the source bundle, and stops if tests, teacher admission, source checks,
+or its fixed timeout fail. It does not stop or modify other jobs. Caliban is not
+used for this comparison because the recorded ARM frozen-fixture qualification
+remains unresolved; those gates must pass before moving policy training there.
+
+The runner now supports `--evaluation-stages` and `--evaluation-population`:
+
+```bash
+taskset -c 14 env PYTHONPATH=src CUDA_VISIBLE_DEVICES='' MUJOCO_GL=disable \
+  OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \
+  python scripts/run_mars_feedback_ablation.py \
+  --regression-receipt /path/to/current/regressions.receipt.json \
+  --suite configs/benchmarks/mars_tracking_mastery_tamp_postures_v1.json \
+  --source /path/to/frozen/source/actor --variants baseline velocity \
+  --stages arm --evaluation-stages base arm coupled \
+  --evaluation-population admission --steps 16384 --seeds 90 91 92 \
+  --learning-rate 1e-5 --arm-std 0.03 --output /path/to/fresh/expanded-experiment
+```
+
+This section declares the protocol, not a completed result. Live phase and
+completion are recorded separately by the managed job and its supervisor.
