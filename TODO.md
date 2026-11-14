@@ -73,6 +73,16 @@
       Freeze the strict candidate for a broader matched EQA/find pilot; any
       larger horizon must apply to both arms. No system superiority is claimed.
       Plan: `docs/experiments/closer_view_feedback_20261113.md`.
+- [ ] Run the frozen recovery-budget check: new candidate at 6/3, then baseline
+      and candidate at 12/8 rounds/navigation calls per find phase. Driver and
+      opt-in acceptance profile now expose/use 12/8; independent navigation
+      exhaustion is recorded, and relative motion uses the shared counter.
+      Explicit answer commits, bounded HTTP CHAT history and cached-camera
+      labeling are repaired/covered. Preserve a new low-budget control because
+      answer semantics changed too. GPU runs await the 20 GiB disk reserve;
+      archived-model deduplication was rejected by automatic approval review
+      and remains unapplied pending user approval. No new task result yet.
+      Review/protocol: `docs/experiments/recovery_budget_review_20261114.md`.
 - [ ] Emit actual per-episode simulation duration, model inference cost and
       invocation overhead in paper-run manifests. Clock probes and reported
       episode wall metrics alone do not measure complete task simulation time.
