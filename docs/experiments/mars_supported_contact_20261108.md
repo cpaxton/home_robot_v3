@@ -6,6 +6,28 @@ control steps; the LR1 optimizer, rewards, normalization, physics, safety limits
 and earlier cases remain fixed. The final is rejected and the original source
 checkpoint remains retained. No intermediate checkpoint is selected.
 
+## Supported-case contract (reviewed 2026-11-14)
+
+These cases are open-jaw arm tracking in the deterministic supported pregrasp
+fixture. Their joint deltas start at that fixture's measured arm pose; FK
+constructs the hand reference, and joint-margin, collision and wheel-support
+admission still apply. The fixture configuration is scoped to this reset and
+does not change the next ordinary reset.
+
+The `pregrasp` phase matches the runtime phase token. Grip correction is
+executor-disabled in this phase, with retention and release both unauthorized;
+these cases do **not** train grasp closure or establish object retention.
+The base target remains active in all three SE(2) coordinates at a stationary
+pose. It is not a masked-out or physically immobilized base: the tight arm-case
+base contract and base jerk measurements still apply. Thus good hand tracking
+can coexist with a failed combined contract due to base motion.
+
+The existing [supported-fixture tests](../../src/test/rl/manipulation/test_supported_mastery.py)
+cover case preservation, invalid reset configurations, open-jaw behavior during
+steps and exact restoration of the following ordinary reset. This review found
+no supported-contact implementation defect; the behavioral results below
+remain unchanged.
+
 | Earlier 146-case subset | Retained source tracking/full | Prior LR1 final | Supported-contact final |
 |---|---:|---:|---:|
 | Base |49/50, 42/50|50/50, 42/50|50/50, 43/50|

@@ -116,6 +116,21 @@ is available**. Repair and test the serialized/in-memory comparison before a
 declared recovery. No retry, extension or promotion has occurred. The separate
 PR #232 adaptation job remains queued because CPU14 has not been released.
 
+The comparison repair is implemented in `29a9fcec`: both PPO setting dictionaries
+are compared in the JSON domain, preserving all value checks while accepting
+the list/tuple serialization boundary. Tests now exercise an actual candidate
+training call against the control's saved `run.json`, verify the pre-update
+guard succeeds, and reject changes to every other PPO setting and each paired
+state/data field. This repairs orchestration; it does not complete the pair.
+The original frozen attempt and its 1,187-test receipt remain historical.
+
+The separate PR #227 reward-clock review also found that executor hold ticks
+were summed without intra-transition discounting, despite continuation using
+`gamma ** ticks`. That correction must be tested before further general/TAMP
+training. It does not change this basic experiment's one-tick, zero-TAMP
+distribution. Do not silently overwrite old evidence or reuse a source-bound
+receipt for changed training code.
+
 [Compact attempt evidence](../../paper/data/whole_body_control/mars_whole_body_advantage_pair_v1/attempt.json)
 records outcome groups, matching hashes and artifact checksums. Raw logs,
 checkpoints and first-rollout arrays remain under the ignored

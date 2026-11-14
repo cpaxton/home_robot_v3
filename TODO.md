@@ -420,9 +420,15 @@ Accepted plan: [Mars controller integration](docs/plans/mars_controller_integrat
       retained. Historical control completes 4,096 decisions; shared candidate
       stops before its first update on JSON-list/Python-tuple settings comparison.
       No completed paired result or policy improvement claim.
-- [ ] Repair and test the serialized/in-memory settings comparison before
-      resuming the controlled normalization experiment. Preserve the incomplete
-      attempt and verify exact initial state/first rollout; no silent retry.
+- [x] Repair and test the serialized/in-memory settings comparison (`29a9fcec`),
+      including an actual candidate call against the saved control record.
+      Preserve the incomplete attempt; no completed paired result yet.
+- [ ] Complete the declared normalization comparison after current-source
+      checks and an explicit recovery record; preserve exact initial state and
+      first-rollout matching, no extra variant/seed or silent source-hash bypass.
+- [ ] Correct bundled TAMP reward timing: discount each physical tick, including
+      terminal credit, before `gamma ** ticks` continuation; preserve raw rewards
+      for evaluation and test bundled-versus-expanded return equivalence.
 - [ ] Evaluate the opt-in frozen-base/shared-context arm-adaptation pilot in
       [PR #232](https://github.com/cpaxton/home_robot_v3/pull/232). Software checks
       pass; training awaits CPU14 release. Preview velocity alone did not improve

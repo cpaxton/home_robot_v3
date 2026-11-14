@@ -19,6 +19,13 @@ normalization conclusion is available. The optional legacy-MLP work in
 [PR #232](https://github.com/cpaxton/home_robot_v3/pull/232) is a separate
 experiment and is not required to run this prototype.
 
+The settings serialization guard is repaired in `29a9fcec` with an actual
+disk-to-live training regression test. The recorded pair remains incomplete.
+A subsequent reward-clock review requires discounting each physical tick inside
+bundled TAMP transitions, including terminal credit, consistently with the
+`gamma ** ticks` continuation. The old cold-pilot results remain historical;
+they must not be presented as results from corrected return timing.
+
 Correct experimental code can merge with measured behavioral limitations.
 Passing all performance gates is a checkpoint-promotion decision, separate
 from implementation correctness and from permission to test real hardware.
