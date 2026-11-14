@@ -132,11 +132,17 @@ def load_suite(path=SUITE):
             type(case["supported_fixture"]) is not bool
             or (
                 case["supported_fixture"]
-                and (cfg.scenario != "reach" or cfg.reach_hold_probability != 1 or not cfg.balanced_grasp_setup
-                     or "arm_start" in case)
+                and (
+                    cfg.scenario != "reach"
+                    or cfg.reach_hold_probability != 1
+                    or not cfg.balanced_grasp_setup
+                    or "arm_start" in case
+                )
             )
         ):
-            raise ValueError("supported fixture requires a balanced, deterministic open-jaw reach reset without arm_start")
+            raise ValueError(
+                "supported fixture requires a balanced, deterministic open-jaw reach reset without arm_start"
+            )
         if "arm_start" in case:
             try:
                 posture = np.asarray(case["arm_start"], dtype=float)
@@ -617,8 +623,11 @@ class MasteryEnv(ManipulationEnv):
         if self.mastery_reference is not None and not self.control.stopped:
             _, q = self.mastery_reference.coordinates(self.control.trajectory_elapsed())
             phase = (
-                "carry" if self.mastery_case["stage"] == "loaded"
-                else "pregrasp" if self.mastery_case.get("supported_fixture", False) else "reach"
+                "carry"
+                if self.mastery_case["stage"] == "loaded"
+                else "pregrasp"
+                if self.mastery_case.get("supported_fixture", False)
+                else "reach"
             )
             self.control.set_reference(q, phase=phase)
 
@@ -746,6 +755,10 @@ def evaluate_suite(suite, *, stages=STAGES, policy=None, teacher_report=None, po
     teacher_rows = {} if teacher_report is None else {c["id"]: c for c in teacher_report["cases"]}
     env = MasteryEnv(suite, stages=stages, split="all", population=population)
     try:
+        if policy is not None and hasattr(policy, "bind_reference"):
+            from emet.rl.manipulation.whole_body_observation import reference_velocity
+
+            policy.bind_reference(lambda: reference_velocity(env.control))
         if policy is not None and (
             policy.robot != env.profile.robot or policy.manifest["fingerprint"] != env.fingerprint
         ):
@@ -1397,7 +1410,7 @@ def main():
             parser.error("training requires preflight, fresh regressions and positive finite settings")
         train(args, suite)
     else:
-        from emet.rl.manipulation.policy import ManipulationPolicy
+        from emet.rl.manipulation.policy import load_control_policy
 
         if args.command == "evaluate" and (not args.policy or not args.preflight):
             parser.error("policy evaluation requires --policy and --preflight")
@@ -1407,7 +1420,7 @@ def main():
         report = evaluate_suite(
             suite,
             stages=args.stages,
-            policy=ManipulationPolicy(args.policy) if args.command == "evaluate" else None,
+            policy=load_control_policy(args.policy) if args.command == "evaluate" else None,
             teacher_report=teacher,
             population="admission" if args.command == "preflight" else args.population,
         )

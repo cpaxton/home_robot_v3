@@ -52,13 +52,20 @@ def simplify_collinear(path, tolerance=1e-10):
     return np.array(kept)
 
 
-def compile_joint_path(path, speed, acceleration, jerk, *, phase_acceleration=0, phase_jerk=0):
+def compile_joint_path(path, speed, acceleration, jerk, *, phase_acceleration=0, phase_jerk=0, profile="quintic"):
     """Rest-to-rest quintics, bounded also under the declared phase governor.
 
     q_dot=q_s*r; q_ddot=q_ss*r²+q_s*r_dot;
     q_jerk=q_sss*r³+3*q_ss*r*r_dot+q_s*r_ddot, for 0<=r<=1.
     Duration grows until conservative bounds on all three derivatives pass.
     """
+    if profile == "s_curve":
+        from emet.rl.manipulation.s_curve import compile_s_curve
+
+        return compile_s_curve(path, speed, acceleration, jerk,
+                               phase_acceleration=phase_acceleration, phase_jerk=phase_jerk)
+    if profile != "quintic":
+        raise ValueError("unknown joint velocity profile")
     points = simplify_collinear(path)
     width = points.shape[1]
     speed, acceleration, jerk = (np.asarray(v, dtype=float) for v in (speed, acceleration, jerk))

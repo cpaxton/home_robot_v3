@@ -119,6 +119,20 @@ def verify_checkpoint(directory, model, evidence):
             "rl/manipulation/tracking.py",
             "rl/pose_targets.py",
         }
+    if manifest.get("format") == "emet-whole-body-v2":
+        required |= {
+            "rl/manipulation/" + name
+            for name in (
+                "whole_body_actor.py",
+                "whole_body_bundle.py",
+                "whole_body_observation.py",
+                "observation_layout.py",
+                "tracking.py",
+                "jerk_reference.py",
+                "jerk_pose_reference.py",
+                "s_curve.py",
+            )
+        }
     if any(k not in sources or sources[k] != current[k] for k in required):
         raise ValueError("training robot sources or runtime changed")
     cfg = manifest["environment"]
@@ -152,16 +166,17 @@ class CheckpointTampPolicy:
 
     def __init__(self, directory, env, *, evidence):
         from emet.rl.manipulation.env import ManipulationConfig
-        from emet.rl.manipulation.policy import ManipulationPolicy
+        from emet.rl.manipulation.policy import load_control_policy
 
         self.directory = Path(directory)
         manifest, self.admission = verify_checkpoint(directory, env.model, evidence)
         self._manifest_bytes = (self.directory / "manifest.json").read_bytes()
-        self.policy = ManipulationPolicy(directory, robot=env.profile.robot, fingerprint=manifest["fingerprint"])
+        self.policy = load_control_policy(directory, robot=env.profile.robot, fingerprint=manifest["fingerprint"])
         from emet.rl.manipulation.feedback_policy import FeedbackActorCriticPolicy, GoalFeedbackFeatures
 
-        feedback = isinstance(self.policy.model.policy, FeedbackActorCriticPolicy)
-        if feedback != manifest["environment"].get("feedback_policy", False):
+        recurrent_window = manifest.get("format") == "emet-whole-body-v2"
+        feedback = False if recurrent_window else isinstance(self.policy.model.policy, FeedbackActorCriticPolicy)
+        if not recurrent_window and feedback != manifest["environment"].get("feedback_policy", False):
             raise ValueError("feedback policy metadata mismatch")
         if feedback and type(self.policy.model.policy.features_extractor) is not GoalFeedbackFeatures:
             raise ValueError("feedback feature contract mismatch")
@@ -188,6 +203,10 @@ class CheckpointTampPolicy:
         # Attachment happens once, before execution; never clear history at a
         # grasp/carry/place boundary or reset live physics to fit a checkpoint.
         control.history = None
+        if recurrent_window:
+            from emet.rl.manipulation.whole_body_observation import reference_velocity
+
+            self.policy.bind_reference(lambda: reference_velocity(env.control))
 
     def __call__(self, observation):
         self.calls += 1

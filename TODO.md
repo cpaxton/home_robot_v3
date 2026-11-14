@@ -404,6 +404,14 @@ Accepted plan: [Mars controller integration](docs/plans/mars_controller_integrat
 - [ ] Test opt-in jaw-unit curriculum after exact critic warmup, with physical
       std floor0.087275rad, a32768-step geometric ramp and the unchanged262k final.
       Require fresh regression/teacher/source gates and all existing post-tests.
+- [x] Implement the [v2 general/TAMP training prototype](docs/plans/mars_whole_body_v2.md):
+      50/50 physical ticks, one full-history actor, three independent critics,
+      training-only privileged state and retimed S-curve velocity references.
+      Keep the diagnosed object-motion challenge as a failure, not a pass.
+- [ ] Complete fresh v2 full regressions/preflight, then the bounded8k pilot
+      and paired source/general/TAMP audit. Pregrasp is not full pick/place.
+- [ ] Add v2 grasp→lift/loaded/placement primitives and actor-active terminal
+      stability audits only after the first pilot's behavior is understood.
 - [ ] Master the five base cases first, then add arm, coupled and loaded cases
       while retaining earlier rehearsal. Keep stage IDs out of actor input and
       require both complete splits before restoring the broad distribution.

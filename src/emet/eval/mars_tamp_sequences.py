@@ -91,7 +91,7 @@ def run_sequence(
         raise ValueError("task-pose reference requires a checkpoint's settings and Cartesian execution")
     if arm_execution not in {"joint", "cartesian"} or (arm_execution == "cartesian" and policy_directory is None):
         raise ValueError("Cartesian replay requires an explicit policy checkpoint")
-    if arm_reference not in {"legacy", "jerk_limited"} or (arm_reference != "legacy" and arm_execution != "cartesian"):
+    if arm_reference not in {"legacy", "jerk_limited", "s_curve"} or (arm_reference != "legacy" and arm_execution != "cartesian"):
         raise ValueError("jerk-limited replay requires Cartesian checkpoint execution")
     env, admission = fixture(case)
     row = {
@@ -361,7 +361,7 @@ def main():
         help="Retain actor inputs and pre/post physics for offline diagnosis",
     )
     parser.add_argument("--arm-execution", choices=["joint", "cartesian"], default="joint")
-    parser.add_argument("--arm-reference", choices=["legacy", "jerk_limited"], default="legacy")
+    parser.add_argument("--arm-reference", choices=["legacy", "jerk_limited", "s_curve"], default="legacy")
     parser.add_argument(
         "--reference-controller", choices=["joint", "task_pose"], default="joint",
         help="Task-pose reference uses the admitted checkpoint settings and the same Cartesian reference mode",

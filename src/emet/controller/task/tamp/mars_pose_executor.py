@@ -124,7 +124,7 @@ def execute_pose_path(robot, executor, phase, path, *, goal_pose=None):
 
     # Certify a densely sampled, derivative-bounded witness before issuing any
     # motion. Only private data is modified; the live robot is never reset.
-    continuous = robot.arm_reference == "jerk_limited"
+    continuous = robot.arm_reference in {"jerk_limited", "s_curve"}
     reference_path = derivative_certificate = governor = None
     q_samples, times = [witness[0].copy()], [0.0]
     if continuous:
@@ -138,6 +138,7 @@ def execute_pose_path(robot, executor, phase, path, *, goal_pose=None):
             4 * np.asarray(MARS.acceleration),
             phase_acceleration=1 / tau,
             phase_jerk=2 / tau**2,
+            profile="s_curve" if robot.arm_reference == "s_curve" else "quintic",
         )
         times = sorted(
             {
@@ -224,6 +225,7 @@ def execute_pose_path(robot, executor, phase, path, *, goal_pose=None):
             goal_pose=goal_pose,
             phase_acceleration=1 / tau,
             phase_jerk=2 / tau**2,
+            profile="s_curve" if robot.arm_reference == "s_curve" else "quintic",
         )
         if schedule.end > 30:
             return fail("cartesian_schedule_too_long")

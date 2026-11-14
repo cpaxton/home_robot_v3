@@ -31,7 +31,7 @@ class MarsSimRobot:
         if arm_execution not in {"joint", "cartesian"} or (arm_execution == "cartesian" and policy is None):
             raise ValueError("Cartesian arm execution requires an explicit simulator policy")
         self.arm_execution = arm_execution
-        if arm_reference not in {"legacy", "jerk_limited"} or (
+        if arm_reference not in {"legacy", "jerk_limited", "s_curve"} or (
             arm_reference != "legacy" and arm_execution != "cartesian"
         ):
             raise ValueError("jerk-limited references require Cartesian simulation execution")
@@ -56,6 +56,7 @@ class MarsSimRobot:
         self.policy_calls = 0
         self.policy_error = None
         self.record_observations = bool(record_observations)
+        self.step_observer = None  # Optional simulator-training observer; receives no ownership of C-backed views.
         self._pose_command_received = False
         self.timing = (timing or TaskPoseRuntimeTiming()).resolve(env.profile.dt)
         self.servo.action_mode = "direct_velocity"
@@ -294,6 +295,8 @@ class MarsSimRobot:
                     "qvel": self.data.qvel.copy().tolist(),
                     "ctrl": self.data.ctrl.copy().tolist(),
                 }
+            if self.step_observer is not None:
+                self.step_observer()
         self.refresh()
 
     @property

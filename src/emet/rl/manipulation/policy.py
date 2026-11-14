@@ -14,6 +14,16 @@ from torch import nn
 from emet.rl.manipulation.profiles import PROFILES
 
 
+def load_control_policy(directory, *, robot=None, fingerprint=None):
+    """Load a sensor-only controller; legacy PPO training remains explicitly v1."""
+    manifest = json.loads((Path(directory) / "manifest.json").read_text())
+    if manifest.get("format") == "emet-whole-body-v2":
+        from emet.rl.manipulation.whole_body_bundle import WholeBodyBundle
+
+        return WholeBodyBundle(directory, robot=robot, fingerprint=fingerprint)
+    return ManipulationPolicy(directory, robot=robot, fingerprint=fingerprint)
+
+
 def validate_critic_reward_scale(scale: float) -> float:
     """Validate critic reward units without changing actor action semantics."""
     if (
