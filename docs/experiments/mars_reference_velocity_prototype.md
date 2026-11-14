@@ -3,6 +3,29 @@
 Branch: `feat/mars-reference-velocity`, based on `0fba6121` from
 `feat/mars-base-isolation`. Simulator research only.
 
+## Current status (2026-11-14)
+
+[PR #232](https://github.com/cpaxton/home_robot_v3/pull/232) contains opt-in
+legacy-MLP features, training tools and experiment evidence. The completed
+six-run comparison does **not** establish a policy improvement: arm tracking
+remains 63–64/64, while base-linear jerk causes most combined-contract losses.
+Retain the original source checkpoint. The subsequent frozen-base/context
+pilot has passed 1,178 full regressions and 27 focused checks, but has recorded
+**zero PPO transitions** and is waiting for an explicit CPU14 handoff.
+
+The separate GRU/multi-critic C1 comparison on the parent branch stopped in its
+candidate settings check before the candidate's first optimizer update. That
+incomplete comparison provides no shared-versus-per-head result; its owner
+has retained CPU14 pending recovery. See the
+[C1 attempt record](https://github.com/cpaxton/home_robot_v3/blob/feat/mars-base-isolation/docs/plans/mars_whole_body_advantage_pair.md#recorded-attempt-2026-11-14).
+This PR is not a dependency of the GRU experiment and does not modify its actor.
+
+Correctness, behavioral improvement and hardware readiness are separate
+decisions. Correct, tested experimental code may merge with documented
+negative results; passing every behavioral gate is not a merge prerequisite.
+Keep the options off by default. A checkpoint needs measured improvement
+before promotion, and these results do not authorize motion on Herman.
+
 The actor can optionally consume a local reference twist derived from its
 ordinary pose preview. This makes anticipation explicit while preserving the
 stationary equilibrium of the learned gain head. It does not invoke the teacher
@@ -134,7 +157,7 @@ four-way experiment. Neither checkpoint is promoted.
 
 ## Expanded paired experiment protocol
 
-The next bounded experiment compares baseline and reference velocity on
+The expanded experiment compared baseline and reference velocity on
 `mars_tracking_mastery_tamp_postures_v1.json`, using the same retained source
 checkpoint as the pilot. It trains the arm stage for **16,384 transitions per
 variant and seed**, with paired seeds **90, 91, 92**, LR `1e-5`, arm exploration
@@ -251,8 +274,9 @@ The next justified training hypothesis is to freeze the retained base function
 coefficients, and suppress wheel exploration during arm adaptation while
 preserving the existing base mean commands. Freezing base readout weights alone
 would still allow shared-context changes to alter the base function. This next
-training experiment has not been run; it must retain the full base/arm/coupled
-and smoothness gates. Axis-angle remains a separate untrained option.
+training mode is now implemented; its bounded pilot is queued as described
+below, with the full base/arm/coupled and smoothness measurements retained.
+Axis-angle remains a separate untrained option.
 
 ## Frozen-base/context arm-adaptation pilot
 
@@ -300,8 +324,9 @@ regression gate passed **1,178/1,178**, with zero skips, errors or failures;
 the focused gate passed **27/27**. The full receipt binds the tested source
 and XML. CPU15 was released after host-visible gate/pytest child exit.
 
-The supervisor is waiting for the existing C1 pair to complete and explicitly
-release CPU14. Its owner has confirmed that handoff; the supervisor then runs
+The supervisor is waiting for the existing C1 reservation to explicitly
+release CPU14. C1 currently stopped at a settings-comparison error, so that
+release has not occurred. Once released, the supervisor runs
 current-source teacher admission, both fixed training runs, all declared
 evaluations and a serialized protected-function check without another launch
 request. No new PPO transitions are recorded yet. No automatic retry,

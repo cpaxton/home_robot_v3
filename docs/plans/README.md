@@ -2,6 +2,18 @@
 
 Design and refactor plan documents live here (`docs/plans/`).
 
+## Whole-body controller research (2026-11-14)
+
+- [General controller and TAMP prototype](https://github.com/cpaxton/home_robot_v3/blob/feat/mars-base-isolation/docs/plans/mars_whole_body_v2.md): masked base,
+  hand and gripper targets, history, retimed references and simulator evaluation.
+- [PR #232 experiment report](../experiments/mars_reference_velocity_prototype.md):
+  optional preview-velocity/axis-angle features and frozen-base arm adaptation.
+  The completed velocity comparison preserves most tracking but regresses jerk;
+  the new adaptation pilot is queued, not a demonstrated improvement.
+- Correctness and documented limitations determine experimental-code merge
+  readiness. Behavioral improvement determines checkpoint promotion; hardware
+  readiness is separate. No policy in this report is qualified for Herman.
+
 ## Paper / eval status (2026-07)
 
 Operator index: [experiments/README.md](../experiments/README.md) · LaTeX: `paper/sections/04_experiments.tex`, `05_results.tex` · Runbook: [paper_benchmarks.md](../paper_benchmarks.md)
