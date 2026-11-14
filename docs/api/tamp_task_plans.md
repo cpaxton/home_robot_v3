@@ -155,3 +155,10 @@ IK cap. The native policy permits up to 12 simulated seconds for measured
 supported settling before retreat, matching the existing native verifier budget;
 this changes the wait budget, not the speed, collision or retention criteria.
 Invalid policy/mode/input combinations are rejected before starting the client.
+
+The bounded policy reserves 0.5 mm inside each telescoping arm segment's
+joint limits when solving IK targets. The coupled extension therefore reserves
+2 mm overall. This leaves room for the small measured limit overrun seen after
+opening; it is not a certified tracking-error bound. Model limits, measured-start
+validation, collision checks and acceptance thresholds remain unchanged. An
+already out-of-range measured start still rejects; no live state is clamped.

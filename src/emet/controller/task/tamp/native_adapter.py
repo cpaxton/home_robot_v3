@@ -49,11 +49,13 @@ class NativeTableAdapter:
     payload_binding = 'preserve'
     release_limits = None
     pregrasp_fallback_offset_m = None
+    arm_extension_margin_m = 0.0
 
     def __init__(self, robot, *, model=None, policy='legacy'):
         selected = native_policy(policy)
         self.policy, self.payload_binding, self.release_limits = selected.name, selected.payload_binding, selected.release_limits
         self.pregrasp_fallback_offset_m = selected.pregrasp_fallback_offset_m
+        self.arm_extension_margin_m = selected.arm_extension_margin_m
         if policy == 'bounded_release':
             self.grasp_yaw_offsets = FINE_GRASP_YAWS
         if model is None:
@@ -165,6 +167,10 @@ class NativeTableAdapter:
             ee_body=chain.ee_body, joint_names=joints, collision=checker,
             synchronize=self.synchronize, command_joints=command,
             coupled_groups=(tuple(f'joint_arm_l{i}' for i in range(4)),),
+            # Reserve controller room at the telescoping limits. This narrows
+            # IK targets, not the model limits or measured-start validation.
+            joint_limit_margins={f'joint_arm_l{i}': self.arm_extension_margin_m
+                                 for i in range(4)} if self.arm_extension_margin_m else None,
             gripper_open_configuration=chain.gripper_open_configuration,
             base_body='base_link', input_mode='privileged', endpoint_settle_s=.3,
             use_sim_time=True, position_tolerance_m=.003,
