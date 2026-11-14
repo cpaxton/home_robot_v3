@@ -115,8 +115,12 @@ There is no simulator launch, network service, or robot connection.
 Reports with optional null metadata remain readable; malformed flag types and
 nonfinite JSON values are rejected. Force-definition metadata is retained and
 shown as unspecified when absent. Intervals assume independent trials: repeated
-seed/case identities and missing identities are flagged without deleting rows
-or claiming that record counts establish independent evidence.
+case/seed keys are checked independently of episode/record IDs. Repeated or
+unidentified trials and repeated record IDs are flagged without deleting rows,
+and their confidence intervals are withheld. Unique episode IDs do not establish
+independent evidence. When case IDs are absent, seed keys are scoped to the
+report's robot/scenario cohort. Even distinct keys still require independent
+sampling for the displayed binomial intervals to be meaningful.
 
 Verified from the repository root using the existing environment:
 

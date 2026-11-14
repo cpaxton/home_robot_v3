@@ -23,7 +23,7 @@ summary { cursor: pointer; }
 <h1>Controller safety evidence</h1>
 <p>Archived simulator evaluations. Cohorts remain separate: matching seeds alone do not establish matching models, controllers, or initial states. These results do not measure hardware safety or combined base–arm performance.</p>
 <p>Rates show observed events / evaluated episodes and 95% Wilson intervals. Safety outcomes exclude failed initializations; task success includes them as failures. Missing or unsupported outcomes remain unknown. Zero observed failures is not proof of zero risk.</p>
-<p>Intervals assume independent trials. Repeated seed/case identities and missing identities are flagged without deleting records; record counts are not independent-evidence counts.</p>
+<p>Intervals assume independent trials. Repeated case/seed keys are checked separately from record IDs. Repeated or unidentified trials and repeated record IDs are flagged without deleting records; their confidence intervals are withheld. Unique record IDs do not establish independent evidence.</p>
 <div class="scroll">
 <table>
 <caption>Per-scenario outcomes. Force cutoffs reflect each evaluation’s experimental limits.</caption>

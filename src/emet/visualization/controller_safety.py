@@ -69,18 +69,31 @@ def summarize(rows):
     attempted = [dict(r, is_success=False) if r.get("initialization_failed") is True else r for r in rows]
     executed = [r for r in rows if r.get("initialization_failed") is not True]
     supported = [dict(r, wheel_lift=None) if r.get("wheel_support_evaluated") is not True else r for r in executed]
-    identities = [
-        json.dumps([r.get("episode_id"), r.get("case_id"), r.get("seed")], sort_keys=True)
-        for r in rows
-        if r.get("episode_id") is not None or r.get("seed") is not None
-    ]
+    # Record IDs identify rows, not independent initial states. In reports that
+    # omit case_id, seed is scoped to this report's robot/scenario cohort.
+    trial_keys = [json.dumps([r.get("case_id"), r["seed"]], sort_keys=True) for r in rows if r.get("seed") is not None]
+    record_ids = [json.dumps(r["episode_id"], sort_keys=True) for r in rows if r.get("episode_id") is not None]
+    repeats = len(trial_keys) - len(set(trial_keys))
+    missing = len(rows) - len(trial_keys)
+    repeated_records = len(record_ids) - len(set(record_ids))
+    results = {
+        "success": outcome(attempted, "is_success"),
+        **{key: outcome(supported if key == "wheel_lift" else executed, key) for key in FLAGS},
+    }
+    if repeats or missing or repeated_records:
+        # Keep descriptive counts, but do not imply repeated records provide
+        # independent binomial evidence. Absence of repeats is only a check;
+        # the displayed intervals still assume independently sampled trials.
+        for result in results.values():
+            result["interval"] = None
     return {
         "attempts": len(rows),
         "initialization_failures": len(rows) - len(executed),
-        "success": outcome(attempted, "is_success"),
-        "repeated_identities": len(identities) - len(set(identities)),
-        "missing_identities": len(rows) - len(identities),
-        **{key: outcome(supported if key == "wheel_lift" else executed, key) for key in FLAGS},
+        "unique_trial_keys": len(set(trial_keys)),
+        "repeated_identities": repeats,
+        "missing_identities": missing,
+        "repeated_record_ids": repeated_records,
+        **results,
     }
 
 
@@ -157,8 +170,10 @@ def load_report(label, path):
 def rate_text(value):
     if not value["count"]:
         return "Unknown (0 evaluated)"
-    low, high = value["interval"]
     unknown = f"; {value['unknown']} unknown" if value["unknown"] else ""
+    if value["interval"] is None:
+        return f"{value['hits']}/{value['count']} (CI unavailable: trial independence unverified){unknown}"
+    low, high = value["interval"]
     return f"{value['hits']}/{value['count']} ({low:.0%}–{high:.0%} CI){unknown}"
 
 
@@ -220,8 +235,9 @@ def write_report(cohorts, destination):
     for index, cohort in enumerate(cohorts):
         summary = cohort["summary"]
         identity_note = (
-            f"; {summary['repeated_identities']} repeated, {summary['missing_identities']} unidentified"
-            if summary["repeated_identities"] or summary["missing_identities"]
+            f"; {summary['repeated_identities']} repeated trials, {summary['missing_identities']} unidentified trials, "
+            f"{summary['repeated_record_ids']} repeated record IDs"
+            if summary["repeated_identities"] or summary["missing_identities"] or summary["repeated_record_ids"]
             else ""
         )
         cells = [

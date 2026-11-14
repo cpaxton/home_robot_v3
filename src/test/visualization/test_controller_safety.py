@@ -133,6 +133,70 @@ def test_repeated_trials_are_flagged_without_inflating_independent_evidence():
     assert result["success"]["unknown"] == 1
 
 
+def test_unique_episode_ids_do_not_hide_identical_case_seed_replays():
+    rows = [{"episode_id": f"record-{i}", "case_id": "fixed-case", "seed": 90, "is_success": True} for i in range(100)]
+    result = summarize(rows)
+    assert result["attempts"] == result["success"]["count"] == 100
+    assert result["unique_trial_keys"] == 1
+    assert result["repeated_identities"] == 99
+    assert result["repeated_record_ids"] == result["missing_identities"] == 0
+    assert result["success"]["interval"] is None
+
+
+def test_duplicate_record_ids_are_separate_from_trial_keys():
+    result = summarize(
+        [
+            {"episode_id": "record-1", "case_id": "case-A", "seed": 1, "is_success": True},
+            {"episode_id": "record-1", "case_id": "case-A", "seed": 2, "is_success": True},
+        ]
+    )
+    assert result["unique_trial_keys"] == 2
+    assert result["repeated_identities"] == 0
+    assert result["repeated_record_ids"] == 1
+    assert result["success"]["interval"] is None
+
+
+def test_distinct_case_seed_pairs_retain_conditional_intervals():
+    result = summarize(
+        [
+            {"episode_id": "record-1", "case_id": "case-A", "seed": 1, "is_success": True},
+            {"episode_id": "record-2", "case_id": "case-B", "seed": 1, "is_success": True},
+            {"episode_id": "record-3", "case_id": "case-A", "seed": 2, "is_success": True},
+        ]
+    )
+    assert result["unique_trial_keys"] == 3
+    assert result["repeated_identities"] == result["repeated_record_ids"] == result["missing_identities"] == 0
+    assert result["success"]["interval"] == wilson(3, 3)
+
+
+def test_episode_id_without_seed_is_not_independent_trial_identity():
+    result = summarize([{"episode_id": "record-1", "case_id": "case-A", "is_success": True}])
+    assert result["unique_trial_keys"] == 0
+    assert result["missing_identities"] == 1
+    assert result["success"]["interval"] is None
+
+
+def test_replayed_trials_show_warning_without_confident_binomial_bound(tmp_path):
+    source = tmp_path / "report.json"
+    source.write_text(
+        json.dumps(
+            {
+                "episodes": [
+                    {"episode_id": f"record-{i}", "case_id": "fixed-case", "seed": 90, "is_success": True}
+                    for i in range(100)
+                ]
+            }
+        )
+    )
+    cohorts = load_report("replays", source)
+    output = tmp_path / "viewer.html"
+    write_report(cohorts, output)
+    document = output.read_text()
+    assert "99 repeated trials" in document
+    assert "100/100 (CI unavailable: trial independence unverified)" in document
+    assert "96%–100% CI" not in document
+
+
 def test_template_sentinel_in_label_and_script_data_is_preserved(tmp_path):
     source = tmp_path / "report.json"
     source.write_text('{"episodes": [{"is_success": true}]}')
