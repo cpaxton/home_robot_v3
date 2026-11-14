@@ -401,15 +401,22 @@ Accepted plan: [Mars controller integration](docs/plans/mars_controller_integrat
 - [x] Audit actual jaw-input clipping and hidden activation saturation against
       six exact supported-training replays. Reject static jaw rescaling alone.
       See [feedback/unit diagnosis](docs/experiments/mars_feedback_units_20261113.md).
-- [ ] Test opt-in jaw-unit curriculum after exact critic warmup, with physical
+- [x] Test opt-in jaw-unit curriculum after exact critic warmup, with physical
       std floor0.087275rad, a32768-step geometric ramp and the unchanged262k final.
       Require fresh regression/teacher/source gates and all existing post-tests.
+      Fixed 262k and post-tests complete: earlier arm 53/88, supported 4/18,
+      learned full public tools 0/3. Reject final and retain source.
 - [x] Implement the [v2 general/TAMP training prototype](docs/plans/mars_whole_body_v2.md):
       50/50 physical ticks, one full-history actor, three independent critics,
       training-only privileged state and retimed S-curve velocity references.
       Keep the diagnosed object-motion challenge as a failure, not a pass.
-- [ ] Complete fresh v2 full regressions/preflight, then the bounded8k pilot
+- [x] Complete fresh v2 full regressions/preflight, then the bounded8k pilot
       and paired source/general/TAMP audit. Pregrasp is not full pick/place.
+      All 1,170 regressions pass, but final full 2/164 and pregrasp 0/6.
+      Preserve repaired harness failures and [complete report](docs/experiments/mars_whole_body_validation_20261113.md).
+- [ ] Fix cold-start exploration/completion learning and audit per-critic
+      advantages before scaling v2. Keep retained-source comparisons and all
+      measured safety/precision gates; add the missing mask/observability strata.
 - [ ] Add v2 grasp→lift/loaded/placement primitives and actor-active terminal
       stability audits only after the first pilot's behavior is understood.
 - [ ] Master the five base cases first, then add arm, coupled and loaded cases

@@ -5,6 +5,12 @@ source, a qualified controller, or authorization to move Herman. Mars is the
 first training target. The actor and sensor encoding also support Stretch;
 the actual public-tool primitive environment is currently Mars-only.
 
+The [completed first validation](../experiments/mars_whole_body_validation_20261113.md)
+passes all 1,170 regressions and teacher 164/164, but the cold 8k final achieves
+only 2/164 full general cases and 0/6 TAMP pregrasp. Reject it and retain the
+original source. The independent jaw-unit trial also completes and is rejected.
+Further scale is conditional on diagnosing the measured learning failures.
+
 ## Controller and reference contract
 
 Keep one masked SE(2) base target, one SE(3) target per supported hand, and the
