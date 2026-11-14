@@ -20,7 +20,9 @@ from emet.controller.manipulation.native_inputs import ObservationUnavailable
 from emet.controller.manipulation.native_scene import model_signature, read_snapshot
 from emet.controller.manipulation.physical_pick_place import PhysicalMotionResult, PhysicalPickPlaceExecutor
 from emet.controller.task.tamp.api import failure_code, response
+from emet.controller.task.tamp.native_policy import FINE_GRASP_YAWS, bind_loaded_payload, native_policy
 from emet.motion.mujoco_collision import body_subtree
+from emet.motion.release import refine_release
 from emet.robots.stretch import STRETCH_ARM_CHAIN
 from emet.simulation.sim_object_placements import placements_from_mujoco_model
 
@@ -43,8 +45,15 @@ class NativeTableAdapter:
     max_planning_ik_calls = 256
     grasp_yaw_offsets = (0., -.35, .35, -.7, .7, -1.57, 1.57)
     input_mode = 'privileged'
+    policy = 'legacy'
+    payload_binding = 'preserve'
+    release_limits = None
 
-    def __init__(self, robot, *, model=None):
+    def __init__(self, robot, *, model=None, policy='legacy'):
+        selected = native_policy(policy)
+        self.policy, self.payload_binding, self.release_limits = selected.name, selected.payload_binding, selected.release_limits
+        if policy == 'bounded_release':
+            self.grasp_yaw_offsets = FINE_GRASP_YAWS
         if model is None:
             from emet.simulation.mujoco_server_stretch import default_scene_xml_path
             model = mujoco.MjModel.from_xml_path(default_scene_xml_path)
@@ -74,7 +83,7 @@ class NativeTableAdapter:
         mujoco.mj_kinematics(self.model, data)
 
     def _data(self, **extra):
-        return {'mode': 'physical', 'inputs': 'privileged', 'geometry_source': 'simulator_ground_truth',
+        return {'mode': 'physical', 'inputs': 'privileged', 'native_motion_policy': self.policy, 'geometry_source': 'simulator_ground_truth',
                 'assistance': [], 'base_motion': 'stationary',
                 'collision_scope': 'sampled_arm_and_payload', **extra}
 
@@ -425,6 +434,9 @@ class NativeTableAdapter:
             time.sleep(.05)
         return False
 
+    def _bind_loaded_payload(self, plan, *, rebind=True):
+        return bind_loaded_payload(self, plan, rebind=rebind)
+
     def execute(self, plan_ref):
         with self.lock:
             plan = self.plans.pop(plan_ref, None)
@@ -450,11 +462,15 @@ class NativeTableAdapter:
                     return fail(result.message, started=True, phase=result.phase)
                 if not self._verify(plan, released=False, seconds=1):
                     return fail('grasp_verification_failed', started=True, phase='lift')
+                if self.payload_binding != 'preserve' and not self._bind_loaded_payload(plan, rebind=self.payload_binding == 'verified_lift'):
+                    return fail('grasp_verification_failed', started=True, phase='lift')
                 completed.append('grasp')
                 self.synchronize(self.data)
                 ex.place_targets = self._place_targets(ex, plan.object_body, plan.goal, plan.rotation)
                 ex.transport = lambda: PhysicalMotionResult(True, 'stationary', 'transport')
                 phase = 'place'
+                if self.release_limits is not None:
+                    ex.release_refiner = lambda: refine_release(ex, support=plan.support_body, region=plan.placement_region, limits=self.release_limits)
                 result = ex.place_only('', object_gt_body=plan.object_body, receptacle_gt_body=plan.support_body)
                 if not result.success:
                     return fail(result.message, completed=completed, phase=result.phase)
@@ -482,7 +498,8 @@ def adapter_for(context, robot):
         return None
     cached = context.get('_native_tamp_adapter')
     boot = (state.get('command_protocol') or {}).get('server_boot_id')
-    if cached is None or cached.robot is not robot or cached.boot != boot:
-        cached = NativeTableAdapter(robot)
+    policy = context.get('native_tamp_policy')
+    if cached is None or cached.robot is not robot or cached.boot != boot or (policy is not None and cached.policy != policy):
+        cached = NativeTableAdapter(robot, policy=policy or 'legacy')
         context['_native_tamp_adapter'] = cached
     return cached

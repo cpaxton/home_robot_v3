@@ -387,3 +387,15 @@ this provider. Python embedders can inject another `observed_tamp_provider`.
 Discovery results explicitly report `discovery_only`; CHAT summarizes and stops.
 Observed planning/execution remain unavailable pending collision geometry and
 verification providers. See the [provider contract](api/tamp.md#observed-discovery-integration-hook).
+
+### Native TAMP policy qualification
+
+The privileged stationary simulation path accepts
+`--set agent.native_tamp_policy=bounded_release` alongside physical mode and
+privileged inputs. The default is `legacy`. The same policy is used by primitive
+pick/place tools and `--native-task-config` multi-step sessions; the diagnostic
+recorder is not a separate executor. See [native task tools](api/tamp_task_plans.md#native-motion-policy)
+and the [qualification gate](plans/2026-11-13_native_tamp_qualification.md).
+`scripts/eval_native_chat_session.py --native-policy bounded_release` forwards
+that ordinary configuration override to the actual `run agent` CLI. Hardware,
+observed grounding and exploration remain separately qualified capabilities.

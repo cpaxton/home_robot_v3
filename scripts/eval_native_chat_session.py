@@ -32,6 +32,7 @@ def main():
     parser.add_argument('--placement-regions', type=Path, required=True)
     parser.add_argument('--native-task-config', type=Path)
     parser.add_argument('--task-instruction')
+    parser.add_argument('--native-policy', choices=('legacy', 'bounded_release'), default='legacy')
     parser.add_argument('--reject-first', action='store_true', help='Request one invalid-plan call, then a separate authorized task turn')
     args = parser.parse_args()
     if bool(args.native_task_config) != bool(args.task_instruction):
@@ -80,7 +81,8 @@ def main():
            '--state-only-sim', '--max-tool-rounds', '12', '--no-discord', '--no-vl-camera',
            '--headless', '--debug-tools', '--port-offset', str(config.port_offset),
            '--llm', f'openai@{args.base_url}#{args.remote_model}',
-           '--set', 'agent.manip_mode=physical', '--set', 'agent.tamp_inputs=privileged']
+           '--set', 'agent.manip_mode=physical', '--set', 'agent.tamp_inputs=privileged',
+           '--set', f'agent.native_tamp_policy={args.native_policy}']
     if args.native_task_config:
         cli += ["--native-task-config", str(args.native_task_config.resolve())]
     for command in commands:

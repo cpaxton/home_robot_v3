@@ -1,0 +1,857 @@
+{
+  "schema_version": 1,
+  "execution": "simulation_live_async",
+  "robot": "stretch",
+  "inputs": "privileged",
+  "cameras": false,
+  "initial_object_positions": {
+    "object1": [
+      -0.02,
+      -0.55,
+      0.6
+    ],
+    "object2": [
+      -0.02,
+      -0.7,
+      0.6
+    ]
+  },
+  "hardware_trials_enabled": false,
+  "status": "frozen_prospective_qualification",
+  "scope": "Eight native task candidates and four interface-boundary checks; zero LLM/GPU; no held-out certification claim",
+  "native_policy": "bounded_release",
+  "production_default_changed": false,
+  "maximum_concurrent_simulators": 2,
+  "qualification_rule": "Retain every outcome; report positive completion and intended rejection separately; no aggregate agent success claim",
+  "negative_checks": [
+    "unknown_plan_before_explicit_new_task",
+    "consumed_plan_reuse",
+    "stale_plan_after_measured_head_motion",
+    "occupied_target_placement"
+  ],
+  "candidate_solvability": "All candidates remain in the qualification denominator; reference feasibility and execution failures are reported, not silently excluded",
+  "cases": [
+    {
+      "case_id": "control",
+      "family": "two-goal",
+      "initial_x_shift_m": 0.0,
+      "instruction": "move red cylinder to cylinder goal; move blue cube to cube goal",
+      "task": {
+        "schema_version": 1,
+        "input_mode": "privileged",
+        "robot": "stretch",
+        "reset_id": "native-qualification-20261113:control",
+        "support_body": "table",
+        "objects": {
+          "red cylinder": "object2",
+          "blue cube": "object1"
+        },
+        "regions": [
+          {
+            "name": "cylinder goal",
+            "bounds": [
+              [
+                -0.08,
+                -0.86
+              ],
+              [
+                0.08,
+                -0.76
+              ]
+            ]
+          },
+          {
+            "name": "cube goal",
+            "bounds": [
+              [
+                -0.08,
+                -0.75
+              ],
+              [
+                0.08,
+                -0.62
+              ]
+            ]
+          }
+        ]
+      },
+      "final_regions_object2_then_object1": [
+        [
+          [
+            -0.08,
+            -0.86
+          ],
+          [
+            0.08,
+            -0.76
+          ]
+        ],
+        [
+          [
+            -0.08,
+            -0.75
+          ],
+          [
+            0.08,
+            -0.62
+          ]
+        ]
+      ],
+      "seed": 0,
+      "port_offset": 2120,
+      "scenario": "invalid_then_task",
+      "population": "regression",
+      "declared_transfers": 2
+    },
+    {
+      "case_id": "shift15",
+      "family": "two-goal",
+      "initial_x_shift_m": 0.015,
+      "instruction": "move red cylinder to cylinder goal; move blue cube to cube goal",
+      "task": {
+        "schema_version": 1,
+        "input_mode": "privileged",
+        "robot": "stretch",
+        "reset_id": "native-qualification-20261113:shift15",
+        "support_body": "table",
+        "objects": {
+          "red cylinder": "object2",
+          "blue cube": "object1"
+        },
+        "regions": [
+          {
+            "name": "cylinder goal",
+            "bounds": [
+              [
+                -0.08,
+                -0.86
+              ],
+              [
+                0.08,
+                -0.76
+              ]
+            ]
+          },
+          {
+            "name": "cube goal",
+            "bounds": [
+              [
+                -0.08,
+                -0.75
+              ],
+              [
+                0.08,
+                -0.62
+              ]
+            ]
+          }
+        ]
+      },
+      "final_regions_object2_then_object1": [
+        [
+          [
+            -0.08,
+            -0.86
+          ],
+          [
+            0.08,
+            -0.76
+          ]
+        ],
+        [
+          [
+            -0.08,
+            -0.75
+          ],
+          [
+            0.08,
+            -0.62
+          ]
+        ]
+      ],
+      "seed": 0,
+      "port_offset": 2130,
+      "scenario": "reuse_plan",
+      "population": "regression",
+      "declared_transfers": 2
+    },
+    {
+      "case_id": "left30",
+      "family": "two-goal",
+      "initial_x_shift_m": -0.03,
+      "instruction": "move red cylinder to cylinder goal; move blue cube to cube goal",
+      "task": {
+        "schema_version": 1,
+        "input_mode": "privileged",
+        "robot": "stretch",
+        "reset_id": "native-qualification-20261113:left30",
+        "support_body": "table",
+        "objects": {
+          "red cylinder": "object2",
+          "blue cube": "object1"
+        },
+        "regions": [
+          {
+            "name": "cylinder goal",
+            "bounds": [
+              [
+                -0.08,
+                -0.86
+              ],
+              [
+                0.08,
+                -0.76
+              ]
+            ]
+          },
+          {
+            "name": "cube goal",
+            "bounds": [
+              [
+                -0.08,
+                -0.75
+              ],
+              [
+                0.08,
+                -0.62
+              ]
+            ]
+          }
+        ]
+      },
+      "final_regions_object2_then_object1": [
+        [
+          [
+            -0.08,
+            -0.86
+          ],
+          [
+            0.08,
+            -0.76
+          ]
+        ],
+        [
+          [
+            -0.08,
+            -0.75
+          ],
+          [
+            0.08,
+            -0.62
+          ]
+        ]
+      ],
+      "seed": 0,
+      "port_offset": 2140,
+      "scenario": "task",
+      "population": "candidate",
+      "declared_transfers": 2
+    },
+    {
+      "case_id": "right30",
+      "family": "two-goal",
+      "initial_x_shift_m": 0.03,
+      "instruction": "move red cylinder to cylinder goal; move blue cube to cube goal",
+      "task": {
+        "schema_version": 1,
+        "input_mode": "privileged",
+        "robot": "stretch",
+        "reset_id": "native-qualification-20261113:right30",
+        "support_body": "table",
+        "objects": {
+          "red cylinder": "object2",
+          "blue cube": "object1"
+        },
+        "regions": [
+          {
+            "name": "cylinder goal",
+            "bounds": [
+              [
+                -0.08,
+                -0.86
+              ],
+              [
+                0.08,
+                -0.76
+              ]
+            ]
+          },
+          {
+            "name": "cube goal",
+            "bounds": [
+              [
+                -0.08,
+                -0.75
+              ],
+              [
+                0.08,
+                -0.62
+              ]
+            ]
+          }
+        ]
+      },
+      "final_regions_object2_then_object1": [
+        [
+          [
+            -0.08,
+            -0.86
+          ],
+          [
+            0.08,
+            -0.76
+          ]
+        ],
+        [
+          [
+            -0.08,
+            -0.75
+          ],
+          [
+            0.08,
+            -0.62
+          ]
+        ]
+      ],
+      "seed": 0,
+      "port_offset": 2150,
+      "scenario": "task",
+      "population": "candidate",
+      "declared_transfers": 2
+    },
+    {
+      "case_id": "back12-yaw",
+      "family": "two-goal",
+      "initial_x_shift_m": 0.0,
+      "instruction": "move red cylinder to cylinder goal; move blue cube to cube goal",
+      "task": {
+        "schema_version": 1,
+        "input_mode": "privileged",
+        "robot": "stretch",
+        "reset_id": "native-qualification-20261113:back12-yaw",
+        "support_body": "table",
+        "objects": {
+          "red cylinder": "object2",
+          "blue cube": "object1"
+        },
+        "regions": [
+          {
+            "name": "cylinder goal",
+            "bounds": [
+              [
+                -0.08,
+                -0.86
+              ],
+              [
+                0.08,
+                -0.76
+              ]
+            ]
+          },
+          {
+            "name": "cube goal",
+            "bounds": [
+              [
+                -0.08,
+                -0.75
+              ],
+              [
+                0.08,
+                -0.62
+              ]
+            ]
+          }
+        ]
+      },
+      "final_regions_object2_then_object1": [
+        [
+          [
+            -0.08,
+            -0.86
+          ],
+          [
+            0.08,
+            -0.76
+          ]
+        ],
+        [
+          [
+            -0.08,
+            -0.75
+          ],
+          [
+            0.08,
+            -0.62
+          ]
+        ]
+      ],
+      "seed": 0,
+      "port_offset": 2160,
+      "scenario": "task",
+      "population": "candidate",
+      "initial_object_positions": {
+        "object1": [
+          -0.02,
+          -0.562,
+          0.6
+        ],
+        "object2": [
+          -0.02,
+          -0.712,
+          0.6
+        ]
+      },
+      "initial_object_quaternions": {
+        "object1": [
+          0.9982005399352042,
+          0,
+          0,
+          0.059964006479444595
+        ]
+      },
+      "declared_transfers": 2
+    },
+    {
+      "case_id": "front12-yaw",
+      "family": "two-goal",
+      "initial_x_shift_m": 0.0,
+      "instruction": "move red cylinder to cylinder goal; move blue cube to cube goal",
+      "task": {
+        "schema_version": 1,
+        "input_mode": "privileged",
+        "robot": "stretch",
+        "reset_id": "native-qualification-20261113:front12-yaw",
+        "support_body": "table",
+        "objects": {
+          "red cylinder": "object2",
+          "blue cube": "object1"
+        },
+        "regions": [
+          {
+            "name": "cylinder goal",
+            "bounds": [
+              [
+                -0.08,
+                -0.86
+              ],
+              [
+                0.08,
+                -0.76
+              ]
+            ]
+          },
+          {
+            "name": "cube goal",
+            "bounds": [
+              [
+                -0.08,
+                -0.75
+              ],
+              [
+                0.08,
+                -0.62
+              ]
+            ]
+          }
+        ]
+      },
+      "final_regions_object2_then_object1": [
+        [
+          [
+            -0.08,
+            -0.86
+          ],
+          [
+            0.08,
+            -0.76
+          ]
+        ],
+        [
+          [
+            -0.08,
+            -0.75
+          ],
+          [
+            0.08,
+            -0.62
+          ]
+        ]
+      ],
+      "seed": 0,
+      "port_offset": 2170,
+      "scenario": "task",
+      "population": "candidate",
+      "initial_object_positions": {
+        "object1": [
+          -0.02,
+          -0.538,
+          0.6
+        ],
+        "object2": [
+          -0.02,
+          -0.688,
+          0.6
+        ]
+      },
+      "initial_object_quaternions": {
+        "object1": [
+          0.9982005399352042,
+          0,
+          0,
+          -0.059964006479444595
+        ]
+      },
+      "declared_transfers": 2
+    },
+    {
+      "case_id": "swap-left10",
+      "family": "wide-destination-swap",
+      "initial_x_shift_m": -0.01,
+      "instruction": "swap blue cube and red cylinder",
+      "task": {
+        "schema_version": 1,
+        "input_mode": "privileged",
+        "robot": "stretch",
+        "reset_id": "native-qualification-20261113:swap-left10",
+        "support_body": "table",
+        "objects": {
+          "red cylinder": "object2",
+          "blue cube": "object1"
+        },
+        "regions": [
+          {
+            "name": "cube home",
+            "bounds": [
+              [
+                -0.08,
+                -0.605
+              ],
+              [
+                0.08,
+                -0.5
+              ]
+            ]
+          },
+          {
+            "name": "cylinder home",
+            "bounds": [
+              [
+                -0.08,
+                -0.75
+              ],
+              [
+                0.08,
+                -0.62
+              ]
+            ]
+          },
+          {
+            "name": "buffer forward",
+            "bounds": [
+              [
+                -0.09,
+                -1.05
+              ],
+              [
+                0.09,
+                -0.77
+              ]
+            ]
+          },
+          {
+            "name": "buffer right",
+            "bounds": [
+              [
+                0.14,
+                -0.75
+              ],
+              [
+                0.28,
+                -0.59
+              ]
+            ]
+          }
+        ]
+      },
+      "final_regions_object2_then_object1": [
+        [
+          [
+            -0.08,
+            -0.605
+          ],
+          [
+            0.08,
+            -0.5
+          ]
+        ],
+        [
+          [
+            -0.08,
+            -0.75
+          ],
+          [
+            0.08,
+            -0.62
+          ]
+        ]
+      ],
+      "seed": 0,
+      "port_offset": 2180,
+      "scenario": "task",
+      "population": "candidate",
+      "declared_transfers": 3
+    },
+    {
+      "case_id": "swap-right25",
+      "family": "wide-destination-swap",
+      "initial_x_shift_m": 0.025,
+      "instruction": "swap blue cube and red cylinder",
+      "task": {
+        "schema_version": 1,
+        "input_mode": "privileged",
+        "robot": "stretch",
+        "reset_id": "native-qualification-20261113:swap-right25",
+        "support_body": "table",
+        "objects": {
+          "red cylinder": "object2",
+          "blue cube": "object1"
+        },
+        "regions": [
+          {
+            "name": "cube home",
+            "bounds": [
+              [
+                -0.08,
+                -0.605
+              ],
+              [
+                0.08,
+                -0.5
+              ]
+            ]
+          },
+          {
+            "name": "cylinder home",
+            "bounds": [
+              [
+                -0.08,
+                -0.75
+              ],
+              [
+                0.08,
+                -0.62
+              ]
+            ]
+          },
+          {
+            "name": "buffer forward",
+            "bounds": [
+              [
+                -0.09,
+                -1.05
+              ],
+              [
+                0.09,
+                -0.77
+              ]
+            ]
+          },
+          {
+            "name": "buffer right",
+            "bounds": [
+              [
+                0.14,
+                -0.75
+              ],
+              [
+                0.28,
+                -0.59
+              ]
+            ]
+          }
+        ]
+      },
+      "final_regions_object2_then_object1": [
+        [
+          [
+            -0.08,
+            -0.605
+          ],
+          [
+            0.08,
+            -0.5
+          ]
+        ],
+        [
+          [
+            -0.08,
+            -0.75
+          ],
+          [
+            0.08,
+            -0.62
+          ]
+        ]
+      ],
+      "seed": 0,
+      "port_offset": 2190,
+      "scenario": "task",
+      "population": "candidate",
+      "declared_transfers": 3
+    },
+    {
+      "case_id": "stale-head-plan",
+      "family": "two-goal",
+      "initial_x_shift_m": 0.0,
+      "instruction": "move red cylinder to cylinder goal; move blue cube to cube goal",
+      "task": {
+        "schema_version": 1,
+        "input_mode": "privileged",
+        "robot": "stretch",
+        "reset_id": "native-qualification-20261113:stale-head-plan",
+        "support_body": "table",
+        "objects": {
+          "red cylinder": "object2",
+          "blue cube": "object1"
+        },
+        "regions": [
+          {
+            "name": "cylinder goal",
+            "bounds": [
+              [
+                -0.08,
+                -0.86
+              ],
+              [
+                0.08,
+                -0.76
+              ]
+            ]
+          },
+          {
+            "name": "cube goal",
+            "bounds": [
+              [
+                -0.08,
+                -0.75
+              ],
+              [
+                0.08,
+                -0.62
+              ]
+            ]
+          }
+        ]
+      },
+      "final_regions_object2_then_object1": [
+        [
+          [
+            -0.08,
+            -0.86
+          ],
+          [
+            0.08,
+            -0.76
+          ]
+        ],
+        [
+          [
+            -0.08,
+            -0.75
+          ],
+          [
+            0.08,
+            -0.62
+          ]
+        ]
+      ],
+      "seed": 0,
+      "port_offset": 2200,
+      "scenario": "stale_plan",
+      "population": "expected_rejection",
+      "declared_transfers": 2
+    },
+    {
+      "case_id": "occupied-placement",
+      "family": "two-goal",
+      "initial_x_shift_m": 0.0,
+      "instruction": "move red cylinder to cylinder goal; move blue cube to cube goal",
+      "task": {
+        "schema_version": 1,
+        "input_mode": "privileged",
+        "robot": "stretch",
+        "reset_id": "native-qualification-20261113:occupied-placement",
+        "support_body": "table",
+        "objects": {
+          "red cylinder": "object2",
+          "blue cube": "object1"
+        },
+        "regions": [
+          {
+            "name": "cylinder goal",
+            "bounds": [
+              [
+                -0.08,
+                -0.86
+              ],
+              [
+                0.08,
+                -0.76
+              ]
+            ]
+          },
+          {
+            "name": "cube goal",
+            "bounds": [
+              [
+                -0.08,
+                -0.75
+              ],
+              [
+                0.08,
+                -0.62
+              ]
+            ]
+          }
+        ]
+      },
+      "final_regions_object2_then_object1": [
+        [
+          [
+            -0.08,
+            -0.86
+          ],
+          [
+            0.08,
+            -0.76
+          ]
+        ],
+        [
+          [
+            -0.08,
+            -0.75
+          ],
+          [
+            0.08,
+            -0.62
+          ]
+        ]
+      ],
+      "seed": 0,
+      "port_offset": 2210,
+      "scenario": "blocked_placement",
+      "population": "expected_rejection",
+      "declared_transfers": 2,
+      "blocked_region": [
+        [
+          -0.042,
+          -0.592
+        ],
+        [
+          0.002,
+          -0.508
+        ]
+      ]
+    }
+  ]
+}

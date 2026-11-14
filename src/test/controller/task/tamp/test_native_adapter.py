@@ -389,3 +389,30 @@ def test_native_transfer_rejects_unsettled_snapshot(native):
     robot._state['native_tamp_snapshot']['qvel'][adapter.model.jnt_dofadr[joint]] = .2
     with pytest.raises(ValueError, match='not_settled'):
         domain.snapshot()
+
+
+def test_shared_bounded_policy_is_explicit_and_legacy_default_is_preserved(native):
+    robot, _, context, _ = native
+    from emet.controller.task.tamp.native_policy import FINE_GRASP_YAWS
+    adapter = NativeTableAdapter(robot, model=context['_native_tamp_adapter'].model, policy='bounded_release')
+    assert adapter.policy == 'bounded_release'
+    assert adapter.grasp_yaw_offsets == FINE_GRASP_YAWS
+    assert adapter.payload_binding == 'verified_lift'
+    assert adapter.release_limits.max_drop_m == .04
+    assert context['_native_tamp_adapter'].policy == 'legacy'
+    assert context['_native_tamp_adapter'].release_limits is None
+    with pytest.raises(ValueError, match='invalid_native_tamp_policy'):
+        NativeTableAdapter(None, policy='typo')
+    robot.arm_to.assert_not_called()
+
+
+def test_policy_change_invalidates_cached_native_handles(native):
+    from emet.controller.task.tamp.native_adapter import adapter_for
+    robot, _, context, _ = native
+    old = context['_native_tamp_adapter']
+    old.plans['old'] = object()
+    context['native_tamp_policy'] = 'bounded_release'
+    current = adapter_for(context, robot)
+    assert current is not old and current.policy == 'bounded_release'
+    assert current.execute('old')['code'] == 'unknown_plan'
+    robot.arm_to.assert_not_called()

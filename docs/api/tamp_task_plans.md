@@ -124,3 +124,27 @@ no-actuation receipts. Typed failed receipts with `execution_started: false`
 report `failed_phase: preflight`, even when an earlier step made physical
 progress. Exceptions from the actual adapter executor remain possible physical
 execution and are never reclassified by the planning-only catch.
+
+## Native motion policy
+
+`agent.native_tamp_policy` selects the shared native adapter implementation for
+both primitive tools and a bound multi-step native task provider. Default
+`legacy` preserves the existing motion policy. Explicit
+`--set agent.native_tamp_policy=bounded_release` enables the finer grasp yaw set,
+a checked loaded-payload handoff, and bounded measured-state release search.
+Use it with `agent.manip_mode=physical` and `agent.tamp_inputs=privileged` in
+simulation. It does not enable observed execution or imply hardware sensors.
+
+The handoff checks the original retention bound through an additional stable
+bilateral-contact interval before binding the measured transform once. Release
+checks arm/payload motion, nominal and lower opening sweeps, support/drop limits,
+and measured supported stillness before retreat. Numerical collision/retention
+limits and independent final-goal checks are unchanged. The 40 mm maximum
+raise/drop policy is explicit and remains opt-in while broader qualification is
+in progress. A failed or partial result still stops dispatch; do not replay it.
+
+Native discovery reports `native_motion_policy`. A primitive adapter cache is
+invalidated when the configured policy changes, and multi-step scene bindings
+include the policy identity. Task JSON remains the same versioned goal/scene
+contract; motion-policy options are not new LLM tools or object-specific features.
+See [qualification protocol](../plans/2026-11-13_native_tamp_qualification.md).

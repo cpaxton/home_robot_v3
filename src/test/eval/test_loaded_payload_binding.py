@@ -40,7 +40,7 @@ def held(monkeypatch):
     plan = SimpleNamespace(executor=executor, object_body='payload', support_body='table')
     def sleep(seconds):
         data.time += seconds
-    monkeypatch.setattr('emet.eval.contact_stability.time', SimpleNamespace(sleep=sleep))
+    monkeypatch.setattr('emet.controller.task.tamp.native_policy.time', SimpleNamespace(sleep=sleep))
     return adapter, plan
 
 
@@ -87,7 +87,7 @@ def test_accumulated_subsample_creep_is_not_hidden_by_a_moving_anchor(held, monk
     def sleep(seconds):
         adapter.data.time += seconds
         rotate(adapter, adapter.data.time * .08)
-    monkeypatch.setattr('emet.eval.contact_stability.time', SimpleNamespace(sleep=sleep))
+    monkeypatch.setattr('emet.controller.task.tamp.native_policy.time', SimpleNamespace(sleep=sleep))
     assert adapter._bind_loaded_payload(plan) is False
     np.testing.assert_array_equal(plan.executor.collision.payload_transform, previous)
     assert plan.executor.payload_retained()  # Rejected for stability, before the original bound is lost.

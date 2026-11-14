@@ -27,6 +27,7 @@ from emet.agent.loop import _dispatch_tool_calls
 from emet.agent.tools import get_tools
 from emet.controller.dynamem.constants import DYNAMEM_HEAD_SETTLE_S
 from emet.controller.manipulation.native_scene import model_signature, read_snapshot
+from emet.controller.task.tamp.native_policy import native_policy
 from emet.controller.task.tamp.native_transfer import NativeTableTransferProvider, validate_native_task_config
 from emet.controller.task.tamp.task_session import TaskSession
 from emet.eval.contact_stability import GRASP_POLICIES, ContactTrace, TracedNativeAdapter
@@ -46,7 +47,7 @@ def sha256(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def prepare_fixture(output, initial_positions, shift):
+def prepare_fixture(output, initial_positions, shift, quaternions=None):
     """Reset-only scene construction; canonical robot/contact/controller unchanged."""
     source = Path(default_scene_xml_path).parent
     fixture = output / 'fixture'
@@ -65,13 +66,18 @@ def prepare_fixture(output, initial_positions, shift):
             raise ValueError('invalid_initial_object_position')
         point[0] += shift
         body.set('pos', ' '.join(map(str, point)))
+        if quaternions and name in quaternions:
+            quat = np.asarray(quaternions[name], dtype=float)
+            if quat.shape != (4,) or not np.isfinite(quat).all() or not np.isclose(np.linalg.norm(quat), 1., atol=1e-6):
+                raise ValueError('invalid_initial_object_quaternion')
+            body.set('quat', ' '.join(map(str, quat)))
     tree.write(fixture / 'scene_environment.xml')
     return fixture / 'scene.xml'
 
 
 def prepare(args, pilot, case, out):
     validate_native_task_config(case['task'])
-    scene = prepare_fixture(out, pilot['initial_object_positions'], case['initial_x_shift_m'])
+    scene = prepare_fixture(out, case.get('initial_object_positions', pilot['initial_object_positions']), case['initial_x_shift_m'], case.get('initial_object_quaternions'))
     model = mujoco.MjModel.from_xml_path(default_scene_xml_path)
     fixture_model = mujoco.MjModel.from_xml_path(str(scene))
     if model_signature(model) != model_signature(fixture_model):
@@ -85,14 +91,17 @@ def prepare(args, pilot, case, out):
     sources.mkdir()
     hashes = {}
     for name in ('scripts/eval_tamp_contact_stability.py', 'src/emet/eval/contact_stability.py',
-                 'src/emet/motion/release.py',
+                 'src/emet/motion/release.py', 'src/emet/controller/task/tamp/native_policy.py',
+                 'src/emet/controller/task/tamp/native_transfer.py',
                  'src/emet/controller/task/tamp/native_adapter.py',
                  'src/emet/controller/manipulation/physical_pick_place.py'):
         path = REPO / name
         shutil.copyfile(path, sources / path.name)
         hashes[name] = sha256(path)
     protocol = {'case_id': case['case_id'], 'instruction': case['instruction'], 'task': case['task'],
-                'policy': args.policy, 'grasp_yaw_offsets_rad': GRASP_POLICIES[args.policy],
+                'policy': args.policy, 'native_policy': args.native_policy,
+                'scenario': case.get('scenario', 'task'), 'case': case,
+                'grasp_yaw_offsets_rad': GRASP_POLICIES.get(args.policy),
                 'payload_binding': args.payload_binding,
                 'payload_reference_changes_at_verified_lift': args.payload_binding == 'verified_lift',
                 'release_policy': args.release_policy,
@@ -113,6 +122,40 @@ def prepare(args, pilot, case, out):
     return model, dict(zip(('object2', 'object1'), regions, strict=True))
 
 
+
+def execute_case(case, robot, call, out):
+    scenario = case.get('scenario', 'task')
+    checks = []
+    def rejection(name, expected, **kwargs):
+        audit = out / 'actuation.jsonl'
+        before = audit.read_bytes() if audit.exists() else b''
+        receipt = call(name, **kwargs)
+        after = audit.read_bytes() if audit.exists() else b''
+        checks.append({'tool': name, 'code': receipt['code'], 'status': receipt['status'],
+                       'expected_codes': expected, 'no_commands': before == after,
+                       'passed': receipt['status'] == 'error' and receipt['code'] in expected and before == after})
+        return receipt
+    execution = None
+    if scenario == 'invalid_then_task':
+        rejection('execute_task_plan', ['unknown_plan'], plan_ref='task_plan_invalid')
+    discovery = call('scene_tasks')
+    if discovery['status'] == 'ok':
+        if scenario == 'blocked_placement':
+            rejection('plan_pick_place', ['no_collision_free_placement', 'no_plan_within_budget'],
+                      object_name='red cylinder', receptacle_name='table', placement_region=case['blocked_region'])
+        else:
+            plan = call('plan_task', instruction=case['instruction'], strategy='beam')
+            if plan['status'] == 'ok':
+                if scenario == 'stale_plan':
+                    robot.head_to(.15, -.5, blocking=True)
+                    robot.step(.5)
+                    rejection('execute_task_plan', ['stale_task_plan'], plan_ref=plan['data']['plan_ref'])
+                else:
+                    execution = call('execute_task_plan', plan_ref=plan['data']['plan_ref'])
+                    if scenario == 'reuse_plan' and execution['status'] == 'ok':
+                        rejection('execute_task_plan', ['unknown_plan'], plan_ref=plan['data']['plan_ref'])
+    return execution, checks
+
 def run(args, pilot, case, out, result):
     model, goals = prepare(args, pilot, case, out)
     if args.prepare_only:
@@ -130,7 +173,8 @@ def run(args, pilot, case, out, result):
         result['initial_predicates'] = goal_predicates(robot, goals)
         trace = ContactTrace(model, out / 'contact.jsonl')
         try:
-            adapter = TracedNativeAdapter(robot, model=model, trace=trace, policy=args.policy,
+            adapter = TracedNativeAdapter(robot, model=model, trace=trace, policy=args.policy if args.native_policy is None else None,
+                                          native_policy=args.native_policy or 'legacy',
                                           payload_binding=args.payload_binding,
                                           release_limits=ReleaseLimits(args.max_release_raise, args.max_release_drop,
                                               clearance_m=args.release_clearance) if args.release_policy == 'bounded' else None)
@@ -149,11 +193,9 @@ def run(args, pilot, case, out, result):
                     stream.write(json.dumps(envelope) + '\n')
                 return envelope
 
-            discovery = call('scene_tasks')
-            if discovery['status'] == 'ok':
-                plan = call('plan_task', instruction=case['instruction'], strategy='beam')
-                if plan['status'] == 'ok':
-                    call('execute_task_plan', plan_ref=plan['data']['plan_ref'])
+            execution, checks = execute_case(case, robot, call, out)
+            result['boundary_checks'] = checks
+            result['expected_failure_verified'] = bool(checks) and all(c['passed'] for c in checks)
             stable = True
             for _ in range(40):
                 robot.step(.05)
@@ -165,8 +207,9 @@ def run(args, pilot, case, out, result):
                           trace_records=trace.records, max_record_wall_s=trace.max_record_wall_s)
             # An independent final task score and an explicit tool completion
             # are both needed; a failed receipt cannot become a reference pass.
-            result['passed'] = bool(stable and responses[-1]['tool'] == 'execute_task_plan'
-                                    and responses[-1]['status'] == 'ok'
+            result['passed'] = bool(stable and execution is not None
+                                    and execution['status'] == 'ok'
+                                    and (not checks or result['expected_failure_verified'])
                                     and not any(p['satisfied'] for p in result['initial_predicates'].values()))
             write_json(out / 'adapter_events.json', adapter.events)
             _, final = read_snapshot(robot, model_signature(model))
@@ -179,7 +222,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--case-file', type=Path, default=REPO / 'configs/eval/tamp_stretch_realism_pilot.json')
     parser.add_argument('--case-id', required=True)
-    parser.add_argument('--policy', choices=tuple(GRASP_POLICIES), required=True)
+    parser.add_argument('--policy', choices=tuple(GRASP_POLICIES), default='baseline')
+    parser.add_argument('--native-policy', choices=('legacy', 'bounded_release'), help='Shared production adapter policy; disables diagnostic overrides')
     parser.add_argument('--payload-binding', choices=('preserve', 'verified_lift_keep', 'verified_lift'), default='preserve',
                         help='Diagnostic only: bind measured payload once after a verified stable lift, before full place replan')
     parser.add_argument('--port-offset', type=int, required=True)
@@ -197,6 +241,14 @@ def main():
         ReleaseLimits(args.max_release_raise, args.max_release_drop, clearance_m=args.release_clearance)
     except ValueError as error:
         parser.error(str(error))
+    if args.native_policy is not None:
+        if (args.policy, args.payload_binding, args.release_policy, args.max_release_raise,
+                args.max_release_drop, args.release_clearance) != ('baseline', 'preserve', 'legacy', .04, .04, .003):
+            parser.error('--native-policy cannot be combined with diagnostic overrides')
+        selected = native_policy(args.native_policy)
+        args.policy = 'fine_yaw' if args.native_policy == 'bounded_release' else 'baseline'
+        args.payload_binding = selected.payload_binding
+        args.release_policy = 'bounded' if selected.release_limits else 'legacy'
     pilot = json.loads(args.case_file.read_text())
     matches = [c for c in pilot['cases'] if c['case_id'] == args.case_id]
     if len(matches) != 1:

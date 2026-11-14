@@ -6,6 +6,9 @@
 
 from __future__ import annotations
 
+import pytest
+from draccus.utils import DecodingError
+
 from emet.config.loader import (
     apply_dot_overrides,
     default_config_path,
@@ -157,3 +160,11 @@ def test_legacy_mapping_agent_block_is_not_chat_section():
     section = cfg.agent_section()
     assert section.manip_mode == "teleport"
     assert section.llm == "qwen35-4B"
+
+
+def test_native_policy_override_uses_chat_section_and_rejects_unknown():
+    cfg = load_config('dynav_config.yaml', overrides=['agent.native_tamp_policy=bounded_release'])
+    assert cfg.agent_section().native_tamp_policy == 'bounded_release'
+    assert cfg.mapping_dict.get('agent', {}).get('realtime') is not None
+    with pytest.raises(DecodingError, match='legacy, bounded_release'):
+        load_config('dynav_config.yaml', overrides=['agent.native_tamp_policy=typo']).agent_section()

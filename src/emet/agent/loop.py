@@ -550,7 +550,7 @@ def _merge_chat_agent_manip_parameters(
         agent_section = load_config(agent_config, robot=robot).agent_section()
     current = parameters.get("agent")
     agent = dict(current) if isinstance(current, dict) else {}
-    for key in ("manip_mode", "manip_collision", "manip_planner", "tamp_inputs"):
+    for key in ("manip_mode", "manip_collision", "manip_planner", "tamp_inputs", "native_tamp_policy"):
         value = str(getattr(agent_section, key, "")).strip()
         if value:
             agent[key] = value
@@ -835,13 +835,17 @@ def run_agent_with_robot(
             voxel_map=executor.agent.get_voxel_map(),
         )
     voxel_memory_backend = get_memory_backend("dynamem", voxel_map=executor.agent.get_voxel_map())
+    native_tamp_policy = parameters.get("agent", {}).get("native_tamp_policy", "legacy")
+    if native_tamp_policy != "legacy" and (executor._manip_mode != "physical" or executor._tamp_inputs != "privileged"):
+        robot_client.stop()
+        raise ValueError("native_tamp_policy requires physical mode with privileged simulation inputs")
     if native_task_config is not None:
         from emet.controller.task.tamp.native_transfer import NativeTableTransferProvider
         from emet.controller.task.tamp.task_session import TaskSession
         try:
             if executor._manip_mode != "physical" or executor._tamp_inputs != "privileged":
                 raise ValueError("native_task_config requires physical mode with privileged inputs")
-            tamp_task_session = TaskSession(NativeTableTransferProvider(robot_client, native_task_config, diagnostic_state=tool_debug))
+            tamp_task_session = TaskSession(NativeTableTransferProvider(robot_client, native_task_config, diagnostic_state=tool_debug, native_policy=native_tamp_policy))
         except Exception:
             robot_client.stop()
             raise
@@ -849,6 +853,7 @@ def run_agent_with_robot(
         "executor": executor,
         "robot": robot_client,
         "tamp_task_session": tamp_task_session,
+        "native_tamp_policy": native_tamp_policy,
         "memory_backend": voxel_memory_backend,
         "observed_tamp_provider": (
             observed_tamp_provider if observed_tamp_provider is not None else
