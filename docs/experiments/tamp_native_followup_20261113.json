@@ -677,5 +677,29 @@
       "path": ".tamp-runs/native-followup-20261113/joint_margin_planning_probe.json",
       "sha256": "968280daa6313df44e656434f339a1525f7a43119a44275034342d495587222b"
     }
+  },
+  "post_trial_validation": {
+    "source_commit": "425f180d",
+    "runtime_trial_source_commit": "c4fa1668",
+    "intervening_runtime_change": "Safe API failure-code mapping only; no physical controller or motion-policy change; old trial scores unchanged",
+    "tests": 302,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "job_id": "20261113_204403_0d683b",
+    "junit": {
+      "path": ".tamp-runs/native-followup-20261113/final-regression/current-source.xml",
+      "sha256": "6b76914d97f02d73e434cd8dc2ec675be5b54b4af77e10f8bf20e0aa5f7563c9"
+    },
+    "paper": {
+      "job_id": "20261113_204413_d46006",
+      "build_exit_code": 0,
+      "pages": 58,
+      "unresolved_references_or_citations": false
+    },
+    "ruff": {
+      "changed_python_files_before_plot": 26,
+      "new_plot_and_api_followup": "pass"
+    }
   }
 }

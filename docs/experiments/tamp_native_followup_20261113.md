@@ -82,3 +82,8 @@ The [compact manifest](tamp_native_followup_20261113.json) contains source,
 job IDs, receipt counts and raw artifact hashes. Full traces remain in ignored
 `.tamp-runs/native-followup-20261113/`; the failed preceding cohort and interrupted
 first launch remain separate in the [prior report](tamp_native_qualification_20261113.md).
+
+Post-trial validation at `425f180d` passes **302 affected tests**, with zero
+failures, errors or skips, including the native verification-code follow-up.
+The full paper builds to 58 pages with no unresolved references or citations.
+These checks do not change the `c4fa1668` physical/agent trial outcomes.

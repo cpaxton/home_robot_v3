@@ -59,3 +59,8 @@ the one-second hold verifier from the additional loaded-handoff check, so no
 more specific contact/rotation diagnosis is claimed. A subsequent API-only fix
 maps native `*_verification_failed` reasons to the existing safe public
 `verification_failed` code; it changes no robot motion or historical scores.
+
+Post-trial validation at `425f180d` passes **302 affected tests**, with zero
+failures, errors or skips, including the native verification-code follow-up.
+The full paper builds to 58 pages with no unresolved references or citations.
+These checks do not change the `c4fa1668` physical/agent trial outcomes.

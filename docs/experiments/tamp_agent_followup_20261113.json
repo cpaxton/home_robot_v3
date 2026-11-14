@@ -317,5 +317,33 @@
     "stop_boundary_violations": 0,
     "requested_invalid_handle_checks": 1,
     "requested_invalid_handle_checks_passed": 1
+  },
+  "post_trial_validation": {
+    "source_commit": "425f180d",
+    "runtime_trial_source_commit": "c4fa1668",
+    "intervening_runtime_change": "Safe API failure-code mapping only; no physical controller or motion-policy change; old trial scores unchanged",
+    "tests": 302,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "job_id": "20261113_204403_0d683b",
+    "junit": {
+      "path": ".tamp-runs/native-followup-20261113/final-regression/current-source.xml",
+      "sha256": "6b76914d97f02d73e434cd8dc2ec675be5b54b4af77e10f8bf20e0aa5f7563c9"
+    },
+    "paper": {
+      "job_id": "20261113_204413_d46006",
+      "build_exit_code": 0,
+      "pages": 58,
+      "unresolved_references_or_citations": false
+    },
+    "ruff": {
+      "changed_python_files_before_plot": 26,
+      "new_plot_and_api_followup": "pass"
+    }
+  },
+  "launch_manifest": {
+    "path": ".tamp-runs/agent-followup-20261113/frozen_batch.json",
+    "sha256": "6de1d69888e01697c3c9ffe4544acf85e7d56c452dd4b298d65133c3712629e8"
   }
 }
