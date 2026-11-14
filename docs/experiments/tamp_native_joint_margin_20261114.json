@@ -1,0 +1,568 @@
+{
+  "schema_version": 1,
+  "scope": "Focused native development check of interior telescope IK targets; no whole-agent, training, hardware or held-out qualification",
+  "runtime_change_source": "941fa8ff",
+  "service_cohort_source": "63fe7a98d62ca171b7ad2eb8c8ff3e9df745a5e8",
+  "fast_candidate_source": "a4f3e0a12814b366fd3189cad475de83c24faefd",
+  "merge_gate": {
+    "status": "blocked",
+    "reason": "Complete swap-right25 task still fails original-reference cube retention after first transfer; no task-success improvement established"
+  },
+  "old_native_aggregate_unchanged": "4/8",
+  "old_caliban_aggregate_unchanged": "3/4",
+  "compute_cohorts_not_pooled": true,
+  "exact_paired_initial_state_certificate": false,
+  "model_signatures_match": true,
+  "service_cohort": {
+    "protocol": "configs/eval/tamp_native_joint_margin_20261114.json",
+    "cases": [
+      {
+        "name": "baseline-service",
+        "role": "baseline",
+        "case": "swap-right25",
+        "source_sha": "935a0c7c47ecf9a63f8c4dcf33793c1f1819f8f5",
+        "source_dirty_flag": true,
+        "archived_runtime_sources_match_commit": true,
+        "job_id": "20261114_084541_07627c",
+        "cpu_set": "20-25",
+        "passed": false,
+        "run_status": "complete",
+        "code": "planning_timeout",
+        "status": "error",
+        "completed_transfers": 0,
+        "planned_transfers": 3,
+        "retreats_complete": 0,
+        "release_samples": [],
+        "final_goals": {
+          "object2": false,
+          "object1": false
+        },
+        "audit_commands": 2,
+        "forbidden_commands": 0,
+        "malformed_audit_rows": 0,
+        "boundary_checks": [],
+        "wall_time_s": 201.92785515985452,
+        "model_signature": "fb1e55839e4ef357cd214a758c88d3b00de3ab3fd31690f434d5e3196ce37f89",
+        "artifacts": [
+          {
+            "path": "/home/cpaxton/src/home_robot_v2/.worktrees/tamp-benchmark-runtime/.tamp-runs/joint-margin-20261114/baseline-service/protocol.json",
+            "sha256": "2cb869fb9f743c60342ae5494b6780f3a5c747fe7fb9e4a8a594189763dc9461"
+          },
+          {
+            "path": "/home/cpaxton/src/home_robot_v2/.worktrees/tamp-benchmark-runtime/.tamp-runs/joint-margin-20261114/baseline-service/summary.json",
+            "sha256": "e196421aaa96c79a8bcd1aa6a7aca8fe46c06b1e6503c87da9d30c5259268113"
+          },
+          {
+            "path": "/home/cpaxton/src/home_robot_v2/.worktrees/tamp-benchmark-runtime/.tamp-runs/joint-margin-20261114/baseline-service/initial.json",
+            "sha256": "0048842eaa19ef552e245473b1e6ebdadf11a6e02c950d14f6ed1d6dc10907cf"
+          },
+          {
+            "path": "/home/cpaxton/src/home_robot_v2/.worktrees/tamp-benchmark-runtime/.tamp-runs/joint-margin-20261114/baseline-service/final.json",
+            "sha256": "e40432ed41c531d3dc4503432488bbe5cc3325075628c4e361eb0a4f17fb7e20"
+          },
+          {
+            "path": "/home/cpaxton/src/home_robot_v2/.worktrees/tamp-benchmark-runtime/.tamp-runs/joint-margin-20261114/baseline-service/contact.jsonl",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "/home/cpaxton/src/home_robot_v2/.worktrees/tamp-benchmark-runtime/.tamp-runs/joint-margin-20261114/baseline-service/adapter_events.json",
+            "sha256": "6b4ed05d81ee0433ed2e34e263eda8478563a450e515caeb109d3cc802a1a855"
+          },
+          {
+            "path": "/home/cpaxton/src/home_robot_v2/.worktrees/tamp-benchmark-runtime/.tamp-runs/joint-margin-20261114/baseline-service/actuation.jsonl",
+            "sha256": "167041c774f7647080be1faf0bc09980ea951eca8cdfc9661ada15618b9d39a6"
+          }
+        ]
+      },
+      {
+        "name": "control-service",
+        "role": "candidate",
+        "case": "control",
+        "source_sha": "63fe7a98d62ca171b7ad2eb8c8ff3e9df745a5e8",
+        "source_dirty_flag": false,
+        "archived_runtime_sources_match_commit": true,
+        "job_id": "20261114_084542_d997c1",
+        "cpu_set": "26-31",
+        "passed": true,
+        "run_status": "complete",
+        "code": "ok",
+        "status": "ok",
+        "completed_transfers": 2,
+        "planned_transfers": 2,
+        "retreats_complete": 2,
+        "release_samples": [
+          {
+            "object": "object2",
+            "sim_time": 55.01400000002127,
+            "segment_positions_m": [
+              0.12758752596661255,
+              0.12758949719936444,
+              0.12759343006747534,
+              0.12759619438117106
+            ],
+            "largest_limit_excess_m": 0.0,
+            "smallest_upper_margin_m": 0.0024038056188289414
+          },
+          {
+            "object": "object1",
+            "sim_time": 87.69799999997701,
+            "segment_positions_m": [
+              0.09645094500810647,
+              0.09647201858323336,
+              0.09647883589857842,
+              0.0964756357404931
+            ],
+            "largest_limit_excess_m": 0.0,
+            "smallest_upper_margin_m": 0.033521164101421586
+          }
+        ],
+        "final_goals": {
+          "object2": true,
+          "object1": true
+        },
+        "audit_commands": 528,
+        "forbidden_commands": 0,
+        "malformed_audit_rows": 0,
+        "boundary_checks": [
+          {
+            "tool": "execute_task_plan",
+            "code": "unknown_plan",
+            "status": "error",
+            "expected_codes": [
+              "unknown_plan"
+            ],
+            "no_commands": true,
+            "passed": true
+          }
+        ],
+        "wall_time_s": 176.01530923880637,
+        "model_signature": "fb1e55839e4ef357cd214a758c88d3b00de3ab3fd31690f434d5e3196ce37f89",
+        "artifacts": [
+          {
+            "path": "/home/cpaxton/src/home_robot_v2/.worktrees/tamp-benchmark-runtime/.tamp-runs/joint-margin-20261114/control-service/protocol.json",
+            "sha256": "b4c417db8db4d4353a87780db0282ebbc3fb82e818e976dc4693f4c54b51f943"
+          },
+          {
+            "path": "/home/cpaxton/src/home_robot_v2/.worktrees/tamp-benchmark-runtime/.tamp-runs/joint-margin-20261114/control-service/summary.json",
+            "sha256": "16c8ca5a588a05124843bcc533b151cf9b63207ad9e4eacc15762521b018355e"
+          },
+          {
+            "path": "/home/cpaxton/src/home_robot_v2/.worktrees/tamp-benchmark-runtime/.tamp-runs/joint-margin-20261114/control-service/initial.json",
+            "sha256": "8d79c9eb1a6cd97078f26dcb9197c189714802dd3246bb9a26eca6ab328e1319"
+          },
+          {
+            "path": "/home/cpaxton/src/home_robot_v2/.worktrees/tamp-benchmark-runtime/.tamp-runs/joint-margin-20261114/control-service/final.json",
+            "sha256": "1c051c6ae5eef5911f4ffd20ea9f513e172c9920087c29990b7a84c6818ba3c4"
+          },
+          {
+            "path": "/home/cpaxton/src/home_robot_v2/.worktrees/tamp-benchmark-runtime/.tamp-runs/joint-margin-20261114/control-service/contact.jsonl",
+            "sha256": "3b32c29e6658cd0dbdad6d4595aafc27bd3b3e2421d22375e5210ebce61a16e3"
+          },
+          {
+            "path": "/home/cpaxton/src/home_robot_v2/.worktrees/tamp-benchmark-runtime/.tamp-runs/joint-margin-20261114/control-service/adapter_events.json",
+            "sha256": "7d0b51a813ab43f2eb315beb60ced04e3c4c8befcc3c6c80d825b491b1d7e838"
+          },
+          {
+            "path": "/home/cpaxton/src/home_robot_v2/.worktrees/tamp-benchmark-runtime/.tamp-runs/joint-margin-20261114/control-service/actuation.jsonl",
+            "sha256": "f521ac51cb572482b51e956540aa5dd4166c638bb4b6a27572466da8c481a7b9"
+          }
+        ]
+      },
+      {
+        "name": "candidate-service",
+        "role": "candidate",
+        "case": "swap-right25",
+        "source_sha": "63fe7a98d62ca171b7ad2eb8c8ff3e9df745a5e8",
+        "source_dirty_flag": false,
+        "archived_runtime_sources_match_commit": true,
+        "job_id": "20261114_084542_4cda81",
+        "cpu_set": "20-25",
+        "passed": false,
+        "run_status": "complete",
+        "code": "planning_timeout",
+        "status": "error",
+        "completed_transfers": 0,
+        "planned_transfers": 3,
+        "retreats_complete": 0,
+        "release_samples": [],
+        "final_goals": {
+          "object2": false,
+          "object1": false
+        },
+        "audit_commands": 2,
+        "forbidden_commands": 0,
+        "malformed_audit_rows": 0,
+        "boundary_checks": [],
+        "wall_time_s": 186.97847378114238,
+        "model_signature": "fb1e55839e4ef357cd214a758c88d3b00de3ab3fd31690f434d5e3196ce37f89",
+        "artifacts": [
+          {
+            "path": "/home/cpaxton/src/home_robot_v2/.worktrees/tamp-benchmark-runtime/.tamp-runs/joint-margin-20261114/candidate-service/protocol.json",
+            "sha256": "f0068b89510dfb0b8f67bf818f39607a600ab3322ff42084ef91b2317f73feaa"
+          },
+          {
+            "path": "/home/cpaxton/src/home_robot_v2/.worktrees/tamp-benchmark-runtime/.tamp-runs/joint-margin-20261114/candidate-service/summary.json",
+            "sha256": "a53433bc3620ccf935bcabb8535a436e0108a9ef4a19cadd45c1eb531b843b58"
+          },
+          {
+            "path": "/home/cpaxton/src/home_robot_v2/.worktrees/tamp-benchmark-runtime/.tamp-runs/joint-margin-20261114/candidate-service/initial.json",
+            "sha256": "28ba3e4dab4890dfc892ae6c825c26d7681f06fdbba3c33d24fd38a4e72078ca"
+          },
+          {
+            "path": "/home/cpaxton/src/home_robot_v2/.worktrees/tamp-benchmark-runtime/.tamp-runs/joint-margin-20261114/candidate-service/final.json",
+            "sha256": "8b10d6699b2540fe70d7c9524898c905b5a0f497c2a62083885b08a24edbf073"
+          },
+          {
+            "path": "/home/cpaxton/src/home_robot_v2/.worktrees/tamp-benchmark-runtime/.tamp-runs/joint-margin-20261114/candidate-service/contact.jsonl",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "/home/cpaxton/src/home_robot_v2/.worktrees/tamp-benchmark-runtime/.tamp-runs/joint-margin-20261114/candidate-service/adapter_events.json",
+            "sha256": "b9aa3edd78ef8f2b12cc84452551c98cb50e2183d0210f7cc0a80f299505c288"
+          },
+          {
+            "path": "/home/cpaxton/src/home_robot_v2/.worktrees/tamp-benchmark-runtime/.tamp-runs/joint-margin-20261114/candidate-service/actuation.jsonl",
+            "sha256": "abbe9532a3f6c4733c83e782dce43976b1b1248d73fb69faea73ef7cabb4a295"
+          }
+        ]
+      },
+      {
+        "name": "shift15-service",
+        "role": "candidate",
+        "case": "shift15",
+        "source_sha": "63fe7a98d62ca171b7ad2eb8c8ff3e9df745a5e8",
+        "source_dirty_flag": false,
+        "archived_runtime_sources_match_commit": true,
+        "job_id": "20261114_084543_98b7f0",
+        "cpu_set": "26-31",
+        "passed": true,
+        "run_status": "complete",
+        "code": "ok",
+        "status": "ok",
+        "completed_transfers": 2,
+        "planned_transfers": 2,
+        "retreats_complete": 2,
+        "release_samples": [
+          {
+            "object": "object2",
+            "sim_time": 56.1000000000226,
+            "segment_positions_m": [
+              0.12731385708762552,
+              0.12733510412702237,
+              0.1273420671081585,
+              0.12733875752782642
+            ],
+            "largest_limit_excess_m": 0.0,
+            "smallest_upper_margin_m": 0.0026579328918414913
+          },
+          {
+            "object": "object1",
+            "sim_time": 90.8359999999697,
+            "segment_positions_m": [
+              0.0971198032777518,
+              0.09714082725410483,
+              0.09714765068286454,
+              0.09714675167608156
+            ],
+            "largest_limit_excess_m": 0.0,
+            "smallest_upper_margin_m": 0.03285234931713546
+          }
+        ],
+        "final_goals": {
+          "object2": true,
+          "object1": true
+        },
+        "audit_commands": 534,
+        "forbidden_commands": 0,
+        "malformed_audit_rows": 0,
+        "boundary_checks": [
+          {
+            "tool": "execute_task_plan",
+            "code": "unknown_plan",
+            "status": "error",
+            "expected_codes": [
+              "unknown_plan"
+            ],
+            "no_commands": true,
+            "passed": true
+          }
+        ],
+        "wall_time_s": 181.55204240698367,
+        "model_signature": "fb1e55839e4ef357cd214a758c88d3b00de3ab3fd31690f434d5e3196ce37f89",
+        "artifacts": [
+          {
+            "path": "/home/cpaxton/src/home_robot_v2/.worktrees/tamp-benchmark-runtime/.tamp-runs/joint-margin-20261114/shift15-service/protocol.json",
+            "sha256": "ac571fe16d700c2cc42ef3fe562ec28ae69e112384ecc0f4e464ddbfc67e78b3"
+          },
+          {
+            "path": "/home/cpaxton/src/home_robot_v2/.worktrees/tamp-benchmark-runtime/.tamp-runs/joint-margin-20261114/shift15-service/summary.json",
+            "sha256": "f7979fc0549690850710e23624266e314533ccd8d057364ceab6fcdb2b9cb420"
+          },
+          {
+            "path": "/home/cpaxton/src/home_robot_v2/.worktrees/tamp-benchmark-runtime/.tamp-runs/joint-margin-20261114/shift15-service/initial.json",
+            "sha256": "c45e6a802877d7a7de65d324534c0a28aa93f4fb410d9f22ebb38cc649a552a1"
+          },
+          {
+            "path": "/home/cpaxton/src/home_robot_v2/.worktrees/tamp-benchmark-runtime/.tamp-runs/joint-margin-20261114/shift15-service/final.json",
+            "sha256": "c6927e209af341951198f23079499a586f0196e566eac0e15fa7bbef9ab1b21a"
+          },
+          {
+            "path": "/home/cpaxton/src/home_robot_v2/.worktrees/tamp-benchmark-runtime/.tamp-runs/joint-margin-20261114/shift15-service/contact.jsonl",
+            "sha256": "2448e66316b79dbc4f8f3d56f1c9b105f794f3f3273d95afe1ef35957c0b4b40"
+          },
+          {
+            "path": "/home/cpaxton/src/home_robot_v2/.worktrees/tamp-benchmark-runtime/.tamp-runs/joint-margin-20261114/shift15-service/adapter_events.json",
+            "sha256": "cf8544ecac8e3a6f2f59312a12103e1d8c5908376a3428e62598af0833d604c0"
+          },
+          {
+            "path": "/home/cpaxton/src/home_robot_v2/.worktrees/tamp-benchmark-runtime/.tamp-runs/joint-margin-20261114/shift15-service/actuation.jsonl",
+            "sha256": "093f6c8404247142f760f39011e600313aac9a1a271612302db52888e426466d"
+          }
+        ]
+      }
+    ],
+    "candidate_aggregate": {
+      "tasks_passed": 2,
+      "tasks": 3,
+      "completed_transfers": 4,
+      "declared_transfers": 7,
+      "boundary_checks_passed": 2,
+      "boundary_checks_observed": 2,
+      "infrastructure_errors": 0,
+      "forbidden_commands": 0,
+      "audit_commands": 1064
+    }
+  },
+  "fast_pair": {
+    "protocol": "configs/eval/tamp_native_joint_margin_cpu_replay_20261114.json",
+    "cases": [
+      {
+        "name": "baseline-fast",
+        "role": "baseline",
+        "case": "swap-right25",
+        "source_sha": "935a0c7c47ecf9a63f8c4dcf33793c1f1819f8f5",
+        "source_dirty_flag": true,
+        "archived_runtime_sources_match_commit": true,
+        "job_id": "20261114_085149_fd2b65",
+        "cpu_set": "0-7",
+        "passed": false,
+        "run_status": "complete",
+        "code": "verification_failed",
+        "status": "partial",
+        "completed_transfers": 1,
+        "planned_transfers": 3,
+        "retreats_complete": 1,
+        "release_samples": [
+          {
+            "object": "object2",
+            "sim_time": 143.0019999999547,
+            "segment_positions_m": [
+              0.12999757705872356,
+              0.1299977536095079,
+              0.12999839002034486,
+              0.1299989489904825
+            ],
+            "largest_limit_excess_m": 0.0,
+            "smallest_upper_margin_m": 1.0510095174998124e-06
+          }
+        ],
+        "final_goals": {
+          "object2": false,
+          "object1": false
+        },
+        "audit_commands": 437,
+        "forbidden_commands": 0,
+        "malformed_audit_rows": 0,
+        "boundary_checks": [],
+        "wall_time_s": 196.77610394218937,
+        "model_signature": "fb1e55839e4ef357cd214a758c88d3b00de3ab3fd31690f434d5e3196ce37f89",
+        "artifacts": [
+          {
+            "path": "/home/cpaxton/src/home_robot_v2/.worktrees/tamp-benchmark-runtime/.tamp-runs/joint-margin-20261114/baseline-fast/protocol.json",
+            "sha256": "2cb869fb9f743c60342ae5494b6780f3a5c747fe7fb9e4a8a594189763dc9461"
+          },
+          {
+            "path": "/home/cpaxton/src/home_robot_v2/.worktrees/tamp-benchmark-runtime/.tamp-runs/joint-margin-20261114/baseline-fast/summary.json",
+            "sha256": "0640ea17937b4cce8e2b0b815d8373420f4b5290272eaf4c4b04cc0f380c0521"
+          },
+          {
+            "path": "/home/cpaxton/src/home_robot_v2/.worktrees/tamp-benchmark-runtime/.tamp-runs/joint-margin-20261114/baseline-fast/initial.json",
+            "sha256": "8aa1a2dba6aa7cc8315213a1b56068beb5014eea2e480809e042d925992c7a68"
+          },
+          {
+            "path": "/home/cpaxton/src/home_robot_v2/.worktrees/tamp-benchmark-runtime/.tamp-runs/joint-margin-20261114/baseline-fast/final.json",
+            "sha256": "fe70663413cecdb9ea0aa51b8499221c3d8f1962daf5a79ec5cd297b5ee5e7e1"
+          },
+          {
+            "path": "/home/cpaxton/src/home_robot_v2/.worktrees/tamp-benchmark-runtime/.tamp-runs/joint-margin-20261114/baseline-fast/contact.jsonl",
+            "sha256": "481deb39a6b999974c17a12a778ca28d63c6f884cc82c1f3311bf5e3ee2ee2b5"
+          },
+          {
+            "path": "/home/cpaxton/src/home_robot_v2/.worktrees/tamp-benchmark-runtime/.tamp-runs/joint-margin-20261114/baseline-fast/adapter_events.json",
+            "sha256": "d60561f935ffa32b13c5fd2f661dbd99d035bdf3671471633cfb2f83f205b5b7"
+          },
+          {
+            "path": "/home/cpaxton/src/home_robot_v2/.worktrees/tamp-benchmark-runtime/.tamp-runs/joint-margin-20261114/baseline-fast/actuation.jsonl",
+            "sha256": "d4057bc59f9dacf702e0166bcda58ec71bfa2cfa66a57c7aad5cdb59ba6669c1"
+          }
+        ],
+        "last_motion_event": {
+          "phase": "payload_retention",
+          "accepted": false,
+          "reason": "payload_not_retained",
+          "translation_residual_m": 0.0026396061303559336,
+          "rotation_residual_rad": 0.1078763750663619,
+          "translation_tolerance_m": 0.02,
+          "rotation_tolerance_rad": 0.1
+        },
+        "last_motion_context": null,
+        "attribution": "Original payload retention check at checked loaded handoff after completed lift and ordinary hold; this attribution is for this native replay, not the historical Caliban episode."
+      },
+      {
+        "name": "candidate-fast",
+        "role": "candidate",
+        "case": "swap-right25",
+        "source_sha": "a4f3e0a12814b366fd3189cad475de83c24faefd",
+        "source_dirty_flag": false,
+        "archived_runtime_sources_match_commit": true,
+        "job_id": "20261114_085149_aaf420",
+        "cpu_set": "0-7",
+        "passed": false,
+        "run_status": "complete",
+        "code": "verification_failed",
+        "status": "partial",
+        "completed_transfers": 1,
+        "planned_transfers": 3,
+        "retreats_complete": 1,
+        "release_samples": [
+          {
+            "object": "object2",
+            "sim_time": 133.58999999990976,
+            "segment_positions_m": [
+              0.12951835800046516,
+              0.12952038007296168,
+              0.12952670314693954,
+              0.1295324926336112
+            ],
+            "largest_limit_excess_m": 0.0,
+            "smallest_upper_margin_m": 0.00046750736638881407
+          }
+        ],
+        "final_goals": {
+          "object2": false,
+          "object1": false
+        },
+        "audit_commands": 411,
+        "forbidden_commands": 0,
+        "malformed_audit_rows": 0,
+        "boundary_checks": [],
+        "wall_time_s": 187.8094369219616,
+        "model_signature": "fb1e55839e4ef357cd214a758c88d3b00de3ab3fd31690f434d5e3196ce37f89",
+        "artifacts": [
+          {
+            "path": "/home/cpaxton/src/home_robot_v2/.worktrees/tamp-benchmark-runtime/.tamp-runs/joint-margin-20261114/candidate-fast/protocol.json",
+            "sha256": "77f41e3732226fe5d23dbc94802f2a82a7b6c726f14ce1485d454e7e9df65941"
+          },
+          {
+            "path": "/home/cpaxton/src/home_robot_v2/.worktrees/tamp-benchmark-runtime/.tamp-runs/joint-margin-20261114/candidate-fast/summary.json",
+            "sha256": "a8332035daa4ccba9a2b5357673c95ee18c52c352c80c69a11db672280d1d17e"
+          },
+          {
+            "path": "/home/cpaxton/src/home_robot_v2/.worktrees/tamp-benchmark-runtime/.tamp-runs/joint-margin-20261114/candidate-fast/initial.json",
+            "sha256": "df7a4f84e1978a340eac6e721aeb118914cba8d628e959d629b2b4c02f6775a6"
+          },
+          {
+            "path": "/home/cpaxton/src/home_robot_v2/.worktrees/tamp-benchmark-runtime/.tamp-runs/joint-margin-20261114/candidate-fast/final.json",
+            "sha256": "601848c556b828db80db77dc26370833e2bc89a2a993b21336cb05ba6e977c18"
+          },
+          {
+            "path": "/home/cpaxton/src/home_robot_v2/.worktrees/tamp-benchmark-runtime/.tamp-runs/joint-margin-20261114/candidate-fast/contact.jsonl",
+            "sha256": "aa537efc9f1590505d3d7322edfff44b07b8d789d169036b4bff69a5440632f7"
+          },
+          {
+            "path": "/home/cpaxton/src/home_robot_v2/.worktrees/tamp-benchmark-runtime/.tamp-runs/joint-margin-20261114/candidate-fast/adapter_events.json",
+            "sha256": "14610736b1de5d048fae977070ffbfe640ac4ff0d2b9c333bb96d98500ca66be"
+          },
+          {
+            "path": "/home/cpaxton/src/home_robot_v2/.worktrees/tamp-benchmark-runtime/.tamp-runs/joint-margin-20261114/candidate-fast/actuation.jsonl",
+            "sha256": "f01e4ac04784e007d0979efc24c94a3dbbd84c05fab600b9123bd32fb78a7ff0"
+          }
+        ],
+        "last_motion_event": {
+          "phase": "payload_retention",
+          "accepted": false,
+          "reason": "payload_not_retained",
+          "translation_residual_m": 0.0026059665961219547,
+          "rotation_residual_rad": 0.10352913253449451,
+          "translation_tolerance_m": 0.02,
+          "rotation_tolerance_rad": 0.1
+        },
+        "last_motion_context": null,
+        "attribution": "Original payload retention check at checked loaded handoff after completed lift and ordinary hold; this attribution is for this native replay, not the historical Caliban episode."
+      }
+    ],
+    "candidate_aggregate": {
+      "tasks_passed": 0,
+      "tasks": 1,
+      "completed_transfers": 1,
+      "declared_transfers": 3,
+      "boundary_checks_passed": 0,
+      "boundary_checks_observed": 0,
+      "infrastructure_errors": 0,
+      "forbidden_commands": 0,
+      "audit_commands": 411
+    }
+  },
+  "focused_regression": {
+    "tests": 152,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "artifact": {
+      "path": "/home/cpaxton/src/home_robot_v2/.worktrees/tamp-benchmark-runtime/.tamp-runs/joint-margin-20261114/regression/results.xml",
+      "sha256": "b5db8bb706c2a88f861d48b9c5e2bd5d992d500e39c1470d53c541f3e56c8989"
+    }
+  },
+  "full_affected_regression": {
+    "tests": 304,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "source_commit": "a4f3e0a12814b366fd3189cad475de83c24faefd",
+    "artifact": {
+      "path": ".tamp-runs/joint-margin-20261114/full-regression/results.xml",
+      "sha256": "710dda9eef096d53844883aec67c031572214c9ca32103dfa20422f98da28472"
+    }
+  },
+  "baseline_asset_verification": {
+    "source_commit": "935a0c7c47ecf9a63f8c4dcf33793c1f1819f8f5",
+    "lfs_asset_objects_verified": 417,
+    "mismatches": [],
+    "runtime_code_diff_empty": true,
+    "protocol_dirty_flag_preserved": true,
+    "explanation": "Hydrated tracked LFS pointers were initially reported modified before clean-filter/index refresh; independently verified every hydrated robot asset against its tracked sha256. Raw protocol is unchanged."
+  },
+  "separate_single_cpu_attempt": {
+    "run_status": "complete",
+    "passed": false,
+    "code": "planning_timeout",
+    "wall_time_s": 355.26455008913763,
+    "artifact": {
+      "path": "/home/cpaxton/src/home_robot_v2/.worktrees/tamp-benchmark-runtime/.tamp-runs/joint-margin-20261114/baseline-swap-right25/summary.json",
+      "sha256": "a57ecc3bae97ad98d490c2d55341bcb51d450c0c1138ea8783d33dd1adf5b1b2"
+    },
+    "not_combined_with_service_cohort": true
+  },
+  "startup_and_interrupted_attempts": {
+    "startup": {
+      "path": "/home/cpaxton/src/home_robot_v2/.worktrees/tamp-benchmark-runtime/.tamp-runs/joint-margin-20261114/startup_attempts.json",
+      "sha256": "1899a855e701244877cc45f979accb0548acc594f44ed8afe8617bf968fee3c6"
+    },
+    "cpu_interrupted": {
+      "path": "/home/cpaxton/src/home_robot_v2/.worktrees/tamp-benchmark-runtime/.tamp-runs/joint-margin-20261114/cpu-interrupted-attempts.json",
+      "sha256": "5132f533dd4d48dbae54da5a894c4d9450135f562e644a9c7dade51b4555f813"
+    },
+    "preserved": true,
+    "not_task_passes": true
+  }
+}
