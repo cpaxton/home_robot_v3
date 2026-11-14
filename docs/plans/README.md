@@ -9,7 +9,9 @@ Design and refactor plan documents live here (`docs/plans/`).
   software checks pass; the cold pilot does not establish useful tracking.
 - [Controlled normalization comparison](mars_whole_body_advantage_pair.md):
   the control finished; the candidate stopped before updating on a settings
-  serialization mismatch. There is no completed paired result yet.
+  serialization mismatch. The guard is repaired; there is no completed paired
+  result yet. The separate bundled-reward timing correction preserves raw
+  physical outcomes and uses one consistent discount clock for training.
 - [PR #232 legacy-MLP experiment](https://github.com/cpaxton/home_robot_v3/pull/232):
   optional preview velocity and frozen-base/context arm adaptation, independent
   of the GRU experiment. The adaptation pilot is queued.

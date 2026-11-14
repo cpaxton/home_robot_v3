@@ -21,10 +21,11 @@ experiment and is not required to run this prototype.
 
 The settings serialization guard is repaired in `29a9fcec` with an actual
 disk-to-live training regression test. The recorded pair remains incomplete.
-A subsequent reward-clock review requires discounting each physical tick inside
-bundled TAMP transitions, including terminal credit, consistently with the
-`gamma ** ticks` continuation. The old cold-pilot results remain historical;
-they must not be presented as results from corrected return timing.
+A subsequent reward-clock review identified undiscounted rewards inside
+bundled TAMP transitions. The correction preserves each tick and discounts
+training returns consistently with the `gamma ** ticks` continuation, as
+described below. The old cold-pilot results remain historical; they must not
+be presented as results from corrected return timing.
 
 Correct experimental code can merge with measured behavioral limitations.
 Passing all performance gates is a checkpoint-promotion decision, separate
@@ -96,8 +97,12 @@ gate is loosened by this new experimental entrypoint.
 
 Use direct PPO, without a residual teacher or teacher actions in its loss.
 Three independent critics estimate tracking, stability and contact/safety
-returns. Normalize their advantages separately before combining them; record
-per-head losses, advantage scales/correlations and the selected weights.
+returns. The current default combines their raw weighted advantages and
+normalizes that sum once, preserving the intended reward coefficients.
+Historical independent head normalization is explicitly selectable as
+`--advantage-normalization per_head` for the controlled comparison; it is not
+the current default. Record per-head losses, raw and weighted advantage scales,
+correlations, gradient contributions and the selected normalization scheme.
 Clip critic gradients separately so one reward's units cannot clip actor or
 other critic gradients through a shared norm.
 
@@ -108,6 +113,27 @@ stability group charges measured jerk, command changes and effort. The contact
 group allows benign contact, charges current force excess above 3 N, and
 penalizes independent hard-guard failures. Do not repeatedly charge a stale
 running contact-force maximum as if it were current force.
+
+The reward clock is one physical control tick. A transition containing `k`
+ticks supplies `sum(gamma ** j * reward[j] for j in range(k))` to PPO, then
+discounts continuation by `gamma ** k`. Terminal completion/failure credit
+belongs to the final tick in that bundle. Timeouts bootstrap from the actual
+final observation; GAE does not propagate across the reset. Per-tick rewards
+are required for multi-tick transitions, and the collector's discount must
+match the learner's configured gamma. One-tick rewards remain bitwise unchanged.
+
+Environment scalar rewards, `info.reward_groups`, episode outcomes and
+evaluation returns remain undiscounted. The learner's rollout rewards and
+pre-normalization reward statistics use discounted training groups;
+`run.json.reward_timing` records this distinction. Gamma remains in PPO
+metadata rather than the numeric first-rollout array payload. A changed
+source revision still requires fresh evidence; preserving array layout does
+not make an old source-bound receipt current.
+
+The [reward-timing correction](../experiments/pr227_tick_reward_timing_20261114.md)
+passes all 61 focused tests, including the native oracle hold. The first cold
+pilot and incomplete normalization pair remain evidence from their original
+source revisions; no corrected policy result is claimed by this code repair.
 
 Critics additionally receive a separately named 34-column simulator vector:
 payload mass/relative pose, finger normal/tangential-load bounds and contact

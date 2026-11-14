@@ -126,10 +126,21 @@ The original frozen attempt and its 1,187-test receipt remain historical.
 
 The separate PR #227 reward-clock review also found that executor hold ticks
 were summed without intra-transition discounting, despite continuation using
-`gamma ** ticks`. That correction must be tested before further general/TAMP
-training. It does not change this basic experiment's one-tick, zero-TAMP
-distribution. Do not silently overwrite old evidence or reuse a source-bound
-receipt for changed training code.
+`gamma ** ticks`. The correction retains individual rewards, including terminal
+credit on the final tick, and discounts each bundle using the learner's gamma.
+Raw physical/evaluation totals remain separate. It leaves one-tick rewards
+bitwise unchanged, including signed zero; this basic experiment has no TAMP
+exposure. Discount metadata stays in `run.json` and outside the existing numeric
+first-rollout payload. Do not silently overwrite old evidence or reuse a
+source-bound receipt for changed training code. A fresh-source, explicitly
+reviewed equivalence record is required before reusing the old control in a
+recovered comparison.
+
+The [timing-correction report](../experiments/pr227_tick_reward_timing_20261114.md)
+records **61/61** focused checks, including the actual oracle pregrasp hold,
+49-tick bundled-versus-expanded returns and the repaired paired-training path.
+This focused result does not replace a fresh full regression receipt or teacher
+preflight for a later training run.
 
 [Compact attempt evidence](../../paper/data/whole_body_control/mars_whole_body_advantage_pair_v1/attempt.json)
 records outcome groups, matching hashes and artifact checksums. Raw logs,

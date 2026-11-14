@@ -426,9 +426,11 @@ Accepted plan: [Mars controller integration](docs/plans/mars_controller_integrat
 - [ ] Complete the declared normalization comparison after current-source
       checks and an explicit recovery record; preserve exact initial state and
       first-rollout matching, no extra variant/seed or silent source-hash bypass.
-- [ ] Correct bundled TAMP reward timing: discount each physical tick, including
+- [x] Correct bundled TAMP reward timing: discount each physical tick, including
       terminal credit, before `gamma ** ticks` continuation; preserve raw rewards
       for evaluation and test bundled-versus-expanded return equivalence.
+      All 61 focused tests pass, including the native oracle terminal hold.
+      See [timing correction](docs/experiments/pr227_tick_reward_timing_20261114.md).
 - [ ] Evaluate the opt-in frozen-base/shared-context arm-adaptation pilot in
       [PR #232](https://github.com/cpaxton/home_robot_v3/pull/232). Software checks
       pass; training awaits CPU14 release. Preview velocity alone did not improve
