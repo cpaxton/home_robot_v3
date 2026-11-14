@@ -189,7 +189,9 @@ Discord / Mars agent: point `agent.llm` and `mapping.eqa.vl_endpoint` at the sam
 ## Quick Start (Simulation)
 
 For goal-conditioned base-and-arm control learning on Mars, see
-[Mars reactive RL](docs/mars_reactive_rl.md) for training, evaluation, and the opt-in simulator controller.
+[RL and whole-body control](docs/rl/README.md) for the design guide and evidence
+map, and [Mars reactive RL](docs/mars_reactive_rl.md) for training, evaluation,
+and the opt-in simulator controller.
 
 Run DynaMem in MuJoCo simulation in a few steps:
 
@@ -416,6 +418,7 @@ Paper LaTeX: `paper/main.tex` → `paper/sections/` (method § EQA loops; append
 | Doc | When to use |
 |-----|-------------|
 | [apps.md](docs/apps.md) | Catalog of `emet.app.*` demos |
+| [rl/](docs/rl/README.md) | RL/WBC philosophy, runbooks, plans and experiment evidence |
 | [data_collection.md](docs/data_collection.md) / [learning_from_demonstration.md](docs/learning_from_demonstration.md) | LfD collect → train |
 | [install_details.md](docs/install_details.md) / [docker.md](docs/docker.md) | Deeper install / image builds |
 | [debug.md](docs/debug.md) | Headless, Rerun, common failures |
