@@ -15,8 +15,11 @@ pilot has passed 1,178 full regressions and 27 focused checks, but has recorded
 
 The separate GRU/multi-critic C1 comparison on the parent branch stopped in its
 candidate settings check before the candidate's first optimizer update. That
-incomplete comparison provides no shared-versus-per-head result; its owner
-has retained CPU14 pending recovery. See the
+incomplete comparison provides no shared-versus-per-head result. The guard is
+now repaired on the parent branch (`29a9fcec`), and the separate bundled TAMP
+reward-clock correction (`105d3dba`) passes 61 focused tests, including a native
+oracle hold. No recovered PPO run has started; its owner retains CPU14 pending
+fresh-source admission and an explicit recovery record. See the
 [C1 attempt record](https://github.com/cpaxton/home_robot_v3/blob/feat/mars-base-isolation/docs/plans/mars_whole_body_advantage_pair.md#recorded-attempt-2026-11-14).
 This PR is not a dependency of the GRU experiment and does not modify its actor.
 
@@ -325,7 +328,8 @@ the focused gate passed **27/27**. The full receipt binds the tested source
 and XML. CPU15 was released after host-visible gate/pytest child exit.
 
 The supervisor is waiting for the existing C1 reservation to explicitly
-release CPU14. C1 currently stopped at a settings-comparison error, so that
+release CPU14. The recorded C1 attempt stopped at a settings-comparison error;
+its guard is now repaired, but the recovered comparison has not run and the
 release has not occurred. Once released, the supervisor runs
 current-source teacher admission, both fixed training runs, all declared
 evaluations and a serialized protected-function check without another launch
