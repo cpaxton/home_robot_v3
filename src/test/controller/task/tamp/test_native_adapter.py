@@ -399,10 +399,49 @@ def test_shared_bounded_policy_is_explicit_and_legacy_default_is_preserved(nativ
     assert adapter.grasp_yaw_offsets == FINE_GRASP_YAWS
     assert adapter.payload_binding == 'verified_lift'
     assert adapter.release_limits.max_drop_m == .04
+    assert adapter.arm_extension_margin_m == .0005
     assert context['_native_tamp_adapter'].policy == 'legacy'
     assert context['_native_tamp_adapter'].release_limits is None
+    assert context['_native_tamp_adapter']._executor('object1').joint_limit_margins == {}
     with pytest.raises(ValueError, match='invalid_native_tamp_policy'):
         NativeTableAdapter(None, policy='typo')
+    robot.arm_to.assert_not_called()
+
+
+def test_bounded_plan_reserves_arm_extension_without_changing_measured_state_or_limits(native):
+    robot, _, context, _ = native
+    model = context['_native_tamp_adapter'].model
+    adapter = NativeTableAdapter(robot, model=model, policy='bounded_release')
+    before_q, before_limits = adapter.data.qpos.copy(), model.jnt_range.copy()
+    result = adapter.plan(object_name='blue cube', receptacle_name='table')
+    assert result['status'] == 'ok', result
+    executor = adapter.plans[result['data']['plan_ref']].executor
+    for path in executor.grasp_paths + executor.place_paths:
+        for i in range(4):
+            name = f'joint_arm_l{i}'
+            lo, hi = model.jnt_range[model.joint(name).id]
+            column = executor.joint_names.index(name)
+            values = np.asarray(path)[:, column]
+            assert np.all(values >= lo + .0005 - 1e-9)
+            assert np.all(values <= hi - .0005 + 1e-9)
+    np.testing.assert_array_equal(adapter.data.qpos, before_q)
+    np.testing.assert_array_equal(model.jnt_range, before_limits)
+    robot.arm_to.assert_not_called()
+    robot.open_gripper.assert_not_called()
+
+
+def test_bounded_margin_does_not_clamp_or_admit_out_of_range_measured_start(native):
+    robot, _, context, _ = native
+    adapter = NativeTableAdapter(robot, model=context['_native_tamp_adapter'].model, policy='bounded_release')
+    executor = adapter._executor('object1')
+    joint = adapter.model.joint('joint_arm_l0')
+    adapter.data.qpos[joint.qposadr[0]] = float(joint.range[1]) + 8e-6
+    before = adapter.data.qpos.copy()
+    goal = before[executor.qadr].copy()
+    goal[executor.joint_names.index('joint_arm_l0')] = float(joint.range[1]) - .0005
+    path, error = executor.plan_joint_target(goal)
+    assert path is None and 'invalid_start:joint_bounds:joint_arm_l0' in error
+    np.testing.assert_array_equal(adapter.data.qpos, before)
     robot.arm_to.assert_not_called()
 
 

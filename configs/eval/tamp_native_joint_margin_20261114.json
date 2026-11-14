@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "status": "frozen_development_replay",
+  "scope": "Native measured joint-limit retreat failure; no agent, training, hardware or held-out claim",
+  "case_file": "configs/eval/tamp_native_qualification_20261113.json",
+  "case_file_sha256": "f493a411885581766a0a6eefaffc357d1c878592a21243603a8febdab72def4c",
+  "baseline_source": "935a0c7c47ecf9a63f8c4dcf33793c1f1819f8f5",
+  "native_policy": "bounded_release",
+  "candidate_arm_extension_margin_m_per_segment": 0.0005,
+  "candidate_cases": ["swap-right25", "control", "shift15"],
+  "baseline_cases": ["swap-right25"],
+  "preserve_case_instructions_regions_and_initial_poses": true,
+  "joint_model_limits_and_measured_start_tolerance_changed": false,
+  "collision_retention_release_and_final_goal_thresholds_changed": false,
+  "clamp_measured_state": false,
+  "maximum_concurrent_simulators": 2,
+  "cpu_lanes": [20, 21],
+  "avoid_controller_training_lanes": [14, 15],
+  "passed_requires": ["successful public execution receipt", "independent supported settled final goals", "nonempty audit with no forbidden commands"],
+  "failure_and_partial_receipts_remain_failures": true,
+  "original_cohorts_and_denominators_unchanged": true
+}
