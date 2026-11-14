@@ -152,6 +152,7 @@ def test_training_persists_paired_initial_state_and_first_rollout(tmp_path, monk
             epochs=1,
             batch_size=2,
             advantage_normalization=mode,
+            pair_reference_run=tmp_path / "per_head/run.json" if mode == "shared" else None,
             no_privileged_critic=False,
             basic_cases=None,
             wandb_mode="disabled",
@@ -161,6 +162,8 @@ def test_training_persists_paired_initial_state_and_first_rollout(tmp_path, monk
         training.train(args)
         record = json.loads((target / "run.json").read_text())
         assert record["ppo"]["advantage_normalization"] == mode
+        if mode == "shared":
+            assert record["initial_pair_verified_before_update"] is True
         initial = torch.load(target / "initial/training.pt", weights_only=True)
         assert {"policy", "optimizer", "torch_rng", "numpy_rng"} == set(initial)
         assert initial["optimizer"]["state"] == {}
@@ -181,6 +184,9 @@ def test_training_persists_paired_initial_state_and_first_rollout(tmp_path, monk
 
 
 def test_pair_verification_rejects_state_data_or_optimizer_changes_before_update():
+    from dataclasses import asdict
+
+    from emet.rl.manipulation.multi_critic_ppo import PPOConfig
     from emet.rl.manipulation.whole_body_training import verify_initial_pair
 
     keys = (
@@ -198,15 +204,23 @@ def test_pair_verification_rejects_state_data_or_optimizer_changes_before_update
         "first_rollout",
     )
     first = dict.fromkeys(keys, "same")
-    first["ppo"] = {"learning_rate": 0.0003, "advantage_normalization": "per_head"}
+    first["ppo"] = asdict(PPOConfig(advantage_normalization="per_head"))
+    # Exercise the actual disk/live boundary, including list-versus-tuple weights.
+    first = json.loads(json.dumps(first))
     second = copy.deepcopy(first)
-    second["ppo"]["advantage_normalization"] = "shared"
+    second["ppo"] = asdict(PPOConfig(advantage_normalization="shared"))
+    assert isinstance(first["ppo"]["advantage_weights"], list)
+    assert isinstance(second["ppo"]["advantage_weights"], tuple)
     verify_initial_pair(first, second)
     for key in keys:
         changed = copy.deepcopy(second)
         changed[key] = "different"
         with pytest.raises(ValueError, match="paired"):
             verify_initial_pair(first, changed)
-    second["ppo"]["learning_rate"] = 0.1
-    with pytest.raises(ValueError, match="PPO settings"):
-        verify_initial_pair(first, second)
+    for key, value in second["ppo"].items():
+        if key == "advantage_normalization":
+            continue
+        changed = copy.deepcopy(second)
+        changed["ppo"][key] = (1.0, 2.0, 1.0) if key == "advantage_weights" else value * 2
+        with pytest.raises(ValueError, match="PPO settings"):
+            verify_initial_pair(first, changed)

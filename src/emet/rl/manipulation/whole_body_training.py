@@ -306,7 +306,9 @@ def verify_initial_pair(reference, current):
         raise ValueError("paired initial state or first pre-update rollout differs")
     first = {k: v for k, v in reference["ppo"].items() if k != "advantage_normalization"}
     second = {k: v for k, v in current["ppo"].items() if k != "advantage_normalization"}
-    if first != second:
+    # The reference came from run.json; current still contains dataclass tuples.
+    # Compare in the same JSON domain without relaxing any setting comparison.
+    if json.loads(json.dumps(first, allow_nan=False)) != json.loads(json.dumps(second, allow_nan=False)):
         raise ValueError("paired PPO settings differ beyond normalization scheme")
 
 
