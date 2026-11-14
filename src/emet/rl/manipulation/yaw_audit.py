@@ -67,7 +67,7 @@ def feedback_terms(policy, observation):
         context = latent[:, : getattr(head, "context_width", latent.shape[1] - head.feedback_width)]
         signal = latent[:, -head.feedback_width :]
         gain = head.gain(context).reshape(-1, head.motion_size, head.feedback_width)
-        terms = (gain[0, 1] * signal[0] / math.sqrt(head.feedback_width)).cpu().numpy()
+        terms = (gain[0, 1] * signal[0] / math.sqrt(head.normalization_width)).cpu().numpy()
         action = head(latent)[0].cpu().numpy()
     np.testing.assert_allclose(action, policy(observation), atol=1e-7, rtol=1e-6)
     p, _ = preview_layout()
@@ -102,7 +102,7 @@ def feedback_terms(policy, observation):
             restoring_terms=(
                 gains
                 * np.array([float(signal[0, 2]), float(signal[0, 14]), -float(signal[0, -1])])
-                / math.sqrt(head.feedback_width)
+                / math.sqrt(head.normalization_width)
             ).tolist(),
         )
     return action, row

@@ -169,6 +169,13 @@ class CheckpointTampPolicy:
             "feedback_orientation_scale", 1.0
         ):
             raise ValueError("feedback angular scale mismatch")
+        if feedback and (
+            self.policy.model.policy.features_extractor.orientation_error
+            != manifest["environment"].get("feedback_orientation_error", "rotation6")
+            or self.policy.model.policy.features_extractor.reference_velocity
+            != manifest["environment"].get("feedback_reference_velocity", False)
+        ):
+            raise ValueError("feedback feature options mismatch")
         self.calls = 0
         control = env.control
         if control.stopped or env._physics_invalid:

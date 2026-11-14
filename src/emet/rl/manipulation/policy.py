@@ -181,6 +181,15 @@ class ManipulationPolicy:
                 raise ValueError("preview contract mismatch")
 
         self.model = PPO.load(directory / "policy.zip", device="cpu")
+        if m.get("environment", {}).get("feedback_policy", False):
+            from emet.rl.manipulation.feedback_policy import GoalFeedbackFeatures
+
+            features = self.model.policy.features_extractor
+            if not isinstance(features, GoalFeedbackFeatures) or (
+                features.orientation_error != m["environment"].get("feedback_orientation_error", "rotation6")
+                or features.reference_velocity != m["environment"].get("feedback_reference_velocity", False)
+            ):
+                raise ValueError("feedback feature options metadata mismatch")
         restoring = m.get("environment", {}).get("restoring_yaw_feedback", False)
         if restoring != getattr(self.model.policy, "restoring_yaw_feedback", False) or (
             restoring and self.model.policy.turn_xy_tolerance != m["environment"]["base_xy_tolerance"]

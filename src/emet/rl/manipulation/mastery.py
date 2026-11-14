@@ -1067,11 +1067,7 @@ def train(args, suite):
                 "restoring_yaw_feedback": cfg.restoring_yaw_feedback,
                 "turn_xy_tolerance": cfg.base_xy_tolerance,
                 "features_extractor_class": GoalFeedbackFeatures,
-                "features_extractor_kwargs": {
-                    "robot": cfg.robot,
-                    "retention_context": True,
-                    "orientation_scale": cfg.feedback_orientation_scale,
-                },
+                "features_extractor_kwargs": GoalFeedbackFeatures.kwargs_for(cfg),
                 "net_arch": {"pi": [128, 128], "vf": [128, 128]},
             },
         )
