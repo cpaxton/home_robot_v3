@@ -274,7 +274,7 @@ invoked, and no new task/physics inputs or thresholds are introduced.
 The mode requires an initialized source bundle, arm-only training stages,
 executor masks and frozen normalization. It defaults off. Weight decay is
 rejected because it would move gradient-masked base rows. The focused
-adaptation/executor/orchestration checks pass **22/22**, including actual PPO
+adaptation/executor/orchestration checks pass **27/27**, including actual PPO
 updates, bitwise preservation of base/grip means and context tensors, continued
 arm/critic learning, deterministic wheel requests, checkpoint transfer, and
 optimizer/export/load round-trips with both feature widths.
@@ -293,3 +293,20 @@ CUDA hidden, rendering disabled and one numerical thread, with an isolated
 runtime and coordinated reservations. Add `--arm-adaptation-only` to the
 expanded-runner command, with `--seeds 90 --steps 16384`. This section records
 the implementation and launch protocol; a completed training result is pending.
+
+Managed job `20261114_091806_52e91d` now runs this protocol from immutable
+implementation `7400cef1fd12fbd7079f2d00b86caa634a6c3c8c`. Its fresh full
+regression gate passed **1,178/1,178**, with zero skips, errors or failures;
+the focused gate passed **27/27**. The full receipt binds the tested source
+and XML. CPU15 was released after host-visible gate/pytest child exit.
+
+The supervisor is waiting for the existing C1 pair to complete and explicitly
+release CPU14. Its owner has confirmed that handoff; the supervisor then runs
+current-source teacher admission, both fixed training runs, all declared
+evaluations and a serialized protected-function check without another launch
+request. No new PPO transitions are recorded yet. No automatic retry,
+extension or promotion is enabled. A failed gate stops the job.
+
+Launch protocol, source copy, receipt, progress and eventual results remain in
+`logs/manipulation/mars-frozen-base-arm-v1/`; `supervisor.json` is the live phase
+and transition-count record. This launch status is not a behavioral result.
