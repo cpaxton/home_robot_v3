@@ -286,6 +286,30 @@ def policy_state_digest(policy):
     return arrays_digest({name: value.detach().cpu().numpy() for name, value in policy.state_dict().items()})
 
 
+def verify_initial_pair(reference, current):
+    """Reject an unpaired candidate before its first optimizer update."""
+    keys = (
+        "source_hashes",
+        "seed",
+        "suite_sha256",
+        "preflight_sha256",
+        "basic_cases_sha256",
+        "requested_decisions",
+        "initial_actor_weights_sha256",
+        "initial_policy_state_sha256",
+        "initial_optimizer_sha256",
+        "rollout_rng_sha256",
+        "initial_numpy_rng_sha256",
+        "first_rollout",
+    )
+    if any(key not in reference or key not in current or reference[key] != current[key] for key in keys):
+        raise ValueError("paired initial state or first pre-update rollout differs")
+    first = {k: v for k, v in reference["ppo"].items() if k != "advantage_normalization"}
+    second = {k: v for k, v in current["ppo"].items() if k != "advantage_normalization"}
+    if first != second:
+        raise ValueError("paired PPO settings differ beyond normalization scheme")
+
+
 def collect_rollout(env, model, observation, steps, *, episode_callback=None):
     """Bootstrap timeouts; never propagate GAE across resets/primitive boundaries."""
     collected = {
@@ -501,6 +525,12 @@ def train(args):
                     "raw_gae_sha256": arrays_digest({"raw_gae": raw_advantage}),
                 }
                 write_json(output / "run.json", metadata)
+                if getattr(args, "pair_reference_run", None):
+                    reference_path = Path(args.pair_reference_run)
+                    verify_initial_pair(json.loads(reference_path.read_text()), metadata)
+                    metadata["paired_reference_run_sha256"] = digest(reference_path)
+                    metadata["initial_pair_verified_before_update"] = True
+                    write_json(output / "run.json", metadata)
             stats = learner.update(rollout)
             decisions += len(rollout["ticks"])
             ticks += int(rollout["ticks"].sum())
@@ -593,6 +623,9 @@ def main():
     parser.add_argument("--no-privileged-critic", action="store_true")
     parser.add_argument("--advantage-normalization", choices=("shared", "per_head"), default="shared")
     parser.add_argument("--basic-cases", type=Path, help="explicit small general-only diagnostic case manifest")
+    parser.add_argument(
+        "--pair-reference-run", type=Path, help="verify initial state/rollout against control run before PPO"
+    )
     parser.add_argument("--wandb-mode", choices=("offline", "disabled"), default="offline")
     args = parser.parse_args()
     if args.command == "preflight":

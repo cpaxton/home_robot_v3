@@ -178,3 +178,35 @@ def test_training_persists_paired_initial_state_and_first_rollout(tmp_path, monk
         "first_rollout",
     ):
         assert records[0][key] == records[1][key]
+
+
+def test_pair_verification_rejects_state_data_or_optimizer_changes_before_update():
+    from emet.rl.manipulation.whole_body_training import verify_initial_pair
+
+    keys = (
+        "source_hashes",
+        "seed",
+        "suite_sha256",
+        "preflight_sha256",
+        "basic_cases_sha256",
+        "requested_decisions",
+        "initial_actor_weights_sha256",
+        "initial_policy_state_sha256",
+        "initial_optimizer_sha256",
+        "rollout_rng_sha256",
+        "initial_numpy_rng_sha256",
+        "first_rollout",
+    )
+    first = dict.fromkeys(keys, "same")
+    first["ppo"] = {"learning_rate": 0.0003, "advantage_normalization": "per_head"}
+    second = copy.deepcopy(first)
+    second["ppo"]["advantage_normalization"] = "shared"
+    verify_initial_pair(first, second)
+    for key in keys:
+        changed = copy.deepcopy(second)
+        changed[key] = "different"
+        with pytest.raises(ValueError, match="paired"):
+            verify_initial_pair(first, changed)
+    second["ppo"]["learning_rate"] = 0.1
+    with pytest.raises(ValueError, match="PPO settings"):
+        verify_initial_pair(first, second)
