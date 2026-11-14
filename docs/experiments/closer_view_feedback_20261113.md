@@ -38,7 +38,7 @@ that proposes the wrong object. The existing opt-in providers remain separate.
 
 ## Contract validation
 
-244 tests pass across CHAT/HTTP history, tool dispatch/rendering, controller
+246 tests pass across CHAT/HTTP history, tool dispatch/rendering, controller
 grounding, visual consumers, EQA room/navigation, relative motion and CPU MuJoCo
 geometry. The HTTP test uses controlled transport and robot observations: it
 checks that a partial move's resulting image, original image and measured
@@ -143,3 +143,32 @@ provider and budgets, retained separately as `closer-view-molmo-20261113-r3`.
 Its purpose is to check this missing feedback path. It is not a new paired
 comparison and cannot establish superiority over main. Broader EQA and complete
 pick/place acceptance remain outstanding.
+
+### Candidate-only feedback check
+
+The `b9f0c726` diagnostic completes normally: bowl pass, microwave fail, query
+69.26 s and reported episode 118.36 s. The bowl uses admitted object geometry.
+The saved actual-context audit shows a `no_target` investigation still reporting
+`nav_progress=false` / `nav_finished=false` while its new capture and positive
+geometry feedback reach the next model context. All six saved coordinator
+requests omit the contradictory legacy stop/limited-choice instructions.
+This restores the recent main phase score; it does not establish superiority.
+
+The microwave phase first requests targeted floor sensing without a rejected
+footprint, then a turn rejected for unknown floor. Subsequent sensing succeeds,
+but its 0.5 m forward request is rejected for low clearance. A later turn loses
+the target view; the final model still recalls that the microwave is above the
+stove, but there is no admitted destination geometry. No useful target-specific
+closer view was acquired in this attempt. Do not describe this as another
+measured out-of-range mask failure: the remaining motion/context sequence is
+different. The safety rejections and absent geometry are retained.
+
+Stopping audit also found that the legacy evidence state could automatically
+end model-final episodes immediately after a positive auxiliary assessment.
+Disable that automatic submission in model-final mode: the coordinator receives
+the feedback and chooses whether to continue or submit. A real-loop regression
+checks both continued sensing and explicit submission, while legacy retains its
+automatic stop. Normal budget finalization still invokes the final answer model.
+Run the frozen head once more as candidate-only `closer-view-molmo-20261113-r4`
+to verify that this completion handoff reaches the actual model. These diagnostics
+are development evidence; a broader matched EQA/find pilot remains a merge gate.

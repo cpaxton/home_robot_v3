@@ -60,7 +60,7 @@
       Offline diagnostic: 24/24 attempts complete; no task-quality gain claimed.
       Coordinator-visible recovery now preserves task gaze, source-bound image
       proposal bearings, nested geometry feedback and camera observations across
-      CHAT tool rounds; 244 contract/CPU geometry checks pass. The central model
+      CHAT tool rounds; 246 contract/CPU geometry checks pass. The central model
       chooses the next sensing/movement action; no automatic approach or depth
       relaxation. First frozen pair is mixed: main bowl pass/microwave fail,
       candidate bowl fail/microwave pass (appropriate mask at 0.969 m). Both are
@@ -71,6 +71,11 @@
       omitted capture/assessment despite a visible bowl; now return fresh
       current-view feedback alongside the unchanged route failure. Verify this
       path in the candidate-only diagnostic before a broader matched pilot.
+      Candidate-only check restores bowl admission (1/2 phases); microwave
+      approach is still blocked by unknown floor/clearance and view loss.
+      Remove the remaining auxiliary-assessment automatic stop in model-final
+      mode and verify the explicit coordinator completion handoff. Keep the
+      broader matched EQA/find gate pending; no system superiority is established.
       Plan: `docs/experiments/closer_view_feedback_20261113.md`.
 - [ ] Emit actual per-episode simulation duration, model inference cost and
       invocation overhead in paper-run manifests. Clock probes and reported

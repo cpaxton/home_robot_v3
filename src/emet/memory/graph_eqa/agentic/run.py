@@ -164,7 +164,12 @@ def run(self) -> AgenticEQAResult:
     for r in range(self.max_rounds):
         self._round = r
         # Only VLM-assessed ANSWER may auto-submit.
-        if self.mode == "answer" and self._evidence_policy.state == AgenticState.ANSWER and r > 0:
+        if (
+            self.decision_policy != "model_final"
+            and self.mode == "answer"
+            and self._evidence_policy.state == AgenticState.ANSWER
+            and r > 0
+        ):
             # Corroborated (verified) ANSWER may submit early. An unverified
             # ANSWER with budget remaining must keep gathering evidence — early
             # unverified submits were the 2026-08 forced-letter wrongs; the
@@ -390,7 +395,11 @@ def run(self) -> AgenticEQAResult:
             # double-verify here — that burned rounds on SKIPPED_SAME_VIEW.
         if final is not None:
             break
-        if self.mode == "answer" and self._evidence_policy.state == AgenticState.ANSWER:
+        if (
+            self.decision_policy != "model_final"
+            and self.mode == "answer"
+            and self._evidence_policy.state == AgenticState.ANSWER
+        ):
             if self._auto_submit_allowed(round_idx=self._round):
                 out = self._do_submit_answer()
                 if self._maybe_follow_eqa_explore_action(out):

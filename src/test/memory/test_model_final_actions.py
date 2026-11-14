@@ -9,6 +9,49 @@ import pytest
 from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
 
 
+@pytest.mark.parametrize("policy", ["legacy", "model_final"])
+def test_positive_assessment_does_not_stop_model_final_coordinator(policy):
+    from unittest.mock import Mock
+
+    from emet.memory.graph_eqa.agentic.policy import AgenticState
+
+    agent = SimpleNamespace(parameters={"eqa": {"agentic_decision_policy": policy}}, graph_memory=None, robot=None)
+    ex = AgenticEQAExecutor(agent, "Where is the bowl?", router=False, max_rounds=4)
+    ex._voxel_eqa_client = SimpleNamespace()
+    ex._extract_vlm_target = lambda: None
+    ex._frontier_pick_out_dir = lambda: None
+    ex._frontier_count = lambda: 0
+    ex._hold_detections_before_explore = lambda: False
+    ex._unused_detection_hypothesis = lambda: None
+    ex._close_map_stay_hypothesis = lambda: None
+    ex._append_trace = lambda row: None
+    routes = iter([[("look_around", {})], [("look_around", {})], [("submit_answer", {"answer": "model answer"})]])
+    ex._route_tool_calls = lambda: (next(routes), "vlm", {})
+    final = {"ok": True, "answer": "model answer", "confidence": True}
+    ex._do_submit_answer = Mock(return_value=final)
+    dispatched = []
+
+    def dispatch(name, args):
+        if name == "inspect_graph":
+            return {"ok": True}
+        dispatched.append(name)
+        if name == "submit_answer":
+            return final
+        ex._verified = True
+        ex._evidence_policy.state = AgenticState.ANSWER
+        return {"ok": True}
+
+    ex.handle_tool = dispatch
+    result = ex.run()
+    assert result.answer == "model answer"
+    if policy == "model_final":
+        assert dispatched == ["look_around", "look_around", "submit_answer"]
+        ex._do_submit_answer.assert_not_called()  # No automatic submission outside selected dispatch.
+    else:
+        assert dispatched == ["look_around"]
+        ex._do_submit_answer.assert_called_once()
+
+
 @pytest.mark.parametrize("capture_state", ["fresh", "unchanged", "capture_error", "assessment_error"])
 def test_failed_investigation_reports_current_evidence_without_claiming_arrival(capture_state):
     from unittest.mock import Mock
