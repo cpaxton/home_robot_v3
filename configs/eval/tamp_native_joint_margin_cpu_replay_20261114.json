@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "status": "frozen_focused_development_pair",
+  "parent_protocol": "configs/eval/tamp_native_joint_margin_20261114.json",
+  "reason": "Old-source E-core baseline hit the existing planning deadline before execution; retain that failure and separately test both sources on the standard fast CPU set.",
+  "case_file": "configs/eval/tamp_native_qualification_20261113.json",
+  "case_file_sha256": "f493a411885581766a0a6eefaffc357d1c878592a21243603a8febdab72def4c",
+  "case_id": "swap-right25",
+  "sources": ["baseline_935a0c7c", "candidate_interior_margin"],
+  "cpu_set": [0, 1, 2, 3, 4, 5, 6, 7],
+  "serialized_after_service_cohort": true,
+  "planning_seconds": 120.0,
+  "motion_collision_retention_release_thresholds_changed": false,
+  "original_task_instruction_regions_and_poses_changed": false,
+  "old_attempts_and_failed_outcomes_preserved": true,
+  "no_combined_score_across_compute_cohorts": true,
+  "exact_paired_initial_state_certificate": false,
+  "whole_agent_or_held_out_claim": false,
+  "controller_training_lanes_used": false
+}
