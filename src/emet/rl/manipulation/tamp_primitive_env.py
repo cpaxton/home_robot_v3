@@ -25,7 +25,8 @@ class _Closed(BaseException):
     pass
 
 
-def _worker(connection, case, oracle, arm_reference, initial_settle_s):
+def _worker(connection, case, oracle, arm_reference, initial_settle_s, wheel_feedback_current_velocity):
+    import hashlib
     import json
 
     from emet.agent.tools import get_tools
@@ -38,9 +39,12 @@ def _worker(connection, case, oracle, arm_reference, initial_settle_s):
 
     env = robot = None
     try:
-        env, admission = fixture(case)
+        env, admission = fixture(case, wheel_feedback_current_velocity=wheel_feedback_current_velocity)
         if not admission["accepted"]:
             raise ValueError("fixture_admission:" + str(admission.get("reason")))
+        initial_state_sha256 = hashlib.sha256(
+            np.r_[env.data.qpos.copy(), env.data.qvel.copy(), float(env.data.time)].tobytes()
+        ).hexdigest()
         env.control.retention_context_enabled = True
         env.control.history = None
         env.control.base_velocity_feedback_gain = 0.5
@@ -73,6 +77,7 @@ def _worker(connection, case, oracle, arm_reference, initial_settle_s):
                     self.meter = RewardMeter(env)
                 info = {
                     "case_id": case["id"],
+                    "model_fingerprint": env.fingerprint,
                     "reward_terms": self.meter.last_terms.copy(),
                     "elapsed_control_ticks": max(1, self.ticks),
                     "reward_group_ticks": np.asarray(self.tick_rewards, dtype=np.float32).reshape(-1, 3),
@@ -208,6 +213,9 @@ def _worker(connection, case, oracle, arm_reference, initial_settle_s):
             "retention_lost": bool(getattr(env, "retention_lost", False)),
             "executor_result": executor_result,
             "initial_settle_s": initial_settle_s,
+            "wheel_feedback_current_velocity": env.control.base_velocity_feedback_current,
+            "initial_state_sha256": initial_state_sha256,
+            "model_fingerprint": env.fingerprint,
             "object_translation_m": (env.data.xpos[env.payload].copy() - object_initial).tolist(),
             "object_rotation_rad": float(
                 np.arccos(
@@ -235,11 +243,23 @@ def _worker(connection, case, oracle, arm_reference, initial_settle_s):
 
 
 class TampPrimitiveEnv(gym.Env):
-    def __init__(self, cases, *, oracle=False, arm_reference="s_curve", timeout=90.0, initial_settle_s=0.0):
+    def __init__(
+        self,
+        cases,
+        *,
+        oracle=False,
+        arm_reference="s_curve",
+        timeout=90.0,
+        initial_settle_s=0.0,
+        wheel_feedback_current_velocity=False,
+    ):
         if not cases or arm_reference not in {"s_curve", "jerk_limited"} or not np.isfinite(timeout) or timeout <= 0:
             raise ValueError("nonempty cases and a bounded simulator training configuration required")
         if not np.isfinite(initial_settle_s) or not 0 <= initial_settle_s <= 2.0:
             raise ValueError("development settling must be bounded in [0,2] seconds")
+        if type(wheel_feedback_current_velocity) is not bool:
+            raise ValueError("current wheel feedback velocity must be boolean")
+        self.wheel_feedback_current_velocity = wheel_feedback_current_velocity
         self.cases, self.oracle, self.arm_reference, self.timeout = list(cases), bool(oracle), arm_reference, timeout
         self.initial_settle_s = float(initial_settle_s)
         self.observation_space = spaces.Dict(
@@ -280,7 +300,16 @@ class TampPrimitiveEnv(gym.Env):
         context = mp.get_context("spawn")
         self.connection, child = context.Pipe()
         self.process = context.Process(
-            target=_worker, args=(child, case, self.oracle, self.arm_reference, self.initial_settle_s), daemon=True
+            target=_worker,
+            args=(
+                child,
+                case,
+                self.oracle,
+                self.arm_reference,
+                self.initial_settle_s,
+                self.wheel_feedback_current_velocity,
+            ),
+            daemon=True,
         )
         self.process.start()
         child.close()

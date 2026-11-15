@@ -848,6 +848,8 @@ def evaluate_suite(suite, *, stages=STAGES, policy=None, teacher_report=None, po
                 final_info=info,
             )
             print("MASTERY", case["id"], row["code"], "pass" if row["mastered"] else "fail", flush=True)
+            if observer is not None and hasattr(observer, "case_complete"):
+                observer.case_complete(report, row)
     finally:
         env.close()
     if report["source_hashes"] != source_hashes():
