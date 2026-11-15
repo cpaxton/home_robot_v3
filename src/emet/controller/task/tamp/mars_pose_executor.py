@@ -46,7 +46,27 @@ def pose_error(current, target):
     return float(np.linalg.norm(a[:3] - b[:3])), float(np.arccos(np.clip((np.trace(rb.T @ ra) - 1) / 2, -1, 1)))
 
 
-def execute_pose_path(robot, executor, phase, path, *, goal_pose=None):
+def arrival_tolerances(executor, requested=None):
+    """Endpoint acceptance is independent of path admission and retiming.
+
+    An explicit task-region experiment may accept a nearby pregrasp endpoint;
+    it cannot expand the independent tracking tube or change the IK witness.
+    """
+    values = np.asarray(
+        (executor.position_tolerance_m, executor.orientation_tolerance_rad) if requested is None else requested
+    )
+    if (
+        values.shape != (2,)
+        or values.dtype.kind not in "fiu"
+        or not np.isfinite(values).all()
+        or np.any(values <= 0)
+        or np.any(values > [TRACKING_POSITION_LIMIT_M, TRACKING_ORIENTATION_LIMIT_RAD])
+    ):
+        raise ValueError("arrival tolerances must be positive finite values within the tracking tube")
+    return tuple(float(v) for v in values)
+
+
+def execute_pose_path(robot, executor, phase, path, *, goal_pose=None, arrival_tolerance=None):
     from emet.controller.task.tamp.mars_sim_robot import MarsSimRobot
 
     if not isinstance(robot, MarsSimRobot) or robot.policy is None or robot.arm_execution != "cartesian":
@@ -69,6 +89,12 @@ def execute_pose_path(robot, executor, phase, path, *, goal_pose=None):
         )
     except ValueError:
         return fail("invalid_cartesian_tolerance")
+    try:
+        if arrival_tolerance is not None and phase != "pregrasp":
+            raise ValueError("experimental task arrival region is pregrasp-only")
+        arrival_position, arrival_orientation = arrival_tolerances(executor, arrival_tolerance)
+    except ValueError:
+        return fail("invalid_cartesian_arrival_tolerance")
     witness = np.asarray(path, dtype=float)
     if (
         witness.ndim != 2
@@ -246,6 +272,8 @@ def execute_pose_path(robot, executor, phase, path, *, goal_pose=None):
         joint_witness=witness.tolist(),
         position_tolerance_m=executor.position_tolerance_m,
         orientation_tolerance_rad=executor.orientation_tolerance_rad,
+        arrival_position_tolerance_m=arrival_position,
+        arrival_orientation_tolerance_rad=arrival_orientation,
         configuration_check_period_s=MARS.dt,
         reference_clock="filtered_lag_scaling" if continuous else "continuous_lag_scaling",
         arm_reference=robot.arm_reference,
@@ -297,7 +325,7 @@ def execute_pose_path(robot, executor, phase, path, *, goal_pose=None):
         if reason:
             return fail(reason, check="measured_configuration")
         distance, angle = pose_error(robot.servo.ee_pose(), hand[-1])
-        within = distance <= executor.position_tolerance_m and angle <= executor.orientation_tolerance_rad
+        within = distance <= arrival_position and angle <= arrival_orientation
         if progress >= schedule.end and within:
             if not robot.servo.holding:
                 robot.servo.hold_position()

@@ -134,12 +134,21 @@ def test_cartesian_stage_reconnects_only_a_valid_world_pose_witness(pose_executo
     assert any(e.get("reference_replan") == expected for e in adapter.events)
 
 
-def test_measured_collision_after_inference_stops_even_if_pose_is_close(pose_executor, monkeypatch):
+@pytest.mark.parametrize("arrival", [None, (0.004, 0.04)])
+def test_measured_collision_after_inference_stops_even_if_pose_is_close(pose_executor, monkeypatch, arrival):
     _, robot, executor, _ = pose_executor
     monkeypatch.setattr(executor.collision, "configuration_collides", lambda *args: robot.policy_calls > 0)
-    result = execute_pose_path(robot, executor, "pregrasp", [robot.servo.positions()])
+    result = execute_pose_path(robot, executor, "pregrasp", [robot.servo.positions()], arrival_tolerance=arrival)
     assert not result.success and result.message == "arm_configuration_collision"
     assert robot.policy_calls == 1 and robot.servo.stopped and robot.stop_confirmed
+
+
+@pytest.mark.parametrize("phase,arrival", [("grasp", (0.004, 0.04)), ("pregrasp", (0.02, 0.04))])
+def test_invalid_arrival_region_stops_before_policy(pose_executor, phase, arrival):
+    _, robot, executor, _ = pose_executor
+    result = execute_pose_path(robot, executor, phase, [robot.servo.positions()], arrival_tolerance=arrival)
+    assert not result.success and result.message == "invalid_cartesian_arrival_tolerance"
+    assert robot.policy_calls == 0 and robot.servo.stopped and robot.stop_confirmed
 
 
 def test_cartesian_execution_keeps_full_base_drift_guard(pose_executor, monkeypatch):
