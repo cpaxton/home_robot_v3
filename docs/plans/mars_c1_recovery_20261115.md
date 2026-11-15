@@ -1,5 +1,11 @@
 # Recover the interrupted C1 comparison
 
+**Completed:** [fixed-final results and limits](../experiments/mars_c1_normalization_recovery_20261115.md).
+Shared normalization improves hand endpoints but preserves only the same two
+full successes as its initial actor. Fresh checks pass 1,249/1,249; the arm
+follow-through has received the CPU lane. The protocol below is the executed
+plan, not another requested launch or an automatic budget extension.
+
 Continue only the shared-normalization half of the frozen comparison. The
 completed historical control remains 4,096 decisions; the previous candidate
 collected 256 ticks but made no optimizer update. Preserve both attempts and

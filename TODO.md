@@ -423,9 +423,15 @@ Accepted plan: [Mars controller integration](docs/plans/mars_controller_integrat
 - [x] Repair and test the serialized/in-memory settings comparison (`29a9fcec`),
       including an actual candidate call against the saved control record.
       Preserve the incomplete attempt; no completed paired result yet.
-- [ ] Complete the declared normalization comparison after current-source
-      checks and an explicit recovery record; preserve exact initial state and
-      first-rollout matching, no extra variant/seed or silent source-hash bypass.
+- [x] Complete the declared normalization comparison with an explicit source
+      bridge and unchanged initial/first-rollout hashes. Fresh regressions
+      1,249/1,249; shared final 2/12 full versus per-head 0/12 and initial 2/12.
+      Completed arm endpoints within 3mm/0.02rad improve 1/10 to 5/10, but
+      quiet/base/jerk remain unresolved. Preserve all failures and the
+      [completed report](docs/experiments/mars_c1_normalization_recovery_20261115.md).
+- [ ] Improve actor-active terminal settling and base authority while retaining
+      the C1 hand-following gains. Distinguish endpoint accuracy from the full
+      quiet/force/jerk contract; do not silently extend the completed C1 budget.
 - [x] Correct bundled TAMP reward timing: discount each physical tick, including
       terminal credit, before `gamma ** ticks` continuation; preserve raw rewards
       for evaluation and test bundled-versus-expanded return equivalence.

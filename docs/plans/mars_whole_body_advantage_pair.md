@@ -1,5 +1,10 @@
 # Controlled C1 advantage-normalization comparison
 
+The [explicitly recovered comparison is now complete](../experiments/mars_c1_normalization_recovery_20261115.md).
+The original failed attempt below remains unchanged. Shared final full mastery
+is 2/12 versus per-head 0/12 and identical initial 2/12; hand endpoints improve,
+but quiet/base/jerk contracts remain unresolved. No checkpoint is promoted.
+
 The cold 8k pilot does not establish useful tracking. Before widening the
 distribution or budget, compare two normalization schemes on basic tracking
 and hold. This is a diagnostic experiment, with independent implementation,
