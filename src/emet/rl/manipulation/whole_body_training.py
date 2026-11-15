@@ -68,7 +68,13 @@ def load_development(path=DEFAULT_SUITE):
 
 
 def primitive_rollout(
-    cases, *, policy=None, arm_reference="s_curve", initial_settle_s=0.0, wheel_feedback_current_velocity=False
+    cases,
+    *,
+    policy=None,
+    arm_reference="s_curve",
+    initial_settle_s=0.0,
+    wheel_feedback_current_velocity=False,
+    trace_dir=None,
 ):
     from emet.rl.manipulation.tamp_primitive_env import TampPrimitiveEnv
 
@@ -78,6 +84,7 @@ def primitive_rollout(
         arm_reference=arm_reference,
         initial_settle_s=initial_settle_s,
         wheel_feedback_current_velocity=wheel_feedback_current_velocity,
+        trace_dir=trace_dir,
     )
     rows = []
     try:
