@@ -58,6 +58,73 @@ Strike through or move to a PR when done.
 
 Accepted plan: [Mars controller integration](docs/plans/mars_controller_integration.md).
 
+### Current WBC follow-through (2026-11-15)
+
+Use the [complete setup/status](docs/rl/status_20261114.md) and
+[WBC philosophy](docs/rl/whole_body_control.md) alongside the ordered work below.
+Historical entries further down retain their original populations and outcomes;
+they are not evidence that the remaining stages have passed. Research-code
+merges, measured policy improvement and hardware readiness are separate decisions.
+
+- [x] Merge the core WBC implementation/evidence: PRs #224, #227, #232 and #233;
+      close superseded #214 without restoring its older code. Preserve the
+      stronger source and negative results. Repair serialized paired settings,
+      physical-tick reward discounting and duplicate-trial confidence reporting.
+- [ ] **Finish the corrected learning baseline.** Complete the
+      [C1 normalization comparison](docs/plans/mars_whole_body_advantage_pair.md):
+      retain the completed 4,096-decision control and its hashes; recover only
+      the declared 4,096-decision candidate after fresh source-bound gates and
+      a reviewed, explicit old/new source bridge. Verify initial state and the
+      full first unoptimized numeric rollout before updating. Report all twelve
+      fixed-final cases, actor-gradient/advantage diagnostics and every failure.
+      Completion means a recorded paired outcome, even if the candidate fails;
+      learning or task success must be measured separately.
+- [ ] **Complete the frozen-base/context coordination test.** The original
+      32,768-transition job expired in the queue with zero PPO steps. Preserve
+      that attempt. Record a new bounded baseline/velocity pair, seed90,
+      16,384 transitions each, from the same retained source with frozen actor
+      context, base/grip function and normalization. Train only arm gains/noise
+      and critic; retain deterministic learned base means. Obtain an actual
+      CPU14 handoff after C1, matching-source admission and the full 122-case
+      initial/fixed-final readout. Verify protected functions after reload.
+      Record pass counts, tracking errors and separate base/arm jerk failures;
+      add no automatic retries, extra seeds or checkpoint selection.
+      [Bounded follow-through protocol](docs/plans/mars_frozen_base_arm_followthrough.md).
+- [ ] **Advance real contact skills in stages.** Follow the
+      [safety/task curriculum](docs/plans/2026-11-13_whole_body_safety_curriculum.md)
+      from actual pregrasp to closure/lift, loaded transport/braking, and
+      placement/release. Freeze each stage's cases, observations, teacher
+      admission and budgets before training. Retain independent retention,
+      force, wheel-support and measured-stop checks. Supported open-jaw
+      tracking and pregrasp do not qualify loaded manipulation. Evaluate
+      complete public-tool programs and fresh audit cases before broader claims.
+- [ ] **Evaluate a bounded differentiable world-model backend.** Use
+      SuperMimic as a method reference, not a claimed Mars result. First capture
+      per-tick physical, actuator/servo and executor state, executed actions,
+      reference progress and termination semantics. Split complete trajectories
+      and case families into training/holdouts; do not leak adjacent windows.
+      Measure multi-step errors by horizon and by contact, slip, wheel unloading
+      and retention event. Keep privileged model state outside actor inputs.
+      Validate trained actors in unchanged native physics, and compare total
+      collection, fitting, policy-update and evaluation wall time with corrected
+      PPO. Predicted success is not qualification; published flat-ground motion
+      tracking speedups are not Mars manipulation speedups.
+- [ ] **Establish robustness and transfer.** Identify actuator/sensor timing
+      and dynamics, then test declared noise, delay, payload/friction variation,
+      disturbances and held-out tasks. Require complete native/alternative-host
+      parity before scaling; Caliban's frozen-fixture gate remains open.
+      State-of-the-art claims require matched strong baselines and measured
+      capability/compute comparisons. Hardware needs verified feedback, limits,
+      watchdog and stop behavior plus separately authorized testing.
+
+Olympia rules remain one CPU14 training/preflight worker and at most one CPU15
+test worker, one numerical thread each, CUDA hidden and ordinary rendering off.
+Use explicit host-visible handoffs and immutable, managed run records. Do not
+leave an expired queue described as running or count software-only PPO checks
+as an experimental training result.
+
+### Historical WBC evidence and remaining integration work
+
 - [ ] Complete the bounded [hand-accuracy pilot](docs/plans/mars_hand_accuracy.md):
       teacher baseline 66/66, latest base-trained actor 0/8 arm cases with near-zero
       arm requests. Use stage-balanced arm/base resets, smaller reachable arm
