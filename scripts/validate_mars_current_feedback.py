@@ -189,10 +189,24 @@ class PrimitiveBundle:
     """Adapt the existing sensor-only bundle to the tensor rollout interface."""
 
     def __init__(self, bundle):
+        from emet.rl.manipulation.models import build_manipulation_model
+        from emet.rl.manipulation.tamp_policy import robot_identity
+
         self.bundle = bundle
-        self.fingerprint = bundle.manifest["fingerprint"]
         if bundle.robot != "innate_mars" or bundle.action_mode != "direct_velocity":
             raise ValueError("direct Mars bundle required")
+        config = bundle.manifest["environment"]
+        model, fingerprint = build_manipulation_model(
+            bundle.robot,
+            **{
+                key: config[key]
+                for key in ("diagnostics", "payload_asset_set", "contact_cone", "contact_impratio", "two_supports")
+            },
+        )
+        if fingerprint != bundle.manifest["fingerprint"]:
+            raise ValueError("bundle training model fingerprint changed")
+        self.training_fingerprint = fingerprint
+        self.compiled_robot_identity = robot_identity(model)
 
     def __call__(self, observation):
         keys = (

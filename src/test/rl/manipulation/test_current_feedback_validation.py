@@ -60,10 +60,21 @@ def test_loop_manifest_has_exact_declared_conditions_and_preserves_sources(runne
 
 
 @pytest.mark.parametrize("kind", ["emet-manipulation-v1", "emet-whole-body-v2"])
-def test_primitive_bundle_adapts_only_sensor_fields(runner, kind):
+def test_primitive_bundle_adapts_only_sensor_fields(runner, kind, monkeypatch):
+    from emet.rl.manipulation import models, tamp_policy
+
+    monkeypatch.setattr(models, "build_manipulation_model", lambda *a, **kw: (object(), "test-model"))
+    monkeypatch.setattr(tamp_policy, "robot_identity", lambda model: "test-robot")
+
     class Bundle:
         robot, action_mode = "innate_mars", "direct_velocity"
-        manifest = {"format": kind, "fingerprint": "test-model"}
+        manifest = {
+            "format": kind,
+            "fingerprint": "test-model",
+            "environment": dict.fromkeys(
+                ("diagnostics", "payload_asset_set", "contact_cone", "contact_impratio", "two_supports")
+            ),
+        }
         normalization = {"history": None, "preview": None}
 
         def __call__(self, observation):
@@ -81,6 +92,57 @@ def test_primitive_bundle_adapts_only_sensor_fields(runner, kind):
     assert set(bundle.seen) == ({"history", "preview", "motion"} if kind.endswith("v2") else {"history", "preview"})
     assert action.shape == (1, 8)
     np.testing.assert_array_equal(action[0].numpy(), np.arange(8) / 8)
+
+
+@pytest.mark.sim
+def test_primitive_bundle_accepts_extra_support_with_identical_compiled_robot(runner):
+    from types import SimpleNamespace
+
+    from emet.rl.manipulation.models import build_manipulation_model
+    from emet.rl.manipulation.tamp_policy import robot_identity
+
+    config = {
+        "diagnostics": False,
+        "payload_asset_set": "training",
+        "contact_cone": "elliptic",
+        "contact_impratio": 3,
+        "two_supports": False,
+    }
+    _, fingerprint = build_manipulation_model("innate_mars", **config)
+    target, target_fingerprint = build_manipulation_model("innate_mars", **{**config, "two_supports": True})
+    bundle = SimpleNamespace(
+        robot="innate_mars", action_mode="direct_velocity", manifest={"environment": config, "fingerprint": fingerprint}
+    )
+    adapter = runner["PrimitiveBundle"](bundle)
+    assert fingerprint != target_fingerprint
+    assert adapter.training_fingerprint == fingerprint
+    assert adapter.compiled_robot_identity == robot_identity(target)
+
+
+def test_primitive_rejects_changed_robot_before_bundle_inference(monkeypatch):
+    from types import SimpleNamespace
+
+    from emet.rl.manipulation import tamp_primitive_env
+    from emet.rl.manipulation.whole_body_training import primitive_rollout
+
+    class Env:
+        def __init__(self, *a, **kw):
+            pass
+
+        def reset(self, **kwargs):
+            return {}, {"model_fingerprint": "other-scene", "compiled_robot_identity": "changed-robot"}
+
+        def close(self):
+            pass
+
+        def step(self, action):
+            raise AssertionError("incompatible model reached execution")
+
+    monkeypatch.setattr(tamp_primitive_env, "TampPrimitiveEnv", Env)
+    policy = SimpleNamespace(compiled_robot_identity="expected-robot")
+    (row,) = primitive_rollout([{"id": "test"}], policy=policy)
+    assert row["execution_error"] and row["decisions"] == 0
+    assert "compiled robot/physics mismatch before inference" in row["code"]
 
 
 def test_archived_budget_score_does_not_inherit_fresh_budget_success(runner, monkeypatch):

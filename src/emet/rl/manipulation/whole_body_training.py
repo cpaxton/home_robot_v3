@@ -88,6 +88,9 @@ def primitive_rollout(
                 expected_model = getattr(policy, "fingerprint", None)
                 if expected_model is not None and expected_model != info.get("model_fingerprint"):
                     raise ValueError("TAMP primitive policy/model mismatch before inference")
+                expected_robot = getattr(policy, "compiled_robot_identity", None)
+                if expected_robot is not None and expected_robot != info.get("compiled_robot_identity"):
+                    raise ValueError("TAMP primitive compiled robot/physics mismatch before inference")
                 for _ in range(2000):
                     count += 1
                     if policy is None:
@@ -122,6 +125,7 @@ def primitive_rollout(
                         "wheel_feedback_current_velocity": info["wheel_feedback_current_velocity"],
                         "initial_state_sha256": info["initial_state_sha256"],
                         "model_fingerprint": info["model_fingerprint"],
+                        "compiled_robot_identity": info["compiled_robot_identity"],
                         "initialization_failed": info["initialization_failed"],
                         "safety_flags": {
                             k: info[k] for k in ("wheel_lift", "invalid_physics", "unsafe_contact", "retention_lost")

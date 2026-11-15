@@ -49,7 +49,10 @@ feedback through the actual initialization path for every evaluated environment.
 Keep every actor-weight checksum and its original bundle environment metadata.
 Report the explicit environment-option override without retagging/exporting a
 bundle. Use the real public-tool primitive environment; closure/pick/place
-remain out of scope. Model fingerprints must match before bundle inference.
+remain out of scope. Reconstruct and verify the bundle's original full-scene
+fingerprint, then use the existing conservative compiled-robot identity for
+TAMP scene transfer before inference. An extra fixed support may differ; robot
+geometry, dynamics, actuators, couplings and solver settings must match.
 Teacher/legacy TAMP reset hashes must match wherever both initialize.
 
 The teacher's current-source report is fresh experimental admission, preserving
@@ -68,3 +71,11 @@ whether to run the separately declared direction-coverage curriculum pair.
 The strongest frozen actor must be selected from these results; no assumption
 that the GRU wins, no automatic PPO launch and no implicit budget extension.
 The existing238/239 results and their producer identities stay unchanged.
+
+The first source (`24c14b27`) completed its 24-case loop check but its broad run
+and full regression run were interrupted after identifying an overly strict
+new adapter check against the whole-scene fingerprint. This would have rejected
+the second fixed TAMP support despite identical robots. Retain their partial
+evidence under `mars-current-feedback-validation-v1`; restart both phases and
+checks under a fresh v2 output root with the compiled-robot compatibility guard.
+Do not relabel partial results as complete or reuse their receipts.

@@ -34,6 +34,7 @@ def _worker(connection, case, oracle, arm_reference, initial_settle_s, wheel_fee
     from emet.controller.task.tamp.native_adapter import adapter_for
     from emet.eval.mars_tamp_control import fixture
     from emet.rl.manipulation.command_runtime import TaskPoseRuntimeTiming, task_pose_teacher_action
+    from emet.rl.manipulation.tamp_policy import robot_identity
     from emet.rl.manipulation.whole_body_observation import actor_observation, privileged_state
     from emet.rl.manipulation.whole_body_reward import RewardMeter
 
@@ -45,6 +46,7 @@ def _worker(connection, case, oracle, arm_reference, initial_settle_s, wheel_fee
         initial_state_sha256 = hashlib.sha256(
             np.r_[env.data.qpos.copy(), env.data.qvel.copy(), float(env.data.time)].tobytes()
         ).hexdigest()
+        compiled_robot_identity = robot_identity(env.model)
         env.control.retention_context_enabled = True
         env.control.history = None
         env.control.base_velocity_feedback_gain = 0.5
@@ -78,6 +80,7 @@ def _worker(connection, case, oracle, arm_reference, initial_settle_s, wheel_fee
                 info = {
                     "case_id": case["id"],
                     "model_fingerprint": env.fingerprint,
+                    "compiled_robot_identity": compiled_robot_identity,
                     "reward_terms": self.meter.last_terms.copy(),
                     "elapsed_control_ticks": max(1, self.ticks),
                     "reward_group_ticks": np.asarray(self.tick_rewards, dtype=np.float32).reshape(-1, 3),
@@ -216,6 +219,7 @@ def _worker(connection, case, oracle, arm_reference, initial_settle_s, wheel_fee
             "wheel_feedback_current_velocity": env.control.base_velocity_feedback_current,
             "initial_state_sha256": initial_state_sha256,
             "model_fingerprint": env.fingerprint,
+            "compiled_robot_identity": compiled_robot_identity,
             "object_translation_m": (env.data.xpos[env.payload].copy() - object_initial).tolist(),
             "object_rotation_rad": float(
                 np.arccos(
