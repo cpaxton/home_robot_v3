@@ -9,7 +9,7 @@ other embodiments, with their own actions, models and qualification.
 
 | Need | Document |
 | --- | --- |
-| Complete setup, measured results and research comparison | [WBC status, 2026-11-14](status_20261114.md) |
+| Complete setup, measured results and research comparison | [WBC status, updated 2026-11-15](status_20261114.md) |
 | WBC design principles and lessons | [Whole-body control philosophy](whole_body_control.md) |
 | Simulator setup, CLI and runtime details | [Mars reactive RL runbook](../mars_reactive_rl.md) |
 | General goals, changing references and recovery | [General whole-body tracking](../plans/general_whole_body_tracking.md) |
@@ -20,6 +20,7 @@ other embodiments, with their own actions, models and qualification.
 | Public tools, agent integration and hardware gates | [Controller integration](../plans/mars_controller_integration.md) |
 | CPU reservations, Caliban and simulator parity | [Parallel simulation](../plans/mars_parallel_simulation.md) |
 | Preview velocity, orientation features and frozen-base pilot | [Experiment report](../experiments/mars_reference_velocity_prototype.md) |
+| Completed frozen-base/context pair | [2026-11-15 results](../experiments/mars_frozen_base_arm_20261115.md) |
 | Completed GRU credit comparison and base interference | [C1 results](../experiments/mars_c1_normalization_recovery_20261115.md), [command diagnostic](../experiments/mars_c1_zero_base_diagnostic_20261115.md) |
 | Near-term work | [RL TODOs](../../TODO.md#rl-controller-integration-and-acceptance-mars-first) |
 

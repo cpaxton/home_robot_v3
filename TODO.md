@@ -87,17 +87,24 @@ merges, measured policy improvement and hardware readiness are separate decision
       full-amplitude pitch orientation. Preserve the
       [36-rollout diagnostic](docs/experiments/mars_c1_zero_base_diagnostic_20261115.md);
       no training, exported controller or qualification follows from it.
-- [ ] **Complete the frozen-base/context coordination test.** The original
-      32,768-transition job expired in the queue with zero PPO steps. Preserve
-      that attempt. Record a new bounded baseline/velocity pair, seed90,
-      16,384 transitions each, from the same retained source with frozen actor
-      context, base/grip function and normalization. Train only arm gains/noise
-      and critic; retain deterministic learned base means. Obtain an actual
-      CPU14 handoff after C1, matching-source admission and the full 122-case
-      initial/fixed-final readout. Verify protected functions after reload.
-      Record pass counts, tracking errors and separate base/arm jerk failures;
-      add no automatic retries, extra seeds or checkpoint selection.
+- [x] **Complete the frozen-base/context coordination test.** The new
+      [bounded pair is complete](docs/experiments/mars_frozen_base_arm_20261115.md):
+      seed90, 16,384 transitions each; baseline arm full 59→57/64 and velocity
+      60→61/64, both 64/64 tracking. All 488 expanded outcomes, 244 matched
+      initial/final identities and serialized protected-function checks are
+      recorded. Each teacher passes 122/122 on the source gated by 1,249 tests.
+      Base-only metrics are exactly preserved; coupled remains 2/8. Keep the
+      retained source: one positive development seed does not qualify a new
+      controller. Preserve the old zero-step queue failure and add no automatic
+      retries, extra seeds or checkpoint selection.
       [Bounded follow-through protocol](docs/plans/mars_frozen_base_arm_followthrough.md).
+- [ ] **Resolve remaining coordination and quiet-hold failures.** Use the
+      completed pair and C1 intervention to predeclare a bounded base-authority
+      or actor-active terminal-settling comparison before a larger training run.
+      Preserve successful arm tracking and report physical base/arm jerk,
+      orientation and coupled cases separately. The opt-in axis-angle feature
+      is implemented but still needs its own controlled trained comparison;
+      do not attribute the velocity result to an orientation change.
 - [ ] **Advance real contact skills in stages.** Follow the
       [safety/task curriculum](docs/plans/2026-11-13_whole_body_safety_curriculum.md)
       from actual pregrasp to closure/lift, loaded transport/braking, and
@@ -494,10 +501,10 @@ as an experimental training result.
       Full source-bound regressions 1,187/1,187; original teacher admission
       retained. Historical control completes 4,096 decisions; shared candidate
       stops before its first update on JSON-list/Python-tuple settings comparison.
-      No completed paired result or policy improvement claim.
+      No paired result existed at that snapshot; completed recovery is below.
 - [x] Repair and test the serialized/in-memory settings comparison (`29a9fcec`),
       including an actual candidate call against the saved control record.
-      Preserve the incomplete attempt; no completed paired result yet.
+      Preserve that incomplete attempt separately from the completed recovery.
 - [x] Complete the declared normalization comparison with an explicit source
       bridge and unchanged initial/first-rollout hashes. Fresh regressions
       1,249/1,249; shared final 2/12 full versus per-head 0/12 and initial 2/12.
@@ -512,10 +519,13 @@ as an experimental training result.
       for evaluation and test bundled-versus-expanded return equivalence.
       All 61 focused tests pass, including the native oracle terminal hold.
       See [timing correction](docs/experiments/pr227_tick_reward_timing_20261114.md).
-- [ ] Evaluate the opt-in frozen-base/shared-context arm-adaptation pilot in
-      [PR #232](https://github.com/cpaxton/home_robot_v3/pull/232). Software checks
-      pass; training awaits CPU14 release. Preview velocity alone did not improve
-      the completed comparison; retain the original checkpoint.
+- [x] Evaluate the opt-in frozen-base/shared-context arm-adaptation pilot from
+      [PR #232](https://github.com/cpaxton/home_robot_v3/pull/232). The new 32,768-step
+      pair completes after C1: baseline arm full 59→57/64; velocity 60→61/64;
+      protected serialized functions and every base-only metric are preserved.
+      Record the [complete result](docs/experiments/mars_frozen_base_arm_20261115.md)
+      and earlier zero-step queue failure separately. One seed, coupled 2/8;
+      keep the retained production source and no automatic extra training.
 - [ ] Fix cold-start exploration/completion learning and audit per-critic
       advantages before scaling v2. Keep retained-source comparisons and all
       measured safety/precision gates; add the missing mask/observability strata.

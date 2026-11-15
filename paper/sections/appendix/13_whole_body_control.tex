@@ -629,3 +629,16 @@ errors worsen, so removing base authority is not a general solution. This
 two-policy diagnostic performs no training or actor export and does not alter
 the canonical comparison; all cases remain in
 \texttt{mars\_c1\_zero\_base\_diagnostic\_v1/results.json}.
+
+A separate legacy-MLP arm-only comparison freezes actor context, base/grip
+function and normalization, retaining deterministic learned base requests.
+Both seed-90 variants complete 16,384 transitions and 122-case initial/final
+evaluations. Baseline arm full passes change 59/64 to 57/64; reference velocity
+changes 60/64 to 61/64, with 64/64 arm tracking/settling in both finals.
+Base-only outcomes and metrics are exactly preserved, but coupled full passes
+remain 2/8. Reloaded protected functions are unchanged while arm gains and
+critic learn; all 244 initial/final physical identities match. The velocity
+final gains three arm cases and loses two to base-linear jerk. This small
+single-seed development gain does not qualify a new controller; the retained
+source remains the production baseline. Complete outcomes and provenance are
+in \texttt{mars\_frozen\_base\_arm\_followthrough\_v1/results.json}.
