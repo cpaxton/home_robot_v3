@@ -87,3 +87,20 @@ declared work; no automatic sweep, best-checkpoint selection or extra training.
 
 Follow-through and PR status belong in [TODO.md](../../TODO.md#current-wbc-follow-through-2026-11-15).
 Add measured outcomes and compact provenance after the actual run finishes.
+
+## Recorded launch (2026-11-15)
+
+[Draft PR #238](https://github.com/cpaxton/home_robot_v3/pull/238) contains the
+implementation and 48 passing focused checks. Immutable implementation
+`3ac722e1096dc901d68192b803dc9596471c46c7` is checked by managed full-regression
+job `20261115_101800_b63738` on CPU15 and teacher job
+`20261115_101800_2b8ed4` on CPU14. Pair supervisor
+`20261115_102028_c99a87` waits for both successful gates and actual host-visible
+CPU14 child exit. It has a separate active budget; waiting does not consume
+PPO decisions. This registration records zero trained decisions until actual
+rollout/update records appear.
+
+Protocol, exact supervision script, gate receipts, progress and eventual raw
+readouts belong in ignored
+`logs/manipulation/mars-reference-base-exploration-v1/`. Do not turn a pending
+or failed managed run into a successful experimental outcome.
