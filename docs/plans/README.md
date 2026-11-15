@@ -19,6 +19,8 @@ Operator index: [experiments/README.md](../experiments/README.md) · LaTeX: `pap
 
 ## Plan index
 
+- **[2026-11-13_whole_body_safety_curriculum.md](2026-11-13_whole_body_safety_curriculum.md)** – Learned whole-body safety curriculum, current agent ownership, observation/model prerequisites, task distributions, progression gates and visualization contract.
+
 - **[ARCHITECTURE_PLAN.md](ARCHITECTURE_PLAN.md)** – Multi-robot, multi-simulator refactor (emet rename, robots/simulators abstraction).
 - **[GRAPH_EQA_PLAN.md](GRAPH_EQA_PLAN.md)** – Plan for adding GraphEQA as a graph-based EQA memory model.
 - **[MAPPING_REFACTOR.md](MAPPING_REFACTOR.md)** – Mapping module layout, instance/memory split, and shared UI.
