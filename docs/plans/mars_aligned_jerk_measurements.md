@@ -90,3 +90,9 @@ Current-qvel Jacobians reuse the latest native position-stage geometry; this
 probe does not claim to refresh that geometry. Measure the native contract,
 instantaneous proxy, high-rate chassis velocity and wheel-actuator force on
 all variants before deciding whether a production opt-in correction is justified.
+
+The first twelve-episode feedback attempt is invalid for this comparison:
+`code=ok` was incorrectly treated as terminal, restoring feedback during a
+continuing hold. Preserve its raw archives under `feedback/`; the corrected
+attempt uses `feedback-v2/` and explicit Gym termination/truncation flags.
+Regression tests cover nonterminal `ok`, actual termination and truncation.

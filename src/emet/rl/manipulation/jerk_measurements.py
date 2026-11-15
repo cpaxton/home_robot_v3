@@ -159,7 +159,7 @@ class NativeJerkObserver:
             env.physics_observer = self._physics_step
         self.pending = (float(env.data.time), reference_velocity(env.control), np.asarray(action).copy())
 
-    def after_step(self, env, action, info):
+    def after_step(self, env, action, info, *, terminated=False, truncated=False):
         if self.pending is None:
             raise RuntimeError("diagnostic after-step has no matching before-step")
         if self.record_physics:
@@ -195,6 +195,8 @@ class NativeJerkObserver:
                     np.sum(np.sqrt(1 + (channels["jacobian"]["jerk"] / [1, 1, 4]) ** 2) - 1)
                 ),
                 "code": info["code"],
+                "terminated": bool(terminated),
+                "truncated": bool(truncated),
                 "reference_complete": bool(info["reference_complete"]),
                 "force_peak_N": float(info["peak_contact_force"]),
                 "native_peak_linear_jerk": float(env.peak_base_axis_jerk[0]),

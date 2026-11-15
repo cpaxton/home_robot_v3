@@ -43,9 +43,11 @@ class FeedbackProbe(NativeJerkObserver):
             point = self.variant.removeprefix("current_")
             env.control._base_feedback_velocity = lambda: current_feedback_velocity(env.control, point)
 
-    def after_step(self, env, action, info):
-        super().after_step(env, action, info)
-        if info["code"] != "running":
+    def after_step(self, env, action, info, *, terminated=False, truncated=False):
+        super().after_step(env, action, info, terminated=terminated, truncated=truncated)
+        # "ok" also labels continuing successful holds. Only Gym's actual
+        # terminal flags permit restoring feedback before the following reset.
+        if terminated or truncated:
             self.restore(env)
 
     def restore(self, env):

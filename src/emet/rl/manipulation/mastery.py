@@ -782,7 +782,7 @@ def evaluate_suite(suite, *, stages=STAGES, policy=None, teacher_report=None, po
                         observer.before_step(env, action)
                     obs, reward, done, truncated, info = env.step(action)
                     if observer is not None:
-                        observer.after_step(env, action, info)
+                        observer.after_step(env, action, info, terminated=done, truncated=truncated)
                     row["trace"].append(
                         {
                             "time": info["time"],

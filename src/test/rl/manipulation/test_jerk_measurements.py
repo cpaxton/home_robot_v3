@@ -44,6 +44,24 @@ def test_current_com_probe_matches_fresh_cache_but_responds_to_new_qvel_without_
         current_feedback_velocity(control, "origin")
 
 
+@pytest.mark.parametrize("terminated,truncated", [(False, False), (True, False), (False, True)])
+def test_feedback_probe_keeps_intervention_during_nonterminal_ok(monkeypatch, terminated, truncated):
+    import runpy
+    from pathlib import Path
+    from types import SimpleNamespace
+
+    scripts = Path(__file__).resolve().parents[4] / "scripts"
+    monkeypatch.syspath_prepend(str(scripts))
+    probe_type = runpy.run_path(str(scripts / "probe_mars_wheel_feedback.py"))["FeedbackProbe"]
+    monkeypatch.setattr(NativeJerkObserver, "after_step", lambda *a, **kw: None)
+    control = SimpleNamespace(base_velocity_feedback_gain=0.0, _base_feedback_velocity=lambda: None)
+    env = SimpleNamespace(control=control, config=SimpleNamespace(wheel_feedback_gain=0.5))
+    probe_type("feedback_off").after_step(env, [], {"code": "ok"}, terminated=terminated, truncated=truncated)
+    finished = terminated or truncated
+    assert control.base_velocity_feedback_gain == (0.5 if finished else 0.0)
+    assert hasattr(control, "_base_feedback_velocity") != finished
+
+
 @pytest.mark.parametrize("dt,peak", [(0.1, 1.0), (0.05, 2.0), (0.025, 4.0)])
 def test_reversal_distinguishes_unsigned_speed_from_vector_jerk(dt, peak):
     times = np.arange(-1.0, 1.0 + dt / 2, dt)
