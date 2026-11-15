@@ -51,8 +51,8 @@ single-actor inference has no sampling gate or second controller.
 Before the candidate samples its first rollout, bind the current-source control
 record and verify identical source, preflight, cases, seed, complete PPO settings,
 actor/policy/optimizer hashes, initial observation and RNG. Only the declared
-exploration scale differs. First rollouts intentionally differ after sampling;
-do not reuse the normalization pair's exact-rollout claim or source bridge.
+exploration scale differs. Rollouts may differ once the condition becomes active; do not require their
+identity or reuse the normalization pair's exact-rollout claim or source bridge.
 
 Record the condition/reduced-noise decision counts per rollout, each learned
 log standard deviation, actual case/tick exposure, episodes and optimizer
@@ -104,3 +104,17 @@ Protocol, exact supervision script, gate receipts, progress and eventual raw
 readouts belong in ignored
 `logs/manipulation/mars-reference-base-exploration-v1/`. Do not turn a pending
 or failed managed run into a successful experimental outcome.
+
+## Completed outcome
+
+All three jobs report `done`. Fresh regressions pass 1,260/1,260, teacher
+164/164 general and 5/6 pregrasp with every stop confirmed. Both trials complete
+4,096 decisions; the candidate verifies identical initialization before sampling.
+Arm tracking/settling improves 1/10→7/10, but full arm passes stay 1/10 because
+nine cases still fail base-linear jerk. The condition is active on 2,063 candidate
+decisions. No default or production checkpoint changes.
+
+The [complete report](../experiments/mars_reference_base_exploration_20261115.md)
+and compact data retain every outcome, exact default-control replay, exposure
+and acceptance-jerk audit. The experiment is complete; broader coordination and
+smoothness remain open. No extra training follows this pair automatically.

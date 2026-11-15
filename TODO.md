@@ -98,6 +98,14 @@ merges, measured policy improvement and hardware readiness are separate decision
       controller. Preserve the old zero-step queue failure and add no automatic
       retries, extra seeds or checkpoint selection.
       [Bounded follow-through protocol](docs/plans/mars_frozen_base_arm_followthrough.md).
+- [x] **Test reference-conditioned base exploration.** Fresh seed90 shared
+      GRU pair completes 4,096 decisions each on source gated by 1,260 tests.
+      Candidate arm tracking/settling improves 1→7/10 and fixed-base stops
+      5→0, but full arm remains 1/10 with nine linear-jerk failures. All twelve
+      fixed cases and identical initial anchors are retained; default control
+      exactly reproduces earlier C1 metrics, rollout hashes and final weights.
+      [Complete report](docs/experiments/mars_reference_base_exploration_20261115.md).
+      Keep default scale 1.0 and the retained production source; no promotion.
 - [ ] **Resolve remaining coordination and quiet-hold failures.** Use the
       completed pair and C1 intervention to predeclare a bounded base-authority
       or actor-active terminal-settling comparison before a larger training run.
@@ -105,12 +113,12 @@ merges, measured policy improvement and hardware readiness are separate decision
       orientation and coupled cases separately. The opt-in axis-angle feature
       is implemented but still needs its own controlled trained comparison;
       do not attribute the velocity result to an orientation change.
-      Next declared test: [reference-conditioned base exploration](docs/plans/mars_reference_base_exploration.md),
-      a fresh 4,096+4,096-decision GRU pair with scale 1.0 versus 0.1 only for
-      explicitly constrained, stationary base previews with active hand goals.
-      Preserve inference authority and full fixed-final failures; gate the new
-      immutable implementation before training. Implementation/protocol alone
-      are not a completed experiment or evidence of improved settling.
+      The completed exploration test improves settling but leaves linear jerk.
+      Audit v2's Jacobian-velocity jerk proxy against native acceptance's
+      displacement-speed derivatives before tuning another weight or extending
+      training. Saved traces reproduce all 48 acceptance peaks to 2.22e-16;
+      candidate failures peak during ordinary running, not fault stopping.
+      Keep frozen gates and report both signals before any metric revision.
 - [ ] **Advance real contact skills in stages.** Follow the
       [safety/task curriculum](docs/plans/2026-11-13_whole_body_safety_curriculum.md)
       from actual pregrasp to closure/lift, loaded transport/braking, and

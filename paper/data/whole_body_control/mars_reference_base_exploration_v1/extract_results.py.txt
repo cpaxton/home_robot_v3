@@ -1,0 +1,123 @@
+# Copyright (c) Chris Paxton 2026
+# Licensed under the Apache License, Version 2.0.
+"""Condense completed native outcomes; retain every fixed case and provenance."""
+from collections import Counter
+import gzip
+import hashlib
+import json
+import statistics
+from pathlib import Path
+
+OUT = Path(__file__).resolve().parent
+
+
+def read(path):
+    p = Path(path)
+    return json.loads(gzip.decompress(p.read_bytes()) if p.suffix == '.gz' else p.read_text())
+
+
+def sha(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def quiet_window(case):
+    reference = case['admission']['reference']
+    end_base, end_hand = reference['base'][-1], reference['hand'][-1]
+    def endpoint(row):
+        return all(abs(a-b) <= 1e-8 for a,b in zip(row['reference_base'],end_base,strict=True)) and all(abs(a-b) <= 1e-8 for a,b in zip(row['reference_hand'],end_hand,strict=True))
+    rows = [r for r in case['trace'] if r['code']=='running' and endpoint(r)]
+    if not rows:
+        return {'samples':0, 'selection':'no running sample at announced endpoint'}
+    rows = [r for r in rows if r['time'] >= rows[-1]['time']-1.0]
+    return {'samples':len(rows), 'duration_s':rows[-1]['time']-rows[0]['time'],
+        'selection':'last1s running samples with base/hand targets within1e-8 of final reference; exclude terminal stop',
+        'median_abs_base_forward_m_s':statistics.median(abs(r['base_velocity_measured'][0]) for r in rows),
+        'median_abs_base_yaw_rad_s':statistics.median(abs(r['base_velocity_measured'][1]) for r in rows),
+        'median_abs_base_forward_command_m_s':statistics.median(abs(r['base_velocity_command'][0]) for r in rows),
+        'median_abs_base_yaw_command_rad_s':statistics.median(abs(r['base_velocity_command'][1]) for r in rows),
+        'max_abs_joint_velocity_rad_s':max((abs(v) for r in rows if r['hand_control'] for v in r['hand_control']['measured_joint_velocity_rad_s']), default=None),
+        'median_base_heading_error_rad':statistics.median(r['base_heading_error_rad'] for r in rows)}
+
+
+def main():
+    state, protocol = read(OUT / 'supervisor.json'), read(OUT / 'protocol.json')
+    assert state['phase'] == 'complete' and state['decision_counts'] == {'control': 4096, 'candidate': 4096}
+    receipt = read(OUT / 'full.receipt.json')
+    preflight = read(OUT / 'preflight/preflight.json')
+    result = {'format': 'mars-reference-base-exploration-v1-results', 'complete': True,
+        'protocol': protocol, 'supervisor': state, 'admission': read(OUT / 'admission.json'),
+        'regression_tests': len(receipt['test_ids']), 'teacher_general': preflight['general_cases'],
+        'teacher_tamp': preflight['tamp_cases'], 'runs': {}, 'source_artifacts': {},
+        'hardware_used': False, 'safety_promoted': False,
+        'historical_default_replay': read(OUT/'historical-default-replay.json'),
+        'acceptance_jerk_replay_max_abs_delta': read(OUT/'jerk-audit.json')['maximum_absolute_error']}
+    def bind(path):
+        result['source_artifacts'][str(path)] = sha(path)
+    for file in ['protocol.json','supervisor.json','supervise.py','extract_results.py','admission.json',
+                 'full.receipt.json','full.xml','preflight/preflight.json','preflight/general-teacher.json.gz',
+                 'historical-default-replay.json','jerk-audit.json','audit_jerk.py']:
+        bind(OUT / file)
+    identities, initial_rows = {}, {}
+    for mode in ['control', 'candidate']:
+        folder = OUT / mode
+        meta, summary = read(folder / 'run.json'), read(folder / 'summary.json')
+        updates = [json.loads(x) for x in (folder / 'updates.jsonl').read_text().splitlines()]
+        assert meta['requested_decisions'] == summary['decision_steps'] == updates[-1]['decisions'] == 4096
+        assert summary['complete']
+        for file in ['run.json','summary.json','updates.jsonl','episodes.jsonl','first-rollout.npz',
+                     'initial/actor/manifest.json','initial/actor/policy.zip','last/actor/manifest.json','last/actor/policy.zip']:
+            bind(folder / file)
+        exposure = Counter(case for u in updates for case in u['case_sequence'])
+        assert sum(exposure.values()) == 4096
+        record = {'initialization_and_recipe': meta, 'summary': summary, 'updates': updates,
+                  'actual_decisions_by_case': dict(exposure),
+                  'condition_decisions': sum(u['base_exploration_condition_decisions'] for u in updates),
+                  'reduced_noise_decisions': sum(u['base_exploration_reduced_decisions'] for u in updates),
+                  'episodes': [json.loads(x) for x in (folder / 'episodes.jsonl').read_text().splitlines()],
+                  'evaluations': {}}
+        for label in ['initial','final']:
+            file = folder / f'{label}-evaluation.json.gz'
+            bind(file)
+            report = read(file)
+            assert report['complete'] and len(report['cases']) == 12
+            rows = []
+            for c in report['cases']:
+                rows.append({k: c[k] for k in ['id','stage','split','mastered','tracking_and_settling_pass','smoothness_pass','code','failure_reasons']} | {
+                    'initial_state_sha256': c['admission']['initial_state_sha256'],
+                    'reference_sha256': c['admission']['reference_sha256'],
+                    'metrics_measured_at_stop': c['metrics'],
+                    'reference_complete': c['final_info'].get('reference_complete'),
+                    'active_endpoint_window': quiet_window(c),
+                    'safety_flags': {k: c['final_info'].get(k) for k in ['wheel_lift','invalid_physics','unsafe_contact','retention_lost']}})
+            assert len({r['id'] for r in rows}) == 12
+            ids = {r['id']: (r['initial_state_sha256'],r['reference_sha256']) for r in rows}
+            identities[(mode,label)] = ids
+            if label == 'initial': initial_rows[mode] = rows
+            groups = {}
+            for stage in ['base','arm']:
+                population = [r for r in rows if r['stage']==stage]
+                groups[stage] = {'cases': len(population), 'full': sum(r['mastered'] for r in population),
+                    'tracking_and_settling': sum(r['tracking_and_settling_pass'] for r in population),
+                    'smoothness': sum(r['smoothness_pass'] for r in population),
+                    'reference_completed': sum(r['reference_complete'] is True for r in population),
+                    'failure_reasons': dict(Counter(reason for r in population for reason in r['failure_reasons'])),
+                    'position_within_3mm_at_stop': sum(r['metrics_measured_at_stop']['hand_position_error_m']<=.003 for r in population),
+                    'completed_pose_within_3mm_point02rad': sum(r['reference_complete'] is True and r['metrics_measured_at_stop']['hand_position_error_m']<=.003 and r['metrics_measured_at_stop']['hand_orientation_error_rad']<=.02 for r in population)}
+            record['evaluations'][label] = {'cases': rows, 'groups': groups}
+        for u in record['updates']: del u['case_sequence']  # Exposure retained above; raw file hash still binds full order.
+        result['runs'][mode] = record
+    assert all(ids == next(iter(identities.values())) for ids in identities.values())
+    assert initial_rows['control'] == initial_rows['candidate']
+    candidate = result['runs']['candidate']['initialization_and_recipe']
+    assert candidate['exploration_initial_pair_verified_before_rollout']
+    assert candidate['exploration_reference_run_sha256'] == sha(OUT / 'control/run.json')
+    result['initial_outcomes_and_all_metrics_equal'] = True
+    result['all_48_case_identities_match'] = True
+    result['initial_pair_verified_before_candidate_rollout'] = True
+    result['extractor_sha256'] = sha(__file__)
+    (OUT / 'results.json').write_text(json.dumps(result, indent=2, allow_nan=False)+'\n')
+    print('Archived48outcomes, all identities, training exposure and bound initial-pair proof.')
+
+
+if __name__ == '__main__':
+    main()

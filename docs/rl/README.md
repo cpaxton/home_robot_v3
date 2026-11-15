@@ -22,6 +22,7 @@ other embodiments, with their own actions, models and qualification.
 | Preview velocity, orientation features and frozen-base pilot | [Experiment report](../experiments/mars_reference_velocity_prototype.md) |
 | Completed frozen-base/context pair | [2026-11-15 results](../experiments/mars_frozen_base_arm_20261115.md) |
 | Completed GRU credit comparison and base interference | [C1 results](../experiments/mars_c1_normalization_recovery_20261115.md), [command diagnostic](../experiments/mars_c1_zero_base_diagnostic_20261115.md) |
+| Base exploration and actor-active settling | [Bounded GRU comparison](../experiments/mars_reference_base_exploration_20261115.md) |
 | Near-term work | [RL TODOs](../../TODO.md#rl-controller-integration-and-acceptance-mars-first) |
 
 Use this directory for enduring design guidance. Keep proposed changes and

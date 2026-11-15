@@ -642,3 +642,16 @@ final gains three arm cases and loses two to base-linear jerk. This small
 single-seed development gain does not qualify a new controller; the retained
 source remains the production baseline. Complete outcomes and provenance are
 in \texttt{mars\_frozen\_base\_arm\_followthrough\_v1/results.json}.
+
+A fresh GRU pair tests base exploration under explicitly constrained, constant
+base previews with active hand goals. Multiplying only base sampling standard
+deviations by 0.1 preserves deterministic commands and inference authority.
+Both variants complete 4,096 decisions after 1,260 fresh regressions; the default
+control exactly reproduces earlier C1 metrics, first-rollout hashes and final
+actor bytes. Candidate arm tracking/settling improves 1/10 to 7/10 and fixed-base
+stops fall from five to zero, but full arm stays 1/10 with nine linear-jerk
+failures. Defaults and the retained source remain unchanged. A saved-pose replay
+reproduces all 48 base-jerk measurements to floating-point precision; candidate
+linear-jerk failures peak during ordinary running. Reward/acceptance measurement
+alignment remains a subsequent audit, not a relaxed gate. All outcomes are in
+\texttt{mars\_reference\_base\_exploration\_v1/results.json}.

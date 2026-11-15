@@ -1,0 +1,184 @@
+# Copyright (c) Chris Paxton 2026
+# Licensed under the Apache License, Version 2.0.
+"""Supervise exactly the declared fresh GRU base-exploration pair."""
+import fcntl
+import hashlib
+import json
+import os
+from pathlib import Path
+import signal
+import subprocess
+import sys
+import time
+
+OUT = Path(__file__).resolve().parent
+PLAN = json.loads((OUT / 'protocol.json').read_text())
+ROOT = Path(PLAN['runtime'])
+PYTHON = str(ROOT / '.venv/bin/python')
+os.environ.update(PYTHONPATH=str(ROOT / 'src'), CUDA_VISIBLE_DEVICES='', MUJOCO_GL='disable',
+                  OMP_NUM_THREADS='1', OPENBLAS_NUM_THREADS='1', MKL_NUM_THREADS='1',
+                  NUMEXPR_NUM_THREADS='1', EMET_UV_RUN='1', MPLCONFIGDIR=str(OUT / 'mpl'))
+os.sched_setaffinity(0, {14})
+sys.path.insert(0, str(ROOT / 'src'))
+CHILD = None
+PHASE = 'waiting_for_fresh_gates'
+
+
+def sha(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def write(path, value):
+    temp = path.with_suffix('.tmp')
+    temp.write_text(json.dumps(value, indent=2, allow_nan=False) + '\n')
+    temp.replace(path)
+
+
+def progress():
+    totals = {}
+    for mode in ('control', 'candidate'):
+        file = OUT / mode / 'updates.jsonl'
+        totals[mode] = 0
+        if file.exists():
+            for row in file.read_text().splitlines():
+                try:
+                    totals[mode] = max(totals[mode], int(json.loads(row)['decisions']))
+                except (ValueError, KeyError):
+                    continue  # A writer may still be appending the final line.
+    return totals
+
+
+def state(**extra):
+    counts = progress()
+    value = dict(phase=PHASE, implementation_revision=PLAN['implementation_revision'],
+                 pid=os.getpid(), updated_unix=time.time(), decision_counts=counts,
+                 total_requested_decisions=8192, hardware_used=False, safety_promoted=False, **extra)
+    write(OUT / 'supervisor.json', value)
+    if job := os.environ.get('EMET_JOB_ID'):
+        from emet.utils.job_registry import update_job
+        update_job(job, status='waiting' if PHASE.startswith('waiting') else 'running',
+                   phase=PHASE, units_done=sum(counts.values()), units_total=8192,
+                   meta_update={'supervisor_state': str(OUT / 'supervisor.json'), 'pr': 238})
+
+
+def cleanup():
+    if CHILD is not None and CHILD.poll() is None:
+        os.killpg(CHILD.pid, signal.SIGTERM)
+        try:
+            CHILD.wait(timeout=15)
+        except subprocess.TimeoutExpired:
+            os.killpg(CHILD.pid, signal.SIGKILL)
+            CHILD.wait()
+
+
+def stop(signum, frame):
+    cleanup()
+    raise SystemExit(128 + signum)
+
+
+signal.signal(signal.SIGTERM, stop)
+signal.signal(signal.SIGINT, stop)
+
+
+def busy14():
+    tokens = ('emet.rl.manipulation.', 'emet.rl.regression_gate', ' -m pytest ',
+              'multiprocessing.spawn', 'run_mars_feedback_ablation.py')
+    active = []
+    for folder in Path('/proc').iterdir():
+        if not folder.name.isdigit() or int(folder.name) == os.getpid():
+            continue
+        try:
+            command = (folder / 'cmdline').read_bytes().replace(b'\0', b' ').decode(errors='replace')
+            if not any(token in command for token in tokens):
+                continue
+            status = (folder / 'stat').read_text().rsplit(')', 1)[1].split()[0]
+            if status != 'Z' and 14 in os.sched_getaffinity(int(folder.name)):
+                active.append(int(folder.name))
+        except (OSError, ValueError, IndexError):
+            continue
+    return active
+
+
+def main():
+    global CHILD, PHASE
+    lock = (OUT / 'supervisor.lock').open('a')
+    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    try:
+        from emet.utils.job_registry import load_job
+        from emet.rl.regression_gate import verify_regressions
+        from emet.rl.manipulation.whole_body_training import require_preflight, verify_exploration_pair
+        assert PLAN['steps_per_run'] == 4096 and PLAN['seed'] == 90
+        assert PLAN['scales'] == {'control': 1.0, 'candidate': 0.1}
+        if subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip() != PLAN['implementation_revision']:
+            raise RuntimeError('immutable source revision changed')
+        if sha(__file__) != PLAN['supervisor_sha256']:
+            raise RuntimeError('declared supervisor changed')
+        deadline = time.monotonic() + PLAN['gate_wait_timeout_seconds']
+        while True:
+            jobs = [load_job(PLAN[key]) for key in ('regression_job', 'teacher_job')]
+            if any(job and job.status in ('failed', 'cancelled') for job in jobs):
+                raise RuntimeError('fresh admission failed; no retry or PPO')
+            busy = busy14()
+            if all(job and job.status == 'done' for job in jobs) and not busy:
+                break
+            if time.monotonic() >= deadline:
+                raise TimeoutError('fresh admission wait budget exhausted; no PPO')
+            state(gate_status=[None if j is None else j.status for j in jobs], busy_cpu14=busy)
+            time.sleep(30)
+        receipt = verify_regressions(OUT / 'full.receipt.json')
+        require_preflight(OUT / 'preflight/preflight.json', ROOT / PLAN['suite'])
+        write(OUT / 'admission.json', {'regressions': len(receipt['test_ids']),
+              'receipt_sha256': sha(OUT / 'full.receipt.json'),
+              'preflight_sha256': sha(OUT / 'preflight/preflight.json'),
+              'verified_host_cpu14_vacancy': True, 'started_unix': time.time()})
+        started = time.monotonic()
+        for mode in ('control', 'candidate'):
+            PHASE = mode + '_training_and_fixed_evaluation'
+            state()
+            command = [PYTHON, '-u', '-m', 'emet.rl.manipulation.whole_body_training', 'train',
+                '--suite', PLAN['suite'], '--basic-cases', PLAN['basic_cases'],
+                '--preflight', str(OUT / 'preflight/preflight.json'),
+                '--regression-receipt', str(OUT / 'full.receipt.json'),
+                '--output', str(OUT / mode), '--steps', '4096', '--seed', '90',
+                '--rollout-steps', '256', '--learning-rate', '0.0003', '--epochs', '5',
+                '--batch-size', '128', '--advantage-normalization', 'shared',
+                '--stationary-base-std-scale', str(PLAN['scales'][mode]), '--wandb-mode', 'disabled']
+            if mode == 'candidate':
+                command += ['--exploration-reference-run', str(OUT / 'control/run.json')]
+            write(OUT / (mode + '-command.json'), {'command': command, 'cwd': str(ROOT)})
+            with (OUT / (mode + '.log')).open('x') as log:
+                CHILD = subprocess.Popen(command, cwd=ROOT, env=os.environ.copy(), stdout=log,
+                                         stderr=subprocess.STDOUT, start_new_session=True)
+                while True:
+                    remaining = PLAN['active_timeout_seconds'] - (time.monotonic() - started)
+                    if remaining <= 0:
+                        raise TimeoutError('declared paired training/evaluation budget exhausted')
+                    if any(value > 4096 for value in progress().values()):
+                        raise RuntimeError('declared training budget exceeded')
+                    try:
+                        status = CHILD.wait(timeout=min(30, remaining))
+                        break
+                    except subprocess.TimeoutExpired:
+                        state(child_pid=CHILD.pid)
+                if status:
+                    raise RuntimeError(f'{mode} exited {status}; no retry')
+            CHILD = None
+            summary = json.loads((OUT / mode / 'summary.json').read_text())
+            if summary.get('complete') is not True or summary['decision_steps'] != 4096:
+                raise RuntimeError('incomplete declared run')
+        records = {mode: json.loads((OUT / mode / 'run.json').read_text()) for mode in ('control', 'candidate')}
+        verify_exploration_pair(records['control'], records['candidate'])
+        if not records['candidate'].get('exploration_initial_pair_verified_before_rollout'):
+            raise RuntimeError('candidate did not verify initial pair before sampling')
+        verify_regressions(OUT / 'full.receipt.json')
+        PHASE = 'complete'
+        state(returncode=0)
+    except BaseException as exc:
+        cleanup()
+        PHASE = 'failed'
+        state(error=repr(exc))
+        raise
+
+
+if __name__ == '__main__':
+    main()
