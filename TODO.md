@@ -109,8 +109,12 @@
       Incomplete pair: `~/runs/emet/recovery-budget-high-20261115-r2/`.
       Episode image packets now preserve dialogue, bound attachments to eight,
       expose stable view IDs and support explicit historical recall. Offline replay
-      reduces the failing 30 attachments to eight; 433 CPU checks pass. Live
-      memory/task acceptance and retained-object selection remain pending.
+      reduces the failing 30 attachments to eight. Live seed-1 retest completes
+      without OOM, 1/2 phases; all 15 requests stay within eight images. The
+      coordinator uses recall_view but still submits a semantic microwave answer
+      without geometry. Find now gets an explicit localization task header;
+      semantic EQA keeps its question header. 435 CPU checks pass. Header benefit,
+      broader task acceptance and retained-object selection remain pending.
       Examples: `docs/experiments/multimodal_context_20261115.md`.
 - [ ] Emit actual per-episode simulation duration, model inference cost and
       invocation overhead in paper-run manifests. Clock probes and reported

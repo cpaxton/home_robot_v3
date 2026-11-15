@@ -115,3 +115,52 @@ across inference failure, episode reset isolation, mandatory-image overflow and
 prepared-trace equality. Report: `/tmp/image-context-tests-20261115.xml`.
 Live memory and task acceptance remain separate gates; offline packet reductions
 are not accuracy results.
+
+## First live packet check
+
+Frozen source `f822e696`, managed job `20261115_144905_3c165c`, reran the same
+find episode with CLI seed 1, Qwen3-VL 8B int4, 12/8 action limits and unchanged
+physical/geometry gates. All **15** coordinator requests have at most **8**
+attached images, even when their original dialogue contains **30** occurrences.
+Recorded prior-message counts match the complete retained dialogue. All 15
+executed actions match model selections; there are no action rewrites.
+
+The episode completed without an inference/OOM error: bowl passes, microwave
+fails (**1/2** phases), 262.01 s query / 346.79 s episode wall time. This is not
+an accuracy gain established against baseline; the earlier seed-1 candidate was
+incomplete. Raw request text and action sequences differ stochastically.
+
+The model chose `recall_view` for the bowl at round 1 using an exact valid ID.
+That image was already in the preceding packet, so this demonstrates live tool
+use, not adaptive retrieval of an omitted view. Contract tests separately cover
+recalling a genuinely omitted image. The bowl then grounds and finishes at round 9.
+
+At microwave round 3, the receipt reports `geometry.status=not_admitted`, with
+microwave proposals at 3.366/3.450 m outside the unchanged 2.5 m depth limit.
+At round 4 the model submits “Above the stove, mounted on the wall.” while only
+three of eight navigation calls have been used. The answer is preserved; it
+cannot supply the missing metric object geometry. The final request contains
+the rejection and proposal bearings: the failure was not hidden from the model.
+
+Artifacts: `~/runs/emet/image-context-find-20261115-r1/`. The compact packet/action
+audit is `image-context-live-audit-20261115.json` in
+`~/runs/emet/image-context-cohort-20261115-r1/`.
+
+### Task-framing follow-up
+
+The top of that request still says `Question: Where is the microwave?`, while
+the metric-localization requirement appears later. The state now starts find
+requests with the actual caller objective:
+
+```text
+Task: find and localize the requested object for downstream robot action.
+Object request: Where is the microwave?
+The requested result is an admitted object location, not just a semantic location description.
+```
+
+Semantic EQA keeps its `Question:` header. This changes task information, not
+motion, answer selection or a stopping gate. The model can still choose its
+answer/actions. The follow-up also makes occurrence pixel SHA-256 values match
+the raw-pixel hash convention used by the trace images; dimensions remain part
+of identity. **435 focused CPU tests pass**, including the find/EQA distinction.
+Live task benefit of the header is still pending.

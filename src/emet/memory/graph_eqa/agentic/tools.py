@@ -500,6 +500,10 @@ def _build_state_message(executor: AgenticEQAExecutor) -> str:
     lines: list[str] = []
     if getattr(executor, "mode", "answer") == "explore":
         lines.append(f"Goal: {executor.goal or 'explore and map the environment'}")
+    elif getattr(executor, "_require_grounded_object", False):
+        lines.append("Task: find and localize the requested object for downstream robot action.")
+        lines.append(f"Object request: {executor.question}")
+        lines.append("The requested result is an admitted object location, not just a semantic location description.")
     else:
         lines.append(f"Question: {executor.question}")
     lines.append(_graph_stats_line(gm))

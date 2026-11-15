@@ -9,6 +9,25 @@ import pytest
 from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
 
 
+@pytest.mark.parametrize("localize", [False, True])
+def test_current_task_distinguishes_find_localization_from_semantic_eqa(localize):
+    from emet.memory.graph_eqa.agentic.tools import build_state_message
+
+    agent = SimpleNamespace(
+        parameters={"eqa": {"agentic_decision_policy": "model_final"}}, graph_memory=None, robot=None
+    )
+    ex = AgenticEQAExecutor(agent, "Where is the microwave?", router=False)
+    ex._require_grounded_object = localize
+    state = build_state_message(ex)
+    if localize:
+        assert state.startswith("Task: find and localize")
+        assert "Object request: Where is the microwave?" in state
+        assert "not just a semantic location description" in state
+    else:
+        assert state.startswith("Question: Where is the microwave?")
+        assert "requested result is an admitted object location" not in state
+
+
 @pytest.mark.parametrize("grounded_obs_id", [None, 0, 7])
 @pytest.mark.parametrize("visually_verified", [False, True])
 def test_find_state_reports_selected_geometry_independently_of_visual_and_motion_status(
