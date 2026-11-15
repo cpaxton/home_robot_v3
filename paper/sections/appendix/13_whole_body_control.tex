@@ -714,5 +714,27 @@ support-margin check. All four stops confirm with no scored safety flag.
 These results motivate mixed general/pregrasp training and measured-state
 planner admission, not hidden feedback replacement or a relaxed support check.
 Compact provenance and phase metrics are in
-\texttt{mars\_tamp\_input\_diagnostic\_v1/results.json}; the modified optional
-tracing source has focused checks, not a fresh full qualification receipt.
+\texttt{mars\_tamp\_input\_diagnostic\_v1/results.json}. Later source-bound
+regressions cover the instrumentation; policy qualification remains separate.
+
+Twelve further development attempts distinguish task regions from verified
+grasp/lift execution. A 4\,mm/0.04\,rad pregrasp arrival region advances the
+retained actor to the next stage, but does not repair grasp accuracy. A separate
+grasp-region trial exposes a hold-handoff deadlock: slight drift leaves the
+arrival region while the actor remains disabled. Bounded, nonfault tracking
+reacquisition preserves trajectory/history/grip authority and the original
+deadline. One reacquisition lets the unchanged actor complete grasp pose and
+executor closure, after which lift planning rejects insufficient support reserve.
+The teacher control's physical trace is unchanged by the fix. The nominal lift
+witness is only 4.1\,$\mu$m above the 5\,mm static support cutoff. An explicit
+maximum-margin reset raises sampled margin to 21.1\,mm; an independently tested
+physical 20\,mm base preparation with fixed world hand also lets the teacher
+pass the prior support bottleneck. Both still fail loaded retention. The actor
+advances only 2.15\,mm on that reachable coupled preparation. All twelve stops
+confirm with no wheel-lift flag, but no full task succeeds; reused seeds and
+different contracts are not pooled into a reliability claim. These results
+motivate actual grasp-pose and fixed-hand/base training, support-reserved
+planning and grasp-wrench validation, with unchanged physical limits. Complete
+provenance and stage metrics are in \texttt{mars\_task\_arrival\_v1/results.json}.
+The corresponding runtime passes 1,330/1,330 fresh source-bound software
+regressions; those checks do not establish successful loaded control.

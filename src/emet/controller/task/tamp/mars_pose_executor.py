@@ -18,6 +18,8 @@ from emet.rl.manipulation.tracking import TaskFrameFK, TaskPoseTrajectory
 
 TRACKING_POSITION_LIMIT_M = 0.01
 TRACKING_ORIENTATION_LIMIT_RAD = 0.10
+MAX_HOLD_REACQUISITIONS = 2
+HOLD_REENTRY_FRACTION = 0.9
 
 
 def lag_scaled_rate(position_error, orientation_error, *, position_scale_m, orientation_scale_rad):
@@ -46,16 +48,39 @@ def pose_error(current, target):
     return float(np.linalg.norm(a[:3] - b[:3])), float(np.arccos(np.clip((np.trace(rb.T @ ra) - 1) / 2, -1, 1)))
 
 
-def execute_pose_path(robot, executor, phase, path, *, goal_pose=None):
+def arrival_tolerances(executor, requested=None):
+    """Endpoint acceptance is independent of path admission and retiming.
+
+    An explicit task-region experiment may accept a nearby pregrasp endpoint;
+    it cannot expand the independent tracking tube or change the IK witness.
+    """
+    values = np.asarray(
+        (executor.position_tolerance_m, executor.orientation_tolerance_rad) if requested is None else requested
+    )
+    if (
+        values.shape != (2,)
+        or values.dtype.kind not in "fiu"
+        or not np.isfinite(values).all()
+        or np.any(values <= 0)
+        or np.any(values > [TRACKING_POSITION_LIMIT_M, TRACKING_ORIENTATION_LIMIT_RAD])
+    ):
+        raise ValueError("arrival tolerances must be positive finite values within the tracking tube")
+    return tuple(float(v) for v in values)
+
+
+def execute_pose_path(robot, executor, phase, path, *, goal_pose=None, arrival_tolerance=None):
     from emet.controller.task.tamp.mars_sim_robot import MarsSimRobot
 
     if not isinstance(robot, MarsSimRobot) or robot.policy is None or robot.arm_execution != "cartesian":
         raise ValueError("Cartesian arm execution requires the explicit Mars simulator policy backend")
 
+    hold_reacquisitions = 0
+
     def fail(reason, **detail):
         robot.stop_and_confirm(reason)
         executor.synchronize(executor.data)
-        executor.event(phase=phase, execution_contract="cartesian_arm_v1", reason=reason, **detail)
+        executor.event(phase=phase, execution_contract="cartesian_arm_v1", reason=reason,
+                       hold_reacquisitions=hold_reacquisitions, **detail)
         return PhysicalMotionResult(False, reason, phase)
 
     if robot.failure or robot.servo.stopped or robot.env._physics_invalid:
@@ -69,6 +94,12 @@ def execute_pose_path(robot, executor, phase, path, *, goal_pose=None):
         )
     except ValueError:
         return fail("invalid_cartesian_tolerance")
+    try:
+        if arrival_tolerance is not None and phase != "pregrasp":
+            raise ValueError("experimental task arrival region is pregrasp-only")
+        arrival_position, arrival_orientation = arrival_tolerances(executor, arrival_tolerance)
+    except ValueError:
+        return fail("invalid_cartesian_arrival_tolerance")
     witness = np.asarray(path, dtype=float)
     if (
         witness.ndim != 2
@@ -103,7 +134,10 @@ def execute_pose_path(robot, executor, phase, path, *, goal_pose=None):
         if executor.collision.configuration_collides(robot.model, scratch):
             return "arm_configuration_collision"
         payload = robot.payload if robot.retention_reference is not None else None
-        if support_margin(robot.model, scratch, MARS, payload)["margin_m"] < 0.005:
+        support = support_margin(robot.model, scratch, MARS, payload)
+        if support["margin_m"] < 0.005:
+            executor.event(phase=phase, check="static_support_margin", required_margin_m=0.005,
+                           support_evidence=support, configuration="witness" if q is not None else "measured")
             return "arm_static_support_margin"
         return None
 
@@ -246,6 +280,8 @@ def execute_pose_path(robot, executor, phase, path, *, goal_pose=None):
         joint_witness=witness.tolist(),
         position_tolerance_m=executor.position_tolerance_m,
         orientation_tolerance_rad=executor.orientation_tolerance_rad,
+        arrival_position_tolerance_m=arrival_position,
+        arrival_orientation_tolerance_rad=arrival_orientation,
         configuration_check_period_s=MARS.dt,
         reference_clock="filtered_lag_scaling" if continuous else "continuous_lag_scaling",
         arm_reference=robot.arm_reference,
@@ -297,8 +333,12 @@ def execute_pose_path(robot, executor, phase, path, *, goal_pose=None):
         if reason:
             return fail(reason, check="measured_configuration")
         distance, angle = pose_error(robot.servo.ee_pose(), hand[-1])
-        within = distance <= executor.position_tolerance_m and angle <= executor.orientation_tolerance_rad
-        if progress >= schedule.end and within:
+        within = distance <= arrival_position and angle <= arrival_orientation
+        enter_hold = within and (
+            not hold_reacquisitions
+            or (distance <= HOLD_REENTRY_FRACTION * arrival_position and angle <= HOLD_REENTRY_FRACTION * arrival_orientation)
+        )
+        if progress >= schedule.end and within and (robot.servo.holding or enter_hold):
             if not robot.servo.holding:
                 robot.servo.hold_position()
                 anchor = robot.servo.positions().copy()
@@ -318,8 +358,18 @@ def execute_pose_path(robot, executor, phase, path, *, goal_pose=None):
                     orientation_error_rad=angle,
                     joint_witness_residual_rad=float(np.max(abs(robot.servo.positions() - witness[-1]))),
                     controller_success=True,
+                    hold_reacquisitions=hold_reacquisitions,
                 )
                 return PhysicalMotionResult(True, "measured_cartesian_path", phase, distance)
         else:
             stable = 0
+            if robot.servo.holding and not within:
+                if hold_reacquisitions >= MAX_HOLD_REACQUISITIONS:
+                    return fail("cartesian_hold_unsettled", position_error_m=distance, orientation_error_rad=angle)
+                robot.servo.resume_tracking_from_hold()
+                hold_reacquisitions += 1
+                anchor = None
+                executor.event(phase=phase, execution_contract="cartesian_arm_v1", reason="hold_reacquire",
+                               hold_reacquisitions=hold_reacquisitions, position_error_m=distance,
+                               orientation_error_rad=angle)
     return fail("cartesian_tracking_timeout", position_error_m=distance, orientation_error_rad=angle)

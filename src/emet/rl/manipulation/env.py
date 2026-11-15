@@ -90,6 +90,7 @@ class ManipulationConfig:
     contact_cone: str = "pyramidal"
     contact_impratio: float = 1.0
     balanced_grasp_setup: bool = False
+    grasp_setup_prefer_nominal: bool = True
     tamp_carry_trajectories: bool = False
     carry_target_mode: str = "combined"
     carry_push_scale: float = 0.0
@@ -340,6 +341,10 @@ class ManipulationConfig:
             raise ValueError("TAMP carry references require Mars direct-velocity pose tracking with preview")
         if self.balanced_grasp_setup and self.robot != "innate_mars":
             raise ValueError("balanced grasp setup currently supports Mars only")
+        if type(self.grasp_setup_prefer_nominal) is not bool or (
+            not self.grasp_setup_prefer_nominal and not self.balanced_grasp_setup
+        ):
+            raise ValueError("maximum-margin setup requires a boolean preference and balanced grasp setup")
         if not np.isfinite(self.contact_impratio) or not 1 <= self.contact_impratio <= 10:
             raise ValueError("contact impedance ratio must be in [1, 10]")
         if self.contact_impratio != 1 and self.contact_cone != "elliptic":
@@ -724,7 +729,7 @@ class ManipulationEnv(gym.Env):
         if self.config.balanced_grasp_setup and grasp_fixture:
             from emet.rl.manipulation.grasp_setup import plan_setup
 
-            plan = plan_setup(self)
+            plan = plan_setup(self, prefer_nominal=self.config.grasp_setup_prefer_nominal)
             if plan is None:
                 self.initialization_failure_reason = "no_stable_grasp_setup"
                 return False

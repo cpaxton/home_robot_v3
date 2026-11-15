@@ -81,6 +81,12 @@ The next stages remain conditional:
    more training: general tracking improved, but no learned actor passed these
    six actual TAMP pregrasps. See the
    [completed report](../experiments/mars_current_feedback_reset_validation_20261115.md).
+   The later [task-stage study](../experiments/mars_task_arrival_20261115.md)
+   repairs nonfault hold reacquisition and reaches grasp/closure with the
+   retained actor, while exposing fixed-world-hand/base coverage, support-reserve
+   and loaded-retention gaps. Choose the next learning distribution around those
+   concrete references; these prepared direction cases are not a substitute for
+   actual task-stage coverage. Keep unloaded and loaded admission distinct.
 2. Freeze this case source and obtain its own full regression receipt and
    matching teacher admission for every required case and the selected plant.
    Publish the acceptance budget anchor separately from fresh admission.

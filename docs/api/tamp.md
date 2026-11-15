@@ -402,6 +402,23 @@ it does not lock the wheels. Supplying base constraints requires the controller
 to satisfy both base and hand contracts. The gripper schedule informs preview;
 physical closure/release remains under the executor's phase/authorization API.
 
+The simulator Cartesian executor verifies a quiet hold before completing a
+stage. If an unfaulted hold drifts outside its arrival contract, it may resume
+the same policy/trajectory at most twice, within the original deadline, using
+a smaller re-entry region. `resume_tracking_from_hold()` preserves trajectory
+progress, history and grip/release authority and refuses a stopped controller;
+it does not clear a fault or install a new goal. Exhaustion reports public
+`tracking_timeout`. Static support rejection reports `planning_failed` with
+`data.motion_rejection=static_support_margin` so the agent can distinguish
+reference feasibility from ordinary slow tracking.
+
+Explicit simulator task-region experiments are separately labeled in the
+[grasp/hold report](../experiments/mars_task_arrival_20261115.md). The default
+Mars endpoint contract remains 3 mm / 0.02 rad; experimental pregrasp acceptance
+does not change witness admission, phase retiming or independent safety checks.
+The maximum-margin reset option changes procedural initialization only and
+does not execute or authorize a real robot stance transition.
+
 The new pose-only actor sees proprioception, command history, masked pose targets,
 and preview; it does not receive a joint solution from IK or inactive target values.
 Future commands may be provided by the executor, but future unannounced replans

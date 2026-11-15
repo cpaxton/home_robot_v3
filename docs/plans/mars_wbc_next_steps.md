@@ -35,6 +35,23 @@ not native admission or training evidence. More time on C1-only training is
 not the selected next action. No default promotion or hardware qualification
 follows from these results; retain the staged validation.
 
+The [task-level follow-up](../experiments/mars_task_arrival_20261115.md) now
+separates endpoint acceptance from actual grasp/lift execution. A bounded
+nonfault-hold reacquisition fixes an executor deadlock: the same retained actor
+reaches the declared grasp region and the executor closes the jaws. Lift planning
+still rejects insufficient support reserve. The nominal admitted witness has
+only about 4 micrometres above the 5 mm cutoff. Opt-in maximum-margin resets and
+an actual fixed-world-hand/base preparation let the teacher pass that bottleneck,
+but retention still fails. The actor also under-tracks the fixed-hand 20 mm
+base shift, confirming a concrete coupled-motion curriculum gap.
+
+Keep the repaired handoff and all guards. Before new training, extend the real
+TAMP primitive boundary through the unloaded grasp pose, admit it independently,
+and include reachable fixed-world-hand/base references alongside general
+tracking. Keep the outer general/task balance; do not train only TAMP or require
+a broken loaded grasp to supervise unloaded tracking. Loaded progression needs
+support-reserved planning and independently stable grasp/wrench evidence.
+
 ## Why this order
 
 | Evidence | What it supports | What it does not establish |

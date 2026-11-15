@@ -18,6 +18,7 @@ class MarsPhysicalPickPlaceExecutor(PhysicalPickPlaceExecutor):
         super().__init__(*args, **kwargs)
         self.ik_attempt = ik_attempt
         self.pose_seed_hints = []
+        self.pregrasp_arrival_tolerance = None  # Explicit simulator task-region experiment, default unchanged.
 
     def _execute_path(self, phase, path):
         if getattr(self.robot, "arm_execution", "joint") == "cartesian":
@@ -36,7 +37,8 @@ class MarsPhysicalPickPlaceExecutor(PhysicalPickPlaceExecutor):
             if choices:
                 position, rotation = choices[index]
                 goal = np.r_[position, np.asarray(rotation)[:, :2].ravel()]
-            return execute_pose_path(self.robot, self, phase, path, goal_pose=goal)
+            options = {"arrival_tolerance": self.pregrasp_arrival_tolerance} if phase == "pregrasp" else {}
+            return execute_pose_path(self.robot, self, phase, path, goal_pose=goal, **options)
         return super()._execute_path(phase, path)
 
     def remember_pose_seed(self, position, rotation, q):

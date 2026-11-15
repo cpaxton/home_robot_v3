@@ -133,14 +133,27 @@ merges, measured policy improvement and hardware readiness are separate decision
       offline and native diagnostics do not relabel any candidate failure.
       The opt-in axis-angle feature still needs a separate controlled trained
       comparison; do not confound it with the plant, reward or velocity studies.
+- [x] **Repair drift after Cartesian hold entry.** Bounded nonfault reacquisition
+      preserves goals, history, grip authority and the original deadline. On
+      the explicitly declared 4 mm / 0.04 rad task contract, the retained actor
+      now completes grasp pose and executor closure; lift planning rejects
+      insufficient support reserve. Keep the original precision failures and
+      all [twelve task diagnostics](docs/experiments/mars_task_arrival_20261115.md).
+- [ ] **Train actual grasp-pose and fixed-world-hand/base motion.** Extend the
+      pregrasp-only primitive boundary, obtain fresh stage-specific teacher
+      admission, and mix these reachable references with general tracking.
+      Do not increase timeouts or accept the actor's 2.15 mm advance as a
+      completed 20 mm support-preparation goal. Keep loaded retention/grasp-fit
+      repair separate, with original force/support/retention thresholds.
 - [x] Prepare the exact [17-case directional curriculum and 24-case audit](docs/plans/mars_directional_curriculum.md)
       with a strict separate loader, source/control hashes, unchanged contracts
       and disjoint audit resets/motions. This is case preparation only: no
-      native admission, training or policy promotion. Keep actual TAMP tracking
-      diagnosis ahead of selecting another training run.
-- [ ] Admit the prepared directional/audit cases on the corrected plant after
-      resolving the actual TAMP gap in #239. Bind the new source's own checks
-      and teacher evidence; keep original case rejections visible.
+      native admission, training or policy promotion. Keep actual task-stage
+      coverage and the latest #239 diagnosis in the next training decision.
+- [ ] Admit the prepared directional/audit cases on the corrected plant for
+      the selected training stage. Bind the new source's own checks and teacher
+      evidence; keep original case rejections visible. Loaded retention failures
+      do not qualify loaded training or invalidate admitted unloaded references.
 - [ ] **Advance real contact skills in stages.** Follow the
       [safety/task curriculum](docs/plans/2026-11-13_whole_body_safety_curriculum.md)
       from actual pregrasp to closure/lift, loaded transport/braking, and
