@@ -27,6 +27,23 @@ These motivate future observability and isolated training ablations, while we
 retain TAMP goal conditioning and hard safety limits; no such ablation is claimed
 as implemented or validated here.
 
+Deep Whole-Body Control~\cite{fu2023deepwholebody} demonstrates unified
+locomotion/manipulation learning with online adaptation, whereas
+WHOLE-MoMa~\cite{jauhri2026wholemoma} uses controller-generated trajectories,
+offline reinforcement learning and temporally extended actions for articulated
+object tasks. These motivate controlled coordination and data-reuse studies,
+rather than an assumption that a larger actor alone improves performance.
+SuperMimic~\cite{liao2026supermimic} fits differentiable shared dynamics and
+optimizes a motion-tracking policy through imagined rollouts. Its flat-ground
+humanoid experiments explicitly leave object and terrain interaction open;
+they are not evidence for Mars grasp retention or manipulation speedups.
+A future model-based comparison must preserve executed-action and physical-tick
+timing, capture actuator/servo and executor state, separate complete held-out
+trajectories, and test multi-step contact and support errors. Policy outcomes
+must still be measured in unchanged native physics, with total data-collection,
+model-fit, policy-update and evaluation cost reported against corrected PPO.
+No world-model training backend or such efficiency result is claimed here.
+
 \paragraph{References and physical screening.}
 Ground-truth TAMP planning supplies collision-checked arm paths, retimed with
 minimum-jerk segments under robot-profile speed, acceleration, and jerk limits.
