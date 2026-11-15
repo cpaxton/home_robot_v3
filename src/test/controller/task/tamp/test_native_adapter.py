@@ -457,6 +457,51 @@ def test_policy_change_invalidates_cached_native_handles(native):
     robot.arm_to.assert_not_called()
 
 
+def test_bounded_closure_uses_existing_position_preset_only(native):
+    robot, _, context, _ = native
+    robot.close_gripper.return_value = True
+    adapter = NativeTableAdapter(robot, model=context['_native_tamp_adapter'].model, policy='bounded_release')
+    executor = adapter._executor('object1')
+    assert executor.gripper_close_command() is True
+    robot.close_gripper.assert_called_once_with(loose=True, blocking=False)
+    assert context['_native_tamp_adapter']._executor('object1').gripper_close_command is None
+
+
+def test_diagnostic_gripper_ablation_changes_only_closure_not_shared_limits(native):
+    from emet.eval.contact_stability import TracedNativeAdapter
+    robot, _, context, _ = native
+    model = context['_native_tamp_adapter'].model
+    adapter = TracedNativeAdapter(robot, model=model, trace=Mock(), native_policy='bounded_release', gripper_close_loose=False)
+    assert adapter._executor('object1').gripper_close_command is None
+    assert adapter.arm_extension_margin_m == .0005 and adapter.payload_binding == 'verified_lift'
+    assert adapter.release_limits.open_settle_timeout_s == 12.
+
+
+@pytest.mark.parametrize('substage', ['post_lift_hold', 'loaded_payload_handoff', 'post_release_support'])
+def test_native_verification_substage_is_public_and_does_not_leak_to_next_handle(native, monkeypatch, substage):
+    from emet.controller.task.tamp.api import VerificationFailure
+    _, _, context, call = native
+    adapter = context['_native_tamp_adapter']
+    ref = make_plan(call)
+    ex = adapter.plans[ref].executor
+    ex.grasp_only = Mock(return_value=SimpleNamespace(success=True))
+    ex.place_only = Mock(return_value=SimpleNamespace(success=True))
+    def reject():
+        adapter.last_verification = VerificationFailure(substage, 'payload_not_retained')
+        return False
+    monkeypatch.setattr(adapter, '_verify', lambda *a, released, **k:
+                        reject() if (released == (substage == 'post_release_support') and
+                                     substage != 'loaded_payload_handoff') else True)
+    if substage == 'loaded_payload_handoff':
+        adapter.payload_binding = 'verified_lift'
+        monkeypatch.setattr(adapter, '_bind_loaded_payload', lambda *a, **k: reject())
+    result = call('execute_pick_place_plan', plan_ref=ref)
+    assert result['status'] == 'partial' and result['code'] == 'verification_failed'
+    assert result['data']['verification'] == {'substage': substage, 'reason': 'payload_not_retained'}
+    assert 'object1' not in json.dumps(result)
+    assert 'verification' not in call('execute_pick_place_plan', plan_ref=ref)['data']
+
+
 def test_bounded_grasp_fallback_preserves_old_order_and_budget():
     adapter = object.__new__(NativeTableAdapter)
     adapter.policy, adapter.planning_ik_calls, adapter.max_planning_ik_calls = 'bounded_release', 0, 2

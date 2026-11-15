@@ -70,6 +70,22 @@ def test_already_violated_original_pose_bound_cannot_be_renewed(held):
     assert adapter._bind_loaded_payload(plan) is False
     np.testing.assert_array_equal(plan.executor.collision.payload_transform, previous)
     assert not getattr(plan.executor, '_loaded_binding_done', False)
+    assert adapter.last_verification.to_dict() == {
+        'substage': 'loaded_payload_handoff', 'reason': 'payload_not_retained'}
+
+
+def test_post_lift_hold_cannot_hide_transient_retention_loss(held, monkeypatch):
+    adapter, plan = held
+    original = plan.executor.collision.payload_transform.copy()
+    def sleep(seconds):
+        adapter.data.time += seconds
+        rotate(adapter, .11 if .15 <= adapter.data.time < .3 else 0.)
+    monkeypatch.setattr('emet.controller.task.tamp.native_adapter.time', SimpleNamespace(sleep=sleep))
+    assert adapter._verify(plan, released=False, seconds=.5) is False
+    assert adapter.data.time < .3
+    assert adapter.last_verification.to_dict() == {
+        'substage': 'post_lift_hold', 'reason': 'payload_not_retained'}
+    np.testing.assert_array_equal(plan.executor.collision.payload_transform, original)
 
 
 def test_hold_only_control_checks_stability_but_keeps_original_reference(held):

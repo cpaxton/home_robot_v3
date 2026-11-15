@@ -441,7 +441,8 @@ def test_planned_lift_leaves_offline_payload_at_lifted_pose():
 
 
 @pytest.mark.parametrize("advance, expected", [(0.1, True), (0.0, False)])
-def test_contact_closure_needs_settled_motor_and_advancing_feedback(monkeypatch, advance, expected):
+@pytest.mark.parametrize("custom_close", [False, True])
+def test_contact_closure_needs_settled_motor_and_advancing_feedback(monkeypatch, advance, expected, custom_close):
     import emet.controller.manipulation.physical_pick_place as module
 
     clock = [0.0]
@@ -466,11 +467,21 @@ def test_contact_closure_needs_settled_motor_and_advancing_feedback(monkeypatch,
         collision=MujocoSceneCollisionChecker(m, robot_body="robot"),
         synchronize=sync,
         command_joints=lambda q: True, use_sim_time=True,
+        gripper_close_command=(lambda: robot.close_gripper(loose=True, blocking=False)) if custom_close else None,
     )
     result = executor._close_gripper_until_still(timeout_s=1.0)
     assert result.success == expected
-    assert commands == [{"blocking": False}]
+    assert commands == ([{"loose": True, "blocking": False}] if custom_close else [{"blocking": False}])
     assert executor.payload_body is None  # Motor settling never asserts pickup or attachment.
+
+
+def test_custom_close_without_ack_cannot_be_accepted_as_grasp():
+    from emet.controller.manipulation.physical_pick_place import PhysicalPickPlaceExecutor
+    executor = object.__new__(PhysicalPickPlaceExecutor)
+    executor.robot = SimpleNamespace(get_gripper_position=lambda: .2)
+    executor.gripper_close_command = lambda: None
+    result = executor._close_gripper_until_still()
+    assert not result.success and result.message == 'gripper_close_command_failed'
 
 
 def test_arm_acknowledgment_waits_for_measured_joint_convergence(monkeypatch):

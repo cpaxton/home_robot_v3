@@ -38,6 +38,7 @@ class PhysicalPickPlaceExecutor:
     release_refiner: Callable[[], PhysicalMotionResult] | None = None
     release_verifier: Callable[[], PhysicalMotionResult] | None = None
     released_collision = None
+    gripper_close_command: Callable[[], bool] | None = None
 
     def __init__(
         self,
@@ -62,6 +63,7 @@ class PhysicalPickPlaceExecutor:
         base_body: str | None = None,
         joint_limit_margins=None,
         gripper_open_configuration=(),
+        gripper_close_command=None,
         input_mode: str = "observed",
         object_pose_provider=None,
         visual_verifier=None,
@@ -100,6 +102,7 @@ class PhysicalPickPlaceExecutor:
         self.base_body = base_body
         self.joint_limit_margins = dict(joint_limit_margins or {})
         self.gripper_open_configuration = dict(gripper_open_configuration)
+        self.gripper_close_command = gripper_close_command
         self.grasp_paths: list = []
         self.place_paths: list = []
         self.grasp_targets: list = []
@@ -293,7 +296,8 @@ class PhysicalPickPlaceExecutor:
         position = getattr(self.robot, "get_gripper_position", None)
         if not callable(position):
             return PhysicalMotionResult(False, "unsupported_gripper_feedback", "grasp")
-        response = self.robot.close_gripper(blocking=False)
+        response = (self.gripper_close_command() if self.gripper_close_command is not None
+                    else self.robot.close_gripper(blocking=False))
         if not isinstance(response, (bool, np.bool_)) or not response:
             return PhysicalMotionResult(False, "gripper_close_command_failed", "grasp")
         self.synchronize(self.data)

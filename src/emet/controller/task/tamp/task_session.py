@@ -10,7 +10,7 @@ from typing import Protocol
 
 from emet.controller.manipulation.native_inputs import ObservationUnavailable
 
-from .api import failure_code, response
+from .api import VerificationFailure, failure_code, response
 from .task_budget import BudgetExhausted
 from .task_contracts import BudgetSpec, GoalSpec, TaskState
 from .task_planning import Operator, TaskDomain, search_task
@@ -33,6 +33,7 @@ class TaskExecutionResult:
     success: bool
     execution_started: bool
     failure_code: str = 'task_execution_failed'
+    verification: VerificationFailure | None = None
 
     def __post_init__(self):
         if type(self.success) is not bool or type(self.execution_started) is not bool:
@@ -40,6 +41,8 @@ class TaskExecutionResult:
         if (not isinstance(self.failure_code, str) or self.failure_code == 'operation_failed'
                 or failure_code(self.failure_code) != self.failure_code):
             raise ValueError('invalid_task_execution_code')
+        if self.verification is not None and not isinstance(self.verification, VerificationFailure):
+            raise ValueError('invalid_task_verification_receipt')
 
 
 class TaskProvider(TaskDomain, Protocol):
@@ -114,6 +117,7 @@ class TaskSession:
             if plan is None:
                 return response('execute_task_plan', code='unknown_plan', recovery='replan')
             started, completed, active_step = False, 0, None
+            verification = None
             phase = "initial_validation"
             try:
                 current = self.provider.snapshot()
@@ -121,6 +125,7 @@ class TaskSession:
                 if current.predicates != plan.initial.predicates:
                     raise ValueError('stale_task_plan')
                 for index, operator in enumerate(plan.operators):
+                    verification = None
                     active_step, phase = index+1, "preflight"
                     if not operator.requires <= current.predicates:
                         raise ValueError('task_precondition_failed')
@@ -136,6 +141,8 @@ class TaskSession:
                     if isinstance(receipt, TaskExecutionResult):
                         started = previous_started or receipt.execution_started
                         success = receipt.success
+                        if not success:
+                            verification = receipt.verification
                         if not success and not receipt.execution_started:
                             phase = "preflight"
                     else:
@@ -164,6 +171,7 @@ class TaskSession:
                 return response('execute_task_plan', code=code, status='partial' if started else 'error',
                                 data={'execution_started': started, 'completed_steps': completed,
                                       'planned_steps': len(plan.operators), 'failed_step_1based': active_step,
-                                      'failed_phase': phase})
+                                      'failed_phase': phase,
+                                      **({'verification': verification.to_dict()} if verification is not None else {})})
             return response('execute_task_plan', data={'execution_started': started,
                                                        'completed_steps': completed, 'goal_verified': True})

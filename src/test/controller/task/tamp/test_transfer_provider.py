@@ -272,6 +272,43 @@ def test_native_transfer_preserves_adapter_failure_code():
     assert result == TaskExecutionResult(False, True, 'object_not_lifted')
 
 
+@pytest.mark.parametrize('private', [False, True])
+def test_native_verification_receipt_reaches_task_tools_without_private_fields(private):
+    domain, _ = native_probe_domain()
+    session = TaskSession(domain)
+    ref = session.plan('swap alpha and beta')['data']['plan_ref']
+    domain.transfer = domain._transfer_native
+    domain._refine = lambda *a, **k: 'plan'
+    witness = {'substage': 'post_lift_hold',
+               'reason': '/private/body_123' if private else 'payload_not_retained'}
+    domain.adapter.execute = lambda ref: {'status': 'partial', 'code': 'verification_failed',
+        'data': {'execution_started': True, 'verification': witness}}
+    result = session.execute(ref)
+    assert result['status'] == 'partial' and result['code'] == 'verification_failed'
+    assert result['data']['completed_steps'] == 0
+    if private:
+        assert 'verification' not in result['data']
+    else:
+        assert result['data']['verification'] == witness
+    assert '/private/' not in json.dumps(result) and 'body_123' not in json.dumps(result)
+
+
+def test_verification_receipt_is_typed_and_not_reused_in_a_new_execution():
+    from emet.controller.task.tamp.api import VerificationFailure
+    domain, _, _ = make_domain()
+    session = TaskSession(domain)
+    ref = session.plan('swap alpha and beta')['data']['plan_ref']
+    witness = VerificationFailure('loaded_payload_handoff', 'payload_not_retained')
+    domain.transfer = lambda *a: TaskExecutionResult(False, True, 'verification_failed', witness)
+    assert session.execute(ref)['data']['verification'] == witness.to_dict()
+    ref = session.plan('swap alpha and beta')['data']['plan_ref']
+    domain.transfer = lambda *a: TaskExecutionResult(False, False, 'task_motion_planning_failed')
+    result = session.execute(ref)
+    assert result['data']['execution_started'] is False and 'verification' not in result['data']
+    with pytest.raises(ValueError, match='invalid_task_verification_receipt'):
+        TaskExecutionResult(False, True, 'verification_failed', {'substage': '/private/body'})
+
+
 def test_semantic_failure_after_progress_stops_and_preserves_first_transfer():
     domain, _, calls = make_domain()
     original = domain.transfer

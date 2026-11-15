@@ -464,3 +464,15 @@ def test_unsupported_adapter_does_not_ignore_placement_region():
     result = decoded(tools['plan_pick_place'].func(object_name='bowl', receptacle_name='table',
                                                 placement_region=[[0, 0], [1, 1]]))
     assert result['code'] == 'placement_region_unsupported'
+
+
+@pytest.mark.parametrize('value', [
+    {'substage': '/private/body', 'reason': 'payload_not_retained'},
+    {'substage': 'post_lift_hold', 'reason': '/private/body'},
+    {'substage': 'post_lift_hold', 'reason': ['payload_not_retained']},
+    {'substage': 'post_lift_hold'},
+    {'substage': 'post_lift_hold', 'reason': 'payload_not_retained', 'body': '/private/body'},
+])
+def test_verification_evidence_rejects_private_or_malformed_values(value):
+    from emet.controller.task.tamp.api import VerificationFailure
+    assert VerificationFailure.from_data(value) is None

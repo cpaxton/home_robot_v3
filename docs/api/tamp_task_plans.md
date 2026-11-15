@@ -162,3 +162,29 @@ joint limits when solving IK targets. The coupled extension therefore reserves
 opening; it is not a certified tracking-error bound. Model limits, measured-start
 validation, collision checks and acceptance thresholds remain unchanged. An
 already out-of-range measured start still rejects; no live state is clamped.
+
+Failure receipts can include a finite-vocabulary `data.verification` witness:
+
+```json
+{"substage":"post_lift_hold","reason":"payload_not_retained"}
+```
+
+Native substages distinguish `lift_motion`, `post_lift_hold`,
+`loaded_payload_handoff` and `post_release_support`. The primitive tool and
+multi-step receipt preserve the same witness without private object IDs or
+provider exception text. Unknown/malformed witness fields are discarded at the
+native-provider boundary. Missing evidence remains absent; it is not inferred
+from the generic failure code or reused from an earlier step/handle.
+
+Original payload retention is checked at every sampled post-lift hold update,
+as well as during motion and the loaded handoff. A sampled violation rejects
+immediately and cannot be renewed by a later good sample. This strengthens
+coverage of the existing bound; it does not relax its 20 mm / 0.1 rad limits or
+establish detection between samples.
+
+The bounded development policy now tests Stretch's existing loose-close
+**position preset**. It still requires measured motor settling, lift, retention
+and bilateral hold; reaching a jaw target alone is not pickup success. The
+ordinary legacy command preset and observed/hardware defaults are unchanged.
+This does not change contact physics or supply force sensing/control. Broader
+validation is required before treating it as a generally reliable grasp policy.

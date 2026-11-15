@@ -19,8 +19,13 @@ import numpy as np
 from emet.controller.manipulation.native_inputs import ObservationUnavailable
 from emet.controller.manipulation.native_scene import model_signature, read_snapshot
 from emet.controller.manipulation.physical_pick_place import PhysicalMotionResult, PhysicalPickPlaceExecutor
-from emet.controller.task.tamp.api import failure_code, response
-from emet.controller.task.tamp.native_policy import FINE_GRASP_YAWS, bind_loaded_payload, native_policy
+from emet.controller.task.tamp.api import VerificationFailure, failure_code, response
+from emet.controller.task.tamp.native_policy import (
+    FINE_GRASP_YAWS,
+    bind_loaded_payload,
+    native_policy,
+    verification_failed,
+)
 from emet.motion.mujoco_collision import body_subtree
 from emet.motion.release import refine_release
 from emet.robots.stretch import STRETCH_ARM_CHAIN
@@ -50,12 +55,14 @@ class NativeTableAdapter:
     release_limits = None
     pregrasp_fallback_offset_m = None
     arm_extension_margin_m = 0.0
+    gripper_close_loose = False
 
     def __init__(self, robot, *, model=None, policy='legacy'):
         selected = native_policy(policy)
         self.policy, self.payload_binding, self.release_limits = selected.name, selected.payload_binding, selected.release_limits
         self.pregrasp_fallback_offset_m = selected.pregrasp_fallback_offset_m
         self.arm_extension_margin_m = selected.arm_extension_margin_m
+        self.gripper_close_loose = selected.gripper_close_loose
         if policy == 'bounded_release':
             self.grasp_yaw_offsets = FINE_GRASP_YAWS
         if model is None:
@@ -98,10 +105,11 @@ class NativeTableAdapter:
         self.events.append({'phase': 'planning_rejection', 'stage': phase, 'code': code,
                             'detail': reason, 'contacts': list(executor.collision.last_contacts) if code == 'collision' else []})
 
-    def _failure(self, tool, reason, *, completed=(), phase=None, started=False, identity=None):
+    def _failure(self, tool, reason, *, completed=(), phase=None, started=False, identity=None, verification=None):
         logging.getLogger(__name__).warning("Native TAMP %s failed at %s: %s", tool, phase, reason)
         return response(tool, code=failure_code(reason), status='partial' if completed or started else 'error',
                         data=self._data(**(identity or {}), completed_ops=list(completed), failed_stage=phase, execution_started=bool(started or completed),
+                            **({'verification': verification.to_dict()} if verification is not None else {}),
                             **({'planning_rejections': dict(self.planning_rejections),
                                 'planning_ik_calls': self.planning_ik_calls, 'max_ik_calls': self.max_planning_ik_calls}
                                if tool == 'plan_pick_place' else {})),
@@ -172,6 +180,10 @@ class NativeTableAdapter:
             joint_limit_margins={f'joint_arm_l{i}': self.arm_extension_margin_m
                                  for i in range(4)} if self.arm_extension_margin_m else None,
             gripper_open_configuration=chain.gripper_open_configuration,
+            # Use the robot's existing position preset, never a claimed force
+            # sensor or a change to gripper/contact physics. Lift still verifies.
+            gripper_close_command=(lambda: self.robot.close_gripper(loose=True, blocking=False))
+                                  if self.gripper_close_loose else None,
             base_body='base_link', input_mode='privileged', endpoint_settle_s=.3,
             use_sim_time=True, position_tolerance_m=.003,
             event=lambda **row: self.events.append({"sim_time": float(self.data.time), **row}))
@@ -409,12 +421,19 @@ class NativeTableAdapter:
                 return self._failure('plan_pick_place', str(exc))
 
     def _verify(self, plan, *, released, seconds):
+        self.last_verification = None
         self.synchronize(self.data)
         start = None
         active = plan.executor._settling_window(12.)
         reference = None
+        substage = 'post_release_support' if released else 'post_lift_hold'
+        reason = 'settling_timeout'
         while active():
             self.synchronize(self.data)
+            # The original retained-payload contract applies throughout the
+            # hold, not only to a later handoff sample after an unchecked gap.
+            if not released and not plan.executor.payload_retained():
+                return verification_failed(self, plan.executor, substage, 'payload_not_retained')
             scratch = mujoco.MjData(self.model)
             mujoco.mj_copyData(scratch, self.model, self.data)
             mujoco.mj_collision(self.model, scratch)
@@ -431,16 +450,26 @@ class NativeTableAdapter:
                 height_error = abs(float(entry['pos'][2]) - (plan.goal[2]-.02))
                 valid = (plan.support_body in contacts and not {'rubber_tip_left','rubber_tip_right'} & contacts
                          and error <= .04 and height_error <= .025 and speed <= .01 and spin <= .1)
+                region_valid = True
                 if plan.placement_region is not None:
                     bounds = np.asarray(entry['bounds'])[:, :2]
-                    valid = valid and bool(np.all(bounds[0] >= plan.placement_region[0] - .005)
-                                           and np.all(bounds[1] <= plan.placement_region[1] + .005))
+                    region_valid = bool(np.all(bounds[0] >= plan.placement_region[0] - .005)
+                                        and np.all(bounds[1] <= plan.placement_region[1] + .005))
+                    valid = valid and region_valid
+                reason = ('support_contact_unverified' if plan.support_body not in contacts else
+                          'fingertip_contact_persists' if {'rubber_tip_left', 'rubber_tip_right'} & contacts else
+                          'object_not_settled' if speed > .01 or spin > .1 else
+                          'placement_region_unverified' if not region_valid else 'effect_unverified')
             else:
                 ee = self.data.body(plan.executor.ee_body)
                 relative = ee.xmat.reshape(3,3).T @ (self.data.body(plan.object_body).xpos-ee.xpos)
                 if reference is None:
                     reference = relative.copy()
                 valid = {'rubber_tip_left','rubber_tip_right'} <= contacts and plan.support_body not in contacts and np.linalg.norm(relative-reference) <= .025
+                reason = ('bilateral_contact_unverified' if not {'rubber_tip_left', 'rubber_tip_right'} <= contacts else
+                          'support_contact_persists' if plan.support_body in contacts else 'relative_pose_unstable')
+            if valid:
+                reason = 'settling_timeout'
             if not valid:
                 start = None
             elif start is None:
@@ -448,13 +477,14 @@ class NativeTableAdapter:
             elif self.data.time-start >= seconds:
                 return True
             time.sleep(.05)
-        return False
+        return verification_failed(self, plan.executor, substage, reason)
 
     def _bind_loaded_payload(self, plan, *, rebind=True):
         return bind_loaded_payload(self, plan, rebind=rebind)
 
     def execute(self, plan_ref):
         with self.lock:
+            self.last_verification = None
             plan = self.plans.pop(plan_ref, None)
             if plan is None:
                 return self._failure('execute_pick_place_plan', 'unknown_plan')
@@ -475,11 +505,14 @@ class NativeTableAdapter:
                 phase = 'grasp'
                 result = ex.grasp_only('', object_gt_body=plan.object_body)
                 if not result.success:
-                    return fail(result.message, started=True, phase=result.phase)
+                    witness = (VerificationFailure('lift_motion', 'payload_not_retained'
+                               if 'payload_not_retained' in result.message else 'motion_unverified')
+                               if result.phase == 'lift' else None)
+                    return fail(result.message, started=True, phase=result.phase, verification=witness)
                 if not self._verify(plan, released=False, seconds=1):
-                    return fail('grasp_verification_failed', started=True, phase='lift')
+                    return fail('grasp_verification_failed', started=True, phase='lift', verification=self.last_verification)
                 if self.payload_binding != 'preserve' and not self._bind_loaded_payload(plan, rebind=self.payload_binding == 'verified_lift'):
-                    return fail('grasp_verification_failed', started=True, phase='lift')
+                    return fail('grasp_verification_failed', started=True, phase='lift', verification=self.last_verification)
                 completed.append('grasp')
                 self.synchronize(self.data)
                 ex.place_targets = self._place_targets(ex, plan.object_body, plan.goal, plan.rotation)
@@ -491,7 +524,7 @@ class NativeTableAdapter:
                 if not result.success:
                     return fail(result.message, completed=completed, phase=result.phase)
                 if not self._verify(plan, released=True, seconds=2):
-                    return fail('placement_verify_failed', completed=completed, phase='release')
+                    return fail('placement_verify_failed', completed=completed, phase='release', verification=self.last_verification)
                 completed.append('place')
                 return response('execute_pick_place_plan', data=self._data(**identity, plan_ref=plan_ref,
                     planned_ops=['grasp','place'], completed_ops=completed, failed_stage=None,
