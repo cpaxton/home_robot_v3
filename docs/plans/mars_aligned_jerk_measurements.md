@@ -20,6 +20,15 @@ and analytic teacher. Both must reproduce their archived trajectories and
 metrics exactly. This addresses the plant/sampling question without another
 training variant or any change to the original 24-case record.
 
+The next two-anchor replay enables `--physics-substeps` and records every valid
+2-ms physics step: copied generalized velocities, actuator commands/forces,
+requested base motion and the applied velocity after inner-loop feedback.
+The observer is detached before reset/fixture conditioning. It never calls
+`mj_forward` mid-step: generalized velocities are post-integration, whereas
+actuator forces describe the preceding solve. Actuator-space force units depend
+on the transmission. These raw samples diagnose plant/servo oscillation and
+control-cadence aliasing without treating endpoint velocity as an interval mean.
+
 The observer records the existing v2 RewardMeter on the deterministic evaluation
 states. This is the exact implementation on those states, not a reconstruction
 of the earlier stochastic training trajectories or a changed evaluation reward.

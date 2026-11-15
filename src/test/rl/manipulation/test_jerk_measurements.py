@@ -103,8 +103,9 @@ def test_replay_validator_rejects_changed_actions_and_duplicate_case_records(cou
 
 
 @pytest.mark.sim
+@pytest.mark.parametrize("record_physics", [False, True])
 @pytest.mark.parametrize("case_id", ["train:base:hold", "train:arm:supported_A_up@amplitude:0.25"])
-def test_observer_preserves_native_state_observations_and_exact_gate_channels(case_id):
+def test_observer_preserves_native_state_observations_and_exact_gate_channels(case_id, record_physics):
     from pathlib import Path
 
     from emet.rl.manipulation.basic_learning import load_basic_learning
@@ -114,7 +115,7 @@ def test_observer_preserves_native_state_observations_and_exact_gate_channels(ca
     _, parent = load_development()
     _, _, suite = load_basic_learning(Path("configs/benchmarks/mars_whole_body_basic_learning_v1.json"), parent)
     plain, observed = (MasteryEnv(suite, stages=("base", "arm"), split="all", population="canonical") for _ in range(2))
-    observer = NativeJerkObserver()
+    observer = NativeJerkObserver(record_physics=record_physics)
     try:
         a, _ = plain.reset(options={"case_id": case_id})
         b, _ = observed.reset(options={"case_id": case_id})
@@ -126,6 +127,7 @@ def test_observer_preserves_native_state_observations_and_exact_gate_channels(ca
             a, *_ = plain.step(action)
             b, _, _, _, info = observed.step(action)
             observer.after_step(observed, action, info)
+            assert observed.physics_observer is None
             for key in a:
                 np.testing.assert_array_equal(a[key], b[key])
             for key in ("qpos", "qvel", "ctrl", "act"):
@@ -135,6 +137,14 @@ def test_observer_preserves_native_state_observations_and_exact_gate_channels(ca
             np.testing.assert_array_equal(plain.peak_base_axis_jerk, observed.peak_base_axis_jerk)
         result = observer.summarize()[0]
         assert result["samples"] == 5 and result["max_dt_error_seconds"] < 1e-10
+        assert result["physics_samples"] == (5 * observed.substeps if record_physics else 0)
+        if record_physics:
+            records = observer.current["physics"]
+            assert all(np.isfinite(row["qvel"]).all() for row in records)
+            np.testing.assert_array_equal(records[-1]["qvel"], observed.data.qvel.copy())
+            observed.reset(options={"case_id": case_id})
+            assert observed.physics_observer is None
+            assert len(records) == 5 * observed.substeps  # Reset/conditioning was not observed.
     finally:
         plain.close()
         observed.close()

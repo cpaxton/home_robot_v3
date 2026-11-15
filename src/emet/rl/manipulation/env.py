@@ -434,6 +434,8 @@ class ManipulationEnv(gym.Env):
         self._configure_preview()
         self.monitor = ContactMonitor(self.model, self.profile)
         self.substeps = round(self.profile.dt / self.model.opt.timestep)
+        # Optional read-only diagnostics, attached only around an observed tick.
+        self.physics_observer = None
         self.action_space = spaces.Box(-1, 1, (self.profile.action_size,), dtype=np.float32)
         self.observation_space = spaces.Dict(
             {
@@ -573,6 +575,8 @@ class ManipulationEnv(gym.Env):
                 self.control.stop()
                 self._physics_invalid = True
                 return {"force": 0.0, "bilateral_contact": False, "invalid_physics": True}
+            if self.physics_observer is not None:
+                self.physics_observer(self)
             if score and (
                 last["force"] > self.profile.unsafe_force
                 or self.monitor.wheel_lift

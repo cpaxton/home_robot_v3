@@ -66,7 +66,10 @@ def main():
         action="store_true",
         help="separate two-episode stationary check: initial zero actor and analytic teacher",
     )
+    parser.add_argument("--physics-substeps", action="store_true", help="record native substeps for stationary anchors")
     args = parser.parse_args()
+    if args.physics_substeps and not args.base_hold_anchors:
+        parser.error("physics-substep diagnosis is scoped to the two stationary anchors")
     torch.set_num_threads(1)
     _, parent = load_development()
     _, _, suite = load_basic_learning(Path("configs/benchmarks/mars_whole_body_basic_learning_v1.json"), parent)
@@ -101,6 +104,7 @@ def main():
         "new_ppo_steps": 0,
         "policy_exported": False,
         "reward_changed": False,
+        "physics_substeps_recorded": args.physics_substeps,
         "acceptance_changed": False,
         "variants": {},
     }
@@ -116,7 +120,8 @@ def main():
             else:
                 checkpoint = args.reference_root / name / "last/actor"
                 expected_path = args.reference_root / name / "final-evaluation.json.gz"
-            policy, observer = (WholeBodyBundle(checkpoint) if checkpoint else None), NativeJerkObserver()
+            policy = WholeBodyBundle(checkpoint) if checkpoint else None
+            observer = NativeJerkObserver(record_physics=args.physics_substeps)
             report = evaluate_suite(
                 suite, stages=("base", "arm"), policy=policy, teacher_report=teacher, observer=observer
             )

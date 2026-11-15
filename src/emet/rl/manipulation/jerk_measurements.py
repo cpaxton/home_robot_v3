@@ -64,9 +64,10 @@ class DerivativeChannels:
 class NativeJerkObserver:
     """Read the exact v2 RewardMeter and native acceptance on the same steps."""
 
-    def __init__(self):
+    def __init__(self, *, record_physics=False):
         self.cases = {}
         self.pending = None
+        self.record_physics = record_physics
 
     def reset(self, env, case):
         from emet.rl.manipulation.whole_body_reward import RewardMeter
@@ -92,17 +93,54 @@ class NativeJerkObserver:
         }
         self.cases[case["id"]] = self.current
         self.pending = None
+        if self.record_physics:
+            self.current["physics"] = []
+            self.current["physics_layout"] = {
+                "joints": [
+                    {
+                        "name": env.model.joint(i).name,
+                        "type": int(env.model.jnt_type[i]),
+                        "qvel_address": int(env.model.jnt_dofadr[i]),
+                    }
+                    for i in range(env.model.njnt)
+                ],
+                "actuators": [env.model.actuator(i).name for i in range(env.model.nu)],
+                "timing": (
+                    "qvel is post-integration; ctrl and actuator_force belong to the preceding "
+                    "physics solve; no extra forward pass or derived-pose access"
+                ),
+                "actuator_force_units": "native actuator-space force, not universally newtons",
+            }
+
+    def _physics_step(self, env):
+        self.current["physics"].append(
+            {
+                "time": float(env.data.time),
+                "control_sample": len(self.current["samples"]),
+                "qvel": env.data.qvel.copy().tolist(),
+                "ctrl": env.data.ctrl.copy().tolist(),
+                "actuator_force": env.data.actuator_force.copy().tolist(),
+                "base_command": env.control.base_command.copy().tolist(),
+                "applied_base_velocity": env.control.applied_base_velocity.copy().tolist(),
+            }
+        )
 
     def before_step(self, env, action):
         from emet.rl.manipulation.whole_body_observation import reference_velocity
 
         if self.pending is not None:
             raise RuntimeError("diagnostic step has no matching after-step")
+        if self.record_physics:
+            if env.physics_observer is not None:
+                raise RuntimeError("another physics observer is already attached")
+            env.physics_observer = self._physics_step
         self.pending = (float(env.data.time), reference_velocity(env.control), np.asarray(action).copy())
 
     def after_step(self, env, action, info):
         if self.pending is None:
             raise RuntimeError("diagnostic after-step has no matching before-step")
+        if self.record_physics:
+            env.physics_observer = None
         before_time, motion, requested = self.pending
         np.testing.assert_array_equal(requested, action)
         physical = [np.asarray(getattr(env.data, key)).copy() for key in ("qpos", "qvel", "ctrl", "act")]
@@ -168,9 +206,10 @@ class NativeJerkObserver:
             ):
                 raise ValueError("diagnostic failed to reproduce the native jerk peak")
             result.append(
-                {key: value for key, value in case.items() if key != "samples"}
+                {key: value for key, value in case.items() if key not in {"samples", "physics"}}
                 | {
                     "samples": len(samples),
+                    "physics_samples": len(case.get("physics", [])),
                     "channel_peaks": channel_peaks,
                     "readonly_reward_group_totals": np.sum(
                         [row["reward_groups_readonly"] for row in samples], axis=0
