@@ -73,16 +73,28 @@
       Freeze the strict candidate for a broader matched EQA/find pilot; any
       larger horizon must apply to both arms. No system superiority is claimed.
       Plan: `docs/experiments/closer_view_feedback_20261113.md`.
-- [ ] Run the frozen recovery-budget check: new candidate at 6/3, then baseline
+- [x] Run the frozen recovery-budget check: new candidate at 6/3, then baseline
       and candidate at 12/8 rounds/navigation calls per find phase. Driver and
       opt-in acceptance profile now expose/use 12/8; independent navigation
       exhaustion is recorded, and relative motion uses the shared counter.
       Explicit answer commits, bounded HTTP CHAT history and cached-camera
       labeling are repaired/covered. Preserve a new low-budget control because
-      answer semantics changed too. GPU runs await the 20 GiB disk reserve;
-      archived-model deduplication was rejected by automatic approval review
-      and remains unapplied pending user approval. No new task result yet.
+      answer semantics changed too. All three episodes complete: candidate 1/2
+      at 6/3, baseline and candidate both 2/2 at 12/8. Candidate query time
+      165 s versus 332 s baseline in this one stochastic episode, not a stable
+      speedup claim. Candidate 13/13 actions match model choices; baseline uses
+      two legacy redirects. Microwave geometry is admitted at 1.646 m median
+      proposal depth versus a 3.476 m rejection in the low control. The bowl
+      phase changes the next phase's start pose; deliberate recovery from the
+      range receipt and causal budget benefit are not established. Approved
+      ten-file deduplication freed 5.24 GiB; the run declared a monitored 16 GiB
+      floor. Further live tests are pending headroom (about 13 GiB on Nov 15).
       Review/protocol: `docs/experiments/recovery_budget_review_20261114.md`.
+- [ ] Repeat matched 12/8 find checks and small EQA/another-room acceptance;
+      preserve failures and compare then-current main before scaling. Add a
+      shared-start out-of-range diagnostic to distinguish model-selected closer
+      views from incidental gains caused by a preceding task's trajectory.
+      Do not add answer overrides or automatic high-level action substitutions.
 - [ ] Emit actual per-episode simulation duration, model inference cost and
       invocation overhead in paper-run manifests. Clock probes and reported
       episode wall metrics alone do not measure complete task simulation time.
