@@ -2,6 +2,7 @@
 # Licensed under the Apache License, Version 2.0 (see LICENSE).
 
 import copy
+import hashlib
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -70,6 +71,7 @@ def test_shape_is_part_of_pixel_identity_and_current_duplicates_are_not_silently
     context = ImageContext(3)
     packet = context.pack([{"role": "user", "content": [a, b, a.copy()]}])
     assert packet.audit["unique_pixel_images"] == 2
+    assert packet.audit["occurrences"][0]["pixel_sha256"] == hashlib.sha256(a.tobytes()).hexdigest()
     assert packet.audit["attached_images"] == 3
     assert len(attached(packet.messages)) == 3
 

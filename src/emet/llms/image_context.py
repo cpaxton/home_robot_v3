@@ -29,19 +29,20 @@ class ImageContext:
             raise ValueError("max_images must be a positive integer or None (full-context ablation)")
         self.max_images = max_images
         self._scope = uuid4().hex[:12]
-        self._by_pixels: dict[str, str] = {}
+        self._by_pixels: dict[tuple, str] = {}
         self.images: dict[str, Image.Image | np.ndarray] = {}
 
     def _register(self, image):
         pixels = np.asarray(image.convert("RGB") if isinstance(image, Image.Image) else image)
         if pixels.dtype != np.uint8 or pixels.ndim != 3 or pixels.shape[-1] != 3:
             raise ValueError("Image context expects RGB uint8 camera images")
-        digest = hashlib.sha256(str(pixels.shape).encode() + pixels.tobytes()).hexdigest()
-        if digest not in self._by_pixels:
+        digest = hashlib.sha256(pixels.tobytes()).hexdigest()
+        identity = (pixels.shape, digest)
+        if identity not in self._by_pixels:
             view_id = f"view_{self._scope}_{len(self.images) + 1:04d}"
-            self._by_pixels[digest] = view_id
+            self._by_pixels[identity] = view_id
             self.images[view_id] = image
-        return self._by_pixels[digest], digest, list(pixels.shape[:2])
+        return self._by_pixels[identity], digest, list(pixels.shape[:2])
 
     def pack(self, messages: list[dict]) -> ImagePacket:
         occurrences = []
