@@ -39,6 +39,7 @@ class PhysicalPickPlaceExecutor:
     release_verifier: Callable[[], PhysicalMotionResult] | None = None
     released_collision = None
     gripper_close_command: Callable[[], bool] | None = None
+    gripper_hold_command: Callable[[], bool] | None = None
 
     def __init__(
         self,
@@ -301,14 +302,35 @@ class PhysicalPickPlaceExecutor:
         if not isinstance(response, (bool, np.bool_)) or not response:
             return PhysicalMotionResult(False, "gripper_close_command_failed", "grasp")
         self.synchronize(self.data)
+        started = self._motion_time()
+        result = self._wait_gripper_still(position, timeout_s,
+            event_phase="gripper_motor_settled" if self.gripper_hold_command is not None else "gripper_settled")
+        if not result.success or self.gripper_hold_command is None:
+            return result
+        response = self.gripper_hold_command()
+        if not isinstance(response, (bool, np.bool_)) or not response:
+            return PhysicalMotionResult(False, "gripper_hold_command_failed", "grasp")
+        self.synchronize(self.data)
+        remaining = timeout_s - (self._motion_time() - started)
+        if remaining <= 0:
+            return PhysicalMotionResult(False, "gripper_settling_timeout", "grasp")
+        return self._wait_gripper_still(position, remaining)
+
+    def _wait_gripper_still(self, position, timeout_s, *, event_phase="gripper_settled"):
         start_sim_time = float(self.data.time)
-        previous = float(position())
+        try:
+            previous = float(position())
+        except (TypeError, ValueError):
+            return PhysicalMotionResult(False, "invalid_gripper_feedback", "grasp")
         active = self._settling_window(timeout_s)
         stable_since = self._motion_time()
         while active():
             time.sleep(0.05)
             self.synchronize(self.data)
-            current = float(position())
+            try:
+                current = float(position())
+            except (TypeError, ValueError):
+                return PhysicalMotionResult(False, "invalid_gripper_feedback", "grasp")
             if not np.isfinite([current, previous]).all():
                 return PhysicalMotionResult(False, "invalid_gripper_feedback", "grasp")
             # Accumulate small drift relative to the stable-interval anchor.
@@ -317,7 +339,7 @@ class PhysicalPickPlaceExecutor:
                 previous = current
             if (self._motion_time() - stable_since >= 0.3
                     and (not self.use_sim_time or self.data.time - start_sim_time >= 0.25)):
-                self.event(phase="gripper_settled", measured=current, controller_success=True)
+                self.event(phase=event_phase, measured=current, controller_success=True)
                 return PhysicalMotionResult(True, "gripper_settled", "grasp")
         return PhysicalMotionResult(False, "gripper_settling_timeout", "grasp")
 

@@ -105,6 +105,7 @@ def prepare(args, pilot, case, out):
     sources.mkdir()
     hashes = {}
     for name in ('scripts/eval_tamp_contact_stability.py', 'src/emet/eval/contact_stability.py',
+                 'src/emet/simulation/stretch_mujoco/config.py', 'src/emet/motion/kinematics.py',
                  'src/emet/controller/task/tamp/api.py', 'src/emet/controller/task/tamp/task_session.py',
                  'src/emet/motion/release.py', 'src/emet/controller/task/tamp/native_policy.py',
                  'src/emet/controller/task/tamp/native_transfer.py',
@@ -117,6 +118,7 @@ def prepare(args, pilot, case, out):
     policy_config = asdict(native_policy(args.native_policy)) if args.native_policy else None
     if policy_config is not None and gripper_close_override(args) is not None:
         policy_config['gripper_close_loose'] = gripper_close_override(args)
+        policy_config['gripper_contact_hold_fraction'] = 0.0
     protocol = {'case_id': case['case_id'], 'instruction': case['instruction'], 'task': case['task'],
                 'policy': args.policy, 'native_policy': args.native_policy,
                 'native_policy_config': policy_config,

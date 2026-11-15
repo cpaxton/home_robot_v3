@@ -202,6 +202,9 @@ def failure_code(message: str) -> str:
     message = {
         "ambiguous_object_use_scene_tasks": "ambiguous_object",
         "ambiguous_receptacle_use_scene_tasks": "ambiguous_receptacle",
+        "gripper_close_command_failed": "execution_error",
+        "gripper_hold_command_failed": "execution_error",
+        "invalid_gripper_feedback": "invalid_measured_state",
     }.get(message, message)
     # MCTS wraps a bounded grounding failure; preserve only its known code,
     # never arbitrary body identifiers or planner details from that wrapper.

@@ -32,6 +32,7 @@ class NativePolicy:
     pregrasp_fallback_offset_m: tuple[float, float, float] | None = None
     arm_extension_margin_m: float = 0.0
     gripper_close_loose: bool = False
+    gripper_contact_hold_fraction: float = 0.0
 
 
 def native_policy(name):
@@ -45,7 +46,7 @@ def native_policy(name):
             release_limits=ReleaseLimits(0.04, 0.04, open_settle_timeout_s=12.0),
             pregrasp_fallback_offset_m=(0.0, 0.0, 0.08),
             arm_extension_margin_m=0.0005,
-            gripper_close_loose=True,
+            gripper_contact_hold_fraction=0.5,
         )
     )
 

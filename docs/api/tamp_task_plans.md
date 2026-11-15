@@ -182,9 +182,18 @@ immediately and cannot be renewed by a later good sample. This strengthens
 coverage of the existing bound; it does not relax its 20 mm / 0.1 rad limits or
 establish detection between samples.
 
-The bounded development policy now tests Stretch's existing loose-close
-**position preset**. It still requires measured motor settling, lift, retention
-and bilateral hold; reaching a jaw target alone is not pickup success. The
-ordinary legacy command preset and observed/hardware defaults are unchanged.
-This does not change contact physics or supply force sensing/control. Broader
-validation is required before treating it as a generally reliable grasp policy.
+The bounded development policy tests a contact-relative **position target**.
+After the normal full-close command settles, it targets the midpoint between
+the measured motor position and the original close preset, then requires a
+second settling interval within the same total closing budget. This retains
+half the position error without using pad pose or force feedback. Lift,
+retention and bilateral hold must still pass; motor settling alone is not
+pickup success. The ordinary legacy command and observed/hardware defaults
+are unchanged. No contact physics or sensor availability is changed.
+
+The prior fixed loose-close pilot passed the swap but failed the familiar
+control; it is not a general solution. Its results remain in
+[the pilot report](../experiments/tamp_native_closure_pilot_20261114.md).
+The contact-relative candidate needs live validation before any reliability
+claim. The diagnostic `--gripper-close-preset default|loose` override disables
+the contact-relative adjustment and archives the effective policy.

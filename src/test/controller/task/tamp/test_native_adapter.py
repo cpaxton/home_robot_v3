@@ -40,6 +40,7 @@ def native(table_model):
             'source': 'simulator_ground_truth', 'model_signature': model_signature(model),
             'qpos': data.qpos.tolist(), 'qvel': data.qvel.tolist(), 'sim_time': float(data.time),
             'captured_at': time.time()}}, arm_to=Mock(), open_gripper=Mock(), close_gripper=Mock(),
+        gripper_to=Mock(return_value=None), get_gripper_position=Mock(return_value=0.),
         get_emet_session=lambda: {'is_simulation': True, 'sim_object_placements': {
             'object1': {'cat': 'blue cube'}, 'object2': {'cat': 'red cylinder'}, 'table': {'cat': 'table'}}})
     context = {'robot': robot, 'manip_mode': 'physical', 'tamp_inputs': 'privileged',
@@ -457,14 +458,43 @@ def test_policy_change_invalidates_cached_native_handles(native):
     robot.arm_to.assert_not_called()
 
 
-def test_bounded_closure_uses_existing_position_preset_only(native):
+@pytest.mark.parametrize('measured', [.12, -.05, -.375])
+def test_bounded_contact_hold_uses_measured_motor_position_and_normal_commands(native, measured):
     robot, _, context, _ = native
-    robot.close_gripper.return_value = True
+    robot.get_gripper_position.return_value = measured
     adapter = NativeTableAdapter(robot, model=context['_native_tamp_adapter'].model, policy='bounded_release')
     executor = adapter._executor('object1')
-    assert executor.gripper_close_command() is True
-    robot.close_gripper.assert_called_once_with(loose=True, blocking=False)
+    before = adapter.data.qpos.copy()
+    assert executor.gripper_close_command is None
+    assert executor.gripper_hold_command() is True
+    target = robot.gripper_to.call_args.args[0]
+    assert target == pytest.approx(max(-.3, .5 * (measured - .3)))
+    assert robot.gripper_to.call_args.kwargs == {'blocking': False}
+    np.testing.assert_array_equal(adapter.data.qpos, before)
+    robot.arm_to.assert_not_called()
+    robot.close_gripper.assert_not_called()
     assert context['_native_tamp_adapter']._executor('object1').gripper_close_command is None
+    assert context['_native_tamp_adapter']._executor('object1').gripper_hold_command is None
+
+
+@pytest.mark.parametrize('feedback', [None, float('nan'), 'bad-feedback', -1., 1.])
+def test_contact_hold_rejects_invalid_encoder_without_a_command(native, feedback):
+    robot, _, context, _ = native
+    adapter = NativeTableAdapter(robot, model=context['_native_tamp_adapter'].model, policy='bounded_release')
+    robot.get_gripper_position.return_value = feedback
+    assert adapter._executor('object1').gripper_hold_command() is False
+    robot.gripper_to.assert_not_called()
+
+
+@pytest.mark.parametrize('missing', ['gripper_to', 'get_gripper_position'])
+def test_contact_hold_capability_is_required_before_planning_or_motion(native, missing):
+    robot, _, context, _ = native
+    adapter = NativeTableAdapter(robot, model=context['_native_tamp_adapter'].model, policy='bounded_release')
+    setattr(robot, missing, None)
+    assert adapter.plan(object_name='blue cube', receptacle_name='table')['code'] == 'native_execution_unavailable'
+    robot.arm_to.assert_not_called()
+    robot.open_gripper.assert_not_called()
+    robot.close_gripper.assert_not_called()
 
 
 def test_diagnostic_gripper_ablation_changes_only_closure_not_shared_limits(native):
@@ -473,6 +503,8 @@ def test_diagnostic_gripper_ablation_changes_only_closure_not_shared_limits(nati
     model = context['_native_tamp_adapter'].model
     adapter = TracedNativeAdapter(robot, model=model, trace=Mock(), native_policy='bounded_release', gripper_close_loose=False)
     assert adapter._executor('object1').gripper_close_command is None
+    assert adapter._executor('object1').gripper_hold_command is None
+    assert adapter.gripper_contact_hold_fraction == 0.
     assert adapter.arm_extension_margin_m == .0005 and adapter.payload_binding == 'verified_lift'
     assert adapter.release_limits.open_settle_timeout_s == 12.
 

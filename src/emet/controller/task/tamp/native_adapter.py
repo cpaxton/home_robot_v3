@@ -56,6 +56,7 @@ class NativeTableAdapter:
     pregrasp_fallback_offset_m = None
     arm_extension_margin_m = 0.0
     gripper_close_loose = False
+    gripper_contact_hold_fraction = 0.0
 
     def __init__(self, robot, *, model=None, policy='legacy'):
         selected = native_policy(policy)
@@ -63,6 +64,7 @@ class NativeTableAdapter:
         self.pregrasp_fallback_offset_m = selected.pregrasp_fallback_offset_m
         self.arm_extension_margin_m = selected.arm_extension_margin_m
         self.gripper_close_loose = selected.gripper_close_loose
+        self.gripper_contact_hold_fraction = selected.gripper_contact_hold_fraction
         if policy == 'bounded_release':
             self.grasp_yaw_offsets = FINE_GRASP_YAWS
         if model is None:
@@ -76,6 +78,7 @@ class NativeTableAdapter:
         self.tasks, self.plans = {}, {}
         self.lock = threading.RLock()
         self.events = []
+        self.last_verification = None
         self.planning_rejections = {}
         self.planning_ik_calls = 0
         self.synchronize(self.data)
@@ -171,7 +174,7 @@ class NativeTableAdapter:
             # The client's generic "stopped moving" heuristic rejects loaded grasps
             # even inside the executor's unchanged 0.03 joint tolerance.
             return self.robot.arm_to(cmd, head=head, blocking=False)
-        return PhysicalPickPlaceExecutor(self.robot, model=self.model, data=self.data,
+        executor = PhysicalPickPlaceExecutor(self.robot, model=self.model, data=self.data,
             ee_body=chain.ee_body, joint_names=joints, collision=checker,
             synchronize=self.synchronize, command_joints=command,
             coupled_groups=(tuple(f'joint_arm_l{i}' for i in range(4)),),
@@ -187,6 +190,44 @@ class NativeTableAdapter:
             base_body='base_link', input_mode='privileged', endpoint_settle_s=.3,
             use_sim_time=True, position_tolerance_m=.003,
             event=lambda **row: self.events.append({"sim_time": float(self.data.time), **row}))
+        if self.gripper_contact_hold_fraction:
+            executor.gripper_hold_command = lambda: self._hold_gripper_contact(executor)
+        return executor
+
+    def _hold_gripper_contact(self, executor):
+        """Relax the full-close target relative to the measured motor stop.
+
+        Uses the existing encoder/position command and known command bounds,
+        not pad pose, contact force, or a hardware force rating.
+        Later lift/retention checks must still establish a physical grasp.
+        """
+        from emet.motion.kinematics import HelloStretchKinematics
+        from emet.simulation.stretch_mujoco.config import robot_settings
+        self.synchronize(self.data)
+        try:
+            measured = float(self.robot.get_gripper_position())
+        except (TypeError, ValueError):
+            return False
+        lo, hi = robot_settings['gripper_min_max']
+        fraction = self.gripper_contact_hold_fraction
+        robot_model = getattr(self.robot, '_robot_model', None)
+        closed = float(getattr(robot_model, 'GRIPPER_CLOSED', HelloStretchKinematics.GRIPPER_CLOSED))
+        if (not np.isfinite([measured, fraction, closed]).all()
+                or not lo <= measured <= hi or not 0 < fraction <= 1 or not lo <= closed <= hi):
+            return False
+        # Retain a fraction of the stopped motor's full-close position error.
+        # Never command more closure than the original robot preset. This is
+        # position feedback, not a force measurement or a force guarantee.
+        command = max(closed, measured - fraction * (measured - closed))
+        returned = self.robot.gripper_to(command, blocking=False)
+        # Stretch gripper_to returns None after its reliable send, as also used
+        # by close_gripper. It is a transport return, never pickup acceptance.
+        ok = returned is None or (isinstance(returned, (bool, np.bool_)) and bool(returned))
+        executor.event(phase='gripper_hold_target', command_returned=bool(ok),
+                       measured_encoder_position=measured, target_encoder_position=command,
+                       default_close_target=closed, retained_error_fraction=fraction,
+                       position_units='stretch_gripper_command')
+        return ok
 
     def _pinch_center_offset(self):
         """Nominal opposing contact midpoint in the EE frame, from robot geometry.
@@ -280,6 +321,9 @@ class NativeTableAdapter:
 
     def plan(self, task_ref='', object_name='', receptacle_name='', placement_region=None):
         with self.lock:
+            if self.gripper_contact_hold_fraction and not all(callable(getattr(self.robot, name, None))
+                    for name in ('gripper_to', 'get_gripper_position')):
+                return self._failure('plan_pick_place', 'native_execution_unavailable')
             self.planning_rejections = {}
             self.planning_ik_calls = 0
             try:

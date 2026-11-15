@@ -64,8 +64,8 @@ def test_prepare_only_binds_shifted_fixture_and_never_starts_controllers(runner,
     assert (out / "protocol.json").read_bytes() == saved
 
 
-@pytest.mark.parametrize('preset, effective', [(None, True), ('default', False), ('loose', True)])
-def test_gripper_ablation_archives_effective_shared_policy_without_actuation(runner, monkeypatch, tmp_path, preset, effective):
+@pytest.mark.parametrize('preset, effective, fraction', [(None, False, .5), ('default', False, 0.), ('loose', True, 0.)])
+def test_gripper_ablation_archives_effective_shared_policy_without_actuation(runner, monkeypatch, tmp_path, preset, effective, fraction):
     out = tmp_path / 'gripper-policy'
     argv = ['eval_tamp_contact_stability', '--case-id', 'two-goal-shift',
             '--native-policy', 'bounded_release', '--port-offset', '2570',
@@ -80,6 +80,7 @@ def test_gripper_ablation_archives_effective_shared_policy_without_actuation(run
     protocol = json.loads((out / 'protocol.json').read_text())
     assert protocol['gripper_close_preset_override'] == preset
     assert protocol['native_policy_config']['gripper_close_loose'] is effective
+    assert protocol['native_policy_config']['gripper_contact_hold_fraction'] == fraction
     assert json.loads((out / 'summary.json').read_text())['audit_commands'] == 0
 
 
