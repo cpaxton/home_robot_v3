@@ -684,3 +684,20 @@ There are no PPO updates, policy promotion or hardware trials. The corrected
 teacher probe, learned comparison, raw-archive identities and an excluded
 first probe with a lifecycle error are retained in
 \texttt{mars\_aligned\_jerk\_measurements\_v1/results.json} and its report.
+
+A subsequent actual-reset validation enables current-velocity feedback before
+initialization. Both feedback variants confirm all twelve measured stops across
+nominal/reverse/yaw, finite end-effector pushes and mid-motion cancellation,
+with maximum stopping time 0.15 simulated seconds. Fresh regressions pass
+1,299/1,299. On the shared twelve cases, retained legacy achieves 12/12 full
+passes versus GRU candidate 8/12; its broader result is 151/164, including
+49/50 base, 100/106 arm and 2/8 coupled. Current and archived teacher-relative
+budgets are reported separately. Actual public-tool pregrasp success remains
+0/6 for retained legacy versus teacher 5/6. A further twenty-four episodes with
+extra initialization settling, the frozen velocity-feature final and GRU
+candidate produce no learned pregrasp success. The teacher's difficult case
+becomes a planning rejection after settling. These results favor the retained
+general baseline and motivate execution/distribution diagnosis before further
+optimization; they do not qualify manipulation or hardware. Complete cases,
+budget identities and stopped/rejected outcomes are in
+\texttt{mars\_current\_feedback\_validation\_v2/}.

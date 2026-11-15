@@ -111,9 +111,15 @@ merges, measured policy improvement and hardware readiness are separate decision
       low-level base feedback/oscillation first, validate current-velocity
       feedback through reset/motion/stop, then train missing directions on the
       corrected plant. Matched current-COM replay already improves frozen
-      candidate full success 2/12→8/12 with no PPO or gate change; publish the
-      companion diagnostic before treating the option as qualified. Next
-      curriculum pair is bounded at 16,384 decisions per variant after fresh
+      candidate full success 2/12→8/12 with no PPO or gate change. The completed
+      [actual-reset validation](docs/experiments/mars_current_feedback_reset_validation_20261115.md)
+      confirms 24 stops and 1,299 regressions; legacy reaches 151/164 general and
+      12/12 common cases, but 0/6 TAMP versus teacher 5/6. Diagnose actual TAMP
+      tracking inputs/timing and the initialization-sensitive planning case
+      before selecting more GRU training. Settling/velocity/GRU frozen probes
+      did not close this gap. Keep PR #240's 17 training and 24 audit cases
+      distinct from admitted/trained evidence. The conditional curriculum
+      pair remains bounded at 16,384 decisions per variant after fresh
       source/teacher gates; preserve reward/representation and report exact
       per-case exposure. Measurement/reward changes are conditional if still
       needed, not simultaneous knobs. Preserve original scores and independent
