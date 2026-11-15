@@ -104,3 +104,25 @@ Repeated loss of hold produces `cartesian_hold_unsettled`, publicly reported as
 `tracking_timeout`. Test a physical wrist disturbance, repeated disturbance
 exhaustion, unchanged grip/history/clock and refusal to clear a stop before
 freezing the updated source. No further tolerance or physics change.
+
+## Physical stance preparation
+
+After the hold fix, the region actor completes grasp and closure; measured-state
+lift planning rejects its support margin before issuing lift. Run exactly two
+additional teacher/actor attempts with `--study physical_stance`, fresh output,
+and case suffix `@physical_stance`. Preserve all previous outcomes.
+
+Before discovery/planning, use the same controller to follow a continuous
+S-curve 20 mm forward base trajectory with fixed world hand pose and open jaw.
+No physical state reset or IK hint is supplied to the actor. This is an explicit
+simulator preparation experiment, not automatic production stance selection.
+Record both initial and prepared state hashes. Do not claim the preparation is
+the unchanged original benchmark or pool its outcomes with those cases.
+
+Keep profile wheel speed/acceleration limits and the experimental 1 m/s^3
+reference jerk bound. Audit actual configuration collisions and the unchanged
+5 mm static support margin each preparation tick, alongside the robot's normal
+force/wheel/physics guards. Require measured arrival and quiet hold before any
+public TAMP planning. Then use the same 4 mm / 0.04 rad pregrasp/grasp contracts,
+strict lift/placement and original retention threshold. No gain, grip/friction,
+budget changes, teacher fallback, automatic retry or hardware motion.

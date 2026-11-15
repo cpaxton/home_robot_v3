@@ -26,18 +26,97 @@ from emet.agent.tools import get_tools
 from emet.controller.task.tamp.mars_sim_robot import MarsSimRobot
 from emet.controller.task.tamp.native_adapter import adapter_for
 from emet.eval.mars_tamp_control import final_predicates, fixture, sources
+from emet.eval.physical_tamp import make_scene_checker
 from emet.rl.manipulation.command_runtime import TaskPoseRuntimeTiming, task_pose_teacher_action
+from emet.rl.manipulation.grasp_setup import support_margin
+from emet.rl.manipulation.jerk_reference import compile_joint_path
 from emet.rl.manipulation.mastery import save_report
 from emet.rl.manipulation.policy import load_control_policy
+from emet.rl.manipulation.profiles import MARS
 from emet.rl.manipulation.tamp_policy import robot_identity
+from emet.rl.manipulation.tracking import TaskPoseTrajectory
 from emet.rl.manipulation.whole_body_observation import actor_observation
 from emet.rl.manipulation.whole_body_training import load_development
 
 GROUPS = ("teacher_precision", "actor_precision", "teacher_region", "actor_region")
 ROBUST_GROUPS = ("teacher_maximum_margin", "actor_maximum_margin")
 GRASP_GROUPS = ("teacher_grasp_region", "actor_grasp_region")
+STANCE_GROUPS = ("teacher_physical_stance", "actor_physical_stance")
 REGION = (0.004, 0.04)
 WEIGHTS = "e7b425699510cc635485bdd8f59a5b25692fb165faf248aaecbc2707c0dbb883"
+
+
+class FixedHandStanceTrajectory(TaskPoseTrajectory):
+    """Continuous scalar S-curve, fixed world hand, 20 mm forward base goal."""
+
+    def __init__(self, base, hand, grip):
+        self.start_base, self.fixed_hand = np.asarray(base).copy(), np.asarray(hand).copy()
+        self.direction = np.array([np.cos(base[2]), np.sin(base[2]), 0.0])
+        self.scalar, self.certificate = compile_joint_path(
+            [[0.0], [0.02]],
+            [MARS.base_speed],
+            [MARS.base_acceleration],
+            [1.0],
+            phase_acceleration=2.0,
+            phase_jerk=80.0,
+            profile="s_curve",
+        )
+        super().__init__(
+            [0, self.scalar.end],
+            [base, self.start_base + 0.02 * self.direction],
+            [hand, hand],
+            [grip, grip],
+            base_mask=[True] * 3,
+        )
+
+    def sample(self, time):
+        distance = self.scalar.sample(time)[0][0]
+        return self.start_base + distance * self.direction, self.fixed_hand.copy(), float(self.gripper[0])
+
+    def record(self):
+        return {
+            **super().record(),
+            "interpolation": "continuous_s_curve_translation_fixed_world_hand",
+            "scalar_derivative_certificate": self.certificate,
+            "scope": "simulator physical preparation; no continuous collision or dynamics certificate",
+        }
+
+
+def prepare_physical_stance(robot):
+    env = robot.env
+    checker = make_scene_checker(
+        env.model, {"object_body": env.payload_name, "gripper_bodies": env.profile.finger_bodies}
+    )
+    scratch = mujoco.MjData(env.model)
+    evidence = {"minimum_measured_support_margin_m": 1.0, "collision": False}
+
+    def audit():
+        mujoco.mj_copyData(scratch, env.model, env.data)
+        collided = bool(checker.configuration_collides(env.model, scratch))
+        margin = support_margin(env.model, scratch, env.profile, None)["margin_m"]
+        evidence["minimum_measured_support_margin_m"] = min(evidence["minimum_measured_support_margin_m"], margin)
+        evidence["collision"] |= collided
+        if collided or margin < 0.005:
+            robot.failure = robot.failure or (
+                "stance_configuration_collision" if collided else "stance_static_support_margin"
+            )
+            robot.servo.stop()
+
+    path = FixedHandStanceTrajectory(robot.servo.base_pose(), robot.servo.ee_pose(), robot.servo.grip_reference)
+    evidence["trajectory"] = path.record()
+    audit()
+    robot.step_observer = audit
+    try:
+        result = robot.follow_trajectory(path, loaded=False)
+    finally:
+        robot.step_observer = None
+    return {
+        **evidence,
+        "success": bool(result.success),
+        "reason": result.message,
+        "measured_base": robot.servo.base_pose().tolist(),
+        "measured_hand": robot.servo.ee_pose().tolist(),
+    }
 
 
 def execute_stage_contract(executor, original, phase, path, *, grasp_region):
@@ -79,6 +158,8 @@ def episode(group, output):
     maximum_margin = group in ROBUST_GROUPS
     if maximum_margin:
         case = {**case, "id": case["id"] + "@maximum_margin"}
+    if group in STANCE_GROUPS:
+        case = {**case, "id": case["id"] + "@physical_stance"}
     env = robot = adapter = None
     row = {"group": group, "case": case, "success": False, "stage_results": [], "calls": []}
     raw = {}
@@ -124,6 +205,13 @@ def episode(group, output):
             arm_execution="cartesian",
             arm_reference="s_curve",
         )
+        if group in STANCE_GROUPS:
+            row["physical_preparation"] = prepare_physical_stance(robot)
+            row["prepared_state_sha256"] = hashlib.sha256(
+                np.r_[env.data.qpos.copy(), env.data.qvel.copy(), float(env.data.time)].tobytes()
+            ).hexdigest()
+            if not row["physical_preparation"]["success"]:
+                raise ValueError("physical_preparation:" + row["physical_preparation"]["reason"])
         context = {
             "robot": robot,
             "manip_mode": "physical",
@@ -145,10 +233,12 @@ def episode(group, output):
         adapter = adapter_for(context, robot)
         plan = adapter.plans[planned["data"]["plan_ref"]]
         executor = plan.executor
-        executor.pregrasp_arrival_tolerance = REGION if group.endswith("region") or maximum_margin else None
+        executor.pregrasp_arrival_tolerance = (
+            REGION if group.endswith("region") or maximum_margin or group in STANCE_GROUPS else None
+        )
         row["arrival_region"] = executor.pregrasp_arrival_tolerance
         row["other_stage_tolerances"] = [executor.position_tolerance_m, executor.orientation_tolerance_rad]
-        row["grasp_stage_region"] = REGION if group in GRASP_GROUPS else None
+        row["grasp_stage_region"] = REGION if group in GRASP_GROUPS + STANCE_GROUPS else None
         row["pregrasp_to_grasp_offset_m"] = (
             np.asarray(executor.grasp_targets[0][0]) - executor.grasp_targets[1][0]
         ).tolist()
@@ -161,7 +251,9 @@ def episode(group, output):
             # retiming and arrival together. It is NOT the endpoint-only study.
             # Fresh planning/configuration and all independent runtime guards
             # remain active; later stages restore the strict contract.
-            result = execute_stage_contract(executor, original, phase, path, grasp_region=group in GRASP_GROUPS)
+            result = execute_stage_contract(
+                executor, original, phase, path, grasp_region=group in GRASP_GROUPS + STANCE_GROUPS
+            )
             row["stage_results"].append(
                 {
                     "phase": phase,
@@ -220,8 +312,10 @@ def episode(group, output):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", required=True, type=Path)
-    parser.add_argument("--episode", choices=GROUPS + ROBUST_GROUPS + GRASP_GROUPS)
-    parser.add_argument("--study", choices=("arrival", "maximum_margin", "grasp_region"), default="arrival")
+    parser.add_argument("--episode", choices=GROUPS + ROBUST_GROUPS + GRASP_GROUPS + STANCE_GROUPS)
+    parser.add_argument(
+        "--study", choices=("arrival", "maximum_margin", "grasp_region", "physical_stance"), default="arrival"
+    )
     args = parser.parse_args()
     if args.episode:
         episode(args.episode, args.output)
@@ -241,7 +335,12 @@ def main():
     }
     try:
         summary["study"] = args.study
-        groups = {"arrival": GROUPS, "maximum_margin": ROBUST_GROUPS, "grasp_region": GRASP_GROUPS}[args.study]
+        groups = {
+            "arrival": GROUPS,
+            "maximum_margin": ROBUST_GROUPS,
+            "grasp_region": GRASP_GROUPS,
+            "physical_stance": STANCE_GROUPS,
+        }[args.study]
         for group in groups:
             process = subprocess.run(
                 [sys.executable, "-u", __file__, "--episode", group, "--output", str(args.output)], timeout=180
