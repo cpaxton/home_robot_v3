@@ -72,3 +72,21 @@ rendering. CPU15 is available for focused checks. After the readout, decide
 whether the objective needs timing/definition alignment, stronger peak costs
 or another bounded change. No new training or reward/gate modification is
 part of this diagnostic protocol.
+
+## Bounded plant follow-up
+
+The completed substep anchors show a roughly 50-Hz oscillation in chassis
+velocity and wheel commands while the requested base command remains zero.
+Predeclare twelve teacher episodes: hold, forward and quarter-amplitude pitch-up,
+each with legacy cached COM velocity, proportional feedback disabled, current
+qvel at the same COM, and current qvel at the axle. Apply interventions only
+after unchanged reset/admission and restore them before the next reset. The
+legacy variant must exactly reproduce archived teacher outcomes/actions/poses;
+every variant must preserve reset/reference identities. Keep all outcomes and
+raw archives, including errors. This isolates feedback gain, cache timing and
+measurement point; no new filter, reward, policy update or production default.
+
+Current-qvel Jacobians reuse the latest native position-stage geometry; this
+probe does not claim to refresh that geometry. Measure the native contract,
+instantaneous proxy, high-rate chassis velocity and wheel-actuator force on
+all variants before deciding whether a production opt-in correction is justified.

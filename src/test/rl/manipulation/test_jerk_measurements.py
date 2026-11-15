@@ -7,7 +7,41 @@
 import numpy as np
 import pytest
 
-from emet.rl.manipulation.jerk_measurements import DerivativeChannels, NativeJerkObserver, linear_magnitude
+from emet.rl.manipulation.jerk_measurements import (
+    DerivativeChannels,
+    NativeJerkObserver,
+    current_feedback_velocity,
+    linear_magnitude,
+)
+
+
+@pytest.mark.sim
+def test_current_com_probe_matches_fresh_cache_but_responds_to_new_qvel_without_forward():
+    from types import SimpleNamespace
+
+    import mujoco
+
+    model = mujoco.MjModel.from_xml_string(
+        '<mujoco><worldbody><body name="base"><freejoint/><geom type="box" size=".1 .1 .1" '
+        'pos=".03 0 .07"/></body></worldbody></mujoco>'
+    )
+    data = mujoco.MjData(model)
+    control = SimpleNamespace(model=model, data=data, base=1, axle_offset=np.array([0.01, 0, -0.05]))
+    data.qvel[:] = [0.1, 0, 0, 0, 0.2, 0.3]
+    mujoco.mj_forward(model, data)
+    spatial = np.zeros(6)
+    mujoco.mj_objectVelocity(model, data, mujoco.mjtObj.mjOBJ_BODY, 1, spatial, 0)
+    expected = spatial[[3, 2]]
+    np.testing.assert_allclose(current_feedback_velocity(control, "com"), expected, atol=1e-15)
+    # Integration changes qvel without refreshing cvel. Current-qvel diagnosis
+    # isolates this timing difference without advancing or re-solving physics.
+    data.qvel[:] *= 2
+    mujoco.mj_objectVelocity(model, data, mujoco.mjtObj.mjOBJ_BODY, 1, spatial, 0)
+    np.testing.assert_allclose(spatial[[3, 2]], expected, atol=1e-15)
+    np.testing.assert_allclose(current_feedback_velocity(control, "com"), 2 * expected, atol=1e-15)
+    np.testing.assert_allclose(current_feedback_velocity(control, "axle"), [0.18, 0.6], atol=1e-15)
+    with pytest.raises(ValueError, match="point"):
+        current_feedback_velocity(control, "origin")
 
 
 @pytest.mark.parametrize("dt,peak", [(0.1, 1.0), (0.05, 2.0), (0.025, 4.0)])

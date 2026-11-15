@@ -7,6 +7,29 @@
 import numpy as np
 
 
+def current_feedback_velocity(control, point):
+    """Diagnostic current-qvel alternative; no forward call or output smoothing.
+
+    COM isolates velocity-cache timing at the legacy feedback point. Axle also
+    removes pitch-induced COM translation from the wheel rolling measurement.
+    Geometry/Jacobian caches still belong to the latest native position stage.
+    """
+    import mujoco
+
+    if point not in {"com", "axle"}:
+        raise ValueError("feedback probe point must be com or axle")
+    model, data, base = control.model, control.data, control.base
+    jp, jr = np.zeros((3, model.nv)), np.zeros((3, model.nv))
+    rotation = data.xmat[base].copy().reshape(3, 3)
+    if point == "com":
+        mujoco.mj_jacBodyCom(model, data, jp, jr, base)
+    else:
+        position = data.xpos[base].copy() + rotation @ control.axle_offset
+        mujoco.mj_jac(model, data, jp, jr, position, base)
+    velocity = data.qvel.copy()
+    return np.array([(jp @ velocity) @ rotation[:, 0], (jr @ velocity)[2]])
+
+
 def vector(value):
     result = np.asarray(value, dtype=np.float64)
     if result.shape != (3,) or not np.isfinite(result).all():

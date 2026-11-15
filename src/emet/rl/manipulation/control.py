@@ -564,10 +564,7 @@ class ManipulationControl:
                 and (not self.holding or self.base_bias_compensation_enabled)
                 and (self.base_feedback_at_rest or np.any(np.abs(self.base_command) > 1e-6))
             ):
-                spatial = np.zeros(6)
-                mujoco.mj_objectVelocity(self.model, self.data, mujoco.mjtObj.mjOBJ_BODY, self.base, spatial, 0)
-                forward = self.data.xmat[self.base].reshape(3, 3)[:, 0]
-                measured = np.array([spatial[3:] @ forward, spatial[2]])
+                measured = self._base_feedback_velocity()
                 limits = np.array([self.profile.base_speed, self.profile.base_yaw_speed])
                 velocity_error = drive - measured
                 interval = max(0.0, now - self._base_velocity_time)
@@ -628,6 +625,13 @@ class ManipulationControl:
             self.data.ctrl[self.wheel_act] = commands
         valid = self.base_hold_act[self.base_hold_act >= 0]
         self.data.ctrl[valid] = 0
+
+    def _base_feedback_velocity(self):
+        """Legacy inertial-frame velocity cache; isolated for matched diagnostics."""
+        spatial = np.zeros(6)
+        mujoco.mj_objectVelocity(self.model, self.data, mujoco.mjtObj.mjOBJ_BODY, self.base, spatial, 0)
+        forward = self.data.xmat[self.base].reshape(3, 3)[:, 0]
+        return np.array([spatial[3:] @ forward, spatial[2]])
 
     def update_task_reference(self):
         if self.task_trajectory is not None:
