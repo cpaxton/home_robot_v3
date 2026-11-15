@@ -59,6 +59,49 @@ def test_invalid_measurement_state_is_rejected(pose, velocity, dt):
         DerivativeChannels(pose, velocity, dt)
 
 
+@pytest.mark.parametrize("count", [1, 12])
+def test_replay_validator_rejects_changed_actions_and_duplicate_case_records(count):
+    import copy
+    import runpy
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[4]
+    compare = runpy.run_path(str(root / "scripts/replay_mars_jerk_measurements.py"))["compare_replay"]
+    trace = {
+        "time": 0.05,
+        "base": [0] * 3,
+        "hand": [0] * 9,
+        "action": [0] * 8,
+        "reference_base": [0] * 3,
+        "reference_hand": [0] * 9,
+    }
+    expected = {
+        "cases": [
+            {
+                "id": str(i),
+                "admission": {"initial_state_sha256": str(i), "reference_sha256": str(i)},
+                "code": "ok",
+                "mastered": True,
+                "tracking_and_settling_pass": True,
+                "smoothness_pass": True,
+                "failure_reasons": [],
+                "metrics": {"base_jerk": 0},
+                "trace": [copy.deepcopy(trace)],
+            }
+            for i in range(count)
+        ]
+    }
+    actual = copy.deepcopy(expected)
+    assert compare(expected, actual, cases=count)["cases"] == count
+    actual["cases"][0]["trace"][0]["action"][0] = 1
+    with pytest.raises(AssertionError):
+        compare(expected, actual, cases=count)
+    duplicate = copy.deepcopy(expected)
+    duplicate["cases"].append(copy.deepcopy(duplicate["cases"][0]))
+    with pytest.raises(ValueError, match="unique"):
+        compare(duplicate, expected, cases=count)
+
+
 @pytest.mark.sim
 @pytest.mark.parametrize("case_id", ["train:base:hold", "train:arm:supported_A_up@amplitude:0.25"])
 def test_observer_preserves_native_state_observations_and_exact_gate_channels(case_id):

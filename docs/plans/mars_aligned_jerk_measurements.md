@@ -13,6 +13,13 @@ seeds, PPO updates or exported policies. Use the same physical models, reference
 teacher-relative budgets and independent guards. Preserve failed or incomplete
 diagnostic attempts in new output directories; never overwrite frozen results.
 
+The completed 24-episode readout exposes large instantaneous-velocity peaks
+even during base hold. A separately recorded **two-episode stationary anchor**
+therefore replays the same base-hold case with the original zero-head actor
+and analytic teacher. Both must reproduce their archived trajectories and
+metrics exactly. This addresses the plant/sampling question without another
+training variant or any change to the original 24-case record.
+
 The observer records the existing v2 RewardMeter on the deterministic evaluation
 states. This is the exact implementation on those states, not a reconstruction
 of the earlier stochastic training trajectories or a changed evaluation reward.

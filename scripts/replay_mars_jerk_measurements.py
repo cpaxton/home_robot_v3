@@ -28,17 +28,17 @@ def sha(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
-def compare_replay(expected, actual):
+def compare_replay(expected, actual, *, cases=12):
     old = {case["id"]: case for case in expected["cases"]}
     new = {case["id"]: case for case in actual["cases"]}
     if (
-        len(old) != 12
-        or len(new) != 12
+        len(old) != cases
+        or len(new) != cases
         or len(old) != len(expected["cases"])
         or len(new) != len(actual["cases"])
         or old.keys() != new.keys()
     ):
-        raise ValueError("all twelve unique frozen diagnostic cases must replay")
+        raise ValueError("all unique frozen diagnostic cases must replay")
     for case_id, previous in old.items():
         replay = new[case_id]
         for key in ("initial_state_sha256", "reference_sha256"):
@@ -52,7 +52,7 @@ def compare_replay(expected, actual):
         for before, after in zip(previous["trace"], replay["trace"], strict=True):
             for key in ("time", "base", "hand", "action", "reference_base", "reference_hand"):
                 np.testing.assert_array_equal(before[key], after[key], err_msg=case_id + "/" + key)
-    return {"cases": 12, "physical_identities_equal": True, "all_outcomes_metrics_actions_poses_exact": True}
+    return {"cases": cases, "physical_identities_equal": True, "all_outcomes_metrics_actions_poses_exact": True}
 
 
 def main():
@@ -61,18 +61,31 @@ def main():
         "--reference-root", type=Path, default=Path("logs/manipulation/mars-reference-base-exploration-v1")
     )
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument(
+        "--base-hold-anchors",
+        action="store_true",
+        help="separate two-episode stationary check: initial zero actor and analytic teacher",
+    )
     args = parser.parse_args()
     torch.set_num_threads(1)
     _, parent = load_development()
     _, _, suite = load_basic_learning(Path("configs/benchmarks/mars_whole_body_basic_learning_v1.json"), parent)
     teacher = read_report(args.reference_root / "preflight/general-teacher.json.gz")
+    if args.base_hold_anchors:
+        suite["cases"] = [case for case in suite["cases"] if case["id"] == "train:base:hold"]
+        if len(suite["cases"]) != 1:
+            raise ValueError("stationary anchor must be the unchanged frozen base-hold case")
     args.output.mkdir(parents=True, exist_ok=False)
     started = time.monotonic()
     summary = {
         "format": "mars-aligned-base-jerk-measurements-v1",
         "producer_revision": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
         "producer_script_sha256": sha(Path(__file__)),
-        "scope": "24 frozen final cases, new read-only instrumentation; no new qualification labels or teacher admission",
+        "scope": (
+            "2 stationary anchors, initial zero actor and teacher; no new PPO or qualification labels"
+            if args.base_hold_anchors
+            else "24 frozen final cases, new read-only instrumentation; no new qualification labels or teacher admission"
+        ),
         "definitions": {
             "point": "base body origin, world XY; both native implementations share this point",
             "gate": "interval-average unsigned planar displacement speed and wrapped heading rate; zero derivative reset",
@@ -92,11 +105,18 @@ def main():
         "variants": {},
     }
     try:
-        for name in ("control", "candidate"):
-            directory = args.reference_root / name
-            checkpoint = directory / "last/actor"
-            expected_path = directory / "final-evaluation.json.gz"
-            policy, observer = WholeBodyBundle(checkpoint), NativeJerkObserver()
+        variants = ("initial_zero_actor", "analytic_teacher") if args.base_hold_anchors else ("control", "candidate")
+        for name in variants:
+            if name == "initial_zero_actor":
+                checkpoint = args.reference_root / "control/initial/actor"
+                expected_path = args.reference_root / "control/initial-evaluation.json.gz"
+            elif name == "analytic_teacher":
+                checkpoint = None
+                expected_path = args.reference_root / "preflight/general-teacher.json.gz"
+            else:
+                checkpoint = args.reference_root / name / "last/actor"
+                expected_path = args.reference_root / name / "final-evaluation.json.gz"
+            policy, observer = (WholeBodyBundle(checkpoint) if checkpoint else None), NativeJerkObserver()
             report = evaluate_suite(
                 suite, stages=("base", "arm"), policy=policy, teacher_report=teacher, observer=observer
             )
@@ -104,17 +124,22 @@ def main():
             raw_path = args.output / (name + "-native.json.gz")
             raw_path.write_bytes(gzip.compress((json.dumps(full, allow_nan=False) + "\n").encode(), mtime=0))
             summary["variants"][name] = {
-                "actor_weights_sha256": policy.manifest["weights_sha256"],
-                "actor_bundle_sha256": sha(checkpoint / "policy.zip"),
+                "actor_weights_sha256": policy.manifest["weights_sha256"] if policy else None,
+                "actor_bundle_sha256": sha(checkpoint / "policy.zip") if checkpoint else None,
                 "original_report_sha256": sha(expected_path),
                 "original_source_hashes": read_report(expected_path)["source_hashes"],
                 "instrumented_source_hashes": report["source_hashes"],
                 "native_archive_sha256": sha(raw_path),
                 "replay_validation": {"complete": False},
             }
-            summary["variants"][name]["replay_validation"] = compare_replay(read_report(expected_path), report)
+            expected = read_report(expected_path)
+            if args.base_hold_anchors:
+                expected["cases"] = [case for case in expected["cases"] if case["id"] == "train:base:hold"]
+            summary["variants"][name]["replay_validation"] = compare_replay(
+                expected, report, cases=1 if args.base_hold_anchors else 12
+            )
             summary["variants"][name]["cases"] = observer.summarize()
-            print(name, "all12 frozen outcomes/actions/poses exact; channels recorded", flush=True)
+            print(name, "frozen outcomes/actions/poses exact; channels recorded", flush=True)
         summary.update(complete=True, elapsed_wall_seconds=time.monotonic() - started)
     except BaseException as exc:
         summary.update(complete=False, error=repr(exc), elapsed_wall_seconds=time.monotonic() - started)
