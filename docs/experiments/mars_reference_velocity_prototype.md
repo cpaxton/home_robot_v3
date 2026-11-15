@@ -3,26 +3,25 @@
 Branch: `feat/mars-reference-velocity`, based on `0fba6121` from
 `feat/mars-base-isolation`. Simulator research only.
 
-## Current status (2026-11-14)
+## Current status (updated 2026-11-15)
 
 [PR #232](https://github.com/cpaxton/home_robot_v3/pull/232) contains opt-in
 legacy-MLP features, training tools and experiment evidence. The completed
 six-run comparison does **not** establish a policy improvement: arm tracking
 remains 63–64/64, while base-linear jerk causes most combined-contract losses.
-Retain the original source checkpoint. The subsequent frozen-base/context
-pilot has passed 1,178 full regressions and 27 focused checks, but has recorded
-**zero PPO transitions**. Its managed job timed out waiting for the CPU14
-handoff; it is no longer an active queued training run.
+Retain the original source checkpoint. A new
+[frozen-base/context pair is complete](mars_frozen_base_arm_20261115.md):
+32,768 transitions total, with arm full passes 59→57/64 for baseline and
+60→61/64 for velocity, both retaining 64/64 tracking. This is a small positive
+velocity result on one development seed; coupled remains 2/8 and no checkpoint
+is promoted. The earlier queue timeout remains a separate zero-step failure.
 
-The separate GRU/multi-critic C1 comparison on the parent branch stopped in its
-candidate settings check before the candidate's first optimizer update. That
-incomplete comparison provides no shared-versus-per-head result. The guard is
-now repaired on the parent branch (`29a9fcec`), and the separate bundled TAMP
-reward-clock correction (`105d3dba`) passes 61 focused tests, including a native
-oracle hold. No recovered PPO run has started; its owner retains CPU14 pending
-fresh-source admission and an explicit recovery record. See the
-[C1 attempt record](../plans/mars_whole_body_advantage_pair.md#recorded-attempt-2026-11-14).
-This PR is not a dependency of the GRU experiment and does not modify its actor.
+The separate [GRU/multi-critic C1 comparison is also complete](mars_c1_normalization_recovery_20261115.md).
+Shared normalization yields 2/12 full passes versus per-head 0/12, but exactly
+preserves the initial actor's two successes. Its partial endpoint improvement
+and the [zero-base command diagnostic](mars_c1_zero_base_diagnostic_20261115.md)
+do not qualify whole-body control. Neither experiment changes the legacy
+orientation representation or establishes a trained axis-angle result.
 
 Correctness, behavioral improvement and hardware readiness are separate
 decisions. Correct, tested experimental code may merge with documented
@@ -320,7 +319,9 @@ must pass before PPO. Use CPU15 for checks and one CPU14 worker for training,
 CUDA hidden, rendering disabled and one numerical thread, with an isolated
 runtime and coordinated reservations. Add `--arm-adaptation-only` to the
 expanded-runner command, with `--seeds 90 --steps 16384`. This section records
-the implementation and launch protocol; a completed training result is pending.
+the implementation and original launch protocol. The separately identified
+[2026-11-15 follow-through](mars_frozen_base_arm_20261115.md) now records the
+completed pair; the failed attempt below remains historical evidence.
 
 Managed job `20261114_091806_52e91d` was launched for this protocol from immutable
 implementation `7400cef1fd12fbd7079f2d00b86caa634a6c3c8c`. Its fresh full
@@ -335,6 +336,8 @@ record are preserved. It produced no training result and will not start when a
 lane later becomes idle. A new bounded launch must record its own identity and
 current-source gates. No automatic retry, extension or promotion is enabled.
 
-Launch protocol, source copy, receipt, progress and eventual results remain in
-`logs/manipulation/mars-frozen-base-arm-v1/`; `supervisor.json` is the live phase
-and transition-count record. This launch status is not a behavioral result.
+The failed launch's protocol, source copy, receipt and zero-step status remain
+in `logs/manipulation/mars-frozen-base-arm-v1/`; its supervisor will not restart.
+The new completed job is separately recorded under
+`logs/manipulation/mars-frozen-base-arm-followthrough-v1/`, with its
+[published readout](mars_frozen_base_arm_20261115.md) and compact evidence.

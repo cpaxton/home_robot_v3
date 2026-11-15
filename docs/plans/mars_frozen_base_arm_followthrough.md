@@ -72,3 +72,13 @@ Record results in the [experiment report](../experiments/mars_reference_velocity
 and update the [ordered TODO](../../TODO.md#current-wbc-follow-through-2026-11-15).
 Actual run identity and results are added after handoff; this protocol alone
 does not claim a running job or completed PPO.
+
+## Completed outcome (2026-11-15)
+
+Job `20261115_012253_ef3fda` completed both 16,384-transition runs and every
+declared readout. Baseline arm full passes changed 59→57/64; velocity changed
+60→61/64. Both retain 64/64 tracking; protected serialized functions and
+normalization are preserved, but coupled remains 2/8. All 244 initial/final
+identities match. The [completed report](../experiments/mars_frozen_base_arm_20261115.md)
+and linked compact data retain every result and artifact hash. This completes
+the experiment without promoting a controller or extending its budget.

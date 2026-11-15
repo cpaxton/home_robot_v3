@@ -609,3 +609,36 @@ is 43/50 and coupled 3/8; actual learned public-tool transfers remain 0/3.
 All 1,138 source-bound regressions, teacher 164/164 and fresh contact teacher
 12/12 pass before training. The final is rejected: contact learning improves,
 but stable whole-body transfer and hardware qualification remain unestablished.
+
+\paragraph{Corrected learning credit and coordination diagnostics.}
+A seed-90 GRU comparison completes 4,096 decisions per variant after an explicit
+source/teacher/optimizer equivalence proof recovers an interrupted candidate.
+Shared advantage normalization gives 2/12 full passes versus per-head 0/12,
+but preserves exactly the same two cases as the untrained zero-head actor.
+Completed arm references within 3\,mm and 0.02\,rad improve from 1/10 to 5/10;
+nine of ten final arm cases still fail quiet hold and base-linear jerk. Fresh
+source-bound regressions pass 1,249/1,249. The complete fixed-final outcomes
+remain in \texttt{mars\_c1\_normalization\_recovery\_v1/results.json}.
+
+A separate 36-rollout command intervention first reproduces all 24 original
+initial/final cases with identical physical identities, flags and jerk metrics.
+Replacing only the final actor's base requests with the initial actor's zero
+requests increases arm tracking/settling from 1/10 to 4/10, full passes from
+1/10 to 3/10 and smoothness from 1/10 to 9/10. Full-amplitude pitch orientation
+errors worsen, so removing base authority is not a general solution. This
+two-policy diagnostic performs no training or actor export and does not alter
+the canonical comparison; all cases remain in
+\texttt{mars\_c1\_zero\_base\_diagnostic\_v1/results.json}.
+
+A separate legacy-MLP arm-only comparison freezes actor context, base/grip
+function and normalization, retaining deterministic learned base requests.
+Both seed-90 variants complete 16,384 transitions and 122-case initial/final
+evaluations. Baseline arm full passes change 59/64 to 57/64; reference velocity
+changes 60/64 to 61/64, with 64/64 arm tracking/settling in both finals.
+Base-only outcomes and metrics are exactly preserved, but coupled full passes
+remain 2/8. Reloaded protected functions are unchanged while arm gains and
+critic learn; all 244 initial/final physical identities match. The velocity
+final gains three arm cases and loses two to base-linear jerk. This small
+single-seed development gain does not qualify a new controller; the retained
+source remains the production baseline. Complete outcomes and provenance are
+in \texttt{mars\_frozen\_base\_arm\_followthrough\_v1/results.json}.
