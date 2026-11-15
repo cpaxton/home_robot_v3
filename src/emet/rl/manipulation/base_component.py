@@ -23,6 +23,7 @@ from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
 
 from emet.rl.manipulation.carry_benchmark import digest, source_hashes
 from emet.rl.manipulation.command_policy import ExecutorCommandVecNormalize
+from emet.rl.manipulation.env import ManipulationConfig
 from emet.rl.manipulation.feedback_policy import FeedbackActorCriticPolicy, GoalFeedbackFeatures, RestoringYawAction
 from emet.rl.manipulation.mastery import (
     MasteryEnv,
@@ -60,8 +61,8 @@ class BaseNoise(StateDependentNoiseDistribution):
 
 
 class BaseMean(RestoringYawAction):
-    def __init__(self, context_width, feedback_width, outputs=2):
-        super().__init__(context_width, feedback_width, 8)
+    def __init__(self, context_width, feedback_width, outputs=2, *, normalization_width=None):
+        super().__init__(context_width, feedback_width, 8, normalization_width=normalization_width)
         self.outputs = outputs
 
     def forward(self, latent):
@@ -128,7 +129,8 @@ class BasePolicy(FeedbackActorCriticPolicy):
         self.action_dist = self.noise_type(self.motion_outputs, full_std=True, epsilon=1e-8)
         super()._build(lr_schedule)
         self.action_net = BaseMean(
-            self.mlp_extractor.context_width, self.features_extractor.feedback_width, outputs=self.motion_outputs
+            self.mlp_extractor.context_width, self.features_extractor.feedback_width, outputs=self.motion_outputs,
+            normalization_width=self.features_extractor.normalization_width,
         ).to(self.device)
         for parameter in self.parameters():
             parameter.requires_grad_(False)
@@ -435,7 +437,7 @@ class MotionSamplingDiagnostics:
 
 def initialize(model, normalizer, source, config, fingerprint):
     if (
-        source.manifest["environment"] != json.loads(json.dumps(asdict(config)))
+        asdict(ManipulationConfig(**source.manifest["environment"])) != asdict(config)
         or source.manifest["fingerprint"] != fingerprint
     ):
         raise ValueError("exact source environment/model required")
@@ -448,6 +450,8 @@ def initialize(model, normalizer, source, config, fingerprint):
     if (
         not isinstance(source.model.policy.features_extractor, GoalFeedbackFeatures)
         or source.model.policy.features_extractor.orientation_scale != model.policy.features_extractor.orientation_scale
+        or source.model.policy.features_extractor.orientation_error != model.policy.features_extractor.orientation_error
+        or source.model.policy.features_extractor.reference_velocity != model.policy.features_extractor.reference_velocity
         or source.model.policy.turn_xy_tolerance != model.policy.turn_xy_tolerance
     ):
         raise ValueError("source feedback units or turn gate differ")
@@ -678,11 +682,7 @@ def train(args, suite):
                 "restoring_yaw_feedback": True,
                 "turn_xy_tolerance": config.base_xy_tolerance,
                 "features_extractor_class": GoalFeedbackFeatures,
-                "features_extractor_kwargs": {
-                    "robot": "innate_mars",
-                    "retention_context": True,
-                    "orientation_scale": config.feedback_orientation_scale,
-                },
+                "features_extractor_kwargs": GoalFeedbackFeatures.kwargs_for(config),
                 "net_arch": {"pi": [128, 128], "vf": [128, 128]},
             },
         )

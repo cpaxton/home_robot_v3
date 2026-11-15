@@ -93,11 +93,7 @@ def initial_checkpoint(directory, cfg, source, spec):
                 else ManipulationMLPFeatures,
                 **(
                     {
-                        "features_extractor_kwargs": {
-                            "robot": cfg.robot,
-                            "retention_context": cfg.retention_context,
-                            "orientation_scale": cfg.feedback_orientation_scale,
-                        }
+                        "features_extractor_kwargs": GoalFeedbackFeatures.kwargs_for(cfg)
                     }
                     if cfg.feedback_policy
                     else {}

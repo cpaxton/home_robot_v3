@@ -1,5 +1,11 @@
 # Mars reactive control in simulation
 
+Start with the [RL documentation index](rl/README.md) and
+[whole-body control philosophy](rl/whole_body_control.md) for the task contract,
+design principles and experiment evidence. This runbook retains the detailed
+CLI and historical implementation notes; dated results apply to their named
+experiments, rather than every controller version.
+
 The optional `emet.rl` package provides a synchronous Gymnasium environment,
 PPO training, a deterministic baseline, and reactive control in the existing
 Mars MuJoCo server. `BaseZmqServer` continues to own transport and command
