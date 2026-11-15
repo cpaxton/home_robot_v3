@@ -201,6 +201,21 @@ def test_reference_conditioned_noise_preserves_authority_and_matches_ppo_likelih
     assert model.log_std.grad is not None and torch.isfinite(model.log_std.grad).all()
 
 
+@pytest.mark.parametrize("jitter", ["target", "motion"])
+def test_reference_producer_jitter_retains_full_base_exploration(jitter):
+    model = MultiCriticPolicy(hidden=16, stationary_base_std_scale=0.1)
+    obs = observation(count=1)
+    assert model.base_exploration_condition(obs).item()
+    if jitter == "target":
+        fields = model.actor.encoder.preview_fields
+        obs["preview"][0, -1, fields["base_error"].start] = 1e-12
+    else:
+        obs["motion"][0, 0] = 1e-12
+    assert not model.base_exploration_condition(obs).item()
+    expected = model.log_std.clamp(-6, 0).exp()[None]
+    torch.testing.assert_close(model.distribution(obs).scale, expected, rtol=0, atol=0)
+
+
 def test_actor_only_bundle_roundtrip_and_rejects_privileged_inputs(tmp_path):
     cfg = replace(
         ManipulationConfig(),

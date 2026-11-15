@@ -10,6 +10,7 @@ other embodiments, with their own actions, models and qualification.
 | Need | Document |
 | --- | --- |
 | Complete setup, measured results and research comparison | [WBC status, updated 2026-11-15](status_20261114.md) |
+| Ordered changes, decision criteria and bounded next experiments | [Mars WBC next steps](../plans/mars_wbc_next_steps.md) |
 | WBC design principles and lessons | [Whole-body control philosophy](whole_body_control.md) |
 | Simulator setup, CLI and runtime details | [Mars reactive RL runbook](../mars_reactive_rl.md) |
 | General goals, changing references and recovery | [General whole-body tracking](../plans/general_whole_body_tracking.md) |
