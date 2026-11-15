@@ -11,6 +11,7 @@ evidence behind those tables, including negative outcomes.
 | `historical-default-replay.json` | Fresh default-control equality audit against the earlier C1 run. |
 | `jerk-audit.json` | Reconstruction of the unchanged acceptance jerk from saved base poses. |
 | `signed-jerk-audit.json` | Nine analytic controls and the separate signed/unsigned displacement comparison. |
+| `review-validation.json` | Separate 50-focused/1,262-full validation for the later review fixes; the experiment's original producer remains unchanged. |
 | `*.py.txt` | Exact executed supervision, extraction and read-only audit sources, stored as text rather than portable production tools. |
 
 The JSON is intentionally larger than the human report: retaining every case

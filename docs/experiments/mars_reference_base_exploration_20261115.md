@@ -146,3 +146,30 @@ artifact binding. Adjacent text files archive exact supervision/extraction and
 jerk-replay scripts; detailed traces, checkpoints and offline artifacts remain
 in ignored storage. Experiment completion does not close the broader
 coordination, smoothness or task-qualification TODOs.
+
+## Review follow-through and next plan
+
+The independent correctness assessment found no blocker. Its five minor items
+are addressed as follows:
+
+| Item | Resolution |
+| --- | --- |
+| Implicit base action ordering | A comment ties the first two channels to `action_size`/`action_mask` layout for wheeled profiles. |
+| Exact equality and future preview jitter | The producer assumption and conservative full-exploration fallback are explicit; two tests cover representable target/twist jitter. |
+| Duplicate wheeled-profile guards | Retained intentionally: distribution slicing and independently queried telemetry need their own safe behavior; the rationale is documented. |
+| NaN/Infinity error path | Pair verification wraps nonfinite serialization failures in the same domain error; both reference/candidate paths are exercised. |
+| Large evidence files | An archive README maps the files to their purpose and short report. Complete case/update evidence and original hashes are preserved. |
+
+The reviewed implementation `0c31adf4` passes **50 focused checks** and a fresh
+**1,262/1,262** source-bound full gate, zero failures/errors/skips, in 1,017.0 s
+(`20261115_115438_2c3205`). The
+[review validation record](../../paper/data/whole_body_control/mars_reference_base_exploration_v1/review-validation.json)
+is separate from the original `3ac722e1` experiment; no training was repeated
+and no historical producer, result or receipt was renamed.
+
+The [ordered next-steps plan](../plans/mars_wbc_next_steps.md) incorporates the
+companion native-loop evidence: validate current-velocity base feedback through
+reset/motion/stop, retain explicit metric/budget identities, then test missing
+directional coverage with reward and representation held fixed. Reward or
+orientation changes are conditional later studies. Companion plant interventions
+do not change the original experiment counts reported above.
