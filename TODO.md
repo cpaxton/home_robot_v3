@@ -113,7 +113,9 @@
       without OOM, 1/2 phases; all 15 requests stay within eight images. The
       coordinator uses recall_view but still submits a semantic microwave answer
       without geometry. Find now gets an explicit localization task header;
-      semantic EQA keeps its question header. 435 CPU checks pass. Header benefit,
+      semantic EQA keeps its question header. Header-only live check remains
+      1/2 without OOM. Removed a contradictory legacy routing-priority sentence
+      from the actual tool description; 436 CPU checks pass. Task improvement,
       broader task acceptance and retained-object selection remain pending.
       Examples: `docs/experiments/multimodal_context_20261115.md`.
 - [ ] Emit actual per-episode simulation duration, model inference cost and

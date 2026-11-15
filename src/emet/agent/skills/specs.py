@@ -73,11 +73,9 @@ EQA_SKILL_SPECS: tuple[SkillSpec, ...] = (
         name="explore_frontier",
         modes=frozenset({AgentMode.EQA_EPISODE}),
         description=(
-            "EXPLORE: grow map coverage / change rooms. Locate and close-look questions "
-            "must investigate unused voxel detections (source=voxel) first. Location "
-            "multiple-choice may explore even if a keyword detection is listed. "
-            "Optional 'toward' is weak coverage bias only — not a substitute for "
-            "investigate(obs_id) on a listed detection."
+            "EXPLORE: navigate toward an active frontier to observe new areas and grow map coverage. "
+            "Optional 'toward' is a weak semantic coverage bias, not an object position or a "
+            "specific place-card destination. Movement validation and target verification are separate."
         ),
         parameters={
             "type": "object",

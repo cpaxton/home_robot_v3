@@ -164,3 +164,20 @@ answer/actions. The follow-up also makes occurrence pixel SHA-256 values match
 the raw-pixel hash convention used by the trace images; dimensions remain part
 of identity. **435 focused CPU tests pass**, including the find/EQA distinction.
 Live task benefit of the header is still pending.
+
+The header-only live follow-up at `a158a639` also completes without OOM and
+scores **1/2** phases (107.32 s query / 158.39 s episode). Bowl finishes after
+nine decisions; microwave receives an invalid-card rejection and then submits
+a semantic answer after two decisions, with no navigation calls used. The
+explicit objective alone did not establish a task improvement. Artifacts:
+`~/runs/emet/image-context-goal-20261115-r2/`.
+
+Auditing that run's **actual saved system prompt** also found a contradictory
+legacy sentence in the `explore_frontier` capability description: “must
+investigate unused voxel detections ... first.” The coordinator prompt says
+there is no required sequence. The shared capability description now explains
+frontier navigation and weak semantic bias without embedding routing priority.
+Legacy execution policies are unchanged; no automatic navigation is added.
+The actual assembled tool-prompt contract is covered by a regression test.
+**436 focused CPU tests pass.** This consistency repair is separate from any
+claim that Qwen will choose a better plan.

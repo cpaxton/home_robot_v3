@@ -28,6 +28,21 @@ def test_current_task_distinguishes_find_localization_from_semantic_eqa(localize
         assert "requested result is an admitted object location" not in state
 
 
+def test_actual_model_final_tool_pack_describes_capabilities_without_legacy_route_priority():
+    from emet.memory.graph_eqa.agentic.tools import build_agentic_eqa_tools, build_graph_eqa_system_prompt
+
+    agent = SimpleNamespace(
+        parameters={"eqa": {"agentic_decision_policy": "model_final"}}, graph_memory=None, robot=None
+    )
+    executor = AgenticEQAExecutor(agent, "Where is the bowl?", router=False)
+    tools = build_agentic_eqa_tools(executor)
+    prompt = build_graph_eqa_system_prompt(tools, decision_policy="model_final")
+    assert "no required INVESTIGATE/EXPLORE sequence" in prompt
+    assert "must investigate unused voxel detections" not in prompt
+    assert "recall_view" in prompt
+    assert "Movement validation and target verification are separate" in prompt
+
+
 @pytest.mark.parametrize("grounded_obs_id", [None, 0, 7])
 @pytest.mark.parametrize("visually_verified", [False, True])
 def test_find_state_reports_selected_geometry_independently_of_visual_and_motion_status(
