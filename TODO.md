@@ -105,6 +105,12 @@ merges, measured policy improvement and hardware readiness are separate decision
       orientation and coupled cases separately. The opt-in axis-angle feature
       is implemented but still needs its own controlled trained comparison;
       do not attribute the velocity result to an orientation change.
+      Next declared test: [reference-conditioned base exploration](docs/plans/mars_reference_base_exploration.md),
+      a fresh 4,096+4,096-decision GRU pair with scale 1.0 versus 0.1 only for
+      explicitly constrained, stationary base previews with active hand goals.
+      Preserve inference authority and full fixed-final failures; gate the new
+      immutable implementation before training. Implementation/protocol alone
+      are not a completed experiment or evidence of improved settling.
 - [ ] **Advance real contact skills in stages.** Follow the
       [safety/task curriculum](docs/plans/2026-11-13_whole_body_safety_curriculum.md)
       from actual pregrasp to closure/lift, loaded transport/braking, and

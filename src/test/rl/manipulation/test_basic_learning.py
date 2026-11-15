@@ -18,6 +18,47 @@ from emet.rl.manipulation.mastery import load_suite, select_cases
 SPEC = Path("configs/benchmarks/mars_whole_body_basic_learning_v1.json")
 
 
+def test_fresh_exploration_pair_binds_initial_state_without_claiming_same_rollout():
+    from emet.rl.manipulation.whole_body_training import verify_exploration_pair
+
+    keys = (
+        "source_hashes",
+        "suite_sha256",
+        "preflight_sha256",
+        "basic_cases_sha256",
+        "seed",
+        "requested_decisions",
+        "ppo",
+        "privileged_critic",
+        "training_family_scope",
+        "initial_actor_weights_sha256",
+        "initial_policy_state_sha256",
+        "initial_optimizer_sha256",
+        "rollout_rng_sha256",
+        "initial_numpy_rng_sha256",
+        "initial_observation_sha256",
+    )
+    first = dict.fromkeys(keys, "same") | {
+        "stationary_base_std_scale": 1.0,
+        "training_family_scope": "basic_general_only",
+        "ppo": {"advantage_normalization": "shared", "weights": [1, 1, 1]},
+        "first_rollout": "control intentionally differs after sampling",
+    }
+    second = copy.deepcopy(first) | {"stationary_base_std_scale": 0.1, "first_rollout": "candidate"}
+    verify_exploration_pair(first, second)
+    for key in keys:
+        changed = copy.deepcopy(second) | {key: "different"}
+        with pytest.raises(ValueError, match="identical fresh initial"):
+            verify_exploration_pair(first, changed)
+        changed = copy.deepcopy(second)
+        del changed[key]
+        with pytest.raises(ValueError, match="identical fresh initial"):
+            verify_exploration_pair(first, changed)
+    for change in ({"stationary_base_std_scale": 1.0}, {"basic_cases_sha256": None}):
+        with pytest.raises(ValueError, match="identical fresh initial"):
+            verify_exploration_pair(first, second | change)
+
+
 def test_basic_sets_are_exact_subsets_and_do_not_mutate_parent():
     parent = load_suite("configs/benchmarks/mars_tracking_mastery_supported_v1.json")
     before = copy.deepcopy(parent)

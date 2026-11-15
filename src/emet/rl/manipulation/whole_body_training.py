@@ -309,12 +309,48 @@ def verify_initial_pair(reference, current, *, recovery_proof=None, reference_sh
         keys = tuple(key for key in keys if key not in {"source_hashes", "preflight_sha256"})
     if any(key not in reference or key not in current or reference[key] != current[key] for key in keys):
         raise ValueError("paired initial state or first pre-update rollout differs")
+    if reference.get("stationary_base_std_scale", 1.0) != current.get("stationary_base_std_scale", 1.0):
+        raise ValueError("normalization pair cannot change the exploration distribution")
     first = {k: v for k, v in reference["ppo"].items() if k != "advantage_normalization"}
     second = {k: v for k, v in current["ppo"].items() if k != "advantage_normalization"}
     # The reference came from run.json; current still contains dataclass tuples.
     # Compare in the same JSON domain without relaxing any setting comparison.
     if json.loads(json.dumps(first, allow_nan=False)) != json.loads(json.dumps(second, allow_nan=False)):
         raise ValueError("paired PPO settings differ beyond normalization scheme")
+
+
+def verify_exploration_pair(reference, current):
+    """Bind a fresh basic comparison before sampling intentionally different noise.
+
+    This does not relax C1's full first-rollout comparison or reuse old sources.
+    """
+    keys = (
+        "source_hashes",
+        "suite_sha256",
+        "preflight_sha256",
+        "basic_cases_sha256",
+        "seed",
+        "requested_decisions",
+        "ppo",
+        "privileged_critic",
+        "training_family_scope",
+        "initial_actor_weights_sha256",
+        "initial_policy_state_sha256",
+        "initial_optimizer_sha256",
+        "rollout_rng_sha256",
+        "initial_numpy_rng_sha256",
+        "initial_observation_sha256",
+    )
+    if (
+        not current.get("basic_cases_sha256")
+        or current.get("training_family_scope") != "basic_general_only"
+        or reference.get("stationary_base_std_scale") != 1.0
+        or not 0 < current.get("stationary_base_std_scale", 1.0) < 1
+        or any(k not in reference or k not in current for k in keys)
+        or json.loads(json.dumps({k: reference[k] for k in keys}, allow_nan=False))
+        != json.loads(json.dumps({k: current[k] for k in keys}, allow_nan=False))
+    ):
+        raise ValueError("exploration comparison requires identical fresh initial state/settings except base noise")
 
 
 def collect_rollout(env, model, observation, steps, *, episode_callback=None, gamma=PPOConfig.gamma):
@@ -412,7 +448,10 @@ def train(args):
         batch_size=args.batch_size,
         advantage_normalization=args.advantage_normalization,
     )
-    policy = MultiCriticPolicy(privileged=not args.no_privileged_critic)
+    policy = MultiCriticPolicy(
+        privileged=not args.no_privileged_critic,
+        stationary_base_std_scale=getattr(args, "stationary_base_std_scale", 1.0),
+    )
     learner = MultiCriticPPO(policy, config)
     metadata = {
         "format": "whole-body-v2-training-v1",
@@ -429,6 +468,7 @@ def train(args):
         "teacher_actions_in_loss": False,
         "reward_timing": "per_control_tick_discounted_within_decision",
         "privileged_critic": not args.no_privileged_critic,
+        "stationary_base_std_scale": policy.stationary_base_std_scale,
         "actor_inputs": ["history", "preview", "motion"],
         "full_pick_place_qualified": False,
         "basic_cases_sha256": digest(args.basic_cases) if args.basic_cases else None,
@@ -499,6 +539,7 @@ def train(args):
             initial_state,
         )
         metadata.update(
+            initial_observation_sha256=arrays_digest(observation),
             initial_training_state_sha256=digest(initial_state),
             rollout_rng_sha256=hashlib.sha256(torch.get_rng_state().numpy().tobytes()).hexdigest(),
             initial_numpy_rng_sha256=hashlib.sha256(json.dumps(numpy_state).encode()).hexdigest(),
@@ -507,6 +548,11 @@ def train(args):
             ).hexdigest(),
         )
         write_json(output / "run.json", metadata)
+        if reference_path := getattr(args, "exploration_reference_run", None):
+            verify_exploration_pair(json.loads(Path(reference_path).read_text()), metadata)
+            metadata["exploration_reference_run_sha256"] = digest(reference_path)
+            metadata["exploration_initial_pair_verified_before_rollout"] = True
+            write_json(output / "run.json", metadata)
         episodes, decisions, ticks = [], 0, 0
 
         def episode(info):
@@ -589,6 +635,14 @@ def train(args):
                 "reward_group_means": rollout["rewards"].mean(0).tolist(),
                 "case_sequence": rollout["case_ids"].tolist(),
             }
+            condition = policy.base_exploration_condition(
+                {k: torch.from_numpy(v) for k, v in rollout["observations"].items()}
+            )
+            row["base_exploration_condition_decisions"] = int(condition.sum())
+            row["base_exploration_reduced_decisions"] = (
+                int(condition.sum()) if policy.stationary_base_std_scale < 1 else 0
+            )
+            row["action_log_std"] = policy.log_std.detach().numpy().tolist()
             with (output / "updates.jsonl").open("a") as stream:
                 stream.write(json.dumps(row, allow_nan=False) + "\n")
             if run is not None:
@@ -625,6 +679,7 @@ def train(args):
         training = {
             "algorithm": "direct_multi_critic_ppo_v2",
             "advantage_normalization": config.advantage_normalization,
+            "stationary_base_std_scale": policy.stationary_base_std_scale,
             "basic_cases_sha256": metadata["basic_cases_sha256"],
             "training_family_scope": metadata["training_family_scope"],
             "initial_actor_weights_sha256": metadata["initial_actor_weights_sha256"],
@@ -669,6 +724,8 @@ def main():
     parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--no-privileged-critic", action="store_true")
     parser.add_argument("--advantage-normalization", choices=("shared", "per_head"), default="shared")
+    parser.add_argument("--stationary-base-std-scale", type=float, default=1.0)
+    parser.add_argument("--exploration-reference-run", type=Path)
     parser.add_argument("--basic-cases", type=Path, help="explicit small general-only diagnostic case manifest")
     parser.add_argument(
         "--pair-reference-run", type=Path, help="verify initial state/rollout against control run before PPO"
@@ -680,6 +737,15 @@ def main():
     )
     parser.add_argument("--wandb-mode", choices=("offline", "disabled"), default="offline")
     args = parser.parse_args()
+    if not 0 < args.stationary_base_std_scale <= 1:
+        parser.error("stationary base exploration scale must be finite and in (0,1]")
+    if args.exploration_reference_run and (
+        not args.basic_cases
+        or args.stationary_base_std_scale == 1.0
+        or args.pair_reference_run
+        or args.pair_recovery_proof
+    ):
+        parser.error("exploration pairing requires basic cases, reduced noise and no normalization/recovery pairing")
     if args.pair_recovery_proof and not (args.basic_cases and args.pair_reference_run):
         parser.error("C1 recovery proof requires the basic manifest and original paired control")
     if args.command == "preflight":
