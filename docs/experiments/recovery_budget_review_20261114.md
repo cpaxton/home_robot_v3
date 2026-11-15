@@ -208,3 +208,21 @@ to 18.07 GiB; no resource abort occurred.
 At the November 15 follow-up only about **13 GiB** remained free, below the declared
 floor. No additional simulation was launched. The completed results above are
 valid; new live repeats remain pending resource headroom.
+
+Following the user's subsequent disk-cleanup request, free space had fallen
+further to about 10 GiB. Removed **10.00 GiB** of disposable Hugging Face Xet
+download chunks (201 files, newest over 490 days old), skipping any open or
+changed file. These chunks are separate from the hub's model weights and
+snapshots. Also removed **0.40 GiB** of stale mypy/ruff caches. Existing Python
+environments, grounding assets and experiment evidence remain intact. Audits:
+`/tmp/disk-cache-cleanup-applied-20261115.json` and
+`/tmp/disk-lint-cache-cleanup-20261115.json`.
+
+This restored roughly **20 GiB** free, above the bounded pilot's 16 GiB floor;
+new runs still need a fresh resource check because other work is writing data.
+A separate full-SHA-256 plan identifies another **12.27 GiB** of identical
+September simulator-model copies. Applying that plan to 71 additional archive
+paths was rejected by automatic approval review pending explicit approval of
+that scope and its shared-inode consequences. It remains **unapplied**:
+`/tmp/disk-archive-dedup-plan-20261115.json`. No additional live result is implied
+by the cleanup.

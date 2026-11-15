@@ -88,7 +88,8 @@
       phase changes the next phase's start pose; deliberate recovery from the
       range receipt and causal budget benefit are not established. Approved
       ten-file deduplication freed 5.24 GiB; the run declared a monitored 16 GiB
-      floor. Further live tests are pending headroom (about 13 GiB on Nov 15).
+      floor. Nov 15 cleanup reclaimed 10.40 GiB of disposable download/lint
+      caches, restoring roughly 20 GiB free; recheck before further live tests.
       Review/protocol: `docs/experiments/recovery_budget_review_20261114.md`.
 - [ ] Repeat matched 12/8 find checks and small EQA/another-room acceptance;
       preserve failures and compare then-current main before scaling. Add a
