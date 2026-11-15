@@ -155,10 +155,14 @@ class MultiCriticPolicy(nn.Module):
         mean = self.actor(obs)
         std = self.log_std.clamp(-6, 0).exp()
         if self.stationary_base_std_scale != 1.0 and self.actor.encoder.profile.wheel_bodies:
+            # Retain this profile guard even though the condition has one too:
+            # the condition is also queried directly for training telemetry.
             # Training distribution only: retain mean/base authority, even when
             # a stationary announced reference still requires base correction.
             factor = torch.where(self.base_exploration_condition(obs), self.stationary_base_std_scale, 1.0)
             std = std.expand_as(mean).clone()
+            # Profile.action_size and actor.action_mask put forward/yaw first,
+            # followed by arm joints and grip, whenever wheel_bodies is set.
             std[:, :2] = std[:, :2] * factor[:, None]
         return torch.distributions.Normal(mean, std)
 
@@ -175,6 +179,9 @@ class MultiCriticPolicy(nn.Module):
         constrained = (history[:, fields["base_mask"]] > 0.5).all(dim=-1)
         constrained &= (preview[:, :, preview_fields["base_mask"]] > 0.5).all(dim=(1, 2))
         targets = preview[:, :, preview_fields["base_error"]]
+        # The producer reuses one measured pose across preview rows and emits
+        # exact zero twist for holds. Future producer jitter deliberately keeps
+        # full exploration; do not silently widen this into an approximate hold.
         constant = (targets == targets[:, :1]).all(dim=(1, 2))
         stationary = (obs["motion"][:, :3] == 0).all(dim=-1)
         return hand & constrained & constant & stationary & bool(self.actor.encoder.profile.wheel_bodies)

@@ -341,16 +341,21 @@ def verify_exploration_pair(reference, current):
         "initial_numpy_rng_sha256",
         "initial_observation_sha256",
     )
-    if (
-        not current.get("basic_cases_sha256")
-        or current.get("training_family_scope") != "basic_general_only"
-        or reference.get("stationary_base_std_scale") != 1.0
-        or not 0 < current.get("stationary_base_std_scale", 1.0) < 1
-        or any(k not in reference or k not in current for k in keys)
-        or json.loads(json.dumps({k: reference[k] for k in keys}, allow_nan=False))
-        != json.loads(json.dumps({k: current[k] for k in keys}, allow_nan=False))
-    ):
-        raise ValueError("exploration comparison requires identical fresh initial state/settings except base noise")
+    message = "exploration comparison requires identical fresh initial state/settings except base noise"
+    try:
+        invalid = (
+            not current.get("basic_cases_sha256")
+            or current.get("training_family_scope") != "basic_general_only"
+            or reference.get("stationary_base_std_scale") != 1.0
+            or not 0 < current.get("stationary_base_std_scale", 1.0) < 1
+            or any(k not in reference or k not in current for k in keys)
+            or json.loads(json.dumps({k: reference[k] for k in keys}, allow_nan=False))
+            != json.loads(json.dumps({k: current[k] for k in keys}, allow_nan=False))
+        )
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError(message) from exc
+    if invalid:
+        raise ValueError(message)
 
 
 def collect_rollout(env, model, observation, steps, *, episode_callback=None, gamma=PPOConfig.gamma):
