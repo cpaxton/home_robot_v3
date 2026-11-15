@@ -87,3 +87,20 @@ proof of an isolated endpoint-gate effect. All actual configuration, collision,
 support, force, retention, wheel and stop checks remain active. Restore the
 original grasp tolerances in `finally`, including on exceptions. No retries,
 physics changes or policy updates, and no relabeling the original failed runs.
+
+## Bounded hold reacquisition replay
+
+The grasp-region actor reaches hold, then drifts just outside the region:
+terminal error is 3.28 mm / 0.04052 rad while the actor remains disabled in hold.
+The existing loop waits until timeout without resuming correction. Fix this
+nonfault handoff, then run exactly two matched original-reset grasp-region
+attempts again (teacher/actor) into a new output directory. Keep all old runs.
+
+The executor may resume policy tracking after hold drifts outside its contract,
+at most twice and inside the original deadline. Re-entry requires 90% of the
+arrival bounds to prevent boundary chatter. Preserve trajectory progress/history,
+grip and release authority; never clear a fault, reset physics or extend time.
+Repeated loss of hold produces `cartesian_hold_unsettled`, publicly reported as
+`tracking_timeout`. Test a physical wrist disturbance, repeated disturbance
+exhaustion, unchanged grip/history/clock and refusal to clear a stop before
+freezing the updated source. No further tolerance or physics change.

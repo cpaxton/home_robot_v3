@@ -493,6 +493,24 @@ class ManipulationControl:
         self._base_velocity_time = float(self.data.time)
         self.stopped = False
 
+    def resume_tracking_from_hold(self):
+        """Executor reacquires the same goal after drift from a nonfault hold.
+
+        Preserve the trajectory clock, history, grip/release authority and
+        bounded servo compensation. This transition never clears a fault or
+        authorizes a new goal, and never changes the measured physical state.
+        """
+        if self.stopped or self.motion_fault or not self.holding:
+            raise ValueError("tracking may resume only from an unfaulted hold")
+        self.holding = False
+        self.arm_holding = False
+        self.velocity[:] = 0
+        self.base_command[:] = 0
+        self.last_action[:] = 0
+        self._trim_time = float(self.data.time)
+        self._base_velocity_time = float(self.data.time)
+        self.apply()
+
     def stop(self):
         """Latch one measured hold target; repeated fault receipts cannot rebase it."""
         first_stop = not self.stopped

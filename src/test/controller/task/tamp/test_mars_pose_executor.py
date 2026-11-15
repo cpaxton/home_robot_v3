@@ -185,6 +185,70 @@ def test_cartesian_mode_never_selects_a_teacher_implicitly(pose_executor):
         MarsSimRobot(env, arm_execution="cartesian")
 
 
+def test_nonfault_hold_resume_preserves_pose_clock_history_and_grip(pose_executor):
+    from emet.rl.manipulation.tracking import TaskPoseTrajectory
+
+    env, robot, _, _ = pose_executor
+    c = robot.servo
+    c.set_reference(c.positions(), phase="carry", grip=0.1)
+    base, hand = c.base_pose(), c.ee_pose()
+    path = TaskPoseTrajectory([0, 1], [base, base], [hand, hand], [0.1, 0.1], base_mask=[True] * 3)
+    c.set_task_trajectory(path)
+    c.observe()
+    c.hold_position()
+    qpos, qvel, history = env.data.qpos.copy(), env.data.qvel.copy(), c.history.copy()
+    clock, target, grip = (
+        c.task_trajectory_start,
+        c.target.copy(),
+        (c.grip_reference, c.grip_target, c.retain_object, c.release_authorized),
+    )
+    c.resume_tracking_from_hold()
+    assert not c.holding and not c.stopped
+    assert c.task_trajectory is path and c.task_trajectory_start == clock
+    assert (c.grip_reference, c.grip_target, c.retain_object, c.release_authorized) == grip
+    np.testing.assert_array_equal(c.target, target)
+    np.testing.assert_array_equal(c.history, history)
+    np.testing.assert_array_equal(env.data.qpos, qpos)
+    np.testing.assert_array_equal(env.data.qvel, qvel)
+    c.stop()
+    with pytest.raises(ValueError, match="unfaulted hold"):
+        c.resume_tracking_from_hold()
+    assert c.stopped
+
+
+@pytest.mark.parametrize("repeated", [False, True])
+def test_cartesian_hold_drift_reacquires_but_cannot_retry_indefinitely(pose_executor, monkeypatch, repeated):
+    env, robot, executor, adapter = pose_executor
+    step = robot.step
+    injected = False
+    injections = 0
+
+    def disturbed_step(duration):
+        nonlocal injected, injections
+        held = robot.servo.holding
+        step(duration)
+        if not held:
+            injected = False
+        elif not injected and (repeated or not injections):
+            # Simulator disturbance after entering an otherwise valid hold.
+            env.data.qpos[robot.servo.q[-1]] += 0.025
+            mujoco.mj_forward(env.model, env.data)
+            injected = True
+            injections += 1
+
+    monkeypatch.setattr(robot, "step", disturbed_step)
+    result = execute_pose_path(robot, executor, "pregrasp", [robot.servo.positions()])
+    reacquisitions = [e for e in adapter.events if e.get("reason") == "hold_reacquire"]
+    assert reacquisitions
+    if repeated:
+        assert len(reacquisitions) == 2
+        assert not result.success and result.message == "cartesian_hold_unsettled"
+        assert robot.stop_confirmed and robot.servo.stopped
+    else:
+        assert result.success and robot.servo.holding and not robot.servo.stopped
+        assert len(reacquisitions) == 1 and robot.policy_calls > 1
+
+
 def test_executor_can_close_gripper_during_terminal_arm_base_hold(pose_executor):
     _, robot, _, _ = pose_executor
     robot.servo.hold_position()
@@ -299,6 +363,7 @@ def test_cartesian_transport_brakes_before_rebasing_position_hold(pose_executor,
     "reason,code",
     [
         ("cartesian_tracking_timeout", "tracking_timeout"),
+        ("cartesian_hold_unsettled", "tracking_timeout"),
         ("cartesian_path_tracking_envelope", "tracking_timeout"),
         ("arm_configuration_collision", "collision"),
         ("arm_joint_margin", "joint_bounds"),

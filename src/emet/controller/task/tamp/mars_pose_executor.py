@@ -18,6 +18,8 @@ from emet.rl.manipulation.tracking import TaskFrameFK, TaskPoseTrajectory
 
 TRACKING_POSITION_LIMIT_M = 0.01
 TRACKING_ORIENTATION_LIMIT_RAD = 0.10
+MAX_HOLD_REACQUISITIONS = 2
+HOLD_REENTRY_FRACTION = 0.9
 
 
 def lag_scaled_rate(position_error, orientation_error, *, position_scale_m, orientation_scale_rad):
@@ -72,10 +74,13 @@ def execute_pose_path(robot, executor, phase, path, *, goal_pose=None, arrival_t
     if not isinstance(robot, MarsSimRobot) or robot.policy is None or robot.arm_execution != "cartesian":
         raise ValueError("Cartesian arm execution requires the explicit Mars simulator policy backend")
 
+    hold_reacquisitions = 0
+
     def fail(reason, **detail):
         robot.stop_and_confirm(reason)
         executor.synchronize(executor.data)
-        executor.event(phase=phase, execution_contract="cartesian_arm_v1", reason=reason, **detail)
+        executor.event(phase=phase, execution_contract="cartesian_arm_v1", reason=reason,
+                       hold_reacquisitions=hold_reacquisitions, **detail)
         return PhysicalMotionResult(False, reason, phase)
 
     if robot.failure or robot.servo.stopped or robot.env._physics_invalid:
@@ -329,7 +334,11 @@ def execute_pose_path(robot, executor, phase, path, *, goal_pose=None, arrival_t
             return fail(reason, check="measured_configuration")
         distance, angle = pose_error(robot.servo.ee_pose(), hand[-1])
         within = distance <= arrival_position and angle <= arrival_orientation
-        if progress >= schedule.end and within:
+        enter_hold = within and (
+            not hold_reacquisitions
+            or (distance <= HOLD_REENTRY_FRACTION * arrival_position and angle <= HOLD_REENTRY_FRACTION * arrival_orientation)
+        )
+        if progress >= schedule.end and within and (robot.servo.holding or enter_hold):
             if not robot.servo.holding:
                 robot.servo.hold_position()
                 anchor = robot.servo.positions().copy()
@@ -349,8 +358,18 @@ def execute_pose_path(robot, executor, phase, path, *, goal_pose=None, arrival_t
                     orientation_error_rad=angle,
                     joint_witness_residual_rad=float(np.max(abs(robot.servo.positions() - witness[-1]))),
                     controller_success=True,
+                    hold_reacquisitions=hold_reacquisitions,
                 )
                 return PhysicalMotionResult(True, "measured_cartesian_path", phase, distance)
         else:
             stable = 0
+            if robot.servo.holding and not within:
+                if hold_reacquisitions >= MAX_HOLD_REACQUISITIONS:
+                    return fail("cartesian_hold_unsettled", position_error_m=distance, orientation_error_rad=angle)
+                robot.servo.resume_tracking_from_hold()
+                hold_reacquisitions += 1
+                anchor = None
+                executor.event(phase=phase, execution_contract="cartesian_arm_v1", reason="hold_reacquire",
+                               hold_reacquisitions=hold_reacquisitions, position_error_m=distance,
+                               orientation_error_rad=angle)
     return fail("cartesian_tracking_timeout", position_error_m=distance, orientation_error_rad=angle)
