@@ -133,6 +133,18 @@ merges, measured policy improvement and hardware readiness are separate decision
       offline and native diagnostics do not relabel any candidate failure.
       The opt-in axis-angle feature still needs a separate controlled trained
       comparison; do not confound it with the plant, reward or velocity studies.
+- [x] **Repair drift after Cartesian hold entry.** Bounded nonfault reacquisition
+      preserves goals, history, grip authority and the original deadline. On
+      the explicitly declared 4 mm / 0.04 rad task contract, the retained actor
+      now completes grasp pose and executor closure; lift planning rejects
+      insufficient support reserve. Keep the original precision failures and
+      all [twelve task diagnostics](docs/experiments/mars_task_arrival_20261115.md).
+- [ ] **Train actual grasp-pose and fixed-world-hand/base motion.** Extend the
+      pregrasp-only primitive boundary, obtain fresh stage-specific teacher
+      admission, and mix these reachable references with general tracking.
+      Do not increase timeouts or accept the actor's 2.15 mm advance as a
+      completed 20 mm support-preparation goal. Keep loaded retention/grasp-fit
+      repair separate, with original force/support/retention thresholds.
 - [ ] **Advance real contact skills in stages.** Follow the
       [safety/task curriculum](docs/plans/2026-11-13_whole_body_safety_curriculum.md)
       from actual pregrasp to closure/lift, loaded transport/braking, and
