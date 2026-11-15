@@ -655,3 +655,8 @@ reproduces all 48 base-jerk measurements to floating-point precision; candidate
 linear-jerk failures peak during ordinary running. Reward/acceptance measurement
 alignment remains a subsequent audit, not a relaxed gate. All outcomes are in
 \texttt{mars\_reference\_base\_exploration\_v1/results.json}.
+Synthetic constant-acceleration reversals show that unsigned-speed derivatives
+can spike despite zero vector jerk. Saved candidate signed-displacement peaks
+are nevertheless larger, so this audit does not remove its failures or revise
+qualification. Sampling/reset alignment with the instantaneous-velocity reward
+remains to be measured.

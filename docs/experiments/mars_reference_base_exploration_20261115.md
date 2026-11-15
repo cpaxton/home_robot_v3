@@ -69,6 +69,28 @@ proof of the cause of these failures; compare the reward and acceptance signals
 before another weight increase or training extension. Preserve the original
 gate and report both measurements if their interpretation is revised.
 
+A separate signed/unsigned diagnostic confirms why these definitions cannot be
+treated as interchangeable. For the synthetic straight trajectory
+`x(t) = 0.05*t*t`, acceleration is constant at 0.1 m/s² and vector jerk is zero.
+Excluding the two derivative warmup samples, the unsigned-speed formula peaks
+at **1, 2 and 4 m/s³** for 100, 50 and 25 ms sampling, respectively. Signed
+displacement derivatives stay below 2.7e-12; constant-velocity and non-reversing
+constant-acceleration controls also have negligible jerk in both formulas.
+An unsigned-speed reversal spike is not by itself evidence of harsh physical
+jerk.
+
+This does not clear the candidate. Its ten saved arm traces have signed
+displacement-vector jerk peaks of 0.462–0.701 m/s³, each larger than that case's
+unsigned peak. These are diagnostic measurements with no new teacher budgets
+or pass labels, and cannot reconstruct the exact instantaneous-velocity reward.
+Both existing implementations use the same base body-frame origin in world XY,
+not different axle/center-of-mass points, and the same 50 ms cadence. Acceptance
+uses interval-average displacement speed with zero initial derivative history;
+the reward uses instantaneous Jacobian velocity initialized from actual qvel.
+Record both velocity channels and reset state before claiming exact alignment.
+The [signed/unsigned audit](../../paper/data/whole_body_control/mars_reference_base_exploration_v1/signed-jerk-audit.json) and exact script retain all controls and
+48 replayed cases; no native physics, policy call or training step is added.
+
 ## Controlled change and actual exposure
 
 Only the training distribution changes. The hand must be active, every base

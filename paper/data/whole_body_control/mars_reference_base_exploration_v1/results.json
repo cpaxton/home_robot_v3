@@ -16020,7 +16020,7 @@
     "/home/cpaxton/src/home_robot_v4/.worktrees/wbc-reference-base-exploration/logs/manipulation/mars-reference-base-exploration-v1/protocol.json": "a8e9285bb290603350146f61f219d798e4aad1a0cffa0568500a75cc6c34115d",
     "/home/cpaxton/src/home_robot_v4/.worktrees/wbc-reference-base-exploration/logs/manipulation/mars-reference-base-exploration-v1/supervisor.json": "65cded63228e9d3565c842fabf6e7e08688786bd0e4fa709e5e55681a3cea5e0",
     "/home/cpaxton/src/home_robot_v4/.worktrees/wbc-reference-base-exploration/logs/manipulation/mars-reference-base-exploration-v1/supervise.py": "858ac15367d7a7c6db5946a71241513c151d0cc28a5d32772001d7519defa527",
-    "/home/cpaxton/src/home_robot_v4/.worktrees/wbc-reference-base-exploration/logs/manipulation/mars-reference-base-exploration-v1/extract_results.py": "a8a94a3a29dd579a22b6b907b56634c7bfdbc6f0511ab153d813a8f6716fbf5d",
+    "/home/cpaxton/src/home_robot_v4/.worktrees/wbc-reference-base-exploration/logs/manipulation/mars-reference-base-exploration-v1/extract_results.py": "1bd240564adfc53645382fbded1cb1f393568bb4fb43c6e16d4c2bdb57d9936b",
     "/home/cpaxton/src/home_robot_v4/.worktrees/wbc-reference-base-exploration/logs/manipulation/mars-reference-base-exploration-v1/admission.json": "9f5abdcf3e39d150d371a3a09384ec258cd7fcb5cd762cba65c3ac4ab15ba663",
     "/home/cpaxton/src/home_robot_v4/.worktrees/wbc-reference-base-exploration/logs/manipulation/mars-reference-base-exploration-v1/full.receipt.json": "6069a44d65c1162d41f6458bede05234e798ac68a7f57203f2d9594dba806fa2",
     "/home/cpaxton/src/home_robot_v4/.worktrees/wbc-reference-base-exploration/logs/manipulation/mars-reference-base-exploration-v1/full.xml": "a1d21b9486e1591009483976eaca8cf1e417994f28c1e89e504dd7e73e9f92bf",
@@ -16029,6 +16029,8 @@
     "/home/cpaxton/src/home_robot_v4/.worktrees/wbc-reference-base-exploration/logs/manipulation/mars-reference-base-exploration-v1/historical-default-replay.json": "29d47dec56a575557e689ccaf657422ad77446d8af42a0f649584b3e61973566",
     "/home/cpaxton/src/home_robot_v4/.worktrees/wbc-reference-base-exploration/logs/manipulation/mars-reference-base-exploration-v1/jerk-audit.json": "ccd1abf18aef787be9e1417f8982c5b1a534b1ffa9151e675fbc8195ffcde684",
     "/home/cpaxton/src/home_robot_v4/.worktrees/wbc-reference-base-exploration/logs/manipulation/mars-reference-base-exploration-v1/audit_jerk.py": "b2ec2c6175a753c6334cafe7dd8cc4381aee242b13a9241a69383eb2ea0ae453",
+    "/home/cpaxton/src/home_robot_v4/.worktrees/wbc-reference-base-exploration/logs/manipulation/mars-reference-base-exploration-v1/signed-jerk-audit.json": "91945aedaf45d46460620f8593d6d10505139fd602491ee73a7eef172c8d4408",
+    "/home/cpaxton/src/home_robot_v4/.worktrees/wbc-reference-base-exploration/logs/manipulation/mars-reference-base-exploration-v1/audit_signed_jerk.py": "63a68244cab33f828c0303c250c655308d4374bb75f2c6beadceeb961d089e00",
     "/home/cpaxton/src/home_robot_v4/.worktrees/wbc-reference-base-exploration/logs/manipulation/mars-reference-base-exploration-v1/control/run.json": "3ff91a4c8913a84db8f4ddce1a1aa75467addcaf51ef2b84a2f5f16f30cfbe96",
     "/home/cpaxton/src/home_robot_v4/.worktrees/wbc-reference-base-exploration/logs/manipulation/mars-reference-base-exploration-v1/control/summary.json": "5a1fc50c07c6e679b1f24360762d0edddab6e3c7aaec4f77b2de7733e4e02427",
     "/home/cpaxton/src/home_robot_v4/.worktrees/wbc-reference-base-exploration/logs/manipulation/mars-reference-base-exploration-v1/control/updates.jsonl": "b0f34b7bc7fe2a7500ad1e039bedf5df03d1f94831504bf9289e575dce5e2f9a",
@@ -16074,8 +16076,12 @@
     "scope": "read-only post-training audit; both current runs were freshly trained, no reused control or admission bridge"
   },
   "acceptance_jerk_replay_max_abs_delta": 2.220446049250313e-16,
+  "signed_unsigned_audit": {
+    "file": "signed-jerk-audit.json",
+    "qualification_changed": false
+  },
   "initial_outcomes_and_all_metrics_equal": true,
   "all_48_case_identities_match": true,
   "initial_pair_verified_before_candidate_rollout": true,
-  "extractor_sha256": "a8a94a3a29dd579a22b6b907b56634c7bfdbc6f0511ab153d813a8f6716fbf5d"
+  "extractor_sha256": "1bd240564adfc53645382fbded1cb1f393568bb4fb43c6e16d4c2bdb57d9936b"
 }

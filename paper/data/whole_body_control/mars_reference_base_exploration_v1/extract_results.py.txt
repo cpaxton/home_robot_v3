@@ -50,12 +50,14 @@ def main():
         'teacher_tamp': preflight['tamp_cases'], 'runs': {}, 'source_artifacts': {},
         'hardware_used': False, 'safety_promoted': False,
         'historical_default_replay': read(OUT/'historical-default-replay.json'),
-        'acceptance_jerk_replay_max_abs_delta': read(OUT/'jerk-audit.json')['maximum_absolute_error']}
+        'acceptance_jerk_replay_max_abs_delta': read(OUT/'jerk-audit.json')['maximum_absolute_error'],
+        'signed_unsigned_audit': {'file':'signed-jerk-audit.json','qualification_changed':False}}
     def bind(path):
         result['source_artifacts'][str(path)] = sha(path)
     for file in ['protocol.json','supervisor.json','supervise.py','extract_results.py','admission.json',
                  'full.receipt.json','full.xml','preflight/preflight.json','preflight/general-teacher.json.gz',
-                 'historical-default-replay.json','jerk-audit.json','audit_jerk.py']:
+                 'historical-default-replay.json','jerk-audit.json','audit_jerk.py',
+                 'signed-jerk-audit.json','audit_signed_jerk.py']:
         bind(OUT / file)
     identities, initial_rows = {}, {}
     for mode in ['control', 'candidate']:

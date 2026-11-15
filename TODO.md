@@ -119,6 +119,11 @@ merges, measured policy improvement and hardware readiness are separate decision
       training. Saved traces reproduce all 48 acceptance peaks to 2.22e-16;
       candidate failures peak during ordinary running, not fault stopping.
       Keep frozen gates and report both signals before any metric revision.
+      Signed/unsigned reversal controls confirm that scalar-speed jerk can
+      spike at constant acceleration; candidate signed-displacement peaks are
+      nevertheless larger, so do not relabel its failures. The base body
+      origin and cadence match; instrument instantaneous/interval-average
+      velocities and reset derivatives for the next alignment comparison.
 - [ ] **Advance real contact skills in stages.** Follow the
       [safety/task curriculum](docs/plans/2026-11-13_whole_body_safety_curriculum.md)
       from actual pregrasp to closure/lift, loaded transport/braking, and
