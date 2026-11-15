@@ -79,3 +79,35 @@ the second fixed TAMP support despite identical robots. Retain their partial
 evidence under `mars-current-feedback-validation-v1`; restart both phases and
 checks under a fresh v2 output root with the compiled-robot compatibility guard.
 Do not relabel partial results as complete or reuse their receipts.
+
+## Next decision after the completed v2 baseline:24 TAMP episodes
+
+The completed corrected-reset readout gives retained legacy12/12 on the common
+C1 cases and151/164 general, versus GRU candidate8/12. Retained legacy still
+passes0/6 actual pregrasps, teacher5/6; the known case now reports a different
+`operation_failed`/lift-stage failure and does not pass the experimental
+admission gate. Do not train past this unclassified change or infer TAMP ability
+from the small general benchmark.
+
+Predeclare one further batch,4groups×the same6cases=24episodes:
+
+| Group | Existing frozen weights | Extra physical settling before planning |
+| --- | --- | ---: |
+| Teacher | None | 2 s |
+| Retained legacy | Original `e7b42569…` | 2 s |
+| Velocity-feature legacy final | Frozen arm comparison `38c291b8…` | 0 s |
+| GRU candidate | Original exploration candidate | 0 s |
+
+Keep the completed zero-settle teacher/legacy runs as anchors. Settling uses the
+existing development-only API before task discovery/planning: no teleport,
+grip closure or actor inference. Goals, thresholds, limits and geometry remain
+unchanged; this is a changed initialization condition, never a retagged frozen
+acceptance result. The worker's initial-state hash precedes optional settling;
+do not call it a post-settling identity.
+
+Use `scripts/probe_mars_tamp_tracking.py`, verify the existing same-runtime
+full regression receipt, and preserve raw outcomes after every case. The
+velocity final is bound to the existing checked-in frozen-arm report and exact
+weight SHA; no fitting, new checkpoint choice or adaptive extension. Preserve
+every failure/stop and compare actual TAMP outcomes across controller families
+before deciding whether to add trajectory/phase exposure or change an objective.
