@@ -5,6 +5,8 @@
 """Prepared coverage and audit identities are not teacher admission."""
 
 import json
+import subprocess
+import sys
 from collections import Counter
 from pathlib import Path
 
@@ -101,3 +103,27 @@ def test_rejects_changed_contract_incomplete_coverage_and_leaking_audits(tmp_pat
     p.write_text(json.dumps(d))
     with pytest.raises(ValueError):
         load_directional_curriculum(p)
+
+
+@pytest.mark.parametrize("optimized", [False, True])
+def test_parent_mutation_fails_closed_even_under_python_optimization(optimized):
+    # Mutate after the initial hashes pass, exercising the final invariant.
+    code = '''
+from emet.rl.manipulation import directional_curriculum as curriculum
+
+original = curriculum.load_basic_learning
+def mutate(path, parent):
+    result = original(path, parent)
+    parent["scope"] += " changed"
+    return result
+
+curriculum.load_basic_learning = mutate
+try:
+    curriculum.load_directional_curriculum()
+except ValueError as exc:
+    if str(exc) != "directional curriculum parent changed while loading":
+        raise
+else:
+    raise RuntimeError("mutated parent was accepted")
+'''
+    subprocess.run([sys.executable, *(["-O"] if optimized else []), "-c", code], check=True)

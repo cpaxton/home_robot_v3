@@ -5,6 +5,28 @@ The goal is one reactive actor that follows base/hand references, settles and
 satisfies physical smoothness, support, force and retention contracts. A better
 hand endpoint is useful progress; it is not the full objective.
 
+## Latest decision after actual-reset validation
+
+The [completed reset/baseline study](../experiments/mars_current_feedback_reset_validation_20261115.md)
+passes all 24 loop stop checks and 1,299 fresh software regressions. Current-COM
+feedback is validated through initialization, forward/reverse/yaw and finite
+disturbances. Retained legacy gives 151/164 general and 12/12 on the common C1
+cases, versus GRU candidate 8/12. Original budgets and outcomes remain available.
+
+Actual TAMP execution remains the limiting result: retained legacy 0/6 versus
+teacher 5/6. A further 24 fixed episodes find no learned success from extra
+settling, the frozen velocity final or the GRU candidate. The difficult teacher
+fixture changes from an execution lift-stage failure to a planning rejection
+after settling; it is not silently admitted under the old exception.
+
+Keep the legacy actor as the stronger general baseline. Before the conditional
+three-versus-seventeen GRU study below, inspect failed TAMP-stage target/input/
+request/measurement traces and diagnose the initialization-sensitive planning
+case. PR #240's direction/audit manifests remain useful preparation, not native
+admission or training evidence. More time on the old C1 objective is not the
+selected next action. No PPO, default promotion or hardware trial is authorized
+by these results alone; retain the previously agreed staged validation.
+
 ## Why this order
 
 | Evidence | What it supports | What it does not establish |

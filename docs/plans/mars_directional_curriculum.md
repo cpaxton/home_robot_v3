@@ -68,15 +68,19 @@ cohort separately and preserve its physical reset/reference hashes.
 
 ## Validation and next gate
 
-Twenty pure case/contract tests pass, including parent preservation, exact
+Twenty-two pure case/contract tests pass, including parent preservation, exact
 coverage and rejection of schema, identity, contract and geometric-bound drift.
+The final parent-mutation check also rejects changes under Python `-O`.
 Ruff passes. The new manifest is bound into the canonical regression source
 state. No parent receipt is reused as full validation of this new source.
 
 The next stages remain conditional:
 
-1. Finish the corrected-plant production/reset and retained-controller baseline
-   in #239; choose the strongest validated actor family for task progress.
+1. The corrected-plant production/reset baseline in #239 is complete. Diagnose
+   actual TAMP tracking and initialization-sensitive planning before selecting
+   more training: general tracking improved, but no learned actor passed these
+   six actual TAMP pregrasps. See the
+   [completed report](../experiments/mars_current_feedback_reset_validation_20261115.md).
 2. Freeze this case source and obtain its own full regression receipt and
    matching teacher admission for every required case and the selected plant.
    Publish the acceptance budget anchor separately from fresh admission.

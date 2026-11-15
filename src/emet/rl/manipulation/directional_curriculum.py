@@ -175,5 +175,6 @@ def load_directional_curriculum(path=SPEC):
         suite["config"] = {**suite["config"], **spec["config_overrides"]}
         if suite["reference"] != parent["reference"] or suite["gate"] != parent["gate"]:
             raise ValueError("directional curriculum cannot change references or acceptance")
-    assert digest(parent) == digest(json.loads(Path(spec["parent_suite"]).read_text()))
+    if digest(parent) != digest(json.loads(Path(spec["parent_suite"]).read_text())):
+        raise ValueError("directional curriculum parent changed while loading")
     return spec, *outputs

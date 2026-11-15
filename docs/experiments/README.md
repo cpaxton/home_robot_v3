@@ -21,6 +21,7 @@ GPU preflight + overnight: [evaluation.md](../evaluation.md). Repo doc map: [REA
 | Profiles / merge policy | [`configs/benchmarks/dynagraph.yaml`](../../configs/benchmarks/dynagraph.yaml) |
 | LaTeX | `paper/sections/04_experiments.tex`, `05_results.tex` |
 | Mars controller timing and smoothness | [Matched wheel-feedback diagnosis](mars_aligned_jerk_measurements_20261115.md): same actor, 2/12→8/12 full passes; simulator diagnostic, zero new PPO |
+| Mars corrected-reset baselines | [Complete reset/TAMP readout](mars_current_feedback_reset_validation_20261115.md): legacy 151/164 general, 0/6 actual pregrasps; teacher 5/6; full 1,299 regressions |
 
 ## HM-EQA baselines
 
