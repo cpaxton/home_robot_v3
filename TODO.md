@@ -70,15 +70,16 @@ merges, measured policy improvement and hardware readiness are separate decision
       close superseded #214 without restoring its older code. Preserve the
       stronger source and negative results. Repair serialized paired settings,
       physical-tick reward discounting and duplicate-trial confidence reporting.
-- [ ] **Finish the corrected learning baseline.** Complete the
-      [C1 normalization comparison](docs/plans/mars_whole_body_advantage_pair.md):
-      retain the completed 4,096-decision control and its hashes; recover only
-      the declared 4,096-decision candidate after fresh source-bound gates and
-      a reviewed, explicit old/new source bridge. Verify initial state and the
-      full first unoptimized numeric rollout before updating. Report all twelve
-      fixed-final cases, actor-gradient/advantage diagnostics and every failure.
-      Completion means a recorded paired outcome, even if the candidate fails;
-      learning or task success must be measured separately.
+- [x] **Finish the corrected learning baseline.** The
+      [C1 comparison is complete](docs/experiments/mars_c1_normalization_recovery_20261115.md):
+      preserve the original 4,096-decision control and failed 256 unoptimized
+      candidate ticks; recover only the remaining 4,096 decisions. Fresh
+      regressions pass 1,249/1,249; explicit source/teacher/optimizer equivalence
+      and every initial/first-rollout hash pass. All twelve fixed-final outcomes
+      and diagnostics are recorded. Shared full mastery is 2/12 versus per-head
+      0/12 and initial 2/12; completed arm endpoints meeting 3mm/0.02rad improve
+      1/10 to 5/10. This completes the experiment, not whole-body qualification:
+      base, quiet-hold and jerk failures remain, with no checkpoint promotion.
 - [ ] **Complete the frozen-base/context coordination test.** The original
       32,768-transition job expired in the queue with zero PPO steps. Preserve
       that attempt. Record a new bounded baseline/velocity pair, seed90,
