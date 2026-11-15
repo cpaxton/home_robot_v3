@@ -43,6 +43,25 @@ SHARED_SKILL_ALIASES: dict[str, dict[AgentMode, str]] = {
 
 EQA_SKILL_SPECS: tuple[SkillSpec, ...] = (
     SkillSpec(
+        name="read_history",
+        modes=frozenset({AgentMode.EQA_EPISODE}),
+        description=(
+            "Read exact retained text from an archived state message. Copy message_id from an archive "
+            "annotation. Optional offset/max_characters paginate it. This returns historical text and "
+            "view IDs; recall_view attaches the pixels. No new observation, movement or geometry permission."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "message_id": {"type": "string", "description": "Exact archived message_id."},
+                "offset": {"type": "integer", "minimum": 0},
+                "max_characters": {"type": "integer", "minimum": 1, "maximum": 8000},
+            },
+            "required": ["message_id"],
+        },
+        returns_info=True,
+    ),
+    SkillSpec(
         name="recall_view",
         modes=frozenset({AgentMode.EQA_EPISODE}),
         description=(
@@ -766,6 +785,7 @@ CHAT_EXCLUSIVE_TOOL_NAMES: frozenset[str] = frozenset(s.name for s in CHAT_SKILL
 # EQA-only skills (must not appear in the CHAT pack by default).
 EQA_EXCLUSIVE_TOOL_NAMES: frozenset[str] = frozenset(
     {
+        "read_history",
         "recall_view",
         "inspect_graph",
         "explore_frontier",

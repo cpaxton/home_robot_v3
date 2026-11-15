@@ -117,6 +117,11 @@
       1/2 without OOM. Removed a contradictory legacy routing-priority sentence
       from the actual tool description; 436 CPU checks pass. Task improvement,
       broader task acceptance and retained-object selection remain pending.
+      The third image-only check still raises OOM with eight images: long state
+      text also matters. Added a 64k working-character cap that archives only old
+      state text by explicit reference; current state and all assistant/tool text
+      remain exact. read_history retrieves original text and recall_view its
+      pixels. 442 CPU tests pass; resource stress/live validation pending.
       Examples: `docs/experiments/multimodal_context_20261115.md`.
 - [ ] Emit actual per-episode simulation duration, model inference cost and
       invocation overhead in paper-run manifests. Clock probes and reported

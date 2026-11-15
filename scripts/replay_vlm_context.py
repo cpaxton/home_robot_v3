@@ -14,7 +14,7 @@ from emet.eval.eqa_decision_trace import record_vlm_request
 from emet.llms.conversation import VLMConversation
 
 
-def replay(request_path: Path, output: Path, *, max_images=8):
+def replay(request_path: Path, output: Path, *, max_images=8, max_characters=64000):
     if output.exists():
         raise ValueError("Use a fresh output directory; recorded evidence is never overwritten")
     source = json.loads(request_path.read_text())
@@ -35,7 +35,7 @@ def replay(request_path: Path, output: Path, *, max_images=8):
                 raise ValueError("Unsupported recorded content type")
         return parts
 
-    conversation = VLMConversation(max_images=max_images)
+    conversation = VLMConversation(max_images=max_images, max_characters=max_characters)
     for message in source.get("conversation_history", []):
         content = message["content"]
         conversation.messages.append({**message, "content": decode(content) if isinstance(content, list) else content})
@@ -47,7 +47,7 @@ def replay(request_path: Path, output: Path, *, max_images=8):
     recorded = record_vlm_request(
         output,
         system_prompt=source["system_prompt"],
-        user_text="",
+        user_text=source.get("source_user_text", source["user_text"]),
         images=[],
         history=[],
         packet=packet,
@@ -89,7 +89,13 @@ if __name__ == "__main__":
     parser.add_argument("request", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--max-images", type=int, default=8)
+    parser.add_argument("--max-characters", type=int, default=64000)
     parser.add_argument("--full-context", action="store_true", help="Keep every attachment occurrence for ablation")
     args = parser.parse_args()
-    audit = replay(args.request, args.output, max_images=None if args.full_context else args.max_images)
+    audit = replay(
+        args.request,
+        args.output,
+        max_images=None if args.full_context else args.max_images,
+        max_characters=None if args.full_context else args.max_characters,
+    )
     print(json.dumps({k: v for k, v in audit.items() if k != "occurrences"}, indent=2))

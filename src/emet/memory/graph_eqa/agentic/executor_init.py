@@ -218,7 +218,10 @@ def init_executor(
     scope = (self._session_id, epoch if isinstance(epoch, str) else None)
     conversation = getattr(agent, "_vlm_episode_conversation", None)
     if not isinstance(conversation, VLMConversation) or getattr(agent, "_vlm_conversation_scope", None) != scope:
-        conversation = VLMConversation(max_images=eqa_cfg.get("agentic_context_max_images", 8))
+        conversation = VLMConversation(
+            max_images=eqa_cfg.get("agentic_context_max_images", 8),
+            max_characters=eqa_cfg.get("agentic_context_max_characters", 64000),
+        )
         agent._vlm_episode_conversation = conversation
         agent._vlm_conversation_scope = scope
     self._conversation = conversation
@@ -313,6 +316,12 @@ def _handle_inspect_graph(self, args: dict[str, Any]) -> dict[str, Any]:
 
 def _handle_recall_view(self, args: dict[str, Any]) -> dict[str, Any]:
     return self._conversation.recall_view(str(args.get("view_id", "")))
+
+
+def _handle_read_history(self, args: dict[str, Any]) -> dict[str, Any]:
+    return self._conversation.read_history(
+        str(args.get("message_id", "")), offset=args.get("offset", 0), max_characters=args.get("max_characters", 4000)
+    )
 
 
 def _handle_explore_frontier(self, args: dict[str, Any]) -> dict[str, Any]:
@@ -421,6 +430,7 @@ def _handle_relative_motion(self, args: dict[str, Any]) -> dict[str, Any]:
 
 
 TOOL_HANDLERS: dict[str, Any] = {
+    "read_history": _handle_read_history,
     "recall_view": _handle_recall_view,
     "inspect_graph": _handle_inspect_graph,
     "explore_frontier": _handle_explore_frontier,

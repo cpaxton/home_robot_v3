@@ -181,3 +181,55 @@ Legacy execution policies are unchanged; no automatic navigation is added.
 The actual assembled tool-prompt contract is covered by a regression test.
 **436 focused CPU tests pass.** This consistency repair is separate from any
 claim that Qwen will choose a better plan.
+
+## Eight images alone do not bound working context
+
+The final image-only consistency run at `353bb7af` completed the bowl but raised
+CUDA OOM during the sixth microwave request. It is an **incomplete episode**, not
+another completed 1/2 result. The attempted allocation was 822 MiB. All saved
+requests respected the eight-image limit. The failed request's history contained
+about **58,000 characters of older state snapshots**, **29,000 of tool results**
+and **2,500 of assistant decisions**, before its current input and system prompt.
+This invalidates any general claim that the eight-image limit solved memory use.
+Artifacts: `~/runs/emet/image-context-policy-20261115-r3/`.
+
+The episode now also has a **64,000-character working-text limit**. This is a
+character proxy, not a tokenizer count or universal GPU guarantee. The policy:
+
+- Keep the system prompt, current state, every assistant decision, and every
+  plain-text/tool-result message unchanged.
+- If the prepared packet is too large, replace the oldest multimodal user-state
+  text with an explicit episode-scoped `message_id` reference. Retain its images
+  subject to the independent image limit. The original full state stays in
+  `VLMConversation.messages`; nothing resets the episode.
+- `read_history(message_id, offset, max_characters)` returns the original text
+  in pages, plus its view IDs. The model can use `recall_view` for those pixels.
+  These information tools add no motion or geometry permission.
+- If required current/system/action/tool text alone cannot fit, fail explicitly
+  before inference, retaining the original dialogue. Do not silently discard a
+  measured outcome to fit the budget.
+
+Prepared traces record which state texts were archived and the actual working
+character count. `source_user_text` also retains each original current state
+before packet annotations, so the full state snapshots remain inspectable across
+saved calls. The offline replay tool can bound both text and images;
+`--full-context` disables both budgets **for content available in that input
+file**. A prepared request alone cannot resurrect previously omitted pixels/text;
+use original captures or the retained live episode archive for full ablations.
+
+Configuration (set either value to `null` to disable that bound):
+
+```yaml
+mapping:
+  eqa:
+    agentic_context_max_images: 8
+    agentic_context_max_characters: 64000
+```
+
+On a replay of the saved failing prepared request, the working text falls from
+104,153 to **63,594 characters**, with eight images, without dropping any assistant
+or tool-result text. The replay adds fresh annotations, so those character counts
+are for the replayed packet, not the original server's token count. It makes no
+model calls. **442 focused CPU tests pass**, including remote-wire/server text
+bounds, exact history retrieval, paging/reset isolation and required-text overflow
+before inference. A GPU resource probe and live follow-up are still required.

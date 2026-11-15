@@ -155,10 +155,13 @@ def test_long_episode_is_bounded_on_remote_wire_and_server_without_losing_tool_t
         return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=reply))])
 
     remote._openai.chat.completions.create = complete
-    conversation = VLMConversation(max_images=4)
+    conversation = VLMConversation(max_images=4, max_characters=10000)
     client = wrapper(remote)
     for n in range(12):
-        client([f"observation {n}", np.full((4, 4, 3), n * 15, dtype=np.uint8)], conversation=conversation)
+        client(
+            [f"observation {n}: " + "historical state " * 80, np.full((4, 4, 3), n * 15, dtype=np.uint8)],
+            conversation=conversation,
+        )
         conversation.record_tool_result("move_forward", {"meters": 0.3}, {"ok": False, "status": "blocked"})
     sent = requests[-1]
     assert (
@@ -168,6 +171,13 @@ def test_long_episode_is_bounded_on_remote_wire_and_server_without_losing_tool_t
     assert sum("TOOL_RESULT" in str(m["content"]) for m in backend.seen[-1]) == 11
     assert len(conversation.messages) == 36
     assert "pixels omitted" in str(sent) and "recall_view" in str(sent)
+    assert "read_history" in str(sent) and conversation.last_packet.audit["archived_state_text"]
+    wire_text = sum(
+        len(part.get("text", "")) if isinstance(part, dict) else len(part)
+        for m in sent
+        for part in (m["content"] if isinstance(m["content"], list) else [m["content"]])
+    )
+    assert wire_text <= 10000
     assert remote.get_history() == backend.get_history() == []
 
 

@@ -23,6 +23,7 @@ def record_vlm_request(root, *, system_prompt, user_text, images, metadata, hist
     Captions/roles are preserved verbatim in user_text, not inferred here.
     Refuse to overwrite another call's evidence. This does not change inference.
     """
+    source_user_text = user_text
     if packet is not None:
         history = packet.messages[:-1]
         if history and history[0]["role"] == "system":
@@ -88,6 +89,7 @@ def record_vlm_request(root, *, system_prompt, user_text, images, metadata, hist
         "capture_boundary": "client payload before model preprocessing; not a wire/token trace",
     }
     if packet is not None:
+        request["source_user_text"] = source_user_text
         image_entries = iter(entries)
         request["user_content"] = [
             {"type": "text", "text": part} if isinstance(part, str) else {"type": "image", **next(image_entries)}

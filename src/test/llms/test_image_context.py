@@ -150,6 +150,9 @@ def test_recall_tool_uses_episode_registry_without_motion_verification_or_nav_bu
     assert result["ok"] and result["status"] == "HISTORICAL_VIEW_QUEUED"
     assert before == (ex._n_nav, ex._n_explore, ex._verified, ex._grounded_obs_id)
     assert not ex.handle_tool("recall_view", {"view_id": "unknown"})["ok"]
+    history = ex.handle_tool("read_history", {"message_id": ex._conversation.history_id(0)})
+    assert history["ok"] and history["text"] == "earlier pixels"
+    assert before == (ex._n_nav, ex._n_explore, ex._verified, ex._grounded_obs_id)
 
 
 def test_recorded_request_contains_actual_prepared_packet_and_identical_selection(tmp_path):
@@ -173,6 +176,7 @@ def test_recorded_request_contains_actual_prepared_packet_and_identical_selectio
     )
     conversation.generate(client, content, system_prompt="system")
     recorded = json.loads(Path(path).read_text())
+    assert recorded["source_user_text"] == "next"
     historical_images = sum(
         part.get("type") == "image"
         for m in recorded["conversation_history"]
@@ -183,3 +187,49 @@ def test_recorded_request_contains_actual_prepared_packet_and_identical_selectio
     assert recorded["metadata"]["image_context"] == conversation.last_packet.audit
     assert "pixels omitted" in str(recorded["conversation_history"])
     assert len(conversation.messages) == 10  # Complete original dialogue still retained.
+
+
+def test_text_budget_archives_only_old_state_text_with_exact_retrieval_and_keeps_actions():
+    conversation = VLMConversation(max_images=3, max_characters=6000)
+    for n in range(8):
+        conversation.messages.extend(
+            [
+                {"role": "user", "content": [f"original state {n}: " + "details " * 500, rgb(n)]},
+                {"role": "assistant", "content": f"action {n}"},
+                {"role": "user", "content": f"TOOL_RESULT measured motion {n}; geometry admitted id 7"},
+            ]
+        )
+    raw = copy.deepcopy(conversation.messages)
+    packet = conversation.preview(["latest required state", rgb(90)], system_prompt="required system")
+    assert packet.audit["text_characters"] <= 6000
+    assert packet.audit["archived_state_text"]
+    assert len(packet.messages) == len(raw) + 2
+    for index, original in enumerate(raw):
+        if isinstance(original["content"], str):
+            assert packet.messages[index + 1] == original
+    assert packet.messages[-1]["content"][0].startswith("latest required state")
+    message_id = packet.audit["archived_state_text"][0]["message_id"]
+    read = conversation.read_history(message_id, max_characters=8000)
+    assert read["ok"] and read["text"] == raw[0]["content"][0]
+    assert read["next_offset"] is None and read["view_ids"]
+    assert conversation.messages[0]["content"][0] == raw[0]["content"][0]
+    page = conversation.read_history(message_id, offset=7, max_characters=100)
+    assert page["text"] == raw[0]["content"][0][7:107] and page["next_offset"] == 107
+    conversation.reset()
+    assert conversation.read_history(message_id)["status"] == "UNKNOWN_HISTORY"
+
+
+def test_required_tool_results_over_text_budget_fail_before_model_without_discarding_them():
+    conversation = VLMConversation(max_characters=1000)
+    conversation.record_tool_result("move_forward", {}, {"measured_data": "exact " * 300})
+    before = copy.deepcopy(conversation.messages)
+    client = Client()
+    with pytest.raises(ValueError, match="Required current/system/tool/action context"):
+        conversation.generate(client, "current state", system_prompt="system")
+    assert not client.calls and conversation.messages == before
+
+
+@pytest.mark.parametrize("limit", [0, -1, True, 1.5])
+def test_invalid_text_budget_is_rejected(limit):
+    with pytest.raises(ValueError, match="positive integer"):
+        VLMConversation(max_characters=limit)

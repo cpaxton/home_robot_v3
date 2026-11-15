@@ -28,7 +28,7 @@ class ImageContext:
         if max_images is not None and (type(max_images) is not int or max_images < 1):
             raise ValueError("max_images must be a positive integer or None (full-context ablation)")
         self.max_images = max_images
-        self._scope = uuid4().hex[:12]
+        self.scope_id = uuid4().hex[:12]
         self._by_pixels: dict[tuple, str] = {}
         self.images: dict[str, Image.Image | np.ndarray] = {}
 
@@ -39,7 +39,7 @@ class ImageContext:
         digest = hashlib.sha256(pixels.tobytes()).hexdigest()
         identity = (pixels.shape, digest)
         if identity not in self._by_pixels:
-            view_id = f"view_{self._scope}_{len(self.images) + 1:04d}"
+            view_id = f"view_{self.scope_id}_{len(self.images) + 1:04d}"
             self._by_pixels[identity] = view_id
             self.images[view_id] = image
         return self._by_pixels[identity], digest, list(pixels.shape[:2])
