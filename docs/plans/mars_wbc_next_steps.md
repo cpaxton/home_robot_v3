@@ -19,13 +19,21 @@ settling, the frozen velocity final or the GRU candidate. The difficult teacher
 fixture changes from an execution lift-stage failure to a planning rejection
 after settling; it is not silently admitted under the old exception.
 
-Keep the legacy actor as the stronger general baseline. Before the conditional
-three-versus-seventeen GRU study below, inspect failed TAMP-stage target/input/
-request/measurement traces and diagnose the initialization-sensitive planning
-case. PR #240's direction/audit manifests remain useful preparation, not native
-admission or training evidence. More time on the old C1 objective is not the
-selected next action. No PPO, default promotion or hardware trial is authorized
-by these results alone; retain the previously agreed staged validation.
+The [four-episode input diagnostic](../experiments/mars_tamp_input_diagnostic_20261115.md)
+now verifies exact teacher recording parity and exact offline actor replay.
+Targets reach the learned actor, but its small commands lag; open-jaw feedback
+then leaves the narrow training normalization range. Its final matched error is
+3.01 mm/0.02966 rad versus teacher 1.11 mm/0.00108 rad. The separate teacher
+rejection is measured-pose lift replanning with `arm_path_static_support_margin`.
+The public failure now preserves `planning_failed` and semantic support-margin
+evidence. Keep the legacy actor as the stronger general baseline. Independently
+admit measured-state references; then test
+actual pregrasp/near-contact training mixed with general tracking, collecting
+normalization statistics from that distribution. Keep real grip feedback and
+all safety checks. PR #240's direction/audit manifests remain preparation,
+not native admission or training evidence. More time on C1-only training is
+not the selected next action. No default promotion or hardware qualification
+follows from these results; retain the staged validation.
 
 ## Why this order
 

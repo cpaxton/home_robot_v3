@@ -339,6 +339,22 @@ def test_partial_progress_reports_execution_started_even_before_next_stage():
     assert result['recovery'] == 'inspect'
 
 
+@pytest.mark.parametrize('reason', ['arm_static_support_margin', 'measured_pose_replan_failed:arm_path_static_support_margin'])
+def test_measured_support_rejection_is_actionable_without_private_planner_text(reason):
+    adapter = object.__new__(NativeTableAdapter)
+    result = adapter._failure('execute_pick_place_plan', reason, phase='lift', started=True)
+    assert result['status'] == 'partial'
+    assert result['code'] == 'planning_failed'
+    assert result['data']['failed_stage'] == 'lift'
+    assert result['data']['motion_rejection'] == 'static_support_margin'
+    assert result['data']['completed_ops'] == []
+    assert result['recovery'] == 'inspect'
+    unknown = adapter._failure('execute_pick_place_plan', 'private_body_name:some_unknown_failure', phase='lift')
+    assert unknown['code'] == 'operation_failed'
+    assert 'motion_rejection' not in unknown['data']
+    assert 'private_body_name' not in json.dumps(unknown)
+
+
 def native_transfer_config(native):
     _, _, context, _ = native
     adapter = context['_native_tamp_adapter']

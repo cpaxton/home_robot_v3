@@ -701,3 +701,18 @@ general baseline and motivate execution/distribution diagnosis before further
 optimization; they do not qualify manipulation or hardware. Complete cases,
 budget identities and stopped/rejected outcomes are in
 \texttt{mars\_current\_feedback\_validation\_v2/}.
+
+Four subsequent fixed diagnostic episodes verify teacher recording parity and
+exact offline replay of all 221 learned decisions on one actual pregrasp.
+Teacher and retained actor finish at 1.11 versus 3.01\,mm hand error and
+0.00108 versus 0.02966\,rad orientation error; only the teacher completes the
+contract. Peak normalized arm commands are 0.2383 versus 0.02846. Grip feedback
+leaves the actor's narrow normalization range after tracking begins to lag;
+offline sensitivity does not establish an executed improvement. The separate
+teacher failure is measured-state lift replanning rejected by the static
+support-margin check. All four stops confirm with no scored safety flag.
+These results motivate mixed general/pregrasp training and measured-state
+planner admission, not hidden feedback replacement or a relaxed support check.
+Compact provenance and phase metrics are in
+\texttt{mars\_tamp\_input\_diagnostic\_v1/results.json}; the modified optional
+tracing source has focused checks, not a fresh full qualification receipt.

@@ -185,6 +185,7 @@ def failure_code(message: str) -> str:
             "invalid_cartesian_witness": "invalid_plan",
             "arm_joint_margin": "joint_bounds",
             "arm_static_support_margin": "planning_failed",
+            "arm_path_static_support_margin": "planning_failed",
         }
         if part in control_codes:
             return control_codes[part]
