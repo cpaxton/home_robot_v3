@@ -2,6 +2,7 @@
 
 import argparse
 import json
+from collections import Counter, defaultdict
 from dataclasses import asdict, replace
 from functools import partial
 from pathlib import Path
@@ -20,7 +21,6 @@ from emet.rl.manipulation.evaluation import (
     evaluate,
     paired_comparison,
     target_coverage_ready,
-    tracking_precision_ready,
 )
 from emet.rl.manipulation.policy import ManipulationHistoryFeatures, ManipulationMLPFeatures, ManipulationPolicy, export
 
@@ -54,11 +54,38 @@ def resume_training(directory, env, config, fingerprint, architecture):
     """Restore PPO optimizer and observation statistics after bundle validation."""
     bundle = ManipulationPolicy(directory, robot=config.robot, fingerprint=fingerprint)
     expected = ManipulationHistoryFeatures if architecture == "history" else ManipulationMLPFeatures
+    if config.feedback_policy:
+        from emet.rl.manipulation.feedback_policy import GoalFeedbackFeatures
+
+        expected = GoalFeedbackFeatures
     if (
         bundle.action_mode != config.action_mode
         or type(bundle.model.policy.features_extractor) is not expected
         or ("preview" in bundle.normalization) != config.trajectory_preview
         or bundle.manifest.get("pose_only_targets", False) != (config.trajectory_preview or config.tracking_reward)
+        or bundle.manifest.get("environment", {}).get("retention_context", False) != config.retention_context
+        or bundle.manifest.get("environment", {}).get("categorical_features_unscaled", False)
+        != config.categorical_features_unscaled
+        or bundle.manifest.get("environment", {}).get("feedback_policy", False) != config.feedback_policy
+        or bundle.manifest.get("environment", {}).get("restoring_yaw_feedback", False) != config.restoring_yaw_feedback
+        or (
+            config.restoring_yaw_feedback
+            and bundle.manifest["environment"]["base_xy_tolerance"] != config.base_xy_tolerance
+        )
+        or bundle.manifest.get("environment", {}).get("feedback_orientation_scale", 1.0)
+        != config.feedback_orientation_scale
+        or bundle.manifest.get("environment", {}).get("wheel_feedback_gain", 2.0) != config.wheel_feedback_gain
+        or bundle.manifest.get("environment", {}).get("physical_wheel_slew", False) != config.physical_wheel_slew
+        or bundle.manifest.get("environment", {}).get("base_turn_progress_guard", False)
+        != config.base_turn_progress_guard
+        or bundle.manifest.get("environment", {}).get("wheel_jerk_limits")
+        != (None if config.wheel_jerk_limits is None else list(config.wheel_jerk_limits))
+        or bundle.manifest.get("environment", {}).get("precision_tracking_reward", False)
+        != config.precision_tracking_reward
+        or bundle.manifest.get("environment", {}).get("terminal_hold_seconds", 1.0) != config.terminal_hold_seconds
+        or bundle.manifest.get("environment", {}).get("normalized_jerk_weight", 0.0) != config.normalized_jerk_weight
+        or bundle.manifest.get("environment", {}).get("command_smoothness_weight", 0.0)
+        != config.command_smoothness_weight
     ):
         raise ValueError("resume policy architecture or control/observation semantics mismatch")
     if set(env.obs_rms) != set(bundle.normalization):
@@ -78,8 +105,76 @@ def resume_training(directory, env, config, fingerprint, architecture):
     return PPO.load(Path(directory) / "policy.zip", env=env, device="cpu")
 
 
+def initialize_retention_context(model, env, directory, config, fingerprint):
+    """Warm-start compatible weights with zero influence from the new suffix.
+
+    This deliberately starts a fresh PPO optimizer, unlike exact resume. Robot,
+    action, preview and model compatibility checks are never bypassed.
+    """
+    old = ManipulationPolicy(directory, robot=config.robot, fingerprint=fingerprint)
+    if (
+        not config.retention_context
+        or old.manifest.get("environment", {}).get("retention_context", False)
+        or old.action_mode != config.action_mode
+        or type(old.model.policy.features_extractor) is not type(model.policy.features_extractor)
+        or ("preview" in old.normalization) != config.trajectory_preview
+        or old.manifest.get("pose_only_targets", False) != (config.trajectory_preview or config.tracking_reward)
+    ):
+        raise ValueError("retention warm-start requires matching legacy control/observation semantics")
+    old_shape, new_shape = old.mean.shape, env.obs_rms["history"].mean.shape
+    if old_shape[0] != new_shape[0] or new_shape[1] != old_shape[1] + 2:
+        raise ValueError("retention warm-start requires exactly two appended history fields")
+    source = old.model.policy.state_dict()
+    target = model.policy.state_dict()
+    if source.keys() != target.keys():
+        raise ValueError("retention warm-start policy parameters differ")
+    for name, value in source.items():
+        if value.shape == target[name].shape:
+            target[name] = value.clone()
+        elif name.endswith("project.weight") and value.shape[1] == old_shape[1]:
+            target[name].zero_()
+            target[name][:, : old_shape[1]] = value
+        elif name in {"mlp_extractor.policy_net.0.weight", "mlp_extractor.value_net.0.weight"}:
+            steps = min(4, old_shape[0])
+            expanded = torch.zeros_like(target[name])
+            expanded[:, : steps * new_shape[1]].reshape(value.shape[0], steps, new_shape[1])[:, :, : old_shape[1]] = (
+                value[:, : steps * old_shape[1]].reshape(value.shape[0], steps, old_shape[1])
+            )
+            expanded[:, steps * new_shape[1] :] = value[:, steps * old_shape[1] :]
+            target[name] = expanded
+        else:
+            raise ValueError(f"unsupported retention warm-start parameter: {name}")
+    model.policy.load_state_dict(target)
+    for key, (mean, var) in old.normalization.items():
+        stats = env.obs_rms[key]
+        if key == "history":
+            stats.mean.fill(0)
+            stats.var.fill(1)
+            stats.mean[:, : old_shape[1]], stats.var[:, : old_shape[1]] = mean, var
+        else:
+            stats.mean, stats.var = mean.copy(), var.copy()
+        stats.count = old.manifest.get("normalization", {}).get(key, {}).get("count", old.manifest["count"])
+    env.epsilon, env.clip_obs = old.manifest["epsilon"], old.manifest["clip"]
+    return {
+        "source_weights_sha256": old.manifest["weights_sha256"],
+        "optimizer_restored": False,
+        "new_context_initial_influence": "zero",
+    }
+
+
 class Monitor(BaseCallback):
-    def __init__(self, directory, config, fingerprint, *, interval, episodes, run=None, debug_reset_seed=None):
+    def __init__(
+        self,
+        directory,
+        config,
+        fingerprint,
+        *,
+        interval,
+        episodes,
+        run=None,
+        debug_reset_seed=None,
+        held_estimator=None,
+    ):
         super().__init__()
         self.directory, self.config, self.fingerprint = directory, config, fingerprint
         self.interval, self.episodes, self.run = interval, episodes, run
@@ -89,6 +184,19 @@ class Monitor(BaseCallback):
         self.best = None
         self.completed = []
         self.debug_reset_seed = debug_reset_seed
+        self.held_estimator = held_estimator
+        self.episode_counts = Counter()
+        self.sample_steps = Counter()
+        self.sample_episodes = Counter()
+        self.reach_mode_steps = Counter()
+        self.reach_mode_episodes = Counter()
+        self.carry_mode_steps = Counter()
+        self.carry_mode_episodes = Counter()
+        self.episode_steps = Counter()
+        self.task_rewards = defaultdict(list)
+        self.reward_terms = defaultdict(list)
+        self.replay_steps = Counter()
+        self.replay_starts = Counter()
 
     def record(self, values):
         values = {"timesteps": self.num_timesteps, **values}
@@ -98,15 +206,135 @@ class Monitor(BaseCallback):
             self.run.log(values)
 
     def _on_step(self):
-        for done, info in zip(self.locals["dones"], self.locals["infos"], strict=True):
+        for i, (done, info) in enumerate(zip(self.locals["dones"], self.locals["infos"], strict=True)):
+            scenario = info.get("scenario", "unknown")
+            replay = info.get("failure_replay", {})
+            if replay.get("selected"):
+                parent = str(replay["parent_seed"])
+                self.replay_steps[parent] += 1
+                if self.episode_steps[i] == 0:
+                    self.replay_starts[parent] += 1
+            if scenario == "carry":
+                mode = (
+                    "grasp_lift"
+                    if info.get("grasp_lift_trial")
+                    else "hold"
+                    if info.get("carry_hold_trial")
+                    else "ordinary"
+                )
+                self.carry_mode_steps[mode] += 1
+                if self.episode_steps[i] == 0:
+                    self.carry_mode_episodes[mode] += 1
+                if mode == "grasp_lift":
+                    phase = "grasp_lift_" + info.get("grasp_lift_start_mode", "start")
+                    self.carry_mode_steps[phase] += 1
+                    if self.episode_steps[i] == 0:
+                        self.carry_mode_episodes[phase] += 1
+            if scenario == "reach":
+                mode = (
+                    "hold"
+                    if info.get("reach_hold_trial")
+                    else "local_" + (info.get("reach_local_mode") or "unspecified")
+                    if info.get("reach_local_trial")
+                    else "ordinary"
+                )
+                self.reach_mode_steps[mode] += 1
+                if self.episode_steps[i] == 0:
+                    self.reach_mode_episodes[mode] += 1
+            if self.episode_steps[i] == 0:
+                self.sample_episodes[scenario] += 1
+            self.episode_steps[i] += 1
+            self.sample_steps[scenario] += 1
+            self.task_rewards[scenario].append(float(self.locals["rewards"][i]))
+            for key, value in info.get("reward_terms", {}).items():
+                self.reward_terms[f"{scenario}/{key}"].append(float(value))
+            label = info.get("held_object_supervision", {})
+            if (
+                self.held_estimator is not None
+                and not info.get("invalid_physics")
+                and not info.get("initialization_failed")
+            ):
+                normalizer = self.model.get_vec_normalize_env()
+                if done:
+                    observation = normalizer.unnormalize_obs(info["terminal_observation"])
+                else:
+                    observation = {k: v[i] for k, v in normalizer.get_original_obs().items()}
+                # All samples of a vector-slot episode share one split. No
+                # adjacent frames from an audit episode enter head training.
+                audit = (self.episode_counts[i] + i) % 5 == 4
+                self.held_estimator.add(observation["history"], label, audit=audit)
             if done:
                 self.completed.append(info)
+                self.episode_counts[i] += 1
+                self.episode_steps[i] = 0
         return True
 
     def _on_rollout_end(self):
         values = {
             k: float(v) for k, v in self.model.logger.name_to_value.items() if isinstance(v, (int, float, np.number))
         }
+        for scenario in ("reach", "pregrasp", "carry", "place", "disturbance"):
+            values[f"sampling/{scenario}/step_count"] = self.sample_steps[scenario]
+            values[f"sampling/{scenario}/episode_start_count"] = self.sample_episodes[scenario]
+            values[f"sampling/{scenario}/step_fraction"] = self.sample_steps[scenario] / max(
+                1, sum(self.sample_steps.values())
+            )
+            values[f"sampling/{scenario}/episode_fraction"] = self.sample_episodes[scenario] / max(
+                1, sum(self.sample_episodes.values())
+            )
+            if self.task_rewards[scenario]:
+                values[f"tasks/{scenario}/reward_per_step"] = float(np.mean(self.task_rewards[scenario]))
+        for mode in (
+            "hold",
+            "local_translation",
+            "local_orientation",
+            "local_combined",
+            "local_unspecified",
+            "ordinary",
+        ):
+            values[f"sampling/reach_{mode}/step_fraction"] = self.reach_mode_steps[mode] / max(
+                1, sum(self.sample_steps.values())
+            )
+            values[f"sampling/reach_{mode}/episode_fraction"] = self.reach_mode_episodes[mode] / max(
+                1, sum(self.sample_episodes.values())
+            )
+        for mode in (
+            "grasp_lift",
+            "hold",
+            "ordinary",
+            "grasp_lift_start",
+            "grasp_lift_mid",
+            "grasp_lift_late",
+            "grasp_lift_hold",
+        ):
+            values[f"sampling/carry_{mode}/step_count"] = self.carry_mode_steps[mode]
+            values[f"sampling/carry_{mode}/episode_start_count"] = self.carry_mode_episodes[mode]
+            values[f"sampling/carry_{mode}/step_fraction"] = self.carry_mode_steps[mode] / max(
+                1, sum(self.sample_steps.values())
+            )
+            values[f"sampling/carry_{mode}/episode_fraction"] = self.carry_mode_episodes[mode] / max(
+                1, sum(self.sample_episodes.values())
+            )
+        for key, samples in self.reward_terms.items():
+            values[f"reward_terms/{key}"] = float(np.mean(samples))
+        values["failure_replay/step_count"] = sum(self.replay_steps.values())
+        values["failure_replay/episode_start_count"] = sum(self.replay_starts.values())
+        for parent in self.replay_steps:
+            values[f"failure_replay/parents/{parent}/step_count"] = self.replay_steps[parent]
+            values[f"failure_replay/parents/{parent}/episode_start_count"] = self.replay_starts[parent]
+        if self.held_estimator is not None:
+            metrics = {**self.held_estimator.fit(), **self.held_estimator.audit_metrics()}
+            values.update({f"held_object/{k}": v for k, v in metrics.items()})
+        self.sample_steps.clear()
+        self.sample_episodes.clear()
+        self.reach_mode_steps.clear()
+        self.reach_mode_episodes.clear()
+        self.carry_mode_steps.clear()
+        self.carry_mode_episodes.clear()
+        self.task_rewards.clear()
+        self.reward_terms.clear()
+        self.replay_steps.clear()
+        self.replay_starts.clear()
         if self.completed:
             for key in (
                 "is_success",
@@ -130,6 +358,7 @@ class Monitor(BaseCallback):
             self.config,
             self.fingerprint,
             steps=self.num_timesteps,
+            held_estimator=self.held_estimator,
         )
         # Checkpoint selection always uses the same full distribution. An easy
         # curriculum stage must not masquerade as full-contract improvement.
@@ -138,8 +367,32 @@ class Monitor(BaseCallback):
             randomization_scale=1.0,
             target_scale=1.0,
             tracking_precision=4 if self.config.tracking_reward else self.config.tracking_precision,
+            motion_penalty_scale=1.0 if self.config.smoothness_curriculum else self.config.motion_penalty_scale,
         )
         actor = ManipulationPolicy(target)
+        lift = None
+        if self.config.grasp_lift_probability:
+            # A mixed validation's single carry sample can miss the lift subtype.
+            # Always log a separate forced-lift comparison at the same checkpoint.
+            lift_config = replace(
+                self.config,
+                scenario="carry",
+                grasp_lift_probability=1,
+                carry_push_probability=0,
+                grasp_lift_phase_weights=None,
+            )
+            lift = evaluate(actor, config=lift_config, episodes=self.episodes, seed=3100000)
+            lift_teacher = evaluate(config=lift_config, episodes=self.episodes, seed=3100000)
+            (target / "grasp-lift-validation.json").write_text(json.dumps(lift, indent=2) + "\n")
+            (target / "grasp-lift-teacher-validation.json").write_text(json.dumps(lift_teacher, indent=2) + "\n")
+            self.record(
+                {
+                    f"grasp_lift/{controller}/{k}": v
+                    for controller, r in [("policy", lift), ("teacher", lift_teacher)]
+                    for k, v in r["summary"]["carry"].items()
+                    if v is not None
+                }
+            )
         if self.debug_reset_seed is not None:
             debug = evaluate(actor, config=self.config, episodes=1, seed=self.debug_reset_seed)
             (target / "debug-training-case.json").write_text(json.dumps(debug, indent=2) + "\n")
@@ -183,6 +436,7 @@ class Monitor(BaseCallback):
         metrics["curriculum/randomization_scale"] = self.randomization_scale
         metrics["curriculum/target_scale"] = self.target_scale
         metrics["curriculum/tracking_precision"] = self.config.tracking_precision
+        metrics["curriculum/motion_penalty_scale"] = self.config.motion_penalty_scale
         for scenario, group in teacher["summary"].items():
             metrics[f"teacher/{scenario}/success_rate"] = group["success_rate"]
             metrics[f"paired/{scenario}/success_rate_delta"] = (
@@ -198,14 +452,21 @@ class Monitor(BaseCallback):
         self.record(metrics)
         # Advance only after an actual stratified validation gate, not episode
         # count or elapsed training time. Keep validation seeds paired.
-        if (
-            self.config.tracking_reward
-            and self.config.tracking_precision < 4
-            and tracking_precision_ready(curriculum["summary"], self.config.tracking_precision, self.episodes)
-        ):
-            level = self.config.tracking_precision + 1
-            self.config = replace(self.config, tracking_precision=level)
-            self.model.get_env().env_method("set_tracking_precision", level)
+        from emet.rl.manipulation.tracking_curriculum import tracking_updates
+
+        updates = tracking_updates(
+            self.config,
+            curriculum["summary"],
+            self.episodes,
+            lift_summary=lift["summary"] if lift is not None else None,
+        )
+        if updates:
+            self.config = replace(self.config, **updates)
+            if "tracking_precision" in updates:
+                self.model.get_env().env_method("set_tracking_precision", updates["tracking_precision"])
+            if "motion_penalty_scale" in updates:
+                self.model.get_env().env_method("set_motion_penalty_scale", updates["motion_penalty_scale"])
+            self.record({f"curriculum/updated_{key}": value for key, value in updates.items()})
         strict_ready = curriculum_ready(curriculum["summary"], self.episodes)
         coverage_ready = strict_ready or (
             self.config.tracking_reward and target_coverage_ready(curriculum["summary"], self.episodes)
@@ -231,6 +492,7 @@ class Monitor(BaseCallback):
                 self.config,
                 self.fingerprint,
                 steps=self.num_timesteps,
+                held_estimator=self.held_estimator,
             )
             (self.directory / "best/validation.json").write_text(json.dumps(report, indent=2) + "\n")
         self.last = self.num_timesteps
@@ -245,7 +507,7 @@ def training_options(args):
         raise ValueError("DAgger needs at least five vector steps")
     std = args.exploration_std
     if std is None:
-        std = 0.03 if args.dagger or args.action_mode == "residual" else 0.3
+        std = 0.03 if args.dagger or args.action_mode == "residual" or getattr(args, "initialize_from", None) else 0.3
     if not np.isfinite(std) or not 0 < std <= 1:
         raise ValueError("normalized exploration standard deviation must be in (0, 1]")
     return {
@@ -255,9 +517,65 @@ def training_options(args):
     }
 
 
+def retention_options(args):
+    """Tracking-majority opt-in preset; legacy sampling remains reproducible."""
+    from emet.rl.manipulation.retention_training import TRACKING_RETENTION_MIX, validate_mixture
+
+    preset = args.task_mix == "tracking-retention"
+    if (preset or args.scenario_weights is not None) and args.scenario != "mixed":
+        raise ValueError("task mixtures require --scenario mixed")
+    weights = args.scenario_weights if args.scenario_weights is not None else TRACKING_RETENTION_MIX if preset else None
+    if weights is not None:
+        weights = validate_mixture(weights)
+    if preset and weights[0] < 0.5:
+        raise ValueError("tracking-retention preset must retain at least 50% ordinary tracking resets")
+    context = args.retention_context or preset
+    if args.held_object_predictor and not context:
+        raise ValueError("held-object predictor requires retention context")
+    return {
+        "scenario_weights": weights,
+        "retention_context": context,
+        "empty_grasp_probability": args.empty_grasp_probability
+        if args.empty_grasp_probability is not None
+        else 0.2
+        if preset
+        else 0,
+        "carry_hold_probability": args.carry_hold_probability
+        if args.carry_hold_probability is not None
+        else 0.25
+        if preset
+        else 0,
+        "payload_mass_range_kg": args.payload_mass_range_kg
+        if args.payload_mass_range_kg is not None
+        else (0.02, 0.10)
+        if preset and args.payload_mass_kg is None
+        else None,
+        "payload_com_randomization_m": args.payload_com_randomization_m
+        if args.payload_com_randomization_m is not None
+        else 0.002
+        if preset
+        else 0,
+    }
+
+
+def configure_observation_normalization(normalizer, *, frozen, initialized):
+    """Freeze copied statistics independently of PPO weight updates.
+
+    VecNormalize.training controls statistics, not the actor's training mode.
+    Frozen identity statistics on a scratch actor are not a continuation audit.
+    """
+    if frozen and not initialized:
+        raise ValueError("frozen observation normalization requires initialized statistics")
+    normalizer.training = not frozen
+
+
 def train(args):
     torch.set_num_threads(1)
     options = training_options(args)
+    initialized = any(x is not None for x in (args.resume_from, args.initialize_from, args.transfer_from))
+    if args.freeze_observation_normalization and not initialized:
+        raise ValueError("frozen observation normalization requires a checkpoint initializer")
+    options["observation_normalization"] = "frozen" if args.freeze_observation_normalization else "adaptive"
     PhaseLearningRate(
         args.learning_rate,
         args.learning_rate if args.final_learning_rate is None else args.final_learning_rate,
@@ -273,10 +591,30 @@ def train(args):
         if args.dagger or args.initialization_steps:
             raise ValueError("resume requires zero initialization steps and no DAgger")
         options["resume_from"] = str(args.resume_from.resolve())
+    if args.initialize_from is not None:
+        if args.resume_from is not None or args.dagger or args.initialization_steps:
+            raise ValueError("retention warm-start requires zero initialization steps, no DAgger and no exact resume")
+        options["initialize_from"] = str(args.initialize_from.resolve())
+    if args.transfer_from is not None:
+        if args.resume_from is not None or args.initialize_from is not None or args.dagger or args.initialization_steps:
+            raise ValueError(
+                "training transfer requires a fresh optimizer, zero initialization steps and no other initializer"
+            )
+        if not np.isfinite(args.normalization_prior_count) or args.normalization_prior_count <= 0:
+            raise ValueError("normalization prior count must be finite and positive")
+        options["initialization"] = "tracking_transfer"
+        options["transfer_from"] = str(args.transfer_from.resolve())
+        options["normalization_prior_count"] = args.normalization_prior_count
     if args.debug_reset_seed is not None:
         if args.scenario != "reach":
             raise ValueError("fixed-case learning audit requires reach")
         options["debug_reset_seed"] = args.debug_reset_seed
+    retention = retention_options(args)
+    options["task_mix"] = args.task_mix
+    options["held_object_predictor"] = (
+        args.held_object_predictor if args.held_object_predictor is not None else args.task_mix == "tracking-retention"
+    )
+    options["held_object_optimizer"] = "separate supervised BCE; no PPO reward or shared gradients"
     config = ManipulationConfig(
         robot=args.robot,
         scenario=args.scenario,
@@ -315,7 +653,58 @@ def train(args):
         tracking_precision=args.tracking_precision,
         endpoint_motion_weight=args.endpoint_motion_weight,
         goal_gated_settling=args.goal_gated_settling,
+        hand_gated_base_reward=args.hand_gated_base_reward,
+        motion_penalty_scale=args.motion_penalty_scale,
+        smoothness_curriculum=args.smoothness_curriculum,
+        jerk_limited_lift_reference=args.jerk_limited_lift_reference,
+        grasp_lift_phase_weights=args.grasp_lift_phase_weights,
+        reach_hold_probability=args.reach_hold_probability,
+        hold_pregrasp_fixture=args.hold_pregrasp_fixture,
+        fixed_base_probability=args.fixed_base_probability,
+        fixed_base_xy_tolerance=args.fixed_base_xy_tolerance,
+        categorical_features_unscaled=args.categorical_features_unscaled,
+        body_motion_weight=args.body_motion_weight,
+        feedback_policy=args.feedback_policy,
+        restoring_yaw_feedback=args.restoring_yaw_feedback,
+        feedback_orientation_scale=args.feedback_orientation_scale,
+        wheel_feedback_gain=args.wheel_feedback_gain,
+        physical_wheel_slew=args.physical_wheel_slew,
+        whole_body_settling=args.whole_body_settling,
+        base_turn_progress_guard=args.base_turn_progress_guard,
+        reach_local_probability=args.reach_local_probability,
+        reach_local_translation_probability=args.reach_local_translation_probability,
+        grasp_lift_probability=args.grasp_lift_probability,
+        grasp_lift_payload_object=args.grasp_lift_payload_object,
+        fixed_base_contract=args.fixed_base_contract,
+        pose_progress_weight=args.pose_progress_weight,
+        **retention,
     )
+    if config.feedback_policy and args.architecture != "mlp":
+        raise ValueError("feedback-head pilot currently requires the fixed-history MLP")
+    replay_corpus = None
+    wrapper = partial(FixedResetSeed, fixed_seed=args.debug_reset_seed) if args.debug_reset_seed is not None else None
+    if args.failure_replay_corpus is not None:
+        import hashlib
+
+        from emet.rl.manipulation.failure_replay import FailureReplay, validate_corpus
+        from emet.rl.regression_gate import verify_regressions
+
+        if wrapper is not None or args.regression_receipt is None:
+            raise ValueError("failure replay requires fresh regressions and cannot use a fixed-case wrapper")
+        if not np.isfinite(args.failure_replay_carry_fraction) or not 0 < args.failure_replay_carry_fraction <= 0.75:
+            raise ValueError("carry replay fraction must be in (0, 0.75]")
+        verify_regressions(args.regression_receipt)
+        replay_raw = args.failure_replay_corpus.read_bytes()
+        replay_corpus = json.loads(replay_raw)
+        validate_corpus(replay_corpus, config)
+        wrapper = partial(FailureReplay, corpus=replay_corpus, carry_fraction=args.failure_replay_carry_fraction)
+        options["failure_replay"] = {
+            "corpus_sha256": hashlib.sha256(replay_raw).hexdigest(),
+            "source_report_sha256": replay_corpus["source_report_sha256"],
+            "carry_fraction": args.failure_replay_carry_fraction,
+            "partition": "train",
+            "validation_families_excluded": True,
+        }
     # Admit the model before starting workers or a tracking run.
     probe = ManipulationEnv(config)
     fingerprint = probe.fingerprint
@@ -344,6 +733,8 @@ def train(args):
         directory.mkdir(parents=True, exist_ok=True)
         if (directory / "complete.json").exists():
             raise ValueError("refusing to overwrite a completed experiment")
+        if replay_corpus is not None:
+            (directory / "failure-replay.json").write_text(json.dumps(replay_corpus, indent=2) + "\n")
         (directory / "run.json").write_text(
             json.dumps(
                 {
@@ -358,6 +749,7 @@ def train(args):
                     "evaluation_seed": 200000,
                     "eval_every": args.eval_every,
                     "eval_episodes_per_category": args.eval_episodes,
+                    "initial_eval_episodes_per_category": args.initial_eval_episodes or args.eval_episodes,
                 },
                 indent=2,
             )
@@ -385,22 +777,26 @@ def train(args):
         env = None
         failed = True
         try:
-            env = VecNormalize(
+            from emet.rl.manipulation.normalization import CommandVecNormalize
+
+            normalization_type = CommandVecNormalize if config.categorical_features_unscaled else VecNormalize
+            env = normalization_type(
                 make_vec_env(
                     ManipulationEnv,
                     n_envs=args.envs,
                     seed=seed,
                     env_kwargs={"config": config},
-                    wrapper_class=partial(FixedResetSeed, fixed_seed=args.debug_reset_seed)
-                    if args.debug_reset_seed is not None
-                    else None,
+                    wrapper_class=wrapper,
                     vec_env_cls=SubprocVecEnv if args.envs > 1 else DummyVecEnv,
                 ),
                 norm_reward=False,
                 clip_obs=20,
+                **({"config": config} if config.categorical_features_unscaled else {}),
             )
+            from emet.rl.manipulation.feedback_policy import FeedbackActorCriticPolicy, GoalFeedbackFeatures
+
             model = PPO(
-                "MultiInputPolicy",
+                FeedbackActorCriticPolicy if config.feedback_policy else "MultiInputPolicy",
                 env,
                 device="cpu",
                 seed=seed,
@@ -413,19 +809,84 @@ def train(args):
                 ent_coef=0,
                 gamma=args.discount,
                 policy_kwargs={
-                    "features_extractor_class": ManipulationHistoryFeatures
+                    "features_extractor_class": GoalFeedbackFeatures
+                    if config.feedback_policy
+                    else ManipulationHistoryFeatures
                     if args.architecture == "history"
                     else ManipulationMLPFeatures,
+                    **(
+                        {
+                            "restoring_yaw_feedback": config.restoring_yaw_feedback,
+                            "turn_xy_tolerance": config.base_xy_tolerance,
+                            "features_extractor_kwargs": {
+                                "robot": config.robot,
+                                "retention_context": config.retention_context,
+                                "orientation_scale": config.feedback_orientation_scale,
+                            },
+                        }
+                        if config.feedback_policy
+                        else {}
+                    ),
                     "net_arch": {"pi": [128, 128], "vf": [128, 128]},
                     "log_std_init": -20,
                 },
             )
             with torch.no_grad():
-                model.policy.action_net.weight.zero_()
-                model.policy.action_net.bias.zero_()
+                if config.feedback_policy:
+                    model.policy.action_net.zero_output()
+                else:
+                    model.policy.action_net.weight.zero_()
+                    model.policy.action_net.bias.zero_()
             if args.resume_from is not None:
                 model = resume_training(args.resume_from, env, config, fingerprint, args.architecture)
                 model.gamma = model.rollout_buffer.gamma = args.discount
+            if args.initialize_from is not None:
+                result = initialize_retention_context(model, env, args.initialize_from, config, fingerprint)
+                (directory / "retention-warm-start.json").write_text(json.dumps(result, indent=2) + "\n")
+            if args.transfer_from is not None:
+                from emet.rl.manipulation.initialization import transfer_actor
+
+                result = transfer_actor(
+                    model,
+                    env,
+                    args.transfer_from,
+                    config,
+                    fingerprint,
+                    prior_count=args.normalization_prior_count,
+                )
+                (directory / "tracking-transfer.json").write_text(json.dumps(result, indent=2) + "\n")
+            held_estimator = None
+            if args.held_object_predictor is True or (
+                args.held_object_predictor is None and args.task_mix == "tracking-retention"
+            ):
+                from emet.rl.manipulation.held_object import HeldObjectEstimator
+
+                if not config.retention_context:
+                    raise ValueError("held-object predictor requires --retention-context or tracking-retention mix")
+                held_estimator = HeldObjectEstimator(config.robot, env.observation_space["history"].shape, seed=seed)
+                if args.resume_from is not None:
+                    previous = ManipulationPolicy(args.resume_from).held_estimator
+                    if previous is not None and previous.feature_set == held_estimator.feature_set:
+                        held_estimator.head.load_state_dict(previous.head.state_dict())
+                        held_estimator.class_counts = previous.class_counts.copy()
+                        held_estimator.updates = previous.updates
+                    elif previous is not None:
+                        (directory / "held-object-initialization.json").write_text(
+                            json.dumps(
+                                {
+                                    "reinitialized": True,
+                                    "reason": "gripper-local feature contract replaces legacy arm/action inputs",
+                                    "previous_feature_set": previous.feature_set,
+                                    "feature_set": held_estimator.feature_set,
+                                    "ppo_optimizer_restored": True,
+                                },
+                                indent=2,
+                            )
+                            + "\n"
+                        )
+            configure_observation_normalization(
+                env, frozen=args.freeze_observation_normalization, initialized=initialized
+            )
             actor = [
                 *model.policy.action_net.parameters(),
                 *model.policy.mlp_extractor.policy_net.parameters(),
@@ -452,8 +913,9 @@ def train(args):
                 model.learn(args.initialization_steps)
             for parameter in actor:
                 parameter.requires_grad_(True)
-            with torch.no_grad():
-                model.policy.log_std.fill_(float(np.log(options["exploration_std"])))
+            if args.resume_from is None:
+                with torch.no_grad():
+                    model.policy.log_std.fill_(float(np.log(options["exploration_std"])))
             schedule = PhaseLearningRate(
                 args.learning_rate,
                 args.learning_rate if args.final_learning_rate is None else args.final_learning_rate,
@@ -469,15 +931,26 @@ def train(args):
                 episodes=args.eval_episodes,
                 run=run,
                 debug_reset_seed=args.debug_reset_seed,
+                held_estimator=held_estimator,
             )
             monitor.init_callback(model)
             monitor.num_timesteps = model.num_timesteps
+            monitor.episodes = args.initial_eval_episodes or args.eval_episodes
             monitor.checkpoint()
+            monitor.episodes = args.eval_episodes
             model.learn(args.steps, callback=monitor, reset_num_timesteps=False)
             monitor.num_timesteps = model.num_timesteps
             if monitor.last != model.num_timesteps:
                 monitor.checkpoint()
-            export(model, env, directory / "last", monitor.config, fingerprint, steps=model.num_timesteps)
+            export(
+                model,
+                env,
+                directory / "last",
+                monitor.config,
+                fingerprint,
+                steps=model.num_timesteps,
+                held_estimator=held_estimator,
+            )
             (directory / "complete.json").write_text(
                 json.dumps({"steps": model.num_timesteps, "promoted": False}) + "\n"
             )
@@ -499,6 +972,62 @@ def main():
         "--scenario", choices=["mixed", "reach", "pregrasp", "carry", "place", "disturbance"], default="mixed"
     )
     p.add_argument("--horizon", type=float, default=20)
+    p.add_argument("--task-mix", choices=["legacy", "tracking-retention"], default="legacy")
+    p.add_argument(
+        "--scenario-weights",
+        type=float,
+        nargs=5,
+        metavar=("REACH", "PREGRASP", "CARRY", "PLACE", "DISTURBANCE"),
+        help="episode probabilities summing to one; tracking-retention requires reach >= .5",
+    )
+    p.add_argument("--retention-context", action="store_true")
+    p.add_argument("--held-object-predictor", action=argparse.BooleanOptionalAction, default=None)
+    p.add_argument("--empty-grasp-probability", type=float, help="closed-empty counterexamples within reach tasks")
+    p.add_argument("--carry-hold-probability", type=float, help="stationary load-holding fraction within carry tasks")
+    p.add_argument(
+        "--grasp-lift-probability",
+        type=float,
+        default=0.0,
+        help="within-carry fraction starting from a physical supported grasp before learned lift-off",
+    )
+    p.add_argument(
+        "--grasp-lift-payload-object",
+        choices=["object1", "object2"],
+        help="optional payload slot for lift subtype only; other tasks retain their existing object mix",
+    )
+    p.add_argument(
+        "--reach-hold-probability",
+        type=float,
+        default=0,
+        help="two-second stationary holds within ordinary reach resets",
+    )
+    p.add_argument(
+        "--hold-pregrasp-fixture", action="store_true", help="Mars holds use the physical pregrasp reset posture"
+    )
+    p.add_argument(
+        "--fixed-base-probability",
+        type=float,
+        default=0,
+        help="manipulation reset fraction with stationary base targets",
+    )
+    p.add_argument("--fixed-base-xy-tolerance", type=float, default=0.005)
+    p.add_argument("--categorical-features-unscaled", action="store_true")
+    p.add_argument("--body-motion-weight", type=float, default=0)
+    p.add_argument("--feedback-policy", action="store_true")
+    p.add_argument("--restoring-yaw-feedback", action="store_true")
+    p.add_argument("--feedback-orientation-scale", type=float, default=1.0)
+    p.add_argument("--wheel-feedback-gain", type=float, default=2.0)
+    p.add_argument("--physical-wheel-slew", action="store_true")
+    p.add_argument("--base-turn-progress-guard", action="store_true")
+    p.add_argument("--failure-replay-corpus", type=Path)
+    p.add_argument("--failure-replay-carry-fraction", type=float, default=0.5)
+    p.add_argument("--whole-body-settling", action="store_true")
+    p.add_argument("--reach-local-probability", type=float, default=0.0)
+    p.add_argument("--reach-local-translation-probability", type=float, default=0.0)
+    p.add_argument("--fixed-base-contract", action="store_true")
+    p.add_argument("--pose-progress-weight", type=float, default=0.0)
+    p.add_argument("--payload-mass-range-kg", type=float, nargs=2, metavar=("MIN", "MAX"))
+    p.add_argument("--payload-com-randomization-m", type=float)
     p.add_argument("--randomization-scale", type=float, default=0.05)
     p.add_argument("--payload-mass-kg", type=float, help="nominal payload mass before randomization")
     p.add_argument("--payload-asset-set", choices=["training", "native_table"], default="training")
@@ -536,6 +1065,11 @@ def main():
     p.add_argument("--reach-target-mode", choices=["mixed", "base", "hand", "combined"], default="mixed")
     p.add_argument("--differential-base-reward", action="store_true")
     p.add_argument("--goal-gated-settling", action="store_true")
+    p.add_argument("--hand-gated-base-reward", action="store_true")
+    p.add_argument("--motion-penalty-scale", type=float, default=1.0)
+    p.add_argument("--smoothness-curriculum", action="store_true")
+    p.add_argument("--jerk-limited-lift-reference", action="store_true")
+    p.add_argument("--grasp-lift-phase-weights", nargs=4, type=float)
     p.add_argument("--discount", type=float, default=0.99, help="PPO per-control-step discount")
     p.add_argument("--hand-position-tolerance", type=float, default=0.005)
     p.add_argument("--hand-orientation-tolerance", type=float, default=0.05)
@@ -551,11 +1085,30 @@ def main():
     p.add_argument("--learning-rate", type=float, default=1e-4)
     p.add_argument("--final-learning-rate", type=float, help="linearly decay to this LR over the additional steps")
     p.add_argument("--resume-from", type=Path, help="continue a validated manipulation bundle with its PPO optimizer")
+    p.add_argument(
+        "--transfer-from",
+        type=Path,
+        help="training-only actor transfer; explicitly checks allowed contact solver changes",
+    )
+    p.add_argument("--normalization-prior-count", type=float, default=1024)
+    p.add_argument(
+        "--freeze-observation-normalization",
+        action="store_true",
+        help="keep initialized observation statistics fixed while PPO updates weights; continuation audit only",
+    )
+    p.add_argument(
+        "--initialize-from",
+        type=Path,
+        help="warm-start matching legacy actor/critic with two new context inputs; fresh optimizer",
+    )
     p.add_argument("--initialization-steps", type=int, default=32768)
     p.add_argument("--envs", type=int, default=4)
     p.add_argument("--seeds", type=int, nargs="+", default=[0, 1, 2])
     p.add_argument("--eval-every", type=int, default=32768)
     p.add_argument("--eval-episodes", type=int, default=5)
+    p.add_argument(
+        "--initial-eval-episodes", type=int, help="smaller startup probe; later validation keeps --eval-episodes"
+    )
     p.add_argument("--wandb-mode", choices=["disabled", "online", "offline"], default="disabled")
     p.add_argument("--output", required=True)
     p = sub.add_parser("evaluate")
@@ -587,6 +1140,8 @@ def main():
     if args.command == "train":
         if min(args.steps, args.envs, args.eval_every, args.eval_episodes) <= 0 or args.initialization_steps < 0:
             parser.error("positive training settings required")
+        if args.initial_eval_episodes is not None and not 1 <= args.initial_eval_episodes <= args.eval_episodes:
+            parser.error("initial evaluation episodes must be in [1, eval-episodes]")
         try:
             training_options(args)
         except ValueError as error:

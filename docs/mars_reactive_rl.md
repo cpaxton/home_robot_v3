@@ -2364,3 +2364,501 @@ and must be diagnosed before further qualification or controller integration.
 [The v5 summary](../paper/data/whole_body_control/qualification_v5.json) and
 adjacent compressed full reports preserve the failures. The initial merge is a
 simulator development baseline, not a qualified learned or hardware controller.
+
+### Placement recovery and command-interface prototype
+
+The follow-up plan is tracked in
+[the Mars integration acceptance plan](plans/mars_controller_integration.md).
+The placement candidate restores **executor-authorized base compensation during
+verified free-space descent**, after conservative stage rearming. Compensation
+still turns off at support contact, and every fault stop still clears it.
+Development ablations recovered all three frozen failures by restoring bias;
+restoring tracking trim alone recovered only one. These diagnostics are archived
+in `paper/data/whole_body_control/placement_rearm_ablation.json` and do not
+replace the full frozen qualification.
+
+`TaskPoseCommandRuntime` provides a **simulator loopback** for validated
+`TaskPoseTrajectory` records through the real `CommandRuntime` ownership,
+identity, deadline, update, cancellation and stop-confirmation logic. A runtime
+owns an already prepared active environment: starting a command never resets
+physics, clears a failed contract, opens the gripper, or releases an object.
+Only a peer explicitly advertising `task_pose_control` accepts the helper.
+Schedules retain SE(2)/SE(3) masks and executor-only gripper release.
+
+The joint-reference teacher cannot follow arbitrary pose-only inputs. The new
+pose-command path uses a damped measured Jacobian to produce bounded teacher
+velocities, compensating measured base motion. This is a teacher baseline, not
+an iterative configuration IK loop or a restriction on learned actors. Learned
+policies receive normal history and preview observations. Both pass through the
+same actuator velocity/slew limits and environment safety checks. This teacher
+has not been qualified for general dynamic manipulation.
+
+Generate and execute **component** TAMP paths through that interface:
+
+```bash
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MUJOCO_GL=egl \
+  taskset -c 14-15 .venv/bin/python -m emet.rl.manipulation.tamp_cases \
+  --robot innate_mars --episodes 2 --seed 610000 --execute \
+  --execution-interface command --emit-pose-trajectories \
+  --output /tmp/mars-tamp-command-smoke.json
+```
+
+The initial development smoke passed 4/4 planned paths, including loaded carry;
+initialization and planning failures remain in the case list. This is not the
+30-case two-support public-tool benchmark, full agent acceptance, a deployed
+ZMQ pose server, or hardware qualification. Subsequent public Mars adapter work
+and its separate acceptance gate are described below.
+
+`GuardedControlSession` is an **unwired, opt-in driver interface** with loopback
+tests. It checks declared whole-body velocity, measured-stop, and robot-watchdog
+capabilities before starting; it enforces fresh feedback, profile speed and
+acceleration bounds, initial-XY holding with a 5 cm measured hard boundary,
+±45° yaw targets/±47° measured stop boundary, target-loss stop, and latching on
+command gaps or faults. It exposes no gripper release or contact procedure.
+No existing Mars bridge advertises this interface, and no network/hardware
+connection is opened by its constructor. Driver declarations and loopback tests
+are not evidence of measured real-robot stopping or calibrated force control.
+
+The placement recovery rerun passed **30/30 frozen continuous pick/place**
+with zero unsafe-contact or wheel events. The expanded source-bound regression
+gate passed **367 tests**, with zero failures or skips; see the archived
+`mars-integration-regressions-v2.*` evidence. The immutable `b181db61` full carry
+rerun subsequently completed **298/300**, with **300/300 admitted** and per-mass
+successes **100/100, 100/100, 98/100**. The two 100 g orientation retention losses
+remain failures. Canonical combined readiness and the regression receipt were
+verified for that snapshot; see
+[the v6 summary](../paper/data/whole_body_control/qualification_v6.json) and its
+adjacent complete compressed reports. PPO remains stopped. These results do not
+qualify later source changes.
+
+### Public Mars TAMP transfers and agent acceptance
+
+`MarsNativeTableAdapter` extends the existing public `scene_tasks`,
+`plan_pick_place` and `execute_pick_place_plan` tools for an explicitly supplied
+Mars simulator model and `MarsSimRobot` control facade. Default Stretch routing
+remains available. Planning uses private MuJoCo data and bounded IK attempts;
+execution issues actuator references without resetting or relocating the object.
+Partial execution consumes its handle and requests a measured whole-body stop.
+This is an in-process simulator harness, not a deployed network or hardware
+adapter. The current public baseline uses joint tracking for certified arm
+segments and task-pose tracking for timed whole-body transport. It is a teacher
+integration, not evidence for the learned actor.
+
+The separate catalog
+`configs/benchmarks/mars_public_tamp_whole_body_v2.json` freezes 30 transfers:
+two distinct support layouts, five seeds and 20/50/100 g payloads. All 30 have
+fixture admissions and whole-body FK target witnesses. The retained v1 catalog
+had 25/30 admissions because five right-layout 100 g witnesses exceeded arm-only
+joint limits; v2 uses a base-yaw witness for those targets. Reachability is not a
+claim that the teacher can execute every path. All planning and execution failures
+are retained. Public readiness requires the exact current catalog/source/model
+binding, 30/30 actual tool executions, continuous retention, moving-base transfer,
+support-confirmed release, a clear open gripper, two seconds of measured stability
+and unchanged force/wheel limits. A returned success dictionary cannot substitute
+for these measurements.
+
+The transport planner samples collision and loaded support margins and plans
+turns about the driven axle. Its current fixed-arm carry reference may rotate the
+hand in the world during turns; the final heading returns before placement.
+World-orientation-locked transport remains a separate harder distribution. The
+timed teacher includes reference twist feedforward and nonholonomic base-path
+tracking. The public simulator facade explicitly opts into final wheel-request
+slew limits, including velocity-feedback corrections. The legacy control default
+is preserved: enabling this during reset changed frozen initial states and
+regressed two existing 100 g integration tests, so that experiment was not
+promoted globally. Its failed fixture report and subsequent 0/30 development
+sweep are preserved as `public_tamp_v1_fixture_rejection` and
+`public_tamp_development_v1` in the paper data directory.
+
+The public executor slows geometric path progress when measured base/hand
+tracking lags, with a total transport budget of three times the nominal duration
+plus four seconds. It records the executed trajectory clock and rate in every
+trace. This retiming is explicit; these are not fixed-deadline trajectory results.
+A separate contact approach descends at most 6 mm over three seconds, holds the
+arm at measured half-weight support, and requires 200 ms of supported load before
+opening. Excessive support load latches a fault; force/wheel/retention guards stay
+active. Placement may use an already achieved point inside the frozen XY goal
+region, with the original final footprint checks unchanged. These are simulator
+procedures, not measured Mars damage ratings or real-robot force certificates.
+
+Run a complete public-tool oracle report on one pinned CPU:
+
+```bash
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MUJOCO_GL=egl MPLCONFIGDIR=/tmp/mpl \
+  taskset -c 14 .venv/bin/python -m emet.eval.mars_tamp_control evaluate \
+  --suite configs/benchmarks/mars_public_tamp_whole_body_v2.json \
+  --output logs/manipulation/mars-public-tamp-new
+```
+
+Use a fresh output directory. On this workstation use cores 14–15 and at most
+two concurrent physics/test processes. The report includes admission, planning,
+execution and end-to-end denominators per layout/mass, failure stages, pose
+errors, measured versus commanded velocities, unsmoothed acceleration/jerk,
+retention and contact/wheel evidence. Export a case for visual inspection:
+
+```bash
+MPLCONFIGDIR=/tmp/mpl .venv/bin/python -m emet.eval.mars_tamp_control plot \
+  --report logs/manipulation/mars-public-tamp-new/report.json \
+  --case left:20g:0 --output /tmp/mars-public-transfer.png
+```
+
+The first frozen 20 g left-layout transfer completed through all public tools:
+11.8 cm measured base displacement, 0.013 rad peak relative object rotation,
+3.24 N peak contact load, no wheel-lift termination, and two seconds of independent
+final stability. It took about 100 simulated seconds, including grasp, lift,
+transport, placement, release and retreat. This is a development-selected positive
+case, not the 30-case qualification or the speed target. The 100 g case still
+exceeded 0.1 rad retention during placement. Additional mass-based slowing,
+loaded-arm tucking and a higher grasp did not improve that diagnostic; those
+changes were discarded. The public gate remains **open**. Do not infer public
+TAMP readiness from the earlier 30/30 single-support result. The complete
+source-bound public report remains the acceptance evidence.
+
+`python -m emet.eval.mars_tamp_agent --help` describes the real agent harness.
+It requires a passing current public oracle report before constructing a client
+for an existing model endpoint. The harness uses the normal prompt, parser and
+dispatcher, three local seeds per task and independent physical scoring.
+Local seeds do not control a remote model sampler. Physics pauses during model
+inference, which is recorded explicitly; these trials do not certify a deployed
+asynchronous execution loop. Normal observed inputs never fall back to GT:
+the current missing observed-scene provider blocks before model calls and
+reports zero completed agent trials. Parser/dispatcher tests are not LLM results.
+
+Passive hardware audit on 2026-10-23: SSH reached `herman` at `192.168.1.43` and
+ROS Humble is installed. The default-domain topic list showed only
+`/parameter_events` and `/rosout`; driver domains, live arm modes, feedback
+timestamps, robot watchdogs, force limits and measured stopping remain unverified.
+No hardware motion, deployment, service start or contact test was performed.
+
+### Completed public-tool reports and remaining work
+
+The complete `9dee06fc` teacher run achieved **16/30** on the same frozen catalog,
+up from 4/30 at `a17a5734`: **10/10 at 20 g, 6/10 at 50 g, 0/10 at 100 g**.
+All thirty fixtures admitted. Five wheel-unloading stops, six retention losses,
+one base-drift stop and two bounded-planning failures remain. The public gate is
+false. Full source-bound evidence is in
+[the v3 summary](../paper/data/whole_body_control/public_tamp_v3.json), its adjacent
+compressed report, and the archived **588-test** regression receipt. See
+[the experiment report](experiments/mars_public_tamp_20261023.md) for the complete
+comparison, corrected v2 execution denominator and failure stages.
+
+The planner evaluates a short straight base approach with arm motion before a
+larger transfer, checking downstream placement/retreat and loaded arm support
+margins. Endpoint control enters hold before verifying quiet motion, clears
+accumulated base bias during hold, and confirms a steady terminal hold before
+tool success. Successful tasks took 65.55–69.00 simulated seconds, median 67.55;
+this remains a slow baseline. No geometry, effort limits or frozen task thresholds
+were relaxed. The v3 plot includes all nominal arm endpoints and orientation axes:
+
+![Successful 50 g public transfer](../paper/data/whole_body_control/public_tamp_v3_50g.png)
+
+The pose teacher can now use differential-drive base motion when the base target
+is entirely masked out, while ignoring inactive target values. Nearby FK-witness
+tests passed for Mars and Stretch at approximately 0.54 mm/0.0018 rad and
+0.94 mm/0.0022 rad endpoint error. These selected free-space checks do not
+qualify manipulation, a learned policy or hardware.
+
+The [Herman source audit](experiments/herman_feedback_audit_20261023.md) identifies
+velocity-unit conversion, invalid-read, effort-unit and missing-base-velocity
+issues that must be resolved before measured stopping can be trusted. A proposed
+upstream patch and an offline validator are checked in. The upstream checkout and
+Herman are unchanged; the driver guard remains disabled. Canonical carry-training
+promotion and normal-observation agent qualification remain gated. The simulator
+research experiment below is separate from those qualification tracks.
+
+### Tracking-majority retention experiment
+
+The opt-in `--task-mix tracking-retention` adds 70% ordinary tracking resets,
+10% pregrasp, 12% carry, 5% placement and 3% disturbance. It adds a retention
+command to observations, closed-empty counterexamples, bounded payload
+mass/COM randomization, and a separately optimized advisory occupancy predictor.
+The existing control reward and safety thresholds remain unchanged. Both actual
+reset/step shares and per-task reward terms are logged to local metrics and W&B;
+the classifier loss is not a PPO reward or a shared actor gradient.
+
+The [training plan](plans/retention_training.md) documents labels, unsupported
+transitions, predictor audits, compatibility-preserving warm starts and launch
+options. `estimate_held_object` reports an uncalibrated advisory probability;
+it does not assert a stable grasp or authorize opening. This simulator research
+track does not qualify the newer source tree against earlier frozen reports,
+and does not replace public TAMP or hardware gates.
+
+### Multi-step agent cases
+
+`python -m emet.eval.mars_tamp_sequences` generates a bounded declarative
+delivery/return program using an existing model service, then runs scripted
+reference selection and real-model CHAT tool selection in fresh matched
+episodes. Physics and controller state persist between transfers; each stage
+requires fresh discovery, exact frozen placement bounds, a new plan handle and
+independent supported/released/still verification. Commands and nominal pose
+schedules are retained. This is privileged, independently stepped development
+testing, not observed or live asynchronous agent qualification.
+
+The first Stretch two-object regional reference and agent both complete 2/2
+transfers. Mars completes delivery but fails bounded return planning for both
+selectors. The learned Mars bundle separately rejects the new scene fingerprint;
+no learned-actor execution or improved policy performance is claimed. See the
+[multi-step experiment](experiments/agent_multistep_control_20261024.md), its raw
+reports and the remaining compatibility/planning integration tasks.
+
+### Fixed-checkpoint TAMP execution backend
+
+`MarsSimRobot.from_checkpoint(env, directory, evidence=summary_path)` selects
+the learned controller for actual public TAMP execution. TAMP still discovers
+objects, selects grasps, screens geometry/support, and sequences grasp/release.
+The actor receives only its normal history and task-pose preview and emits
+direct velocity actions. It never invokes the reference controller. Gripper
+release remains executor-authorized after measured support confirmation.
+
+Legacy bundles retain their full-scene check against a reconstructed training
+model. A separate conservative compiled-robot comparison admits the additional
+fixed support while binding the robot geometry (including mesh bytes), dynamics,
+actuators, couplings and physics options. Archived training evidence must bind
+the exact manifest and weight checksum. This path currently supports Mars with
+primitive scene payloads; extra actuators, mesh assets or robot changes reject.
+It is compatibility admission, not a guarantee that the new scene is safe.
+
+For a matched reference/checkpoint replay without a language-model service:
+
+```bash
+taskset -c 14 env OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MPLCONFIGDIR=/tmp/mpl \
+  .venv/bin/python -m emet.eval.mars_tamp_sequences \
+  --program logs/eval/agent_cases_20261024/mars_shuttle/program.json \
+  --policy logs/manipulation/tracking-retention-v3-gripper-head/seed-46/step-10240 \
+  --policy-evidence paper/data/whole_body_control/retention_training_gripper_v3.json \
+  --case left:20g:0 --output logs/eval/new_checkpoint_tamp_replay
+```
+
+Use a fresh output directory. Add `--agent --base-url URL --remote-model MODEL`
+to compare scripted and real-model public-tool selection for both controllers.
+No service is started. Local checkpoint files are not distributed with the
+repository; the archived evidence binds `step-10240`, not a re-exported `last`
+bundle with a different zip checksum. Each tool call records before/after
+physics and target checkpoints for debugging, not resumable simulator saves.
+Reports distinguish policy admission, planning and execution failures and record
+actual policy calls. Physics stays continuous within an episode and pauses
+during model inference; this does not test live asynchronous reactivity.
+
+Arm joint witnesses are currently converted to pose targets using FK anchored
+at the commanded base pose, while the certified joint-path executor retains its
+joint convergence and fixed-base bounds. Transport consumes timed pose
+schedules directly. Thus planning can still report IK failure before any actor
+call. The initial replay admits the checkpoint and invokes it, then stops on
+approach base drift; integration does not imply learned-task qualification.
+
+The follow-up [startup audit](experiments/mars_policy_startup_audit_20261025.md)
+found that those first failures preceded any arm command. The simulator now
+uses actuator hold until an explicit arm/trajectory command, with no teacher
+fallback, and suppresses inference during terminal hold. The same cases now
+reach real pregrasp targets and still fail learned tracking. Command/hold/fault
+sources are distinct in traces. `--record-observations` retains actor inputs in
+the sequence runner; `python -m emet.eval.mars_policy_audit --output NEW_DIR`
+adds stationary baselines, input normalization/clipping and offline target
+sensitivity. Reusing carry-trained statistics, tiny exploration and unseen
+phase/mask combinations remains a training concern. Geometric TAMP replanning
+still uses IK during execution; actor inference does not.
+
+### Runtime review: stop feedback, units and timing
+
+The [PR 224 runtime repair report](experiments/pr224_runtime_review_20261024.md)
+documents the shared six-DOF measured base-stop check, guarded-driver arm feedback
+checks, and explicit spatial teacher gains/task metric. The teacher defaults
+retain their prior values; these repairs do not claim better tracking from
+different gains.
+
+`TaskPoseCommandRuntime(..., timing=TaskPoseRuntimeTiming(...))` accepts explicit
+simulator observation/inference, cycle and state-age ceilings. Defaults are still
+2*control_dt, 2*control_dt and 0.25 s. The budgets are advertised and elapsed times
+are recorded. Absolute command expiry and freshness are rechecked after
+inference and before actuation; a larger cycle budget does not waive either
+check. No budget adapts automatically to CPU load. The real Mars watchdog and
+200 ms feedback boundary are separate and unchanged.
+
+### Hold repair and learned-feedback pilot (2026-10-25)
+
+The opt-in hold experiment now supplies fixed-current-base manipulation goals,
+physical pregrasp holds, native categorical feature scales and an all-six-DOF
+body-motion cost. `--feedback-policy` selects an MLP whose learned gain matrix
+acts on current/future pose errors and measured velocities, with a separate
+bounded gripper head. It retains history/preview context and uses no teacher
+residual. Zero deterministic mean motion at a stationary, zero-velocity target
+is an architectural property, not a stability guarantee. PPO exploration remains
+stochastic. Compatible context/critic transfer explicitly resets the new heads
+and optimizer; exact resume remains a separate operation.
+
+Use `python -m emet.rl.manipulation.hold_experiment --spec
+configs/benchmarks/mars_hold_training_feedback_v2.json --output FRESH_DIRECTORY
+--wandb-mode offline` (one shell line). The experiment runs two sequential CPU
+pilots and compares scratch with a checked tracking initialization. The full
+command, continuation, source/weight-bound evidence and results are in the
+[hold-repair report](experiments/mars_hold_repair_20261025.md).
+
+Five runs completed 24,576 new PPO steps. The selected continued candidate holds
+hand position within 1.2 mm over ten seconds on five selected pregrasp fixtures,
+but small body oscillations prevent a continuous two-second quiet hold. Nearby
+translation remains slow and reachable wrist rotations barely progress. One
+inference-deadline stop is preserved. The same candidate times out at the first
+joint waypoint in all three public development programs, despite approximately
+1.4 mm hand error: the current executor still requires the certified joint
+configuration. A complete Cartesian schedule backend needs its own endpoint and
+independent path/collision contract. No joint certificate was relaxed. The
+five-category paired no-regression check also fails. These are simulator
+research results; no checkpoint is promoted. The fresh regression receipt
+covers 692 tests, with all old negative controls retained.
+
+### Quiet wheel feedback and explicit Cartesian arm execution (2026-10-25)
+
+Matched frozen-fixture ablations isolate the extra wheel velocity loop as a
+major source of stationary chatter. The new research configuration uses
+`--wheel-feedback-gain 0.5`, `--whole-body-settling`, nearby FK pregrasp targets
+and explicit angular feedback scaling. Compatible UI policy selection now
+restores the wheel gain and retention observation context, including observation
+space shape; switching to the reference restores its original settings. Model
+fingerprint compatibility remains mandatory. These changes do not make an
+incompatible-contact-model checkpoint eligible for a different UI simulation.
+
+`--fixed-base-contract` additionally aligns selected fixed-base/hold/local
+training episodes with the arm executor's 1 cm XYZ / 0.02 rad SO(3) boundary.
+Their settling heading tolerance is at most 0.01 rad, with stronger base tracking
+reward. General base navigation targets retain their ordinary goal regions.
+`--pose-progress-weight 1` adds dense progress toward the active hand pose,
+measured against the same goal before/after each transition. Moving the goal
+without moving the robot earns zero progress. Fine pose success and existing
+jerk/effort/force/retention terms remain active. Evaluation records full linear
+and angular base speed norms rather than treating planar quiet as a full stop.
+
+Run the diagnostic interface on a compatible, source-bound bundle:
+
+```bash
+taskset -c 14 env OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MPLCONFIGDIR=/tmp/mpl \
+  .venv/bin/python -m emet.eval.mars_hold_dynamics \
+  --policy BUNDLE --evidence TRAINING_SUMMARY --output FRESH_DIRECTORY \
+  --selectors reference checkpoint_policy --trials hold nearby rotation --duration 6
+```
+
+The public simulator replay supports `--arm-execution cartesian` with an explicit
+checkpoint. This mode receives a full FK schedule and targets TAMP's actual final
+Cartesian pose. It rechecks measured configurations/support/retention/base drift
+at each control cycle and stops on tracking or timing failure. The joint executor
+remains the default. This is sampled online collision checking; the joint witness
+is not claimed as a certificate for a different learned configuration path.
+
+The [completed report](experiments/mars_hold_cartesian_20261025.md) preserves gain
+ablations, successful stationary holds, failed moving goals, joint/Cartesian
+public comparisons, analytic teacher checks and training/source evidence.
+No new hardware driver or checkpoint promotion is enabled.
+
+
+### Cartesian phase and reference-clock repairs
+
+The Cartesian backend restores the servo phase through its public reference
+setter before actor inference, preserves unloaded aperture after release, and
+cannot create release authority. Its lag-scaled clock continues smoothly inside
+the existing tracking tube; final endpoint accuracy is not a per-sample clock
+gate. Endpoints still require 3 mm / 0.02 rad plus measured settling.
+
+The completed 65,536-step research refinement and current three-program replay
+are preserved in `pose_precision_training_v6`, `pose_precision_validation_v6` and
+`cartesian_clock_v7` under `paper/data/whole_body_control/`. Nearby position error
+is approximately 0.4 mm, but angular and full-task gates still fail. This bundle
+is unqualified. Diagnostic quiet bounds default to the bundle's declared hand
+tolerances; pass explicit bounds when comparing older development contracts.
+The next configuration-only ablation enables `--goal-gated-settling` to avoid
+rewarding premature stopping outside the hand goal. It does not relax safety or
+accuracy requirements. See the experiment report for actual launch/completion
+status; a proposed configuration alone is not completed training.
+
+
+### Continuation audit and general tracking (2026-10-26)
+
+The matched settling pilots completed and both regress on moving goals. Keep the
+original 65k-step checkpoint as the development baseline. See the
+[continuation report](experiments/mars_general_continuation_20261026.md) and
+[general whole-body plan](plans/general_whole_body_tracking.md).
+
+`--freeze-observation-normalization` is an explicit training-only continuation
+audit: it requires an initialized checkpoint, keeps its copied mean/variance
+fixed while PPO trains, and records the setting in run/W&B metadata. Runtime
+preprocessing and bundle source admission remain unchanged. The four-way
+learning-rate/normalization specification preserves the broad 70/30 task mix;
+its general validation adds masked base/hand/combined, retarget and push cases.
+TAMP is a bounded benchmark subset, not the entire control interface.
+
+The installed Stretch post-training audit resolves its packaged oracle runner
+rather than a repository-relative scripts directory. Risk responses retain
+supported per-head probabilities and explain `unavailable_heads`; missing
+positive/calibration evidence still yields an unknown aggregate result. No
+hardware or promotion gate is relaxed.
+
+
+### Persistent recovery and translation target inspection
+
+The four-way continuation experiment completed before the crash. Its model
+archives and replay checksums survived; the temporary checkout did not. Use the
+persistent `.worktrees/mars-controller-integration` checkout, with
+`PYTHONPATH="$PWD/src"`, rather than depending on the primary review checkout's
+editable package. Checkpoints, offline W&B, recovery scripts and partial
+evaluations live in persistent `logs/` directories.
+
+`python -m emet.rl.manipulation.translation_curriculum --output FRESH_DIRECTORY`
+exports nearby orientation-preserving FK targets, full nominal pose schedules
+and a target-cloud plot. Mars reset integration uses
+`--reach-local-translation-probability` within the existing nearby-reach share.
+The general macro distribution remains 70/30; no Jacobian or witness is added to
+pose-policy observations. Geometric admission is not dynamic qualification.
+See the [recovery/translation report](experiments/mars_recovery_translation_20261026.md).
+
+### Current agent delivery acceptance
+
+The v12 control/treatment training and evaluation have completed; neither improves
+public task success. The separate single-delivery development program in
+`configs/benchmarks/mars_agent_controller_v1.json` lets us diagnose the agent and
+learned execution without replacing the original multi-transfer gates. Reference
+agent execution completes; the learned gain diagnostics reach grasp and begin
+lift but still fail orientation/base tracking. These are local research weights,
+not a promoted controller. See the
+[full agent/controller report](experiments/mars_agent_controller_20261026.md).
+
+To reproduce through public tools from the persistent checkout, extract the
+declared program and use a fresh output directory:
+
+```bash
+mkdir -p logs/eval/agent_delivery_program
+.venv/bin/python -c 'import json; print(json.dumps(json.load(open("configs/benchmarks/mars_agent_controller_v1.json"))["program"]))' \
+  > logs/eval/agent_delivery_program/program.json
+taskset -c 14 env PYTHONPATH="$PWD/src" CUDA_VISIBLE_DEVICES='' \
+  OPENAI_API_KEY=EMPTY OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MPLCONFIGDIR=/tmp/mpl \
+  .venv/bin/python -m emet.eval.mars_tamp_sequences \
+  --program logs/eval/agent_delivery_program/program.json \
+  --policy logs/manipulation/agent-hand-gain-v13/gain-3p0 \
+  --policy-evidence paper/data/whole_body_control/agent_controller_v1/gain_3p0/checkpoint_evidence.json \
+  --arm-execution cartesian --record-observations \
+  --agent --base-url http://192.168.1.55:8000/v1 \
+  --remote-model Qwen/Qwen3-VL-8B-Instruct --max-turns 12 \
+  --case left:20g:0 --output logs/eval/NEW_AGENT_DELIVERY_REPLAY
+```
+
+This compares scripted and model-selected tools for reference and checkpoint
+backends. It needs the existing remote service and local checksummed weights;
+the repository carries evidence and manifests, not weights. Keep CPU 15 for one
+test worker, disable local GPU use, and do not run additional physics workers.
+`--record-observations` now retains pre-input and post-step physics alongside
+actor observations, off by default. These snapshots are diagnostic, not complete
+resumable simulator checkpoints. The new opt-in Cartesian lift-off contact rule
+is documented explicitly in the report; historical qualification does not cover
+it. Nothing in this command connects to Herman.
+
+The opt-in [supported grasp-to-lift curriculum](plans/mars_grasp_lift_curriculum.md)
+hands control over before teacher lift-off, inside the existing carry share.
+`--grasp-lift-probability` splits that share; `--grasp-lift-payload-object` optionally
+restricts only the new subtype. Other tasks retain their object mix and general
+pose coverage. Native pose history/preview and all force/support/retention/wheel
+guards remain active. The initial prototype adds about 9% supported box lifts
+and logs actual episode/step shares to offline W&B.
+
+Use `python -m emet.rl.manipulation.grasp_lift --output FRESH_DIRECTORY` to export
+admitted/rejected targets, full pose schedules, initial states and an equal-scale
+plot. Add `--teacher` or `--policy CHECKPOINT` for measured lift/hold traces.
+Mixed-shape probes still fail cylinder retention and remain unqualified. The box
+teacher preflight finishes 5/8, with 7/8 ever settled; a successful export or
+PPO smoke test is not a carry qualification or hardware permission.

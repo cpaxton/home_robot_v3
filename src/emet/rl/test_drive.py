@@ -185,7 +185,14 @@ class Simulation:
         """Bind input/action contracts on selection and on simulation reset."""
         if self.mode in MANIPULATION_MODES:
             if candidate is None:
-                settings = {"action_mode": "residual", "trajectory_preview": False, "tracking_reward": False}
+                settings = {
+                    "action_mode": "residual",
+                    "trajectory_preview": False,
+                    "tracking_reward": False,
+                    "retention_context": False,
+                    "wheel_feedback_gain": 2.0,
+                    "whole_body_settling": False,
+                }
             else:
                 if (
                     candidate.robot != self.env.profile.robot
@@ -197,6 +204,9 @@ class Simulation:
                     "action_mode": candidate.action_mode,
                     "trajectory_preview": "preview" in candidate.normalization,
                     "tracking_reward": source.get("tracking_reward", False),
+                    "retention_context": source.get("retention_context", False),
+                    "wheel_feedback_gain": source.get("wheel_feedback_gain", 2.0),
+                    "whole_body_settling": source.get("whole_body_settling", False),
                     **{
                         key: source[key]
                         for key in (
@@ -209,11 +219,17 @@ class Simulation:
                     },
                 }
             self.env.config = replace(self.env.config, **settings)
+            self.env.control.retention_context_enabled = self.env.config.retention_context
             self.env._configure_preview()
             self.env.control.history = None  # Contract changes restart inputs, never physics.
             self.env.control.action_mode = self.env.config.action_mode
             self.env.control.base_xy_tolerance = self.env.config.base_xy_tolerance
             self.obs = self.env.control.observe()
+            from gymnasium import spaces
+
+            self.env.observation_space = spaces.Dict(
+                {key: spaces.Box(-np.inf, np.inf, value.shape, dtype=np.float32) for key, value in self.obs.items()}
+            )
         self.policy, self.policy_name = candidate, name
         self.policy_scope = (
             "Feedback controller"

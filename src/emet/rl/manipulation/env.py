@@ -11,7 +11,7 @@ from emet.rl.control import invalid_physics
 from emet.rl.manipulation.control import ManipulationControl
 from emet.rl.manipulation.models import build_manipulation_model
 from emet.rl.manipulation.profiles import PROFILES
-from emet.rl.manipulation.safety import ContactMonitor, relative_pose, retention_error
+from emet.rl.manipulation.safety import ContactMonitor, relative_pose, retention_error, whole_body_stopped
 
 SCENARIOS = ("reach", "pregrasp", "carry", "place", "disturbance")
 MIXTURE = (0.25, 0.20, 0.30, 0.15, 0.10)
@@ -34,7 +34,7 @@ def sample_disturbance(rng, difficulty=1.0):
     return np.r_[force, torque]
 
 
-def running_cost(*, dt, force, jerk, action, rotation, translation, tracking=0.0, motion=0.0):
+def running_cost(*, dt, force, jerk, action, rotation, translation, tracking=0.0, motion=0.0, motion_scale=1.0):
     """Integrate physical costs over time; do not charge them once per sample.
 
     Sustaining an ordinary grasp must not cost more than dropping it early.
@@ -43,17 +43,22 @@ def running_cost(*, dt, force, jerk, action, rotation, translation, tracking=0.0
     return dt * (
         0.4
         + 0.02 * force
-        + 0.00001 * float(np.sum(np.asarray(jerk) ** 2))
-        + 0.01 * float(np.sum(np.asarray(action) ** 2))
+        + motion_scale
+        * (0.00001 * float(np.sum(np.asarray(jerk) ** 2)) + 0.01 * float(np.sum(np.asarray(action) ** 2)))
         + 2 * rotation
         + 5 * translation
         + 4 * tracking
-        + 0.2 * motion
+        + motion_scale * 0.2 * motion
     )
 
 
 class ResetMotionUnreachable(ValueError):
     """A procedural reset cannot produce its requested kinematic lift."""
+
+
+def pose_progress_potential(position_error, orientation_error):
+    """Dense error signal outside the fine coupled tracking reward's support."""
+    return -float(np.log1p(position_error / 0.02) + np.log1p(orientation_error / 0.2))
 
 
 def sample_carry_events(config, rng, scenario):
@@ -81,6 +86,7 @@ class ManipulationConfig:
     randomization_scale: float = 1.0
     payload_mass_kg: float | None = None
     payload_asset_set: str = "training"
+    two_supports: bool = False
     contact_cone: str = "pyramidal"
     contact_impratio: float = 1.0
     balanced_grasp_setup: bool = False
@@ -113,8 +119,198 @@ class ManipulationConfig:
     tracking_precision: int = 0
     endpoint_motion_weight: float = 0.0
     goal_gated_settling: bool = False
+    hand_gated_base_reward: bool = False
+    motion_penalty_scale: float = 1.0
+    smoothness_curriculum: bool = False
+    jerk_limited_lift_reference: bool = False
+    grasp_lift_phase_weights: tuple[float, ...] | None = None
+    scenario_weights: tuple[float, ...] | None = None
+    retention_context: bool = False
+    empty_grasp_probability: float = 0.0
+    carry_hold_probability: float = 0.0
+    grasp_lift_probability: float = 0.0
+    grasp_lift_payload_object: str | None = None
+    payload_mass_range_kg: tuple[float, float] | None = None
+    payload_com_randomization_m: float = 0.0
+    reach_hold_probability: float = 0.0
+    hold_pregrasp_fixture: bool = False
+    fixed_base_probability: float = 0.0
+    fixed_base_xy_tolerance: float = 0.005
+    categorical_features_unscaled: bool = False
+    body_motion_weight: float = 0.0
+    feedback_policy: bool = False
+    restoring_yaw_feedback: bool = False
+    feedback_orientation_scale: float = 1.0
+    wheel_feedback_gain: float = 2.0
+    physical_wheel_slew: bool = False
+    wheel_jerk_limits: tuple[float, float] | None = None
+    precision_tracking_reward: bool = False
+    terminal_hold_seconds: float = 1.0
+    normalized_jerk_weight: float = 0.0
+    command_smoothness_weight: float = 0.0
+    base_turn_progress_guard: bool = False
+    whole_body_settling: bool = False
+    reach_local_probability: float = 0.0
+    reach_local_translation_probability: float = 0.0
+    fixed_base_contract: bool = False
+    pose_progress_weight: float = 0.0
 
     def __post_init__(self):
+        from emet.rl.manipulation.retention_training import validate_mixture
+
+        if self.scenario_weights is not None:
+            object.__setattr__(self, "scenario_weights", validate_mixture(self.scenario_weights))
+        for value in (
+            self.reach_hold_probability,
+            self.fixed_base_probability,
+            self.reach_local_probability,
+            self.reach_local_translation_probability,
+        ):
+            if not np.isfinite(value) or not 0 <= value <= 1:
+                raise ValueError("hold/fixed-base probabilities must be in [0, 1]")
+        if self.reach_local_probability + self.reach_hold_probability > 1:
+            raise ValueError("local and hold reach shares must sum to at most one")
+        if self.reach_local_probability and not self.hold_pregrasp_fixture:
+            raise ValueError("nearby pose curriculum requires pregrasp fixtures")
+        if self.reach_local_translation_probability and not self.reach_local_probability:
+            raise ValueError("translation share requires a local reach curriculum")
+        if not np.isfinite(self.wheel_feedback_gain) or not 0 <= self.wheel_feedback_gain <= 2:
+            raise ValueError("wheel feedback gain must be in [0, 2]")
+        if type(self.restoring_yaw_feedback) is not bool or (
+            self.restoring_yaw_feedback
+            and (
+                not self.feedback_policy
+                or self.robot != "innate_mars"
+                or not self.categorical_features_unscaled
+                or not self.trajectory_preview
+            )
+        ):
+            raise ValueError("restoring yaw feedback requires Mars feedback with native masks and preview")
+        if type(self.physical_wheel_slew) is not bool:
+            raise ValueError("physical wheel slew must be boolean")
+        if self.wheel_jerk_limits is not None:
+            limits = np.asarray(self.wheel_jerk_limits, dtype=float)
+            if (
+                not self.physical_wheel_slew
+                or limits.shape != (2,)
+                or not np.isfinite(limits).all()
+                or np.any(limits <= 0)
+            ):
+                raise ValueError("positive linear/yaw jerk limits require physical wheel slew")
+            object.__setattr__(self, "wheel_jerk_limits", tuple(float(v) for v in limits))
+        if type(self.precision_tracking_reward) is not bool or (
+            self.precision_tracking_reward
+            and (not self.tracking_reward or not self.trajectory_preview or self.differential_base_reward)
+        ):
+            raise ValueError("precision tracking reward requires tracking and trajectory preview")
+        if (
+            isinstance(self.terminal_hold_seconds, bool)
+            or not np.isfinite(self.terminal_hold_seconds)
+            or not 0.5 <= self.terminal_hold_seconds <= 5
+        ):
+            raise ValueError("terminal hold must be between 0.5 and 5 seconds")
+        if not np.isfinite(self.normalized_jerk_weight) or not 0 <= self.normalized_jerk_weight <= 2:
+            raise ValueError("normalized jerk weight must be in [0,2]")
+        if self.normalized_jerk_weight and not self.precision_tracking_reward:
+            raise ValueError("normalized jerk cost requires precision tracking reward")
+        if type(self.base_turn_progress_guard) is not bool:
+            raise ValueError("base turn progress guard must be boolean")
+        if not np.isfinite(self.command_smoothness_weight) or not 0 <= self.command_smoothness_weight <= 2:
+            raise ValueError("command smoothness weight must be in [0,2]")
+        if self.command_smoothness_weight and not self.precision_tracking_reward:
+            raise ValueError("command smoothness requires precision tracking reward")
+        if not np.isfinite(self.feedback_orientation_scale) or not 0.05 <= self.feedback_orientation_scale <= 1:
+            raise ValueError("feedback orientation scale must be in [0.05, 1] rad")
+        if self.feedback_orientation_scale != 1 and not self.feedback_policy:
+            raise ValueError("orientation feedback scaling requires the feedback policy")
+        if type(self.whole_body_settling) is not bool:
+            raise ValueError("whole-body settling must be boolean")
+        if type(self.fixed_base_contract) is not bool or (self.fixed_base_contract and self.robot != "innate_mars"):
+            raise ValueError("fixed-base execution contract currently requires Mars")
+        if not np.isfinite(self.pose_progress_weight) or not 0 <= self.pose_progress_weight <= 2:
+            raise ValueError("pose progress weight must be in [0, 2]")
+        if self.pose_progress_weight and not self.tracking_reward:
+            raise ValueError("pose progress shaping requires tracking rewards")
+        for value in (self.hand_gated_base_reward, self.smoothness_curriculum, self.jerk_limited_lift_reference):
+            if type(value) is not bool or (value and not self.tracking_reward):
+                raise ValueError("reward/reference curriculum flags require boolean values and tracking rewards")
+        if not np.isfinite(self.motion_penalty_scale) or not 0 <= self.motion_penalty_scale <= 1:
+            raise ValueError("motion penalty scale must be in [0,1]")
+        if self.jerk_limited_lift_reference and (
+            self.robot != "innate_mars" or not self.trajectory_preview or self.action_mode != "direct_velocity"
+        ):
+            raise ValueError("jerk-limited lift references require Mars direct velocities and preview")
+        if self.grasp_lift_phase_weights is not None:
+            values = np.asarray(self.grasp_lift_phase_weights, dtype=float)
+            if (
+                values.shape != (4,)
+                or not np.isfinite(values).all()
+                or np.any(values < 0)
+                or not np.isclose(values.sum(), 1)
+            ):
+                raise ValueError("lift phase weights require four nonnegative probabilities summing to one")
+            if not self.jerk_limited_lift_reference:
+                raise ValueError("lift phase resets require jerk-limited references")
+            object.__setattr__(self, "grasp_lift_phase_weights", tuple(float(v) for v in values))
+        if self.fixed_base_probability and self.robot != "innate_mars":
+            raise ValueError("fixed-base manipulation sampling currently requires Mars")
+        if not np.isfinite(self.body_motion_weight) or not 0 <= self.body_motion_weight <= 2:
+            raise ValueError("body motion weight must be in [0, 2]")
+        if self.body_motion_weight and not self.tracking_reward:
+            raise ValueError("body motion penalty requires pose tracking reward")
+        if type(self.feedback_policy) is not bool or (
+            self.feedback_policy
+            and (
+                not self.categorical_features_unscaled
+                or not self.trajectory_preview
+                or self.action_mode != "direct_velocity"
+            )
+        ):
+            raise ValueError("feedback policy requires native command features, preview and direct velocities")
+        if type(self.hold_pregrasp_fixture) is not bool or type(self.categorical_features_unscaled) is not bool:
+            raise ValueError("hold fixture and categorical normalization options must be boolean")
+        if self.hold_pregrasp_fixture and (self.robot != "innate_mars" or not self.balanced_grasp_setup):
+            raise ValueError("pregrasp hold fixtures require balanced Mars setup")
+        if not np.isfinite(self.fixed_base_xy_tolerance) or not 0.005 <= self.fixed_base_xy_tolerance <= 0.01:
+            raise ValueError("fixed-base tolerance must be between 5 and 10 mm")
+        if type(self.retention_context) is not bool:
+            raise ValueError("retention context must be boolean")
+        if not np.isfinite(self.empty_grasp_probability) or not 0 <= self.empty_grasp_probability <= 1:
+            raise ValueError("empty grasp probability must be in [0, 1]")
+        if self.empty_grasp_probability and not self.retention_context:
+            raise ValueError("empty grasp counterexamples require retention context")
+        if not np.isfinite(self.carry_hold_probability) or not 0 <= self.carry_hold_probability <= 1:
+            raise ValueError("carry hold probability must be in [0, 1]")
+        if not np.isfinite(self.grasp_lift_probability) or not 0 <= self.grasp_lift_probability <= 1:
+            raise ValueError("grasp lift probability must be in [0, 1]")
+        if self.grasp_lift_payload_object not in (None, "object1", "object2"):
+            raise ValueError("unsupported grasp lift payload slot")
+        if self.payload_object is not None and self.grasp_lift_payload_object not in (None, self.payload_object):
+            raise ValueError("grasp lift payload conflicts with global payload selection")
+        if self.grasp_lift_probability and (
+            self.robot != "innate_mars"
+            or not self.balanced_grasp_setup
+            or not self.trajectory_preview
+            or not self.tracking_reward
+            or self.action_mode != "direct_velocity"
+            or not self.retention_context
+            or not self.fixed_base_contract
+            or self.tamp_carry_trajectories
+        ):
+            raise ValueError(
+                "grasp lift curriculum requires balanced Mars pose/preview/direct-velocity retention and fixed-base checks; separate from qualified TAMP carry"
+            )
+        if self.payload_mass_range_kg is not None:
+            bounds = np.asarray(self.payload_mass_range_kg, dtype=float)
+            if bounds.shape != (2,) or not np.isfinite(bounds).all() or not 0 < bounds[0] <= bounds[1] <= 0.2:
+                raise ValueError("payload mass range must be ordered, positive and at most 200 g")
+            if self.payload_mass_kg is not None:
+                raise ValueError("choose a fixed payload mass or a mass range")
+            object.__setattr__(self, "payload_mass_range_kg", tuple(float(v) for v in bounds))
+        if not np.isfinite(self.payload_com_randomization_m) or not 0 <= self.payload_com_randomization_m <= 0.005:
+            raise ValueError("payload COM randomization must be in [0, 5 mm]")
+        if type(self.two_supports) is not bool or (self.two_supports and self.robot != "innate_mars"):
+            raise ValueError("two-support fixtures require Mars")
         if self.carry_target_mode not in {"translation", "orientation", "combined", "mixed"}:
             raise ValueError("invalid carry target mode")
         if not np.isfinite(self.carry_push_probability) or not 0 <= self.carry_push_probability <= 1:
@@ -199,18 +395,33 @@ class ManipulationEnv(gym.Env):
     def __init__(self, config=None):
         self.config = config if isinstance(config, ManipulationConfig) else ManipulationConfig(**(config or {}))
         self.profile = PROFILES[self.config.robot]
+        self.reach_hold_trial = self.fixed_base_trial = False
+        self.reach_local_trial = False
+        self.reach_local_mode = None
+        self.reach_local_translation = None
+        self.grasp_lift_trial = False
+        self.grasp_lift_guard = None
+        self.grasp_lift_admission = None
+        self.grasp_lift_reset_attempts = []
+        self.fixed_base_distance_m = self.fixed_base_rotation_rad = 0.0
+        self.fixed_base_contract_violation = False
         self.model, self.fingerprint = build_manipulation_model(
             self.config.robot,
             diagnostics=self.config.diagnostics,
             payload_asset_set=self.config.payload_asset_set,
+            two_supports=self.config.two_supports,
             contact_cone=self.config.contact_cone,
             contact_impratio=self.config.contact_impratio,
         )
         self.data = mujoco.MjData(self.model)
         mujoco.mj_forward(self.model, self.data)
         self.control = ManipulationControl(self.model, self.data, self.profile)
+        self.control.set_physical_wheel_slew(self.config.physical_wheel_slew, jerk_limits=self.config.wheel_jerk_limits)
+        self.control.retention_context_enabled = self.config.retention_context
         self._reference_fk = None
         self.tracking_precision = self.config.tracking_precision
+        self.motion_penalty_scale = self.config.motion_penalty_scale
+        self.command_smoothness_fraction = 1.0
         self._configure_preview()
         self.monitor = ContactMonitor(self.model, self.profile)
         self.substeps = round(self.profile.dt / self.model.opt.timestep)
@@ -223,6 +434,7 @@ class ManipulationEnv(gym.Env):
         )
         self.mass = self.model.body_mass.copy()
         self.inertia = self.model.body_inertia.copy()
+        self.body_ipos = self.model.body_ipos.copy()
         self.friction = self.model.geom_friction.copy()
         self.randomization_scale = self.config.randomization_scale
         self.target_scale = self.config.target_scale
@@ -230,11 +442,17 @@ class ManipulationEnv(gym.Env):
         self._done = True
 
     def _configure_preview(self):
+        self.control.turn_progress_guard_enabled = self.config.base_turn_progress_guard
+        self.control.base_velocity_feedback_gain = self.config.wheel_feedback_gain
+        # The old teacher's 0.015-rad deadband exceeds this task's 0.01-rad
+        # heading success condition. Correct the new task's comparator without
+        # changing historical reset/teacher behavior for other distributions.
+        self.control.base_yaw_deadband = 0.5 * self.active_base_heading_tolerance if self.grasp_lift_trial else 0.015
         self.control.pose_only_targets = self.config.tracking_reward or self.config.trajectory_preview
         self.control.preview_enabled = self.config.trajectory_preview
         if self.config.trajectory_preview and self.control.task_trajectory is not None:
             self.control.preview_sampler = lambda time: self.control.task_trajectory.sample(
-                time - self.control.task_trajectory_start
+                self.control.trajectory_elapsed() + (time - float(self.data.time)) * self.control.task_progress_rate
             )
         else:
             self.control.preview_sampler = self._sample_task_reference if self.config.trajectory_preview else None
@@ -253,11 +471,22 @@ class ManipulationEnv(gym.Env):
             raise ValueError("tracking precision must be a stage from 0 to 4")
         self.tracking_precision = level
 
+    def set_motion_penalty_scale(self, scale):
+        if not np.isfinite(scale) or not 0 <= scale <= 1:
+            raise ValueError("motion penalty scale must be in [0,1]")
+        self.motion_penalty_scale = float(scale)
+
+    def set_command_smoothness_fraction(self, fraction):
+        """Training-only curriculum coefficient, independent of physical limits."""
+        if not np.isfinite(fraction) or not 0 <= fraction <= 1:
+            raise ValueError("command smoothness fraction must be in [0,1]")
+        self.command_smoothness_fraction = float(fraction)
+
     def _sample_task_reference(self, time):
         path = getattr(self, "arm_trajectory", None)
         if path is None or self._reference_fk is None:
             return self.control.base_goal.copy(), self.control.hand_goal.copy()
-        elapsed = max(0.0, time - self.start_time)
+        elapsed = max(0.0, time - self.start_time + self.reference_time_offset)
         # A reset freezes test events for pairing, but future unannounced goals
         # must not leak to the actor through the precomputed second segment.
         if path.replan_time is not None and not self.retargets:
@@ -284,9 +513,9 @@ class ManipulationEnv(gym.Env):
     def _reference_end_elapsed(self):
         c = self.control
         if c.task_trajectory is not None:
-            return float(self.data.time - c.task_trajectory_start - c.task_trajectory.end)
+            return c.trajectory_end_elapsed()
         if self.arm_trajectory is not None:
-            return float(self.data.time - self.start_time - self.arm_trajectory.end)
+            return float(self.data.time - self.start_time + self.reference_time_offset - self.arm_trajectory.end)
         return float(self.data.time - max(self.start_time, c.goal_changed_time))
 
     def teacher_action(self):
@@ -336,7 +565,10 @@ class ManipulationEnv(gym.Env):
                 self._physics_invalid = True
                 return {"force": 0.0, "bilateral_contact": False, "invalid_physics": True}
             if score and (
-                last["force"] > self.profile.unsafe_force or self.monitor.wheel_lift or invalid_physics(self.data)
+                last["force"] > self.profile.unsafe_force
+                or self.monitor.wheel_lift
+                or invalid_physics(self.data)
+                or self.control.motion_fault
             ):
                 self.control.stop()
                 break
@@ -344,13 +576,21 @@ class ManipulationEnv(gym.Env):
         return last
 
     def _initialize(self):
+        grasp_fixture = self.scenario != "reach" or (
+            (self.reach_hold_trial or self.reach_local_trial) and self.config.hold_pregrasp_fixture
+        )
         m, d, p = self.model, self.data, self.profile
         mujoco.mj_resetData(m, d)
         m.body_mass[:] = self.mass
         m.body_inertia[:] = self.inertia
+        m.body_ipos[:] = self.body_ipos
         m.geom_friction[:] = self.friction
         sampled_payload = str(self.np_random.choice(("object1", "object2")))
-        self.payload_name = self.config.payload_object or sampled_payload
+        self.payload_name = (
+            self.config.grasp_lift_payload_object
+            if self.grasp_lift_trial and self.config.grasp_lift_payload_object
+            else self.config.payload_object or sampled_payload
+        )
         self.payload = m.body(self.payload_name).id
         mass_factor = self.np_random.uniform(1 - 0.2 * self.randomization_scale, 1 + 0.2 * self.randomization_scale)
         density_factor = (
@@ -358,6 +598,19 @@ class ManipulationEnv(gym.Env):
         )
         m.body_mass[self.payload] *= density_factor * mass_factor
         m.body_inertia[self.payload] *= density_factor * mass_factor
+        if self.config.payload_mass_range_kg is not None:
+            low, high = self.config.payload_mass_range_kg
+            middle = (low + high) / 2
+            sampled_mass = self.np_random.uniform(
+                middle + (low - middle) * self.randomization_scale,
+                middle + (high - middle) * self.randomization_scale,
+            )
+            m.body_mass[self.payload] = sampled_mass
+            m.body_inertia[self.payload] = self.inertia[self.payload] * sampled_mass / self.mass[self.payload]
+            mass_factor = sampled_mass / self.mass[self.payload]
+        if self.config.payload_com_randomization_m:
+            bound = self.config.payload_com_randomization_m * self.randomization_scale
+            m.body_ipos[self.payload] += self.np_random.uniform(-bound, bound, 3)
         friction_factor = self.np_random.uniform(1 - 0.2 * self.randomization_scale, 1 + 0.2 * self.randomization_scale)
         payload_geom = m.body_geomadr[self.payload]
         # Randomize the manipulated object's grip friction only. Scaling every
@@ -376,7 +629,12 @@ class ManipulationEnv(gym.Env):
             )
         else:
             q = np.array([0, -0.4, 0.2, 0.2, 0]) + self.np_random.uniform(-0.05, 0.05, 5)
-            if self.scenario != "reach":
+            if self.grasp_lift_trial:
+                # Continuous nearby grasp postures include the straighter elbow
+                # used by public execution, as well as ordinary flexed carry.
+                # These are procedural training samples, not frozen test states.
+                q[2] = self.np_random.uniform(-0.08, 0.25)
+            if grasp_fixture:
                 q[0] = q[4] = 0
                 q[3] = -q[1] - q[2] + self.config.grasp_pitch_rad
         self.control.initialize(q, p.gripper_open)
@@ -431,7 +689,7 @@ class ManipulationEnv(gym.Env):
         for name in ("object1", "object2"):
             address = m.jnt_qposadr[m.body(name).jntadr[0]]
             d.qpos[address : address + 3] = center if name == self.payload_name else [4, 4, 0.5]
-        if self.scenario == "reach":
+        if self.scenario == "reach" and not grasp_fixture:
             # Free-space reaching includes base turns. A table under the hand
             # becomes an unintended obstacle during those turns; loaded/grasp
             # scenarios retain the physical support fixture.
@@ -440,7 +698,7 @@ class ManipulationEnv(gym.Env):
                 address = m.jnt_qposadr[m.body(name).jntadr[0]]
                 d.qpos[address : address + 3] = [3 + index * 0.1, 3, 0.05]
         mujoco.mj_forward(m, d)
-        if self.config.balanced_grasp_setup and self.scenario != "reach":
+        if self.config.balanced_grasp_setup and grasp_fixture:
             from emet.rl.manipulation.grasp_setup import plan_setup
 
             plan = plan_setup(self)
@@ -453,7 +711,9 @@ class ManipulationEnv(gym.Env):
             self.control.reset()
             self.randomization["grasp_setup"] = plan
         grasp_reference = self.control.positions().copy()
-        if self.scenario == "pregrasp":
+        if self.scenario == "pregrasp" or (
+            (self.reach_hold_trial or self.reach_local_trial) and self.config.hold_pregrasp_fixture
+        ):
             approach = (
                 self._vertical_reference(0.025)
                 if p.robot == "innate_mars"
@@ -513,17 +773,45 @@ class ManipulationEnv(gym.Env):
             return True
         self.control.set_reference(self.control.positions(), phase="close", grip=p.gripper_closed)
         bilateral_steps = 0
+        readiness = None
+        if self.grasp_lift_trial:
+            from emet.rl.manipulation.grasp_lift import SupportedGraspReadiness
+
+            readiness = SupportedGraspReadiness(p.dt)
+        ready = False
         for _ in range(100):
             evidence = self._tick(np.zeros(p.action_size))
             bilateral_steps = bilateral_steps + 1 if evidence["bilateral_contact"] else 0
+            if readiness is not None:
+                ready = readiness.update(
+                    relative_pose(d, self.control.ee, self.payload),
+                    bilateral=evidence["bilateral_contact"],
+                    grip_velocity=d.qvel[self.control.grip_v],
+                    supported=self.payload_support_load() >= 0.1 * m.body_mass[self.payload] * 9.81,
+                )
             if self.control.stopped:
+                if readiness is not None:
+                    self.grasp_lift_reset_attempts.append(
+                        {"payload": self.payload_name, "reason": "closure_physical_stop", **readiness.last}
+                    )
                 return False
-            if p.robot == "innate_mars" and bilateral_steps >= 20:
+            if p.robot == "innate_mars" and bilateral_steps >= 20 and (readiness is None or ready):
                 # Lift after sustained bilateral contact, keeping bounded
                 # closure torque to maintain grasp pressure.
                 break
-        if bilateral_steps < 20:
+        if readiness is not None:
+            self.grasp_lift_reset_attempts.append(
+                {"payload": self.payload_name, "bilateral_steps": bilateral_steps, **readiness.last}
+            )
+        if bilateral_steps < 20 or (readiness is not None and not ready):
+            if readiness is not None:
+                self.initialization_failure_reason = "supported_grasp_not_quiet"
             return False
+        if self.grasp_lift_trial:
+            # The learned rollout starts at physical, table-supported closure.
+            # Do not perform the teacher lift that initializes ordinary carry.
+            self.control.set_reference(self.control.positions(), phase="carry", grip=p.gripper_closed)
+            return True
         lift_height = float(d.xpos[self.control.ee, 2]) + self.config.grasp_lift_height
         lift_rotation = d.xmat[self.control.ee].reshape(3, 3).copy()
         self.control.set_reference(
@@ -572,20 +860,67 @@ class ManipulationEnv(gym.Env):
             self.steps = 0
 
     def reset(self, *, seed=None, options=None):
-        super().reset(seed=seed)
+        # A bounded target perturbation is reset-only planner input. It cannot
+        # inject physics, clear a running fault, or bypass geometric admission.
+        goal_delta = None
         if options:
-            raise ValueError("frozen fixtures and arbitrary physics injection are not training reset options")
+            if (
+                set(options) != {"lift_goal_delta"}
+                or self.config.robot != "innate_mars"
+                or self.config.scenario != "carry"
+                or self.config.grasp_lift_probability != 1
+            ):
+                raise ValueError("frozen fixtures and arbitrary physics injection are not training reset options")
+            goal_delta = np.asarray(options["lift_goal_delta"], dtype=float).copy()
+            if goal_delta.shape != (5,) or not np.isfinite(goal_delta).all() or np.any(abs(goal_delta) > 0.03):
+                raise ValueError("lift goal delta requires five finite joint offsets within 0.03 rad")
+        super().reset(seed=seed)
+        if self.grasp_lift_guard is not None:
+            self.grasp_lift_guard.close()
+            self.grasp_lift_guard = None
+        self.grasp_lift_admission = None
+        self.grasp_lift_reset_attempts = []
         self._reference_fk = None
         self.arm_trajectory = None
         self.tamp_reference_case = None
         self.scenario = (
-            str(self.np_random.choice(SCENARIOS, p=MIXTURE))
+            str(self.np_random.choice(SCENARIOS, p=self.config.scenario_weights or MIXTURE))
             if self.config.scenario == "mixed"
             else self.config.scenario
+        )
+        self.reach_hold_trial = bool(
+            self.scenario == "reach"
+            and self.config.reach_hold_probability > 0
+            and self.np_random.random() < self.config.reach_hold_probability
+        )
+        self.reach_local_trial = bool(
+            self.scenario == "reach"
+            and not self.reach_hold_trial
+            and self.config.reach_local_probability > 0
+            and self.np_random.random() < self.config.reach_local_probability / (1 - self.config.reach_hold_probability)
+        )
+        self.reach_local_mode = None
+        self.reach_local_translation = None
+        self.fixed_base_trial = bool(
+            self.scenario != "reach"
+            and self.config.fixed_base_probability > 0
+            and self.np_random.random() < self.config.fixed_base_probability
         )
         self.carry_target_mode, self._carry_push_selected = sample_carry_events(
             self.config, self.np_random, self.scenario
         )
+        from emet.rl.manipulation.retention_training import sample_carry_subtype
+
+        carry_subtype = sample_carry_subtype(
+            self.scenario,
+            self.np_random,
+            lift_probability=self.config.grasp_lift_probability,
+            hold_probability=self.config.carry_hold_probability,
+        )
+        self.grasp_lift_trial = carry_subtype == "grasp_lift"
+        if self.grasp_lift_trial:
+            self.fixed_base_trial = True
+        self.carry_hold_trial = carry_subtype == "hold"
         if self.scenario == "disturbance":
             self.disturbance_difficulty = (
                 min(1.0, self.disturbance_episodes / DISTURBANCE_WARMUP_EPISODES)
@@ -603,7 +938,7 @@ class ManipulationEnv(gym.Env):
             mujoco.mj_resetData(self.model, self.data)
             mujoco.mj_forward(self.model, self.data)
             self.control.action_mode = "residual"
-            self.control.base_xy_tolerance = self.config.base_xy_tolerance
+            self.control.base_xy_tolerance = self.active_base_xy_tolerance
             self.control.reset()
             self.monitor.reset()
             try:
@@ -618,6 +953,8 @@ class ManipulationEnv(gym.Env):
         self._configure_preview()
         self.steps = 0
         self.start_time = float(self.data.time)
+        self.reference_time_offset = 0.0
+        self.grasp_lift_start_mode = "start"
         self._last_stage_success = False
         self._done = False
         self.retention_reference = (
@@ -627,6 +964,7 @@ class ManipulationEnv(gym.Env):
         )
         self.monitor.reset()
         self.max_translation = self.max_rotation = 0.0
+        self.current_payload_translation = self.current_payload_rotation = 0.0
         self.peak_hand_position_error = self.peak_hand_orientation_error = 0.0
         self.hand_squared_error = self.hand_tracking_time = 0.0
         self.retention_lost = False
@@ -635,6 +973,7 @@ class ManipulationEnv(gym.Env):
         self.hold_base_anchor = None
         self.peak_hold_drift = 0.0
         self.last_actor_action = np.zeros(self.profile.action_size)
+        self.last_command_acceleration = np.zeros(self.profile.action_size - 1)
         self.last_velocity = self.control.velocities()
         self.last_base_pose = self.control.base_pose()
         self.last_base_velocity = np.zeros(2)
@@ -664,6 +1003,10 @@ class ManipulationEnv(gym.Env):
             self.control.set_reference(self.control.positions(), phase="reach")
             self.control.stop()
         self._set_pose_targets()
+        self._fixed_base_origin_position = self.data.xpos[self.control.base].copy()
+        self._fixed_base_origin_rotation = self.data.xmat[self.control.base].reshape(3, 3).copy()
+        self.fixed_base_distance_m = self.fixed_base_rotation_rad = 0.0
+        self.fixed_base_contract_violation = False
         if self.control.pose_only_targets:
             from emet.rl.manipulation.tracking import TaskFrameFK
 
@@ -673,6 +1016,8 @@ class ManipulationEnv(gym.Env):
         self.retarget_goal = None
         if (
             self.scenario == "reach"
+            and not self.reach_hold_trial
+            and not self.reach_local_trial
             and self.config.retarget_probability > 0
             and self.np_random.random() < self.config.retarget_probability
         ):
@@ -699,20 +1044,52 @@ class ManipulationEnv(gym.Env):
         self.arm_trajectory = None
         self.trajectory_rejections = []
         self.trajectory_admission = {"accepted": None, "reason": "not_requested"}
-        if self.scenario == "reach" and (self.config.certify_reach_paths or self.config.dynamic_references):
+        if (
+            self.scenario == "reach"
+            and not self.reach_hold_trial
+            and (self.config.certify_reach_paths or self.config.dynamic_references)
+        ):
             self._prepare_reach_trajectory()
-        if self.scenario == "carry" and self.config.tamp_carry_trajectories and not self.initialization_failed:
+        if (
+            self.scenario == "carry"
+            and self.config.tamp_carry_trajectories
+            and not self.initialization_failed
+            and not self.carry_hold_trial
+        ):
             from emet.rl.manipulation.carry_training import prepare
 
             prepare(self)
+        if self.grasp_lift_trial and not self.initialization_failed:
+            from emet.rl.manipulation.grasp_lift import prepare, prepare_phase_reset
+
+            prepare(self, goal_delta=goal_delta)
+            if not self.initialization_failed and self.config.grasp_lift_phase_weights is not None:
+                prepare_phase_reset(self)
         self._previous_cost = self._tracking_cost()
+        # Closed-empty examples retain the ordinary reachable tracking task.
+        # The object was already placed far away by the reach reset. No scored
+        # state is teleported and no fabricated success/retention is introduced.
+        self.empty_grasp_trial = bool(
+            self.scenario == "reach"
+            and not ((self.reach_hold_trial or self.reach_local_trial) and self.config.hold_pregrasp_fixture)
+            and self.config.empty_grasp_probability > 0
+            and self.np_random.random() < self.config.empty_grasp_probability
+        )
+        if self.empty_grasp_trial and not self.initialization_failed:
+            self.control.grip_reference = self.profile.gripper_closed
+            self.control.retain_object = True
+        from emet.rl.manipulation.retention_training import HeldObjectLabel
+
+        self.held_object_label = HeldObjectLabel()
         obs = self.control.observe()
         from emet.rl.manipulation.observation_layout import proprioceptive_layout
         from emet.rl.manipulation.risk import trajectory_features
 
         self.risk_features = trajectory_features(
-            obs["history"][:, :proprioceptive_layout(self.profile)[1]],
-            self.control.reference[None], self.config.horizon, profile=self.profile
+            obs["history"][:, : proprioceptive_layout(self.profile)[1]],
+            self.control.reference[None],
+            self.config.horizon,
+            profile=self.profile,
         ).tolist()
         return obs, self._info()
 
@@ -721,7 +1098,13 @@ class ManipulationEnv(gym.Env):
 
         q0 = self.control.positions()
         for attempt in range(20):
-            if attempt:
+            if attempt and self.reach_local_trial:
+                try:
+                    self._make_reference()
+                except ResetMotionUnreachable:
+                    self.trajectory_rejections.append({"accepted": False, "reason": "local_sampling_exhausted"})
+                    continue
+            elif attempt:
                 arm = np.clip(
                     q0
                     + self.np_random.uniform(-1, 1, self.profile.arm_size)
@@ -801,12 +1184,12 @@ class ManipulationEnv(gym.Env):
     def _advance_dynamic_reference(self):
         if self.arm_trajectory is None:
             return
-        elapsed = float(self.data.time - self.start_time)
+        elapsed = float(self.data.time - self.start_time + self.reference_time_offset)
         if self.arm_trajectory.replan_time is not None and not self.retargets:
             arm = self.arm_trajectory.segments[0].sample(max(self.arm_trajectory.segments[0].start, elapsed))[0]
         else:
             arm = self.arm_trajectory.sample(elapsed)[0]
-        self.control.set_reference(arm, phase=self.scenario)
+        self.control.set_reference(arm, phase="pregrasp" if self.reach_local_trial else self.scenario)
         self.control.set_pose_targets(
             self.control.base_goal,
             self.control.base_mask.copy(),
@@ -851,7 +1234,45 @@ class ManipulationEnv(gym.Env):
         raise ResetMotionUnreachable("vertical reset motion is unreachable")
 
     def _make_reference(self):
+        if self.reach_hold_trial:
+            phase = "pregrasp" if self.config.hold_pregrasp_fixture else "reach"
+            self.control.set_reference(self.control.positions(), phase=phase)
+            return
+        if self.reach_local_trial:
+            if (
+                self.config.reach_local_translation_probability
+                and self.np_random.random() < self.config.reach_local_translation_probability
+            ):
+                from emet.rl.manipulation.translation_curriculum import sample_translation_reference
+
+                self.reach_local_mode = "translation"
+                self.reach_local_translation = None
+                try:
+                    q, record = sample_translation_reference(self.control, self.np_random)
+                except ValueError as error:
+                    raise ResetMotionUnreachable(str(error)) from error
+                self.reach_local_mode = "translation"
+                self.reach_local_translation = record
+                self.control.set_reference(q, phase="pregrasp")
+                return
+            self.reach_local_translation = None
+            # FK witnesses near the actual public-tool pregrasp distribution.
+            # Half isolate reachable wrist rotations; the remainder include
+            # shoulder/elbow translation. They are certified below before use.
+            q = self.control.positions()
+            if self.np_random.random() < 0.5:
+                self.reach_local_mode = "orientation"
+                q[-1] += self.np_random.choice([-1, 1]) * self.np_random.uniform(0.08, 0.20)
+            else:
+                self.reach_local_mode = "combined"
+                q += self.np_random.uniform(-1, 1, self.profile.arm_size) * [0.04, 0.08, 0.10, 0.08, 0.15]
+            q = np.clip(q, self.control.limits[:, 0] + 0.02, self.control.limits[:, 1] - 0.02)
+            self.control.set_reference(q, phase="pregrasp")
+            return
         if self.scenario == "pregrasp":
+            return
+        if self.carry_hold_trial:
+            self.control.set_reference(self.control.positions(), phase="carry")
             return
         q = self.control.positions()
         if self.scenario == "place":
@@ -887,6 +1308,15 @@ class ManipulationEnv(gym.Env):
     def _set_pose_targets(self):
         control, profile = self.control, self.profile
         base = control.base_pose()
+        if self.carry_hold_trial or self.reach_hold_trial or self.reach_local_trial or self.fixed_base_trial:
+            self.target_mode = 3 if profile.wheel_bodies else 2
+            hand = (
+                control.ee_pose()
+                if self.carry_hold_trial or self.reach_hold_trial
+                else self._fk_hand_pose(base, control.reference)
+            )
+            control.set_pose_targets(base, np.full(3, bool(profile.wheel_bodies)), hand, True)
+            return
         if profile.wheel_bodies:
             if self.scenario == "reach":
                 self.target_mode = (
@@ -949,6 +1379,28 @@ class ManipulationEnv(gym.Env):
         rotation = scratch.xmat[control.ee].reshape(3, 3)
         return np.r_[scratch.xpos[control.ee], rotation[:, :2].ravel()]
 
+    @property
+    def active_base_xy_tolerance(self):
+        return (
+            self.config.fixed_base_xy_tolerance
+            if self.reach_hold_trial or self.reach_local_trial or self.fixed_base_trial
+            else self.config.base_xy_tolerance
+        )
+
+    @property
+    def fixed_base_contract_active(self):
+        return self.config.fixed_base_contract and (
+            self.reach_hold_trial or self.reach_local_trial or self.fixed_base_trial
+        )
+
+    @property
+    def active_base_heading_tolerance(self):
+        return (
+            min(0.01, self.config.base_heading_tolerance)
+            if self.fixed_base_contract_active
+            else self.config.base_heading_tolerance
+        )
+
     def _tracking_cost(self):
         control = self.control
         cost = 0.0  # Score the active world-frame hand contract, not a redundant IK solution.
@@ -956,7 +1408,7 @@ class ManipulationEnv(gym.Env):
             delta = control.base_goal - control.base_pose()
             yaw = np.arctan2(np.sin(delta[2]), np.cos(delta[2]))
             cost += float(
-                max(0, np.linalg.norm(delta[:2] * control.base_mask[:2]) - self.config.base_xy_tolerance)
+                max(0, np.linalg.norm(delta[:2] * control.base_mask[:2]) - self.active_base_xy_tolerance)
                 + 0.2 * abs(yaw) * control.base_mask[2]
             )
         if control.hand_mask:
@@ -978,9 +1430,9 @@ class ManipulationEnv(gym.Env):
                 total += solved_contact_force(self.model, self.data, index)[0]
         return total
 
-    def _hand_pose_error(self):
+    def _hand_pose_error(self, pose=None):
         control = self.control
-        current = control.ee_pose()
+        current = control.ee_pose() if pose is None else pose
         current_columns = current[3:].reshape(3, 2)
         target_columns = control.hand_goal[3:].reshape(3, 2)
         current_rotation = np.column_stack([current_columns, np.cross(current_columns[:, 0], current_columns[:, 1])])
@@ -996,9 +1448,21 @@ class ManipulationEnv(gym.Env):
     def _info(self):
         hand_position_error, hand_orientation_error = self._hand_pose_error()
         heading_delta = self.control.base_goal[2] - self.control.base_pose()[2]
+        base_velocity = (
+            self.data.qvel[self.control.base_dof : self.control.base_dof + 6].copy()
+            if self.control.base_dof >= 0
+            else np.zeros(6)
+        )
         return {
             **self.monitor.metrics(),
+            "empty_grasp_trial": getattr(self, "empty_grasp_trial", False),
+            "carry_hold_trial": getattr(self, "carry_hold_trial", False),
+            "held_object_supervision": self.held_object_label.record()
+            if hasattr(self, "held_object_label")
+            else {"target": 0.0, "valid": False},
             "scenario": self.scenario,
+            "grasp_lift_start_mode": self.grasp_lift_start_mode,
+            "reference_time_offset_s": self.reference_time_offset,
             "carry_target_mode": self.carry_target_mode,
             "carry_push_selected": self._carry_push_selected,
             "hand_target_active": bool(self.control.hand_mask),
@@ -1013,6 +1477,8 @@ class ManipulationEnv(gym.Env):
             "retention_lost": self.retention_lost,
             "max_payload_translation": self.max_translation,
             "max_payload_rotation": self.max_rotation,
+            "current_payload_translation": self.current_payload_translation,
+            "current_payload_rotation": self.current_payload_rotation,
             "peak_measured_jerk": max(self.peak_jerk, self.peak_base_jerk),
             "peak_measured_acceleration": max(self.peak_acceleration, self.peak_base_acceleration),
             "peak_base_jerk": self.peak_base_jerk,
@@ -1028,6 +1494,8 @@ class ManipulationEnv(gym.Env):
             "ee_orientation_error": hand_orientation_error,
             "base_linear_velocity_m_s": float(self.last_base_velocity[0]),
             "base_yaw_velocity_rad_s": float(self.last_base_velocity[1]),
+            "base_linear_norm_m_s": float(np.linalg.norm(base_velocity[:3])),
+            "base_angular_norm_rad_s": float(np.linalg.norm(base_velocity[3:])),
             "base_heading_error_rad": float(abs(np.arctan2(np.sin(heading_delta), np.cos(heading_delta))))
             if self.control.base_mask[2]
             else 0.0,
@@ -1037,8 +1505,20 @@ class ManipulationEnv(gym.Env):
             "time_to_first_settle": self.first_settle_time,
             "peak_hold_base_drift_m": self.peak_hold_drift,
             "tracking_precision": self.tracking_precision,
-            "base_xy_tolerance": self.config.base_xy_tolerance,
-            "base_heading_tolerance": self.config.base_heading_tolerance,
+            "base_xy_tolerance": self.active_base_xy_tolerance,
+            "base_heading_tolerance": self.active_base_heading_tolerance,
+            "reach_hold_trial": self.reach_hold_trial,
+            "reach_local_trial": self.reach_local_trial,
+            "grasp_lift_trial": self.grasp_lift_trial,
+            "grasp_lift_admission": self.grasp_lift_admission,
+            "grasp_lift_contacts": self.grasp_lift_guard.contacts if self.grasp_lift_guard else [],
+            "reach_local_mode": self.reach_local_mode,
+            "reach_local_translation": self.reach_local_translation,
+            "fixed_base_contract_active": self.fixed_base_contract_active,
+            "fixed_base_contract_violation": self.fixed_base_contract_violation,
+            "fixed_base_distance_m": self.fixed_base_distance_m,
+            "fixed_base_rotation_rad": self.fixed_base_rotation_rad,
+            "fixed_base_trial": self.fixed_base_trial,
             "base_contract_violation": max(
                 0.0,
                 float(
@@ -1046,7 +1526,7 @@ class ManipulationEnv(gym.Env):
                         (self.control.base_goal[:2] - self.control.base_pose()[:2]) * self.control.base_mask[:2]
                     )
                 )
-                - self.config.base_xy_tolerance,
+                - self.active_base_xy_tolerance,
             ),
             "base_goal_error": float(
                 np.linalg.norm(self.control.base_goal[:2] - self.control.base_pose()[:2])
@@ -1056,6 +1536,8 @@ class ManipulationEnv(gym.Env):
             "time": float(self.data.time - self.start_time),
             "is_success": False,
             "unsafe_contact": self.monitor.peak_force > self.profile.unsafe_force,
+            "motion_fault": self.control.motion_fault,
+            "turn_guard_evidence": self.control.turn_progress_guard.evidence,
             "randomization": getattr(self, "randomization", {}),
             "disturbance_force_n": float(np.linalg.norm(getattr(self, "disturbance_wrench", np.zeros(6))[:3])),
             "disturbance_torque_nm": float(np.linalg.norm(getattr(self, "disturbance_wrench", np.zeros(6))[3:])),
@@ -1076,6 +1558,8 @@ class ManipulationEnv(gym.Env):
             return self.control.observe(), -20.0, True, False, {**self._info(), "code": "initialization_failed"}
         self.actions.append(action.copy())
         action = self.actions.pop(0)
+        before_hand = self.control.ee_pose().copy() if self.config.pose_progress_weight else None
+        before_base = self.control.base_pose().copy() if self.config.precision_tracking_reward else None
         if self._scheduled_push:
             end = self.disturbance_start + self.disturbance_steps
             if self.disturbance_start <= self.steps < end:
@@ -1132,7 +1616,9 @@ class ManipulationEnv(gym.Env):
         translation, rotation = retention_error(
             self.retention_reference, relative_pose(self.data, self.control.ee, self.payload)
         )
+        self.current_payload_translation = self.current_payload_rotation = 0.0
         if translation is not None and not self._released:
+            self.current_payload_translation, self.current_payload_rotation = translation, rotation
             self.max_translation, self.max_rotation = (
                 max(self.max_translation, translation),
                 max(self.max_rotation, rotation),
@@ -1146,13 +1632,15 @@ class ManipulationEnv(gym.Env):
                 approach_reached = (
                     position_error < self.config.hand_position_tolerance
                     and angle_error < self.config.hand_orientation_tolerance
-                    and np.linalg.norm(base_error[:2] * self.control.base_mask[:2]) < self.config.base_xy_tolerance
-                    and (not self.control.base_mask[2] or abs(base_yaw_error) < self.config.base_heading_tolerance)
+                    and np.linalg.norm(base_error[:2] * self.control.base_mask[:2]) < self.active_base_xy_tolerance
+                    and (not self.control.base_mask[2] or abs(base_yaw_error) < self.active_base_heading_tolerance)
                     and abs(self.last_base_velocity[0]) < 0.005
                     and abs(self.last_base_velocity[1]) < 0.02
                 )
             else:
                 approach_reached = np.max(abs(self.control.reference - self.control.positions())) < 0.02
+            if self.config.whole_body_settling:
+                approach_reached &= whole_body_stopped(self.control)
             if not self._closure_commanded and approach_reached and np.max(abs(velocity)) < 0.03:
                 self.control.set_reference(self.control.reference, phase="close", grip=self.profile.gripper_closed)
                 self._closure_commanded = True
@@ -1188,8 +1676,8 @@ class ManipulationEnv(gym.Env):
         base_delta = self.control.base_goal - base_pose
         base_delta[2] = np.arctan2(np.sin(base_delta[2]), np.cos(base_delta[2]))
         base_within_pose = not self.control.base_mask.any() or (
-            np.linalg.norm(base_delta[:2] * self.control.base_mask[:2]) < self.config.base_xy_tolerance
-            and (not self.control.base_mask[2] or abs(base_delta[2]) < self.config.base_heading_tolerance)
+            np.linalg.norm(base_delta[:2] * self.control.base_mask[:2]) < self.active_base_xy_tolerance
+            and (not self.control.base_mask[2] or abs(base_delta[2]) < self.active_base_heading_tolerance)
         )
         base_motion_allowed = self.control.base_mask.any() or (
             self.config.trajectory_preview and self.control.hand_mask
@@ -1198,6 +1686,8 @@ class ManipulationEnv(gym.Env):
             not base_motion_allowed
             or (abs(self.last_base_velocity[0]) < 0.005 and abs(self.last_base_velocity[1]) < 0.02)
         )
+        if self.config.whole_body_settling:
+            base_settled = base_settled and whole_body_stopped(self.control)
         hand_position_error, hand_orientation_error = self._hand_pose_error()
         if self.control.hand_mask:
             self.peak_hand_position_error = max(self.peak_hand_position_error, hand_position_error)
@@ -1238,6 +1728,8 @@ class ManipulationEnv(gym.Env):
             )
         if self.scenario == "pregrasp":
             settled &= self._lift_commanded and self.data.xpos[self.payload, 2] - self.initial_object_height > 0.04
+        if self.grasp_lift_trial:
+            settled &= self.data.xpos[self.payload, 2] - self.initial_object_height > 0.04
         if self._scheduled_push:
             settled &= (
                 self._disturbed or not np.any(self.disturbance_wrench)
@@ -1246,10 +1738,40 @@ class ManipulationEnv(gym.Env):
         self.settle_time = self.settle_time + dt if settled else 0
         unsafe = self.monitor.peak_force > self.profile.unsafe_force
         invalid = invalid_physics(self.data)
-        failure = unsafe or self.monitor.wheel_lift or self.retention_lost or invalid or self._motion_infeasible
-        success = self.settle_time >= (2 if self.scenario == "place" else 1) and not failure
+        if self.fixed_base_contract_active:
+            self.fixed_base_distance_m = float(
+                np.linalg.norm(self.data.xpos[self.control.base] - self._fixed_base_origin_position)
+            )
+            rotation = self.data.xmat[self.control.base].reshape(3, 3).copy()
+            self.fixed_base_rotation_rad = float(
+                np.arccos(np.clip((np.trace(self._fixed_base_origin_rotation.T @ rotation) - 1) / 2, -1, 1))
+            )
+            self.fixed_base_contract_violation |= (
+                not np.isfinite([self.fixed_base_distance_m, self.fixed_base_rotation_rad]).all()
+                or self.fixed_base_distance_m > 0.01
+                or self.fixed_base_rotation_rad > 0.02
+            )
+        grasp_lift_collision = self.grasp_lift_guard is not None and self.grasp_lift_guard.collides(self.data)
+        failure = (
+            unsafe
+            or bool(self.control.motion_fault)
+            or self.monitor.wheel_lift
+            or self.retention_lost
+            or invalid
+            or self._motion_infeasible
+            or self.fixed_base_contract_violation
+            or grasp_lift_collision
+        )
+        hold_seconds = max(
+            self.config.terminal_hold_seconds, 2 if self.scenario == "place" or self.reach_hold_trial else 1
+        )
+        success = self.settle_time >= hold_seconds and not failure
         continuing = self.config.tracking_reward and (
-            self.scenario == "reach" or (self.scenario == "carry" and self.config.tamp_carry_trajectories)
+            self.scenario == "reach"
+            or (
+                self.scenario == "carry"
+                and (self.config.tamp_carry_trajectories or self.carry_hold_trial or self.grasp_lift_trial)
+            )
         )
         success_event = success and self.first_settle_time is None
         if success_event:
@@ -1266,11 +1788,12 @@ class ManipulationEnv(gym.Env):
         at_reference_end = self._reference_complete()
         physical_cost = running_cost(
             dt=dt,
+            motion_scale=self.motion_penalty_scale,
             force=evidence["force"],
             jerk=np.r_[jerk, base_jerk],
             action=action,
-            rotation=self.max_rotation,
-            translation=self.max_translation,
+            rotation=self.current_payload_rotation,
+            translation=self.current_payload_translation,
             tracking=0 if self.config.tracking_reward else cost,
             motion=(
                 float(
@@ -1282,44 +1805,163 @@ class ManipulationEnv(gym.Env):
                 else 0
             ),
         )
+        body_cost = 0.0
         if self.config.tracking_reward:
             from emet.rl.manipulation.tracking import (
                 PRECISION_STAGES,
+                base_progress_potential,
+                body_motion_cost,
+                command_motion_cost,
                 differential_base_score,
                 endpoint_motion_cost,
+                normalized_jerk_cost,
+                precision_base_score,
                 stationary_tracking_score,
                 tracking_score,
+                whole_body_quiet_score,
             )
 
             pose_score = tracking_score(hand_position_error, hand_orientation_error, self.tracking_precision)
-            base_sigma = max(self.config.base_xy_tolerance, PRECISION_STAGES[self.tracking_precision][0])
+            base_sigma = max(self.active_base_xy_tolerance, PRECISION_STAGES[self.tracking_precision][0])
             base_error = max(
-                0.0, float(np.linalg.norm(base_delta[:2] * self.control.base_mask[:2])) - self.config.base_xy_tolerance
+                0.0, float(np.linalg.norm(base_delta[:2] * self.control.base_mask[:2])) - self.active_base_xy_tolerance
             )
-            base_score = np.exp(-base_error / base_sigma - abs(base_delta[2]) * self.control.base_mask[2] / 0.2)
+            heading_sigma = self.active_base_heading_tolerance if self.fixed_base_contract_active else 0.2
+            base_score = np.exp(
+                -base_error / base_sigma - abs(base_delta[2]) * self.control.base_mask[2] / heading_sigma
+            )
+            if self.config.precision_tracking_reward:
+                base_score = precision_base_score(
+                    base_error,
+                    base_delta[2] * self.control.base_mask[2],
+                    self.active_base_xy_tolerance,
+                    self.active_base_heading_tolerance,
+                )
             if self.config.differential_base_reward and self.control.base_mask.any():
                 delta = self.control._base_tracking_delta()
                 bearing = np.arctan2(delta[1], delta[0]) - self.control.base_pose()[2]
                 base_score = differential_base_score(
                     base_error, base_delta[2] * self.control.base_mask[2], bearing, base_sigma
                 )
-            density = 4 * pose_score * self.control.hand_mask + base_score * self.control.base_mask.any()
+            base_weight = 4 if self.fixed_base_contract_active else 1
+            hand_density = 4 * pose_score * self.control.hand_mask
+            base_density = base_weight * base_score * self.control.base_mask.any()
+            # Use the same newly active goal as native hand scoring, including
+            # reference advancement. Base-only commands keep their own reward.
+            if self.config.hand_gated_base_reward and self.control.hand_mask:
+                base_density *= pose_score
+            density = hand_density + base_density
             in_goal = base_within_pose and hand_settled
-            if at_reference_end and (not self.config.goal_gated_settling or in_goal):
-                density += base_score * stationary_tracking_score(
+            quiet_density = 0.0
+            if self.config.precision_tracking_reward and at_reference_end:
+                full_velocity = (
+                    self.data.qvel[self.control.base_dof : self.control.base_dof + 6].copy()
+                    if self.control.base_dof >= 0
+                    else np.zeros(6)
+                )
+                quiet_density = (
+                    2
+                    * base_score
+                    * (pose_score if self.control.hand_mask else 1)
+                    * whole_body_quiet_score(velocity, full_velocity)
+                )
+            elif at_reference_end and (not self.config.goal_gated_settling or in_goal):
+                quiet_density = base_score * stationary_tracking_score(
                     hand_position_error,
                     hand_orientation_error,
                     velocity,
                     base_velocity,
                     hand_active=self.control.hand_mask,
                 )
-            action_rate = 0.02 * float(np.sum((action - self.last_actor_action) ** 2))
-            endpoint_cost = self.config.endpoint_motion_weight * endpoint_motion_cost(
-                self._reference_end_elapsed(), velocity, base_velocity, hand_active=self.control.hand_mask
+            density += quiet_density
+            action_rate = self.motion_penalty_scale * 0.02 * float(np.sum((action - self.last_actor_action) ** 2))
+            endpoint_cost = (
+                self.motion_penalty_scale
+                * self.config.endpoint_motion_weight
+                * endpoint_motion_cost(
+                    self._reference_end_elapsed(), velocity, base_velocity, hand_active=self.control.hand_mask
+                )
             )
             if self.config.goal_gated_settling and not in_goal:
                 endpoint_cost = 0.0
-            reward = dt * (density - action_rate - endpoint_cost) - physical_cost + 10 * success_event - 20 * failure
+            if at_reference_end and self.control.base_dof >= 0:
+                body_cost = (
+                    self.motion_penalty_scale
+                    * self.config.body_motion_weight
+                    * body_motion_cost(self.data.qvel[self.control.base_dof : self.control.base_dof + 6].copy())
+                )
+            reward = (
+                dt * (density - action_rate - endpoint_cost - body_cost)
+                - physical_cost
+                + 10 * success_event
+                - 20 * failure
+            )
+            normalized_jerk = 0.0
+            if self.config.precision_tracking_reward:
+                normalized_jerk = (
+                    dt
+                    * self.config.normalized_jerk_weight
+                    * normalized_jerk_cost(
+                        jerk,
+                        base_jerk,
+                        np.asarray(self.profile.acceleration) * 2,
+                        np.array(
+                            [
+                                max(self.profile.base_acceleration * 2, 0.01),
+                                max(self.profile.base_yaw_acceleration * 2, 0.01),
+                            ]
+                        ),
+                    )
+                )
+                reward -= normalized_jerk
+            command_cost = 0.0
+            if self.config.command_smoothness_weight:
+                wheels = bool(self.profile.wheel_bodies)
+                active_base = self.control.base_mask.any() or self.control.hand_mask
+                mask = np.r_[[active_base] * 2 if wheels else [], [self.control.hand_mask] * self.profile.arm_size]
+                speeds = np.r_[
+                    [self.profile.base_speed, self.profile.base_yaw_speed] if wheels else [], self.profile.speed
+                ]
+                acceleration_scales = np.r_[
+                    [self.profile.base_acceleration, self.profile.base_yaw_acceleration] if wheels else [],
+                    self.profile.acceleration,
+                ]
+                value, self.last_command_acceleration = command_motion_cost(
+                    action[:-1],
+                    self.last_actor_action[:-1],
+                    self.last_command_acceleration,
+                    dt,
+                    speeds,
+                    acceleration_scales,
+                    2 * acceleration_scales,
+                    mask,
+                )
+                command_cost = dt * self.config.command_smoothness_weight * self.command_smoothness_fraction * value
+                reward -= command_cost
+            progress_reward = 0.0
+            if before_hand is not None and self.control.hand_mask:
+                before_position, before_angle = self._hand_pose_error(before_hand)
+                # Both endpoints use the same newly active goal. Goal changes
+                # and reference-clock updates cannot manufacture progress.
+                progress_reward = self.config.pose_progress_weight * (
+                    pose_progress_potential(hand_position_error, hand_orientation_error)
+                    - pose_progress_potential(before_position, before_angle)
+                )
+                reward += progress_reward
+            base_progress = 0.0
+            if before_base is not None and self.control.base_mask.any():
+                previous = self.control.base_goal - before_base
+                previous[2] = np.arctan2(np.sin(previous[2]), np.cos(previous[2]))
+
+                def potential(delta):
+                    outside = max(
+                        0.0,
+                        float(np.linalg.norm(delta[:2] * self.control.base_mask[:2])) - self.active_base_xy_tolerance,
+                    )
+                    return base_progress_potential(outside, delta[2] * self.control.base_mask[2])
+
+                base_progress = self.config.pose_progress_weight * (potential(base_delta) - potential(previous))
+                reward += base_progress
         else:
             reward = 10 * (self._previous_cost - cost) - physical_cost + 10 * success - 20 * failure
         self.last_actor_action = action.copy()
@@ -1341,6 +1983,12 @@ class ManipulationEnv(gym.Env):
             if invalid
             else "motion_infeasible"
             if self._motion_infeasible
+            else self.control.motion_fault
+            if self.control.motion_fault
+            else "fixed_base_contract_violation"
+            if self.fixed_base_contract_violation
+            else "grasp_lift_collision"
+            if grasp_lift_collision
             else "ok"
             if success
             else "tracking_timeout"
@@ -1357,12 +2005,51 @@ class ManipulationEnv(gym.Env):
             self._previous_cost = self._tracking_cost()
         if not self._done and self.arm_trajectory is not None:
             self._advance_dynamic_reference()
+        if self.empty_grasp_trial:
+            self.control.retain_object = True
+        self.held_object_label.update(
+            bilateral=evidence["bilateral_contact"],
+            clearly_empty=(
+                np.linalg.norm(self.data.xpos[self.payload] - self.data.xpos[self.control.ee]) > 0.18
+                or self.control.gripper_is_open()
+            ),
+            dt=dt,
+            physics_valid=not invalid and not self._physics_invalid,
+        )
         info = {
             **self._info(),
+            "reward_terms": {
+                "hand_tracking_reward": float(dt * hand_density) if self.config.tracking_reward else 0.0,
+                "base_tracking_reward": float(dt * base_density) if self.config.tracking_reward else 0.0,
+                "terminal_quiet_reward": float(dt * quiet_density) if self.config.tracking_reward else 0.0,
+                "motion_penalty_scale": self.motion_penalty_scale,
+                "body_motion_cost": float(dt * body_cost),
+                "pose_progress_reward": float(progress_reward) if self.config.tracking_reward else 0.0,
+                "base_progress_reward": float(base_progress) if self.config.tracking_reward else 0.0,
+                "normalized_jerk_cost": float(normalized_jerk) if self.config.tracking_reward else 0.0,
+                "command_motion_cost": float(command_cost) if self.config.tracking_reward else 0.0,
+                "command_smoothness_fraction": self.command_smoothness_fraction,
+                "physical_cost": float(physical_cost),
+                "success_bonus": float(10 * success_event if self.config.tracking_reward else 10 * success),
+                "failure_penalty": float(20 * failure),
+                "tracking_and_progress": float(
+                    reward
+                    - (10 * success_event if self.config.tracking_reward else 10 * success)
+                    + 20 * failure
+                    + physical_cost
+                ),
+            },
             "is_success": bool(success),
             "code": code,
             "invalid_physics": bool(invalid),
             "config": asdict(self.config),
             "risk_features": self.risk_features if self._done else None,
         }
+        if self._done and self.grasp_lift_guard is not None:
+            self.grasp_lift_guard.close()
         return self.control.observe(), float(reward), bool(failure or terminal_success), bool(truncated), info
+
+    def close(self):
+        if self.grasp_lift_guard is not None:
+            self.grasp_lift_guard.close()
+        super().close()
