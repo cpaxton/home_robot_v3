@@ -393,5 +393,21 @@
       0.025,
       0.04
     ]
+  },
+  "final_pr_review_20261115": {
+    "scope": "PR234 frozen refinement/evidence scope; no native task rescore or base-approach implementation",
+    "source_commit": "0db4014f8d4d74dc49cb2608af9b8e32bee456b7",
+    "source_clean": true,
+    "job_id": "20261115_125239_2f18dc",
+    "tests": 346,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "artifact": {
+      "path": ".tamp-runs/pr234-final-20261115/results.xml",
+      "sha256": "90ae049b3da4bd71ebec18336a36777b3e26a16fe4a114b7e48ae9bddeb624b2"
+    },
+    "follow_up_branch": "feat/tamp-native-base-approach",
+    "full_task_acceptance_pending": true
   }
 }

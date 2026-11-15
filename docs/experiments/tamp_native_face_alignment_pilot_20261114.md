@@ -63,3 +63,18 @@ the comparison figure, planner failures and the private IK probe remain under
 ignored `.tamp-runs/face-alignment-20261114/`. Prior attempts are preserved.
 This is privileged stationary simulated Stretch development, with no training,
 hardware, local GPU/VLM, observed manipulation or held-out qualification claim.
+
+## November 15 PR scope freeze
+
+PR #234 is finalized for review as the refinement/evidence change. Its frozen
+source `0db4014f` passes all 346 affected tests, with zero failures/errors/skips;
+the final job and artifact hash are added to the manifest. The 345-test record
+above remains the original pilot validation, and the physical scores are not
+rescored. Review readiness does not establish full-task acceptance.
+
+The checked-base feature and remaining acceptance work are tracked on
+[`feat/tamp-native-base-approach`](https://github.com/cpaxton/home_robot_v3/tree/feat/tamp-native-base-approach)
+and in [TODO.md](../../TODO.md#native-tamp-base-approach-follow-up-to-234).
+That implementation is excluded from #234. The original margin-only review
+does not cover the later grasp/verification additions; current-head review
+is still needed. The PR remains stacked on #231.
