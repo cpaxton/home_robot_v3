@@ -57,6 +57,12 @@ def test_fresh_exploration_pair_binds_initial_state_without_claiming_same_rollou
     for change in ({"stationary_base_std_scale": 1.0}, {"basic_cases_sha256": None}):
         with pytest.raises(ValueError, match="identical fresh initial"):
             verify_exploration_pair(first, second | change)
+    for value in (float("nan"), float("inf"), -float("inf")):
+        for side in (0, 1):
+            pair = [copy.deepcopy(first), copy.deepcopy(second)]
+            pair[side]["ppo"]["weights"][0] = value
+            with pytest.raises(ValueError, match="identical fresh initial"):
+                verify_exploration_pair(*pair)
 
 
 def test_basic_sets_are_exact_subsets_and_do_not_mutate_parent():
