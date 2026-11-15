@@ -144,6 +144,7 @@ class ManipulationConfig:
     feedback_orientation_error: str = "rotation6"
     feedback_reference_velocity: bool = False
     wheel_feedback_gain: float = 2.0
+    wheel_feedback_current_velocity: bool = False
     physical_wheel_slew: bool = False
     wheel_jerk_limits: tuple[float, float] | None = None
     precision_tracking_reward: bool = False
@@ -178,6 +179,10 @@ class ManipulationConfig:
             raise ValueError("translation share requires a local reach curriculum")
         if not np.isfinite(self.wheel_feedback_gain) or not 0 <= self.wheel_feedback_gain <= 2:
             raise ValueError("wheel feedback gain must be in [0, 2]")
+        if type(self.wheel_feedback_current_velocity) is not bool:
+            raise ValueError("current wheel feedback velocity must be boolean")
+        if self.wheel_feedback_current_velocity and self.robot != "innate_mars":
+            raise ValueError("current wheel feedback velocity is Mars-only")
         if type(self.restoring_yaw_feedback) is not bool or (
             self.restoring_yaw_feedback
             and (
@@ -455,6 +460,7 @@ class ManipulationEnv(gym.Env):
     def _configure_preview(self):
         self.control.turn_progress_guard_enabled = self.config.base_turn_progress_guard
         self.control.base_velocity_feedback_gain = self.config.wheel_feedback_gain
+        self.control.base_velocity_feedback_current = self.config.wheel_feedback_current_velocity
         # The old teacher's 0.015-rad deadband exceeds this task's 0.01-rad
         # heading success condition. Correct the new task's comparator without
         # changing historical reset/teacher behavior for other distributions.

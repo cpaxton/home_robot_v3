@@ -21,6 +21,8 @@ def test_current_com_probe_matches_fresh_cache_but_responds_to_new_qvel_without_
 
     import mujoco
 
+    from emet.rl.manipulation.control import ManipulationControl
+
     model = mujoco.MjModel.from_xml_string(
         '<mujoco><worldbody><body name="base"><freejoint/><geom type="box" size=".1 .1 .1" '
         'pos=".03 0 .07"/></body></worldbody></mujoco>'
@@ -39,6 +41,12 @@ def test_current_com_probe_matches_fresh_cache_but_responds_to_new_qvel_without_
     mujoco.mj_objectVelocity(model, data, mujoco.mjtObj.mjOBJ_BODY, 1, spatial, 0)
     np.testing.assert_allclose(spatial[[3, 2]], expected, atol=1e-15)
     np.testing.assert_allclose(current_feedback_velocity(control, "com"), 2 * expected, atol=1e-15)
+    control.base_velocity_feedback_current = True
+    np.testing.assert_array_equal(
+        ManipulationControl._base_feedback_velocity(control), current_feedback_velocity(control, "com")
+    )
+    control.base_velocity_feedback_current = False
+    np.testing.assert_allclose(ManipulationControl._base_feedback_velocity(control), expected, atol=1e-15)
     np.testing.assert_allclose(current_feedback_velocity(control, "axle"), [0.18, 0.6], atol=1e-15)
     with pytest.raises(ValueError, match="point"):
         current_feedback_velocity(control, "origin")
@@ -55,11 +63,30 @@ def test_feedback_probe_keeps_intervention_during_nonterminal_ok(monkeypatch, te
     probe_type = runpy.run_path(str(scripts / "probe_mars_wheel_feedback.py"))["FeedbackProbe"]
     monkeypatch.setattr(NativeJerkObserver, "after_step", lambda *a, **kw: None)
     control = SimpleNamespace(base_velocity_feedback_gain=0.0, _base_feedback_velocity=lambda: None)
-    env = SimpleNamespace(control=control, config=SimpleNamespace(wheel_feedback_gain=0.5))
+    env = SimpleNamespace(
+        control=control, config=SimpleNamespace(wheel_feedback_gain=0.5, wheel_feedback_current_velocity=False)
+    )
     probe_type("feedback_off").after_step(env, [], {"code": "ok"}, terminated=terminated, truncated=truncated)
     finished = terminated or truncated
     assert control.base_velocity_feedback_gain == (0.5 if finished else 0.0)
     assert hasattr(control, "_base_feedback_velocity") != finished
+
+
+@pytest.mark.parametrize("value", [0, 1, "true", None])
+def test_current_feedback_config_rejects_non_boolean(value):
+    from emet.rl.manipulation.env import ManipulationConfig
+
+    with pytest.raises(ValueError, match="must be boolean"):
+        ManipulationConfig(wheel_feedback_current_velocity=value)
+
+
+def test_current_feedback_config_is_opt_in_and_mars_only():
+    from emet.rl.manipulation.env import ManipulationConfig
+
+    assert not ManipulationConfig(robot="innate_mars").wheel_feedback_current_velocity
+    assert ManipulationConfig(robot="innate_mars", wheel_feedback_current_velocity=True).wheel_feedback_current_velocity
+    with pytest.raises(ValueError, match="Mars-only"):
+        ManipulationConfig(robot="stretch", wheel_feedback_current_velocity=True)
 
 
 @pytest.mark.parametrize("dt,peak", [(0.1, 1.0), (0.05, 2.0), (0.025, 4.0)])

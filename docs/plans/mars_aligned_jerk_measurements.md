@@ -96,3 +96,13 @@ The first twelve-episode feedback attempt is invalid for this comparison:
 continuing hold. Preserve its raw archives under `feedback/`; the corrected
 attempt uses `feedback-v2/` and explicit Gym termination/truncation flags.
 Regression tests cover nonterminal `ok`, actual termination and truncation.
+
+The corrected teacher comparison justifies a narrowly scoped opt-in
+`wheel_feedback_current_velocity` setting (default false, Mars-only), using
+current qvel at the same COM with all gains and limits retained. The diagnostic
+probe and implementation must return exactly identical current-COM values.
+Before training, predeclare **24 learned-candidate episodes**, all twelve
+original cases with cached versus current COM feedback after identical reset.
+The cached variant must exactly replay the original candidate. Report all
+old-gate outcomes, tracking, orientation, forces and jerk; do not infer loaded
+manipulation or hardware readiness. This is not a new actor or promotion.

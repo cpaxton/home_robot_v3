@@ -46,6 +46,7 @@ class ManipulationControl:
         self.action_mode = "residual"
         self.base_xy_tolerance = 0.02
         self.base_velocity_feedback_gain = 2.0
+        self.base_velocity_feedback_current = False
         self.base_velocity_integral_gain = 1.0
         self.base_feedback_at_rest = True
         # Keep the qualified legacy servo until the opt-in mode is qualified.
@@ -627,7 +628,19 @@ class ManipulationControl:
         self.data.ctrl[valid] = 0
 
     def _base_feedback_velocity(self):
-        """Legacy inertial-frame velocity cache; isolated for matched diagnostics."""
+        """COM forward/yaw velocity; current-qvel correction remains opt-in.
+
+        mj_step integrates qvel after computing cvel. Between substeps the
+        legacy spatial cache therefore belongs to the preceding solve. Reuse
+        position-stage Jacobians with current qvel without another forward
+        solve, retaining the same COM measurement point and physical bounds.
+        """
+        if self.base_velocity_feedback_current:
+            jp, jr = np.zeros((3, self.model.nv)), np.zeros((3, self.model.nv))
+            mujoco.mj_jacBodyCom(self.model, self.data, jp, jr, self.base)
+            velocity = self.data.qvel.copy()
+            forward = self.data.xmat[self.base].reshape(3, 3)[:, 0]
+            return np.array([(jp @ velocity) @ forward, (jr @ velocity)[2]])
         spatial = np.zeros(6)
         mujoco.mj_objectVelocity(self.model, self.data, mujoco.mjtObj.mjOBJ_BODY, self.base, spatial, 0)
         forward = self.data.xmat[self.base].reshape(3, 3)[:, 0]
