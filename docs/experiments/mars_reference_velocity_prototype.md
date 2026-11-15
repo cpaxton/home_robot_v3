@@ -11,7 +11,8 @@ six-run comparison does **not** establish a policy improvement: arm tracking
 remains 63–64/64, while base-linear jerk causes most combined-contract losses.
 Retain the original source checkpoint. The subsequent frozen-base/context
 pilot has passed 1,178 full regressions and 27 focused checks, but has recorded
-**zero PPO transitions** and is waiting for an explicit CPU14 handoff.
+**zero PPO transitions**. Its managed job timed out waiting for the CPU14
+handoff; it is no longer an active queued training run.
 
 The separate GRU/multi-critic C1 comparison on the parent branch stopped in its
 candidate settings check before the candidate's first optimizer update. That
@@ -20,7 +21,7 @@ now repaired on the parent branch (`29a9fcec`), and the separate bundled TAMP
 reward-clock correction (`105d3dba`) passes 61 focused tests, including a native
 oracle hold. No recovered PPO run has started; its owner retains CPU14 pending
 fresh-source admission and an explicit recovery record. See the
-[C1 attempt record](https://github.com/cpaxton/home_robot_v3/blob/feat/mars-base-isolation/docs/plans/mars_whole_body_advantage_pair.md#recorded-attempt-2026-11-14).
+[C1 attempt record](../plans/mars_whole_body_advantage_pair.md#recorded-attempt-2026-11-14).
 This PR is not a dependency of the GRU experiment and does not modify its actor.
 
 Correctness, behavioral improvement and hardware readiness are separate
@@ -277,7 +278,7 @@ The next justified training hypothesis is to freeze the retained base function
 coefficients, and suppress wheel exploration during arm adaptation while
 preserving the existing base mean commands. Freezing base readout weights alone
 would still allow shared-context changes to alter the base function. This next
-training mode is now implemented; its bounded pilot is queued as described
+training mode is now implemented; its bounded pilot is recorded as described
 below, with the full base/arm/coupled and smoothness measurements retained.
 Axis-angle remains a separate untrained option.
 
@@ -321,20 +322,18 @@ runtime and coordinated reservations. Add `--arm-adaptation-only` to the
 expanded-runner command, with `--seeds 90 --steps 16384`. This section records
 the implementation and launch protocol; a completed training result is pending.
 
-Managed job `20261114_091806_52e91d` now runs this protocol from immutable
+Managed job `20261114_091806_52e91d` was launched for this protocol from immutable
 implementation `7400cef1fd12fbd7079f2d00b86caa634a6c3c8c`. Its fresh full
 regression gate passed **1,178/1,178**, with zero skips, errors or failures;
 the focused gate passed **27/27**. The full receipt binds the tested source
 and XML. CPU15 was released after host-visible gate/pytest child exit.
 
-The supervisor is waiting for the existing C1 reservation to explicitly
-release CPU14. The recorded C1 attempt stopped at a settings-comparison error;
-its guard is now repaired, but the recovered comparison has not run and the
-release has not occurred. Once released, the supervisor runs
-current-source teacher admission, both fixed training runs, all declared
-evaluations and a serialized protected-function check without another launch
-request. No new PPO transitions are recorded yet. No automatic retry,
-extension or promotion is enabled. A failed gate stops the job.
+The supervisor subsequently timed out while waiting for the existing C1
+reservation to release CPU14. Job `20261114_091806_52e91d` is failed with
+**zero experimental PPO transitions**; its software receipts and failed queue
+record are preserved. It produced no training result and will not start when a
+lane later becomes idle. A new bounded launch must record its own identity and
+current-source gates. No automatic retry, extension or promotion is enabled.
 
 Launch protocol, source copy, receipt, progress and eventual results remain in
 `logs/manipulation/mars-frozen-base-arm-v1/`; `supervisor.json` is the live phase

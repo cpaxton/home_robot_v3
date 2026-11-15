@@ -59,7 +59,7 @@ Keep one actor at inference while testing the learning machinery. Recurrent
 history encoders, structured feedback heads and separate critics are
 architectural choices to evaluate. Critic-only simulator information must stay
 outside actor inputs and exported inference. The separate parent-branch
-[GRU / multi-critic prototype](https://github.com/cpaxton/home_robot_v3/blob/feat/mars-base-isolation/docs/plans/mars_whole_body_v2.md)
+[GRU / multi-critic prototype](../plans/mars_whole_body_v2.md)
 tests that separation; the optional legacy-MLP features in this branch are an
 independent experiment. Neither architecture is established by software tests
 alone.
