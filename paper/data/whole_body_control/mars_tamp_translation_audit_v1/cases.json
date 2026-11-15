@@ -1,0 +1,288 @@
+{
+  "scope": "Twelve separately frozen constant-orientation translation audits, generated before training; preserve failed admission and all outcomes.",
+  "base_suite_path": "configs/benchmarks/mars_tracking_mastery_tamp_translation_v1.json",
+  "base_suite_sha256": "41edd8938b6be5b166e7e7b13b952b32b70325472a651d092d5239781f45d05d",
+  "generation_seed": 34490,
+  "reset_seed_namespace": [
+    34400000,
+    34400011
+  ],
+  "cases": [
+    {
+      "id": "validation:arm:fresh_translation_0",
+      "split": "validation",
+      "stage": "arm",
+      "reset_seed": 34400000,
+      "travel_m": 0,
+      "turn_rad": 0,
+      "arm_delta": [
+        0.0,
+        -0.03780130321068506,
+        0.15120521284274024,
+        -0.11340390963205518,
+        0.0
+      ],
+      "arm_start": [
+        0.023249806188938845,
+        -0.4105160966011347,
+        -0.01743932028657664,
+        0.4279554168877113,
+        0.010586035321311443
+      ],
+      "minimum_duration_s": 2.5
+    },
+    {
+      "id": "validation:arm:fresh_translation_1",
+      "split": "validation",
+      "stage": "arm",
+      "reset_seed": 34400001,
+      "travel_m": 0,
+      "turn_rad": 0,
+      "arm_delta": [
+        -0.0,
+        0.11083514383234261,
+        -0.0,
+        -0.11083514383234261,
+        -0.0
+      ],
+      "arm_start": [
+        0.013401485695336227,
+        -0.4027379112996453,
+        0.028482823809994583,
+        0.37425508748965075,
+        -0.013153806244586608
+      ],
+      "minimum_duration_s": 2.5
+    },
+    {
+      "id": "validation:arm:fresh_translation_2",
+      "split": "validation",
+      "stage": "arm",
+      "reset_seed": 34400002,
+      "travel_m": 0,
+      "turn_rad": 0,
+      "arm_delta": [
+        0.0,
+        -0.032943188154379265,
+        0.15386540520393924,
+        -0.12092221704955997,
+        0.0
+      ],
+      "arm_start": [
+        0.023734713382410937,
+        -0.4123558304834244,
+        0.028528086734446907,
+        0.3838277437489775,
+        -0.004456472214371718
+      ],
+      "minimum_duration_s": 2.5
+    },
+    {
+      "id": "validation:arm:fresh_translation_3",
+      "split": "validation",
+      "stage": "arm",
+      "reset_seed": 34400003,
+      "travel_m": 0,
+      "turn_rad": 0,
+      "arm_delta": [
+        -0.0,
+        0.04265922947927481,
+        -0.17063691791709923,
+        0.12797768843782442,
+        -0.0
+      ],
+      "arm_start": [
+        0.01089193034028298,
+        -0.4043247051631001,
+        0.03520185582215376,
+        0.36912284934094636,
+        0.00288013516625326
+      ],
+      "minimum_duration_s": 2.5
+    },
+    {
+      "id": "validation:arm:fresh_translation_4",
+      "split": "validation",
+      "stage": "arm",
+      "reset_seed": 34400004,
+      "travel_m": 0,
+      "turn_rad": 0,
+      "arm_delta": [
+        0.0,
+        -0.10052052365200943,
+        0.0,
+        0.10052052365200943,
+        0.0
+      ],
+      "arm_start": [
+        -0.005731585067702879,
+        -0.3977337761050492,
+        0.0007727833382914426,
+        0.3969609927667577,
+        0.0058730250129104405
+      ],
+      "minimum_duration_s": 2.5
+    },
+    {
+      "id": "validation:arm:fresh_translation_5",
+      "split": "validation",
+      "stage": "arm",
+      "reset_seed": 34400005,
+      "travel_m": 0,
+      "turn_rad": 0,
+      "arm_delta": [
+        -0.0,
+        0.05018937379854499,
+        -0.14812180787433443,
+        0.09793243407578943,
+        -0.0
+      ],
+      "arm_start": [
+        0.031034480560617497,
+        -0.3983696169781488,
+        -0.0036597683545451162,
+        0.40202938533269394,
+        0.014692692354732757
+      ],
+      "minimum_duration_s": 2.5
+    },
+    {
+      "id": "validation:arm:fresh_translation_6",
+      "split": "validation",
+      "stage": "arm",
+      "reset_seed": 34400006,
+      "travel_m": 0,
+      "turn_rad": 0,
+      "arm_delta": [
+        0.0,
+        -0.035165280224257245,
+        0.14066112089702898,
+        -0.10549584067277173,
+        0.0
+      ],
+      "arm_start": [
+        0.004133497866023166,
+        -0.4042556544665709,
+        -0.03223233522174759,
+        0.4364879896883185,
+        0.019074175098865463
+      ],
+      "minimum_duration_s": 2.5
+    },
+    {
+      "id": "validation:arm:fresh_translation_7",
+      "split": "validation",
+      "stage": "arm",
+      "reset_seed": 34400007,
+      "travel_m": 0,
+      "turn_rad": 0,
+      "arm_delta": [
+        -0.0,
+        0.10819785893196368,
+        -0.0,
+        -0.10819785893196368,
+        -0.0
+      ],
+      "arm_start": [
+        0.014576826097113065,
+        -0.3954663640200144,
+        -0.01790311633250564,
+        0.41336948035252,
+        -0.024997912691947215
+      ],
+      "minimum_duration_s": 2.5
+    },
+    {
+      "id": "validation:arm:fresh_translation_8",
+      "split": "validation",
+      "stage": "arm",
+      "reset_seed": 34400008,
+      "travel_m": 0,
+      "turn_rad": 0,
+      "arm_delta": [
+        0.0,
+        -0.017728186929021353,
+        0.12895497936984687,
+        -0.1112267924408255,
+        0.0
+      ],
+      "arm_start": [
+        0.010150313955613707,
+        -0.38163550512848177,
+        -0.001421798838438841,
+        0.3830573039669206,
+        0.002198587796423783
+      ],
+      "minimum_duration_s": 2.5
+    },
+    {
+      "id": "validation:arm:fresh_translation_9",
+      "split": "validation",
+      "stage": "arm",
+      "reset_seed": 34400009,
+      "travel_m": 0,
+      "turn_rad": 0,
+      "arm_delta": [
+        -0.0,
+        0.035079742366763055,
+        -0.14031896946705222,
+        0.10523922710028917,
+        -0.0
+      ],
+      "arm_start": [
+        0.025231158114562006,
+        -0.4160754642745817,
+        -0.01973985335192829,
+        0.43581531762651,
+        0.004094085860960446
+      ],
+      "minimum_duration_s": 2.5
+    },
+    {
+      "id": "validation:arm:fresh_translation_10",
+      "split": "validation",
+      "stage": "arm",
+      "reset_seed": 34400010,
+      "travel_m": 0,
+      "turn_rad": 0,
+      "arm_delta": [
+        0.0,
+        -0.09375464701432824,
+        0.0,
+        0.09375464701432824,
+        0.0
+      ],
+      "arm_start": [
+        0.03698201128641006,
+        -0.38350783444629855,
+        -0.029700651167334245,
+        0.41320848561363277,
+        0.0020026821303449974
+      ],
+      "minimum_duration_s": 2.5
+    },
+    {
+      "id": "validation:arm:fresh_translation_11",
+      "split": "validation",
+      "stage": "arm",
+      "reset_seed": 34400011,
+      "travel_m": 0,
+      "turn_rad": 0,
+      "arm_delta": [
+        0.0,
+        0.009119089651472352,
+        -0.1335999645392934,
+        0.12448087488782103,
+        0.0
+      ],
+      "arm_start": [
+        0.03457005883187443,
+        -0.4185543625998891,
+        -0.01187103081528644,
+        0.43042539341517555,
+        -0.015512173206332863
+      ],
+      "minimum_duration_s": 2.5
+    }
+  ]
+}

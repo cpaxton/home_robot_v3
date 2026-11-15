@@ -27,9 +27,13 @@ class FKPoseReference(TaskPoseTrajectory):
         phase_acceleration=0,
         phase_jerk=0,
         sample_dt=0.05,
+        profile="quintic",
     ):
         if not np.isfinite(sample_dt) or sample_dt <= 0:
             raise ValueError("positive finite reference sample period required")
+        if profile not in {"quintic", "s_curve"}:
+            raise ValueError("unsupported terminal correction profile")
+        self.profile = profile
         self.fk, self.path, self.certificate = fk, path, certificate
         self.fixed_base = np.asarray(base, dtype=float).copy()
         self.grip = float(gripper)
@@ -61,6 +65,7 @@ class FKPoseReference(TaskPoseTrajectory):
                     [j],
                     phase_acceleration=phase_acceleration,
                     phase_jerk=phase_jerk,
+                    profile=profile,
                 )
                 self.goal_pose = goal.copy()
         end = self.prefix_end + (self.correction.end if self.correction else 0)
@@ -147,7 +152,11 @@ class FKPoseReference(TaskPoseTrajectory):
         record = super().record()
         record.update(
             format="task_pose_fk_reference_v2",
-            interpolation="continuous_private_fk_and_optional_quintic_se3_tail",
+            interpolation=(
+                "continuous_private_fk_and_optional_quintic_se3_tail"
+                if self.profile == "quintic"
+                else "continuous_private_fk_and_optional_s_curve_se3_tail"
+            ),
             arm_trajectory=self.path.record(),
             arm_derivative_certificate=self.certificate,
             fk_anchor_qpos=self.fk.qpos.tolist(),

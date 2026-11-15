@@ -51,7 +51,7 @@ def checkpoints(roots, mode):
         for manifest in root.rglob("manifest.json"):
             try:
                 data = json.loads(manifest.read_text())
-                arm = data.get("format") == "emet-manipulation-v1" and data.get("robot") == (
+                arm = data.get("format") in {"emet-manipulation-v1", "emet-whole-body-v2"} and data.get("robot") == (
                     "innate_mars" if mode == "mars-arm" else "stretch"
                 )
                 base = data.get("robot") == "innate_mars" and data.get("task") == "base"
@@ -202,7 +202,9 @@ class Simulation:
                 source = candidate.manifest.get("environment", {})
                 settings = {
                     "action_mode": candidate.action_mode,
-                    "trajectory_preview": "preview" in candidate.normalization,
+                    "trajectory_preview": (
+                        candidate.manifest.get("format") == "emet-whole-body-v2" or "preview" in candidate.normalization
+                    ),
                     "tracking_reward": source.get("tracking_reward", False),
                     "retention_context": source.get("retention_context", False),
                     "wheel_feedback_gain": source.get("wheel_feedback_gain", 2.0),
@@ -222,6 +224,10 @@ class Simulation:
             self.env.control.retention_context_enabled = self.env.config.retention_context
             self.env._configure_preview()
             self.env.control.history = None  # Contract changes restart inputs, never physics.
+            if candidate is not None and hasattr(candidate, "bind_reference"):
+                from emet.rl.manipulation.whole_body_observation import reference_velocity
+
+                candidate.bind_reference(lambda: reference_velocity(self.env.control))
             self.env.control.action_mode = self.env.config.action_mode
             self.env.control.base_xy_tolerance = self.env.config.base_xy_tolerance
             self.obs = self.env.control.observe()
@@ -259,9 +265,9 @@ class Simulation:
         if path not in allowed:
             raise ValueError("select a complete checkpoint from the configured local roots")
         if self.mode in MANIPULATION_MODES:
-            from emet.rl.manipulation.policy import ManipulationPolicy
+            from emet.rl.manipulation.policy import load_control_policy
 
-            candidate = ManipulationPolicy(path, robot=self.env.profile.robot, fingerprint=self.env.fingerprint)
+            candidate = load_control_policy(path, robot=self.env.profile.robot, fingerprint=self.env.fingerprint)
         else:
             from emet.rl.policy import PPOPolicy
 

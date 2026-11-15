@@ -428,3 +428,26 @@ def test_transport_reserves_quiet_verification_even_at_last_motion_tick(pose_exe
     monkeypatch.setattr(robot, "_verify_quiet_hold", verify)
     result = robot.follow_trajectory(path, loaded=False)
     assert result.success and checked
+
+
+def test_explicit_pose_reference_traces_and_public_counts_exclude_learned_inference(pose_executor):
+    from emet.rl.manipulation.command_runtime import task_pose_teacher_action
+
+    _, robot, executor, adapter = pose_executor
+
+    class Reference:
+        controller_name = "task_pose_reference"
+        is_reference_controller = True
+
+        def __call__(self, obs):
+            return task_pose_teacher_action(robot.servo)
+
+    robot.policy = Reference()
+    q = robot.servo.positions()
+    result = execute_pose_path(robot, executor, "pregrasp", [q, q + [0, -0.015, 0.03, -0.015, 0]])
+    assert result.success
+    assert robot.inference_counts["policy_calls"] == 0 and robot.inference_counts["reference_controller_calls"] > 0
+    active = [t for t in robot.trace if t["action_source"] == "analytic_reference"]
+    assert active and all(t["policy_calls"] == 0 for t in active)
+    assert adapter._data()["controller"] == "task_pose_reference"
+    assert adapter._data()["reference_controller_calls"] == robot.policy_calls

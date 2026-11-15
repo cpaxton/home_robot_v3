@@ -398,3 +398,197 @@ physical metrics and rewards exactly. Short constant-request probes track
 0.5--10\,mm/s within about 2.6\% by displacement, narrowing the remaining gap to
 policy learning. Complete results and request/motion plots are retained in
 \texttt{paper/data/whole\_body\_control/mars\_command\_history\_v1/}.
+
+\paragraph{Frozen-arm base exploration diagnostic.}
+A subsequent bounded 32,768-step pilot fixes arm/context/grip parameters and
+normalization, training base readouts and exploration with generalized
+state-dependent noise~\cite{raffin2022smoothexploration}. Export still uses one
+eight-output actor. A fresh teacher passes 66/66 and 985 source-bound regressions
+pass. Final base tracking improves to 48/50, but full passes fall to 15/50;
+arm tracking/full passes are 14/16 and 0/16. No unsafe-contact or wheel-lift flag
+trips in these unloaded cases. A final-only diagnostic removing direct
+hand-error-to-base connections restores canonical arm tracking from 6/8 to 8/8,
+while full arm smoothness remains 0/8. Frozen arm weights therefore do not
+prevent physical interference from trainable base outputs. This motivates
+base-only task-distribution isolation before further coordinated training,
+not policy promotion or hardware testing. Complete outcomes are retained in
+\texttt{paper/data/whole\_body\_control/mars\_base\_isolation\_v1/}.
+
+\paragraph{Base-only curriculum and reward alignment.}
+Two subsequent 8,192-step pilots isolate base-only task sampling with the same
+frozen arm function. Native reward reaches 49/50 base tracking, 42/50 full base
+and 15/16 full arm passes. An optional aligned reward shares evaluation's force
+and jerk budgets, adds dense excess and incremental peak costs, and moves the
+full-contract bonus to episode termination. This first aligned package reaches
+48/50, 41/50 and 12/16 respectively; both retain 16/16 arm tracking, and neither
+is promoted. Exploratory aligned rollouts earn no full-contract bonuses after
+removal of native completion credit, motivating a staged reward transition.
+Initial physical metrics match, the 66-case teacher reproduces exactly and
+1,005 source-bound regressions pass. These are fixed-seed development results,
+not hardware or loaded-manipulation qualification. Complete outcomes and
+training-case weight calibration are retained in
+\texttt{paper/data/whole\_body\_control/mars\_contract\_curriculum\_v1/}.
+
+\paragraph{Refinement and value calibration.}
+Two 16,384-step continuations from the stronger native actor add 20\% moving-arm
+control-step exposure and quieter exploration. Native reward reaches 50/50 base
+tracking, 43/50 full base and 11/16 full arm; a gradual contract-reward transition
+reaches 50/50, 40/50 and 2/16. Both retain 16/16 arm tracking, but neither preserves
+the source's arm smoothness, so the source remains the development baseline.
+A fresh teacher passes 66/66 and 1,013 source-bound regressions pass. A separate
+coupled diagnostic gives the source 0/4 against the teacher's 4/4, preventing a
+whole-body qualification claim. No hardware is used. Noisy on-policy return
+audits, including time-limit bootstrapping, find substantial critic calibration
+errors; critic-only warmup is a subsequent experiment, not a demonstrated fix.
+Complete case outcomes are retained in
+\texttt{paper/data/whole\_body\_control/mars\_refinement\_v1/}.
+
+A subsequent 24,576-transition experiment freezes the actor for 8,192 critic
+warmup transitions, then resumes PPO. Warmup preserves actor tensors and physical
+traces exactly and improves base value calibration, but the fixed final gives
+49/50 base tracking, 42/50 full base and only 5/16 full arm. It is rejected.
+The critic saturates on arm states; a separate fixed-target value regression
+supports testing constant return-unit normalization, without demonstrating a
+better policy. A teacher-base/learned-arm intervention passes 4/4 coupled cases,
+supporting coordinated base training with the preserved arm. These remain
+development diagnostics; all outcomes and provenance are retained in
+\texttt{paper/data/whole\_body\_control/mars\_critic\_calibration\_v1/}.
+
+Constant training reward scale 0.01 and 40/20/40 base/arm/coupled step budgets
+are then tested for 36,864 transitions. The fixed final retains 49/50 base and
+16/16 arm tracking, but full passes regress to 38/50 and 5/16; coupled remains
+0/4. Teacher 70/70 and 1,041 source-bound regressions pass; initial 70-case
+transfer and warmup replay are exact. The source is retained. A separate
+quarter-amplitude training-parent probe passes 2/2, motivating a possible later
+curriculum; it does not relax the canonical benchmark. General feedback-gain
+optimization units are a subsequent experiment, not a demonstrated fix.
+All outcomes are in
+\texttt{paper/data/whole\_body\_control/mars\_coupled\_units\_v1/}.
+
+
+A matched gain-bias learning-rate experiment reaches 50/50 base tracking and
+1/4 coupled full passes, but only 33/50 full base and 0/16 full arm due to base
+jerk; it is rejected (1,042 fresh regressions, teacher 70/70). In a ground-truth
+public-tool two-transfer replay, the retained source-equivalent initialized
+checkpoint is admitted and executes 56 policy calls, then stops at pregrasp
+with 10.10\,mm position error. The joint-reference baseline completes the first
+transfer but exhausts its return planning budget; neither completes the program.
+These use different reference/execution modes and are task-level comparisons.
+The original arm displacement matrix has rank two, exciting only two of five
+joints. A subsequent training-only rank-five FK expansion and joint base/arm
+optimization are proposed; successful general arm or hardware control is not
+established. Full outcomes remain in
+\texttt{paper/data/whole\_body\_control/mars\_gain\_bias\_v1/} and
+\texttt{paper/data/whole\_body\_control/mars\_tamp\_arm\_coverage\_v1/}.
+
+
+The subsequent 65,536-transition seven-motion trial keeps context/gripper fixed
+and expands nearby arm directions. Its fixed final gives base 50/50 tracking,
+42/50 full; arm 37/40 tracking, 4/40 full; coupled 0/4. A separately frozen
+12-case audit falls from source 12/12 full to 8/12 tracking and 0/12 full. The
+public-tool final makes 151 calls within the 10\,mm hand-position tube, then
+stops on 10.3\,mm base drift with measured stop confirmed; no transfer completes.
+The source remains the baseline. Same-batch update diagnostics and an observed
+TAMP starting-posture mismatch motivate smaller actor steps and expanded
+procedural resets; neither is yet a demonstrated general controller fix.
+All outcomes remain in
+\texttt{paper/data/whole\_body\_control/mars\_whole\_body\_seven\_v1/}.
+
+
+A matched tenfold smaller actor step retains 40/40 arm tracking but only 20/40
+full arm and 40/50 full base passes; it remains below the source. Its public-tool
+pregrasp stops at the position envelope after 55 calls. These results are retained
+in \texttt{paper/data/whole\_body\_control/mars\_small\_actor\_rate\_v1/}.
+A subsequent procedural reset curriculum adds near-straight elbow/wrist postures
+and coupled amplitudes: fresh teacher 122/122 and 1,080 regressions pass, with
+all 94 earlier teacher rollouts reproducing native metrics and rewards exactly.
+Longer scheduled refinement and optional context adaptation are subsequent
+experiments; no successful general controller or hardware qualification follows.
+
+
+Independent native worlds are supported by the motion trainer with all-worker
+transition telemetry and aligned rollout/warmup boundaries. Two- and eight-worker
+ARM plumbing probes update a synthetic actor and export matching actions; this
+is not a trained-policy qualification or throughput comparison. Exact frozen
+public-tool fixture portability remains an unpassed prerequisite for ARM
+training. The local policy trials remain serial and use immutable source.
+
+
+The 262,144-transition posture/scheduled-objective trial is rejected: base
+50/50 tracking and 40/50 full, arm 62/64 tracking and 7/64 full, coupled 2/8
+tracking/full. The source has 59/64 full arm; its original four coupled cases
+remain unsolved. Two independent twelve-case audits regress to 0/12 and 2/12
+full, and all three actual-checkpoint public-tool first transfers stop during
+pregrasp. All three joint-reference baselines complete the transfer. More
+transitions and expanded resets have not established whole-body stability.
+Full evidence is retained in
+\texttt{paper/data/whole\_body\_control/mars\_tamp\_postures\_v1/}.
+
+
+A matched Cartesian/jerk-limited analytic reference uses the admitted
+checkpoint's actuator settings and identical initial state, with analytic calls
+counted separately from learned inference. All three transfers violate retention
+at lift/preplace despite roughly 2\,mm hand tracking; the learned final still
+fails earlier in pregrasp. Repeated stop calls also rebase the arm hold target.
+Latching the first target fixes three diagnostic loaded fault resets within
+0.10/0.25/0.20\,s under unchanged stop thresholds. These resets are not full
+transfer or hardware qualifications; retention remains unresolved.
+
+An offline reference audit finds that eighteen nearly constant-orientation
+training paths travel at most 11.94\,mm, versus about 25\,mm for the actual
+retimed TAMP pregrasp. An additional twenty-four translation cases preserve
+all previous cases, limits and thresholds; twelve separate inputs are frozen
+before training. Geometry-only admission is not a physical tracking result.
+The corrected stop runtime confirms all six failed reference/source integrated
+stops, while all three matched Cartesian references still violate retention.
+
+Unfreezing motion context in a matched 262,144-transition trial improves arm
+full passes from 7/64 to 29/64 and coupled passes from 2/8 to 4/8, but remains
+below the source's 59/64 full arm. Separate twelve-case audits yield 4/12 and
+3/12 full, and actual public-tool transfers remain 0/3. This final is also
+rejected; improved tracking counts do not establish quiet whole-body control.
+
+Three grasp-height priorities each fail all thirty matched Cartesian reference
+transfers. A static full-pad box audit finds open-pad overlap in all twenty-four
+available grasp frames; recorded native FK verifies the analytic transforms.
+Testing axial pinch geometry is a separate planning diagnostic, not a change
+to friction, force limits or retention acceptance, and not evidence of success.
+
+Both subsequent axial pinch candidates also fail all thirty cases. Three
+read-only solved-contact probes reproduce the original physical trajectories
+exactly and distinguish contact-friction saturation from jaw-stop deflection.
+Positive geometric clearance alone does not qualify loaded retention.
+
+The 36\,mm pinch candidate also trips the conservative wheel-unloading guard
+once with a confirmed measured stop; it is rejected without relaxing the gate.
+
+The translation-coverage 262,144-transition final also regresses: arm tracking
+84/88 but only 14/88 full passes, versus source 80/88 full, with 70 base-jerk
+failures. Coupled full passes improve 2/8 to 4/8 but public-tool transfers
+remain 0/3. A paired hand-to-base readout intervention improves the earlier
+context final only from 29/64 to 32/64 full arm and regresses coupled 4/8 to
+3/8. Neither result is promoted; finite-horizon training-return alignment is
+being audited before further optimization.
+
+An exact 292-rollout reward replay finds that all 67 arm cases losing full
+success also earn lower final discounted shaped return. A deterministic
+training-budget reward-rate diagnostic declines by 6.52\%, without exploration
+or value bootstraps. Direct velocity-gain changes are dominated by the global
+bias in a recipe using a 300-fold bias learning-rate multiplier. A matched
+300-to-1 multiplier control completes 262,144 transitions: full arm success
+improves from 14/88 to 68/88 but remains below the retained source's 80/88;
+base full success is 42/50 and coupled 3/8. Actual learned public-tool transfers
+remain 0/3, so the final is rejected. Two witness-derived motions pass in free
+space for all controllers, while supported open-jaw versions pass 2/2 for the
+teacher and 0/2 for both learned actors. Phase/jaw-input sensitivities and all
+failed interventions are retained; a bounded contact-tracking curriculum is
+subsequent work, not a claimed repair or hardware qualification.
+
+The subsequent 262,144-transition trial reserves 12.5\% of training control
+steps for supported open-jaw contact. Its twelve fixed new-seed contact cases
+improve from source 3/12 to 9/12 full success, but earlier arm full success
+regresses from 80/88 to 63/88, primarily through base jerk. Base full success
+is 43/50 and coupled 3/8; actual learned public-tool transfers remain 0/3.
+All 1,138 source-bound regressions, teacher 164/164 and fresh contact teacher
+12/12 pass before training. The final is rejected: contact learning improves,
+but stable whole-body transfer and hardware qualification remain unestablished.

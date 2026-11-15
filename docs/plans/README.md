@@ -2,6 +2,23 @@
 
 Design and refactor plan documents live here (`docs/plans/`).
 
+## Whole-body controller research (2026-11-14)
+
+- [Controller contract and training prototype](mars_whole_body_v2.md).
+- [Completed first validation](../experiments/mars_whole_body_validation_20261113.md):
+  software checks pass; the cold pilot does not establish useful tracking.
+- [Controlled normalization comparison](mars_whole_body_advantage_pair.md):
+  the control finished; the candidate stopped before updating on a settings
+  serialization mismatch. The guard is repaired; there is no completed paired
+  result yet. The separate bundled-reward timing correction preserves raw
+  physical outcomes and uses one consistent discount clock for training.
+- [PR #232 legacy-MLP experiment](https://github.com/cpaxton/home_robot_v3/pull/232):
+  optional preview velocity and frozen-base/context arm adaptation, independent
+  of the GRU experiment. The adaptation pilot is queued.
+- Correct, tested experimental code may merge with documented performance
+  limitations. Checkpoint promotion and hardware readiness require separate
+  behavioral evidence. The retained source remains unchanged; no Herman motion.
+
 ## Paper / eval status (2026-07)
 
 Operator index: [experiments/README.md](../experiments/README.md) · LaTeX: `paper/sections/04_experiments.tex`, `05_results.tex` · Runbook: [paper_benchmarks.md](../paper_benchmarks.md)

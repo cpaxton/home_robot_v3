@@ -14,6 +14,33 @@ from torch import nn
 from emet.rl.manipulation.profiles import PROFILES
 
 
+def load_control_policy(directory, *, robot=None, fingerprint=None):
+    """Load a sensor-only controller; legacy PPO training remains explicitly v1."""
+    manifest = json.loads((Path(directory) / "manifest.json").read_text())
+    if manifest.get("format") == "emet-whole-body-v2":
+        from emet.rl.manipulation.whole_body_bundle import WholeBodyBundle
+
+        return WholeBodyBundle(directory, robot=robot, fingerprint=fingerprint)
+    return ManipulationPolicy(directory, robot=robot, fingerprint=fingerprint)
+
+
+def validate_critic_reward_scale(scale: float) -> float:
+    """Validate critic reward units without changing actor action semantics."""
+    if (
+        isinstance(scale, (bool, np.bool_))
+        or not isinstance(scale, (int, float, np.integer, np.floating))
+        or not np.isfinite(scale)
+        or scale <= 0
+    ):
+        raise ValueError("positive finite critic reward scale required")
+    return float(scale)
+
+
+def value_reward_scale(manifest):
+    """Read critic units, retaining native-unit compatibility for old bundles."""
+    return validate_critic_reward_scale(manifest.get("critic_reward_scale", 1.0))
+
+
 class ManipulationMLPFeatures(BaseFeaturesExtractor):
     """A small fixed history for a plain feed-forward controller."""
 
@@ -56,6 +83,7 @@ class ManipulationHistoryFeatures(BaseFeaturesExtractor):
 
 
 def export(model, normalizer, directory, env_config, fingerprint, *, steps, held_estimator=None):
+    critic_scale = validate_critic_reward_scale(getattr(model.policy, "critic_reward_scale", 1.0))
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=True)
     model.save(directory / "policy.zip")
@@ -66,6 +94,7 @@ def export(model, normalizer, directory, env_config, fingerprint, *, steps, held
         "contract": PROFILES[env_config.robot].contract(env_config.action_mode),
         "fingerprint": fingerprint,
         "steps": steps,
+        "critic_reward_scale": critic_scale,
         "mean": stats.mean.tolist(),
         "var": stats.var.tolist(),
         "count": float(stats.count),
@@ -123,6 +152,7 @@ class ManipulationPolicy:
         if m.get("format") != "emet-manipulation-v1" or m.get("robot") not in PROFILES:
             raise ValueError("not a supported manipulation policy")
         self.robot = m["robot"]
+        self.critic_reward_scale = value_reward_scale(m)
         from emet.rl.manipulation.retention_training import GRASP_CONTEXT_CONTRACT
 
         context = m.get("environment", {}).get("retention_context", False)

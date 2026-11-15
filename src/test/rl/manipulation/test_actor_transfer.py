@@ -94,6 +94,28 @@ def test_transfer_rejects_unapproved_actuator_changes(transfer, monkeypatch):
         transfer_actor(target, env, path, cfg, fingerprint)
 
 
+def test_generic_transfer_restores_native_critic_units(transfer):
+    old, target, env, cfg, path, fingerprint = transfer
+    manifest = json.loads((path / "manifest.json").read_text())
+    weight, bias = old.policy.value_net.weight.detach().clone(), old.policy.value_net.bias.detach().clone()
+    old.policy.critic_reward_scale = 0.01
+    with torch.no_grad():
+        old.policy.value_net.weight.mul_(0.01)
+        old.policy.value_net.bias.mul_(0.01)
+    export(
+        old,
+        old.get_vec_normalize_env(),
+        path,
+        ManipulationConfig(**manifest["environment"]),
+        manifest["fingerprint"],
+        steps=8,
+    )
+    result = transfer_actor(target, env, path, cfg, fingerprint)
+    assert result["critic_reward_scale_change"] == {"from": 0.01, "to": 1.0}
+    torch.testing.assert_close(target.policy.value_net.weight, weight)
+    torch.testing.assert_close(target.policy.value_net.bias, bias)
+
+
 def test_legacy_feedback_contract_is_training_only_and_units_are_pinned(transfer):
     _, target, env, cfg, path, fingerprint = transfer
     manifest_path = path / "manifest.json"

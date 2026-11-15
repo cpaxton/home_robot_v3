@@ -128,3 +128,44 @@ def test_agent_cannot_replace_frozen_stage_region_or_reset_physics():
     assert row["initial_state"]["time"] == row["final_state"]["time"]
     assert row["calls"][-1]["result"]["code"] == "frozen_stage_region_required"
     assert row["calls"][-1]["dispatched"] is False
+
+
+@pytest.mark.parametrize("enabled,mode,directory", [(True, "joint", "missing"), (True, "cartesian", None), (1, "cartesian", "missing")])
+def test_matched_reference_requires_explicit_checkpoint_settings_before_fixture(enabled, mode, directory):
+    with pytest.raises(ValueError, match="checkpoint's settings"):
+        run_sequence({}, program(), task_pose_reference=enabled, arm_execution=mode, policy_directory=directory)
+
+
+@pytest.mark.parametrize("reference", ["joint", "task_pose"])
+def test_cli_compares_valid_reference_modes_with_a_jerk_limited_checkpoint(tmp_path, monkeypatch, reference):
+    import sys
+
+    from emet.eval import mars_tamp_sequences as module
+
+    frozen = tmp_path / "program.json"
+    frozen.write_text(json.dumps(program()))
+    cases = tmp_path / "cases.json"
+    cases.write_text(json.dumps({"cases": [{"id": "left:20g:0"}]}))
+    monkeypatch.setattr(module, "CANONICAL_SUITE", cases)
+    monkeypatch.setattr(module, "manifest", lambda: {})
+    calls = []
+
+    def run(case, value, **kwargs):
+        calls.append(kwargs)
+        return {"controller": "test", "completed_stages": 0, "success": False}
+
+    monkeypatch.setattr(module, "run_sequence", run)
+    monkeypatch.setattr(sys, "argv", [
+        "evaluate", "--program", str(frozen), "--output", str(tmp_path / "output"),
+        "--policy", "actor", "--policy-evidence", "evidence", "--arm-execution", "cartesian",
+        "--arm-reference", "jerk_limited", "--reference-controller", reference,
+    ])
+    module.main()
+    assert len(calls) == 2
+    first, learned = calls
+    assert first["task_pose_reference"] is (reference == "task_pose")
+    assert first["arm_execution"] == ("cartesian" if reference == "task_pose" else "joint")
+    assert first["arm_reference"] == ("jerk_limited" if reference == "task_pose" else "legacy")
+    assert bool(first["policy_directory"]) is (reference == "task_pose")
+    assert learned["arm_execution"] == "cartesian" and learned["arm_reference"] == "jerk_limited"
+    assert learned["task_pose_reference"] is False

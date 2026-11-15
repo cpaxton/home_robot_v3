@@ -1,0 +1,275 @@
+{
+  "format": "mars-fresh-arm-audit-v1",
+  "scope": "Twelve preregistered procedural near-straight posture audit cases, absent from training; preserve all admissions and failures.",
+  "base_suite_path": "configs/benchmarks/mars_tracking_mastery_tamp_postures_v1.json",
+  "base_suite_sha256": "17d15754b1b9777559f3e63f2f19bd1b33c7cdb3ec40ed0971720968c9f41cb9",
+  "generation_seed": 34390,
+  "cases": [
+    {
+      "id": "validation:arm:fresh_posture_0",
+      "stage": "arm",
+      "split": "validation",
+      "reset_seed": 34300000,
+      "travel_m": 0,
+      "turn_rad": 0,
+      "arm_delta": [
+        0.0,
+        0.046,
+        -0.13799999999999998,
+        0.092,
+        0.0
+      ],
+      "arm_start": [
+        -0.007301158186869133,
+        -0.4508379335654183,
+        0.028536716981226076,
+        0.42230121658419223,
+        -0.036825797963485396
+      ]
+    },
+    {
+      "id": "validation:arm:fresh_posture_1",
+      "stage": "arm",
+      "split": "validation",
+      "reset_seed": 34300001,
+      "travel_m": 0,
+      "turn_rad": 0,
+      "arm_delta": [
+        0.0,
+        -0.046,
+        0.13799999999999998,
+        -0.092,
+        0.0
+      ],
+      "arm_start": [
+        -0.039122627936895776,
+        -0.371842466358712,
+        -0.06932854763127871,
+        0.4411710139899907,
+        -0.017886781842126817
+      ]
+    },
+    {
+      "id": "validation:arm:fresh_posture_2",
+      "stage": "arm",
+      "split": "validation",
+      "reset_seed": 34300002,
+      "travel_m": 0,
+      "turn_rad": 0,
+      "arm_delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.092
+      ],
+      "arm_start": [
+        -0.012593888773131844,
+        -0.4487685440055608,
+        -0.03643121418525147,
+        0.4851997581908123,
+        -0.03801896357278386
+      ]
+    },
+    {
+      "id": "validation:arm:fresh_posture_3",
+      "stage": "arm",
+      "split": "validation",
+      "reset_seed": 34300003,
+      "travel_m": 0,
+      "turn_rad": 0,
+      "arm_delta": [
+        0.092,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "arm_start": [
+        -0.039509915836787854,
+        -0.4652532705781238,
+        -0.04277744953584379,
+        0.5080307201139677,
+        0.019036745090131493
+      ]
+    },
+    {
+      "id": "validation:arm:fresh_posture_4",
+      "stage": "arm",
+      "split": "validation",
+      "reset_seed": 34300004,
+      "travel_m": 0,
+      "turn_rad": 0,
+      "arm_delta": [
+        0.0,
+        0.046,
+        -0.13799999999999998,
+        0.092,
+        0.0
+      ],
+      "arm_start": [
+        0.03246512359625207,
+        -0.41842768404559294,
+        0.06945792044337021,
+        0.34896976360222276,
+        0.013832071845455658
+      ]
+    },
+    {
+      "id": "validation:arm:fresh_posture_5",
+      "stage": "arm",
+      "split": "validation",
+      "reset_seed": 34300005,
+      "travel_m": 0,
+      "turn_rad": 0,
+      "arm_delta": [
+        0.0,
+        -0.046,
+        0.13799999999999998,
+        -0.092,
+        0.0
+      ],
+      "arm_start": [
+        -0.024047938271954276,
+        -0.3696181385249812,
+        0.001343263157758387,
+        0.3682748753672228,
+        -0.03308806585636592
+      ]
+    },
+    {
+      "id": "validation:arm:fresh_posture_6",
+      "stage": "arm",
+      "split": "validation",
+      "reset_seed": 34300006,
+      "travel_m": 0,
+      "turn_rad": 0,
+      "arm_delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        -0.092
+      ],
+      "arm_start": [
+        -0.013333146915328609,
+        -0.3987482800775013,
+        -0.02180967915118983,
+        0.4205579592286911,
+        0.0303111952467836
+      ]
+    },
+    {
+      "id": "validation:arm:fresh_posture_7",
+      "stage": "arm",
+      "split": "validation",
+      "reset_seed": 34300007,
+      "travel_m": 0,
+      "turn_rad": 0,
+      "arm_delta": [
+        -0.092,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "arm_start": [
+        -0.00820799296780321,
+        -0.4174767407020474,
+        -0.010004781146156508,
+        0.42748152184820387,
+        -0.030568375060729916
+      ]
+    },
+    {
+      "id": "validation:arm:fresh_posture_8",
+      "stage": "arm",
+      "split": "validation",
+      "reset_seed": 34300008,
+      "travel_m": 0,
+      "turn_rad": 0,
+      "arm_delta": [
+        0.04,
+        -0.03,
+        0.07,
+        -0.04,
+        0.05
+      ],
+      "arm_start": [
+        0.025359546092372155,
+        -0.37854330847503237,
+        -0.030788549012726978,
+        0.40933185748775935,
+        -0.03240764449309118
+      ]
+    },
+    {
+      "id": "validation:arm:fresh_posture_9",
+      "stage": "arm",
+      "split": "validation",
+      "reset_seed": 34300009,
+      "travel_m": 0,
+      "turn_rad": 0,
+      "arm_delta": [
+        -0.04,
+        0.03,
+        -0.07,
+        0.04,
+        -0.05
+      ],
+      "arm_start": [
+        0.02371686378495428,
+        -0.44588516379879395,
+        -0.035024175445478055,
+        0.480909339244272,
+        -0.015716231235744303
+      ]
+    },
+    {
+      "id": "validation:arm:fresh_posture_10",
+      "stage": "arm",
+      "split": "validation",
+      "reset_seed": 34300010,
+      "travel_m": 0,
+      "turn_rad": 0,
+      "arm_delta": [
+        0.03,
+        0.04,
+        -0.09,
+        0.05,
+        -0.06
+      ],
+      "arm_start": [
+        -0.017813535123431538,
+        -0.3983365900019574,
+        0.026393313713304542,
+        0.37194327628865287,
+        -0.010953801035397497
+      ]
+    },
+    {
+      "id": "validation:arm:fresh_posture_11",
+      "stage": "arm",
+      "split": "validation",
+      "reset_seed": 34300011,
+      "travel_m": 0,
+      "turn_rad": 0,
+      "arm_delta": [
+        -0.03,
+        -0.04,
+        0.09,
+        -0.05,
+        0.06
+      ],
+      "arm_start": [
+        0.0035429020962126564,
+        -0.33258371230545936,
+        0.06440840409946091,
+        0.26817530820599844,
+        0.020822572617238008
+      ]
+    }
+  ],
+  "hardware_used": false,
+  "safety_promoted": false
+}

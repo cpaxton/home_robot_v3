@@ -497,3 +497,59 @@ def test_checkpoint_evaluation_cannot_reset_exploration_rng_even_on_failure():
 def test_mastery_v1_hold_clock_matches_its_gate():
     suite = load_suite()
     assert suite["config"]["terminal_hold_seconds"] == suite["gate"]["terminal_hold_s"] == 2
+
+
+def full_arm_suite():
+    from pathlib import Path
+
+    return load_suite(Path(__file__).resolve().parents[4] / "configs/benchmarks/mars_tracking_mastery_full_arm_v1.json")
+
+
+def test_full_arm_distribution_preserves_eval_and_spans_all_five_joints():
+    suite = full_arm_suite()
+    frozen = load_suite()
+    for key in ("cases", "reference", "gate"):
+        assert suite[key] == frozen[key]
+    assert select_cases(suite, ["base", "arm", "coupled"], "all") == select_cases(
+        frozen, ["base", "arm", "coupled"], "all"
+    )
+    parents = [c for c in suite["cases"] if c["stage"] == "arm" and c["split"] == "train"]
+    assert np.linalg.matrix_rank([c["arm_delta"] for c in parents]) == 2
+    assert np.linalg.matrix_rank([c["arm_delta"] for c in parents + suite["extra_training_cases"]]) == 5
+    cases = select_cases(suite, ["base", "arm", "coupled"], "all", population="admission")
+    assert len(cases) == len({c["id"] for c in cases}) == 94
+    assert len([c for c in cases if c["stage"] == "arm"]) == 40
+    training = select_cases(suite, ["arm"], "train", population="training")
+    assert len(training) == 36
+    assert {c["reset_seed"] for c in training}.isdisjoint(c["reset_seed"] for c in cases if c["split"] == "validation")
+    assert np.isclose(sum(suite["training_primitive_weights"]["arm"].values()), 1)
+
+
+@pytest.mark.parametrize(
+    "mutation", ["validation_seed", "duplicate", "base", "nan", "large", "width", "missing", "suffix"]
+)
+def test_extra_arm_cases_fail_closed(tmp_path, mutation):
+    import json
+
+    suite = full_arm_suite()
+    case = suite["extra_training_cases"][0]
+    if mutation == "validation_seed":
+        case["reset_seed"] = 34100005
+    elif mutation == "duplicate":
+        case["id"] = suite["cases"][5]["id"]
+    elif mutation == "base":
+        case["stage"] = "base"
+    elif mutation == "nan":
+        case["arm_delta"][0] = float("nan")
+    elif mutation == "large":
+        case["arm_delta"][0] = 0.21
+    elif mutation == "width":
+        case["arm_delta"] = [0] * 6
+    elif mutation == "missing":
+        del case["arm_delta"]
+    elif mutation == "suffix":
+        case["id"] += "@amplitude:0.5"
+    path = tmp_path / "suite.json"
+    path.write_text(json.dumps(suite))
+    with pytest.raises(ValueError, match="extra arm"):
+        load_suite(path)

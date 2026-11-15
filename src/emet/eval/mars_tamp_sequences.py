@@ -75,6 +75,7 @@ def run_sequence(
     record_observations=False,
     arm_execution="joint",
     arm_reference="legacy",
+    task_pose_reference=False,
 ):
     """Reset only at episode start; never rearm/clear faults between stages."""
     from emet.agent.tools import get_tools
@@ -84,9 +85,13 @@ def run_sequence(
     from emet.eval.mars_tamp_metrics import motion_metrics
 
     program = validate_program(program)
+    if type(task_pose_reference) is not bool or (
+        task_pose_reference and (policy_directory is None or arm_execution != "cartesian")
+    ):
+        raise ValueError("task-pose reference requires a checkpoint's settings and Cartesian execution")
     if arm_execution not in {"joint", "cartesian"} or (arm_execution == "cartesian" and policy_directory is None):
         raise ValueError("Cartesian replay requires an explicit policy checkpoint")
-    if arm_reference not in {"legacy", "jerk_limited"} or (arm_reference != "legacy" and arm_execution != "cartesian"):
+    if arm_reference not in {"legacy", "jerk_limited", "s_curve"} or (arm_reference != "legacy" and arm_execution != "cartesian"):
         raise ValueError("jerk-limited replay requires Cartesian checkpoint execution")
     env, admission = fixture(case)
     row = {
@@ -102,9 +107,13 @@ def run_sequence(
         "stages": [],
         "calls": [],
         "pose_references": {},
-        "controller": "checkpoint_policy" if policy_directory is not None else "reference_teacher",
+        "controller": (
+            "task_pose_reference" if task_pose_reference else "checkpoint_policy"
+            if policy_directory is not None else "reference_teacher"
+        ),
         "learned_policy_evaluated": False,
         "policy_calls": 0,
+        "reference_controller_calls": 0,
         "arm_execution": arm_execution,
         "arm_reference": arm_reference,
     }
@@ -140,12 +149,15 @@ def run_sequence(
                     record_observations=record_observations,
                     arm_execution=arm_execution,
                     arm_reference=arm_reference,
+                    task_pose_reference=task_pose_reference,
                 )
             except ValueError as exc:
-                row["policy_admission"] = {"accepted": False, "reason": str(exc)}
-                row["failure_at"] = {"stage": 0, "tool": None, "category": "policy_admission"}
+                key = "reference_settings_admission" if task_pose_reference else "policy_admission"
+                row[key] = {"accepted": False, "reason": str(exc)}
+                row["failure_at"] = {"stage": 0, "tool": None, "category": key}
                 return row
-            row["policy_admission"] = {"accepted": True, **robot.policy.admission}
+            key = "reference_settings_admission" if task_pose_reference else "policy_admission"
+            row[key] = {"accepted": True, **robot.policy.admission}
         else:
             robot = MarsSimRobot(env, record_observations=record_observations)
         context = {
@@ -256,7 +268,7 @@ def run_sequence(
                 "base_goal": robot.servo.base_goal.tolist(),
                 "hand_goal": robot.servo.hand_goal.tolist(),
                 "grip_reference": robot.servo.grip_reference,
-                "policy_calls": robot.policy_calls,
+                **robot.inference_counts,
                 "failure": robot.failure,
             }
 
@@ -310,8 +322,8 @@ def run_sequence(
             contact_metrics=env.monitor.metrics(),
             max_payload_translation_m=robot.max_translation,
             max_payload_rotation_rad=robot.max_rotation,
-            learned_policy_evaluated=robot.policy_calls > 0,
-            policy_calls=robot.policy_calls,
+            learned_policy_evaluated=robot.inference_counts["policy_calls"] > 0,
+            **robot.inference_counts,
             policy_error=robot.policy_error,
             final_state={"qpos": env.data.qpos.tolist(), "qvel": env.data.qvel.tolist(), "time": float(env.data.time)},
         )
@@ -349,13 +361,21 @@ def main():
         help="Retain actor inputs and pre/post physics for offline diagnosis",
     )
     parser.add_argument("--arm-execution", choices=["joint", "cartesian"], default="joint")
-    parser.add_argument("--arm-reference", choices=["legacy", "jerk_limited"], default="legacy")
+    parser.add_argument("--arm-reference", choices=["legacy", "jerk_limited", "s_curve"], default="legacy")
+    parser.add_argument(
+        "--reference-controller", choices=["joint", "task_pose"], default="joint",
+        help="Task-pose reference uses the admitted checkpoint settings and the same Cartesian reference mode",
+    )
     parser.add_argument("--max-turns", type=int, default=20)
     args = parser.parse_args()
     if not 1 <= args.max_turns <= 32:
         parser.error("turn budget must be in [1, 32]")
     if bool(args.policy) != bool(args.policy_evidence):
         parser.error("--policy and --policy-evidence must be supplied together")
+    if args.reference_controller == "task_pose" and (args.policy is None or args.arm_execution != "cartesian"):
+        parser.error("task-pose reference requires --policy, --policy-evidence and --arm-execution cartesian")
+    if args.arm_reference != "legacy" and args.arm_execution != "cartesian":
+        parser.error("jerk-limited reference requires --arm-execution cartesian")
     if args.arm_execution == "cartesian" and args.policy is None:
         parser.error("Cartesian arm execution requires --policy")
     if (args.program is None or args.agent) and not (args.base_url and args.remote_model):
@@ -422,16 +442,18 @@ def main():
         for checkpoint in ([None, args.policy] if args.policy else [None])
     ]
     for selector, checkpoint in combinations:
+        reference = checkpoint is None and args.reference_controller == "task_pose"
         row = run_sequence(
             case,
             program,
             infer=None if selector == "scripted_reference" else infer,
             max_turns=args.max_turns,
-            policy_directory=checkpoint,
+            policy_directory=args.policy if reference else checkpoint,
             policy_evidence=args.policy_evidence,
             record_observations=args.record_observations,
-            arm_execution=args.arm_execution if checkpoint is not None else "joint",
-            arm_reference=args.arm_reference,
+            arm_execution=args.arm_execution if checkpoint is not None or reference else "joint",
+            arm_reference=args.arm_reference if checkpoint is not None or reference else "legacy",
+            task_pose_reference=reference,
         )
         report["episodes"].append(row)
         report["complete"] = len(report["episodes"]) == len(combinations)
