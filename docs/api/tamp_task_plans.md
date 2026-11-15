@@ -194,9 +194,10 @@ are unchanged. No contact physics or sensor availability is changed.
 The prior fixed loose-close pilot passed the swap but failed the familiar
 control; it is not a general solution. Its results remain in
 [the pilot report](../experiments/tamp_native_closure_pilot_20261114.md).
-The contact-relative candidate needs live validation before any reliability
-claim. The diagnostic `--gripper-close-preset default|loose` override disables
-the contact-relative adjustment and archives the effective policy.
+The [live contact-relative pilot](../experiments/tamp_native_contact_relative_pilot_20261114.md)
+passes the two-goal controls but still fails swap retention. The diagnostic
+`--gripper-close-preset default|loose` override disables the contact-relative
+adjustment and archives the effective policy.
 
 For an object described by one collision box, the bounded development policy
 also ranks the existing grasp candidates by jaw alignment with the box's
@@ -205,3 +206,6 @@ lower edge pinch. Compound and other shapes keep their prior order. No candidate
 is removed or added, and the shared IK cap stays unchanged. This is a geometric
 preference, not a contact/force certificate; execution still has to pass the
 same physical checks.
+The [geometric-order pilot](../experiments/tamp_native_face_alignment_pilot_20261114.md)
+also retains the failed swap. Broader reliability and an executed base approach
+remain unqualified; the private base-offset IK probe is not task success.

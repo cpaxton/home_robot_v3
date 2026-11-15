@@ -1,0 +1,397 @@
+{
+  "schema_version": 1,
+  "scope": "Same-source privileged native development face-aligned grasp and contact-relative position-hold pilot; stricter sampled original-reference hold coverage; no hardware, force sensing, training, held-out or general qualification claim",
+  "source_commit": "2e9b824c8beaeee274ddb3db88c0561d96f2f3e6",
+  "protocol": "configs/eval/tamp_native_face_alignment_pilot_20261114.json",
+  "exact_paired_initial_state_certificate": false,
+  "old_native_aggregate_unchanged": "4/8",
+  "old_caliban_aggregate_unchanged": "3/4",
+  "cases": [
+    {
+      "id": "aligned-swap",
+      "case_id": "swap-right25",
+      "role": "production_candidate",
+      "job_id": "20261114_203649_5f94d4",
+      "gripper_close_preset_override": null,
+      "effective_gripper_close_loose": false,
+      "effective_gripper_contact_hold_fraction": 0.5,
+      "hold_targets": [
+        {
+          "phase": "gripper_hold_target",
+          "command_returned": true,
+          "measured_encoder_position": 0.014255459307329355,
+          "target_encoder_position": -0.14287227034633532,
+          "default_close_target": -0.3,
+          "retained_error_fraction": 0.5,
+          "position_units": "stretch_gripper_command"
+        },
+        {
+          "phase": "gripper_hold_target",
+          "command_returned": true,
+          "measured_encoder_position": 0.011104529543788266,
+          "target_encoder_position": -0.14444773522810586,
+          "default_close_target": -0.3,
+          "retained_error_fraction": 0.5,
+          "position_units": "stretch_gripper_command"
+        }
+      ],
+      "passed": false,
+      "run_status": "complete",
+      "code": "verification_failed",
+      "status": "partial",
+      "verification": {
+        "substage": "post_lift_hold",
+        "reason": "payload_not_retained"
+      },
+      "completed_transfers": 1,
+      "declared_transfers": 3,
+      "cube_max_original_rotation_before_handoff_rad": 0.10004037009485169,
+      "final_goals_satisfied": {
+        "object2": false,
+        "object1": false
+      },
+      "boundary_checks": [],
+      "audit_commands": 439,
+      "forbidden_commands": 0,
+      "malformed_audit_rows": 0,
+      "wall_time_s": 199.07576999813318,
+      "last_event": {
+        "phase": "native_verification",
+        "accepted": false,
+        "substage": "post_lift_hold",
+        "reason": "payload_not_retained"
+      },
+      "artifacts": [
+        {
+          "path": ".tamp-runs/face-alignment-20261114/aligned-swap/protocol.json",
+          "sha256": "005c0a0e0d804b7e9286231cc1434ff1458616dfb9f614a0ca4dddd7decf202a"
+        },
+        {
+          "path": ".tamp-runs/face-alignment-20261114/aligned-swap/summary.json",
+          "sha256": "3f48884698b38b5016cd7f472a4ef8026d0fdab10ce937ff06e3bff034e19f86"
+        },
+        {
+          "path": ".tamp-runs/face-alignment-20261114/aligned-swap/initial.json",
+          "sha256": "16de66cab3eb5f5e2105fe7eb0d4e0789eab22924a842e92a1085e552f5549bd"
+        },
+        {
+          "path": ".tamp-runs/face-alignment-20261114/aligned-swap/final.json",
+          "sha256": "707f1e32bbc59077aeee08df473e09a22141e133dcb6c3b3e3ab06881761de8b"
+        },
+        {
+          "path": ".tamp-runs/face-alignment-20261114/aligned-swap/contact.jsonl",
+          "sha256": "e6a29fcabf8413297fb1fe1810a4d17d9e1deb1a1f8a6cf9536ac7354461d53c"
+        },
+        {
+          "path": ".tamp-runs/face-alignment-20261114/aligned-swap/adapter_events.json",
+          "sha256": "bb19987f11296dbb03d602cff7beebfcf26e3d18fd0da052bc5bb2116adcfddc"
+        },
+        {
+          "path": ".tamp-runs/face-alignment-20261114/aligned-swap/actuation.jsonl",
+          "sha256": "e5f54f94e126c9643e92147d1606a37d53c7b44b45dcc62f56a6d85f611549f4"
+        }
+      ]
+    },
+    {
+      "id": "aligned-control",
+      "case_id": "control",
+      "role": "production_candidate",
+      "job_id": "20261114_203649_8fc0a2",
+      "gripper_close_preset_override": null,
+      "effective_gripper_close_loose": false,
+      "effective_gripper_contact_hold_fraction": 0.5,
+      "hold_targets": [
+        {
+          "phase": "gripper_hold_target",
+          "command_returned": true,
+          "measured_encoder_position": 0.014303718611417215,
+          "target_encoder_position": -0.1428481406942914,
+          "default_close_target": -0.3,
+          "retained_error_fraction": 0.5,
+          "position_units": "stretch_gripper_command"
+        },
+        {
+          "phase": "gripper_hold_target",
+          "command_returned": true,
+          "measured_encoder_position": 0.007086651279820999,
+          "target_encoder_position": -0.1464566743600895,
+          "default_close_target": -0.3,
+          "retained_error_fraction": 0.5,
+          "position_units": "stretch_gripper_command"
+        }
+      ],
+      "passed": true,
+      "run_status": "complete",
+      "code": "ok",
+      "status": "ok",
+      "verification": null,
+      "completed_transfers": 2,
+      "declared_transfers": 2,
+      "cube_max_original_rotation_before_handoff_rad": 0.014108096784053958,
+      "final_goals_satisfied": {
+        "object2": true,
+        "object1": true
+      },
+      "boundary_checks": [
+        {
+          "tool": "execute_task_plan",
+          "code": "unknown_plan",
+          "status": "error",
+          "expected_codes": [
+            "unknown_plan"
+          ],
+          "no_commands": true,
+          "passed": true
+        }
+      ],
+      "audit_commands": 456,
+      "forbidden_commands": 0,
+      "malformed_audit_rows": 0,
+      "wall_time_s": 126.27542184619233,
+      "last_event": {
+        "phase": "release_open_verified",
+        "controller_success": true,
+        "source": "simulator_ground_truth_debug",
+        "supported": true,
+        "settled": true,
+        "stable_interval_s": 0.1
+      },
+      "artifacts": [
+        {
+          "path": ".tamp-runs/face-alignment-20261114/aligned-control/protocol.json",
+          "sha256": "0435fb5921742a33b3962ebc1d193d50eb96cecc6d2c3df8da9e487e8512e1bf"
+        },
+        {
+          "path": ".tamp-runs/face-alignment-20261114/aligned-control/summary.json",
+          "sha256": "fc3d7c0b1b333bde4fb7ccb1d743fa45a2b0c12838120395b46412f31dab4dcc"
+        },
+        {
+          "path": ".tamp-runs/face-alignment-20261114/aligned-control/initial.json",
+          "sha256": "04f039fc92857a7a9a7beb3242ea6bd1851be1f6bacbc999683c854aff0c0f5a"
+        },
+        {
+          "path": ".tamp-runs/face-alignment-20261114/aligned-control/final.json",
+          "sha256": "2f870436998701d882003aafd51735380ef3b991e16b26ed3efd41600b1810a3"
+        },
+        {
+          "path": ".tamp-runs/face-alignment-20261114/aligned-control/contact.jsonl",
+          "sha256": "c6d6423173dbac5217edf6669945866bc3a8349e8dbe3ea202ba5abe204ff320"
+        },
+        {
+          "path": ".tamp-runs/face-alignment-20261114/aligned-control/adapter_events.json",
+          "sha256": "3cadbc4e20ec61f7a4476ebf247b9176668cf97b2a6fa27e2943a036a28191f7"
+        },
+        {
+          "path": ".tamp-runs/face-alignment-20261114/aligned-control/actuation.jsonl",
+          "sha256": "f897da6efd7fcdd54665d1de25143b19f917b2e55c3b5d785a96f3345690db75"
+        }
+      ]
+    },
+    {
+      "id": "aligned-shift",
+      "case_id": "shift15",
+      "role": "production_candidate",
+      "job_id": "20261114_203649_2d7c35",
+      "gripper_close_preset_override": null,
+      "effective_gripper_close_loose": false,
+      "effective_gripper_contact_hold_fraction": 0.5,
+      "hold_targets": [
+        {
+          "phase": "gripper_hold_target",
+          "command_returned": true,
+          "measured_encoder_position": 0.014157021917956814,
+          "target_encoder_position": -0.1429214890410216,
+          "default_close_target": -0.3,
+          "retained_error_fraction": 0.5,
+          "position_units": "stretch_gripper_command"
+        },
+        {
+          "phase": "gripper_hold_target",
+          "command_returned": true,
+          "measured_encoder_position": 0.007304787469684271,
+          "target_encoder_position": -0.14634760626515786,
+          "default_close_target": -0.3,
+          "retained_error_fraction": 0.5,
+          "position_units": "stretch_gripper_command"
+        }
+      ],
+      "passed": true,
+      "run_status": "complete",
+      "code": "ok",
+      "status": "ok",
+      "verification": null,
+      "completed_transfers": 2,
+      "declared_transfers": 2,
+      "cube_max_original_rotation_before_handoff_rad": 0.030647721019997555,
+      "final_goals_satisfied": {
+        "object2": true,
+        "object1": true
+      },
+      "boundary_checks": [
+        {
+          "tool": "execute_task_plan",
+          "code": "unknown_plan",
+          "status": "error",
+          "expected_codes": [
+            "unknown_plan"
+          ],
+          "no_commands": true,
+          "passed": true
+        }
+      ],
+      "audit_commands": 564,
+      "forbidden_commands": 0,
+      "malformed_audit_rows": 0,
+      "wall_time_s": 138.94737428217195,
+      "last_event": {
+        "phase": "release_open_verified",
+        "controller_success": true,
+        "source": "simulator_ground_truth_debug",
+        "supported": true,
+        "settled": true,
+        "stable_interval_s": 0.1
+      },
+      "artifacts": [
+        {
+          "path": ".tamp-runs/face-alignment-20261114/aligned-shift/protocol.json",
+          "sha256": "6a0054228460aef6d9d88ab8ec90976c07ea44f2b95ce8dbac0665a10a777829"
+        },
+        {
+          "path": ".tamp-runs/face-alignment-20261114/aligned-shift/summary.json",
+          "sha256": "65c7830e729d38f963603cee113051009a255729fd9236ddee8a18945fd9ebb8"
+        },
+        {
+          "path": ".tamp-runs/face-alignment-20261114/aligned-shift/initial.json",
+          "sha256": "9b6394790defea0bcb9bc9cce8e1e00a8ce8e52cab864d7b571038d2a704b8f1"
+        },
+        {
+          "path": ".tamp-runs/face-alignment-20261114/aligned-shift/final.json",
+          "sha256": "144d4900874a4bdea5707adffd1481dce56c9b09178c3da191be91e9655b6bc5"
+        },
+        {
+          "path": ".tamp-runs/face-alignment-20261114/aligned-shift/contact.jsonl",
+          "sha256": "43c24b219e6280d3dcfc05879b1e6e8e31c98334a826a1ff1d737ad201aef8e6"
+        },
+        {
+          "path": ".tamp-runs/face-alignment-20261114/aligned-shift/adapter_events.json",
+          "sha256": "216527091607728abf45daa5d18621fc12500a83ca1240ed07306dd4d08cb3e7"
+        },
+        {
+          "path": ".tamp-runs/face-alignment-20261114/aligned-shift/actuation.jsonl",
+          "sha256": "07224577fd982b18888950041dbda9d55b3764615f36ece00c1a1a4c9e6f5a6f"
+        }
+      ]
+    },
+    {
+      "id": "default-swap-ablation",
+      "case_id": "swap-right25",
+      "role": "same_source_ablation",
+      "job_id": "20261114_203650_7cf04d",
+      "gripper_close_preset_override": "default",
+      "effective_gripper_close_loose": false,
+      "effective_gripper_contact_hold_fraction": 0.0,
+      "hold_targets": [],
+      "passed": false,
+      "run_status": "complete",
+      "code": "payload_not_retained",
+      "status": "partial",
+      "verification": {
+        "substage": "lift_motion",
+        "reason": "payload_not_retained"
+      },
+      "completed_transfers": 1,
+      "declared_transfers": 3,
+      "cube_max_original_rotation_before_handoff_rad": 0.10043138963728125,
+      "final_goals_satisfied": {
+        "object2": false,
+        "object1": false
+      },
+      "boundary_checks": [],
+      "audit_commands": 491,
+      "forbidden_commands": 0,
+      "malformed_audit_rows": 0,
+      "wall_time_s": 197.2077429590281,
+      "last_event": {
+        "phase": "payload_retention",
+        "accepted": false,
+        "reason": "payload_not_retained",
+        "translation_residual_m": 0.0018290859881672076,
+        "rotation_residual_rad": 0.10043138963728125,
+        "translation_tolerance_m": 0.02,
+        "rotation_tolerance_rad": 0.1
+      },
+      "artifacts": [
+        {
+          "path": ".tamp-runs/face-alignment-20261114/default-swap-ablation/protocol.json",
+          "sha256": "76cf9b9e5a2e8eefc7fd19c8607b6536c4bc3eb8b2ee5e2106bbad0526cc67e5"
+        },
+        {
+          "path": ".tamp-runs/face-alignment-20261114/default-swap-ablation/summary.json",
+          "sha256": "85fd15a18f28cb835f594d04a765a3e8cb41fc5020fe8864f15d24f148fa621d"
+        },
+        {
+          "path": ".tamp-runs/face-alignment-20261114/default-swap-ablation/initial.json",
+          "sha256": "accdc14ea8c4598b879fb9c50f5af254e8b86277c53f15af7c102256444639b9"
+        },
+        {
+          "path": ".tamp-runs/face-alignment-20261114/default-swap-ablation/final.json",
+          "sha256": "d91d97fe8261af407baa734abb8ec2dab0812d1808f56b76cce565510395e4bf"
+        },
+        {
+          "path": ".tamp-runs/face-alignment-20261114/default-swap-ablation/contact.jsonl",
+          "sha256": "a714c91c3818747dec98444a63d75e32308e43d2aad5c53f256758a82869ec99"
+        },
+        {
+          "path": ".tamp-runs/face-alignment-20261114/default-swap-ablation/adapter_events.json",
+          "sha256": "66dfa9cf1c075f05109e048b79eac4689b948a408baaec1b0d6ea38770a24474"
+        },
+        {
+          "path": ".tamp-runs/face-alignment-20261114/default-swap-ablation/actuation.jsonl",
+          "sha256": "7213395defef7c07d8c67230394326fb4f05187360faffc7d0a03a9fa23cacd3"
+        }
+      ]
+    }
+  ],
+  "candidate_aggregate": {
+    "tasks_passed": 2,
+    "tasks": 3,
+    "completed_transfers": 5,
+    "declared_transfers": 7,
+    "boundary_checks_passed": 2,
+    "boundary_checks_observed": 2,
+    "audit_commands": 1459,
+    "forbidden_commands": 0,
+    "infrastructure_errors": 0
+  },
+  "regression": {
+    "tests": 345,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "artifact": {
+      "path": ".tamp-runs/face-alignment-20261114/full-regression/results.xml",
+      "sha256": "034c015532f361f040d2f6b0136790d32cd040660165ada4f16cc96c51680b79"
+    }
+  },
+  "private_probe": {
+    "artifact": {
+      "path": ".tamp-runs/retention-20261114/component_probe_v3.json",
+      "sha256": "f63cad6f0a9c428efe911c054fd41c86244dce4e0d28bd1f6c5864668be2b1c0"
+    },
+    "not_live_or_exact_replay": true,
+    "baseline_also_passed_private_probe": true,
+    "failures_retained": true
+  },
+  "base_ik_probe": {
+    "artifact": {
+      "path": ".tamp-runs/face-alignment-20261114/base_alignment_probe.json",
+      "sha256": "0c63b1f40165785273ba5317515dc05c7396dbf7fc49e9a36f48f16e909feece"
+    },
+    "scope": "Private base-qpos IK sensitivity only; no collision/path/navigation or task certificate",
+    "fixed_base_face_aligned_ik_passes": false,
+    "positive_offsets_with_ik_success_m": [
+      0.025,
+      0.04
+    ]
+  }
+}

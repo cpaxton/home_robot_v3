@@ -36,7 +36,7 @@ compact-manifest policy.
 | Graph room timeline A/B | [graph_room_evidence.md](graph_room_evidence.md) |
 | Joint agentic loop (cross-task) | [hmeqa_joint_agentic_loop.md](hmeqa_joint_agentic_loop.md) · [HMEQA_STRATEGY](../plans/HMEQA_STRATEGY.md) |
 | Profiles / merge policy | [`configs/benchmarks/dynagraph.yaml`](../../configs/benchmarks/dynagraph.yaml) |
-| Native retention pilots and preserved failures | [Fixed presets](tamp_native_closure_pilot_20261114.md) · [Contact-relative hold](tamp_native_contact_relative_pilot_20261114.md) |
+| Native retention pilots and preserved failures | [Fixed presets](tamp_native_closure_pilot_20261114.md) · [Contact-relative hold](tamp_native_contact_relative_pilot_20261114.md) · [Geometric ordering / base sensitivity](tamp_native_face_alignment_pilot_20261114.md) |
 | LaTeX | `paper/sections/04_experiments.tex`, `05_results.tex` |
 
 ## HM-EQA baselines
