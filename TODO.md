@@ -90,12 +90,23 @@
       ten-file deduplication freed 5.24 GiB; the run declared a monitored 16 GiB
       floor. Nov 15 cleanup reclaimed 10.40 GiB of disposable download/lint
       caches, restoring roughly 20 GiB free; recheck before further live tests.
+      User-approved raw-array archival subsequently reclaimed 23.76 GiB, leaving
+      about 40 GiB free; all 214 batches verified and visual/metric files retained.
+      Restore/index: `docs/experiments/debug_array_archival_20261115.md`.
       Review/protocol: `docs/experiments/recovery_budget_review_20261114.md`.
 - [ ] Repeat matched 12/8 find checks and small EQA/another-room acceptance;
       preserve failures and compare then-current main before scaling. Add a
       shared-start out-of-range diagnostic to distinguish model-selected closer
       views from incidental gains caused by a preceding task's trajectory.
       Do not add answer overrides or automatic high-level action substitutions.
+- [ ] Fix multimodal packet growth before another long-horizon repeat: seed-1
+      baseline passes 2/2; candidate bowl terminal localization fails after an
+      earlier admission, then destination inference raises CUDA OOM. Last input
+      contains 28 historical images (15 unique pixel hashes) plus two current
+      images, despite staying within 50 messages. Preserve dialogue/action text;
+      deduplicate/budget image evidence with auditable identities. Keep retained
+      admitted object evidence distinct from latest-view grounding failure.
+      Incomplete pair: `~/runs/emet/recovery-budget-high-20261115-r2/`.
 - [ ] Emit actual per-episode simulation duration, model inference cost and
       invocation overhead in paper-run manifests. Clock probes and reported
       episode wall metrics alone do not measure complete task simulation time.

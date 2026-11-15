@@ -246,3 +246,46 @@ The added floor-recovery suite exposed an older assertion expecting a removed
 forced investigate/explore instruction; it now checks historical rejection,
 new footprint validity and replanning without certifying the route. Report:
 `/tmp/geometry-state-tests-20261115.xml`. Live benefit is not yet established.
+
+## Seed-1 repeat: incomplete pair and a concrete context limit
+
+Managed job `20261115_124833_f1abd4` ran the same frozen baseline (`35fbabf7`)
+against candidate `cd03fad7`, with 12/8 limits and episode seed 1. Baseline
+completed both find phases successfully (483.70 s query, 575.77 s episode).
+Candidate's bowl phase reached 12 rounds and failed final localization; its
+microwave phase raised a CUDA out-of-memory error. The pair is **incomplete**,
+not a scored 0/2 candidate comparison or evidence of a runtime speedup.
+
+Two issues are visible in the saved inputs and receipts:
+
+- Bowl geometry was admitted as object observation 7 at round 0. The added
+  state field correctly showed that admission through round 6. The model kept
+  moving; subsequent grounding attempts abstained, clearing the selected result.
+  Its terminal semantic answer still named the bowl's earlier location, but
+  the final verified/selected geometry was unavailable. Exposing the field alone
+  did not resolve completion in this run. Retained object evidence and the latest
+  unsuccessful view need to remain distinguishable; do not manufacture success
+  by overriding the model or relabeling this terminal failure.
+- The last microwave request contained **46 history messages, 28 historical
+  image attachments (15 unique pixel hashes), plus two new images**. It was
+  still inside the default 50-message bound. The inference error reported an
+  810 MiB allocation failure with about 477 MiB free on the 24 GiB GPU. These
+  observations motivate deduplication and a bounded image/token packet alongside
+  preserved dialogue. They do not establish the exact safe limit or exclude
+  other contributors to GPU memory use.
+
+Aggregate destination counters are zero because the phase raised before returning,
+although four destination request artifacts were captured. Preserve those partial
+requests and the completed bowl miss. Artifacts are under
+`~/runs/emet/recovery-budget-high-20261115-r2/`; compact summary/history audits
+are copied into `~/runs/emet/recovery-budget-cohort-20261115-r2/`.
+
+No larger horizon or further routing rule follows this result. Next repair is to
+budget the actual multimodal packet without erasing text/action history, report
+retained image identities, and verify retained admitted geometry separately from
+current-view status before repeating matched acceptance.
+
+The subsequent user-approved [raw-array archival](debug_array_archival_20261115.md)
+reclaimed **23.76 GiB** with all 214 archives verified. Alongside the earlier
+10.40 GiB cache cleanup, free space is now about **40 GiB**. This removes the
+immediate disk block; it does not resolve the GPU context limit above.
