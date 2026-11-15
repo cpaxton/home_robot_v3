@@ -145,6 +145,15 @@ merges, measured policy improvement and hardware readiness are separate decision
       Do not increase timeouts or accept the actor's 2.15 mm advance as a
       completed 20 mm support-preparation goal. Keep loaded retention/grasp-fit
       repair separate, with original force/support/retention thresholds.
+- [x] Prepare the exact [17-case directional curriculum and 24-case audit](docs/plans/mars_directional_curriculum.md)
+      with a strict separate loader, source/control hashes, unchanged contracts
+      and disjoint audit resets/motions. This is case preparation only: no
+      native admission, training or policy promotion. Keep actual task-stage
+      coverage and the latest #239 diagnosis in the next training decision.
+- [ ] Admit the prepared directional/audit cases on the corrected plant for
+      the selected training stage. Bind the new source's own checks and teacher
+      evidence; keep original case rejections visible. Loaded retention failures
+      do not qualify loaded training or invalidate admitted unloaded references.
 - [ ] **Advance real contact skills in stages.** Follow the
       [safety/task curriculum](docs/plans/2026-11-13_whole_body_safety_curriculum.md)
       from actual pregrasp to closure/lift, loaded transport/braking, and
