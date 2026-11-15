@@ -70,15 +70,16 @@ merges, measured policy improvement and hardware readiness are separate decision
       close superseded #214 without restoring its older code. Preserve the
       stronger source and negative results. Repair serialized paired settings,
       physical-tick reward discounting and duplicate-trial confidence reporting.
-- [ ] **Finish the corrected learning baseline.** Complete the
-      [C1 normalization comparison](docs/plans/mars_whole_body_advantage_pair.md):
-      retain the completed 4,096-decision control and its hashes; recover only
-      the declared 4,096-decision candidate after fresh source-bound gates and
-      a reviewed, explicit old/new source bridge. Verify initial state and the
-      full first unoptimized numeric rollout before updating. Report all twelve
-      fixed-final cases, actor-gradient/advantage diagnostics and every failure.
-      Completion means a recorded paired outcome, even if the candidate fails;
-      learning or task success must be measured separately.
+- [x] **Finish the corrected learning baseline.** The
+      [C1 comparison is complete](docs/experiments/mars_c1_normalization_recovery_20261115.md):
+      preserve the original 4,096-decision control and failed 256 unoptimized
+      candidate ticks; recover only the remaining 4,096 decisions. Fresh
+      regressions pass 1,249/1,249; explicit source/teacher/optimizer equivalence
+      and every initial/first-rollout hash pass. All twelve fixed-final outcomes
+      and diagnostics are recorded. Shared full mastery is 2/12 versus per-head
+      0/12 and initial 2/12; completed arm endpoints meeting 3mm/0.02rad improve
+      1/10 to 5/10. This completes the experiment, not whole-body qualification:
+      base, quiet-hold and jerk failures remain, with no checkpoint promotion.
 - [ ] **Complete the frozen-base/context coordination test.** The original
       32,768-transition job expired in the queue with zero PPO steps. Preserve
       that attempt. Record a new bounded baseline/velocity pair, seed90,
@@ -490,9 +491,15 @@ as an experimental training result.
 - [x] Repair and test the serialized/in-memory settings comparison (`29a9fcec`),
       including an actual candidate call against the saved control record.
       Preserve the incomplete attempt; no completed paired result yet.
-- [ ] Complete the declared normalization comparison after current-source
-      checks and an explicit recovery record; preserve exact initial state and
-      first-rollout matching, no extra variant/seed or silent source-hash bypass.
+- [x] Complete the declared normalization comparison with an explicit source
+      bridge and unchanged initial/first-rollout hashes. Fresh regressions
+      1,249/1,249; shared final 2/12 full versus per-head 0/12 and initial 2/12.
+      Completed arm endpoints within 3mm/0.02rad improve 1/10 to 5/10, but
+      quiet/base/jerk remain unresolved. Preserve all failures and the
+      [completed report](docs/experiments/mars_c1_normalization_recovery_20261115.md).
+- [ ] Improve actor-active terminal settling and base authority while retaining
+      the C1 hand-following gains. Distinguish endpoint accuracy from the full
+      quiet/force/jerk contract; do not silently extend the completed C1 budget.
 - [x] Correct bundled TAMP reward timing: discount each physical tick, including
       terminal credit, before `gamma ** ticks` continuation; preserve raw rewards
       for evaluation and test bundled-versus-expanded return equivalence.

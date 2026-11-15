@@ -286,7 +286,7 @@ def policy_state_digest(policy):
     return arrays_digest({name: value.detach().cpu().numpy() for name, value in policy.state_dict().items()})
 
 
-def verify_initial_pair(reference, current):
+def verify_initial_pair(reference, current, *, recovery_proof=None, reference_sha256=None):
     """Reject an unpaired candidate before its first optimizer update."""
     keys = (
         "source_hashes",
@@ -302,6 +302,11 @@ def verify_initial_pair(reference, current):
         "initial_numpy_rng_sha256",
         "first_rollout",
     )
+    if recovery_proof is not None:
+        from emet.rl.manipulation.pair_recovery import verify_recovery
+
+        verify_recovery(reference, current, recovery_proof, reference_sha256=reference_sha256)
+        keys = tuple(key for key in keys if key not in {"source_hashes", "preflight_sha256"})
     if any(key not in reference or key not in current or reference[key] != current[key] for key in keys):
         raise ValueError("paired initial state or first pre-update rollout differs")
     first = {k: v for k, v in reference["ppo"].items() if k != "advantage_normalization"}
@@ -561,7 +566,15 @@ def train(args):
                 write_json(output / "run.json", metadata)
                 if getattr(args, "pair_reference_run", None):
                     reference_path = Path(args.pair_reference_run)
-                    verify_initial_pair(json.loads(reference_path.read_text()), metadata)
+                    recovery_proof = getattr(args, "pair_recovery_proof", None)
+                    verify_initial_pair(
+                        json.loads(reference_path.read_text()),
+                        metadata,
+                        recovery_proof=recovery_proof,
+                        reference_sha256=digest(reference_path),
+                    )
+                    if recovery_proof is not None:
+                        metadata["pair_recovery_proof_sha256"] = digest(recovery_proof)
                     metadata["paired_reference_run_sha256"] = digest(reference_path)
                     metadata["initial_pair_verified_before_update"] = True
                     write_json(output / "run.json", metadata)
@@ -660,8 +673,15 @@ def main():
     parser.add_argument(
         "--pair-reference-run", type=Path, help="verify initial state/rollout against control run before PPO"
     )
+    parser.add_argument(
+        "--pair-recovery-proof",
+        type=Path,
+        help="explicit source/teacher/optimizer equivalence evidence for the interrupted C1 pair only",
+    )
     parser.add_argument("--wandb-mode", choices=("offline", "disabled"), default="offline")
     args = parser.parse_args()
+    if args.pair_recovery_proof and not (args.basic_cases and args.pair_reference_run):
+        parser.error("C1 recovery proof requires the basic manifest and original paired control")
     if args.command == "preflight":
         report = preflight(args.suite, args.output)
         if not report["ready_for_experimental_training"]:
