@@ -52,7 +52,9 @@ These four development attempts cannot qualify hardware or broad task success.
 The actor's region trial completes pregrasp but fails the tighter grasp pose.
 Both teacher trials reach lift and stop at the static support margin. Offline
 inspection finds the admitted lift witness only about 0.035 mm above the 5 mm
-runtime margin. Do not lower that guard or repeat the original four attempts.
+runtime margin in a preliminary fixed-payload audit. The later attached-payload
+audit refines that reserve to 0.0041 mm. Do not lower that guard or repeat the
+original four attempts.
 
 Add exactly two explicitly different reset cases, teacher and retained actor,
 using `--study maximum_margin` and a fresh output directory. Their case ID is
@@ -70,3 +72,18 @@ conditions and cannot be pooled with the original matched-case evidence.
 No automatic retries or training. Record numeric support evidence on rejection.
 Private forward kinematics refresh geometry before signed-distance queries;
 geometry measurements remain sampled evidence, not robust-region certificates.
+
+## Grasp-region follow-up
+
+After those two outcomes, run exactly two more original-reset attempts, teacher
+and retained actor, using `--study grasp_region` with fresh output. The actor's
+strict grasp timeout is 3.31 mm / 0.03491 rad; its measured finger/table
+separation is about 8.55 mm. Test 4 mm / 0.04 rad grasp tolerances, keeping the
+same pregrasp-only arrival region and unchanged lift/place contracts.
+
+Unlike the first experiment, this changes grasp IK/witness admission, retiming
+scale and endpoint acceptance together. It is a separate task contract, not
+proof of an isolated endpoint-gate effect. All actual configuration, collision,
+support, force, retention, wheel and stop checks remain active. Restore the
+original grasp tolerances in `finally`, including on exceptions. No retries,
+physics changes or policy updates, and no relabeling the original failed runs.

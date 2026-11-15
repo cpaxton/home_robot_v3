@@ -4,7 +4,8 @@
 
 """Four fixed full-task attempts, comparing precision and pregrasp arrival.
 
-The region affects endpoint acceptance only. All reference, collision, force,
+The arrival study affects endpoint acceptance only. The separate grasp-region
+study changes grasp admission/retiming/arrival together. Collision, force,
 wheel-support, retention, measured-stop and later-stage contracts remain active.
 Raw traces stay in ignored logs. This never trains or touches hardware.
 """
@@ -34,8 +35,19 @@ from emet.rl.manipulation.whole_body_training import load_development
 
 GROUPS = ("teacher_precision", "actor_precision", "teacher_region", "actor_region")
 ROBUST_GROUPS = ("teacher_maximum_margin", "actor_maximum_margin")
+GRASP_GROUPS = ("teacher_grasp_region", "actor_grasp_region")
 REGION = (0.004, 0.04)
 WEIGHTS = "e7b425699510cc635485bdd8f59a5b25692fb165faf248aaecbc2707c0dbb883"
+
+
+def execute_stage_contract(executor, original, phase, path, *, grasp_region):
+    previous = (executor.position_tolerance_m, executor.orientation_tolerance_rad)
+    if phase == "grasp" and grasp_region:
+        executor.position_tolerance_m, executor.orientation_tolerance_rad = REGION
+    try:
+        return original(phase, path)
+    finally:
+        executor.position_tolerance_m, executor.orientation_tolerance_rad = previous
 
 
 def finger_geometry(env):
@@ -136,6 +148,7 @@ def episode(group, output):
         executor.pregrasp_arrival_tolerance = REGION if group.endswith("region") or maximum_margin else None
         row["arrival_region"] = executor.pregrasp_arrival_tolerance
         row["other_stage_tolerances"] = [executor.position_tolerance_m, executor.orientation_tolerance_rad]
+        row["grasp_stage_region"] = REGION if group in GRASP_GROUPS else None
         row["pregrasp_to_grasp_offset_m"] = (
             np.asarray(executor.grasp_targets[0][0]) - executor.grasp_targets[1][0]
         ).tolist()
@@ -144,7 +157,11 @@ def episode(group, output):
 
         def record_stage(phase, path):
             start = float(env.data.time)
-            result = original(phase, path)
+            # This separate task-contract experiment changes grasp admission,
+            # retiming and arrival together. It is NOT the endpoint-only study.
+            # Fresh planning/configuration and all independent runtime guards
+            # remain active; later stages restore the strict contract.
+            result = execute_stage_contract(executor, original, phase, path, grasp_region=group in GRASP_GROUPS)
             row["stage_results"].append(
                 {
                     "phase": phase,
@@ -203,8 +220,8 @@ def episode(group, output):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", required=True, type=Path)
-    parser.add_argument("--episode", choices=GROUPS + ROBUST_GROUPS)
-    parser.add_argument("--study", choices=("arrival", "maximum_margin"), default="arrival")
+    parser.add_argument("--episode", choices=GROUPS + ROBUST_GROUPS + GRASP_GROUPS)
+    parser.add_argument("--study", choices=("arrival", "maximum_margin", "grasp_region"), default="arrival")
     args = parser.parse_args()
     if args.episode:
         episode(args.episode, args.output)
@@ -224,7 +241,8 @@ def main():
     }
     try:
         summary["study"] = args.study
-        for group in GROUPS if args.study == "arrival" else ROBUST_GROUPS:
+        groups = {"arrival": GROUPS, "maximum_margin": ROBUST_GROUPS, "grasp_region": GRASP_GROUPS}[args.study]
+        for group in groups:
             process = subprocess.run(
                 [sys.executable, "-u", __file__, "--episode", group, "--output", str(args.output)], timeout=180
             )
