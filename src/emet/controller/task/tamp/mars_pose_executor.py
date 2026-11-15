@@ -129,7 +129,10 @@ def execute_pose_path(robot, executor, phase, path, *, goal_pose=None, arrival_t
         if executor.collision.configuration_collides(robot.model, scratch):
             return "arm_configuration_collision"
         payload = robot.payload if robot.retention_reference is not None else None
-        if support_margin(robot.model, scratch, MARS, payload)["margin_m"] < 0.005:
+        support = support_margin(robot.model, scratch, MARS, payload)
+        if support["margin_m"] < 0.005:
+            executor.event(phase=phase, check="static_support_margin", required_margin_m=0.005,
+                           support_evidence=support, configuration="witness" if q is not None else "measured")
             return "arm_static_support_margin"
         return None
 

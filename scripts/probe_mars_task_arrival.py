@@ -33,6 +33,7 @@ from emet.rl.manipulation.whole_body_observation import actor_observation
 from emet.rl.manipulation.whole_body_training import load_development
 
 GROUPS = ("teacher_precision", "actor_precision", "teacher_region", "actor_region")
+ROBUST_GROUPS = ("teacher_maximum_margin", "actor_maximum_margin")
 REGION = (0.004, 0.04)
 WEIGHTS = "e7b425699510cc635485bdd8f59a5b25692fb165faf248aaecbc2707c0dbb883"
 
@@ -42,6 +43,7 @@ def finger_geometry(env):
     model = env.model
     scratch = mujoco.MjData(model)
     mujoco.mj_copyData(scratch, model, env.data)
+    mujoco.mj_forward(model, scratch)
     bodies = np.asarray(model.geom_bodyid).copy()
     active = (np.asarray(model.geom_contype).copy() | np.asarray(model.geom_conaffinity).copy()) != 0
     fingers = {model.body(n).id for n in env.profile.finger_bodies}
@@ -62,14 +64,21 @@ def finger_geometry(env):
 def episode(group, output):
     development, _ = load_development()
     case = next(c for c in development["train_cases"] if c["id"] == "development:right:50g:1")
+    maximum_margin = group in ROBUST_GROUPS
+    if maximum_margin:
+        case = {**case, "id": case["id"] + "@maximum_margin"}
     env = robot = adapter = None
     row = {"group": group, "case": case, "success": False, "stage_results": [], "calls": []}
     raw = {}
     try:
-        env, admission = fixture(case, wheel_feedback_current_velocity=True)
+        env, admission = fixture(
+            case, wheel_feedback_current_velocity=True, grasp_setup_prefer_nominal=not maximum_margin
+        )
         row["fixture_admission"] = admission
         if not admission["accepted"]:
             raise ValueError("fixture admission failed")
+        row["reset_setup"] = env.randomization.get("grasp_setup")
+        row["grasp_setup_prefer_nominal"] = not maximum_margin
         row["initial_state_sha256"] = hashlib.sha256(
             np.r_[env.data.qpos.copy(), env.data.qvel.copy(), float(env.data.time)].tobytes()
         ).hexdigest()
@@ -124,7 +133,7 @@ def episode(group, output):
         adapter = adapter_for(context, robot)
         plan = adapter.plans[planned["data"]["plan_ref"]]
         executor = plan.executor
-        executor.pregrasp_arrival_tolerance = REGION if group.endswith("region") else None
+        executor.pregrasp_arrival_tolerance = REGION if group.endswith("region") or maximum_margin else None
         row["arrival_region"] = executor.pregrasp_arrival_tolerance
         row["other_stage_tolerances"] = [executor.position_tolerance_m, executor.orientation_tolerance_rad]
         row["pregrasp_to_grasp_offset_m"] = (
@@ -194,7 +203,8 @@ def episode(group, output):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", required=True, type=Path)
-    parser.add_argument("--episode", choices=GROUPS)
+    parser.add_argument("--episode", choices=GROUPS + ROBUST_GROUPS)
+    parser.add_argument("--study", choices=("arrival", "maximum_margin"), default="arrival")
     args = parser.parse_args()
     if args.episode:
         episode(args.episode, args.output)
@@ -213,7 +223,8 @@ def main():
         "complete": False,
     }
     try:
-        for group in GROUPS:
+        summary["study"] = args.study
+        for group in GROUPS if args.study == "arrival" else ROBUST_GROUPS:
             process = subprocess.run(
                 [sys.executable, "-u", __file__, "--episode", group, "--output", str(args.output)], timeout=180
             )

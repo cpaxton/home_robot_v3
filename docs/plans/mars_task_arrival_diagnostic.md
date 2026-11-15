@@ -46,3 +46,27 @@ Publish compact outcomes, endpoint errors/geometry, closure/lift progress,
 retention/contact/support metrics and provenance. Raw `.json.gz` files stay
 ignored. The prior full regression receipt does not qualify changed source.
 These four development attempts cannot qualify hardware or broad task success.
+
+## Predeclared follow-up after the four outcomes
+
+The actor's region trial completes pregrasp but fails the tighter grasp pose.
+Both teacher trials reach lift and stop at the static support margin. Offline
+inspection finds the admitted lift witness only about 0.035 mm above the 5 mm
+runtime margin. Do not lower that guard or repeat the original four attempts.
+
+Add exactly two explicitly different reset cases, teacher and retained actor,
+using `--study maximum_margin` and a fresh output directory. Their case ID is
+`development:right:50g:1@maximum_margin`. Enable the new opt-in
+`grasp_setup_prefer_nominal=False` before fixture initialization; its default
+remains True. Select the existing collision-checked setup candidate with the
+largest sampled loaded lift margin, preserving the initial world hand pose.
+This is procedural simulator reset generation, not an executed hardware stance
+change. Keep mass, seed, physical model, task logic and all guards. Both use the
+4 mm / 0.04 rad pregrasp-only region; all later stages remain strict.
+
+Record the actual setup transform, selected sampled margin, model/initial-state
+identities and any changed destination placement. These are new initial
+conditions and cannot be pooled with the original matched-case evidence.
+No automatic retries or training. Record numeric support evidence on rejection.
+Private forward kinematics refresh geometry before signed-distance queries;
+geometry measurements remain sampled evidence, not robust-region certificates.

@@ -42,3 +42,11 @@ def test_arrival_cannot_disable_the_independent_tracking_tube(requested):
     executor = SimpleNamespace(position_tolerance_m=0.003, orientation_tolerance_rad=0.02)
     with pytest.raises(ValueError, match="arrival tolerances"):
         arrival_tolerances(executor, requested)
+
+
+@pytest.mark.parametrize("preference,balanced", [(0, True), ("false", True), (False, False)])
+def test_robust_reset_is_explicit_and_requires_balanced_setup(preference, balanced):
+    from emet.rl.manipulation.env import ManipulationConfig
+
+    with pytest.raises(ValueError, match="maximum-margin setup"):
+        ManipulationConfig(robot="innate_mars", balanced_grasp_setup=balanced, grasp_setup_prefer_nominal=preference)
