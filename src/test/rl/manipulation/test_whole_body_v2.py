@@ -118,9 +118,10 @@ def test_separate_advantage_normalization_removes_reward_unit_scaling():
     torch.testing.assert_close(first, second)
 
 
-def test_ppo_changes_actor_and_all_three_critics_with_finite_losses():
+@pytest.mark.parametrize("base_scale", [1.0, 0.1])
+def test_ppo_changes_actor_and_all_three_critics_with_finite_losses(base_scale):
     torch.manual_seed(21)
-    model = MultiCriticPolicy(hidden=16)
+    model = MultiCriticPolicy(hidden=16, stationary_base_std_scale=base_scale)
     obs = observation(count=16)
     obs["preview"][:, :, 7] = 0.01
     with torch.no_grad():
@@ -142,6 +143,77 @@ def test_ppo_changes_actor_and_all_three_critics_with_finite_losses():
     assert np.isfinite(stats["critic_losses"]).all()
     for prefix in ("actor.", "critics.0.", "critics.1.", "critics.2."):
         assert any(not torch.equal(v, before[k]) for k, v in model.state_dict().items() if k.startswith(prefix))
+
+
+@pytest.mark.parametrize("value", [0, -0.1, 1.01, float("nan"), float("inf"), True])
+def test_base_exploration_rejects_invalid_scales(value):
+    with pytest.raises(ValueError, match="exploration scale"):
+        MultiCriticPolicy(stationary_base_std_scale=value)
+
+
+def test_default_exploration_keeps_identical_seeded_samples_and_probabilities():
+    model = MultiCriticPolicy(hidden=16)
+    obs = observation()
+    original = torch.distributions.Normal(model.actor(obs), model.log_std.clamp(-6, 0).exp())
+    torch.manual_seed(51)
+    expected = original.sample()
+    torch.manual_seed(51)
+    actual = model.distribution(obs).sample()
+    assert torch.equal(actual, expected)
+    log, entropy, _ = model.evaluate(obs, actual)
+    mask = model.actor.action_mask(obs)
+    assert torch.equal(log, (original.log_prob(actual) * mask).sum(-1))
+    assert torch.equal(entropy, (original.entropy() * mask).sum(-1))
+
+
+@pytest.mark.parametrize("robot", ["innate_mars", "stretch"])
+def test_reference_conditioned_noise_preserves_authority_and_matches_ppo_likelihood(robot):
+    model = MultiCriticPolicy(robot=robot, hidden=16, stationary_base_std_scale=0.1)
+    with torch.no_grad():
+        model.actor.gain.weight.normal_(0, 0.1)
+    obs = observation(robot, count=8)
+    f, pf = model.actor.encoder.fields, model.actor.encoder.preview_fields
+    obs["preview"][:, :, pf["hand_error"]][:, :, 0] = 0.01
+    obs["history"][1, :, f["hand_mask"]] = 0
+    obs["history"][2, :, f["base_mask"]] = 0
+    obs["motion"][3, 2] = 0.001
+    obs["preview"][4, 4, pf["base_error"]] = 0.01  # upcoming motion, current velocity zero
+    obs["history"][5, :, f["base_mask"]][:, 0] = 0
+    obs["preview"][6, 4, pf["base_mask"]] = 0
+    obs["preview"][7, :, pf["base_error"]] = 1  # far static goal still permits correction
+    obs["history"][7, :, f["base_velocity"]] = 0.1  # reference stationarity is not measured rest
+    obs["preview"][0, 0, pf["base_error"]] = 0.2  # past target does not gate future exploration
+    assert model.base_exploration_condition(obs).tolist() == [True, False, False, False, False, False, False, True]
+    mean = model.actor(obs).detach().clone()
+    dist = model.distribution(obs)
+    assert torch.equal(mean, dist.mean)
+    expected = model.log_std.clamp(-6, 0).exp().expand_as(mean).clone()
+    expected[[0, 7], :2] *= 0.1
+    assert torch.equal(dist.scale, expected)
+    assert torch.count_nonzero(mean[7, :2]) > 0  # no base authority mask
+    action = dist.sample() * model.actor.action_mask(obs)
+    log, entropy, _ = model.evaluate(obs, action)
+    reference = torch.distributions.Normal(mean, expected)
+    mask = model.actor.action_mask(obs)
+    torch.testing.assert_close(log, (reference.log_prob(action) * mask).sum(-1), rtol=0, atol=0)
+    torch.testing.assert_close(entropy, (reference.entropy() * mask).sum(-1), rtol=0, atol=0)
+    (-log.mean()).backward()
+    assert model.log_std.grad is not None and torch.isfinite(model.log_std.grad).all()
+
+
+@pytest.mark.parametrize("jitter", ["target", "motion"])
+def test_reference_producer_jitter_retains_full_base_exploration(jitter):
+    model = MultiCriticPolicy(hidden=16, stationary_base_std_scale=0.1)
+    obs = observation(count=1)
+    assert model.base_exploration_condition(obs).item()
+    if jitter == "target":
+        fields = model.actor.encoder.preview_fields
+        obs["preview"][0, -1, fields["base_error"].start] = 1e-12
+    else:
+        obs["motion"][0, 0] = 1e-12
+    assert not model.base_exploration_condition(obs).item()
+    expected = model.log_std.clamp(-6, 0).exp()[None]
+    torch.testing.assert_close(model.distribution(obs).scale, expected, rtol=0, atol=0)
 
 
 def test_actor_only_bundle_roundtrip_and_rejects_privileged_inputs(tmp_path):

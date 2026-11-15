@@ -127,8 +127,11 @@ class WholeBodyActor(nn.Module):
 
 
 class MultiCriticPolicy(nn.Module):
-    def __init__(self, robot="innate_mars", hidden=64, privileged=True):
+    def __init__(self, robot="innate_mars", hidden=64, privileged=True, stationary_base_std_scale=1.0):
         super().__init__()
+        if isinstance(stationary_base_std_scale, bool) or not 0 < stationary_base_std_scale <= 1:
+            raise ValueError("stationary base exploration scale must be finite and in (0,1]")
+        self.stationary_base_std_scale = float(stationary_base_std_scale)
         self.actor = WholeBodyActor(robot, hidden)
         self.critic_encoder = SensorEncoder(robot)
         self.privileged = bool(privileged)
@@ -149,7 +152,39 @@ class MultiCriticPolicy(nn.Module):
         return torch.cat([critic(features) for critic in self.critics], dim=-1)
 
     def distribution(self, obs):
-        return torch.distributions.Normal(self.actor(obs), self.log_std.clamp(-6, 0).exp())
+        mean = self.actor(obs)
+        std = self.log_std.clamp(-6, 0).exp()
+        if self.stationary_base_std_scale != 1.0 and self.actor.encoder.profile.wheel_bodies:
+            # Retain this profile guard even though the condition has one too:
+            # the condition is also queried directly for training telemetry.
+            # Training distribution only: retain mean/base authority, even when
+            # a stationary announced reference still requires base correction.
+            factor = torch.where(self.base_exploration_condition(obs), self.stationary_base_std_scale, 1.0)
+            std = std.expand_as(mean).clone()
+            # Profile.action_size and actor.action_mask put forward/yaw first,
+            # followed by arm joints and grip, whenever wheel_bodies is set.
+            std[:, :2] = std[:, :2] * factor[:, None]
+        return torch.distributions.Normal(mean, std)
+
+    def base_exploration_condition(self, obs):
+        """An explicitly constrained, constant base preview with an active hand.
+
+        Zero announced velocity alone does not imply a held base goal. A free
+        base and an upcoming moving reference retain their exploration. Actual
+        base motion/error is deliberately not used to mask correction authority.
+        """
+        fields, preview_fields = self.actor.encoder.fields, self.actor.encoder.preview_fields
+        history, preview = obs["history"][:, -1], obs["preview"][:, 1:]
+        hand = history[:, fields["hand_mask"]].squeeze(-1) > 0.5
+        constrained = (history[:, fields["base_mask"]] > 0.5).all(dim=-1)
+        constrained &= (preview[:, :, preview_fields["base_mask"]] > 0.5).all(dim=(1, 2))
+        targets = preview[:, :, preview_fields["base_error"]]
+        # The producer reuses one measured pose across preview rows and emits
+        # exact zero twist for holds. Future producer jitter deliberately keeps
+        # full exploration; do not silently widen this into an approximate hold.
+        constant = (targets == targets[:, :1]).all(dim=(1, 2))
+        stationary = (obs["motion"][:, :3] == 0).all(dim=-1)
+        return hand & constrained & constant & stationary & bool(self.actor.encoder.profile.wheel_bodies)
 
     def evaluate(self, obs, actions):
         dist = self.distribution(obs)

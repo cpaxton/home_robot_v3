@@ -98,13 +98,30 @@ merges, measured policy improvement and hardware readiness are separate decision
       controller. Preserve the old zero-step queue failure and add no automatic
       retries, extra seeds or checkpoint selection.
       [Bounded follow-through protocol](docs/plans/mars_frozen_base_arm_followthrough.md).
+- [x] **Test reference-conditioned base exploration.** Fresh seed90 shared
+      GRU pair completes 4,096 decisions each on source gated by 1,260 tests.
+      Candidate arm tracking/settling improves 1→7/10 and fixed-base stops
+      5→0, but full arm remains 1/10 with nine linear-jerk failures. All twelve
+      fixed cases and identical initial anchors are retained; default control
+      exactly reproduces earlier C1 metrics, rollout hashes and final weights.
+      [Complete report](docs/experiments/mars_reference_base_exploration_20261115.md).
+      Keep default scale 1.0 and the retained production source; no promotion.
 - [ ] **Resolve remaining coordination and quiet-hold failures.** Use the
-      completed pair and C1 intervention to predeclare a bounded base-authority
-      or actor-active terminal-settling comparison before a larger training run.
-      Preserve successful arm tracking and report physical base/arm jerk,
-      orientation and coupled cases separately. The opt-in axis-angle feature
-      is implemented but still needs its own controlled trained comparison;
-      do not attribute the velocity result to an orientation change.
+      [ordered next-steps plan](docs/plans/mars_wbc_next_steps.md): isolate the
+      low-level base feedback/oscillation first, validate current-velocity
+      feedback through reset/motion/stop, then train missing directions on the
+      corrected plant. Matched current-COM replay already improves frozen
+      candidate full success 2/12→8/12 with no PPO or gate change; publish the
+      companion diagnostic before treating the option as qualified. Next
+      curriculum pair is bounded at 16,384 decisions per variant after fresh
+      source/teacher gates; preserve reward/representation and report exact
+      per-case exposure. Measurement/reward changes are conditional if still
+      needed, not simultaneous knobs. Preserve original scores and independent
+      stop/force/support/retention checks. Freeze the separate audit cases before
+      training; no automatic budget extension or policy promotion. Existing
+      offline and native diagnostics do not relabel any candidate failure.
+      The opt-in axis-angle feature still needs a separate controlled trained
+      comparison; do not confound it with the plant, reward or velocity studies.
 - [ ] **Advance real contact skills in stages.** Follow the
       [safety/task curriculum](docs/plans/2026-11-13_whole_body_safety_curriculum.md)
       from actual pregrasp to closure/lift, loaded transport/braking, and
