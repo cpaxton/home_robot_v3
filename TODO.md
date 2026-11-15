@@ -107,6 +107,11 @@
       deduplicate/budget image evidence with auditable identities. Keep retained
       admitted object evidence distinct from latest-view grounding failure.
       Incomplete pair: `~/runs/emet/recovery-budget-high-20261115-r2/`.
+      Episode image packets now preserve dialogue, bound attachments to eight,
+      expose stable view IDs and support explicit historical recall. Offline replay
+      reduces the failing 30 attachments to eight; 433 CPU checks pass. Live
+      memory/task acceptance and retained-object selection remain pending.
+      Examples: `docs/experiments/multimodal_context_20261115.md`.
 - [ ] Emit actual per-episode simulation duration, model inference cost and
       invocation overhead in paper-run manifests. Clock probes and reported
       episode wall metrics alone do not measure complete task simulation time.

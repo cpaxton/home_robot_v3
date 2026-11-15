@@ -144,6 +144,33 @@ def test_final_graph_answer_receives_the_episode_dialogue():
     assert "no_target" in str(model.seen[-1])
 
 
+def test_long_episode_is_bounded_on_remote_wire_and_server_without_losing_tool_text():
+    backend = FakeVision()
+    remote = OpenaiVLLMClient(base_url="http://fixture/v1", api_key="fixture")
+    requests = []
+
+    def complete(**kwargs):
+        requests.append(copy.deepcopy(kwargs["messages"]))
+        reply = generate_chat(backend, kwargs["messages"], max_tokens=kwargs["max_tokens"])
+        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=reply))])
+
+    remote._openai.chat.completions.create = complete
+    conversation = VLMConversation(max_images=4)
+    client = wrapper(remote)
+    for n in range(12):
+        client([f"observation {n}", np.full((4, 4, 3), n * 15, dtype=np.uint8)], conversation=conversation)
+        conversation.record_tool_result("move_forward", {"meters": 0.3}, {"ok": False, "status": "blocked"})
+    sent = requests[-1]
+    assert (
+        sum(part.get("type") == "image_url" for m in sent if isinstance(m["content"], list) for part in m["content"])
+        == 4
+    )
+    assert sum("TOOL_RESULT" in str(m["content"]) for m in backend.seen[-1]) == 11
+    assert len(conversation.messages) == 36
+    assert "pixels omitted" in str(sent) and "recall_view" in str(sent)
+    assert remote.get_history() == backend.get_history() == []
+
+
 def test_unknown_arguments_are_rejected_recorded_and_never_executed():
     from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
 

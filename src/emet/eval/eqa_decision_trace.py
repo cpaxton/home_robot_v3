@@ -17,12 +17,25 @@ import numpy as np
 from PIL import Image
 
 
-def record_vlm_request(root, *, system_prompt, user_text, images, metadata, history=None):
+def record_vlm_request(root, *, system_prompt, user_text, images, metadata, history=None, packet=None):
     """Save the exact client-level payload before model resizing/tokenization.
 
     Captions/roles are preserved verbatim in user_text, not inferred here.
     Refuse to overwrite another call's evidence. This does not change inference.
     """
+    if packet is not None:
+        history = packet.messages[:-1]
+        if history and history[0]["role"] == "system":
+            history = history[1:]
+        current = packet.messages[-1]["content"]
+        parts = [current] if isinstance(current, str) else current
+        user_text = "\n".join(part for part in parts if isinstance(part, str))
+        images = [
+            part if isinstance(part, Image.Image) else Image.fromarray(part)
+            for part in parts
+            if isinstance(part, (Image.Image, np.ndarray))
+        ]
+        metadata = {**metadata, "image_context": packet.audit}
     root = Path(root)
     original_root = root
     try:
@@ -74,6 +87,12 @@ def record_vlm_request(root, *, system_prompt, user_text, images, metadata, hist
         "conversation_history": history_entries,
         "capture_boundary": "client payload before model preprocessing; not a wire/token trace",
     }
+    if packet is not None:
+        image_entries = iter(entries)
+        request["user_content"] = [
+            {"type": "text", "text": part} if isinstance(part, str) else {"type": "image", **next(image_entries)}
+            for part in parts
+        ]
     (root / "request.json").write_text(json.dumps(request, indent=2), encoding="utf-8")
     return root / "request.json"
 

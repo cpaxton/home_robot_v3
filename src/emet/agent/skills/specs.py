@@ -43,6 +43,21 @@ SHARED_SKILL_ALIASES: dict[str, dict[AgentMode, str]] = {
 
 EQA_SKILL_SPECS: tuple[SkillSpec, ...] = (
     SkillSpec(
+        name="recall_view",
+        modes=frozenset({AgentMode.EQA_EPISODE}),
+        description=(
+            "Attach a retained historical image again on the next model turn. Copy the exact view_id "
+            "from an image annotation in the dialogue. This does not move the robot, capture a new "
+            "image, confirm current presence, or admit object geometry."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {"view_id": {"type": "string", "description": "Exact retained image view_id."}},
+            "required": ["view_id"],
+        },
+        returns_info=True,
+    ),
+    SkillSpec(
         name="inspect_graph",
         modes=frozenset({AgentMode.EQA_EPISODE}),
         description=(
@@ -753,6 +768,7 @@ CHAT_EXCLUSIVE_TOOL_NAMES: frozenset[str] = frozenset(s.name for s in CHAT_SKILL
 # EQA-only skills (must not appear in the CHAT pack by default).
 EQA_EXCLUSIVE_TOOL_NAMES: frozenset[str] = frozenset(
     {
+        "recall_view",
         "inspect_graph",
         "explore_frontier",
         "investigate",

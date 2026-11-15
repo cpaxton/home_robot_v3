@@ -419,6 +419,7 @@ def _route_tool_calls(self) -> tuple[list[tuple[str, dict[str, Any]]], str, dict
     meta["action_allowlist"] = {key: list(value) for key, value in action_allowlist.items()}
     meta["action_gate_decisions"] = gate_decisions
     user_text = f"{img_prefix}{state}" if img_prefix else state
+    payload: list[Any] = [user_text, *img_parts] if img_parts else [user_text]
     request_path = None
     if self._collect_trace and self._trace_path is not None:
         from emet.eval.eqa_decision_trace import record_vlm_request
@@ -434,6 +435,7 @@ def _route_tool_calls(self) -> tuple[list[tuple[str, dict[str, Any]]], str, dict
                     user_text=user_text,
                     images=img_parts,
                     history=self._conversation.messages,
+                    packet=self._conversation.preview(payload, system_prompt=self._system_prompt),
                     metadata={
                         "router_call_id": router_call_id,
                         "max_new_tokens": ROUTER_MAX_NEW_TOKENS,
@@ -463,7 +465,6 @@ def _route_tool_calls(self) -> tuple[list[tuple[str, dict[str, Any]]], str, dict
     )
     if gm is not None:
         gm.last_router_state_text = state
-    payload: list[Any] = [user_text, *img_parts] if img_parts else [user_text]
     t_router0 = time.monotonic()
     try:
         reply = client(
