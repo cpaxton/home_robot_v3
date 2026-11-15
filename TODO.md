@@ -80,6 +80,13 @@ merges, measured policy improvement and hardware readiness are separate decision
       0/12 and initial 2/12; completed arm endpoints meeting 3mm/0.02rad improve
       1/10 to 5/10. This completes the experiment, not whole-body qualification:
       base, quiet-hold and jerk failures remain, with no checkpoint promotion.
+- [x] **Separate C1 base interference from arm learning.** All 24 unchanged
+      initial/final replays reproduce every continuous metric and outcome.
+      Replacing only final base requests with initial zero requests raises
+      arm full passes 1/10 to 3/10 and smoothness 1/10 to 9/10, but worsens
+      full-amplitude pitch orientation. Preserve the
+      [36-rollout diagnostic](docs/experiments/mars_c1_zero_base_diagnostic_20261115.md);
+      no training, exported controller or qualification follows from it.
 - [ ] **Complete the frozen-base/context coordination test.** The original
       32,768-transition job expired in the queue with zero PPO steps. Preserve
       that attempt. Record a new bounded baseline/velocity pair, seed90,

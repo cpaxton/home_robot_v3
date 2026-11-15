@@ -1,0 +1,127 @@
+{
+  "complete": true,
+  "cases": 24,
+  "all_continuous_metrics_equal": true,
+  "rows": [
+    {
+      "mode": "initial",
+      "id": "train:base:hold",
+      "all_continuous_metrics_equal": true
+    },
+    {
+      "mode": "initial",
+      "id": "train:base:forward",
+      "all_continuous_metrics_equal": true
+    },
+    {
+      "mode": "initial",
+      "id": "train:arm:pitch_up",
+      "all_continuous_metrics_equal": true
+    },
+    {
+      "mode": "initial",
+      "id": "train:arm:pitch_down",
+      "all_continuous_metrics_equal": true
+    },
+    {
+      "mode": "initial",
+      "id": "train:arm:roll_left",
+      "all_continuous_metrics_equal": true
+    },
+    {
+      "mode": "initial",
+      "id": "train:arm:roll_right",
+      "all_continuous_metrics_equal": true
+    },
+    {
+      "mode": "initial",
+      "id": "train:arm:pitch_up@amplitude:0.25",
+      "all_continuous_metrics_equal": true
+    },
+    {
+      "mode": "initial",
+      "id": "train:arm:pitch_up@amplitude:0.5",
+      "all_continuous_metrics_equal": true
+    },
+    {
+      "mode": "initial",
+      "id": "train:arm:pitch_down@amplitude:0.25",
+      "all_continuous_metrics_equal": true
+    },
+    {
+      "mode": "initial",
+      "id": "train:arm:pitch_down@amplitude:0.5",
+      "all_continuous_metrics_equal": true
+    },
+    {
+      "mode": "initial",
+      "id": "train:arm:supported_A_up@amplitude:0.25",
+      "all_continuous_metrics_equal": true
+    },
+    {
+      "mode": "initial",
+      "id": "train:arm:supported_A_up",
+      "all_continuous_metrics_equal": true
+    },
+    {
+      "mode": "final",
+      "id": "train:base:hold",
+      "all_continuous_metrics_equal": true
+    },
+    {
+      "mode": "final",
+      "id": "train:base:forward",
+      "all_continuous_metrics_equal": true
+    },
+    {
+      "mode": "final",
+      "id": "train:arm:pitch_up",
+      "all_continuous_metrics_equal": true
+    },
+    {
+      "mode": "final",
+      "id": "train:arm:pitch_down",
+      "all_continuous_metrics_equal": true
+    },
+    {
+      "mode": "final",
+      "id": "train:arm:roll_left",
+      "all_continuous_metrics_equal": true
+    },
+    {
+      "mode": "final",
+      "id": "train:arm:roll_right",
+      "all_continuous_metrics_equal": true
+    },
+    {
+      "mode": "final",
+      "id": "train:arm:pitch_up@amplitude:0.25",
+      "all_continuous_metrics_equal": true
+    },
+    {
+      "mode": "final",
+      "id": "train:arm:pitch_up@amplitude:0.5",
+      "all_continuous_metrics_equal": true
+    },
+    {
+      "mode": "final",
+      "id": "train:arm:pitch_down@amplitude:0.25",
+      "all_continuous_metrics_equal": true
+    },
+    {
+      "mode": "final",
+      "id": "train:arm:pitch_down@amplitude:0.5",
+      "all_continuous_metrics_equal": true
+    },
+    {
+      "mode": "final",
+      "id": "train:arm:supported_A_up@amplitude:0.25",
+      "all_continuous_metrics_equal": true
+    },
+    {
+      "mode": "final",
+      "id": "train:arm:supported_A_up",
+      "all_continuous_metrics_equal": true
+    }
+  ]
+}

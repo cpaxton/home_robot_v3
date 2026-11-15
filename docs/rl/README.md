@@ -20,6 +20,7 @@ other embodiments, with their own actions, models and qualification.
 | Public tools, agent integration and hardware gates | [Controller integration](../plans/mars_controller_integration.md) |
 | CPU reservations, Caliban and simulator parity | [Parallel simulation](../plans/mars_parallel_simulation.md) |
 | Preview velocity, orientation features and frozen-base pilot | [Experiment report](../experiments/mars_reference_velocity_prototype.md) |
+| Completed GRU credit comparison and base interference | [C1 results](../experiments/mars_c1_normalization_recovery_20261115.md), [command diagnostic](../experiments/mars_c1_zero_base_diagnostic_20261115.md) |
 | Near-term work | [RL TODOs](../../TODO.md#rl-controller-integration-and-acceptance-mars-first) |
 
 Use this directory for enduring design guidance. Keep proposed changes and
