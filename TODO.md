@@ -122,6 +122,14 @@ merges, measured policy improvement and hardware readiness are separate decision
       offline and native diagnostics do not relabel any candidate failure.
       The opt-in axis-angle feature still needs a separate controlled trained
       comparison; do not confound it with the plant, reward or velocity studies.
+- [x] Prepare the exact [17-case directional curriculum and 24-case audit](docs/plans/mars_directional_curriculum.md)
+      with a strict separate loader, source/control hashes, unchanged contracts
+      and disjoint audit resets/motions. Twenty pure case tests pass. This is
+      case preparation only: no native admission, training or policy promotion.
+- [ ] Admit the prepared directional/audit cases on the corrected plant after
+      production/reset and retained-controller validation in #239. Bind the
+      new source's own full checks and teacher evidence; keep original case
+      rejections visible. Training remains conditional on the baseline result.
 - [ ] **Advance real contact skills in stages.** Follow the
       [safety/task curriculum](docs/plans/2026-11-13_whole_body_safety_curriculum.md)
       from actual pregrasp to closure/lift, loaded transport/braking, and
