@@ -74,11 +74,11 @@ def replay(request_path: Path, output: Path, *, max_images=8, max_characters=640
         (10, 30), "Historical images are not proof of current visibility or object geometry.", fill="white", font=font
     )
     for index, row in enumerate(rows):
-        image = conversation.image_context.images[row["view_id"]].copy()
+        image = conversation.image_context.images[row["image_id"]].copy()
         image.thumbnail((320, 240))
         x, y = index % cols * 320, 60 + index // cols * 290
         sheet.paste(image, (x, y))
-        label = f"{row['view_id']}\nmessage {row['message_index']}, image {row['image_slot']}"
+        label = f"{row['image_id']}\nmessage {row['message_index']}, image {row['image_slot']}"
         draw.text((x + 5, y + 243), label, fill="white", font=font)
     sheet.save(recorded.parent / "selected-images.png")
     return packet.audit

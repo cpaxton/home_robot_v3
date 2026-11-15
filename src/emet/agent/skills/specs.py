@@ -48,7 +48,7 @@ EQA_SKILL_SPECS: tuple[SkillSpec, ...] = (
         description=(
             "Read exact retained text from an archived state message. Copy message_id from an archive "
             "annotation. Optional offset/max_characters paginate it. This returns historical text and "
-            "view IDs; recall_view attaches the pixels. No new observation, movement or geometry permission."
+            "image IDs; recall_image attaches the pixels. No new observation, movement or geometry permission."
         ),
         parameters={
             "type": "object",
@@ -62,17 +62,19 @@ EQA_SKILL_SPECS: tuple[SkillSpec, ...] = (
         returns_info=True,
     ),
     SkillSpec(
-        name="recall_view",
+        name="recall_image",
         modes=frozenset({AgentMode.EQA_EPISODE}),
         description=(
-            "Attach a retained historical image again on the next model turn. Copy the exact view_id "
-            "from an image annotation in the dialogue. This does not move the robot, capture a new "
+            "Attach a retained historical image again on the next model turn. Copy the exact image_id "
+            "from an image annotation, not a capture view_id or graph obs_id. This does not move the robot, capture a new "
             "image, confirm current presence, or admit object geometry."
         ),
         parameters={
             "type": "object",
-            "properties": {"view_id": {"type": "string", "description": "Exact retained image view_id."}},
-            "required": ["view_id"],
+            "properties": {
+                "image_id": {"type": "string", "description": "Exact image_id from a pixel attachment annotation."}
+            },
+            "required": ["image_id"],
         },
         returns_info=True,
     ),
@@ -786,7 +788,7 @@ CHAT_EXCLUSIVE_TOOL_NAMES: frozenset[str] = frozenset(s.name for s in CHAT_SKILL
 EQA_EXCLUSIVE_TOOL_NAMES: frozenset[str] = frozenset(
     {
         "read_history",
-        "recall_view",
+        "recall_image",
         "inspect_graph",
         "explore_frontier",
         "investigate",

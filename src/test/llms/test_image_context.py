@@ -61,7 +61,7 @@ def test_bounded_packet_keeps_current_and_distinct_recent_pixels_without_erasing
         else:
             assert before == after
     omitted = packet.messages[1]["content"][1]
-    assert "pixels omitted" in omitted and "recall_view(view_id)" in omitted
+    assert "pixels omitted" in omitted and "recall_image(image_id)" in omitted
     assert packet.audit["occurrences"][0]["decision"] == "repeated_pixels"
 
 
@@ -113,8 +113,8 @@ def test_recall_old_image_is_pinned_historical_and_survives_failed_inference():
         conversation.generate(client, [f"frame {n}", rgb(n)], system_prompt="system")
     oldest = next(iter(conversation.image_context.images))
     assert "pixels omitted" in str(client.calls[-1][1]["content"])
-    assert conversation.recall_view(oldest)["status"] == "HISTORICAL_VIEW_QUEUED"
-    conversation.record_tool_result("recall_view", {"view_id": oldest}, {"ok": True})
+    assert conversation.recall_image(oldest)["status"] == "HISTORICAL_IMAGE_QUEUED"
+    conversation.record_tool_result("recall_image", {"image_id": oldest}, {"ok": True})
     before = len(conversation.messages)
     client.fail = True
     with pytest.raises(RuntimeError, match="inference failed"):
@@ -126,12 +126,14 @@ def test_recall_old_image_is_pinned_historical_and_survives_failed_inference():
     assert preview.audit == conversation.last_packet.audit
     last = client.calls[-1][-1]["content"]
     assert [int(np.asarray(p)[0, 0, 0]) for p in attached([{"content": last}])] == [5, 0]
-    assert any("Requested historical view" in p and "not a new camera capture" in p for p in last if isinstance(p, str))
+    assert any(
+        "Requested historical image" in p and "not a new camera capture" in p for p in last if isinstance(p, str)
+    )
     assert "TOOL_RESULT" in str(client.calls[-1])
     assert len(conversation.messages) == before + 2
     conversation.reset()
     assert not conversation.messages
-    assert conversation.recall_view(oldest)["status"] == "UNKNOWN_VIEW"
+    assert conversation.recall_image(oldest)["status"] == "UNKNOWN_IMAGE"
 
 
 def test_recall_tool_uses_episode_registry_without_motion_verification_or_nav_budget():
@@ -144,12 +146,14 @@ def test_recall_tool_uses_episode_registry_without_motion_verification_or_nav_bu
     ex._grounded_obs_id = 7
     ex._verified = True
     ex._conversation.generate(Client(), ["earlier pixels", rgb(1)], system_prompt="system")
-    view_id = next(iter(ex._conversation.image_context.images))
+    image_id = next(iter(ex._conversation.image_context.images))
     before = (ex._n_nav, ex._n_explore, ex._verified, ex._grounded_obs_id)
-    result = ex.handle_tool("recall_view", {"view_id": view_id})
-    assert result["ok"] and result["status"] == "HISTORICAL_VIEW_QUEUED"
+    result = ex.handle_tool("recall_image", {"image_id": image_id})
+    assert result["ok"] and result["status"] == "HISTORICAL_IMAGE_QUEUED"
     assert before == (ex._n_nav, ex._n_explore, ex._verified, ex._grounded_obs_id)
-    assert not ex.handle_tool("recall_view", {"view_id": "unknown"})["ok"]
+    assert not ex.handle_tool("recall_image", {"image_id": "unknown"})["ok"]
+    assert ex.handle_tool("recall_image", {"image_id": "voxel-frame:5"})["status"] == "UNKNOWN_IMAGE"
+    assert ex.handle_tool("recall_image", {"view_id": "voxel-frame:5"})["status"] == "invalid_tool_arguments"
     history = ex.handle_tool("read_history", {"message_id": ex._conversation.history_id(0)})
     assert history["ok"] and history["text"] == "earlier pixels"
     assert before == (ex._n_nav, ex._n_explore, ex._verified, ex._grounded_obs_id)
@@ -211,7 +215,7 @@ def test_text_budget_archives_only_old_state_text_with_exact_retrieval_and_keeps
     message_id = packet.audit["archived_state_text"][0]["message_id"]
     read = conversation.read_history(message_id, max_characters=8000)
     assert read["ok"] and read["text"] == raw[0]["content"][0]
-    assert read["next_offset"] is None and read["view_ids"]
+    assert read["next_offset"] is None and read["image_ids"]
     assert conversation.messages[0]["content"][0] == raw[0]["content"][0]
     page = conversation.read_history(message_id, offset=7, max_characters=100)
     assert page["text"] == raw[0]["content"][0][7:107] and page["next_offset"] == 107

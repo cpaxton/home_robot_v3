@@ -314,8 +314,8 @@ def _handle_inspect_graph(self, args: dict[str, Any]) -> dict[str, Any]:
     return self._tool_inspect_graph()
 
 
-def _handle_recall_view(self, args: dict[str, Any]) -> dict[str, Any]:
-    return self._conversation.recall_view(str(args.get("view_id", "")))
+def _handle_recall_image(self, args: dict[str, Any]) -> dict[str, Any]:
+    return self._conversation.recall_image(str(args.get("image_id", "")))
 
 
 def _handle_read_history(self, args: dict[str, Any]) -> dict[str, Any]:
@@ -431,7 +431,7 @@ def _handle_relative_motion(self, args: dict[str, Any]) -> dict[str, Any]:
 
 TOOL_HANDLERS: dict[str, Any] = {
     "read_history": _handle_read_history,
-    "recall_view": _handle_recall_view,
+    "recall_image": _handle_recall_image,
     "inspect_graph": _handle_inspect_graph,
     "explore_frontier": _handle_explore_frontier,
     "investigate": _handle_investigate,

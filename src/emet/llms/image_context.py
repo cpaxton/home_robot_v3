@@ -39,9 +39,9 @@ class ImageContext:
         digest = hashlib.sha256(pixels.tobytes()).hexdigest()
         identity = (pixels.shape, digest)
         if identity not in self._by_pixels:
-            view_id = f"view_{self.scope_id}_{len(self.images) + 1:04d}"
-            self._by_pixels[identity] = view_id
-            self.images[view_id] = image
+            image_id = f"image_{self.scope_id}_{len(self.images) + 1:04d}"
+            self._by_pixels[identity] = image_id
+            self.images[image_id] = image
         return self._by_pixels[identity], digest, list(pixels.shape[:2])
 
     def pack(self, messages: list[dict]) -> ImagePacket:
@@ -54,13 +54,13 @@ class ImageContext:
             for part_index, part in enumerate(content):
                 if isinstance(part, (Image.Image, np.ndarray)):
                     slot += 1
-                    view_id, digest, shape = self._register(part)
+                    image_id, digest, shape = self._register(part)
                     occurrences.append(
                         {
                             "message_index": turn,
                             "part_index": part_index,
                             "image_slot": slot,
-                            "view_id": view_id,
+                            "image_id": image_id,
                             "pixel_sha256": digest,
                             "shape_hw": shape,
                         }
@@ -69,14 +69,14 @@ class ImageContext:
         if self.max_images is not None and len(current) > self.max_images:
             raise ValueError("Current/requested images exceed max_images; no current evidence was silently dropped")
         selected = {(o["message_index"], o["part_index"]) for o in current}
-        seen = {o["view_id"] for o in current}
+        seen = {o["image_id"] for o in current}
         for occurrence in reversed(occurrences):
             position = (occurrence["message_index"], occurrence["part_index"])
             if position in selected:
                 continue
-            if self.max_images is None or (occurrence["view_id"] not in seen and len(selected) < self.max_images):
+            if self.max_images is None or (occurrence["image_id"] not in seen and len(selected) < self.max_images):
                 selected.add(position)
-                seen.add(occurrence["view_id"])
+                seen.add(occurrence["image_id"])
         lookup = {(o["message_index"], o["part_index"]): o for o in occurrences}
         packed = []
         for turn, message in enumerate(messages):
@@ -92,10 +92,12 @@ class ImageContext:
                     continue
                 attached = (turn, index) in selected
                 occurrence["decision"] = (
-                    "attached" if attached else ("repeated_pixels" if occurrence["view_id"] in seen else "image_budget")
+                    "attached"
+                    if attached
+                    else ("repeated_pixels" if occurrence["image_id"] in seen else "image_budget")
                 )
                 label = (
-                    f"[Image {occurrence['image_slot']} in this message; view_id={occurrence['view_id']}; "
+                    f"[Image {occurrence['image_slot']} in this message; image_id={occurrence['image_id']}; "
                     f"{'latest request attachment' if turn == len(messages) - 1 else 'historical attachment'}; "
                 )
                 if attached:
@@ -107,7 +109,7 @@ class ImageContext:
                     parts.append(part)
                 else:
                     parts.append(
-                        label + "pixels omitted from this request. Use recall_view(view_id) to see them again.]"
+                        label + "pixels omitted from this request. Use recall_image(image_id) to see them again.]"
                     )
             packed.append({**message, "content": parts})
         return ImagePacket(
@@ -116,7 +118,7 @@ class ImageContext:
                 "policy": "recent_unique",
                 "max_images": self.max_images,
                 "input_images": len(occurrences),
-                "unique_pixel_images": len({o["view_id"] for o in occurrences}),
+                "unique_pixel_images": len({o["image_id"] for o in occurrences}),
                 "attached_images": len(selected),
                 "occurrences": occurrences,
                 "attached_pixels": sum(

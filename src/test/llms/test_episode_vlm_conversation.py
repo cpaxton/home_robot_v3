@@ -170,7 +170,7 @@ def test_long_episode_is_bounded_on_remote_wire_and_server_without_losing_tool_t
     )
     assert sum("TOOL_RESULT" in str(m["content"]) for m in backend.seen[-1]) == 11
     assert len(conversation.messages) == 36
-    assert "pixels omitted" in str(sent) and "recall_view" in str(sent)
+    assert "pixels omitted" in str(sent) and "recall_image" in str(sent)
     assert "read_history" in str(sent) and conversation.last_packet.audit["archived_state_text"]
     wire_text = sum(
         len(part.get("text", "")) if isinstance(part, dict) else len(part)

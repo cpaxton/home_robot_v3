@@ -15,29 +15,29 @@ class VLMConversation:
         self.messages = []
         self.max_characters = max_characters
         self.image_context = ImageContext(max_images)
-        self._requested_views = []
+        self._requested_images = []
         self.last_packet = None
 
     def reset(self):
         self.messages.clear()
         self.image_context = ImageContext(self.image_context.max_images)
-        self._requested_views.clear()
+        self._requested_images.clear()
         self.last_packet = None
 
-    def recall_view(self, view_id):
-        if view_id not in self.image_context.images:
+    def recall_image(self, image_id):
+        if image_id not in self.image_context.images:
             return {
                 "ok": False,
-                "status": "UNKNOWN_VIEW",
-                "view_id": view_id,
-                "note": "Use an exact view_id from this episode's image annotations.",
+                "status": "UNKNOWN_IMAGE",
+                "image_id": image_id,
+                "note": "Use an exact image_id from this episode's image annotations.",
             }
-        if view_id not in self._requested_views:
-            self._requested_views.append(view_id)
+        if image_id not in self._requested_images:
+            self._requested_images.append(image_id)
         return {
             "ok": True,
-            "status": "HISTORICAL_VIEW_QUEUED",
-            "view_id": view_id,
+            "status": "HISTORICAL_IMAGE_QUEUED",
+            "image_id": image_id,
             "note": "The next request will attach these retained pixels; no new capture or motion occurred.",
         }
 
@@ -57,8 +57,8 @@ class VLMConversation:
         images = []
         for part in parts:
             if not isinstance(part, str):
-                view_id, _, _ = self.image_context._register(part)
-                images.append(view_id)
+                image_id, _, _ = self.image_context._register(part)
+                images.append(image_id)
         end = min(len(text), offset + max_characters)
         return {
             "ok": True,
@@ -69,19 +69,19 @@ class VLMConversation:
             "offset": offset,
             "next_offset": end if end < len(text) else None,
             "total_characters": len(text),
-            "view_ids": images,
-            "note": "Original historical text; use recall_view for its pixels. Not a new observation.",
+            "image_ids": images,
+            "note": "Original historical text; use recall_image for its pixels. Not a new observation.",
         }
 
     def _user_message(self, content):
         parts = copy.deepcopy(content)
-        if self._requested_views:
+        if self._requested_images:
             parts = [parts] if isinstance(parts, str) else list(parts)
-            for view_id in self._requested_views:
+            for image_id in self._requested_images:
                 parts.extend(
                     [
-                        f"Requested historical view {view_id}; not a new camera capture.",
-                        self.image_context.images[view_id],
+                        f"Requested historical image {image_id}; not a new camera capture.",
+                        self.image_context.images[image_id],
                     ]
                 )
         return {"role": "user", "content": parts}
@@ -150,7 +150,7 @@ class VLMConversation:
         reply = client.generate_messages(self.last_packet.messages, **kwargs)
         # Failed inference must not leave a half-turn in episode history.
         self.messages.extend([user, {"role": "assistant", "content": str(reply or "")}])
-        self._requested_views.clear()
+        self._requested_images.clear()
         return reply
 
     def record_tool_result(self, name, arguments, result):

@@ -39,7 +39,7 @@ def test_actual_model_final_tool_pack_describes_capabilities_without_legacy_rout
     prompt = build_graph_eqa_system_prompt(tools, decision_policy="model_final")
     assert "no required INVESTIGATE/EXPLORE sequence" in prompt
     assert "must investigate unused voxel detections" not in prompt
-    assert "recall_view" in prompt
+    assert "recall_image" in prompt
     assert "Movement validation and target verification are separate" in prompt
 
 

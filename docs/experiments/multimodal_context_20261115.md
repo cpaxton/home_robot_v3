@@ -48,6 +48,10 @@ Original requests live under the candidate artifact's
 
 ## Packet contract
 
+Current API names pixel identity `image_id` and uses `recall_image(image_id)`.
+Historical prototype traces below retain their original `recall_view` name;
+capture `view_id` and graph `obs_id` are separate identities.
+
 `emet.llms.image_context` now makes a request copy for episode-owned
 `VLMConversation`, shared by EQA and OVMM find phases:
 
@@ -58,12 +62,12 @@ Original requests live under the candidate artifact's
   Fill the remaining slots with recent distinct historical pixels, within eight
   attachments by default. If mandatory images exceed the limit, fail explicitly
   rather than silently discard current evidence.
-- Add stable episode-scoped view IDs and local message image slots. An omitted
+- Add stable episode-scoped image IDs and local message image slots. An omitted
   image becomes a text reference at its original location. Pixel equality does
   not establish acquisition-time, pose, geometry or object-state equality.
-- `recall_view(view_id)` queues exact retained pixels for the next turn, labeled
+- `recall_image(image_id)` queues exact retained pixels for the next turn, labeled
   historical. It performs no movement, no new capture, no visual verification
-  and no geometry admission. Unknown/reset-episode IDs return `UNKNOWN_VIEW`.
+  and no geometry admission. Unknown/reset-episode IDs return `UNKNOWN_IMAGE`.
 - Record the prepared packet, its selected/omitted image audit, raw pixel hashes,
   and interleaved current content before provider resizing/tokenization. This
   boundary is still not a token or HTTP-wire trace.
@@ -71,7 +75,7 @@ Original requests live under the candidate artifact's
 `mapping.eqa.agentic_context_max_images` is configurable; `null` keeps all
 attachment occurrences for the full-context ablation. Eight is a conservative
 resource setting, not a tuned optimum or a universal GPU-memory guarantee.
-Original text remains intact and is not token-budgeted by this change. The
+Original text remains retained; the separate working-text bound described below is a character proxy, not a tokenizer limit. The
 independent CHAT/OpenaiClient path is not silently claimed to use this episode
 adapter. The packet module is provider-independent and does not depend on a robot,
 scene, object detector or answer rule.
@@ -203,7 +207,7 @@ character proxy, not a tokenizer count or universal GPU guarantee. The policy:
   subject to the independent image limit. The original full state stays in
   `VLMConversation.messages`; nothing resets the episode.
 - `read_history(message_id, offset, max_characters)` returns the original text
-  in pages, plus its view IDs. The model can use `recall_view` for those pixels.
+  in pages, plus its image IDs. The model can use `recall_image` for those pixels.
   These information tools add no motion or geometry permission.
 - If required current/system/action/tool text alone cannot fit, fail explicitly
   before inference, retaining the original dialogue. Do not silently discard a
@@ -233,3 +237,53 @@ are for the replayed packet, not the original server's token count. It makes no
 model calls. **442 focused CPU tests pass**, including remote-wire/server text
 bounds, exact history retrieval, paging/reset isolation and required-text overflow
 before inference. A GPU resource probe and live follow-up are still required.
+
+## Working-text validation and identifier correction
+
+At frozen source `8ee6d898`, the resource-only probe replayed a bounded version
+of the saved failing packet: eight images, 63,594 characters and **22,773 actual
+prompt tokens**. With a synthetic **6 GiB GPU allocation** approximating competing
+agent memory, generation completed using SDPA. Peak PyTorch reserved memory was
+**18.61 GiB including that reservation** (17.47 GiB peak allocated). This is a
+resource diagnostic; its proposed action was not executed or scored. Evidence:
+`~/runs/emet/context-state-memory-probe-20261115-r1/`.
+
+The subsequent physical-simulation find episode also completed without OOM,
+again **1/2** phases (165.55 s query / 217.62 s episode). All 15 coordinator
+requests stayed within eight images and 64,000 characters; the maximum measured
+working text was **63,767 characters**. Up to eight earlier states were archived
+by reference. A cross-request audit verified unchanged text for **31 assistant /
+tool-result messages** and unchanged current inputs. All 16 executions belonged
+to the model's selected action lists, without rewrites. Evidence:
+`~/runs/emet/context-state-budget-find-20261115-r4/` and its sibling cohort's
+`working-context-live-audit-20261115.json`.
+
+The same audit caught an API naming collision introduced by the prototype. The
+model requested `recall_view(view_id="voxel-frame:5")`, copying a real capture
+receipt's `view_id`; the prototype pixel registry expected another ID namespace.
+The request failed safely, but those names were misleading. The current API is
+therefore **`recall_image(image_id)`**, where pixel IDs start `image_...`.
+`read_history` returns `image_ids`. Capture `view_id`, graph/candidate `obs_id`
+and archive `message_id` retain their distinct meanings. There is no guessed
+compatibility alias and no change to physical permissions. Contract tests cover
+successful image recall and rejection of frame IDs or the wrong argument name.
+
+For example, the model can request:
+
+```json
+{"name":"recall_image","arguments":{"image_id":"image_<episode-scope>_0003"}}
+```
+
+or page an archived state:
+
+```json
+{"name":"read_history","arguments":{"message_id":"message_<episode-scope>_0001","offset":0,"max_characters":4000}}
+```
+
+Copy real IDs from the packet annotations; the placeholders above are not valid
+IDs. Quoted historical tool calls preserve their prototype names. The image sheets
+are offline replays using current pixel IDs; current inference receives the current schemas.
+
+The memory improvement does not establish localization quality: microwave
+geometry still abstained and the model chose a semantic final answer. Broader
+paired EQA/another-room acceptance and retained-object selection remain open.
