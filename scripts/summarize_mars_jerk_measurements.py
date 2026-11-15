@@ -60,20 +60,21 @@ def main():
     args.output.mkdir(parents=True, exist_ok=False)
     result = {
         "format": "mars-aligned-jerk-readout-v1",
-        "scope": "24 final replays + 2 stationary anchors + 2 high-rate anchors + 12 corrected teacher feedback probes; first 12-probe attempt invalid",
+        "scope": "24 final replays + 2 stationary anchors + 2 high-rate anchors + 12 corrected teacher feedback probes + 24 learned probes; first 12-probe attempt invalid",
         "new_ppo_steps": 0,
         "hardware_used": False,
         "qualified": False,
         "acceptance_or_reward_changed": False,
         "experiments": {},
         "readout_script_sha256": sha(Path(__file__)),
+        "jerk_channel_columns": ["linear_peak", "linear_peak_after_two_samples", "yaw_peak"],
         "invalid_attempt": {
             "path": str(args.root / "feedback"),
             "reason": "observer restored feedback on nonterminal code=ok; excluded from comparison; raw archives retained",
             "summary_sha256": sha(args.root / "feedback/summary.json"),
         },
     }
-    for name in ("data", "anchors", "substeps", "feedback"):
+    for name in ("data", "anchors", "substeps", "feedback", "learned"):
         directory = "feedback-v2" if name == "feedback" else name
         path = args.root / directory / "summary.json"
         summary = json.loads(path.read_text())
@@ -84,19 +85,54 @@ def main():
             variants[variant] = {
                 key: value
                 for key, value in record.items()
-                if key not in {"original_source_hashes", "instrumented_source_hashes"}
+                if key not in {"original_source_hashes", "instrumented_source_hashes", "cases", "outcomes"}
             }
+            variants[variant]["cases"] = [
+                {
+                    "id": case["id"],
+                    "samples": case["samples"],
+                    "initial_state_sha256": case["initial_state_sha256"],
+                    "reference_sha256": case["reference_sha256"],
+                    "jerk_channels": {
+                        channel: [
+                            values["linear_jerk_peak"],
+                            values["linear_jerk_peak_after_two_samples"],
+                            values["yaw_jerk_peak"],
+                        ]
+                        for channel, values in case["channel_peaks"].items()
+                    },
+                    "integrated_base_jerk_reward_component": case["integrated_base_jerk_reward_component"],
+                    "readonly_reward_group_totals": case["readonly_reward_group_totals"],
+                    "max_dt_error_seconds": case["max_dt_error_seconds"],
+                }
+                for case in record["cases"]
+            ]
             for key in ("original_source_hashes", "instrumented_source_hashes"):
                 if key in record:
                     variants[variant][key + "_digest"] = hashlib.sha256(
                         json.dumps(record[key], sort_keys=True, separators=(",", ":")).encode()
                     ).hexdigest()
-            if name in {"substeps", "feedback"}:
-                suffix = ".json.gz" if name == "feedback" else "-native.json.gz"
+            if name in {"substeps", "feedback", "learned"}:
+                suffix = ".json.gz" if name in {"feedback", "learned"} else "-native.json.gz"
                 raw = args.root / directory / (variant + suffix)
                 content = json.loads(gzip.decompress(raw.read_bytes()))
                 measurements = content["measurements"]
                 variants[variant]["physics_readout"] = {case["id"]: physics_summary(case) for case in measurements}
+                variants[variant]["outcomes"] = [
+                    {
+                        key: row[key]
+                        for key in (
+                            "id",
+                            "code",
+                            "mastered",
+                            "tracking_and_settling_pass",
+                            "smoothness_pass",
+                            "failure_reasons",
+                            "metrics",
+                        )
+                    }
+                    for row in content["replay"]["cases"]
+                ]
         result["experiments"][name] = {
             "producer_revision": summary["producer_revision"],
             "original_summary_sha256": sha(path),

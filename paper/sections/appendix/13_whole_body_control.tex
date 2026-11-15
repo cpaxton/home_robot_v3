@@ -658,5 +658,29 @@ alignment remains a subsequent audit, not a relaxed gate. All outcomes are in
 Synthetic constant-acceleration reversals show that unsigned-speed derivatives
 can spike despite zero vector jerk. Saved candidate signed-displacement peaks
 are nevertheless larger, so this audit does not remove its failures or revise
-qualification. Sampling/reset alignment with the instantaneous-velocity reward
-remains to be measured.
+qualification. This saved-pose audit could not measure sampling/reset alignment
+with the instantaneous-velocity reward.
+
+\paragraph{Native wheel-feedback timing diagnosis.}
+A subsequent matched native replay records the reward and acceptance channels
+on the same states, preserving all 24 original final-actor trajectories exactly.
+Stationary zero-head and analytic-teacher anchors show a real approximately
+50\,Hz chassis/wheel-command oscillation at the 2\,ms physics cadence, despite
+zero requested base motion. The inner loop reads a spatial-velocity cache from
+the preceding solve. Using current generalized velocity at the same chassis
+center of mass reduces teacher hold speed RMS from 1.583 to 0.000217\,mm/s
+after the first second. Disabling proportional feedback also quiets the hold
+but fails the forward-motion smoothness check; the current-velocity correction
+retains that pass without adding an output filter.
+
+With the same learned candidate weights, references and acceptance budgets,
+the opt-in correction increases full passes from 2/12 to 8/12 and full arm
+passes from 1/10 to 7/10. All ten arm cases pass smoothness, versus one before;
+arm tracking/settling remains 7/10. Median hand position error is 0.174\,mm;
+both roll orientations, full supported-arm orientation and forward-base
+tracking remain unresolved. Full-supported contact load increases from 0.757
+to 0.970\,N, so improved smoothness is not a claim of uniformly lower loads.
+There are no PPO updates, policy promotion or hardware trials. The corrected
+teacher probe, learned comparison, raw-archive identities and an excluded
+first probe with a lifecycle error are retained in
+\texttt{mars\_aligned\_jerk\_measurements\_v1/results.json} and its report.
