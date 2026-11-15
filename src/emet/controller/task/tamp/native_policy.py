@@ -33,6 +33,7 @@ class NativePolicy:
     arm_extension_margin_m: float = 0.0
     gripper_close_loose: bool = False
     gripper_contact_hold_fraction: float = 0.0
+    prefer_face_aligned_grasps: bool = False
 
 
 def native_policy(name):
@@ -47,6 +48,7 @@ def native_policy(name):
             pregrasp_fallback_offset_m=(0.0, 0.0, 0.08),
             arm_extension_margin_m=0.0005,
             gripper_contact_hold_fraction=0.5,
+            prefer_face_aligned_grasps=True,
         )
     )
 

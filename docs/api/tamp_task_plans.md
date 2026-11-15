@@ -170,7 +170,7 @@ Failure receipts can include a finite-vocabulary `data.verification` witness:
 ```
 
 Native substages distinguish `lift_motion`, `post_lift_hold`,
-`loaded_payload_handoff` and `post_release_support`. The primitive tool and
+`loaded_payload_handoff`, `loaded_motion` and `post_release_support`. The primitive tool and
 multi-step receipt preserve the same witness without private object IDs or
 provider exception text. Unknown/malformed witness fields are discarded at the
 native-provider boundary. Missing evidence remains absent; it is not inferred
@@ -197,3 +197,11 @@ control; it is not a general solution. Its results remain in
 The contact-relative candidate needs live validation before any reliability
 claim. The diagnostic `--gripper-close-preset default|loose` override disables
 the contact-relative adjustment and archives the effective policy.
+
+For an object described by one collision box, the bounded development policy
+also ranks the existing grasp candidates by jaw alignment with the box's
+measured world-space face normals. This lets a higher aligned grasp precede a
+lower edge pinch. Compound and other shapes keep their prior order. No candidate
+is removed or added, and the shared IK cap stays unchanged. This is a geometric
+preference, not a contact/force certificate; execution still has to pass the
+same physical checks.

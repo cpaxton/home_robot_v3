@@ -401,8 +401,10 @@ def test_shared_bounded_policy_is_explicit_and_legacy_default_is_preserved(nativ
     assert adapter.payload_binding == 'verified_lift'
     assert adapter.release_limits.max_drop_m == .04
     assert adapter.arm_extension_margin_m == .0005
+    assert adapter.prefer_face_aligned_grasps is True
     assert context['_native_tamp_adapter'].policy == 'legacy'
     assert context['_native_tamp_adapter'].release_limits is None
+    assert context['_native_tamp_adapter'].prefer_face_aligned_grasps is False
     assert context['_native_tamp_adapter']._executor('object1').joint_limit_margins == {}
     with pytest.raises(ValueError, match='invalid_native_tamp_policy'):
         NativeTableAdapter(None, policy='typo')
@@ -531,6 +533,23 @@ def test_native_verification_substage_is_public_and_does_not_leak_to_next_handle
     assert result['status'] == 'partial' and result['code'] == 'verification_failed'
     assert result['data']['verification'] == {'substage': substage, 'reason': 'payload_not_retained'}
     assert 'object1' not in json.dumps(result)
+    assert 'verification' not in call('execute_pick_place_plan', plan_ref=ref)['data']
+
+
+@pytest.mark.parametrize('phase', ['preplace', 'place'])
+def test_loaded_motion_retention_failure_has_its_own_witness(native, monkeypatch, phase):
+    from emet.controller.manipulation.physical_pick_place import PhysicalMotionResult
+    _, _, context, call = native
+    adapter = context['_native_tamp_adapter']
+    ref = make_plan(call)
+    ex = adapter.plans[ref].executor
+    ex.grasp_only = Mock(return_value=PhysicalMotionResult(True, 'ok', 'lift'))
+    ex.place_only = Mock(return_value=PhysicalMotionResult(False, 'payload_not_retained', phase))
+    monkeypatch.setattr(adapter, '_verify', lambda *a, **k: True)
+    result = call('execute_pick_place_plan', plan_ref=ref)
+    assert result['status'] == 'partial' and result['code'] == 'payload_not_retained'
+    assert result['data']['verification'] == {'substage': 'loaded_motion', 'reason': 'payload_not_retained'}
+    assert result['data']['completed_ops'] == ['grasp']
     assert 'verification' not in call('execute_pick_place_plan', plan_ref=ref)['data']
 
 

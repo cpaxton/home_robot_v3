@@ -20,7 +20,7 @@ class VerificationFailure:
 
     def __post_init__(self):
         if not isinstance(self.substage, str) or not isinstance(self.reason, str) or self.substage not in {
-            "lift_motion", "post_lift_hold", "loaded_payload_handoff", "post_release_support"
+            "lift_motion", "post_lift_hold", "loaded_payload_handoff", "loaded_motion", "post_release_support"
         } or self.reason not in {
             "payload_not_retained", "motion_unverified", "reference_binding_invalid",
             "bilateral_contact_unverified", "support_contact_persists", "unexpected_contact",
