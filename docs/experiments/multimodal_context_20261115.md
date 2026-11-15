@@ -287,3 +287,60 @@ are offline replays using current pixel IDs; current inference receives the curr
 The memory improvement does not establish localization quality: microwave
 geometry still abstained and the model chose a semantic final answer. Broader
 paired EQA/another-room acceptance and retained-object selection remain open.
+
+## Current-API live check and remaining handoff gap
+
+Frozen source `b00c6bae`, managed job `20261115_155756_39ab27`, completed
+without inference errors: **0/2 terminal localization phases**, 147.82 s query /
+202.22 s episode wall time. This remains the same stochastic seed-1 development
+episode, not another independent benchmark scene or a matched performance claim.
+Evidence: `~/runs/emet/context-image-ids-find-20261115-r5/`; serial protocol and
+audit: `~/runs/emet/context-image-ids-cohort-20261115-r5/`.
+
+All **16 requests** contain at most eight images and 64,000 characters
+(maximum **63,879**). Up to eight old state messages are archived by reference.
+The audit verifies exact recurring text for **32 assistant/tool messages**,
+unchanged current inputs, and **16 executions** matching model-selected actions
+without rewrites. The model successfully calls the current API:
+
+```json
+{"name":"recall_image","arguments":{"image_id":"image_f6c651d88b73_0003"}}
+```
+
+That image was already attached in the preceding request: this validates naming
+and dispatch, not autonomous recovery of omitted evidence. No `read_history` call
+occurred; its paging and omitted-image recall remain covered by contract tests.
+
+The bowl trace is especially useful. Rounds 0 and 4 both admit object 7. The final
+request **still says** `Selected object geometry ... admitted, object_obs_id: 7`
+and attaches its historical image; the current camera has turned away and visual
+verification is false. The model explicitly submits `on the counter`. The
+terminal adapter's grounded-object branch requires `result.verified` as well as
+`grounded_obs_id`, so it does not hand off those retained coordinates. This is
+**not missing image history or a lost geometry pointer in this run**. Semantic
+answers remain intact; localization acceptance is a distinct failure.
+
+The completion text previously mentioned only admitted geometry. A subsequent
+context-only repair now renders the existing handoff's visual-verification status
+as `confirmed` / `unconfirmed` and states both requirements. Six combinations
+(no geometry, object 0, object 7; verification true/false) pin that distinction.
+The adapter, geometry freshness rules and model action/answer authority are
+unchanged. This last wording change has CPU coverage, not a further live outcome.
+
+For the microwave, grounding abstains at round 2 (`no unambiguous surface
+selected; another view is needed`). The model submits `above the stove, mounted
+in the wall` at round 4 with only one of eight navigation calls spent. Neither
+semantic correctness nor a larger unused budget establishes metric localization.
+
+Next investigate whether find should return explicitly selected **last-observed
+geometry** separately from **current manipulation authorization**, rather than
+coupling their acceptance flags. That is a separate contract change requiring
+review and tests; do not silently reuse historical coordinates for physical action.
+Broader paired EQA/another-room acceptance is still open.
+
+Final context-status verification: **108** routing/answer/verification tests and
+**52** OVMM consumer/phase-metric tests pass. Earlier identifier/working-context
+suite: **442 passed**. Reports: `/tmp/context-handoff-status-tests-20261115.xml`,
+`/tmp/context-handoff-consumer-tests-20261115.xml`,
+`/tmp/context-image-id-tests-20261115.xml`. These suites overlap; do not add their
+counts as independent coverage.

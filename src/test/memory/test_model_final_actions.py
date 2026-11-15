@@ -71,6 +71,10 @@ def test_find_state_reports_selected_geometry_independently_of_visual_and_motion
     else:
         assert f'"status": "admitted", "object_obs_id": {grounded_obs_id}' in text
     assert "not a claim of current visibility, reachability or manipulation readiness" in text
+    expected = "confirmed" if visually_verified else "unconfirmed"
+    assert f"Grounded-object handoff visual verification: {expected}" in text
+    assert "requires both admitted geometry and visual verification" in text
+    assert "Retained geometry alone does not satisfy that handoff" in text
 
 
 @pytest.mark.parametrize(

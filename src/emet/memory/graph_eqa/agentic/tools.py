@@ -423,9 +423,14 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
         )
         text += "\nSelected object geometry for this query: " + json.dumps(geometry)
         text += " Retained geometry is not a claim of current visibility, reachability or manipulation readiness."
+        text += "\nGrounded-object handoff visual verification: " + (
+            "confirmed" if getattr(executor, "_verified", False) else "unconfirmed"
+        )
         text += (
             "\nCompletion requirement: localize the requested object. Visual presence alone is not success; "
-            "an admitted object position is required. If grounding fails, inspect another view or explore. "
+            "the existing grounded-object handoff requires both admitted geometry and visual verification. "
+            "Retained geometry alone does not satisfy that handoff while verification is unconfirmed. "
+            "If either is missing, the available sensing and movement tools can obtain another target view. "
             "A camera/viewpoint position is not an object position."
         )
     agent = getattr(executor, "agent", None)

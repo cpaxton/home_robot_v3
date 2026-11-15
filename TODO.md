@@ -108,7 +108,7 @@
       admitted object evidence distinct from latest-view grounding failure.
       Incomplete pair: `~/runs/emet/recovery-budget-high-20261115-r2/`.
       Episode image packets now preserve dialogue, bound attachments to eight,
-      expose stable view IDs and support explicit historical recall. Offline replay
+      expose stable pixel IDs and support explicit historical recall. Offline replay
       reduces the failing 30 attachments to eight. Live seed-1 retest completes
       without OOM, 1/2 phases; all 15 requests stay within eight images. The
       coordinator uses recall_view but still submits a semantic microwave answer
@@ -120,13 +120,19 @@
       The third image-only check still raises OOM with eight images: long state
       text also matters. Added a 64k working-character cap that archives only old
       state text by explicit reference; current state and all assistant/tool text
-      remain exact. read_history retrieves original text and recall_view its
+      remain exact. read_history retrieves original text and recall_image its
       pixels. The resource probe completes at 22,773 tokens with a synthetic
       6 GiB competing GPU allocation; live also completes without OOM (1/2).
       Fifteen requests respect both bounds, with assistant/tool text unchanged.
       Fixed a discovered pixel/frame ID naming collision: current tools are
       recall_image(image_id) and read_history(message_id). 442 CPU checks pass;
-      current-API live check and broader acceptance remain pending.
+      current-API live check completes without OOM, 0/2 terminal phases. All 16
+      requests respect bounds and preserve 32 assistant/tool messages. Pixel recall
+      uses the correct ID. Bowl geometry remains admitted at submit, but the
+      terminal adapter rejects it without current visual verification; context
+      now states both existing requirements. Investigate last-observed find
+      geometry versus current manipulation authorization as separate contracts.
+      Broader acceptance remains pending.
       Examples: `docs/experiments/multimodal_context_20261115.md`.
 - [ ] Emit actual per-episode simulation duration, model inference cost and
       invocation overhead in paper-run manifests. Clock probes and reported
