@@ -162,6 +162,9 @@ joint limits when solving IK targets. The coupled extension therefore reserves
 opening; it is not a certified tracking-error bound. Model limits, measured-start
 validation, collision checks and acceptance thresholds remain unchanged. An
 already out-of-range measured start still rejects; no live state is clamped.
+This reserve applies to IK targets, not every path waypoint: the path planner
+uses the original model limits, so a valid measured start within the reserve
+band and the initial path segment can remain outside the target reserve.
 
 Failure receipts can include a finite-vocabulary `data.verification` witness:
 

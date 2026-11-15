@@ -412,6 +412,7 @@ def test_shared_bounded_policy_is_explicit_and_legacy_default_is_preserved(nativ
 
 
 def test_bounded_plan_reserves_arm_extension_without_changing_measured_state_or_limits(native):
+    """The home-start fixture stays interior; this is not a general path bound."""
     robot, _, context, _ = native
     model = context['_native_tamp_adapter'].model
     adapter = NativeTableAdapter(robot, model=model, policy='bounded_release')
@@ -446,6 +447,37 @@ def test_bounded_margin_does_not_clamp_or_admit_out_of_range_measured_start(nati
     assert path is None and 'invalid_start:joint_bounds:joint_arm_l0' in error
     np.testing.assert_array_equal(adapter.data.qpos, before)
     robot.arm_to.assert_not_called()
+
+
+def test_bounded_target_reserve_keeps_valid_margin_band_start_in_path(native):
+    robot, _, context, _ = native
+    adapter = NativeTableAdapter(robot, model=context['_native_tamp_adapter'].model, policy='bounded_release')
+    executor = adapter._executor('object1')
+    adapter.data.qpos[adapter.model.joint('joint_lift').qposadr[0]] = .85
+    adapter.data.qpos[adapter.model.joint('joint_wrist_pitch').qposadr[0]] = 0.
+    for i in range(4):
+        joint = adapter.model.joint(f'joint_arm_l{i}')
+        adapter.data.qpos[joint.qposadr[0]] = float(joint.range[1]) - .00025
+    before = adapter.data.qpos.copy()
+    start = before[executor.qadr].copy()
+    goal = start.copy()
+    for i in range(4):
+        name = f'joint_arm_l{i}'
+        goal[executor.joint_names.index(name)] = float(adapter.model.joint(name).range[1]) - .001
+    path, error = executor.plan_joint_target(goal)
+    assert error is None, error
+    np.testing.assert_array_equal(path[0], start)
+    np.testing.assert_allclose(path[-1], goal)
+    for i in range(4):
+        name = f'joint_arm_l{i}'
+        column = executor.joint_names.index(name)
+        upper = float(adapter.model.joint(name).range[1])
+        assert upper - .0005 < path[0][column] < upper
+    # Pure planning may leave private data at its goal, but never clamps the
+    # start waypoint or writes a measured configuration back to the robot.
+    robot.arm_to.assert_not_called()
+    robot.open_gripper.assert_not_called()
+    robot.close_gripper.assert_not_called()
 
 
 def test_policy_change_invalidates_cached_native_handles(native):

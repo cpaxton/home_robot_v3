@@ -6,14 +6,17 @@ The ordinary legacy policy is unchanged. Physical model limits, measured-start
 validation, geometry, collision/retention thresholds, release limits and final
 goal verification remain unchanged. A measured state beyond the original limit
 still rejects; the planner does not clamp live qpos or silently relabel it valid.
-The margin is an empirical reserve, not a certified tracking-error bound.
+The margin is an empirical IK-target reserve, not a certified tracking-error
+bound or an enforced bound on every path waypoint. The path planner uses the
+original model limits; a valid measured start inside the reserve band and its
+initial path segment can remain outside the target reserve.
 
 The original November 13 swap-right25 failure captured arm segments 7–9 µm above
 their 0.13 m limits after release, beyond the unchanged 1 µm numerical tolerance.
 A private planning probe showed an interior target remained feasible. The new
-regressions check real bounded grasp/place paths stay inside this reserve, the
-model/state remain unmodified, legacy behavior is preserved, and an 8 µm
-out-of-range measured start still rejects without commands.
+regressions check the home-start fixture's bounded grasp/place paths stay inside
+this reserve, the model/state remain unmodified, legacy behavior is preserved,
+and an 8 µm out-of-range measured start still rejects without commands.
 
 ## Physical results, kept separate by compute condition
 
@@ -84,6 +87,16 @@ Protocols:
 [fast CPU pair](../../configs/eval/tamp_native_joint_margin_cpu_replay_20261114.json).
 The [compact result manifest](tamp_native_joint_margin_20261114.json) retains
 all outcomes, budgets, sources, audit counts, release samples and artifact hashes.
+Artifact-reference paths in this derived manifest are relative to the repository
+root. Restore the separately retained `.tamp-runs/` artifacts there and verify
+their recorded hashes; cloning the source alone does not supply those files.
+Original raw protocol contents and artifact hashes are unchanged.
+
+November 15 review follow-up: all 47 referenced artifact hashes were verified
+when normalizing the 46 absolute references. Four focused policy/path tests pass,
+including a new regression that retains a valid start 0.25 mm from the upper
+joint limit in the returned path, outside the 0.5 mm IK-target reserve. The
+152/304-test counts above describe the original recorded runs.
 
 The prior 4/8 native and 3/4 Caliban agent development results remain unchanged.
 This does not qualify observed manipulation, whole-body learned control,
