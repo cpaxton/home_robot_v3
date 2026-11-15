@@ -24,6 +24,22 @@ Strike through or move to a PR when done.
       coverage gap, with same-provider local/coverage, initial-heading and cost
       comparisons. See [disposition](docs/plans/coverage_scan_disposition.md).
 
+## Native TAMP base approach (follow-up to #234)
+
+- [ ] Implement checked unloaded base positioning on
+      [`feat/tamp-native-base-approach`](https://github.com/cpaxton/home_robot_v3/tree/feat/tamp-native-base-approach),
+      stacked on `fix/tamp-native-joint-margin` (#234). Keep it out of #234's
+      frozen refinement scope. Plan: [native base approach](docs/plans/2026-11-14_native_tamp_base_approach.md).
+      Use private combined base/arm planning, swept robot geometry, ordinary base
+      controllers, measured arrival and fresh grasp refinement. No live pose writes.
+- [ ] Preserve the failed swap: the latest #234 pilot passes 2/3 tasks and 5/7
+      transfers; fixed-base IK rejects better-aligned pregrasps. Private +25/+40 mm
+      base-offset IK success is not navigation or task acceptance. Finish the
+      original control/shift/swap live gate, then all eight native tasks and four
+      interface boundaries, followed by the four actual remote-VLM agent cases.
+      Historical native 4/8 and Caliban 3/4 scores remain unchanged. Observed
+      exploration and hardware qualification stay separate.
+
 ## Shared evidence/navigation stack (#199 / #202)
 
 - [ ] Report wall-clock and simulator-clock elapsed time separately for episodes,

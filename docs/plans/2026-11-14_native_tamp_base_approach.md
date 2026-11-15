@@ -1,5 +1,11 @@
 # Native TAMP: checked base approach before grasp
 
+November 15 scope freeze: this feature belongs on
+[`feat/tamp-native-base-approach`](https://github.com/cpaxton/home_robot_v3/tree/feat/tamp-native-base-approach),
+stacked on #234. Finalize #234 for review as the bounded refinement/evidence
+change; its failed full-task gate remains recorded and moves into this
+follow-up's acceptance work. Review readiness is not task qualification.
+
 ## Evidence and scope
 
 The November 14 contact-relative pilot passes the familiar control and shift15,
@@ -78,5 +84,5 @@ separate gates. No sensor or controller-training capability is inferred.
   exploration remain separately unqualified. No merge/readiness promotion from
   a numerical probe, individual primitive or smaller successful subset.
 
-Keep the current follow-up draft and its evidence intact. Base approach is a
-cohesive next feature; it must not be presented as already implemented here.
+Preserve #234's evidence and failed outcomes. Base approach is a separate
+cohesive feature; it must not be presented as already implemented in #234.
