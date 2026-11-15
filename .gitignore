@@ -171,6 +171,8 @@ data/
 !paper/data/**
 log/
 logs/
+# Worktrees may link the shared artifact directory instead of creating it.
+logs
 dynamem_log/
 
 # Third-party sim (cloned by emet install sim / emet install robocasa)
