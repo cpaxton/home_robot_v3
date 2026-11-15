@@ -173,3 +173,50 @@ def test_progress_keeps_completed_cases_without_marking_partial_run_complete(run
     saved = json.loads(gzip.decompress(path.read_bytes()))
     assert saved == report and not saved["complete"]
     assert not path.with_suffix(".partial").exists()
+
+
+def test_primitive_trace_is_opt_in_and_cannot_overwrite_previous_run(tmp_path):
+    from emet.rl.manipulation.tamp_primitive_env import TampPrimitiveEnv
+
+    ordinary = TampPrimitiveEnv([{"id": "stub"}])
+    assert ordinary.trace_dir is None
+    directory = tmp_path / "traces"
+    traced = TampPrimitiveEnv([{"id": "stub"}], trace_dir=directory)
+    assert traced.trace_dir == directory and traced.process is None
+    with pytest.raises(FileExistsError):
+        TampPrimitiveEnv([{"id": "stub"}], trace_dir=directory)
+
+
+def test_diagnostic_parity_detects_physics_changes_but_ignores_wall_time():
+    diagnostic = runpy.run_path(str(ROOT / "scripts/trace_mars_tamp_inputs.py"))
+    signature = diagnostic["parity_signature"]
+    row = {"success": True, "object_translation_m": [0, 0, 0], "wall_time": 1}
+    assert signature(row) == signature({**row, "wall_time": 2})
+    assert signature(row) != signature({**row, "object_translation_m": [0.001, 0, 0]})
+
+
+def test_trace_summary_keeps_phase_errors_and_measured_commanded_velocities():
+    diagnostic = runpy.run_path(str(ROOT / "scripts/trace_mars_tamp_inputs.py"))
+    hand = [0, 0, 0, 1, 0, 0, 1, 0, 0]
+    trace = {
+        "outcome": {"status": "terminal", "code": "tracking_timeout"},
+        "stop_confirmed": True,
+        "commands": [],
+        "decisions": [{"time": 0, "observation": {"motion": [0] * 9}}],
+        "ticks": [
+            {
+                "phase": "pregrasp",
+                "time": 0.05,
+                "hand": hand,
+                "hand_goal": [0.02, *hand[1:]],
+                "action_source": "policy",
+                "normalized_action": [0] * 8,
+                "commanded_joint_velocity": [0.1] * 5,
+                "joint_velocity": [0.01] * 5,
+            }
+        ],
+    }
+    result = diagnostic["summarize_trace"](trace)
+    assert result["phases"]["pregrasp"]["hand_error_m"]["last"] == pytest.approx(0.02)
+    assert result["phases"]["pregrasp"]["hand_error_rad"]["last"] == pytest.approx(0)
+    assert result["phases"]["pregrasp"]["last_joint_command"] != result["phases"]["pregrasp"]["last_joint_measured"]

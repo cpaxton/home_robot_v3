@@ -7,6 +7,7 @@ remain explicit. This is a primitive environment, never a full pick/place claim.
 
 import multiprocessing as mp
 import traceback
+from pathlib import Path
 
 import gymnasium as gym
 import numpy as np
@@ -25,7 +26,7 @@ class _Closed(BaseException):
     pass
 
 
-def _worker(connection, case, oracle, arm_reference, initial_settle_s, wheel_feedback_current_velocity):
+def _worker(connection, case, oracle, arm_reference, initial_settle_s, wheel_feedback_current_velocity, trace_path):
     import hashlib
     import json
 
@@ -39,6 +40,7 @@ def _worker(connection, case, oracle, arm_reference, initial_settle_s, wheel_fee
     from emet.rl.manipulation.whole_body_reward import RewardMeter
 
     env = robot = None
+    decisions, outcome = [], {"status": "incomplete"}
     try:
         env, admission = fixture(case, wheel_feedback_current_velocity=wheel_feedback_current_velocity)
         if not admission["accepted"]:
@@ -106,6 +108,16 @@ def _worker(connection, case, oracle, arm_reference, initial_settle_s, wheel_fee
                 self.ticks = 0
                 self.pending = True
                 self.motion = reference_velocity(env.control)
+                if trace_path is not None:
+                    decisions.append(
+                        {
+                            "time": float(env.data.time),
+                            # Exactly the sensor arrays supplied over IPC. The
+                            # privileged critic is deliberately excluded.
+                            "observation": {k: observation[k].tolist() for k in ("history", "preview", "motion")},
+                            "action": action.tolist(),
+                        }
+                    )
                 return action
 
             def after_step(self):
@@ -125,6 +137,7 @@ def _worker(connection, case, oracle, arm_reference, initial_settle_s, wheel_fee
             timing=TaskPoseRuntimeTiming(60.0, 61.0),
             arm_execution="cartesian",
             arm_reference=arm_reference,
+            record_observations=trace_path is not None,
         )
         robot.step_observer = bridge.after_step
         # Development reset conditioning: physical settling before planning,
@@ -229,11 +242,28 @@ def _worker(connection, case, oracle, arm_reference, initial_settle_s, wheel_fee
                 )
             ),
         }
+        outcome = {
+            "status": "terminal",
+            **{
+                k: info[k]
+                for k in (
+                    "code",
+                    "primitive_success",
+                    "stop_confirmed",
+                    "executor_result",
+                    "initial_state_sha256",
+                    "model_fingerprint",
+                    "compiled_robot_identity",
+                )
+            },
+        }
         connection.send(("terminal", bridge.observation(), bridge.reward.copy(), info))
     except _Closed:
+        outcome = {"status": "client_closed"}
         if robot is not None:
             robot.stop_and_confirm("training_client_closed")
     except BaseException as exc:
+        outcome = {"status": "error", "error": str(exc), "traceback": traceback.format_exc()}
         if robot is not None:
             robot.stop_and_confirm("training_worker_failed")
         try:
@@ -241,9 +271,29 @@ def _worker(connection, case, oracle, arm_reference, initial_settle_s, wheel_fee
         except (BrokenPipeError, EOFError):
             pass
     finally:
-        if env is not None:
-            env.close()
-        connection.close()
+        try:
+            if trace_path is not None:
+                from emet.rl.manipulation.mastery import save_report
+
+                save_report(
+                    trace_path,
+                    {
+                        "format": "mars-tamp-primitive-trace-v1",
+                        "case": case,
+                        "oracle": bool(oracle),
+                        "initial_settle_s": initial_settle_s,
+                        "wheel_feedback_current_velocity": wheel_feedback_current_velocity,
+                        "outcome": outcome,
+                        "stop_confirmed": robot.stop_confirmed if robot is not None else None,
+                        "commands": robot.commands if robot is not None else [],
+                        "ticks": robot.trace if robot is not None else [],
+                        "decisions": decisions,
+                    },
+                )
+        finally:
+            if env is not None:
+                env.close()
+            connection.close()
 
 
 class TampPrimitiveEnv(gym.Env):
@@ -256,6 +306,7 @@ class TampPrimitiveEnv(gym.Env):
         timeout=90.0,
         initial_settle_s=0.0,
         wheel_feedback_current_velocity=False,
+        trace_dir=None,
     ):
         if not cases or arm_reference not in {"s_curve", "jerk_limited"} or not np.isfinite(timeout) or timeout <= 0:
             raise ValueError("nonempty cases and a bounded simulator training configuration required")
@@ -266,6 +317,9 @@ class TampPrimitiveEnv(gym.Env):
         self.wheel_feedback_current_velocity = wheel_feedback_current_velocity
         self.cases, self.oracle, self.arm_reference, self.timeout = list(cases), bool(oracle), arm_reference, timeout
         self.initial_settle_s = float(initial_settle_s)
+        self.trace_dir = Path(trace_dir).resolve() if trace_dir is not None else None
+        if self.trace_dir is not None:
+            self.trace_dir.mkdir(parents=True, exist_ok=False)
         self.observation_space = spaces.Dict(
             {
                 "history": spaces.Box(-np.inf, np.inf, (20, 101), np.float32),
@@ -301,6 +355,8 @@ class TampPrimitiveEnv(gym.Env):
             else self.cases[self.cursor % len(self.cases)]
         )
         self.cursor += 1
+        # Per-reset numbering prevents overwriting repeated case identities.
+        self.trace_path = self.trace_dir / f"episode-{self.cursor:04d}.json.gz" if self.trace_dir else None
         context = mp.get_context("spawn")
         self.connection, child = context.Pipe()
         self.process = context.Process(
@@ -312,6 +368,7 @@ class TampPrimitiveEnv(gym.Env):
                 self.arm_reference,
                 self.initial_settle_s,
                 self.wheel_feedback_current_velocity,
+                self.trace_path,
             ),
             daemon=True,
         )

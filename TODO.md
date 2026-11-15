@@ -114,9 +114,14 @@ merges, measured policy improvement and hardware readiness are separate decision
       candidate full success 2/12→8/12 with no PPO or gate change. The completed
       [actual-reset validation](docs/experiments/mars_current_feedback_reset_validation_20261115.md)
       confirms 24 stops and 1,299 regressions; legacy reaches 151/164 general and
-      12/12 common cases, but 0/6 TAMP versus teacher 5/6. Diagnose actual TAMP
-      tracking inputs/timing and the initialization-sensitive planning case
-      before selecting more GRU training. Settling/velocity/GRU frozen probes
+      12/12 common cases, but 0/6 TAMP versus teacher 5/6. The
+      [four-episode trace study](docs/experiments/mars_tamp_input_diagnostic_20261115.md)
+      confirms input delivery and small learned commands, followed by clipped
+      open-jaw feedback. Preserve real inputs; train the actual near-contact
+      distribution mixed with general tracking after fresh checks/admission.
+      The teacher's support-margin rejection now has an actionable public
+      failure code; independently admit the measured-state replan without
+      weakening the support check. Settling/velocity/GRU frozen probes
       did not close this gap. Keep PR #240's 17 training and 24 audit cases
       distinct from admitted/trained evidence. The conditional curriculum
       pair remains bounded at 16,384 decisions per variant after fresh

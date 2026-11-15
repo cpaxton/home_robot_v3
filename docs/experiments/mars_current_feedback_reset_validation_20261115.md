@@ -122,8 +122,10 @@ established sensor/target fields; privileged critic fields are filtered out.
 Weight and environment-option provenance remain explicit; bundles are not retagged.
 
 Immutable runtime source **`35bb4fa6`** passes **1,299/1,299** fresh full
-regressions in 1,165.6 s; its receipt verifies against current runtime/test
-sources. The focused compatibility/reset tests pass, and Ruff passes. General
+regressions in 1,165.6 s; its receipt binds that baseline's runtime/test
+sources. Later optional tracing changes in `a8c9e9d7` require their own full
+receipt; see the [four-episode input diagnostic](mars_tamp_input_diagnostic_20261115.md).
+The focused compatibility/reset tests pass, and Ruff passes. General
 case progress is saved atomically every ten completed episodes. All native
 jobs use one numerical thread on CPU14; full checks use CPU15, CUDA hidden.
 
