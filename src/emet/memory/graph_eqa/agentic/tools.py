@@ -415,6 +415,14 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
         if failure.get("reason") == "HEAD_LIMIT":
             text += "\nDo not repeat this look from the same pose; choose another collision-checked viewing location."
     if getattr(executor, "_require_grounded_object", False):
+        grounded_obs_id = getattr(executor, "_grounded_obs_id", None)
+        geometry = (
+            {"status": "admitted", "object_obs_id": grounded_obs_id}
+            if grounded_obs_id is not None
+            else {"status": "no_selected_object"}
+        )
+        text += "\nSelected object geometry for this query: " + json.dumps(geometry)
+        text += " Retained geometry is not a claim of current visibility, reachability or manipulation readiness."
         text += (
             "\nCompletion requirement: localize the requested object. Visual presence alone is not success; "
             "an admitted object position is required. If grounding fails, inspect another view or explore. "

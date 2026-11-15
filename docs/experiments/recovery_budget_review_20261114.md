@@ -226,3 +226,23 @@ paths was rejected by automatic approval review pending explicit approval of
 that scope and its shared-inode consequences. It remains **unapplied**:
 `/tmp/disk-archive-dedup-plan-20261115.json`. No additional live result is implied
 by the cleanup.
+
+## Follow-up: expose selected geometry in the current state
+
+The larger-budget bowl request at round 1 retained the successful geometry
+receipt in dialogue, but its latest state emphasized `failed_move`, weak
+retrieval, approach-sampling failure and a requirement for admitted geometry.
+It did not state that an object had already been admitted. The selected geometry
+is now rendered explicitly beside that requirement as `admitted` with the actual
+object observation ID, or `no_selected_object` when the executor has none. This
+uses the existing per-query `_grounded_obs_id`; visual confidence cannot create
+the ID. Retained geometry is explicitly separate from current visibility,
+reachability and manipulation readiness. Navigation failure remains visible.
+
+This is additional current-state information, not an automatic completion rule.
+No action, answer, budget or physical gate changes. **385 focused CPU tests pass**,
+including six new combinations of visual verification and selected geometry.
+The added floor-recovery suite exposed an older assertion expecting a removed
+forced investigate/explore instruction; it now checks historical rejection,
+new footprint validity and replanning without certifying the route. Report:
+`/tmp/geometry-state-tests-20261115.xml`. Live benefit is not yet established.

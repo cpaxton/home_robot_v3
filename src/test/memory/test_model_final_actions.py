@@ -9,6 +9,36 @@ import pytest
 from emet.memory.graph_eqa.agentic_eqa import AgenticEQAExecutor
 
 
+@pytest.mark.parametrize("grounded_obs_id", [None, 0, 7])
+@pytest.mark.parametrize("visually_verified", [False, True])
+def test_find_state_reports_selected_geometry_independently_of_visual_and_motion_status(
+    monkeypatch, grounded_obs_id, visually_verified
+):
+    from emet.memory.graph_eqa.agentic import tools
+
+    # A failed movement can still return a usable captured target. The next
+    # request must retain both facts, without deriving geometry from presence.
+    monkeypatch.setattr(
+        tools, "_build_state_message", lambda ex: f"Recent navigation: failed_move; vlm_answerable={ex._verified}"
+    )
+    monkeypatch.setattr("emet.controller.dynamem.look.supports_floor_observation", lambda agent: False)
+    ex = SimpleNamespace(
+        _require_grounded_object=True,
+        _grounded_obs_id=grounded_obs_id,
+        _verified=visually_verified,
+        agent=None,
+    )
+    text = tools.build_state_message(ex)
+    assert "Recent navigation: failed_move" in text
+    assert "Selected object geometry for this query:" in text
+    if grounded_obs_id is None:
+        assert '"status": "no_selected_object"' in text
+        assert '"status": "admitted"' not in text
+    else:
+        assert f'"status": "admitted", "object_obs_id": {grounded_obs_id}' in text
+    assert "not a claim of current visibility, reachability or manipulation readiness" in text
+
+
 @pytest.mark.parametrize(
     "status",
     [
