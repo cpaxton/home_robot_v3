@@ -110,6 +110,20 @@ merges, measured policy improvement and hardware readiness are separate decision
       [active-work index](docs/rl/ACTIVE_WORK.md), canonical controller thread
       and linear #239 → #240 → #241 stack. Preserve archived handoffs and old
       evidence. No PPO or hardware launch is implied by consolidation.
+- [x] **Make coupled control the common embodiment requirement.** Mars and
+      Stretch hand SE(3) goals may require base motion. Preserve optional masked
+      SE(2) base constraints and per-hand native gripper coordinates; distinguish
+      arm-only diagnostics from full-robot feasibility. Record this in the
+      [control philosophy](docs/rl/whole_body_control.md#coupled-control-across-embodiments).
+- [ ] **Validate general coupled coverage, then optionally compare MABEL.**
+      Generate/admit full-robot paths; test free-base hand goals, fixed-world-hand
+      base motion, jointly feasible constraints, retargeting and settling on
+      Mars and Stretch. Investigate model/reference/learning failures before
+      declaring hardware limitations. If useful, pin and validate the published
+      [MABEL](https://robotmabel.github.io/website/) MuJoCo model as a separate
+      redundant-robot diagnostic, with native actions and per-hand coordinates.
+      [Comparison scope and model admission](docs/plans/general_whole_body_tracking.md#optional-mabel-diagnostic).
+      MABEL is not integrated or trained; Mars remains the first hardware target.
 - [ ] **Resolve remaining coordination and quiet-hold failures.** Use the
       [ordered next-steps plan](docs/plans/mars_wbc_next_steps.md): isolate the
       low-level base feedback/oscillation first, validate current-velocity

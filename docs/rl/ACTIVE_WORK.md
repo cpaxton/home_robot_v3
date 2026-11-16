@@ -75,10 +75,12 @@ quarter-pitch experiment does not establish broad direction coverage.
    default full-task loaded validation, closure/release authority and all frozen
    failures. Do not fabricate a lift witness, drop the case or borrow the old
    expected-failure exception. Obtain a fresh stage-specific readout before PPO.
-2. **Add reachable fixed-world-hand/base coverage.** The teacher can execute a
-   20 mm forward preparation while holding the world hand; the actor advances
+2. **Add reachable coupled whole-body coverage for Mars and Stretch.** The
+   teacher can execute a 20 mm forward preparation while holding the world hand; the actor advances
    about 2.15 mm. Include this motion, actual unloaded grasp trajectories,
-   ordinary reach/base goals, goal changes and reset/hold transitions. Keep
+   hand-only goals with authorized free-base motion, jointly feasible masked
+   base/hand targets, ordinary reach/base goals, goal changes and reset/hold
+   transitions. Sample/admit full-robot paths, not only stationary-arm poses. Keep
    #240's frozen train/audit identities separate from new coverage.
 3. **Register and run bounded mixed training only after admission.** Preserve
    the outer 50/50 general/task exposure by physical control ticks, report
@@ -91,6 +93,13 @@ quarter-pitch experiment does not establish broad direction coverage.
    Do not increase torque/friction, relax retention or replay closed-loop holds
    as a substitute for evidence. Herman remains observation-only until a
    separately authorized, qualified hardware test.
+
+Coupled control is the framework for both first robots; limited stationary-arm
+DoF does not establish failure of general whole-body control. The
+[embodiment comparison plan](../plans/general_whole_body_tracking.md#coupled-control-and-embodiment-comparison)
+records MABEL as an optional, unintegrated redundant-robot diagnostic if model,
+reference and learning investigations leave a suspected embodiment limitation.
+This does not displace the unloaded-prefix fix or authorize another training run.
 
 The controller owns smooth reactive pose/trajectory tracking. TAMP owns task
 choice, feasible stance/reference construction and planning scope. Neither

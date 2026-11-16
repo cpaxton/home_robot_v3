@@ -10,6 +10,38 @@ This page describes design intent and lessons from the current experiments.
 Individual implementations and simulator results have narrower scope; follow
 the linked reports for their exact contracts and limitations.
 
+## Coupled control across embodiments
+
+Coupled whole-body control is the intended solution for both Stretch and Mars.
+A hand's SE(3) workspace includes authorized base motion; an arm-only
+reachability failure is not evidence that general whole-body control is
+infeasible. A stationary base is a requested constraint for selected cases,
+not a universal prerequisite for hand tracking.
+
+Keep the task interface independent of arm count and joint count: one optional
+component-masked SE(2) base target, one SE(3) target per supported hand, and the
+native coordinates of each gripper/hand. Base regions and partial constraints
+leave coordination freedom; arbitrary independently sampled full base/hand
+constraints need not be jointly reachable. Runtime support for regions or
+additional hands must be implemented and tested explicitly before claiming it.
+Robot adapters retain their own joints, actuator limits, base kinematics and
+support/contact checks. A holonomic base and a differential-drive base must not
+share an assumed lateral-velocity action. This common interface does not yet
+require shared policy weights across robots.
+
+Generate reachable references from complete robot configurations and paths,
+including base motion, and admit the requested trajectory under native timing,
+collision and support limits. Cover hand-only goals with free base targets,
+fixed-world-hand/base motion, jointly feasible constrained targets, mid-motion
+retargeting and settling. Keep arm-only cases as diagnostics or explicit
+fixed-base tasks, while reporting coupled performance separately.
+
+A hardware limitation requires evidence: distinguish a missing kinematic
+solution, infeasible dynamics/contact or reference timing, a simulator/model
+error, a teacher/solver failure, and learned-policy tracking failure. Neither
+counting arm joints nor one solver's rejection settles that diagnosis. See the
+[cross-embodiment comparison plan](../plans/general_whole_body_tracking.md#coupled-control-and-embodiment-comparison).
+
 ## Keep planning, learning and execution responsibilities explicit
 
 | Layer | Responsibility |
