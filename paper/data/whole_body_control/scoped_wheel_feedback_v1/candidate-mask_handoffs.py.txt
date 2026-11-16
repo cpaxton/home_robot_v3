@@ -1,0 +1,49 @@
+"""Mask handoffs on the same admitted continuous motion, without reset/replan jumps."""
+import json
+from pathlib import Path
+import numpy as np
+from emet.rl.manipulation.coupled_tracking import COARSE_SUITE,admit_reference
+from emet.rl.manipulation.tracking import TaskPoseTrajectory
+from emet.rl.manipulation.whole_body_observation import reference_velocity
+
+class RemainingReference(TaskPoseTrajectory):
+ def __init__(self,previous,offset,base_mask,hand_mask):
+  self.previous,self.offset=previous,offset
+  self.fk,self.fixed_hand=previous.fk,previous.fixed_hand
+  end=max(.05,previous.end-offset)
+  a,b=previous.sample(offset),previous.sample(offset+end)
+  super().__init__([0,end],[a[0],b[0]],[a[1],b[1]],[a[2],b[2]],base_mask=base_mask,hand_mask=hand_mask)
+ def sample(self,time):return self.previous.sample(time+self.offset)
+ def coordinates(self,time):return self.previous.coordinates(time+self.offset)
+
+def run(bundle,factory,base,helpers,out):
+ rows=[]
+ for i,index in enumerate((0,1,4,7)):
+  case={**base[index],'id':f'mars:mask-handoff-audit-v1:{i}','seed':35876000+i}
+  env=factory('innate_mars',[case],suite_path=COARSE_SUITE);e=env.unwrapped;events=[];trace=[]
+  try:
+   obs,_=env.reset()
+   for tick in range(500):
+    if tick in (20,40,60,80):
+     c=e.control;previous=c.task_trajectory;offset=c.trajectory_elapsed()
+     hand=tick!=60;mask=[True,True,tick!=40]
+     reference=RemainingReference(previous,offset,mask,hand)
+     physical=[e.data.qpos.copy(),e.data.qvel.copy(),c.history.copy(),c.target.copy(),c.grip_target]
+     twist=reference_velocity(c);admission=admit_reference(e,reference)
+     if not admission['accepted']:raise ValueError('mask_handoff_admission:'+str(admission))
+     e.set_task_trajectory(reference)
+     for actual,expected in zip((e.data.qpos,e.data.qvel,c.history,c.target,c.grip_target),physical,strict=True):np.testing.assert_array_equal(actual,expected)
+     for delta in (-.05,-.001,0,.001,.05):
+      for actual,expected in zip(reference.sample(delta),previous.sample(offset+delta),strict=True):np.testing.assert_allclose(actual,expected,atol=1e-10)
+     # Masking intentionally turns previously inactive velocity hints on/off.
+     # The physical reference samples/derivatives above must remain identical.
+     events.append({'tick':tick,'hand_active':hand,'base_mask':mask,'gains':np.broadcast_to(c.wheel_feedback_gains(),(2,)).tolist(),'admission':admission,'physics_history_grip_preserved':True,'physical_reference_samples_preserved':True,'motion_hint_before':twist.tolist(),'motion_hint_after':reference_velocity(c).tolist()})
+     obs=env.observe(c.observe())
+    obs,_,done,truncated,info=env.step(helpers['predict'](bundle.actor,obs))
+    trace.append({'tick':tick,'base':e.control.base_pose().tolist(),'gains':np.broadcast_to(e.control.wheel_feedback_gains(),(2,)).tolist()})
+    if done or truncated:break
+   row={'id':case['id'],'seed':case['seed'],'success':bool(info.get('is_success')) and len(events)==4,'code':info['code'],'events':events,'metrics':e._info(),'stop_confirmed':helpers['stop'](e),'trace':trace}
+  except ValueError as exc:row={'id':case['id'],'seed':case['seed'],'success':False,'code':str(exc),'events':events,'stop_confirmed':helpers['stop'](e)}
+  finally:env.close()
+  rows.append(row);(out/'mask-handoffs.json').write_text(json.dumps(rows,indent=2,allow_nan=False)+'\n');print('MASK_HANDOFF',i,row['success'],row['code'],flush=True)
+ return rows

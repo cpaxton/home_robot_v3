@@ -860,3 +860,24 @@ remain untested under that override. Fresh source-bound regressions pass
 1,520 tests. This work does not establish loaded-task or hardware qualification.
 Complete producer-separated outcomes are retained in
 \texttt{base\_goal\_replan\_v1/}.
+
+
+\paragraph{Versioned mask-scoped native execution.}
+An opt-in Mars execution setting selects separate forward/yaw proportional
+gains only while every base constraint is active and the hand target is
+inactive. Active-hand and partial-base commands retain the declared fallback
+gain. Selection occurs at the physics boundary and leaves the native speed,
+slew, force and stop guards in place. Actor-only v4 bundles bind the scope,
+gains, feedback measurement and physical slew settings in both the manifest
+and weights; unsupported older runtimes reject the format. This is an
+execution-law change with fixed learned tensors, not an RL training result.
+
+A matched 113-case-per-contract readout improves moving-goal success from
+10/12 to 12/12 while preserving 24/24 base paths, 24/24 compiled endpoints,
+10/10 small coupled cases, 6/10 larger coupled cases, 6/6 unloaded TAMP prefixes
+and 4/4 original base-to-hand handoffs. All 226 stops confirm. New repeated
+mask handoffs remain 2/4. Moving-audit yaw jerk decreases from 150.09 to
+109.63 rad/s$^3$, but linear jerk increases from 20.68 to 28.10 m/s$^3$.
+Fresh source-bound regressions pass 1,538 tests. The setting remains experimental;
+loaded-task and hardware qualification are not established. Complete outcomes
+and separated producer identities are in \texttt{scoped\_wheel\_feedback\_v1/}.

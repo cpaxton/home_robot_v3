@@ -154,8 +154,11 @@ Physical support remains independent of reference continuity: two reverse
 caster failures reproduce with and without retargeting. Removing body-velocity
 feedback globally helps reverse motion but harms coupled hand accuracy, so test
 a supported per-axis execution contract before another training run. The
-scoped diagnostic passes 15/15, but is not a deployable checkpoint. Validate
-broader coupled cases, fresh audits, TAMP and mask transitions next. Keep the
+scoped diagnostic passes 15/15. The v4 execution binding is now implemented
+passes 1,538 source-bound tests and the complete paired readout: moving goals
+10/12 → 12/12 with coupled/TAMP scores preserved. Repeated mask handoffs remain
+2/4 and linear jerk worsens; this does not promote a checkpoint.
+See the [scoped-feedback report](../experiments/scoped_wheel_feedback_20261116.md). Keep the
 [replan/servo report](../experiments/base_goal_replan_20261116.md) and prior
 [endpoint diagnostic](../experiments/base_goal_reference_20261116.md) distinct
 from loaded carry, checkpointed agent integration and hardware qualification.

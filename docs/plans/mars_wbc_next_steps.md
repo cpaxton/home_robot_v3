@@ -14,6 +14,33 @@ The goal is one reactive actor that follows base/hand references, settles and
 satisfies physical smoothness, support, force and retention contracts. A better
 hand endpoint is useful progress; it is not the full objective.
 
+## Current decision: scoped native feedback, then matched tracking
+
+Source `4b3c4059` implements an explicit opt-in base-only linear/yaw feedback
+pair, bound in an actor-only v4 checkpoint execution contract. Fallback feedback
+is preserved for active-hand and partial-base commands; native wheel slew and
+stop guards remain authoritative. The preceding unsupported 15-case override
+is now historical diagnostic evidence, not the deployable implementation.
+
+The completed comparison uses the same source, learned tensors, cases and seeds
+for scalar gain 0.5 and scoped gains `(0, 0.5)`. Its 113 cases per contract cover
+moving goals, static/compiled endpoints, both coupled distributions, unloaded
+TAMP, new reverse audits and repeated base/hand mask handoffs. Publish every
+failure, measured jerk/contact/support peak and confirmed-stop count. Keep the
+older 10/12 moving and 6/10 larger-general results in their original producers.
+[Current protocol and report](../experiments/scoped_wheel_feedback_20261116.md).
+
+Decide from those results whether the option preserves hand precision and
+settling while improving reverse support. The readout improves moving goals 10/12 → 12/12 and preserves coupled/TAMP
+scores, but linear jerk worsens and repeated mask handoffs remain 2/4. Retain
+the option experimentally; diagnose motion and train analogous transitions
+without qualifying the whole controller.
+A new mask-transition fault or lost hand/TAMP performance needs diagnosis
+before training on that plant. If the execution setting is retained, expose it
+consistently to the mixed general/TAMP training factory, then run a bounded PPO
+comparison with unchanged physical contracts and separate teacher readouts.
+Loaded retention, per-plant agent admission and Herman remain separate gates.
+
 ## Historical decision after actual-reset validation
 
 The [completed reset/baseline study](../experiments/mars_current_feedback_reset_validation_20261115.md)

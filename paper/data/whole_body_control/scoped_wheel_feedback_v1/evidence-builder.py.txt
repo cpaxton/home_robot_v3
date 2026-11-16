@@ -1,0 +1,81 @@
+"""Compact, producer-separated complete paired outcomes; no raw blobs in Git."""
+import collections,hashlib,json,shutil
+from pathlib import Path
+import numpy as np
+from emet.rl.regression_gate import ROOT,source_state,verify_regressions
+from emet.rl.manipulation.carry_benchmark import digest
+
+RAW=ROOT/'logs/eval/scoped-wheel-feedback-v2'
+OUT=ROOT/'paper/data/whole_body_control/scoped_wheel_feedback_v1'
+def read(path):return json.loads(path.read_text())
+def sha(path):return hashlib.sha256(path.read_bytes()).hexdigest()
+def clean(row):
+ result={k:v for k,v in row.items() if k not in {'trace','reference'}}
+ if 'reference' in row:result['reference_sha256']=digest(row['reference'])
+ if 'physics_trace' in result:
+  result['physics_trace']=dict(result['physics_trace']);p=Path(result['physics_trace']['path']);parts=p.parts;p=Path(*parts[parts.index('logs'):]);assert sha(ROOT/p)==result['physics_trace']['sha256'];result['physics_trace']['path']=str(p)
+ return result
+
+def main():
+ OUT.mkdir(parents=True,exist_ok=True)
+ runs={role:read(RAW/role/('run.completed.json' if role=='baseline' else 'run.json')) for role in ('baseline','candidate')}
+ assert all(run['complete'] for run in runs.values())
+ state=digest(source_state(ROOT));assert all(run['source_state_digest']==state for run in runs.values())
+ assert runs['baseline']['source_weights_sha256']==runs['candidate']['source_weights_sha256']
+ receipt=ROOT/'logs/eval/scoped-wheel-feedback-regressions-v2/full.receipt.json';verified=verify_regressions(receipt,root=ROOT)
+ report={'format':'scoped-wheel-feedback-paired-evidence-v1','source_state_digest':state,'source_archive':read(ROOT/'logs/recovery/scoped-wheel-feedback-4b3c4059-source-record.json'),'regressions':{'tests':len(verified['test_ids']),'seconds':verified['finished_unix']-verified['started_unix'],'receipt_sha256':sha(receipt),'xml_sha256':verified['xml_sha256']},'jobs':{'baseline_native':'20261116_162848_dc5934','completion_native':'20261116_164653_17158b','regressions':'20261116_164218_a4b9d1'},'runs':runs,'cases':{},'cohort_summary':{},'new_training_steps':0,'hardware_used':False,'safety_promoted':False,'interpretation':'Matched deterministic repeats compare execution contracts; do not pool as independent reliability trials.'}
+ for role in runs:
+  cases={};summary={}
+  for name in ('moving-goals','ui-moving','base-directions','general-v1','general-v2','tamp','point-goals','compiled-goals','handoffs','mask-handoffs','reverse-audit/moving-goals'):
+   path=RAW/role/(name+'.json');rows=read(path);cases[name]={'raw_report_sha256':sha(path),'rows':[clean(r) for r in rows]}
+   summary[name]={'attempts':len(rows),'successes':sum(bool(r['success']) for r in rows),'confirmed_stops':sum(r.get('stop_confirmed') is True for r in rows),'failure_codes':dict(collections.Counter(r['code'] for r in rows if not r['success']))}
+  assert sum(v['attempts'] for v in summary.values())==113
+  report['cases'][role]=cases;report['cohort_summary'][role]=summary
+ for cohort in report['cases']['baseline']:
+  b=report['cases']['baseline'][cohort]['rows'];c=report['cases']['candidate'][cohort]['rows']
+  assert [(r['id'],r.get('seed',r.get('case',{}).get('seed'))) for r in b]==[(r['id'],r.get('seed',r.get('case',{}).get('seed'))) for r in c]
+ b=read(RAW/'baseline/tamp.json');c=read(RAW/'candidate/tamp.json')
+ report['paired_tamp_equality']={key:all(x.get(key)==y.get(key) for x,y in zip(b,c)) for key in ('initial_state_sha256','compiled_robot_identity','model_fingerprint','terminal_pose','object_translation_m','object_rotation_rad')}
+ for role,run in runs.items():
+  rec=ROOT/'logs/recovery'/('scoped-wheel-feedback-v1' if role=='baseline' else 'scoped-wheel-feedback-v2')
+  for name,expected in run['producer_hashes'].items():assert sha(rec/name)==expected
+  for name in ('run.py','moving.py','mask_handoffs.py'):shutil.copyfile(rec/name,OUT/(role+'-'+name+'.txt'))
+ completion=runs['baseline']['completion_producer'];rec=ROOT/'logs/recovery/scoped-wheel-feedback-v2'
+ assert sha(rec/'resume.py')==completion['resume_sha256']
+ assert sha(rec/'mask_handoffs.py')==completion['mask_handoff_sha256']
+ assert sha(RAW/'baseline/run.json')==completion['original_partial_run_sha256']
+ shutil.copyfile(rec/'resume.py',OUT/'baseline-completion.py.txt')
+ shutil.copyfile(rec/'protocol.json',OUT/'protocol.json')
+ for name in ('cold_viewer.py','log_wandb.py'):shutil.copyfile(Path(__file__).with_name(name),OUT/(name+'.txt'))
+ shutil.copyfile(Path(__file__),OUT/'evidence-builder.py.txt')
+ report['evidence_builder_sha256']=sha(Path(__file__))
+ cold=RAW/'cold-viewer.json'
+ if cold.exists():report['cold_viewer']=read(cold)
+ wandb=RAW/'wandb-evaluation.json'
+ if wandb.exists():report['wandb_evaluation']=read(wandb)
+ # Keep case rows compact and fully inspectable, without thousands of format lines.
+ def render(v,depth=0,key=None):
+  if isinstance(v,dict):return '{\n'+',\n'.join('  '*(depth+1)+json.dumps(k)+': '+render(x,depth+1,k) for k,x in v.items())+'\n'+'  '*depth+'}'
+  if isinstance(v,list):
+   if key=='rows':return '[\n'+',\n'.join('  '*(depth+1)+json.dumps(x,separators=(',',': '),allow_nan=False) for x in v)+'\n'+'  '*depth+']'
+   return json.dumps(v,allow_nan=False)
+  return json.dumps(v,allow_nan=False)
+ text=render(report)+'\n';assert json.loads(text)==report;(OUT/'results.json').write_text(text)
+ import matplotlib
+ matplotlib.use('Agg')
+ import matplotlib.pyplot as plt
+ cohorts=('moving-goals','ui-moving','general-v1','general-v2','tamp','handoffs','mask-handoffs','reverse-audit/moving-goals')
+ fig,axes=plt.subplots(1,2,figsize=(13,4.5));x=np.arange(len(cohorts))
+ for offset,role in ((-.18,'baseline'),(.18,'candidate')):
+  values=[report['cohort_summary'][role][n] for n in cohorts];bars=axes[0].bar(x+offset,[v['successes']/v['attempts'] for v in values],width=.36,label=role)
+  for bar,v in zip(bars,values):axes[0].text(bar.get_x()+bar.get_width()/2,bar.get_height()+.02+(.045 if role=='candidate' else 0),f"{v['successes']}/{v['attempts']}",ha='center',fontsize=7)
+ axes[0].set(ylim=(0,1.17),ylabel='Contract success fraction',title='Matched deterministic cases; no PPO');axes[0].set_xticks(x,[n.replace('-','\n').replace('/moving\ngoals','') for n in cohorts],fontsize=7);axes[0].legend(fontsize=8)
+ for role in ('baseline','candidate'):
+  rows=read(RAW/role/'mask-handoffs.json');trace=rows[0].get('trace',[])
+  if trace:axes[1].plot(.05*(np.array([r['tick'] for r in trace])+1),[r['gains'][0] for r in trace],label=role)
+ for t in (1,2,3,4):axes[1].axvline(t,color='grey',linestyle=':',linewidth=.7)
+ axes[1].set(xlabel='Physical time (s)',ylabel='Linear proportional gain',title='Repeated mask handoff: selected native gain');axes[1].legend(fontsize=8)
+ fig.tight_layout();fig.savefig(OUT/'comparison.svg');fig.savefig(RAW/'comparison.png',dpi=120);plt.close(fig)
+ svg=OUT/'comparison.svg';svg.write_text('\n'.join(x.rstrip() for x in svg.read_text().splitlines())+'\n')
+ print(json.dumps({'summary':report['cohort_summary'],'regressions':report['regressions'],'artifact_bytes':sum(p.stat().st_size for p in OUT.iterdir())}),flush=True)
+if __name__=='__main__':main()

@@ -191,20 +191,20 @@ merges, measured policy improvement and hardware readiness are separate decision
       universal endpoint navigation. See the
       [endpoint report](docs/experiments/base_goal_reference_20261116.md).
 - [ ] **Validate continuous replans and native servo response together.**
-      Motion-matched braking/replans, bounded past previews, atomic admission,
-      final UI markers and batched edits are implemented. The first moving
-      audit is 10/12 and actual viewer integration 3/3. Both reverse caster
-      failures reproduce without a goal change. Gain zero fixes reused reverse
-      cases but regresses coupled hand accuracy, so do not make it a global
-      default. The scoped diagnostic passes 15/15 and current-source regressions
-      pass 1,520/1,520. Implement a supported/versioned per-axis contract and
-      audit broader coupled cases, TAMP and moving mask transitions before
-      deployment or further PPO. Keep support/force thresholds unchanged.
-      See the [replan/servo report](docs/experiments/base_goal_replan_20261116.md).
+      Moving replans and batched UI edits are implemented. The v4 scoped law
+      improves the paired moving audit 10/12 → 12/12, preserving coupled/TAMP
+      scores and all 226 stop confirmations. Fresh regressions pass 1,538/1,538.
+      Keep it experimental: moving linear jerk increases despite improved yaw
+      jerk; larger coupled remains 6/10 and new mask handoffs 2/4. Diagnose
+      physics-rate motion and train analogous transitions without reusing audit
+      seeds; preserve outer 50/50 general/TAMP ticks and precise hand targets.
+      [Complete scoped readout](docs/experiments/scoped_wheel_feedback_20261116.md).
 - [ ] **Bind future actor exports to their actual training plants.** General
       and TAMP currently use different contact solver settings. Use explicit
       per-plant export/admission evidence or align the configurations before
-      claiming checkpointed agent integration; preserve source/model gates.
+      claiming checkpointed agent integration; preserve source/model gates. Bind
+      shared wheel-feedback helper hashes for legacy admissions as well; the new
+      v4 admission already requires its helper.
 - [ ] **Fix base-only stability, final approach and coverage.** Preserve fine
       reactive arm feedback, native servo limits and the outer general/task mix.
       Current v2 starts general base acceptance at 5 cm / 5° with 15 cm required

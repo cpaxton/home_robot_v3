@@ -48,8 +48,8 @@ It is not promoted. The earlier retained checkpoint remains the control anchor.
 The fixed-weight signed-feedback intervention passes 24/24 base trajectory
 cases and is implemented as an explicit opt-in actor parameterization. The safely versioned v3 export at source `823b3d1d` has a complete native
 readout and **1,451 passing source-bound regressions** (990.82 s). The paper
-builds successfully. Current work proceeds toward static-goal references and
-broader coupled trajectory training. It is not a learned-policy or
+builds successfully. Subsequent endpoint, moving-goal and scoped-feedback results below supersede
+that milestone. It is not a learned-policy or
 hardware qualification.
 The earlier 4,096-decision pilot and both 1,024-update imitation diagnostics are
 complete. Static lateral endpoint convergence and broader coupled coverage remain gaps. No full
@@ -66,7 +66,7 @@ logged to offline W&B `ybaxsdnt`. Measured jerk and moving-start retarget contin
 remain explicit gaps. No UI/service default or checkpoint is promoted. See the
 [endpoint report](../experiments/base_goal_reference_20261116.md).
 
-Current implementation source **`13c53634`** adds motion-matched base replans,
+Previous implementation source **`13c53634`** adds motion-matched base replans,
 past-preview continuity and atomic opt-in viewer goal batching. Native source
 `e30a7dfc` preserves the old 86-case cohorts and passes 10/12 new moving cases
 and 3/3 actual viewer/public-bundle cases. Two reverse caster events reproduce
@@ -76,6 +76,15 @@ axis/mask-scoped diagnostic passes 15/15; it remains unsupported for deployment.
 Final source-bound regressions pass 1,520/1,520, the cold viewer passes and the
 paper builds (60 pages); no PPO is active. See the
 [replan/servo report](../experiments/base_goal_replan_20261116.md).
+
+Current source **`4b3c4059`** implements the opt-in v4 scoped execution contract.
+Fresh source-bound regressions pass **1,538/1,538**; cold v4 viewer checks pass.
+The matched 113-case-per-contract readout improves moving goals **10/12 → 12/12**
+and preserves base 24/24, compiled endpoints 24/24, small coupled 10/10,
+larger coupled 6/10, unloaded TAMP 6/6 and original handoffs 4/4. New repeated
+mask handoffs remain 2/4. All 226 completed cases confirm a stop. Moving linear
+jerk worsens despite improved yaw jerk, so no default/hardware promotion. No PPO
+is active. See the [scoped-feedback report](../experiments/scoped_wheel_feedback_20261116.md).
 
 | Evidence | Scope / result |
 | --- | --- |
@@ -200,12 +209,34 @@ under ignored `logs/recovery/`. Completed duplicate runtimes `0a682deb`,
 `adc5d168` and `e30a7dfc` were pruned after process/job/archive verification;
 their archives, logs and results remain intact.
 
-Completed jobs: native gain-zero `20261116_151955_512625`, full regressions
-`20261116_151952_bd45a2`, scoped diagnostic `20261116_153146_db79d9` and final
-verification/evidence `20261116_153518_be7428`. The only live controller UI is
-job `20261116_154539_54ba7e` on CPU14, localhost port8766, retained gain-0.5
-checkpoint root. Reset a finished/faulted scene before selecting the actor;
-accepted goal edits then resume automatically. The completed offline stopping
-check `20261116_155434_94880d` confirms both failed reverse cases stop after
-0.15 s of physical stepping; original wheel failures remain counted. The
-superseded partial regression run is cancelled and its verified orphan group terminated; its XML is never reused.
+Completed jobs: earlier gain-zero `20261116_151955_512625`, earlier full
+regressions `20261116_151952_bd45a2`, scoped diagnostic
+`20261116_153146_db79d9`, and prior verification/evidence `20261116_153518_be7428`.
+The stopping check `20261116_155434_94880d` confirms both failed reverse cases
+stop after 0.15 s of physical stepping; wheel failures remain counted.
+
+Current immutable runtime: `/tmp/emet-scoped-wheel-feedback-4b3c4059`, with
+3,504 checksummed inputs and a compressed source archive. Completed jobs:
+full gate `20261116_164218_a4b9d1`, native completion `20261116_164653_17158b`
+and finalizer `20261116_164739_e113e5`. Offline W&B: `w2ld2dmi`. Failed partial
+attempts and producer corrections are preserved in the experiment report;
+source bytes and physical contracts remain unchanged. The snapshot's local
+Git view pins the frozen revision for report tests.
+
+The v4 candidate is `logs/eval/scoped-wheel-feedback-v2/candidate/actor`.
+It is an experimental simulator option, not a promoted replacement for the
+retained v3 actor. Keep known larger-coupled/mask failures and the measured
+linear-jerk regression visible. Next diagnose that motion and generate related
+training trajectories while preserving ordinary tracking and the outer mix.
+Per-plant agent admission, loaded manipulation and Herman remain unqualified.
+
+Disk cleanup removed disposable package cache and four completed duplicate
+runtimes after checking archives, Git references and absence of active jobs.
+Generated extras were archived separately. Checkpoints, traces, original source
+archives, models, datasets and unrelated work are preserved. Compatibility
+runtimes `823b3d1d`, `57e8e73b` and `13c53634` remain for reproducibility.
+
+A single simulator viewer is running as `20261116_170847_aa8444` on CPU14,
+localhost8766, exposing the retained v3 and experimental v4 roots for explicit
+selection. The earlier viewer was stopped during native evaluation. Reset a finished/faulted scene
+before selecting an actor. Goal edits then resume automatically. No hardware.

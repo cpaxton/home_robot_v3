@@ -1,0 +1,88 @@
+"""Frozen moving-goal audits and actual Simulation/public-bundle integration."""
+import gzip,hashlib,json,time
+from dataclasses import replace
+from pathlib import Path
+import numpy as np
+from emet.rl.manipulation.base_goal_reference import install_base_goal
+from emet.rl.manipulation.coupled_tracking import CoupledTrackingEnv,COARSE_SUITE
+from emet.rl.manipulation.whole_body_observation import reference_velocity
+from emet.rl.test_drive import Simulation
+
+def wrap(x):return float(np.arctan2(np.sin(x),np.cos(x)))
+def specs():
+ rows=[]
+ for i,(sign,tick) in enumerate(((1,5),(-1,30),(1,74),(-1,82))):
+  rows.append({'id':f'mars:base-moving-audit-v1:{i}','seed':35870000+i,'initial':[0,sign*.15,0],'updates':[(tick,[.10 if i%2==0 else -.10,0,sign*.2])]})
+ for i in range(4):
+  sign=1 if i%2==0 else -1
+  rows.append({'id':f'mars:base-moving-audit-v1:{i+4}','seed':35870004+i,'initial':[sign*.15,0,0],'updates':[(30,[0,.10 if i<2 else -.10,sign*.2])]})
+ for i in range(2):
+  sign=1 if i==0 else -1
+  rows.append({'id':f'mars:base-moving-audit-v1:{i+8}','seed':35870008+i,'initial':[0,sign*.12,0],'updates':[(5,[sign*.10,0,0]),(15,[0,-sign*.10,sign*.1]),(30,[-sign*.08,0,0]),(45,[sign*.08,0,sign*.2])]})
+ for i in range(2):
+  sign=1 if i==0 else -1
+  rows.append({'id':f'mars:base-moving-audit-v1:{i+10}','seed':35870010+i,'initial':[sign*.15,0,0],'updates':[(10+k,[sign*(.15-.004*(k+1)),.003*(k+1),0]) for k in range(10)]})
+ return rows
+
+def save(out,name,data):(out/name).write_text(json.dumps(data,indent=2,allow_nan=False)+'\n')
+def run_moving(bundle,base,helpers,out):
+ rows=[];save(out,'moving-protocol.json',{'horizon_s':25,'terminal_hold_s':2,'cases':specs(),'frozen_before_audit':True,'hardware_used':False})
+ for index,spec in enumerate(specs()):
+  case={**base,'id':spec['id'],'seed':spec['seed']};env=CoupledTrackingEnv('innate_mars',[case],suite_path=COARSE_SUITE);e=env.unwrapped
+  row={'id':spec['id'],'seed':spec['seed'],'spec':spec,'updates':[],'success':False};trace=[];physics=[]
+  try:
+   env.reset();origin=e.control.base_pose().copy();goal=origin+spec['initial'];initial,admission=install_base_goal(e,goal);row['initial_admission']=admission
+   if index in (0,4):
+    def physics_sample(state):
+     c,d=state.control,state.data
+     physics.append({'time':float(d.time),'qvel_base':d.qvel[c.base_dof:c.base_dof+6].copy().tolist(),'wheel_ctrl':d.ctrl[c.wheel_act].copy().tolist(),'wheel_actuator_force':d.actuator_force[c.wheel_act].copy().tolist(),'base_command':c.base_command.copy().tolist(),'applied_base_velocity':c.applied_base_velocity.copy().tolist(),'ncon':int(d.ncon)})
+    e.physics_observer=physics_sample
+   obs=env.observe(e.control.observe());updates=dict(spec['updates'])
+   for tick in range(500):
+    if tick in updates:
+     c,d=e.control,e.data;old=c.task_trajectory;elapsed=c.trajectory_elapsed();before=old.state(elapsed);twist=reference_velocity(c);physical=[d.qpos.copy(),d.qvel.copy(),d.ctrl.copy(),c.history.copy()];stamp=float(d.time);goal=origin+updates[tick];started=time.monotonic()
+     event={'tick':tick,'goal':goal.tolist(),'accepted':False}
+     try:
+      path,admission=install_base_goal(e,goal);after=path.state(0);error=after[0]-before[0];error[2]=wrap(error[2]);motion=reference_velocity(c)
+      for actual,previous in zip((d.qpos,d.qvel,d.ctrl,c.history),physical,strict=True):np.testing.assert_array_equal(actual,previous)
+      assert float(d.time)==stamp
+      np.testing.assert_allclose(error,0,atol=1e-9);np.testing.assert_allclose(after[2],before[2],atol=1e-9);np.testing.assert_allclose(after[3],before[3],atol=1e-9);np.testing.assert_allclose(motion,twist,atol=1e-5)
+      event.update(accepted=True,admission=admission,boundary=path.boundary,reference_duration_s=path.end,twist_before=twist.tolist(),twist_after=motion.tolist(),physics_and_history_preserved=True)
+     except ValueError as exc:event['error']=str(exc)
+     event['planning_wall_ms']=(time.monotonic()-started)*1000;row['updates'].append(event);obs=env.observe(c.observe())
+    action=helpers['predict'](bundle.actor,obs);obs,_,done,truncated,info=env.step(action);c=e.control
+    trace.append({'tick':tick,'base':c.base_pose().tolist(),'reference':c.base_goal.tolist(),'announced_twist':reference_velocity(c).tolist(),'requested_base_velocity':(action[:2]*[e.profile.base_speed,e.profile.base_yaw_speed]).tolist(),'native_base_command':c.base_command.tolist(),'applied_base_velocity':c.applied_base_velocity.tolist(),'measured_base_velocity':c._base_feedback_velocity().tolist(),'gate_base_velocity':e.last_base_velocity.tolist(),'progress_s':c.trajectory_elapsed()})
+    if done or truncated:break
+   delta=e.control.base_pose()-goal;delta[2]=wrap(delta[2]);all_updates=len(row['updates'])==len(spec['updates']) and all(x['accepted'] for x in row['updates']);row.update(success=bool(info.get('is_success')) and all_updates,code=info['code'] if all_updates else 'goal_update_rejected',native_code=info['code'],all_updates_delivered=all_updates,target=goal.tolist(),endpoint_xy_error_m=float(np.linalg.norm(delta[:2])),endpoint_heading_error_rad=float(abs(delta[2])),metrics=e._info(),stop_confirmed=helpers['stop'](e),trace=trace)
+  except ValueError as exc:row.update(code='initialization_or_admission_rejected',error=str(exc))
+  finally:
+   e.physics_observer=None;env.close()
+  if physics:
+   path=out/f'moving-{index}-physics.json.gz';raw=json.dumps({'case_id':spec['id'],'physics_dt_s':.002,'force_units':'native actuator-space force, not universally newtons','timing':'qvel post-integration; ctrl/actuator_force from preceding solve; no extra forward pass','samples':physics},allow_nan=False).encode()
+   with gzip.open(path,'wb') as stream:stream.write(raw)
+   row['physics_trace']={'path':str(path),'sha256':hashlib.sha256(path.read_bytes()).hexdigest(),'samples':len(physics)}
+  rows.append(row);save(out,'moving-goals.json',rows);print('MOVING',index,row['success'],row.get('code'),len(row['updates']),flush=True)
+ return rows
+
+def run_ui(bundle,helpers,out):
+ rows=[]
+ for i in range(3):
+  sim=Simulation('mars-arm','reach',seed=35871000+i);row={'id':f'mars:ui-moving-v1:{i}','seed':35871000+i,'success':False,'events':[]}
+  try:
+   sim.use_policy(bundle,'source-bound-navigation-candidate');sim.env.config=replace(sim.env.config,horizon=25);sim.select_target_mode(1);origin=sim.env.control.base_pose().copy();sim.goal(origin+([.08,0,0] if i!=1 else [0,.12,0]))
+   assert sim.env.control.base_velocity_feedback_current and sim.env.control.physical_wheel_slew_enabled and sim.env.tracking_precision==4 and sim.env.config.terminal_hold_seconds==2
+   for tick in range(500):
+    edits=None
+    if i==0 and tick==30:edits=[{'op':'nudge','translation':[0,.01,0],'rotation_z':.03} for _ in range(4)]
+    if i==1 and tick==20:edits=[{'op':'goal','values':(origin+[.02,-.12,.1]).tolist()}]
+    if i==2 and tick in range(10,20):edits=[{'op':'nudge','translation':[.002,-.0004,0]} for _ in range(5)]
+    if edits is not None:
+     before=sim.env.control.task_trajectory;state=before.state(sim.env.control.trajectory_elapsed());sim.update_base_goals(edits);after=sim.env.control.task_trajectory
+     np.testing.assert_allclose(after.state(0)[2],state[2],atol=1e-9);np.testing.assert_allclose(after.state(0)[3],state[3],atol=1e-9);np.testing.assert_allclose(sim.state()['goal'],sim.base_endpoint());row['events'].append({'tick':tick,'edits':len(edits),'goal':sim.base_endpoint().tolist()})
+    sim.step()
+    if sim.done:break
+   delta=sim.env.control.base_pose()-sim.base_endpoint();delta[2]=wrap(delta[2]);row.update(success=bool(sim.info.get('is_success')),code=sim.info.get('code'),target=sim.base_endpoint().tolist(),endpoint_xy_error_m=float(np.linalg.norm(delta[:2])),endpoint_heading_error_rad=float(abs(delta[2])),metrics=sim.env._info(),stop_confirmed=helpers['stop'](sim.env),checkpoint_model_match=True)
+  except ValueError as exc:row.update(code='ui_binding_or_goal_rejected',error=str(exc))
+  finally:sim.close()
+  rows.append(row);save(out,'ui-moving.json',rows);print('UI_MOVING',i,row['success'],row.get('code'),flush=True)
+ return rows
