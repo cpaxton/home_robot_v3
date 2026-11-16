@@ -249,3 +249,49 @@ is bound in exported weights and manifest; old bundles preserve legacy behavior.
 This is an experimental ablation, not a promoted default. See the
 [complete diagnosis](../experiments/coupled_tracking_20261116.md) and
 [SuperMimic coverage proposal](supermimic_controller_training.md).
+
+## Optional signed base feedback, 2026-11-16
+
+`BaseNavigationFeedback` supplies an explicit coarse base-only feedback
+parameterization. Learned gain magnitudes remain trainable. Forward-position
+and heading-error responses have restoring signs; lateral-to-yaw correction
+changes with forward/reverse travel. Unsupported cross-axis gains are omitted.
+A stationary constant preview uses an inner hold region at half the declared
+XY/yaw acceptance radius, leaving margin to enter the accepted region.
+
+```python
+from emet.rl.manipulation.base_navigation_feedback import BaseNavigationFeedback
+from emet.rl.manipulation.whole_body_actor import MultiCriticPolicy
+
+policy = MultiCriticPolicy(
+    robot="innate_mars",
+    base_rate_feedback=False,
+    base_navigation_feedback=BaseNavigationFeedback(
+        xy_region_m=0.05,
+        yaw_region_rad=0.08726646259971647,
+    ),
+)
+```
+
+It applies when the hand is inactive and all three base coordinates are
+constrained. Active-hand and partial-base commands retain the existing coupled
+mapping; the base can still supply missing hand task directions. Native wheel
+speed/slew, arm, gripper and stop guards remain authoritative. No output filter,
+teacher action or private joint witness is added. This prior is not a global
+stability certificate.
+
+Configured exports use `emet-whole-body-v3`, which v2-only runtimes reject.
+The manifest and weights must agree on both feedback options. The loader checks
+the declared environment tolerance against the inner hold region. Legacy v2
+bundles remain readable; they retain their original feedback semantics. The
+policy loader, TAMP adapter, current-feedback validator and test-drive picker
+recognize v3. Existing qualification checks still apply.
+
+The fixed-weight prototype completes 24/24 base trajectory cases, 10/10 small
+general cases, 6/10 larger general cases, 6/6 open-jaw TAMP cases and 4/4 live
+base-to-hand handoffs. Repeated source-bound readouts are separate producers,
+not independent reliability trials. V3-source validation passes 1,451 regressions and the complete native readout.
+Static endpoint goals pass 2/8: lateral/diagonal cases enter the XY region but
+fail final heading convergence. They need feasible local reference generation
+or broader control coverage. Mars owns these physical results; Stretch has
+unit coverage of the parameterization, not a trained v3 policy qualification.

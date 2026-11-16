@@ -794,3 +794,28 @@ completes 8/10 Mars and 9/10 Stretch cases; geometric admission alone does not
 establish dynamic tracking. These fixed deterministic cohorts are not pooled
 into reliability or hardware claims. Complete failures and setup-attempt
 provenance are retained in \texttt{coupled\_tracking\_v2/results.json}.
+
+\paragraph{Base-only feedback structure.}
+A separate 1,024-update base-output-only imitation fit regresses despite
+bitwise frozen arm/gripper/context parameters; changed base motion alters the
+physical hand trajectory. A subsequent 32,768-decision joint PPO run preserves
+9/10 small general, 5/10 larger general and 6/6 unloaded TAMP completions, but
+leaves sixteen base-only audit cases at 0/16. A local derivative diagnostic
+finds that the base-only yaw-error response remains negative. These outcomes
+are retained rather than treated as evidence that more identical PPO is enough.
+
+An opt-in feedback parameterization retains learned magnitudes while imposing
+base-only restoring signs, forward/reverse lateral symmetry and an explicit
+coarse hold region. Active-hand and partial-base commands retain the original
+coupled mapping. No teacher action, private joint witness or output filter is
+added. With unchanged parameter tensors, the source-bound candidate completes
+24/24 base trajectory cases, 10/10 small general, 6/10 larger general, 6/6
+open-jaw TAMP operations and 4/4 base-to-hand handoffs during motion. These
+are architectural/control results, not a learned-policy improvement estimate
+or a global stability certificate. Static endpoint commands pass only 2/8:
+position reaches the accepted region but lateral/diagonal goals fail final
+heading convergence. The configured actor format is versioned so older runtimes
+reject unsupported feedback semantics. Complete cases and source provenance
+are in \texttt{base\_direction\_bootstrap\_v1/} and
+\texttt{base\_navigation\_feedback\_v1/}. No loaded-task or hardware qualification
+follows from this development result.

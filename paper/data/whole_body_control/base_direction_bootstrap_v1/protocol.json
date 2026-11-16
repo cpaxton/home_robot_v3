@@ -1,0 +1,23 @@
+{
+  "format": "base-direction-bootstrap-protocol-v1",
+  "runtime_revision": "57e8e73b",
+  "initializer": "logs/eval/coupled-base-feedback-v1/actor",
+  "seed": 94,
+  "supervised_updates": 1024,
+  "batch_size": 64,
+  "learning_rate": 0.001,
+  "optimization": "base output gain rows only; encoder, context, arm and gripper weights frozen; fresh Adam",
+  "general_mix": "half new directional base cases, half existing six general train cases",
+  "outer_mix": "50% general and 50% TAMP replay rows per batch; not a claim about PPO physical tick allocation",
+  "replay_sampling": "uniform case then uniform observed phase; general moving/first 2s after end/later hold; TAMP announced motion/hold",
+  "collection": "teacher and fixed initializer states on train cases only; all sampled histories from continuous physical rollouts",
+  "audit_labels_used": false,
+  "new_ppo_steps": 0,
+  "evaluation": "fixed final vs exact initializer, v1 and v2 existing general cohorts, six original TAMP, sixteen fresh base audits",
+  "automatic_extensions": 0,
+  "hardware_used": false,
+  "safety_promoted": false,
+  "admission": "fresh 1433-test receipt; all eight new teacher base cases plus unchanged TAMP teacher cases must pass before fitting",
+  "reason": "train-case attribution identifies wrong-sign base heading response after disabling direct rate feedback; original bootstrap had only straight forward base-only targets",
+  "runner_sha256": "a7d42bf1902baf82f1c8e85e368c7bf8156e8483306a979ac98ac4ed59d863a3"
+}

@@ -1,0 +1,322 @@
+[
+  {
+    "id": "innate_mars:base-direction-audit-v1:0",
+    "seed": 35830000,
+    "split": "audit",
+    "mode": "base_only",
+    "travel_m": 0.12,
+    "turn_rad": 0.18,
+    "arm_delta": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "base_mask": [
+      true,
+      true,
+      true
+    ]
+  },
+  {
+    "id": "innate_mars:base-direction-audit-v1:1",
+    "seed": 35830001,
+    "split": "audit",
+    "mode": "base_only",
+    "travel_m": 0.12,
+    "turn_rad": -0.18,
+    "arm_delta": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "base_mask": [
+      true,
+      true,
+      true
+    ]
+  },
+  {
+    "id": "innate_mars:base-direction-audit-v1:2",
+    "seed": 35830002,
+    "split": "audit",
+    "mode": "base_only",
+    "travel_m": -0.12,
+    "turn_rad": 0.18,
+    "arm_delta": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "base_mask": [
+      true,
+      true,
+      true
+    ]
+  },
+  {
+    "id": "innate_mars:base-direction-audit-v1:3",
+    "seed": 35830003,
+    "split": "audit",
+    "mode": "base_only",
+    "travel_m": -0.12,
+    "turn_rad": -0.18,
+    "arm_delta": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "base_mask": [
+      true,
+      true,
+      true
+    ]
+  },
+  {
+    "id": "innate_mars:base-direction-audit-v1:4",
+    "seed": 35830004,
+    "split": "audit",
+    "mode": "base_only",
+    "travel_m": 0.18,
+    "turn_rad": 0.3,
+    "arm_delta": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "base_mask": [
+      true,
+      true,
+      true
+    ]
+  },
+  {
+    "id": "innate_mars:base-direction-audit-v1:5",
+    "seed": 35830005,
+    "split": "audit",
+    "mode": "base_only",
+    "travel_m": 0.18,
+    "turn_rad": -0.3,
+    "arm_delta": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "base_mask": [
+      true,
+      true,
+      true
+    ]
+  },
+  {
+    "id": "innate_mars:base-direction-audit-v1:6",
+    "seed": 35830006,
+    "split": "audit",
+    "mode": "base_only",
+    "travel_m": -0.18,
+    "turn_rad": 0.3,
+    "arm_delta": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "base_mask": [
+      true,
+      true,
+      true
+    ]
+  },
+  {
+    "id": "innate_mars:base-direction-audit-v1:7",
+    "seed": 35830007,
+    "split": "audit",
+    "mode": "base_only",
+    "travel_m": -0.18,
+    "turn_rad": -0.3,
+    "arm_delta": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "base_mask": [
+      true,
+      true,
+      true
+    ]
+  },
+  {
+    "id": "innate_mars:base-direction-audit-v1:8",
+    "seed": 35830008,
+    "split": "audit",
+    "mode": "base_only",
+    "travel_m": 0.0,
+    "turn_rad": 0.18,
+    "arm_delta": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "base_mask": [
+      true,
+      true,
+      true
+    ]
+  },
+  {
+    "id": "innate_mars:base-direction-audit-v1:9",
+    "seed": 35830009,
+    "split": "audit",
+    "mode": "base_only",
+    "travel_m": 0.0,
+    "turn_rad": -0.18,
+    "arm_delta": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "base_mask": [
+      true,
+      true,
+      true
+    ]
+  },
+  {
+    "id": "innate_mars:base-direction-audit-v1:10",
+    "seed": 35830010,
+    "split": "audit",
+    "mode": "base_only",
+    "travel_m": 0.0,
+    "turn_rad": 0.3,
+    "arm_delta": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "base_mask": [
+      true,
+      true,
+      true
+    ]
+  },
+  {
+    "id": "innate_mars:base-direction-audit-v1:11",
+    "seed": 35830011,
+    "split": "audit",
+    "mode": "base_only",
+    "travel_m": 0.0,
+    "turn_rad": -0.3,
+    "arm_delta": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "base_mask": [
+      true,
+      true,
+      true
+    ]
+  },
+  {
+    "id": "innate_mars:base-direction-audit-v1:12",
+    "seed": 35830012,
+    "split": "audit",
+    "mode": "base_only",
+    "travel_m": 0.12,
+    "turn_rad": 0.0,
+    "arm_delta": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "base_mask": [
+      true,
+      true,
+      true
+    ]
+  },
+  {
+    "id": "innate_mars:base-direction-audit-v1:13",
+    "seed": 35830013,
+    "split": "audit",
+    "mode": "base_only",
+    "travel_m": -0.12,
+    "turn_rad": 0.0,
+    "arm_delta": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "base_mask": [
+      true,
+      true,
+      true
+    ]
+  },
+  {
+    "id": "innate_mars:base-direction-audit-v1:14",
+    "seed": 35830014,
+    "split": "audit",
+    "mode": "base_only",
+    "travel_m": 0.18,
+    "turn_rad": 0.0,
+    "arm_delta": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "base_mask": [
+      true,
+      true,
+      true
+    ]
+  },
+  {
+    "id": "innate_mars:base-direction-audit-v1:15",
+    "seed": 35830015,
+    "split": "audit",
+    "mode": "base_only",
+    "travel_m": -0.18,
+    "turn_rad": 0.0,
+    "arm_delta": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "base_mask": [
+      true,
+      true,
+      true
+    ]
+  }
+]

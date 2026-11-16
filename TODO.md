@@ -172,6 +172,22 @@ merges, measured policy improvement and hardware readiness are separate decision
       bootstrap reaches 5/6 TAMP but raw general remains 0/10. Fixed-weight
       base-rate-path ablation reaches 9/10 full-horizon general, while base-only
       worsens. Keep all producers, modes, failures and original scores distinct.
+- [x] **Diagnose the base-only gain failure and test a structured correction.**
+      Output-only imitation regresses; 32,768-decision joint PPO preserves the
+      retained controller but leaves fresh base audits 0/16. A fixed-weight
+      sign/symmetry and declared-region intervention passes 24/24 base trajectory
+      cases, small general 10/10, larger general 6/10 and original TAMP 6/6.
+      Implement it opt-in with a v3 bundle format that old runtimes reject;
+      fresh v3-source verification passes 1,451 tests and all 62 native readouts are recorded (including failures). See the
+      [direction/formulation report](docs/experiments/base_direction_bootstrap_20261116.md).
+- [ ] **Support static lateral base goals with feasible local references.**
+      Current point-goal checks are 2/8: position enters the 5 cm region, but
+      final heading does not converge. Preserve those failures and mode-switch
+      checks; do not call timed-path tracking universal endpoint navigation.
+- [ ] **Bind future actor exports to their actual training plants.** General
+      and TAMP currently use different contact solver settings. Use explicit
+      per-plant export/admission evidence or align the configurations before
+      claiming checkpointed agent integration; preserve source/model gates.
 - [ ] **Fix base-only stability, final approach and coverage.** Preserve fine
       reactive arm feedback, native servo limits and the outer general/task mix.
       Current v2 starts general base acceptance at 5 cm / 5° with 15 cm required

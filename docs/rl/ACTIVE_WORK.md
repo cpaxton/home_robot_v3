@@ -42,9 +42,17 @@ files. Parent merges do not promote an actor or qualify hardware.
 
 ## Current state and evidence
 
-**No PPO run is active.** The bounded 4,096-decision pilot and 1,024-update
-teacher-action bootstrap are complete. Current work isolates base hunting,
-coarse general base acceptance and physically valid phase coverage. No full
+**No PPO run is active.** The 32,768-decision joint fine-tuning run completes
+with scores unchanged: v1 9/10, v2 5/10, fresh base audits 0/16 and TAMP 6/6.
+It is not promoted. The earlier retained checkpoint remains the control anchor.
+The fixed-weight signed-feedback intervention passes 24/24 base trajectory
+cases and is implemented as an explicit opt-in actor parameterization. The safely versioned v3 export at source `823b3d1d` has a complete native
+readout and **1,451 passing source-bound regressions** (990.82 s). The paper
+builds successfully. Current work proceeds toward static-goal references and
+broader coupled trajectory training. It is not a learned-policy or
+hardware qualification.
+The earlier 4,096-decision pilot and both 1,024-update imitation diagnostics are
+complete. Static lateral endpoint convergence and broader coupled coverage remain gaps. No full
 pick-and-place or hardware controller is qualified.
 
 | Evidence | Scope / result |
@@ -55,7 +63,19 @@ pick-and-place or hardware controller is qualified.
 | Teacher-action bootstrap | 1,024 supervised updates, train labels only. Actor-only TAMP grasp-pose 5/6; raw general 0/10 with settling/self-contact failures. |
 | Fixed-weight base-rate ablation | Full-horizon general 9/10 versus raw 0/10; arm rate feedback retained. Base-only becomes worse; not a promoted replacement. |
 | Explicit completion-hold diagnostic | 10/10 using existing executor hold/reacquisition. Keep separate from raw actor stability. |
-| Current runtime `57e8e73b` | New v2 coarse base acceptance, unchanged hand precision, serialized opt-in base feedback mode. Physical readouts: teacher Mars 8/10, Stretch 9/10; fixed-weight Mars actor v1 9/10, v2 5/10, original TAMP grasp-pose 6/6. Fresh current-source regressions pass 1,433/1,433 in 913.38 s; paper builds (59 pages). Old receipts do not qualify this source. |
+| Pre-navigation runtime `57e8e73b` | New v2 coarse base acceptance, unchanged hand precision, serialized opt-in base feedback mode. Physical readouts: teacher Mars 8/10, Stretch 9/10; fixed-weight Mars actor v1 9/10, v2 5/10, original TAMP grasp-pose 6/6. Fresh current-source regressions pass 1,433/1,433 in 913.38 s; paper builds (59 pages). Old receipts do not qualify this source. |
+
+Current opt-in runtime **`823b3d1d`**: base trajectories **24/24**, small general
+**10/10**, larger general **6/10**, TAMP grasp-pose **6/6**, moving handoffs
+**4/4**, and static endpoint goals **2/8**. Fresh source-bound tests are
+**1,451/1,451**; v3 loader compatibility and paper build pass.
+
+The [base-direction diagnostic](../experiments/base_direction_bootstrap_20261116.md)
+identifies wrong-sign base-only yaw correction. Eight new training references
+and six unchanged TAMP references pass teacher admission. Output-only fitting
+regresses to v1 4/10, v2 2/10 and TAMP 1/6, with fresh base audits still 0/16;
+it is rejected. The retained initializer remains v1 9/10, v2 5/10, TAMP 6/6.
+The fresh base-audit teacher is 15/16; its heading failure remains counted.
 
 The preceding [unloaded-stage report](../experiments/mars_unloaded_grasp_admission_20261116.md)
 remains historical 5/6 at both boundaries, under full-task planning scope.
@@ -136,3 +156,15 @@ Avoid environment upgrades on this unstable machine. Keep raw compressed
 traces and weights ignored, and retain source/archive hashes in compact reports.
 Only remove owned completed duplicate runtimes after verifying job completion
 and preserving source archives/logs. Do not kill unrelated or unidentified jobs.
+
+The signed-feedback prototype also passes 10/10 small general, 6/10 larger
+general, 6/6 TAMP and 4/4 live base-to-hand handoffs. Static endpoint goals remain
+2/8 despite reaching the XY region. See the
+[complete direction/formulation report](../experiments/base_direction_bootstrap_20261116.md).
+Completed jobs: native `20261116_122228_f4f79a` and regressions
+`20261116_122228_e25e20`, immutable runtime `/tmp/emet-base-navigation-823b3d1d`.
+The previous source's canceled partial suite is not reused.
+
+The explicit unpromoted v3 test candidate is
+`logs/eval/base-navigation-native-v2/actor`. It is opt-in; existing service/UI
+checkpoints are not switched. All controller training/test workers are finished.

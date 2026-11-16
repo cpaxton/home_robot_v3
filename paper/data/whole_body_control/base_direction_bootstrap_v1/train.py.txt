@@ -1,0 +1,180 @@
+"""One fixed-budget base-output fit; arm/GRU/grip weights remain exact."""
+import hashlib,json,math,runpy
+from pathlib import Path
+import numpy as np
+import torch
+from emet.rl.manipulation.carry_benchmark import digest
+from emet.rl.manipulation.command_runtime import task_pose_teacher_action
+from emet.rl.manipulation.coupled_tracking import CoupledTrackingEnv,SUITE,COARSE_SUITE,load_suite
+from emet.rl.manipulation.coupled_evaluation import teacher_episode,json_value
+from emet.rl.manipulation.safety import whole_body_stopped
+from emet.rl.manipulation.tamp_primitive_env import TampPrimitiveEnv
+from emet.rl.manipulation.whole_body_bundle import WholeBodyBundle,export_actor
+from emet.rl.manipulation.whole_body_training import load_development,primitive_rollout
+from emet.rl.regression_gate import ROOT,source_state,verify_regressions
+
+OUT=ROOT/'logs/manipulation/base-direction-bootstrap-v1'
+REC=ROOT/'logs/recovery/base-direction-bootstrap-v1'
+INITIAL=ROOT/'logs/eval/coupled-base-feedback-v1/actor'
+
+def sha(p):return hashlib.sha256(Path(p).read_bytes()).hexdigest()
+def save(p,value):
+ temp=p.with_suffix('.partial');temp.write_text(json.dumps(value,indent=2,default=json_value,allow_nan=False)+'\n');temp.replace(p)
+def sensor(obs):return {k:np.asarray(obs[k],dtype=np.float32).copy() for k in ('history','preview','motion')}
+def predict(actor,obs):
+ with torch.no_grad():return actor({k:torch.from_numpy(v)[None] for k,v in sensor(obs).items()})[0].numpy().copy()
+def stop(e):
+ e.control.stop()
+ for _ in range(16):
+  if whole_body_stopped(e.control) or e._physics_invalid:break
+  e._tick(np.zeros(e.profile.action_size))
+ return bool(whole_body_stopped(e.control) and not e._physics_invalid)
+def new_base_cases():return runpy.run_path(str(REC/'admit.py'))['cases']()
+def audit_cases():
+ motions=[(d,y) for d in (.12,-.12) for y in (.18,-.18)]+[(d,y) for d in (.18,-.18) for y in (.30,-.30)]+[(0.,y) for y in (.18,-.18,.30,-.30)]+[(d,0.) for d in (.12,-.12,.18,-.18)]
+ return [{'id':f'innate_mars:base-direction-audit-v1:{i}','seed':35830000+i,'split':'audit','mode':'base_only','travel_m':d,'turn_rad':y,'arm_delta':[0.]*5,'base_mask':[True]*3} for i,(d,y) in enumerate(motions)]
+def evaluate_general(actor,cases,suite_path,label):
+ env=CoupledTrackingEnv('innate_mars',cases,suite_path=suite_path);rows=[];e=env.unwrapped
+ try:
+  for case in cases:
+   try:
+    obs,init=env.reset(options={'case_id':case['id']});trace=[]
+    for tick in range(500):
+     action=predict(actor,obs);obs,_,done,truncated,info=env.step(action)
+     trace.append({'tick':tick,'action':action.tolist(),'base':e.control.base_pose().tolist()})
+     if done or truncated:break
+    metrics=e._info();confirmed=stop(e)
+    row={'id':case['id'],'case':case,'success':bool(info.get('is_success')),'code':info['code'],'control_ticks':tick+1,'stop_confirmed':confirmed,'metrics':metrics,'reference_sha256':init['reference_sha256'],'trace':trace}
+   except (ValueError,RuntimeError) as exc:row={'id':case['id'],'success':False,'code':str(exc),'initialization_failed':True}
+   rows.append(row);save(OUT/(label+'.json'),rows);print('EVAL',label,case['id'],row['success'],row['code'],flush=True)
+ finally:env.close()
+ return rows
+
+def collect_general(actor,cases,suite_path,drive,group,data):
+ env=CoupledTrackingEnv('innate_mars',cases,suite_path=suite_path);e=env.unwrapped;summary=[]
+ try:
+  for c in cases:
+   obs,_=env.reset(options={'case_id':c['id']});n=0
+   for tick in range(500):
+    label=task_pose_teacher_action(e.control).astype(np.float32)
+    elapsed=e.control.trajectory_elapsed()-e.control.task_trajectory.end
+    phase='moving' if elapsed<0 else 'settling' if elapsed<2 else 'late_hold'
+    data[group].append((c['id'],phase,sensor(obs),label.copy()));n+=1
+    action=label if drive=='teacher' else predict(actor,obs)
+    obs,_,done,truncated,info=env.step(action)
+    if done or truncated:break
+   stop(e);summary.append({'group':group,'case':c['id'],'drive':drive,'labels':n,'code':info['code'],'success':bool(info.get('is_success'))})
+ finally:env.close()
+ return summary
+
+def collect_tamp(actor,cases,drive,data):
+ env=TampPrimitiveEnv(cases,oracle=True,primitive='grasp_pose',planning_scope='unloaded_prefix',wheel_feedback_current_velocity=True);summary=[]
+ try:
+  for c in cases:
+   obs,info=env.reset(options={'case_id':c['id']});n=0
+   for _ in range(2000):
+    if 'oracle_action' not in info:break
+    phase='announced_motion' if np.linalg.norm(obs['motion'])>1e-6 else 'announced_hold'
+    label=np.asarray(info['oracle_action'],dtype=np.float32).copy();data['tamp'].append((c['id'],phase,sensor(obs),label));n+=1
+    action=label if drive=='teacher' else predict(actor,obs)
+    obs,_,done,truncated,info=env.step(action)
+    if done or truncated:break
+   summary.append({'group':'tamp','case':c['id'],'drive':drive,'labels':n,'code':info['code'],'success':bool(info.get('primitive_success'))})
+ finally:env.close()
+ return summary
+
+def fit(actor,data,protocol,run):
+ rng=np.random.default_rng(protocol['seed']);tensors={};index={}
+ for group,rows in data.items():
+  tensors[group]={k:torch.from_numpy(np.array([x[2][k] for x in rows])) for k in ('history','preview','motion')}
+  tensors[group]['labels']=torch.from_numpy(np.array([x[3] for x in rows]))
+  index[group]={}
+  for i,(case,phase,_,_) in enumerate(rows):index[group].setdefault(case,{}).setdefault(phase,[]).append(i)
+ # A fresh optimizer and zero weight decay make zero-gradient inactive rows
+ # exactly invariant. Verify every frozen row/tensor again before exporting.
+ for p in actor.parameters():p.requires_grad_(False)
+ actor.gain.weight.requires_grad_(True);actor.gain.bias.requires_grad_(True)
+ count=2*actor.feedback_width
+ hooks=[]
+ for parameter in (actor.gain.weight,actor.gain.bias):
+  mask=torch.zeros_like(parameter);mask[:count]=1
+  hooks.append(parameter.register_hook(lambda grad,mask=mask:grad*mask))
+ opt=torch.optim.Adam([actor.gain.weight,actor.gain.bias],lr=protocol['learning_rate'])
+ try:
+  for step in range(protocol['supervised_updates']):
+   batches={k:[] for k in ('history','preview','motion','labels')}
+   for group,n in (('base',16),('general',16),('tamp',32)):
+    ids=[];cases=list(index[group])
+    for _ in range(n):
+     c=cases[int(rng.integers(len(cases)))];phases=list(index[group][c]);phase=phases[int(rng.integers(len(phases)))];choices=index[group][c][phase];ids.append(choices[int(rng.integers(len(choices)))])
+    for k in batches:batches[k].append(tensors[group][k][ids])
+   batch={k:torch.cat(v) for k,v in batches.items()}
+   prediction=actor(batch);mask=actor.action_mask(batch)[:,:2]
+   loss=(((prediction[:,:2]-batch['labels'][:,:2])*mask)**2).sum()/mask.sum().clamp_min(1)
+   opt.zero_grad();loss.backward();torch.nn.utils.clip_grad_norm_([actor.gain.weight,actor.gain.bias],1.);opt.step()
+   if (step+1)%64==0:
+    record={'supervised_update':step+1,'base_action_mse':float(loss.detach())};run.log(record,step=step+1)
+    with (OUT/'updates.jsonl').open('a') as f:f.write(json.dumps(record)+'\n')
+    print('FIT',record,flush=True)
+ finally:
+  for hook in hooks:hook.remove()
+ return {group:{c:{p:len(rows) for p,rows in phases.items()} for c,phases in cs.items()} for group,cs in index.items()}
+
+def main():
+ torch.set_num_threads(1)
+ protocol=json.loads((REC/'protocol.json').read_text());receipt=verify_regressions(ROOT/'logs/eval/coupled-coarse-regressions-v1/full.receipt.json')
+ sources=source_state(ROOT);admission=json.loads((ROOT/'logs/eval/base-direction-admission-v1/results.json').read_text());development,_=load_development()
+ assert admission['ready'] and admission['complete'] and admission['source_state_digest']==digest(sources)
+ assert [x['case'] for x in admission['general']]==new_base_cases()
+ assert [x['id'] for x in admission['tamp']]==[c['id'] for c in development['train_cases']+development['audit_cases']]
+ assert admission['cases_manifest_sha256']==sha(REC/'cases.json')
+ assert all(x['accepted'] and x['teacher']['tracking_success'] and x['teacher']['stop_confirmed'] and not any(x['teacher']['safety_flags'].values()) for x in admission['general'])
+ assert all(x['success'] and x['stop_confirmed'] and not any(x['safety_flags'].values()) for x in admission['tamp'])
+ OUT.mkdir(parents=True,exist_ok=False);np.random.seed(protocol['seed']);torch.manual_seed(protocol['seed'])
+ original=WholeBodyBundle(INITIAL);actor=original.actor;assert actor.base_rate_feedback is False
+ before={k:v.clone() for k,v in actor.state_dict().items()}
+ general=[c for c in load_suite()['robots']['innate_mars'] if c['split']=='train'];audits=audit_cases()
+ train_ids={c['id'] for c in new_base_cases()+general+development['train_cases']};assert train_ids.isdisjoint(c['id'] for c in audits)
+ save(OUT/'audit-cases.json',audits)
+ meta={'format':'base-direction-bootstrap-v1','protocol':protocol,'protocol_sha256':sha(REC/'protocol.json'),'runner_sha256':sha(__file__),'source_state_digest':digest(sources),'regression_tests':len(receipt['test_ids']),'teacher_admission_sha256':sha(ROOT/'logs/eval/base-direction-admission-v1/results.json'),'initializer_weights_sha256':original.manifest['weights_sha256'],'complete':False,'phase':'initial_audit','new_ppo_steps':0,'hardware_used':False,'safety_promoted':False};save(OUT/'run.json',meta)
+ evaluate_general(actor,audits,COARSE_SUITE,'initial-base-audit')
+ # Evaluation may consume RNG; restart the declared training stream.
+ np.random.seed(protocol['seed']);torch.manual_seed(protocol['seed'])
+ data={'base':[],'general':[],'tamp':[]};collected=[]
+ for drive in ('teacher','actor'):
+  for group,cases,path in (('base',new_base_cases(),COARSE_SUITE),('general',general,SUITE)):
+   collected.extend(collect_general(actor,cases,path,drive,group,data));save(OUT/'collection.json',collected);print('COLLECT',drive,group,len(data[group]),flush=True)
+  collected.extend(collect_tamp(actor,development['train_cases'],drive,data));save(OUT/'collection.json',collected)
+ assert all(row[0] in train_ids for rows in data.values() for row in rows)
+ save(OUT/'dataset-summary.json',{k:len(v) for k,v in data.items()})
+ meta['phase']='fitting';save(OUT/'run.json',meta)
+ import wandb
+ run=wandb.init(project='emet-mars-control',name='base-direction-bootstrap-v1',mode='offline',dir=str(OUT),config={**protocol,'source_state_digest':digest(sources)})
+ try:exposure=fit(actor,data,protocol,run)
+ finally:run.finish()
+ count=2*actor.feedback_width
+ for k,v in actor.state_dict().items():
+  if k in ('gain.weight','gain.bias'):torch.testing.assert_close(v[count:],before[k][count:],rtol=0,atol=0)
+  else:torch.testing.assert_close(v,before[k],rtol=0,atol=0)
+ meta['frozen_arm_grip_encoder_context_exact']=True;save(OUT/'replay-exposure.json',exposure)
+ env=CoupledTrackingEnv('innate_mars')
+ try:final=export_actor(actor,OUT/'final/actor',env.unwrapped.config,env.unwrapped.fingerprint,steps=0,training={'scope':'base_output_only_supervised_fit','supervised_updates':protocol['supervised_updates'],'source_weights_sha256':original.manifest['weights_sha256'],'frozen_arm_grip_encoder_context_exact':True,'new_ppo_steps':0})
+ finally:env.close()
+ meta['phase']='final_evaluation';meta['candidate_weights_sha256']=final.manifest['weights_sha256'];save(OUT/'run.json',meta)
+ summary={}
+ for path,name in ((SUITE,'final-v1-general'),(COARSE_SUITE,'final-v2-general')):
+  rows=evaluate_general(final.actor,load_suite(path)['robots']['innate_mars'],path,name);summary[name]={'attempts':len(rows),'successes':sum(x['success'] for x in rows)}
+ rows=evaluate_general(final.actor,audits,COARSE_SUITE,'final-base-audit');summary['final-base-audit']={'attempts':len(rows),'successes':sum(x['success'] for x in rows)}
+ rows=primitive_rollout(development['train_cases']+development['audit_cases'],policy=final.actor,primitive='grasp_pose',planning_scope='unloaded_prefix',wheel_feedback_current_velocity=True);save(OUT/'final-tamp.json',rows);summary['final-tamp']={'attempts':len(rows),'successes':sum(x['success'] for x in rows)}
+ teacher_rows=[];env=CoupledTrackingEnv('innate_mars',audits,suite_path=COARSE_SUITE)
+ try:
+  for c in audits:
+   try:
+    env.reset(options={'case_id':c['id']});row={'id':c['id'],'admission':env.admission,'teacher':teacher_episode(env,c)}
+   except (ValueError,RuntimeError) as exc:row={'id':c['id'],'accepted':False,'reason':str(exc)}
+   teacher_rows.append(row);save(OUT/'base-audit-teacher.json',teacher_rows)
+ finally:env.close()
+ summary['base-audit-teacher']={'attempts':len(teacher_rows),'successes':sum(x.get('teacher',{}).get('tracking_success',False) for x in teacher_rows)}
+ assert digest(source_state(ROOT))==meta['source_state_digest']
+ meta.update(phase='complete',complete=True,summary=summary);save(OUT/'run.json',meta);print('SUMMARY',summary,flush=True)
+if __name__=='__main__':main()
