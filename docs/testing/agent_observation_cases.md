@@ -3,6 +3,14 @@
 Qualify the same harness across EQA and OVMM. Model correctness, geometry
 admission, motion safety and task completion are separate outcomes.
 
+Live operator qualification on 2026-11-16 exposed two additional gaps, not yet
+passing acceptance cases: measured head arrival through the rby1/Galaxea-proxy
+bridge, and failed executor-mapped FIND returning an actionable result to the
+coordinator instead of ending its turn with generic success. Preserve these
+as separate gates; process exit-zero does not pass either. See the
+[operator report](../experiments/independent_operator_trial_20261116.md) for
+exact actions, source pin, receipt paths and the proposed repair tests.
+
 ## Fast cross-tool integration gate
 
 ```bash

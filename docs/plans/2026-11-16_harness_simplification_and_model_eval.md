@@ -209,3 +209,14 @@ images are in acquisition order. Keep source capture order separate from
 presentation order and retain both historical and current-view negative controls.
 Next compare packet placement on frozen trajectories before another live sweep;
 do not interpret the first eight replies as a general precision comparison.
+
+## Independent operator qualification
+
+The requested external-operator trial is complete on the unchanged production
+CHAT loop; [report and evidence](../experiments/independent_operator_trial_20261116.md).
+It does not establish task success: head commands remained unconfirmed and a
+failed FIND ended the coordinator turn with a misleading generic success summary.
+Before another live accuracy sweep, qualify measured gaze and preserve detailed
+mapped-tool feedback through the coordinator loop. Then repeat the bounded
+operator case and small paired EQA/OVMM gates. The frozen packet-placement study
+remains a separate model-context comparison; it cannot repair actuation failures.
