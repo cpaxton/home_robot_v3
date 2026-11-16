@@ -14,6 +14,12 @@ fixes. The combined admission/contact/release/API/provider regression batch
 passes 390 tests, zero failures/errors/skips (`20261116_162854_3643a6`). This
 does not complete any live observed-transfer gate below.
 
+PR #246 is now merged as `2ccf390c`. This branch integrates that main commit at
+`63dceb73`; all runtime/scripts/configs bytes are unchanged from the passing
+390-check integration. Squash-ancestry conflicts preserve the tested combined
+implementation and import the final evidence documents. No new task score or
+observed/hardware qualification follows from this ancestry-only integration.
+
 Implemented so far:
 
 - Maximum elapsed capture-interval time for bounded mask reachability. This is
