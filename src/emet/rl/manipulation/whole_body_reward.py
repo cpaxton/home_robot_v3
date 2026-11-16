@@ -34,8 +34,9 @@ def current_contact_force(env):
 
 
 class RewardMeter:
-    def __init__(self, env):
+    def __init__(self, env, *, base_heading_region=False):
         self.env = env
+        self.base_heading_region = base_heading_region
         c = env.control
         self.velocity, self.acceleration = c.velocities().copy(), np.zeros(c.profile.arm_size)
         jp, jr = np.zeros((3, env.model.nv)), np.zeros((3, env.model.nv))
@@ -66,7 +67,10 @@ class RewardMeter:
         delta = c.base_goal - c.base_pose()
         delta[2] = np.arctan2(np.sin(delta[2]), np.cos(delta[2]))
         outside = max(0, np.linalg.norm(delta[:2] * c.base_mask[:2]) - e.config.base_xy_tolerance)
-        base_score = np.exp(-outside / 0.02 - abs(delta[2] * c.base_mask[2]) / 0.05) if c.base_mask.any() else 0.0
+        heading_error = abs(delta[2] * c.base_mask[2])
+        if self.base_heading_region:
+            heading_error = max(0, heading_error - e.config.base_heading_tolerance)
+        base_score = np.exp(-outside / 0.02 - heading_error / 0.05) if c.base_mask.any() else 0.0
         velocity = c.velocities().copy()
         acceleration = (velocity - self.velocity) / dt
         jerk = (acceleration - self.acceleration) / dt

@@ -8,11 +8,13 @@ import pytest
 from scipy.interpolate import CubicSpline
 
 from emet.rl.manipulation.coupled_tracking import (
+    COARSE_SUITE,
     CoupledReference,
     CoupledTrackingEnv,
     admit_reference,
     load_suite,
     spline_bounds,
+    suite_contract,
 )
 
 
@@ -55,6 +57,77 @@ def test_exact_spline_derivative_bounds_include_internal_extrema():
         dense = np.max(abs(spline(np.linspace(0, 1, 10001), order)), axis=0)
         assert np.all(dense <= bound * (1 + 1e-12))
         np.testing.assert_allclose(dense, bound, rtol=1e-4)
+
+
+def test_coarse_distribution_keeps_precise_hand_and_requires_real_base_progress():
+    old, coarse = load_suite(), load_suite(COARSE_SUITE)
+    before, after = suite_contract(old), suite_contract(coarse)
+    assert before["base_xy_tolerance"] == 0.02 and before["base_heading_tolerance"] == 0.04
+    assert after["base_xy_tolerance"] == 0.05
+    assert after["base_heading_tolerance"] == pytest.approx(np.deg2rad(5))
+    for key in ("hand_position_tolerance", "hand_orientation_tolerance"):
+        assert before[key] == after[key]
+    all_old = [c for cases in old["robots"].values() for c in cases]
+    all_new = [c for cases in coarse["robots"].values() for c in cases]
+    assert {c["seed"] for c in all_old}.isdisjoint(c["seed"] for c in all_new)
+    assert {c["id"] for c in all_old}.isdisjoint(c["id"] for c in all_new)
+    for c in all_new:
+        if c["mode"] == "fixed_world_hand":
+            assert c["purpose"] == "hand_hold_nullspace_diagnostic"
+        elif any(c["base_mask"][:2]):
+            assert abs(c["travel_m"]) > 2 * after["base_xy_tolerance"]
+
+
+@pytest.mark.parametrize("fault", ["radius", "hand", "purpose", "trivial_base"])
+def test_coarse_distribution_rejects_contract_drift_and_trivial_base_goals(tmp_path, fault):
+    suite = load_suite(COARSE_SUITE)
+    if fault == "radius":
+        suite["acceptance"]["base_xy_tolerance"] = 0.15
+    elif fault == "hand":
+        suite["acceptance"]["hand_position_tolerance"] = 0.01
+    elif fault == "purpose":
+        suite["robots"]["innate_mars"][5]["purpose"] = "tracking"
+    else:
+        suite["robots"]["innate_mars"][0]["travel_m"] = 0.01
+    path = tmp_path / "suite.json"
+    path.write_text(json.dumps(suite))
+    with pytest.raises(ValueError):
+        load_suite(path)
+
+
+@pytest.mark.sim
+@pytest.mark.parametrize("robot", ["innate_mars", "stretch"])
+def test_coarse_general_reward_has_no_in_region_heading_precision_pressure(robot):
+    from emet.rl.manipulation.whole_body_reward import RewardMeter
+
+    case = load_suite(COARSE_SUITE)["robots"][robot][0]
+    env = CoupledTrackingEnv(robot, [case], suite_path=COARSE_SUITE)
+    try:
+        env.reset()
+        e, c = env.unwrapped, env.unwrapped.control
+        assert e.config.base_xy_tolerance == 0.05
+        assert e.config.hand_position_tolerance == 0.003
+        c.base_goal = c.base_pose().copy()
+        action, motion = np.zeros(e.profile.action_size), np.zeros(9)
+        meter = RewardMeter(e, base_heading_region=True)
+        meter.tick(action, motion)
+        original = meter.last_terms["base_pose_score"]
+        c.base_goal[2] += np.deg2rad(4)
+        meter.tick(action, motion)
+        assert meter.last_terms["base_pose_score"] == original
+        c.base_goal[2] += np.deg2rad(3)
+        meter.tick(action, motion)
+        assert meter.last_terms["base_pose_score"] < original
+        # Frozen/default objective still distinguishes these headings.
+        old = RewardMeter(e)
+        c.base_goal = c.base_pose().copy()
+        old.tick(action, motion)
+        original = old.last_terms["base_pose_score"]
+        c.base_goal[2] += np.deg2rad(4)
+        old.tick(action, motion)
+        assert old.last_terms["base_pose_score"] < original
+    finally:
+        env.close()
 
 
 @pytest.mark.sim

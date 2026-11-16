@@ -1,5 +1,6 @@
 """Test actual isolation, derivative bounds, PPO returns and tick scheduling."""
 
+import json
 from dataclasses import replace
 
 import gymnasium as gym
@@ -237,6 +238,61 @@ def test_actor_only_bundle_roundtrip_and_rejects_privileged_inputs(tmp_path):
     np.testing.assert_array_equal(bundle(obs), np.zeros(8))
     bundle.bind_reference(lambda: obs["motion"])
     np.testing.assert_array_equal(bundle({k: v for k, v in obs.items() if k != "motion"}), np.zeros(8))
+
+
+@pytest.mark.parametrize("robot", ["innate_mars", "stretch"])
+def test_base_rate_ablation_preserves_arm_feedback_and_reference_authority(robot):
+    legacy = WholeBodyActor(robot)
+    candidate = WholeBodyActor(robot, base_rate_feedback=False)
+    with torch.no_grad():
+        gains = legacy.gain.bias.reshape(-1, legacy.feedback_width)
+        gains[:, 24 : 24 + legacy.encoder.profile.arm_size + 6] = 1
+        gains[:, -9:] = 1
+        candidate.load_state_dict(legacy.state_dict())
+    obs = observation(robot)
+    obs["history"][..., legacy.encoder.fields["proprio/velocities"]] = 0.01
+    obs["history"][..., legacy.encoder.fields["base_velocity"]] = 0.01
+    original, changed = legacy(obs), candidate(obs)
+    assert torch.count_nonzero(original[:, :2]) == original.shape[0] * 2
+    torch.testing.assert_close(changed[:, :2], torch.zeros_like(changed[:, :2]), rtol=0, atol=0)
+    torch.testing.assert_close(changed[:, 2:], original[:, 2:], rtol=0, atol=0)
+    assert torch.count_nonzero(changed[:, 2:-1]) > 0
+    # Removing the direct rate path does not remove announced-motion authority.
+    obs["motion"][:, 0] = 0.1
+    assert torch.count_nonzero(candidate(obs)[:, :2]) == original.shape[0] * 2
+
+
+@pytest.mark.parametrize("rate_feedback", [True, False])
+def test_bundle_pins_base_feedback_behavior_and_rejects_manifest_only_change(tmp_path, rate_feedback):
+    cfg = replace(ManipulationConfig(), retention_context=True, trajectory_preview=True, action_mode="direct_velocity")
+    actor = WholeBodyActor(base_rate_feedback=rate_feedback)
+    destination = tmp_path / "actor"
+    export_actor(actor, destination, cfg, "test-model", steps=0)
+    assert WholeBodyBundle(destination).actor.base_rate_feedback is rate_feedback
+    path = destination / "manifest.json"
+    manifest = json.loads(path.read_text())
+    manifest["base_rate_feedback"] = not rate_feedback
+    path.write_text(json.dumps(manifest))
+    with pytest.raises(ValueError, match="base feedback contract"):
+        WholeBodyBundle(destination)
+
+
+def test_legacy_bundle_without_feedback_metadata_preserves_original_actor(tmp_path):
+    import hashlib
+
+    cfg = replace(ManipulationConfig(), retention_context=True, trajectory_preview=True, action_mode="direct_velocity")
+    destination = tmp_path / "legacy"
+    export_actor(WholeBodyActor(), destination, cfg, "test-model", steps=0)
+    path = destination / "policy.zip"
+    weights = torch.load(path, weights_only=True)
+    weights.pop("base_rate_feedback")
+    torch.save(weights, path)
+    manifest_path = destination / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest.pop("base_rate_feedback")
+    manifest["weights_sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
+    manifest_path.write_text(json.dumps(manifest))
+    assert WholeBodyBundle(destination).actor.base_rate_feedback is True
 
 
 class TickEnv(gym.Env):

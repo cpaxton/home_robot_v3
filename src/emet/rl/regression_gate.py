@@ -109,6 +109,7 @@ def source_state(root):
             root / "configs/benchmarks/mars_whole_body_basic_learning_v1.json",
             root / "configs/benchmarks/mars_directional_curriculum_v1.json",
             root / "configs/benchmarks/coupled_tracking_v1.json",
+            root / "configs/benchmarks/coupled_tracking_v2.json",
             root / "configs/benchmarks/mars_whole_body_advantage_pair_v1.json",
             root / "configs/benchmarks/mars_whole_body_advantage_recovery_v1.json",
             root / "paper/data/whole_body_control/mars_tamp_translation_audit_v1/cases.json",

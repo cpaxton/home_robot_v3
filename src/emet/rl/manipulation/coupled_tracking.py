@@ -22,13 +22,35 @@ from emet.rl.manipulation.tracking import TaskFrameFK, TaskPoseTrajectory
 
 ROOT = Path(__file__).resolve().parents[4]
 SUITE = ROOT / "configs/benchmarks/coupled_tracking_v1.json"
+COARSE_SUITE = ROOT / "configs/benchmarks/coupled_tracking_v2.json"
 MODES = {"hand_free_base", "coupled", "base_only", "fixed_world_hand"}
+
+
+def suite_contract(suite):
+    """Versioned general acceptance; frozen manipulation contracts are separate."""
+    contract = {
+        "base_xy_tolerance": 0.02,
+        "base_heading_tolerance": 0.04,
+        "hand_position_tolerance": 0.003,
+        "hand_orientation_tolerance": 0.02,
+    }
+    if suite["format"] == "coupled-tracking-v2":
+        contract.update(base_xy_tolerance=0.05, base_heading_tolerance=float(np.deg2rad(5)))
+        if suite.get("acceptance") != contract:
+            raise ValueError("v2 acceptance must declare coarse base and unchanged precise hand tolerances")
+    return contract
 
 
 def load_suite(path=SUITE):
     suite = json.loads(Path(path).read_text())
-    if suite.get("format") != "coupled-tracking-v1" or set(suite["robots"]) != {"stretch", "innate_mars"}:
+    if suite.get("format") not in {"coupled-tracking-v1", "coupled-tracking-v2"} or set(suite["robots"]) != {
+        "stretch",
+        "innate_mars",
+    }:
         raise ValueError("expected the two-robot coupled tracking distribution")
+    contract = suite_contract(suite)
+    coarse = suite["format"] == "coupled-tracking-v2"
+    travel_bound, turn_bound = (0.2, 0.5) if coarse else (0.05, 0.1)
     ids, seeds = set(), set()
     for robot, cases in suite["robots"].items():
         for case in cases:
@@ -45,6 +67,7 @@ def load_suite(path=SUITE):
                     "base_mask",
                     "retarget",
                     "self_motion_scale",
+                    *({"purpose"} if coarse else set()),
                 }
                 or not isinstance(case["id"], str)
                 or not case["id"].startswith(robot + ":")
@@ -61,7 +84,7 @@ def load_suite(path=SUITE):
             if (
                 motion.shape != (7,)
                 or not np.isfinite(motion).all()
-                or np.any(abs(motion) > [0.05, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1])
+                or np.any(abs(motion) > [travel_bound, turn_bound, 0.1, 0.1, 0.1, 0.1, 0.1])
                 or len(mask) != 3
                 or any(type(v) is not bool for v in mask)
                 or (case["mode"] == "hand_free_base" and any(mask))
@@ -71,6 +94,16 @@ def load_suite(path=SUITE):
                 or (case["mode"] == "coupled" and not any(mask))
             ):
                 raise ValueError("invalid coupled geometry or masks")
+            if coarse:
+                purpose = "hand_hold_nullspace_diagnostic" if case["mode"] == "fixed_world_hand" else "tracking"
+                if case.get("purpose") != purpose:
+                    raise ValueError("v2 must distinguish optional nullspace motion from required base progress")
+                if (
+                    case["mode"] != "fixed_world_hand"
+                    and any(mask[:2])
+                    and abs(motion[0]) <= 2 * contract["base_xy_tolerance"]
+                ):
+                    raise ValueError("v2 required base travel must exceed twice its acceptance radius")
             if case["mode"] == "fixed_world_hand" and (
                 type(case.get("self_motion_scale")) not in (int, float)
                 or not np.isfinite(case["self_motion_scale"])
@@ -83,7 +116,7 @@ def load_suite(path=SUITE):
                     set(event) != {"at_fraction", "travel_m"}
                     or not 0 < event["at_fraction"] < 1
                     or not np.isfinite(event["travel_m"])
-                    or abs(event["travel_m"]) > 0.05
+                    or abs(event["travel_m"]) > travel_bound
                 ):
                     raise ValueError("invalid announced goal change")
             ids.add(case["id"])
@@ -367,7 +400,7 @@ def admit_reference(env, reference):
 class CoupledTrackingEnv(gym.Wrapper):
     """Reusable general training share; task/case metadata stays outside the actor."""
 
-    def __init__(self, robot, cases=None):
+    def __init__(self, robot, cases=None, *, suite_path=SUITE):
         from gymnasium import spaces
 
         from emet.rl.manipulation.observation_layout import history_layout
@@ -375,7 +408,9 @@ class CoupledTrackingEnv(gym.Wrapper):
 
         if robot not in {"innate_mars", "stretch"}:
             raise ValueError("unsupported coupled robot")
-        self.cases = cases if cases is not None else load_suite()["robots"][robot]
+        suite = load_suite(suite_path)
+        self.suite_format = suite["format"]
+        self.cases = cases if cases is not None else suite["robots"][robot]
         cfg = ManipulationConfig(
             robot=robot,
             scenario="reach",
@@ -392,10 +427,7 @@ class CoupledTrackingEnv(gym.Wrapper):
             wheel_feedback_current_velocity=robot == "innate_mars",
             wheel_feedback_gain=0.5,
             physical_wheel_slew=True,
-            base_xy_tolerance=0.02,
-            base_heading_tolerance=0.04,
-            hand_position_tolerance=0.003,
-            hand_orientation_tolerance=0.02,
+            **suite_contract(suite),
             retarget_probability=0,
             reach_push_probability=0,
         )
@@ -448,7 +480,7 @@ class CoupledTrackingEnv(gym.Wrapper):
         e.control.history = None
         self.retarget_at = reference.end * case["retarget"]["at_fraction"] if "retarget" in case else None
         self.retargeted = False
-        self.meter = RewardMeter(e)
+        self.meter = RewardMeter(e, base_heading_region=self.suite_format == "coupled-tracking-v2")
         raw = e.control.observe()
         return self.observe(raw), {
             **info,

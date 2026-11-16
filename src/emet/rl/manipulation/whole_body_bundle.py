@@ -26,7 +26,13 @@ def export_actor(actor, destination, environment, fingerprint, *, steps, trainin
     with tempfile.TemporaryDirectory(prefix=f".{destination.name}-", dir=destination.parent) as temp:
         directory = Path(temp)
         torch.save(
-            {"format": FORMAT, "robot": actor.robot, "hidden": actor.hidden, "state_dict": actor.state_dict()},
+            {
+                "format": FORMAT,
+                "robot": actor.robot,
+                "hidden": actor.hidden,
+                "base_rate_feedback": actor.base_rate_feedback,
+                "state_dict": actor.state_dict(),
+            },
             directory / "policy.zip",
         )
         manifest = {
@@ -41,6 +47,7 @@ def export_actor(actor, destination, environment, fingerprint, *, steps, trainin
             "actor_inputs": list(ACTOR_KEYS),
             "history_steps": PROFILES[actor.robot].history_steps,
             "motion_contract": MOTION_CONTRACT,
+            "base_rate_feedback": actor.base_rate_feedback,
             "critic_exported": False,
             "hardware_used": False,
             "safety_promoted": False,
@@ -82,7 +89,13 @@ class WholeBodyBundle:
             raise ValueError("whole-body weights metadata mismatch")
         if type(data.get("hidden")) is not int or not 1 <= data["hidden"] <= 1024:
             raise ValueError("invalid whole-body hidden width")
-        self.actor = WholeBodyActor(self.robot, data["hidden"])
+        # Missing fields are legacy bundles with the original rate path. Both
+        # files must agree so an edited manifest cannot change actor behavior.
+        rate = data.get("base_rate_feedback", True)
+        declared_rate = m.get("base_rate_feedback", True)
+        if type(rate) is not bool or type(declared_rate) is not bool or rate != declared_rate:
+            raise ValueError("whole-body base feedback contract mismatch")
+        self.actor = WholeBodyActor(self.robot, data["hidden"], base_rate_feedback=rate)
         self.actor.load_state_dict(data["state_dict"], strict=True)
         if any(not torch.isfinite(value).all() for value in self.actor.state_dict().values()):
             raise ValueError("nonfinite whole-body weights")

@@ -77,9 +77,12 @@ class SensorEncoder(nn.Module):
 
 
 class WholeBodyActor(nn.Module):
-    def __init__(self, robot="innate_mars", hidden=64):
+    def __init__(self, robot="innate_mars", hidden=64, *, base_rate_feedback=True):
         super().__init__()
+        if type(base_rate_feedback) is not bool:
+            raise ValueError("base_rate_feedback must be a boolean")
         self.robot, self.hidden = robot, hidden
+        self.base_rate_feedback = base_rate_feedback
         self.encoder = SensorEncoder(robot)
         p = self.encoder.profile
         self.gru = nn.GRU(self.encoder.token_width, hidden, batch_first=True)
@@ -116,6 +119,13 @@ class WholeBodyActor(nn.Module):
         base_velocity = history[:, -1, -9:-3]
         feedback = torch.cat([*errors, velocities, base_velocity, motion], dim=-1)
         gain = self.gain(context).reshape(-1, self.encoder.profile.action_size - 1, self.feedback_width)
+        if not self.base_rate_feedback and self.encoder.profile.wheel_bodies:
+            # The native base servo already closes its velocity loop. This
+            # opt-in ablation removes only the base head's instantaneous linear
+            # rate path; history, announced twist and hand-driven base authority
+            # remain. Arm rows retain measured rates for reactive compensation.
+            gain = gain.clone()
+            gain[:, :2, 24 : 24 + self.encoder.profile.arm_size + 6] = 0
         mean = torch.cat(
             [
                 torch.tanh(torch.einsum("bae,be->ba", gain, feedback) / math.sqrt(self.feedback_width)),
@@ -127,12 +137,20 @@ class WholeBodyActor(nn.Module):
 
 
 class MultiCriticPolicy(nn.Module):
-    def __init__(self, robot="innate_mars", hidden=64, privileged=True, stationary_base_std_scale=1.0):
+    def __init__(
+        self,
+        robot="innate_mars",
+        hidden=64,
+        privileged=True,
+        stationary_base_std_scale=1.0,
+        *,
+        base_rate_feedback=True,
+    ):
         super().__init__()
         if isinstance(stationary_base_std_scale, bool) or not 0 < stationary_base_std_scale <= 1:
             raise ValueError("stationary base exploration scale must be finite and in (0,1]")
         self.stationary_base_std_scale = float(stationary_base_std_scale)
-        self.actor = WholeBodyActor(robot, hidden)
+        self.actor = WholeBodyActor(robot, hidden, base_rate_feedback=base_rate_feedback)
         self.critic_encoder = SensorEncoder(robot)
         self.privileged = bool(privileged)
         width = self.critic_encoder.token_width + 126 + 9 + PRIVILEGED_WIDTH

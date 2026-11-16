@@ -193,6 +193,11 @@ merges, measured policy improvement and hardware readiness are separate decision
       force, wheel-support and measured-stop checks. Supported open-jaw
       tracking and pregrasp do not qualify loaded manipulation. Evaluate
       complete public-tool programs and fresh audit cases before broader claims.
+- [ ] **Test SuperMimic-style reset/phase coverage** within each side of the
+      existing 50/50 general/TAMP mix: 50% uniform, 40% current low-return and
+      10% historical hard regions. Implement physically valid checkpoint resets
+      before sampling later phases; preserve audit separation and full-reset
+      evaluation. See the [research handoff](docs/plans/supermimic_controller_training.md).
 - [ ] **Evaluate a bounded differentiable world-model backend.** Use
       SuperMimic as a method reference, not a claimed Mars result. First capture
       per-tick physical, actuator/servo and executor state, executed actions,

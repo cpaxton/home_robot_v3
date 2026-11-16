@@ -553,5 +553,8 @@ a prerequisite. The scope is sealed into the single-use `plan_ref`;
 requires final pose tolerance, measured hold and confirmed stop, and does not
 close the gripper, attach a payload, lift, transport or release. Responses state
 `full_task_admitted=false` and `full_pick_place_success=false`. These are pose
-tracking operations, not successful grasp or transfer claims. A later loaded
-operation requires a separately admitted full task from the then-current state.
+tracking operations, not successful grasp or transfer claims. The current Mars
+simulator prefix endpoint is terminal: its confirmed stop latches the facade,
+so reset the simulator before another operation. Continuous prefix-to-loaded
+execution needs an explicit nonfault handoff; do not clear the stop/failure state
+or treat a fresh plan as permission to resume this diagnostic episode.

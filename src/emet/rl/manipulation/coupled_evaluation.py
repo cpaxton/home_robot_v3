@@ -145,11 +145,21 @@ def export_distribution(robot, output, *, suite_path, teacher=False):
     output.mkdir(parents=True, exist_ok=False)
     before = source_state(ROOT)
     (output / "sources.json").write_text(json.dumps(before, indent=2) + "\n")
-    env = CoupledTrackingEnv(robot, suite["robots"][robot])
+    env = CoupledTrackingEnv(robot, suite["robots"][robot], suite_path=suite_path)
     report = {
         "format": "coupled-tracking-readout-v1",
         "robot": robot,
         "suite_sha256": digest(suite),
+        "suite_format": suite["format"],
+        "acceptance": {
+            key: getattr(env.unwrapped.config, key)
+            for key in (
+                "base_xy_tolerance",
+                "base_heading_tolerance",
+                "hand_position_tolerance",
+                "hand_orientation_tolerance",
+            )
+        },
         "source_state_digest": digest(before),
         "cases": [],
         "complete": False,

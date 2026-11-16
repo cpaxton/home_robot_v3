@@ -1,0 +1,448 @@
+{
+  "format": "coupled-tracking-v2",
+  "scope": "Coarse general base region, precise hand tracking; small nullspace cases are explicit hand-hold diagnostics. Native admission required; not hardware qualification.",
+  "robots": {
+    "innate_mars": [
+      {
+        "id": "innate_mars:v2:train:base_only:0",
+        "seed": 35700000,
+        "split": "train",
+        "mode": "base_only",
+        "travel_m": 0.15,
+        "turn_rad": 0,
+        "arm_delta": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "base_mask": [
+          true,
+          true,
+          true
+        ],
+        "purpose": "tracking"
+      },
+      {
+        "id": "innate_mars:v2:train:hand_free_base:1",
+        "seed": 35700001,
+        "split": "train",
+        "mode": "hand_free_base",
+        "travel_m": 0.15,
+        "turn_rad": 0,
+        "arm_delta": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "base_mask": [
+          false,
+          false,
+          false
+        ],
+        "purpose": "tracking"
+      },
+      {
+        "id": "innate_mars:v2:train:hand_free_base:2",
+        "seed": 35700002,
+        "split": "train",
+        "mode": "hand_free_base",
+        "travel_m": 0.15,
+        "turn_rad": 0.24,
+        "arm_delta": [
+          0,
+          0.005,
+          -0.005,
+          0,
+          0
+        ],
+        "base_mask": [
+          false,
+          false,
+          false
+        ],
+        "purpose": "tracking"
+      },
+      {
+        "id": "innate_mars:v2:train:coupled:3",
+        "seed": 35700003,
+        "split": "train",
+        "mode": "coupled",
+        "travel_m": 0.15,
+        "turn_rad": -0.24,
+        "arm_delta": [
+          0,
+          -0.005,
+          0.005,
+          0,
+          0
+        ],
+        "base_mask": [
+          true,
+          true,
+          true
+        ],
+        "purpose": "tracking"
+      },
+      {
+        "id": "innate_mars:v2:train:coupled:4",
+        "seed": 35700004,
+        "split": "train",
+        "mode": "coupled",
+        "travel_m": 0.15,
+        "turn_rad": 0.24,
+        "arm_delta": [
+          0,
+          0,
+          0,
+          0,
+          0.01
+        ],
+        "base_mask": [
+          true,
+          true,
+          false
+        ],
+        "purpose": "tracking"
+      },
+      {
+        "id": "innate_mars:v2:train:fixed_world_hand:5",
+        "seed": 35700005,
+        "split": "train",
+        "mode": "fixed_world_hand",
+        "travel_m": 0.0,
+        "turn_rad": 0,
+        "arm_delta": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "base_mask": [
+          true,
+          true,
+          true
+        ],
+        "self_motion_scale": 1.0,
+        "purpose": "hand_hold_nullspace_diagnostic"
+      },
+      {
+        "id": "innate_mars:v2:audit:hand_free_base:6",
+        "seed": 35700006,
+        "split": "audit",
+        "mode": "hand_free_base",
+        "travel_m": -0.15,
+        "turn_rad": 0,
+        "arm_delta": [
+          0,
+          0,
+          0,
+          0,
+          -0.01
+        ],
+        "base_mask": [
+          false,
+          false,
+          false
+        ],
+        "purpose": "tracking"
+      },
+      {
+        "id": "innate_mars:v2:audit:coupled:7",
+        "seed": 35700007,
+        "split": "audit",
+        "mode": "coupled",
+        "travel_m": -0.15,
+        "turn_rad": -0.24,
+        "arm_delta": [
+          0,
+          0.007,
+          -0.007,
+          0,
+          0
+        ],
+        "base_mask": [
+          true,
+          true,
+          true
+        ],
+        "purpose": "tracking"
+      },
+      {
+        "id": "innate_mars:v2:audit:fixed_world_hand:8",
+        "seed": 35700008,
+        "split": "audit",
+        "mode": "fixed_world_hand",
+        "travel_m": 0.0,
+        "turn_rad": 0,
+        "arm_delta": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "base_mask": [
+          true,
+          true,
+          true
+        ],
+        "self_motion_scale": -0.75,
+        "purpose": "hand_hold_nullspace_diagnostic"
+      },
+      {
+        "id": "innate_mars:v2:audit:hand_free_base:9",
+        "seed": 35700009,
+        "split": "audit",
+        "mode": "hand_free_base",
+        "travel_m": 0.15,
+        "turn_rad": 0,
+        "arm_delta": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "base_mask": [
+          false,
+          false,
+          false
+        ],
+        "retarget": {
+          "at_fraction": 0.5,
+          "travel_m": -0.15
+        },
+        "purpose": "tracking"
+      }
+    ],
+    "stretch": [
+      {
+        "id": "stretch:v2:train:base_only:0",
+        "seed": 35710000,
+        "split": "train",
+        "mode": "base_only",
+        "travel_m": 0.15,
+        "turn_rad": 0,
+        "arm_delta": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "base_mask": [
+          true,
+          true,
+          true
+        ],
+        "purpose": "tracking"
+      },
+      {
+        "id": "stretch:v2:train:hand_free_base:1",
+        "seed": 35710001,
+        "split": "train",
+        "mode": "hand_free_base",
+        "travel_m": 0.15,
+        "turn_rad": 0,
+        "arm_delta": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "base_mask": [
+          false,
+          false,
+          false
+        ],
+        "purpose": "tracking"
+      },
+      {
+        "id": "stretch:v2:train:hand_free_base:2",
+        "seed": 35710002,
+        "split": "train",
+        "mode": "hand_free_base",
+        "travel_m": 0.15,
+        "turn_rad": 0.24,
+        "arm_delta": [
+          0,
+          0.005,
+          -0.005,
+          0,
+          0
+        ],
+        "base_mask": [
+          false,
+          false,
+          false
+        ],
+        "purpose": "tracking"
+      },
+      {
+        "id": "stretch:v2:train:coupled:3",
+        "seed": 35710003,
+        "split": "train",
+        "mode": "coupled",
+        "travel_m": 0.15,
+        "turn_rad": -0.24,
+        "arm_delta": [
+          0,
+          -0.005,
+          0.005,
+          0,
+          0
+        ],
+        "base_mask": [
+          true,
+          true,
+          true
+        ],
+        "purpose": "tracking"
+      },
+      {
+        "id": "stretch:v2:train:coupled:4",
+        "seed": 35710004,
+        "split": "train",
+        "mode": "coupled",
+        "travel_m": 0.15,
+        "turn_rad": 0.24,
+        "arm_delta": [
+          0,
+          0,
+          0,
+          0,
+          0.01
+        ],
+        "base_mask": [
+          true,
+          true,
+          false
+        ],
+        "purpose": "tracking"
+      },
+      {
+        "id": "stretch:v2:train:fixed_world_hand:5",
+        "seed": 35710005,
+        "split": "train",
+        "mode": "fixed_world_hand",
+        "travel_m": 0.0,
+        "turn_rad": 0,
+        "arm_delta": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "base_mask": [
+          true,
+          true,
+          true
+        ],
+        "self_motion_scale": 1.0,
+        "purpose": "hand_hold_nullspace_diagnostic"
+      },
+      {
+        "id": "stretch:v2:audit:hand_free_base:6",
+        "seed": 35710006,
+        "split": "audit",
+        "mode": "hand_free_base",
+        "travel_m": -0.15,
+        "turn_rad": 0,
+        "arm_delta": [
+          0,
+          0,
+          0,
+          0,
+          -0.01
+        ],
+        "base_mask": [
+          false,
+          false,
+          false
+        ],
+        "purpose": "tracking"
+      },
+      {
+        "id": "stretch:v2:audit:coupled:7",
+        "seed": 35710007,
+        "split": "audit",
+        "mode": "coupled",
+        "travel_m": -0.15,
+        "turn_rad": -0.24,
+        "arm_delta": [
+          0,
+          0.007,
+          -0.007,
+          0,
+          0
+        ],
+        "base_mask": [
+          true,
+          true,
+          true
+        ],
+        "purpose": "tracking"
+      },
+      {
+        "id": "stretch:v2:audit:fixed_world_hand:8",
+        "seed": 35710008,
+        "split": "audit",
+        "mode": "fixed_world_hand",
+        "travel_m": 0.0,
+        "turn_rad": 0,
+        "arm_delta": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "base_mask": [
+          true,
+          true,
+          true
+        ],
+        "self_motion_scale": -0.75,
+        "purpose": "hand_hold_nullspace_diagnostic"
+      },
+      {
+        "id": "stretch:v2:audit:hand_free_base:9",
+        "seed": 35710009,
+        "split": "audit",
+        "mode": "hand_free_base",
+        "travel_m": 0.15,
+        "turn_rad": 0,
+        "arm_delta": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "base_mask": [
+          false,
+          false,
+          false
+        ],
+        "retarget": {
+          "at_fraction": 0.5,
+          "travel_m": -0.15
+        },
+        "purpose": "tracking"
+      }
+    ]
+  },
+  "acceptance": {
+    "base_xy_tolerance": 0.05,
+    "base_heading_tolerance": 0.08726646259971647,
+    "hand_position_tolerance": 0.003,
+    "hand_orientation_tolerance": 0.02
+  }
+}
