@@ -25,6 +25,7 @@ other embodiments, with their own actions, models and qualification.
 | Completed GRU credit comparison and base interference | [C1 results](../experiments/mars_c1_normalization_recovery_20261115.md), [command diagnostic](../experiments/mars_c1_zero_base_diagnostic_20261115.md) |
 | Base exploration and actor-active settling | [Bounded GRU comparison](../experiments/mars_reference_base_exploration_20261115.md) |
 | Actual grasp-stage progression and reactive hold recovery | [Task-level diagnosis](../experiments/mars_task_arrival_20261115.md), [bounded protocol](../plans/mars_task_arrival_diagnostic.md) |
+| Unloaded grasp-pose training boundary and teacher checks | [Stage-admission protocol](../plans/mars_unloaded_grasp_admission.md) |
 | Near-term work | [RL TODOs](../../TODO.md#rl-controller-integration-and-acceptance-mars-first) |
 
 Use this directory for enduring design guidance. Keep proposed changes and

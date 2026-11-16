@@ -75,6 +75,7 @@ def primitive_rollout(
     initial_settle_s=0.0,
     wheel_feedback_current_velocity=False,
     trace_dir=None,
+    primitive="pregrasp",
 ):
     from emet.rl.manipulation.tamp_primitive_env import TampPrimitiveEnv
 
@@ -85,6 +86,7 @@ def primitive_rollout(
         initial_settle_s=initial_settle_s,
         wheel_feedback_current_velocity=wheel_feedback_current_velocity,
         trace_dir=trace_dir,
+        primitive=primitive,
     )
     rows = []
     try:
@@ -116,6 +118,11 @@ def primitive_rollout(
                 rows.append(
                     {
                         "id": case["id"],
+                        "primitive": primitive,
+                        "boundary_reached": info["boundary_reached"],
+                        "terminal_pose": info["terminal_pose"],
+                        "terminal_pose_in_contract": info["terminal_pose_in_contract"],
+                        "gripper_open": info["gripper_open"],
                         "success": info["primitive_success"],
                         "code": info["code"],
                         "stop_confirmed": info["stop_confirmed"],
@@ -143,6 +150,7 @@ def primitive_rollout(
                 rows.append(
                     {
                         "id": case["id"],
+                        "primitive": primitive,
                         "success": False,
                         "code": str(exc),
                         "control_ticks": ticks,
@@ -171,7 +179,8 @@ def tamp_training_readiness(rows, suite):
         return False
     for row in rows:
         if (
-            row.get("stop_confirmed") is not True
+            row.get("primitive", "pregrasp") != "pregrasp"
+            or row.get("stop_confirmed") is not True
             or row.get("initialization_failed") is not False
             or set(row.get("safety_flags", {})) != {"wheel_lift", "invalid_physics", "unsafe_contact", "retention_lost"}
             or any(row["safety_flags"].values())

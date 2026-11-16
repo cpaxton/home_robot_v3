@@ -142,6 +142,9 @@ merges, measured policy improvement and hardware readiness are separate decision
 - [ ] **Train actual grasp-pose and fixed-world-hand/base motion.** Extend the
       pregrasp-only primitive boundary, obtain fresh stage-specific teacher
       admission, and mix these reachable references with general tracking.
+      The isolated [unloaded-grasp extension](docs/plans/mars_unloaded_grasp_admission.md)
+      adds an explicit pre-closure boundary and a fixed twelve-episode teacher
+      readout; its fresh checks/admission are separate from PR #239's receipt.
       Do not increase timeouts or accept the actor's 2.15 mm advance as a
       completed 20 mm support-preparation goal. Keep loaded retention/grasp-fit
       repair separate, with original force/support/retention thresholds.
