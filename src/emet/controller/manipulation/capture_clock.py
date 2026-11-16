@@ -12,13 +12,18 @@ from emet.controller.manipulation.native_inputs import ObservationUnavailable
 from emet.controller.manipulation.observed_effects import CaptureInterval
 
 
-@lru_cache(maxsize=1)
 def local_monotonic_clock_id():
     """Linux boot + time namespace identify this monotonic clock, without hostnames."""
     try:
-        identity = Path('/proc/sys/kernel/random/boot_id').read_text().strip() + os.readlink('/proc/self/ns/time')
+        return _local_monotonic_clock_id()
     except OSError:
         return None
+
+
+@lru_cache(maxsize=1)
+def _local_monotonic_clock_id():
+    # Exceptions are not cached: transient procfs failures can recover.
+    identity = Path('/proc/sys/kernel/random/boot_id').read_text().strip() + os.readlink('/proc/self/ns/time')
     return hashlib.sha256(identity.encode()).hexdigest()
 
 

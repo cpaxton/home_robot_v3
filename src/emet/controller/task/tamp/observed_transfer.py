@@ -22,6 +22,7 @@ class ObservedRegionTransferProvider(RegionTransferProvider):
         if not robot_profile_id or not reset_id:
             raise ValueError('observed_robot_profile_required')
         self.adapter, self.reset_id = adapter, reset_id
+        self.robot_name = adapter.robot_name
         self._profile = fingerprint({'profile': robot_profile_id, 'inputs': 'observed'})
         self.roles = {task.object_name.strip().casefold(): task for task in adapter.tasks.values()}
         if (len(self.roles) != len(adapter.tasks)

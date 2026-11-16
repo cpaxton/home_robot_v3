@@ -358,7 +358,10 @@ For contextual requests such as “please retry the remaining work,” CHAT supp
 up to two preceding consecutive TAMP user requests and public outcome summaries.
 These contain named historical progress and failure/dispatch flags, without
 plan handles, raw observations or images. Each record is limited to 8192
-characters; oversized records are dropped whole, and a non-TAMP turn clears the
+characters (up to two records plus prompt framing); oversized records are
+dropped whole. A dispatched non-TAMP tool clears context, including mixed turns;
+dispatch bookkeeping and deferred proposals do not. Nullable progress fields
+remain explicit. A turn with no TAMP outcome also clears the
 history. This summary is not current scene evidence or renewed authorization.
 A newly authorized retry requires fresh `scene_tasks` and a fresh plan. An
 explanation or plan-only request must not execute; ambiguous referents require

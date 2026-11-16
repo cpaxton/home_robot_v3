@@ -103,6 +103,8 @@ def refine_loaded_placement(adapter, plan):
             raise
         return PhysicalMotionResult(False, str(error), 'place_refinement')
     finally:
+        # Retain the consumed IK count: the task provider charges this delta to
+        # its shared motion budget. Only temporary limits/deadlines are restored.
         data.qpos[:] = before
         ex.collision.restore_payload(payload)
         mujoco.mj_kinematics(model, data)

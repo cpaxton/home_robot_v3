@@ -10,6 +10,7 @@ from emet.controller.manipulation.native_inputs import ObjectPoseEvidence
 from emet.controller.manipulation.observed_collision import PayloadGeometryEvidence
 from emet.controller.manipulation.observed_effects import (
     CaptureInterval,
+    ObservedVisualVerifier,
     RobotPoseSample,
     VisualEffectFrame,
     evaluate_lift,
@@ -45,6 +46,20 @@ def frame(t, *, obj=(0, 0, .03), ee=(0, 0, .03), capture_id=None):
     return VisualEffectFrame(payload, CaptureInterval(capture_id, t, t+.01, t+.02, 'clock-calibration'),
         RobotPoseSample(e, np.zeros(2), t-.01, np.array([[e[:3, 3]-.001, e[:3, 3]+.001]])),
         RobotPoseSample(e, np.zeros(2), t+.03, np.array([[e[:3, 3]-.001, e[:3, 3]+.001]])), .001, .005, .0001, .0001)
+
+
+@pytest.mark.parametrize('fresh', [False, True])
+def test_begin_grasp_requests_post_barrier_acquisition_instead_of_cached_snapshot(fresh):
+    seen = []
+    cached, new = frame(10.), frame(10.7 if fresh else 10.3, capture_id='new-id')
+    def observe_after(obj, *, after):
+        seen.append((obj, after))
+        return new
+    verifier = ObservedVisualVerifier(object_ref='object', support_bounds=[[-.5, -.5, -.1], [.5, .5, 0.]],
+        observe=lambda _: cached, observe_after=observe_after, collect=lambda *a, **k: (), clock=lambda: 11.)
+    result = verifier.begin_grasp(after=10.5)
+    assert result.satisfied is fresh and seen == [('object', 10.5)]
+    assert (verifier.reference is new) is fresh
 
 
 def test_lift_requires_repeated_comotion_and_separation():
