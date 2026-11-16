@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "pr": 243,
+  "scope": "Updated-main integration of named partial receipts and agent dispatch; no new physical cohort",
+  "runtime_source": "2bb806b3fcc0c8e61873baeafd1a8e685af0d414",
+  "parent_main": "5e2a643ea455a9e12fda7ac66ec9bac43e7468e4",
+  "resulting_main_integration": "407e763ce55a0b87617d2745e489d9fb2c1926f7",
+  "src_scripts_configs_unchanged_after_parent_squash": true,
+  "independent_review": "review_pr234 found no production blocker; original evaluator fresh-sequence gap stays documented and #244 adds scoring",
+  "tests": {
+    "tests": "205",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0",
+    "time": "66.794"
+  },
+  "job": "20261116_123345_18670c",
+  "prior_launcher_failure": {
+    "job": "20261116_123314_2f2c52",
+    "reason": "Nonexistent test path prevented runner creation; shell launched missing runner and exited127; no tests ran",
+    "preserved": true
+  },
+  "new_physical_trials_claimed": false,
+  "historical_results_unchanged": true,
+  "artifacts": [
+    {
+      "path": ".tamp-runs/native-stack-20261116/pr243/regression.xml",
+      "sha256": "71a5c7d21187c7e51f440d054d81a574b6cd7c60e234b9377dc4ae36fb2c8ea9"
+    },
+    {
+      "path": ".tamp-runs/native-stack-20261116/pr243/test-job/job.log",
+      "sha256": "e9dcd41f5a229a1538d080fd3cc183504d436519f01202504fac978d8dbd65fd"
+    },
+    {
+      "path": ".tamp-runs/native-stack-20261116/pr243/test-job-corrected/job.log",
+      "sha256": "8b297b771d7e6feb167395164483bd0b4c28530ee0998edd7021f0ae89b4ca01"
+    }
+  ]
+}

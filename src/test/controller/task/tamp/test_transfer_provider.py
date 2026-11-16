@@ -165,6 +165,76 @@ def test_second_preflight_failure_preserves_step_number():
     assert result['data']['completed_steps'] == 1
     assert result['data']['failed_step_1based'] == 2
     assert result['data']['failed_phase'] == 'preflight'
+    assert result['data']['failed_step_execution_started'] is False
+    assert result['data']['plan_consumed'] is True
+    assert result['data']['goal_verified'] is False
+    assert len(result['data']['completed_actions']) == 1
+    assert result['data']['completed_actions'][0]['step_1based'] == 1
+    assert result['data']['failed_action']['step_1based'] == 2
+    assert result['data']['unverified_actions'][0] == result['data']['failed_action']
+    assert all('ref' not in row for row in result['data']['unverified_actions'])
+    assert session.execute(ref)['code'] == 'unknown_plan'
+
+
+def test_named_partial_feedback_uses_public_roles_and_only_verified_actions():
+    domain, _, calls = make_domain()
+    original = domain.transfer
+    def transfer(obj, region):
+        return original(obj, region) if not calls else TaskExecutionResult(False, False, 'task_motion_budget_exhausted')
+    domain.transfer = transfer
+    session = TaskSession(domain)
+    plan = session.plan('swap alpha and beta')
+    detail = plan['data']['step_details']
+    result = session.execute(plan['data']['plan_ref'])
+    assert result['data']['completed_actions'] == detail[:1]
+    assert result['data']['failed_action'] == detail[1]
+    assert result['data']['unverified_actions'] == detail[1:]
+    assert detail[0]['object_name'] in {'alpha', 'beta'}
+    assert set(detail[0]) == {'step_1based','action','object_name','from_region','to_region'}
+    assert 'transfer:' not in json.dumps(detail)
+
+
+def test_possible_dispatch_is_distinct_from_earlier_completed_work():
+    domain, _, calls = make_domain()
+    original = domain.transfer
+    def transfer(obj, region):
+        if not calls:
+            return original(obj, region)
+        raise TimeoutError('possible dispatch')
+    domain.transfer = transfer
+    session = TaskSession(domain)
+    ref = session.plan('swap alpha and beta')['data']['plan_ref']
+    result = session.execute(ref)
+    assert result['data']['failed_step_execution_started'] is True
+    assert result['data']['failed_phase'] == 'execution'
+    assert len(result['data']['completed_actions']) == 1
+
+
+def test_public_plan_description_cannot_mutate_stored_feedback():
+    domain, _, _ = make_domain()
+    session = TaskSession(domain)
+    plan = session.plan('swap alpha and beta')
+    plan['data']['step_details'][0]['object_name'] = 'tampered'
+    result = session.execute(plan['data']['plan_ref'])
+    assert result['status'] == 'ok'
+    assert result['data']['completed_actions'][0]['object_name'] != 'tampered'
+
+
+def test_invalid_public_step_description_rejects_before_commands():
+    domain, _, calls = make_domain()
+    domain.describe_operator = lambda op: {'private_body_id': 'secret-path'}
+    result = TaskSession(domain).plan('swap alpha and beta')
+    assert result['status'] == 'error' and not calls
+    assert 'secret-path' not in json.dumps(result)
+
+
+def test_connected_robot_selector_is_accepted_but_cross_robot_and_filters_reject():
+    domain, _, _ = make_domain()
+    domain.robot_name = 'stretch'
+    session = TaskSession(domain)
+    assert session.discover(robot='stretch')['status'] == 'ok'
+    assert session.discover(robot='rby1')['code'] == 'task_filter_unsupported'
+    assert session.discover(object_filter='alpha')['code'] == 'task_filter_unsupported'
 
 
 def test_debug_state_is_json_in_logs_but_not_public_motion_evidence(caplog, monkeypatch):

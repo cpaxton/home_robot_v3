@@ -709,8 +709,9 @@ CHAT_SKILL_SPECS: tuple[SkillSpec, ...] = (
         modes=frozenset({AgentMode.CHAT}),
         description=(
             "Returns schema_version=1 JSON with status, code, data, and recovery; inspect these fields, "
-            "not message text. For partial execution, inspect the scene before planning another action. "
-            "Enumerate candidate pick-and-place tasks from the configured input provider. "
+            "not message text. After partial execution stop and wait for a new user request. "
+            "For task-state inspection on an authorized recovery request, call scene_tasks before a fresh plan. "
+            "Choose only listed session tools. Enumerate tasks from the configured input provider. "
             "If discovery_only is true, report proposals and unavailable capabilities; do not plan or execute. "
             "Candidates are not promises of reachable grasps or feasible placement. Inspect the "
             "returned mode, inputs, and assistance before use; native contact does not imply "
@@ -723,7 +724,7 @@ CHAT_SKILL_SPECS: tuple[SkillSpec, ...] = (
             "properties": {
                 "object_filter": {
                     "type": "string",
-                    "description": "Optional single category substring (e.g. 'bowl'). Omit to list all; do not concatenate multiple object names.",
+                    "description": "Optional single category substring (e.g. 'bowl'). Omit for a bound multi-step task session, which requires complete role/occupancy discovery. Never concatenate names.",
                 },
                 "robot": {
                     "type": "string",

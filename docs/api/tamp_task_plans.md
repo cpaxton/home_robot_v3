@@ -79,6 +79,31 @@ transfer. Debug mode can include private simulator state in JSON logs for offlin
 replay; public tool responses and public motion evidence never include it.
 See [measured integration cases and captured-state controls](../experiments/tamp_native_task_provider_20261022.md).
 
+Planning also returns ordered `step_details` with 1-based indices local to each
+plan; a new one-action recovery plan starts at step 1. Region-transfer
+providers describe public object roles and source/target region names; private
+operator refs and body IDs are never serialized. Providers without a qualified
+description hook return indices only.
+
+Execution feedback includes `completed_actions`, `failed_action`,
+`unverified_actions`, `plan_consumed` and explicit `goal_verified=false` on a
+failed known plan. Completed actions are the prefix whose measured effects were
+verified at completion; later disturbance can still require rediscovery.
+Unverified actions include the failed and unattempted steps and are not claims
+about current state or permission to retry. `failed_step_execution_started`
+distinguishes that step's possible dispatch from earlier overall progress:
+after one completed transfer and a second-step admission refusal, overall
+`execution_started=true` but `failed_step_execution_started=false`. An unknown
+execution exception preserves possible dispatch. Any partial result still stops
+the agent until a separately authorized request and fresh measured admission.
+
+For bound native Stretch tasks, `scene_tasks(robot="stretch")` is equivalent to
+omitting the robot selector. A different robot or nonempty object filter still
+rejects: task discovery must retain the complete bound occupancy context. Use
+`scene_tasks` for task-state inspection on a newly authorized recovery request.
+An unavailable tool in a TAMP-containing batch prevents dispatch of its remaining
+calls; it cannot silently fall through into planning or execution.
+
 ## Provider failures and budgets
 
 Discovery and planning use the same public failure translation as execution.

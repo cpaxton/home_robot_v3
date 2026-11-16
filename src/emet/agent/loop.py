@@ -293,6 +293,12 @@ def _dispatch_tool_calls(
             logger.warning(f"Unknown or unavailable tool: {name}")
             results.append(msg)
             has_info = True
+            remaining = [c.get('name', '') for c in tool_calls[call_index+1:]]
+            if name in TAMP_TOOLS or any(n in TAMP_TOOLS for n in remaining):
+                if remaining:
+                    results.append('[dispatch] ' + json.dumps(tamp_response('dispatch', code='batch_stopped',
+                        data={'failed_tool': name, 'unattempted_tools': remaining}, recovery='inspect')))
+                break
             continue
 
         cmds = tool.to_executor(args)
@@ -1436,7 +1442,14 @@ def run_agent_with_robot(
                     followup = (
                         f"[Tool results]\n{result_text}\n\n"
                         "Summarize these results for the user in your message. "
-                        "Use completed_steps and failed_step_1based when present: a later failure does not undo completed work. "
+                        "Use completed_actions and failed_action to name the verified progress and failed step. "
+                        "A later failure does not undo completed work. Distinguish overall execution_started from "
+                        "failed_step_execution_started: a preflight refusal need not have sent that step. "
+                        "Explicitly state when the failed step did not start; possible dispatch means "
+                        "its outcome remains unverified. "
+                        "Unverified actions are not confirmed outcomes or permission to retry. "
+                        "For partial/failed results, report incomplete goals and that you stopped; "
+                        "do not claim full success. "
                         "Do not call any more tools."
                     )
                     if last_round:

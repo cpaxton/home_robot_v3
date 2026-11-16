@@ -1,0 +1,664 @@
+{
+  "schema_version": 1,
+  "source_commit": "63b85dfa676f3745f2ca6fff0b30569bef18839b",
+  "protocol": "configs/eval/tamp_prospective_20261116.json",
+  "protocol_sha256": "95fe299c6031b55881265a0fb635d59d543f25056018baebee5fa5d909336852",
+  "scope": "Four predeclared untouched within-family layouts on unchanged native motion; separate native scripted admission-failure recovery; no physical grasp-loss or held-object recovery, observed, household or hardware qualification",
+  "initial_state_pairing_certificate": false,
+  "historical_development_unchanged": "docs/experiments/tamp_native_base_approach_20261116.json",
+  "native": {
+    "schema_version": 1,
+    "source_commit": "63b85dfa676f3745f2ca6fff0b30569bef18839b",
+    "protocol": "configs/eval/tamp_prospective_20261116.json",
+    "scope": "Prospectively frozen within-family layouts and separately scripted native recovery; not broad reliability or observed/hardware qualification",
+    "hardware_trials": false,
+    "llm_calls": 0,
+    "prior_development": "docs/experiments/tamp_native_base_approach_20261116.json",
+    "cases": [
+      {
+        "id": "prospective-two-goal-1",
+        "population": "prospective",
+        "scenario": "task",
+        "job_id": "20261116_073812_6cea8a",
+        "run_status": "complete",
+        "task_passed": true,
+        "execution_attempts": [
+          {
+            "status": "ok",
+            "code": "ok",
+            "data": {
+              "execution_started": true,
+              "completed_steps": 2,
+              "goal_verified": true
+            }
+          }
+        ],
+        "code": "ok",
+        "status": "ok",
+        "completed_transfers": 2,
+        "declared_transfers": 2,
+        "boundary_checks": [],
+        "fault_injection": [],
+        "audit_commands": 539,
+        "forbidden_commands": 0,
+        "wall_time_s": 184.80836754408665,
+        "final_goals_satisfied": {
+          "object2": true,
+          "object1": true
+        },
+        "last_motion_phase": null,
+        "last_motion_event": {
+          "phase": "release_open_verified",
+          "controller_success": true,
+          "source": "simulator_ground_truth_debug",
+          "supported": true,
+          "settled": true,
+          "stable_interval_s": 0.1
+        },
+        "summary": {
+          "path": ".tamp-runs/prospective-20261116/native/episodes/prospective-two-goal-1/summary.json",
+          "sha256": "db01c5ceb5cd5217d2f232a7b2f44651d527c3bac13cd5e8b3696a2e676b6ee0"
+        }
+      },
+      {
+        "id": "prospective-two-goal-2",
+        "population": "prospective",
+        "scenario": "task",
+        "job_id": "20261116_073813_87df4d",
+        "run_status": "complete",
+        "task_passed": true,
+        "execution_attempts": [
+          {
+            "status": "ok",
+            "code": "ok",
+            "data": {
+              "execution_started": true,
+              "completed_steps": 2,
+              "goal_verified": true
+            }
+          }
+        ],
+        "code": "ok",
+        "status": "ok",
+        "completed_transfers": 2,
+        "declared_transfers": 2,
+        "boundary_checks": [],
+        "fault_injection": [],
+        "audit_commands": 538,
+        "forbidden_commands": 0,
+        "wall_time_s": 159.0164055468049,
+        "final_goals_satisfied": {
+          "object2": true,
+          "object1": true
+        },
+        "last_motion_phase": null,
+        "last_motion_event": {
+          "phase": "release_open_verified",
+          "controller_success": true,
+          "source": "simulator_ground_truth_debug",
+          "supported": true,
+          "settled": true,
+          "stable_interval_s": 0.1
+        },
+        "summary": {
+          "path": ".tamp-runs/prospective-20261116/native/episodes/prospective-two-goal-2/summary.json",
+          "sha256": "b9900c200457f047f18e67be36f027b793dcb558107e03bcfceb02c14143064f"
+        }
+      },
+      {
+        "id": "prospective-swap-3",
+        "population": "prospective",
+        "scenario": "task",
+        "job_id": "20261116_073813_82bd2f",
+        "run_status": "complete",
+        "task_passed": true,
+        "execution_attempts": [
+          {
+            "status": "ok",
+            "code": "ok",
+            "data": {
+              "execution_started": true,
+              "completed_steps": 3,
+              "goal_verified": true
+            }
+          }
+        ],
+        "code": "ok",
+        "status": "ok",
+        "completed_transfers": 3,
+        "declared_transfers": 3,
+        "boundary_checks": [],
+        "fault_injection": [],
+        "audit_commands": 762,
+        "forbidden_commands": 0,
+        "wall_time_s": 239.60679424088448,
+        "final_goals_satisfied": {
+          "object2": true,
+          "object1": true
+        },
+        "last_motion_phase": null,
+        "last_motion_event": {
+          "phase": "release_open_verified",
+          "controller_success": true,
+          "source": "simulator_ground_truth_debug",
+          "supported": true,
+          "settled": true,
+          "stable_interval_s": 0.1
+        },
+        "summary": {
+          "path": ".tamp-runs/prospective-20261116/native/episodes/prospective-swap-3/summary.json",
+          "sha256": "509e5373bd1404c5d16bdf2845deab5ebb0a47b09a5c6419ae2bb1f327a5a9e1"
+        }
+      },
+      {
+        "id": "prospective-swap-4",
+        "population": "prospective",
+        "scenario": "task",
+        "job_id": "20261116_073813_863c2e",
+        "run_status": "complete",
+        "task_passed": true,
+        "execution_attempts": [
+          {
+            "status": "ok",
+            "code": "ok",
+            "data": {
+              "execution_started": true,
+              "completed_steps": 3,
+              "goal_verified": true
+            }
+          }
+        ],
+        "code": "ok",
+        "status": "ok",
+        "completed_transfers": 3,
+        "declared_transfers": 3,
+        "boundary_checks": [],
+        "fault_injection": [],
+        "audit_commands": 734,
+        "forbidden_commands": 0,
+        "wall_time_s": 243.13607623497956,
+        "final_goals_satisfied": {
+          "object2": true,
+          "object1": true
+        },
+        "last_motion_phase": null,
+        "last_motion_event": {
+          "phase": "release_open_verified",
+          "controller_success": true,
+          "source": "simulator_ground_truth_debug",
+          "supported": true,
+          "settled": true,
+          "stable_interval_s": 0.1
+        },
+        "summary": {
+          "path": ".tamp-runs/prospective-20261116/native/episodes/prospective-swap-4/summary.json",
+          "sha256": "cfb34da9a374f222dae5fd487eae46775ec3f7671a0be2b127b0b0f5068d86de"
+        }
+      },
+      {
+        "id": "recovery-stale_replan",
+        "population": "scripted_recovery",
+        "scenario": "stale_replan",
+        "job_id": "20261116_073813_899c2f",
+        "run_status": "complete",
+        "task_passed": true,
+        "execution_attempts": [
+          {
+            "status": "error",
+            "code": "stale_task_plan",
+            "data": {
+              "execution_started": false,
+              "completed_steps": 0,
+              "planned_steps": 2,
+              "failed_step_1based": null,
+              "failed_phase": "initial_validation"
+            }
+          },
+          {
+            "status": "ok",
+            "code": "ok",
+            "data": {
+              "execution_started": true,
+              "completed_steps": 2,
+              "goal_verified": true
+            }
+          }
+        ],
+        "code": "ok",
+        "status": "ok",
+        "completed_transfers": 2,
+        "declared_transfers": 2,
+        "boundary_checks": [
+          {
+            "tool": "execute_task_plan",
+            "code": "stale_task_plan",
+            "status": "error",
+            "expected_codes": [
+              "stale_task_plan"
+            ],
+            "no_commands": true,
+            "passed": true
+          },
+          {
+            "tool": "execute_task_plan",
+            "code": "unknown_plan",
+            "status": "error",
+            "expected_codes": [
+              "unknown_plan"
+            ],
+            "no_commands": true,
+            "passed": true
+          }
+        ],
+        "fault_injection": [],
+        "audit_commands": 505,
+        "forbidden_commands": 0,
+        "wall_time_s": 191.4996718929615,
+        "final_goals_satisfied": {
+          "object2": true,
+          "object1": true
+        },
+        "last_motion_phase": null,
+        "last_motion_event": {
+          "phase": "release_open_verified",
+          "controller_success": true,
+          "source": "simulator_ground_truth_debug",
+          "supported": true,
+          "settled": true,
+          "stable_interval_s": 0.1
+        },
+        "summary": {
+          "path": ".tamp-runs/prospective-20261116/native/episodes/recovery-stale_replan/summary.json",
+          "sha256": "101a9e49e39276eba2a0c1baef72683728306891264a08ef1e6ee7a03296766d"
+        }
+      },
+      {
+        "id": "recovery-between_transfers_refusal",
+        "population": "scripted_recovery",
+        "scenario": "between_transfers_refusal",
+        "job_id": "20261116_073813_91667a",
+        "run_status": "complete",
+        "task_passed": true,
+        "execution_attempts": [
+          {
+            "status": "partial",
+            "code": "task_motion_budget_exhausted",
+            "data": {
+              "execution_started": true,
+              "completed_steps": 1,
+              "planned_steps": 2,
+              "failed_step_1based": 2,
+              "failed_phase": "preflight"
+            }
+          },
+          {
+            "status": "ok",
+            "code": "ok",
+            "data": {
+              "execution_started": true,
+              "completed_steps": 1,
+              "goal_verified": true
+            }
+          }
+        ],
+        "code": "ok",
+        "status": "ok",
+        "completed_transfers": 2,
+        "declared_transfers": 2,
+        "boundary_checks": [
+          {
+            "tool": "execute_task_plan",
+            "code": "task_motion_budget_exhausted",
+            "status": "partial",
+            "kind": "partial_task_admission_refusal",
+            "passed": true
+          },
+          {
+            "tool": "execute_task_plan",
+            "code": "unknown_plan",
+            "status": "error",
+            "expected_codes": [
+              "unknown_plan"
+            ],
+            "no_commands": true,
+            "passed": true
+          },
+          {
+            "kind": "injected_refusal_no_dispatch",
+            "passed": true
+          }
+        ],
+        "fault_injection": [
+          {
+            "kind": "injected_between_transfer_admission_refusal",
+            "completed_before_refusal": 1,
+            "no_commands": true
+          }
+        ],
+        "audit_commands": 482,
+        "forbidden_commands": 0,
+        "wall_time_s": 152.71794633986428,
+        "final_goals_satisfied": {
+          "object2": true,
+          "object1": true
+        },
+        "last_motion_phase": null,
+        "last_motion_event": {
+          "phase": "release_open_verified",
+          "controller_success": true,
+          "source": "simulator_ground_truth_debug",
+          "supported": true,
+          "settled": true,
+          "stable_interval_s": 0.1
+        },
+        "summary": {
+          "path": ".tamp-runs/prospective-20261116/native/episodes/recovery-between_transfers_refusal/summary.json",
+          "sha256": "317429ca93b458aaef8e828e6ba63aef4f196ab1cd5b6bdfe3fd65e5a0891760"
+        }
+      }
+    ],
+    "aggregate": {
+      "positive_tasks_passed": 4,
+      "positive_task_candidates": 4,
+      "completed_transfers": 10,
+      "declared_transfers": 10,
+      "boundary_checks_passed": 5,
+      "declared_boundary_checks": 5,
+      "recovery_tasks_passed": 2,
+      "recovery_tasks": 2,
+      "recovery_completed_transfers": 4,
+      "recovery_declared_transfers": 4,
+      "boundary_checks_observed": 5,
+      "audit_commands": 3560,
+      "forbidden_commands": 0,
+      "infrastructure_errors": 0
+    }
+  },
+  "agent": {
+    "schema_version": 1,
+    "source_commit": "63b85dfa676f3745f2ca6fff0b30569bef18839b",
+    "scope": "Actual run agent CLI; privileged simulated Stretch with checked unloaded base approach; four predeclared untouched within-family layouts; no cameras, exploration, hardware or broad reliability claim",
+    "native_policy": "bounded_approach",
+    "model": "remote Caliban Qwen/Qwen3-VL-8B-Instruct",
+    "sampling": "server defaults; not independently pinned",
+    "initial_state_certificate": false,
+    "previous_agent_baseline": "docs/experiments/tamp_native_base_approach_20261116.json",
+    "cases": [
+      {
+        "id": "prospective-two-goal-1",
+        "job_id": "20261116_073817_4eedea",
+        "family": "two-goal",
+        "initial_x_shift_m": 0.022,
+        "passed": true,
+        "task_passed": true,
+        "physical_goals_satisfied": true,
+        "execution_completion_verified": true,
+        "cli_exit_code": 0,
+        "completed_transfers": 2,
+        "declared_transfers": 2,
+        "execution_code": "ok",
+        "final_goals_satisfied": {
+          "object2": true,
+          "object1": true
+        },
+        "audit_commands": 544,
+        "forbidden_commands": 0,
+        "shutdown_warnings": 0,
+        "llm_calls": 6,
+        "multi_tool_model_responses": 0,
+        "llm_wall_time_s": 41.32401212817058,
+        "agent_integration": {
+          "tamp_calls": 4,
+          "outcome_counts": {
+            "ok": 3,
+            "error": 1,
+            "partial": 0,
+            "invalid": 0
+          },
+          "code_counts": {
+            "unknown_plan": 1,
+            "ok": 3
+          },
+          "result_contracts_valid": true,
+          "failure_stop_compliant": true,
+          "failure_cases": 1,
+          "discovery_only_cases": 0,
+          "stop_boundary_cases": 1,
+          "failure_boundaries": [
+            {
+              "tool": "execute_pick_place_plan",
+              "code": "unknown_plan",
+              "unexpected_tools": [],
+              "boundary_kind": "failure"
+            }
+          ],
+          "unassessed": [
+            "task_interpretation",
+            "goal_coverage",
+            "physical_recovery",
+            "observed_grounding",
+            "navigation",
+            "exploration"
+          ]
+        },
+        "requested_rejection_observed": true,
+        "summary": {
+          "path": ".tamp-runs/prospective-20261116/agent/episodes/prospective-two-goal-1/summary.json",
+          "sha256": "c8c36faa40faa501846f550e028e1b42977f3b59f7e7e387b34b0f414f3b4200"
+        }
+      },
+      {
+        "id": "prospective-two-goal-2",
+        "job_id": "20261116_073817_632ed3",
+        "family": "two-goal",
+        "initial_x_shift_m": -0.024,
+        "passed": true,
+        "task_passed": true,
+        "physical_goals_satisfied": true,
+        "execution_completion_verified": true,
+        "cli_exit_code": 0,
+        "completed_transfers": 2,
+        "declared_transfers": 2,
+        "execution_code": "ok",
+        "final_goals_satisfied": {
+          "object2": true,
+          "object1": true
+        },
+        "audit_commands": 543,
+        "forbidden_commands": 0,
+        "shutdown_warnings": 0,
+        "llm_calls": 4,
+        "multi_tool_model_responses": 0,
+        "llm_wall_time_s": 29.64718286669813,
+        "agent_integration": {
+          "tamp_calls": 3,
+          "outcome_counts": {
+            "ok": 3,
+            "error": 0,
+            "partial": 0,
+            "invalid": 0
+          },
+          "code_counts": {
+            "ok": 3
+          },
+          "result_contracts_valid": true,
+          "failure_stop_compliant": null,
+          "failure_cases": 0,
+          "discovery_only_cases": 0,
+          "stop_boundary_cases": 0,
+          "failure_boundaries": [],
+          "unassessed": [
+            "task_interpretation",
+            "goal_coverage",
+            "physical_recovery",
+            "observed_grounding",
+            "navigation",
+            "exploration"
+          ]
+        },
+        "requested_rejection_observed": null,
+        "summary": {
+          "path": ".tamp-runs/prospective-20261116/agent/episodes/prospective-two-goal-2/summary.json",
+          "sha256": "3282b8ae51b3331bae85d1c332ef2b4508ca2b008632b179f7b2542ef13113f0"
+        }
+      },
+      {
+        "id": "prospective-swap-3",
+        "job_id": "20261116_073817_d9fed2",
+        "family": "wide-destination-swap",
+        "initial_x_shift_m": 0.0125,
+        "passed": true,
+        "task_passed": true,
+        "physical_goals_satisfied": true,
+        "execution_completion_verified": true,
+        "cli_exit_code": 0,
+        "completed_transfers": 3,
+        "declared_transfers": 3,
+        "execution_code": "ok",
+        "final_goals_satisfied": {
+          "object2": true,
+          "object1": true
+        },
+        "audit_commands": 717,
+        "forbidden_commands": 0,
+        "shutdown_warnings": 0,
+        "llm_calls": 3,
+        "multi_tool_model_responses": 1,
+        "llm_wall_time_s": 22.701172480126843,
+        "agent_integration": {
+          "tamp_calls": 3,
+          "outcome_counts": {
+            "ok": 3,
+            "error": 0,
+            "partial": 0,
+            "invalid": 0
+          },
+          "code_counts": {
+            "ok": 3
+          },
+          "result_contracts_valid": true,
+          "failure_stop_compliant": null,
+          "failure_cases": 0,
+          "discovery_only_cases": 0,
+          "stop_boundary_cases": 0,
+          "failure_boundaries": [],
+          "unassessed": [
+            "task_interpretation",
+            "goal_coverage",
+            "physical_recovery",
+            "observed_grounding",
+            "navigation",
+            "exploration"
+          ]
+        },
+        "requested_rejection_observed": null,
+        "summary": {
+          "path": ".tamp-runs/prospective-20261116/agent/episodes/prospective-swap-3/summary.json",
+          "sha256": "8305f30940ee0ae625868994424aa4b9ab226ff298e35c2a59be9a17c77628c8"
+        }
+      },
+      {
+        "id": "prospective-swap-4",
+        "job_id": "20261116_073818_66d5c2",
+        "family": "wide-destination-swap",
+        "initial_x_shift_m": -0.0175,
+        "passed": true,
+        "task_passed": true,
+        "physical_goals_satisfied": true,
+        "execution_completion_verified": true,
+        "cli_exit_code": 0,
+        "completed_transfers": 3,
+        "declared_transfers": 3,
+        "execution_code": "ok",
+        "final_goals_satisfied": {
+          "object2": true,
+          "object1": true
+        },
+        "audit_commands": 741,
+        "forbidden_commands": 0,
+        "shutdown_warnings": 0,
+        "llm_calls": 3,
+        "multi_tool_model_responses": 1,
+        "llm_wall_time_s": 22.745594632113352,
+        "agent_integration": {
+          "tamp_calls": 3,
+          "outcome_counts": {
+            "ok": 3,
+            "error": 0,
+            "partial": 0,
+            "invalid": 0
+          },
+          "code_counts": {
+            "ok": 3
+          },
+          "result_contracts_valid": true,
+          "failure_stop_compliant": null,
+          "failure_cases": 0,
+          "discovery_only_cases": 0,
+          "stop_boundary_cases": 0,
+          "failure_boundaries": [],
+          "unassessed": [
+            "task_interpretation",
+            "goal_coverage",
+            "physical_recovery",
+            "observed_grounding",
+            "navigation",
+            "exploration"
+          ]
+        },
+        "requested_rejection_observed": null,
+        "summary": {
+          "path": ".tamp-runs/prospective-20261116/agent/episodes/prospective-swap-4/summary.json",
+          "sha256": "8c231382f6d1c2988d04a52766373aebff94f425975d6a689a3c19705623ca5d"
+        }
+      }
+    ],
+    "aggregate": {
+      "shutdown_warnings": 0,
+      "tasks_passed": 4,
+      "tasks": 4,
+      "completed_transfers": 10,
+      "declared_transfers": 10,
+      "final_object_goals_satisfied": 8,
+      "final_object_goals": 8,
+      "audit_commands": 2545,
+      "forbidden_commands": 0,
+      "cli_infrastructure_errors": 0,
+      "llm_calls": 16,
+      "multi_tool_model_responses": 2,
+      "llm_wall_time_s": 116.4179621071089,
+      "valid_contract_trials": 4,
+      "stop_boundary_cases": 1,
+      "stop_boundary_violations": 0,
+      "requested_invalid_handle_checks": 1,
+      "requested_invalid_handle_checks_passed": 1
+    }
+  },
+  "regression": {
+    "tests": 416,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "job_id": "20261116_074332_cafbdd",
+    "sha256": "e0b3e5d774b0076a31c1508d27005fc71ecea4c263b150c771d03fb8947944eb"
+  },
+  "motion_hashes_vs_pr242": {
+    "src/emet/controller/task/tamp/native_adapter.py": "c6131b9e9417655e230b6a0c6b6136b2728cf1e9c4389160bae85381222e280c",
+    "src/emet/controller/task/tamp/native_approach.py": "7a098b6dd94a425d889bc7dd2545de69b3a93f7380858cd7f6df897842360a97",
+    "src/emet/controller/task/tamp/native_placement.py": "f6274e791d67da8660b02d25c661075557e067ed041f1ccc70a41cc73002e5b7",
+    "src/emet/controller/task/tamp/native_policy.py": "e552f6b96719d3a40b9aebe3c74327e5687a897a4b0c7925c41a2fd251640957",
+    "src/emet/core/command_client.py": "6ed0479ecf694f533aa32cf402ff480a049ab02374faf4db1f0a8ceb5a9173d3",
+    "src/emet/motion/release.py": "085e49b267ed637d7d728501d0cb4bd7e9ac240b734a427dba83779c4fc1aec5"
+  },
+  "raw_records_publicly_archived": false,
+  "raw_reports": [
+    {
+      "path": ".tamp-runs/prospective-20261116/native/report.json",
+      "sha256": "4497e4cd8680113c6f744b72518866fc6784e1c166481eee4b5674f478acdab9"
+    },
+    {
+      "path": ".tamp-runs/prospective-20261116/agent/report.json",
+      "sha256": "3253599bde73ebd115ee210575ad074d708b7c6b7f22614c4d3ced129b112b92"
+    }
+  ]
+}

@@ -1006,7 +1006,8 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         Tool(
             name="scene_tasks",
             description=(
-                "Enumerate candidate pick-and-place tasks from the configured input provider. "
+                "Inspect task state and enumerate tasks from the configured input provider. "
+                "After partial execution wait for a new user request, then use scene_tasks before fresh planning. "
                 "Observed discovery_only proposals do not enable planning or execution."
             ),
             parameters={
@@ -1014,7 +1015,7 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
                 "properties": {
                     "object_filter": {
                         "type": "string",
-                        "description": "Optional category substring to limit proposed tasks (e.g. 'bowl').",
+                        "description": "Optional category substring; omit for a bound multi-step session requiring complete role discovery.",
                     },
                     "robot": {
                         "type": "string",

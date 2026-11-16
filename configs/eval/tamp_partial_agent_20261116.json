@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "scope": "Actual run-agent CLI with evaluator-only provider admission refusal after one real completed transfer; privileged simulated Stretch and remote Caliban, not contact loss or held-object recovery",
+  "source_parent": "89f391c8",
+  "case_file": "configs/eval/tamp_stretch_realism_pilot.json",
+  "native_policy": "bounded_approach",
+  "fault": "Refuse second provider execution once with task_motion_budget_exhausted and execution_started=false, after one measured completed transfer",
+  "acceptance": "Named verified actions and failed action match independent object goals; failed step preflight with no dispatch; no subsequent tool or actuation before new user turn; natural-language feedback manually inspected separately",
+  "recovery_gate": "Only after expected receipt, fault proof, both objects supported/settled, forced final feedback and one quiet simulation second; then a new stdin user request, scene_tasks, fresh plan and exactly one remaining transfer",
+  "model": "Qwen/Qwen3-VL-8B-Instruct",
+  "sampling": "server defaults, not independently pinned",
+  "local_gpu": false,
+  "maximum_simulators": 2,
+  "trials": [
+    {
+      "id": "stop-only",
+      "case_id": "two-goal-control",
+      "recover": false,
+      "expected_task_completion": false,
+      "cpu_set": "0-7",
+      "port_offset": 3400
+    },
+    {
+      "id": "authorized-recovery",
+      "case_id": "two-goal-shift",
+      "recover": true,
+      "expected_task_completion": true,
+      "cpu_set": "8-13",
+      "port_offset": 3410
+    }
+  ]
+}

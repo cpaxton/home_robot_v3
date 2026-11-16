@@ -386,3 +386,74 @@ unchanged bound. These are sparse simulator debug samples, ending before any
 loaded-payload rebinding; they do not measure force or establish replay fidelity.}
 \label{fig:tamp_base_approach}
 \end{figure}
+
+\paragraph{Prospective layouts and bounded scripted recovery.}
+A separate protocol is committed before execution at \texttt{63b85dfa}.
+Four untouched within-family layouts combine new XY shifts and cube yaw,
+retaining the existing two-goal and buffered-swap instructions. Motion-module
+and command-client hashes match the frozen checked-approach implementation.
+No policy is tuned or failed case replaced. Native tools and the actual CLI each
+pass 4/4 tasks and 10/10 transfers (Figure~\ref{fig:tamp_prospective}); the agent
+also satisfies 8/8 independent object goals. It makes 16 remote model calls
+(116.4~s inference wall time), with valid result contracts, no shutdown warnings
+and one compliant invalid-handle stop before a new authorized user turn.
+Native prospective trials contain 2,573 audited commands; agent trials contain
+2,545, with no forbidden commands or infrastructure failures.
+
+Two separately counted native scripted recovery trials pass, completing four
+transfers and five expected boundary checks. The first invalidates a plan through
+ordinary head motion, verifies stale/consumed-handle rejection without dispatch,
+then rediscovers and replans. The second injects one admission refusal after a
+measured completed transfer. Its receipt remains partial with one completed step
+and a preflight failure on step two; a new request completes only the remaining
+transfer. These 987 audited commands contain no forbidden commands. The injected
+refusal represents planning admission, not contact loss or an exhausted real
+solver budget. Scripted recovery does not qualify LLM handling of partial tasks
+or held-object recovery. All 416 affected tests pass. Protocol, receipt histories
+and source/job hashes are in
+\path{docs/experiments/tamp_prospective_20261116.json}.
+These single-trial, independently initialized layouts do not establish broad
+reliability, new-language reasoning, observed grounding or household/hardware
+capability; historical development cohorts are unchanged.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/tamp_prospective_20261116.pdf}
+\caption{The four prospectively frozen layouts through native tools and the
+actual agent CLI. Labels show completed/declared transfers; green requires a
+successful receipt and independent physical goals. Recovery trials are counted
+separately. One independently initialized trial per cell does not estimate broad
+reliability. XY offsets are in millimetres; yaw is in radians.}
+\label{fig:tamp_prospective}
+\end{figure}
+
+\paragraph{Actual-agent partial feedback and reauthorization.}
+The next pair uses the actual CLI with an evaluator-only native provider
+constructor seam: after one real, measured transfer, admission for step two is
+refused without dispatch. Public receipts now name the measured-effect-verified
+completed actions and the failed/unverified actions. They distinguish overall
+execution progress from possible dispatch of the failed step, consume the handle
+and explicitly retain \texttt{goal\_verified=false}. No motion or acceptance
+threshold changes accompany this feedback contract.
+
+At \texttt{d9fb0273}, both model reports correctly name the completed cylinder
+placement, unfinished cube and stop. The stop-only condition passes while the
+task remains incomplete. Subsequent authorized recovery fails because discovery
+rejects its configured robot selector after an unavailable inspection-tool
+proposal; this failed attempt is retained. The fix accepts the connected robot,
+clarifies the advertised inspection tool and stops mixed TAMP batches at
+unavailable calls. On the unchanged request pair at \texttt{d2b24610}, both
+feedback/control tests pass. Only after the expected partial receipt, supported
+settled objects and a quiet audit interval does a new stdin user request authorize
+fresh discovery/planning. Recovery executes exactly one cube transfer and both
+original object goals hold. Stop-only remains incomplete; it is not scored as
+full-task success. There are 799 audited commands, zero forbidden commands or
+shutdown warnings, and all 468 affected tests pass. The corrected pair uses
+12 remote model calls. Extra read-only discovery and a zero-step plan after
+completion are retained, not presented as optimal tool efficiency.
+Verbatim feedback, both source histories and hashes are in
+\path{docs/experiments/tamp_partial_agent_20261116.json}. Model-text accuracy is
+manually reviewed against the receipt and independent physical goals. The fault
+represents injected planning admission, not actual solver exhaustion, contact
+loss or sensor failure. Recovery from a bare ``retry'' without restated goals,
+unknown outcomes, held objects, observed inputs and hardware remains unqualified.

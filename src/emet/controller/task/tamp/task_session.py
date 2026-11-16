@@ -56,6 +56,7 @@ class StoredTaskPlan:
     initial: TaskState
     goal: GoalSpec
     operators: tuple[Operator, ...]
+    step_details: tuple[dict, ...] = ()
 
 
 class TaskSession:
@@ -63,7 +64,8 @@ class TaskSession:
 
     Scene revision after each action is expected to advance. Boot/reset/model/
     robot identity must remain stable throughout, and every subsequent action is
-    revalidated from a new measured snapshot. No retries after partial progress.
+    revalidated from a new measured snapshot. Partial progress forbids automatic
+    retry or failed-handle reuse; a new request must ground and plan again.
     """
     def __init__(self, provider: TaskProvider, *, budget: BudgetSpec | None = None):
         self.provider = provider
@@ -76,9 +78,25 @@ class TaskSession:
         with self._lock:
             self._plans.clear()
 
+    def _describe_steps(self, operators):
+        describe = getattr(self.provider, 'describe_operator', None)
+        rows = []
+        for index, operator in enumerate(operators, 1):
+            row = {'step_1based': index}
+            if describe is not None:
+                detail = describe(operator)
+                keys = {'action', 'object_name', 'from_region', 'to_region'}
+                if (not isinstance(detail, dict) or set(detail) != keys
+                        or detail['action'] != 'transfer'
+                        or any(not isinstance(v, str) or not v for v in detail.values())):
+                    raise ValueError('invalid_task_step_description')
+                row.update(detail)
+            rows.append(row)
+        return tuple(rows)
+
     def discover(self, object_filter: str = "", robot: str = "") -> dict:
         with self._lock:
-            if object_filter or robot:
+            if object_filter or robot and robot != getattr(self.provider, 'robot_name', None):
                 return response("scene_tasks", code="task_filter_unsupported")
             describe = getattr(self.provider, "describe", None)
             if describe is None:
@@ -99,15 +117,17 @@ class TaskSession:
                 if result.reason != 'ok':
                     return response('plan_task', code=result.reason)
                 initial.binding.require_current(self.provider.snapshot().binding)
+                details = self._describe_steps(result.operators)
             except Exception as error:
                 return response("plan_task", code=provider_failure_code(error))
             ref = 'task_plan_' + uuid.uuid4().hex
             # Bound memory even if an agent continually asks for plans.
             if len(self._plans) >= self.budget.tool_rounds:
                 self._plans.pop(next(iter(self._plans)))
-            self._plans[ref] = StoredTaskPlan(initial, goal, result.operators)
+            self._plans[ref] = StoredTaskPlan(initial, goal, result.operators, details)
             return response('plan_task', data={'plan_ref': ref, 'steps': len(result.operators),
                                               'strategy': strategy, 'execution_started': False,
+                                              'step_details': [dict(row) for row in details],
                                               'planning_scope': getattr(self.provider, 'planning_scope', 'provider_defined'),
                                               'motion_refinement': getattr(self.provider, 'motion_refinement', 'provider_defined')})
 
@@ -116,7 +136,7 @@ class TaskSession:
             plan = self._plans.pop(plan_ref, None)
             if plan is None:
                 return response('execute_task_plan', code='unknown_plan', recovery='replan')
-            started, completed, active_step = False, 0, None
+            started, completed, active_step, step_started = False, 0, None, False
             verification = None
             phase = "initial_validation"
             try:
@@ -126,6 +146,7 @@ class TaskSession:
                     raise ValueError('stale_task_plan')
                 for index, operator in enumerate(plan.operators):
                     verification = None
+                    step_started = False
                     active_step, phase = index+1, "preflight"
                     if not operator.requires <= current.predicates:
                         raise ValueError('task_precondition_failed')
@@ -137,9 +158,11 @@ class TaskSession:
                     current.binding.require_current(self.provider.snapshot().binding)
                     phase = "execution"
                     previous_started, started = started, True
+                    step_started = True  # An untyped exception may follow dispatch.
                     receipt = self.provider.execute(operator)
                     if isinstance(receipt, TaskExecutionResult):
                         started = previous_started or receipt.execution_started
+                        step_started = receipt.execution_started
                         success = receipt.success
                         if not success:
                             verification = receipt.verification
@@ -172,6 +195,14 @@ class TaskSession:
                                 data={'execution_started': started, 'completed_steps': completed,
                                       'planned_steps': len(plan.operators), 'failed_step_1based': active_step,
                                       'failed_phase': phase,
+                                      'failed_step_execution_started': step_started if active_step is not None else None,
+                                      'plan_consumed': True, 'goal_verified': False,
+                                      'completed_actions': [dict(row) for row in plan.step_details[:completed]],
+                                      'failed_action': dict(plan.step_details[active_step-1]) if active_step is not None and plan.step_details else None,
+                                      'unverified_actions': [dict(row) for row in plan.step_details[completed:]],
                                       **({'verification': verification.to_dict()} if verification is not None else {})})
             return response('execute_task_plan', data={'execution_started': started,
-                                                       'completed_steps': completed, 'goal_verified': True})
+                                                       'completed_steps': completed, 'goal_verified': True,
+                                                       'plan_consumed': True,
+                                                       'completed_actions': [dict(row) for row in plan.step_details],
+                                                       'unverified_actions': []})
