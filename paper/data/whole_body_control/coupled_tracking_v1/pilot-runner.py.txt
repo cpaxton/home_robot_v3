@@ -1,0 +1,323 @@
+"""One bounded research pilot on the admitted coupled/general and unloaded TAMP mix.
+
+This orchestrates the frozen runtime, not a deployment entrypoint. Exact source
+is archived with the experiment; every actor remains simulator-only/unpromoted.
+"""
+
+import hashlib
+import json
+import time
+from dataclasses import asdict
+from pathlib import Path
+
+import numpy as np
+import torch
+
+from emet.rl.manipulation.carry_benchmark import digest
+from emet.rl.manipulation.coupled_evaluation import json_value
+from emet.rl.manipulation.coupled_tracking import CoupledTrackingEnv, load_suite
+from emet.rl.manipulation.multi_critic_ppo import MultiCriticPPO, PPOConfig
+from emet.rl.manipulation.primitive_admission import unloaded_stage_readiness
+from emet.rl.manipulation.safety import whole_body_stopped
+from emet.rl.manipulation.tamp_primitive_env import TampPrimitiveEnv
+from emet.rl.manipulation.whole_body_actor import MultiCriticPolicy
+from emet.rl.manipulation.whole_body_bundle import WholeBodyBundle, export_actor
+from emet.rl.manipulation.whole_body_env import ControlStepMixture
+from emet.rl.manipulation.whole_body_training import collect_rollout, load_development, primitive_rollout
+from emet.rl.regression_gate import ROOT, source_state, verify_regressions
+
+OUT = ROOT / "logs/manipulation/coupled-unloaded-ppo-pilot-v1"
+TEACHER = ROOT / "logs/eval/coupled-mars-teacher-v3/references.json"
+TAMP = ROOT / "logs/eval/unloaded-prefix-admission-v4/results.json"
+RECEIPT = ROOT / "logs/eval/coupled-prefix-regressions-v3/full.receipt.json"
+INITIALIZER = Path(
+    "/home/cpaxton/src/home_robot_v4/.worktrees/wbc-reference-base-exploration/logs/manipulation/mars-reference-base-exploration-v1/candidate/last/actor"
+)
+STEPS, SEED = 4096, 91
+
+
+def sha(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def save(path, value):
+    temporary = path.with_suffix(".partial")
+    temporary.write_text(json.dumps(value, indent=2, default=json_value, allow_nan=False) + "\n")
+    temporary.replace(path)
+
+
+def validate_admission():
+    receipt = verify_regressions(RECEIPT)
+    sources = source_state(ROOT)
+    suite = load_suite()
+    general = json.loads(TEACHER.read_text())
+    tamp = json.loads(TAMP.read_text())
+    development, _ = load_development()
+    expected = development["train_cases"] + development["audit_cases"]
+    if (
+        not general["complete"]
+        or not general["ready_for_training"]
+        or general["robot"] != "innate_mars"
+        or general["source_state_digest"] != digest(sources)
+        or general["suite_sha256"] != digest(suite)
+        or [r["case"] for r in general["cases"]] != suite["robots"]["innate_mars"]
+        or not all(
+            r["accepted"]
+            and r["teacher"]["tracking_success"]
+            and r["teacher"]["stop_confirmed"]
+            and not any(r["teacher"]["safety_flags"].values())
+            and (not r["teacher"]["retarget_expected"] or r["teacher"]["retarget_delivered"])
+            for r in general["cases"]
+        )
+    ):
+        raise ValueError("fresh all-case coupled teacher admission required")
+    if (
+        not tamp["complete"]
+        or tamp["planning_scope"] != "unloaded_prefix"
+        or tamp["source_state_digest"] != digest(sources)
+        or tamp["cases"] != expected
+        or not all(
+            sha(TAMP.parent / (p + ".json")) == tamp["stages"][p]["rows_file_sha256"]
+            and unloaded_stage_readiness(json.loads((TAMP.parent / (p + ".json")).read_text()), expected, p)
+            for p in ("pregrasp", "grasp_pose")
+        )
+    ):
+        raise ValueError("fresh all-case unloaded teacher admission required")
+    return receipt, suite, development, sources
+
+
+def evaluate(actor, suite, development, label):
+    env = CoupledTrackingEnv("innate_mars", suite["robots"]["innate_mars"])
+    rows = []
+    try:
+        for case in env.cases:
+            obs, initial = env.reset(options={"case_id": case["id"]})
+            info = {}
+            trace = []
+            for _ in range(500):
+                sensor = {k: torch.from_numpy(obs[k])[None] for k in ("history", "preview", "motion")}
+                with torch.no_grad():
+                    action = actor(sensor)[0].numpy()
+                obs, _, done, truncated, info = env.step(action)
+                trace.append(
+                    {
+                        "time": float(env.unwrapped.data.time),
+                        "base": env.unwrapped.control.base_pose().tolist(),
+                        "hand": env.unwrapped.control.ee_pose().tolist(),
+                        "action": action.tolist(),
+                        "position_error_m": info["ee_position_error"],
+                        "orientation_error_rad": info["ee_orientation_error"],
+                    }
+                )
+                if done or truncated:
+                    break
+            e = env.unwrapped
+            e.control.stop()
+            for _ in range(16):
+                if whole_body_stopped(e.control) or e._physics_invalid:
+                    break
+                e._tick(np.zeros(e.profile.action_size))
+            rows.append(
+                {
+                    "id": case["id"],
+                    "split": case["split"],
+                    "success": bool(info.get("primitive_success")),
+                    "stop_confirmed": bool(whole_body_stopped(e.control) and not e._physics_invalid),
+                    "reference_sha256": initial["reference_sha256"],
+                    "retarget_delivered": info.get("retarget_delivered"),
+                    "trace": trace,
+                    "metrics": e._info(),
+                    "code": info.get("code"),
+                }
+            )
+    finally:
+        env.close()
+    task = primitive_rollout(
+        development["train_cases"] + development["audit_cases"],
+        policy=actor,
+        primitive="grasp_pose",
+        planning_scope="unloaded_prefix",
+        wheel_feedback_current_velocity=True,
+    )
+    report = {
+        "label": label,
+        "general_cases": rows,
+        "tamp_cases": task,
+        "hardware_used": False,
+        "full_pick_place_qualified": False,
+    }
+    save(OUT / (label + "-evaluation.json"), report)
+    return {
+        "general": sum(r["success"] for r in rows),
+        "general_attempts": len(rows),
+        "tamp": sum(r["success"] for r in task),
+        "tamp_attempts": len(task),
+    }
+
+
+def main():
+    if OUT.exists():
+        raise ValueError("fresh pilot output required; no resume or automatic extension")
+    # This supervisor may wait for its declared prerequisites; no PPO while waiting.
+    deadline = time.monotonic() + 1800
+    while not (TEACHER.exists() and TAMP.exists() and RECEIPT.exists()):
+        from emet.utils.job_registry import load_job
+
+        prerequisite = load_job("20261116_090302_b0b597")
+        if prerequisite is not None and prerequisite.status in {"failed", "cancelled"}:
+            raise RuntimeError("full regression prerequisite failed; no PPO authorized by this protocol")
+        if time.monotonic() > deadline:
+            raise TimeoutError("bounded wait for fresh gates expired")
+        time.sleep(10)
+    receipt, suite, development, sources = validate_admission()
+    OUT.mkdir(parents=True, exist_ok=False)
+    torch.set_num_threads(1)
+    torch.manual_seed(SEED)
+    np.random.seed(SEED)
+    source = WholeBodyBundle(INITIALIZER, robot="innate_mars")
+    model = MultiCriticPolicy(robot="innate_mars", hidden=source.actor.hidden)
+    model.actor.load_state_dict(source.actor.state_dict(), strict=True)
+    config = PPOConfig(learning_rate=3e-5, epochs=3, batch_size=64, advantage_normalization="shared")
+    learner = MultiCriticPPO(model, config)
+    train_cases = [c for c in suite["robots"]["innate_mars"] if c["split"] == "train"]
+    general = CoupledTrackingEnv("innate_mars", train_cases)
+    task = TampPrimitiveEnv(
+        development["train_cases"],
+        primitive="grasp_pose",
+        planning_scope="unloaded_prefix",
+        wheel_feedback_current_velocity=True,
+    )
+    env = ControlStepMixture({"general": general, "tamp": task}, [0.5, 0.5])
+    native = general.unwrapped
+    metadata = {
+        "format": "coupled-unloaded-ppo-pilot-v1",
+        "seed": SEED,
+        "requested_decisions": STEPS,
+        "source_state_digest": digest(sources),
+        "regression_tests": len(receipt["test_ids"]),
+        "regression_receipt_sha256": sha(RECEIPT),
+        "teacher_sha256": sha(TEACHER),
+        "tamp_admission_sha256": sha(TAMP),
+        "runner_sha256": sha(__file__),
+        "initializer_weights_sha256": sha(INITIALIZER / "policy.zip"),
+        "initializer_scope": "actor-only initialization; fresh critic/optimizer, not a resumed run",
+        "ppo": asdict(config),
+        "actor_lr_schedule": "linear_3e-5_to_1e-5",
+        "training_general_cases": [c["id"] for c in train_cases],
+        "training_tamp_cases": [c["id"] for c in development["train_cases"]],
+        "general_task_mix": "50_50_by_physical_ticks_episode_boundary_deficit",
+        "randomization_scale": 0,
+        "wandb_mode": "offline",
+        "hardware_used": False,
+        "safety_promoted": False,
+        "full_pick_place_qualified": False,
+        "phase": "initial_evaluation",
+    }
+    save(OUT / "run.json", metadata)
+    export_actor(model.actor, OUT / "initial/actor", native.config, native.fingerprint, steps=0, training=metadata)
+    metadata["initial_evaluation"] = evaluate(model.actor, suite, development, "initial")
+    torch.manual_seed(SEED)
+    np.random.seed(SEED)
+    observation, _ = env.reset(seed=SEED)
+    torch.save(
+        {
+            "policy": model.state_dict(),
+            "optimizer": learner.optimizer.state_dict(),
+            "torch_rng": torch.get_rng_state(),
+            "numpy_rng": [np.random.get_state()[0], np.random.get_state()[1].tolist(), *np.random.get_state()[2:]],
+        },
+        OUT / "initial/training.pt",
+    )
+
+    def episode(info):
+        record = {
+            k: info.get(k)
+            for k in (
+                "training_family",
+                "case_id",
+                "primitive",
+                "planning_scope",
+                "code",
+                "primitive_success",
+                "stop_confirmed",
+                "wheel_lift",
+                "unsafe_contact",
+                "invalid_physics",
+                "retention_lost",
+            )
+        }
+        with (OUT / "episodes.jsonl").open("a") as stream:
+            stream.write(json.dumps(record, default=json_value) + "\n")
+
+    run = None
+    try:
+        import wandb
+
+        run = wandb.init(
+            project="emet-whole-body-v2",
+            name=OUT.name,
+            mode="offline",
+            dir=str(OUT),
+            config=metadata,
+            settings=wandb.Settings(disable_git=True, save_code=False),
+        )
+        metadata["phase"] = "training"
+        save(OUT / "run.json", metadata)
+        decisions = ticks = 0
+        while decisions < STEPS:
+            rollout, observation = collect_rollout(
+                env, model, observation, min(256, STEPS - decisions), gamma=config.gamma
+            )
+            if decisions == 0:
+                first = {"obs/" + k: v for k, v in rollout["observations"].items()}
+                first.update({k: v for k, v in rollout.items() if k not in {"observations", "case_ids"}})
+                np.savez_compressed(OUT / "first-rollout.npz", **first)
+            actor_lr = 1e-5 + 2e-5 * (1 - decisions / STEPS)
+            learner.optimizer.param_groups[0]["lr"] = actor_lr
+            stats = learner.update(rollout)
+            decisions += len(rollout["actions"])
+            ticks += int(rollout["ticks"].sum())
+            row = {
+                "decisions": decisions,
+                "control_ticks": ticks,
+                "actor_learning_rate": actor_lr,
+                "mixture": env.ledger(),
+                "stats": stats,
+            }
+            with (OUT / "updates.jsonl").open("a") as stream:
+                stream.write(json.dumps(row, default=json_value) + "\n")
+            run.log(
+                {
+                    "decisions": decisions,
+                    "control_ticks": ticks,
+                    "actor_learning_rate": actor_lr,
+                    **{"ppo/" + k: v for k, v in stats.items() if np.isscalar(v)},
+                },
+                step=decisions,
+            )
+            metadata.update(decisions=decisions, control_ticks=ticks, mixture=env.ledger())
+            save(OUT / "run.json", metadata)
+            print("PPO", decisions, ticks, env.ledger(), flush=True)
+        export_actor(
+            model.actor, OUT / "final/actor", native.config, native.fingerprint, steps=STEPS, training=metadata
+        )
+        metadata["phase"] = "final_evaluation"
+        save(OUT / "run.json", metadata)
+        env.close()
+        metadata["final_evaluation"] = evaluate(model.actor, suite, development, "final")
+        assert source_state(ROOT) == sources
+        metadata.update(phase="complete", complete=True, automatic_extensions=0)
+        save(OUT / "run.json", metadata)
+    finally:
+        env.close()
+        if run is not None:
+            run.finish()
+    print(
+        json.dumps(
+            {"initial": metadata["initial_evaluation"], "final": metadata["final_evaluation"], "decisions": STEPS}
+        )
+    )
+
+
+if __name__ == "__main__":
+    main()

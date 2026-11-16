@@ -751,3 +751,46 @@ stage separation alone does not establish independently admitted unloaded
 references; both full-cohort stage readouts remain closed, with no PPO update.
 Compact outcomes and parity hashes are in
 \texttt{mars\_unloaded\_grasp\_admission\_v1/results.json}.
+
+
+\paragraph{Coupled reference and learning diagnosis.}
+Explicit unloaded-prefix planning subsequently removes the unrequested lift
+prerequisite while preserving geometry/support checks for requested motion.
+At revision \texttt{db6b6964}, the original six cases complete 6/6 pregrasp and
+6/6 open-jaw grasp-pose teacher operations, with all twelve stops confirmed.
+These are terminal pose operations requiring simulator reset, not grasp/lift
+handoffs. Independently, ten coupled FK-generated references per robot give
+10/10 teacher completions for both Mars and Stretch. Worst final active-hand
+position errors are 0.125\,mm and 1.55\,mm, respectively. Source-bound software
+regressions pass 1,421 tests. Stretch's static support polygon includes its
+caster; dynamic unloading metrics currently cover its drive wheels.
+
+A 4,096-decision direct PPO pilot remains at 0/10 general and 0/6 unloaded
+TAMP success. Its approximately 53/47 general/task physical-tick mixture reaches
+only five of six general training cases. A separate 1,024-update, train-label-only
+teacher-action bootstrap reaches 5/6 TAMP grasp-pose completions, but 0/10 raw
+general completions because of settling and self-contact failures. Late yaw
+commands reverse on every 50\,ms tick. On the same full-horizon ten-case cohort,
+removing only the learned base output rows' instantaneous joint/base-rate path
+raises success to 9/10 without changing arm rate feedback or weights. The
+base-only case worsens; this is an experimental ablation, not a promoted actor.
+A separate explicit executor-hold diagnostic yields 10/10 and is not counted as
+raw actor stability. Complete cases and provenance are retained in
+\texttt{coupled\_tracking\_v1/results.json}.
+
+A versioned general benchmark starts with a 5\,cm/$5^\circ$ base region while
+retaining 3\,mm/0.02\,rad hand accuracy. Required base paths travel 15\,cm;
+small nullspace cases are separately labeled hand-hold diagnostics. Historical
+benchmarks and task-specific base contracts remain unchanged. This operating
+region prioritizes reactive arm precision without claiming that finer wheeled
+base control is impossible. Physically valid phase/reset coverage, inspired by
+SuperMimic's reset sampling, remains a proposed experiment rather than an
+implemented dynamics-model training backend.
+
+The serialized ablation at \texttt{57e8e73b} reproduces 9/10 on the original
+small cohort, completes 5/10 on the larger v2 cohort, and completes 6/6 original
+open-jaw TAMP grasp-pose operations with all stops confirmed. On v2, the teacher
+completes 8/10 Mars and 9/10 Stretch cases; geometric admission alone does not
+establish dynamic tracking. These fixed deterministic cohorts are not pooled
+into reliability or hardware claims. Complete failures and setup-attempt
+provenance are retained in \texttt{coupled\_tracking\_v2/results.json}.

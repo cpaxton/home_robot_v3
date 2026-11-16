@@ -226,3 +226,26 @@ components enter the resolved-rate objective alongside the precise hand pose;
 inactive coordinates do not become hidden targets. This matters for Stretch: an
 XY-constrained, yaw-free target can require yaw motion to close the hand error.
 The fully constrained-base teacher path remains unchanged.
+
+## Coarse general base region, 2026-11-16
+
+The versioned `configs/benchmarks/coupled_tracking_v2.json` distribution starts
+with 5 cm XY and 5° heading acceptance, keeping the hand at 3 mm / 0.02 rad.
+This is a first general-controller operating region, not a claim that wheeled
+robots cannot be more precise. Required base paths travel 15 cm; staying still
+does not pass. Small fixed-hand nullspace paths are explicitly hand-hold
+diagnostics, not required-base progress. V1 and frozen TAMP results are retained.
+
+Use `CoupledTrackingEnv(robot, suite_path=COARSE_SUITE)` for the new distribution;
+its CLI accepts `--suite configs/benchmarks/coupled_tracking_v2.json`. The v2
+base pose reward is flat inside both base acceptance bands. Fine hand tracking,
+measured motion/jerk and force terms remain active. Existing task-specific
+base contracts are not changed by this general benchmark.
+
+A separate opt-in `WholeBodyActor(base_rate_feedback=False)` removes the direct
+measured joint/base-rate path only from base output rows. Arm rows retain it;
+history, hand/base pose errors and announced motion remain available. The flag
+is bound in exported weights and manifest; old bundles preserve legacy behavior.
+This is an experimental ablation, not a promoted default. See the
+[complete diagnosis](../experiments/coupled_tracking_20261116.md) and
+[SuperMimic coverage proposal](supermimic_controller_training.md).

@@ -1,0 +1,22 @@
+{
+  "format": "coupled-bootstrap-protocol-v1",
+  "runtime": "db6b6964",
+  "seed": 92,
+  "source_actor": "same original GRU initializer as the preceding PPO pilot; not its regressed final",
+  "round_0": "teacher and original-actor states; six general and four TAMP train cases only",
+  "round_1": "candidate-actor states on the same train cases only",
+  "updates_per_round": 512,
+  "total_supervised_updates": 1024,
+  "batch_size": 64,
+  "learning_rate": 0.0002,
+  "new_ppo_steps": 0,
+  "objective": "masked action MSE, balanced general/TAMP batches",
+  "labels": "analytic bounded control actions computed at sampled states; never actor inputs or runtime fallback",
+  "audit_labels_used": false,
+  "evaluation": "final actor only on the ten general and six TAMP cases; initial anchor is previous exact initializer evaluation",
+  "automatic_extensions": 0,
+  "hardware_used": false,
+  "safety_promoted": false,
+  "trigger": "4096-decision direct PPO pilot remained 0/10 general and 0/6 TAMP; diagnose representability/bootstrap before more PPO scale",
+  "runner_sha256": "ca2e7841f3398e337b18ad967466b1cf0893d8d0151e23da8bf4bfa7cbdeb479"
+}

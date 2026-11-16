@@ -1,0 +1,4821 @@
+{
+  "format": "coupled-coarse-base-readout-v1",
+  "runtime_revision": "57e8e73b",
+  "source_archive_sha256": "992fbffc59e19028f06079e427805b4561c1761395cae24482869f99d7ef2d06",
+  "hardware_used": false,
+  "safety_promoted": false,
+  "full_pick_place_qualified": false,
+  "new_ppo_steps": 0,
+  "teacher": {
+    "innate_mars": {
+      "source_state_digest": "3647b7fa34fb4978abfbd5bec7cf5734ebfc915aa68b83b79464ea500a3d8fca",
+      "suite_sha256": "5a5964e202561361f0ae31bfff27ceb4102ef4d2c57430bc72ceb56585c0e930",
+      "acceptance": {
+        "base_xy_tolerance": 0.05,
+        "base_heading_tolerance": 0.08726646259971647,
+        "hand_position_tolerance": 0.003,
+        "hand_orientation_tolerance": 0.02
+      },
+      "report_sha256": "9709127e124926f2ee7a91182ddcc4c91743bddaa5b91c583c9918fbdc5c6a70",
+      "attempts": 10,
+      "successes": 8,
+      "ready_for_training": false,
+      "cases": [
+        {
+          "case": {
+            "id": "innate_mars:v2:train:base_only:0",
+            "seed": 35700000,
+            "split": "train",
+            "mode": "base_only",
+            "travel_m": 0.15,
+            "turn_rad": 0,
+            "arm_delta": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "base_mask": [
+              true,
+              true,
+              true
+            ],
+            "purpose": "tracking"
+          },
+          "accepted": true,
+          "admission": {
+            "accepted": true,
+            "reason": null,
+            "minimum_support_margin_m": 0.017500352102202923,
+            "fixed_hand_witness_position_m": 0.0,
+            "fixed_hand_witness_orientation_rad": 0.0,
+            "dynamic_feasibility_verified": false,
+            "geometry_sample_period_s": 0.025
+          },
+          "tracking_success": true,
+          "stop_confirmed": true,
+          "post_stop_pose_in_contract": true,
+          "code": "ok",
+          "retarget_expected": false,
+          "retarget_delivered": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "control_ticks": 500,
+          "metrics": {
+            "ee_position_error": 0.003362074377681577,
+            "ee_orientation_error": 0.0031112309484921173,
+            "rms_hand_position_error": 0.0,
+            "peak_hand_position_error": 0.0,
+            "peak_hand_orientation_error": 0.0,
+            "base_goal_error": 0.0031587835378685653,
+            "base_heading_error_rad": 0.0012116093266481792,
+            "peak_base_linear_jerk_m_s3": 2.377707432978827,
+            "peak_base_yaw_jerk_rad_s3": 8.56637606117399,
+            "peak_joint_jerk": [
+              0.06472744940252274,
+              0.4921878905657187,
+              0.1861137831160118,
+              0.03587072065466171,
+              0.002457706991888258
+            ],
+            "peak_contact_force": 0.19620000000974752,
+            "contact_impulse": 4.9050000000028255,
+            "max_penetration": 0.00014215299777013004,
+            "max_wheel_gap": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "min_wheel_load": [
+              4.01214666580134,
+              6.2518576888319615,
+              0.36409899647659544
+            ],
+            "time_to_first_settle": 6.899999999999351,
+            "peak_hold_base_drift_m": 2.34996977458117e-06,
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "retention_lost": false,
+            "base_linear_norm_m_s": 1.3280304304856622e-07,
+            "base_angular_norm_rad_s": 3.097332668063019e-07,
+            "max_joint_velocity": 1.3991825873609018e-09
+          },
+          "base_start": [
+            -0.0004185620126648625,
+            1.3378914695356238e-05,
+            8.810090699567816e-05
+          ],
+          "base_end": [
+            0.1495814374052021,
+            2.6594050727612462e-05,
+            8.810090699567816e-05
+          ],
+          "hand_start": [
+            0.3114830782316083,
+            -0.061267983762524486,
+            0.22551772605490525,
+            0.9970535792023698,
+            0.03433025374066536,
+            -0.037291000555282346,
+            0.9984063601505904,
+            -0.06703388305424704,
+            -0.04479033030635282
+          ],
+          "hand_end": [
+            0.46148307764947527,
+            -0.06125476862649223,
+            0.22551772605490525,
+            0.9970535792023698,
+            0.03433025374066536,
+            -0.037291000555282346,
+            0.9984063601505904,
+            -0.06703388305424704,
+            -0.04479033030635282
+          ],
+          "initial_state_sha256": "bfedccee664f7c448cbd86654f629f15985a90d1ba507c7fe989543f4585d6f3",
+          "model_fingerprint": "dc7199658397a4d5e027a426cb3e936a46199b779d6bc9dc73113f400a5ca68a"
+        },
+        {
+          "case": {
+            "id": "innate_mars:v2:train:hand_free_base:1",
+            "seed": 35700001,
+            "split": "train",
+            "mode": "hand_free_base",
+            "travel_m": 0.15,
+            "turn_rad": 0,
+            "arm_delta": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "base_mask": [
+              false,
+              false,
+              false
+            ],
+            "purpose": "tracking"
+          },
+          "accepted": true,
+          "admission": {
+            "accepted": true,
+            "reason": null,
+            "minimum_support_margin_m": 0.018266239632879405,
+            "fixed_hand_witness_position_m": 0.0,
+            "fixed_hand_witness_orientation_rad": 0.0,
+            "dynamic_feasibility_verified": false,
+            "geometry_sample_period_s": 0.025
+          },
+          "tracking_success": true,
+          "stop_confirmed": true,
+          "post_stop_pose_in_contract": true,
+          "code": "ok",
+          "retarget_expected": false,
+          "retarget_delivered": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "control_ticks": 500,
+          "metrics": {
+            "ee_position_error": 3.201913640253346e-07,
+            "ee_orientation_error": 8.180723924226277e-07,
+            "rms_hand_position_error": 0.00037994440480322426,
+            "peak_hand_position_error": 0.0014636557519974924,
+            "peak_hand_orientation_error": 0.001320590917224655,
+            "base_goal_error": 0.0,
+            "base_heading_error_rad": 0.0,
+            "peak_base_linear_jerk_m_s3": 0.37750453211302726,
+            "peak_base_yaw_jerk_rad_s3": 3.000959541129341,
+            "peak_joint_jerk": [
+              0.5167568954065727,
+              1.0323689002518344,
+              1.4140410823941352,
+              1.461845270906155,
+              0.2587562429922552
+            ],
+            "peak_contact_force": 0.19620000000000115,
+            "contact_impulse": 4.904999999999551,
+            "max_penetration": 0.00014215299777013037,
+            "max_wheel_gap": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "min_wheel_load": [
+              2.2984483005779435,
+              2.2342871547874124,
+              0.4074056113225646
+            ],
+            "time_to_first_settle": 5.899999999999461,
+            "peak_hold_base_drift_m": 0.00035365199643811357,
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "retention_lost": false,
+            "base_linear_norm_m_s": 9.73014760019926e-08,
+            "base_angular_norm_rad_s": 1.3909839307827494e-07,
+            "max_joint_velocity": 9.231431984180705e-07
+          },
+          "base_start": [
+            -0.00040991068705759174,
+            1.67255126492908e-05,
+            0.00027039067979682253
+          ],
+          "base_end": [
+            0.14959008382960817,
+            5.728411412459997e-05,
+            0.00027039067979682253
+          ],
+          "hand_start": [
+            0.305122968055537,
+            -0.04354090511427735,
+            0.2386553552275768,
+            0.9989932003975385,
+            -0.04278324987729313,
+            0.042534770851186794,
+            0.9989294091678457,
+            0.014261094913148104,
+            0.01759627885426777
+          ],
+          "hand_end": [
+            0.45512296257220275,
+            -0.04350034651280204,
+            0.2386553552275768,
+            0.9989932003975385,
+            -0.04278324987729313,
+            0.042534770851186794,
+            0.9989294091678457,
+            0.014261094913148104,
+            0.01759627885426777
+          ],
+          "initial_state_sha256": "50d58a2eaea3089b269c2b46f955c2aac6c083372a51765091cb9b2666701424",
+          "model_fingerprint": "dc7199658397a4d5e027a426cb3e936a46199b779d6bc9dc73113f400a5ca68a"
+        },
+        {
+          "case": {
+            "id": "innate_mars:v2:train:hand_free_base:2",
+            "seed": 35700002,
+            "split": "train",
+            "mode": "hand_free_base",
+            "travel_m": 0.15,
+            "turn_rad": 0.24,
+            "arm_delta": [
+              0,
+              0.005,
+              -0.005,
+              0,
+              0
+            ],
+            "base_mask": [
+              false,
+              false,
+              false
+            ],
+            "purpose": "tracking"
+          },
+          "accepted": true,
+          "admission": {
+            "accepted": true,
+            "reason": null,
+            "minimum_support_margin_m": 0.018395645102650637,
+            "fixed_hand_witness_position_m": 0.0,
+            "fixed_hand_witness_orientation_rad": 0.0,
+            "dynamic_feasibility_verified": false,
+            "geometry_sample_period_s": 0.025
+          },
+          "tracking_success": true,
+          "stop_confirmed": true,
+          "post_stop_pose_in_contract": true,
+          "code": "ok",
+          "retarget_expected": false,
+          "retarget_delivered": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "control_ticks": 500,
+          "metrics": {
+            "ee_position_error": 5.301060050132378e-07,
+            "ee_orientation_error": 1.3783372735796086e-06,
+            "rms_hand_position_error": 0.0004834747016316904,
+            "peak_hand_position_error": 0.0018189994844663492,
+            "peak_hand_orientation_error": 0.0028556540286259415,
+            "base_goal_error": 0.0,
+            "base_heading_error_rad": 0.0,
+            "peak_base_linear_jerk_m_s3": 0.4866033172714973,
+            "peak_base_yaw_jerk_rad_s3": 3.259515927622969,
+            "peak_joint_jerk": [
+              0.4433213576127387,
+              0.900542951327632,
+              1.5262908193854785,
+              1.2445430911676736,
+              0.20671850155630606
+            ],
+            "peak_contact_force": 0.1962000000000022,
+            "contact_impulse": 4.904999999999551,
+            "max_penetration": 0.0001421529977701352,
+            "max_wheel_gap": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "min_wheel_load": [
+              2.1906835688561133,
+              2.1361578979046403,
+              0.3812402071393326
+            ],
+            "time_to_first_settle": 5.899999999999461,
+            "peak_hold_base_drift_m": 0.0003556493498873115,
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "retention_lost": false,
+            "base_linear_norm_m_s": 2.439214052061106e-08,
+            "base_angular_norm_rad_s": 1.8036697897980588e-07,
+            "max_joint_velocity": 1.3701818981239604e-07
+          },
+          "base_start": [
+            -0.0004116200146086545,
+            1.5073279392904328e-05,
+            0.00016112046378911023
+          ],
+          "base_end": [
+            0.14815003282201145,
+            0.017949466617657672,
+            0.24016112046378868
+          ],
+          "hand_start": [
+            0.30268312527277696,
+            -0.05226255282193765,
+            0.2489293295804839,
+            0.9997714689295711,
+            -0.0033124864376819383,
+            0.0027366908369629494,
+            0.9996253282961589,
+            0.021201897029972903,
+            0.02717039680232388
+          ],
+          "hand_end": [
+            0.45557571906281696,
+            0.0393631450835464,
+            0.24905539393335457,
+            0.9704654753452233,
+            -0.2408311098471861,
+            0.24030655572684478,
+            0.9701866552717451,
+            0.02120189702997296,
+            0.027170396802323863
+          ],
+          "initial_state_sha256": "245bbcc3ff7fbdf33afda8e0d7183491511a6027898c1585f062ca73e0235a5c",
+          "model_fingerprint": "dc7199658397a4d5e027a426cb3e936a46199b779d6bc9dc73113f400a5ca68a"
+        },
+        {
+          "case": {
+            "id": "innate_mars:v2:train:coupled:3",
+            "seed": 35700003,
+            "split": "train",
+            "mode": "coupled",
+            "travel_m": 0.15,
+            "turn_rad": -0.24,
+            "arm_delta": [
+              0,
+              -0.005,
+              0.005,
+              0,
+              0
+            ],
+            "base_mask": [
+              true,
+              true,
+              true
+            ],
+            "purpose": "tracking"
+          },
+          "accepted": true,
+          "admission": {
+            "accepted": true,
+            "reason": null,
+            "minimum_support_margin_m": 0.01723399036806287,
+            "fixed_hand_witness_position_m": 0.0,
+            "fixed_hand_witness_orientation_rad": 0.0,
+            "dynamic_feasibility_verified": false,
+            "geometry_sample_period_s": 0.025
+          },
+          "tracking_success": true,
+          "stop_confirmed": true,
+          "post_stop_pose_in_contract": true,
+          "code": "ok",
+          "retarget_expected": false,
+          "retarget_delivered": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "control_ticks": 500,
+          "metrics": {
+            "ee_position_error": 0.0004988874269593863,
+            "ee_orientation_error": 0.00011498046516731477,
+            "rms_hand_position_error": 0.001259469876000058,
+            "peak_hand_position_error": 0.007072239794698643,
+            "peak_hand_orientation_error": 0.0327717774219419,
+            "base_goal_error": 0.003227381837521611,
+            "base_heading_error_rad": 0.01402222062888042,
+            "peak_base_linear_jerk_m_s3": 3.2056668709043556,
+            "peak_base_yaw_jerk_rad_s3": 56.086144740834285,
+            "peak_joint_jerk": [
+              13.414719417333503,
+              10.05969361650875,
+              10.320810566840708,
+              3.249987125601046,
+              0.5358117514918112
+            ],
+            "peak_contact_force": 0.19620000000000118,
+            "contact_impulse": 4.904999999999551,
+            "max_penetration": 0.00014215299777013002,
+            "max_wheel_gap": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "min_wheel_load": [
+              0.27952131862366436,
+              0.9627857831127147,
+              0.35003947286889225
+            ],
+            "time_to_first_settle": 9.75000000000026,
+            "peak_hold_base_drift_m": 7.8731365391357e-06,
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "retention_lost": false,
+            "base_linear_norm_m_s": 5.378472838975999e-07,
+            "base_angular_norm_rad_s": 1.543560925521802e-05,
+            "max_joint_velocity": 1.2014430209824088e-05
+          },
+          "base_start": [
+            -0.0004226812570481303,
+            1.5436466588959014e-05,
+            0.00021134029783884237
+          ],
+          "base_end": [
+            0.14814564113246215,
+            -0.017863622242598534,
+            -0.23978865970216073
+          ],
+          "hand_start": [
+            0.3141995393213249,
+            -0.049117331726435405,
+            0.23225721099184402,
+            0.9998342431069663,
+            -0.016242998090429894,
+            0.016391493491918104,
+            0.999697792872197,
+            -0.007924976455940825,
+            0.018452315288206646
+          ],
+          "hand_end": [
+            0.44147056342622926,
+            -0.14023807110782543,
+            0.23216716197240536,
+            0.9750732699413249,
+            0.22185335012844692,
+            -0.2217415454850718,
+            0.9749054328996698,
+            -0.007924976455940843,
+            0.018452315288206653
+          ],
+          "initial_state_sha256": "af2bb745fb03de005e0f82fa5111a4af871a6ce38d4b7e49902e5303a06409a1",
+          "model_fingerprint": "dc7199658397a4d5e027a426cb3e936a46199b779d6bc9dc73113f400a5ca68a"
+        },
+        {
+          "case": {
+            "id": "innate_mars:v2:train:coupled:4",
+            "seed": 35700004,
+            "split": "train",
+            "mode": "coupled",
+            "travel_m": 0.15,
+            "turn_rad": 0.24,
+            "arm_delta": [
+              0,
+              0,
+              0,
+              0,
+              0.01
+            ],
+            "base_mask": [
+              true,
+              true,
+              false
+            ],
+            "purpose": "tracking"
+          },
+          "accepted": true,
+          "admission": {
+            "accepted": true,
+            "reason": null,
+            "minimum_support_margin_m": 0.017406463340351088,
+            "fixed_hand_witness_position_m": 0.0,
+            "fixed_hand_witness_orientation_rad": 0.0,
+            "dynamic_feasibility_verified": false,
+            "geometry_sample_period_s": 0.025
+          },
+          "tracking_success": true,
+          "stop_confirmed": true,
+          "post_stop_pose_in_contract": true,
+          "code": "ok",
+          "retarget_expected": false,
+          "retarget_delivered": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "control_ticks": 500,
+          "metrics": {
+            "ee_position_error": 1.88690042382469e-07,
+            "ee_orientation_error": 3.7579298653955955e-07,
+            "rms_hand_position_error": 0.0006570947972014339,
+            "peak_hand_position_error": 0.002240402285156122,
+            "peak_hand_orientation_error": 0.003479466576363853,
+            "base_goal_error": 0.001943196690121148,
+            "base_heading_error_rad": 0.0,
+            "peak_base_linear_jerk_m_s3": 0.21392360412272618,
+            "peak_base_yaw_jerk_rad_s3": 0.3442673830138383,
+            "peak_joint_jerk": [
+              0.021210689114769723,
+              0.2032705986599881,
+              0.22030141451005458,
+              0.026673791424240725,
+              0.006620887005458222
+            ],
+            "peak_contact_force": 0.19620000000000057,
+            "contact_impulse": 4.904999999999551,
+            "max_penetration": 0.0001077554202162101,
+            "max_wheel_gap": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "min_wheel_load": [
+              4.232962761891101,
+              5.479814267083617,
+              0.9160892997216459
+            ],
+            "time_to_first_settle": 7.499999999999507,
+            "peak_hold_base_drift_m": 0.0031905224118954248,
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "retention_lost": false,
+            "base_linear_norm_m_s": 3.3823614931462525e-07,
+            "base_angular_norm_rad_s": 1.0633607582951685e-07,
+            "max_joint_velocity": 1.8931133292909396e-06
+          },
+          "base_start": [
+            -0.00042332497227155015,
+            1.2745603476429245e-05,
+            4.342401857067338e-05
+          ],
+          "base_end": [
+            0.14814043764971507,
+            0.017929653639129267,
+            0.24004342401857026
+          ],
+          "hand_start": [
+            0.3121774061462429,
+            -0.06394215941337786,
+            0.23417433638742105,
+            0.9983490203364043,
+            0.04970068044985819,
+            -0.04904362723337792,
+            0.9985296271387798,
+            -0.029899100674378377,
+            0.02164315339574668
+          ],
+          "hand_end": [
+            0.46698364764704103,
+            0.03011384052811738,
+            0.23417433638742105,
+            0.9813921146119581,
+            -0.18873293082536316,
+            0.1896722466686526,
+            0.9815187730622156,
+            -0.02989910067437842,
+            0.03163509046159251
+          ],
+          "initial_state_sha256": "e1d8e4e4ee7fc4492d9e2f2948f9b9032dcc7db529a9c516fc0885023e747338",
+          "model_fingerprint": "dc7199658397a4d5e027a426cb3e936a46199b779d6bc9dc73113f400a5ca68a"
+        },
+        {
+          "case": {
+            "id": "innate_mars:v2:train:fixed_world_hand:5",
+            "seed": 35700005,
+            "split": "train",
+            "mode": "fixed_world_hand",
+            "travel_m": 0.0,
+            "turn_rad": 0,
+            "arm_delta": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "base_mask": [
+              true,
+              true,
+              true
+            ],
+            "self_motion_scale": 1.0,
+            "purpose": "hand_hold_nullspace_diagnostic"
+          },
+          "accepted": true,
+          "admission": {
+            "accepted": true,
+            "reason": null,
+            "minimum_support_margin_m": 0.017386129157536106,
+            "fixed_hand_witness_position_m": 2.133611343028782e-08,
+            "fixed_hand_witness_orientation_rad": 2.0352137740387207e-12,
+            "dynamic_feasibility_verified": false,
+            "geometry_sample_period_s": 0.025
+          },
+          "tracking_success": true,
+          "stop_confirmed": true,
+          "post_stop_pose_in_contract": true,
+          "code": "ok",
+          "retarget_expected": false,
+          "retarget_delivered": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "control_ticks": 500,
+          "metrics": {
+            "ee_position_error": 1.0591775095768836e-05,
+            "ee_orientation_error": 2.3289709335049925e-06,
+            "rms_hand_position_error": 2.693397399886699e-05,
+            "peak_hand_position_error": 8.70151703495262e-05,
+            "peak_hand_orientation_error": 0.0003222629528360963,
+            "base_goal_error": 0.00040611746525957333,
+            "base_heading_error_rad": 7.357837585016689e-05,
+            "peak_base_linear_jerk_m_s3": 0.548602949332663,
+            "peak_base_yaw_jerk_rad_s3": 0.10374399449853897,
+            "peak_joint_jerk": [
+              0.02632438894912126,
+              0.9989495439227899,
+              0.7124063475599849,
+              0.19339528676721293,
+              0.01462096651247761
+            ],
+            "peak_contact_force": 0.19620000000000112,
+            "contact_impulse": 4.904999999999551,
+            "max_penetration": 0.00014215299777013376,
+            "max_wheel_gap": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "min_wheel_load": [
+              4.6696386854652445,
+              6.290166871296059,
+              1.5654471862754127
+            ],
+            "time_to_first_settle": 5.899999999999461,
+            "peak_hold_base_drift_m": 3.6739632429613207e-06,
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "retention_lost": false,
+            "base_linear_norm_m_s": 1.960484654752353e-07,
+            "base_angular_norm_rad_s": 2.2099331576916339e-07,
+            "max_joint_velocity": 1.2752497672125156e-06
+          },
+          "base_start": [
+            -0.00042264578559915504,
+            1.629022428867199e-05,
+            0.00025983352654248513
+          ],
+          "base_end": [
+            0.005044863438645156,
+            2.3652368346356624e-05,
+            0.002420589670215062
+          ],
+          "hand_start": [
+            0.31239790270437895,
+            -0.04492237492504896,
+            0.23500575293779066,
+            0.9989785407551283,
+            -0.03628112326337024,
+            0.035061123268571956,
+            0.9983956821569001,
+            -0.02850601245180333,
+            -0.04347116222518486
+          ],
+          "hand_end": [
+            0.31239790270437895,
+            -0.04492237492504896,
+            0.23500575293779066,
+            0.9989785407551283,
+            -0.03628112326337024,
+            0.035061123268571956,
+            0.9983956821569001,
+            -0.02850601245180333,
+            -0.04347116222518486
+          ],
+          "initial_state_sha256": "e7eee8cffe118ee9aa483ef7ed61c7051b3fbd6aa279bfd79db94966fe5f97fa",
+          "model_fingerprint": "dc7199658397a4d5e027a426cb3e936a46199b779d6bc9dc73113f400a5ca68a"
+        },
+        {
+          "case": {
+            "id": "innate_mars:v2:audit:hand_free_base:6",
+            "seed": 35700006,
+            "split": "audit",
+            "mode": "hand_free_base",
+            "travel_m": -0.15,
+            "turn_rad": 0,
+            "arm_delta": [
+              0,
+              0,
+              0,
+              0,
+              -0.01
+            ],
+            "base_mask": [
+              false,
+              false,
+              false
+            ],
+            "purpose": "tracking"
+          },
+          "accepted": true,
+          "admission": {
+            "accepted": true,
+            "reason": null,
+            "minimum_support_margin_m": 0.017785285708444905,
+            "fixed_hand_witness_position_m": 0.0,
+            "fixed_hand_witness_orientation_rad": 0.0,
+            "dynamic_feasibility_verified": false,
+            "geometry_sample_period_s": 0.025
+          },
+          "tracking_success": false,
+          "stop_confirmed": true,
+          "post_stop_pose_in_contract": false,
+          "code": "unsafe_contact",
+          "retarget_expected": false,
+          "retarget_delivered": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": true,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "control_ticks": 41,
+          "metrics": {
+            "ee_position_error": 0.006798172905663202,
+            "ee_orientation_error": 0.028292508839969914,
+            "rms_hand_position_error": 0.0010736995285212264,
+            "peak_hand_position_error": 0.004149580843066199,
+            "peak_hand_orientation_error": 0.014812422079834095,
+            "base_goal_error": 0.0,
+            "base_heading_error_rad": 0.0,
+            "peak_base_linear_jerk_m_s3": 13.357594260642566,
+            "peak_base_yaw_jerk_rad_s3": 13.471079210447243,
+            "peak_joint_jerk": [
+              3.3089139260690446,
+              62.791092869772825,
+              31.8548268077769,
+              20.310473566257258,
+              2.334055945423472
+            ],
+            "peak_contact_force": 37.096476526428205,
+            "contact_impulse": 4.663543620785477,
+            "max_penetration": 0.0019188337953940388,
+            "max_wheel_gap": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "min_wheel_load": [
+              2.1645966104758583,
+              2.266303456723605,
+              0.062089934755366345
+            ],
+            "time_to_first_settle": null,
+            "peak_hold_base_drift_m": 0.0,
+            "unsafe_contact": true,
+            "wheel_lift": false,
+            "retention_lost": false,
+            "base_linear_norm_m_s": 0.0006431326759923222,
+            "base_angular_norm_rad_s": 0.005633032622369976,
+            "max_joint_velocity": 0.028932628695941577
+          },
+          "base_start": [
+            -0.00041631644818148413,
+            1.4739856830800485e-05,
+            0.0001557051063028999
+          ],
+          "base_end": [
+            -0.15041631462987518,
+            -8.615909020261278e-06,
+            0.0001557051063028999
+          ],
+          "hand_start": [
+            0.30903317852298096,
+            -0.053669820487541146,
+            0.24497021009702855,
+            0.9993631050121802,
+            0.004702641604800686,
+            -0.003669855125492397,
+            0.9995666985530617,
+            0.035495302559259256,
+            -0.029056846106741065
+          ],
+          "hand_end": [
+            0.15903318034128724,
+            -0.053693176253392205,
+            0.24497021009702855,
+            0.9993631050121801,
+            0.005056133458938207,
+            -0.0036698551254923965,
+            0.9992246728858012,
+            0.035495302559259256,
+            -0.0390447001616138
+          ],
+          "initial_state_sha256": "47ee86c849ead40503c1012db280e82f57a7b20021ccdd6b95754fb8a3d17345",
+          "model_fingerprint": "dc7199658397a4d5e027a426cb3e936a46199b779d6bc9dc73113f400a5ca68a"
+        },
+        {
+          "case": {
+            "id": "innate_mars:v2:audit:coupled:7",
+            "seed": 35700007,
+            "split": "audit",
+            "mode": "coupled",
+            "travel_m": -0.15,
+            "turn_rad": -0.24,
+            "arm_delta": [
+              0,
+              0.007,
+              -0.007,
+              0,
+              0
+            ],
+            "base_mask": [
+              true,
+              true,
+              true
+            ],
+            "purpose": "tracking"
+          },
+          "accepted": true,
+          "admission": {
+            "accepted": true,
+            "reason": null,
+            "minimum_support_margin_m": 0.017044939210100928,
+            "fixed_hand_witness_position_m": 0.0,
+            "fixed_hand_witness_orientation_rad": 0.0,
+            "dynamic_feasibility_verified": false,
+            "geometry_sample_period_s": 0.025
+          },
+          "tracking_success": true,
+          "stop_confirmed": true,
+          "post_stop_pose_in_contract": true,
+          "code": "ok",
+          "retarget_expected": false,
+          "retarget_delivered": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "control_ticks": 500,
+          "metrics": {
+            "ee_position_error": 0.0016494904662952149,
+            "ee_orientation_error": 0.00037469219854739303,
+            "rms_hand_position_error": 0.0029759405921563216,
+            "peak_hand_position_error": 0.010991967084318433,
+            "peak_hand_orientation_error": 0.03294913632041532,
+            "base_goal_error": 0.002891034194877124,
+            "base_heading_error_rad": 0.014955732804784405,
+            "peak_base_linear_jerk_m_s3": 9.771587715728879,
+            "peak_base_yaw_jerk_rad_s3": 46.514278659072886,
+            "peak_joint_jerk": [
+              13.341024873710673,
+              9.251781153085798,
+              9.97438579946203,
+              5.752457714773938,
+              0.6738390419925258
+            ],
+            "peak_contact_force": 0.19620000000000057,
+            "contact_impulse": 4.904999999999551,
+            "max_penetration": 0.00010775542021621357,
+            "max_wheel_gap": [
+              0.0,
+              0.0,
+              2.3607476036904482e-05
+            ],
+            "min_wheel_load": [
+              1.0292124015875013,
+              0.004445241302843795,
+              0.0
+            ],
+            "time_to_first_settle": 13.100000000001378,
+            "peak_hold_base_drift_m": 6.697517024049013e-07,
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "retention_lost": false,
+            "base_linear_norm_m_s": 5.090681638283719e-08,
+            "base_angular_norm_rad_s": 3.742091466254768e-06,
+            "max_joint_velocity": 2.9894733479110414e-06
+          },
+          "base_start": [
+            -0.00042206671979185673,
+            1.4599208003202221e-05,
+            0.0001636376709974409
+          ],
+          "base_end": [
+            -0.14898873916693223,
+            0.01790736299519196,
+            -0.23983636232900213
+          ],
+          "hand_start": [
+            0.3150591117787913,
+            -0.053743363203705465,
+            0.22870663359872445,
+            0.9998375503015776,
+            0.004317117009258273,
+            -0.003901573547798218,
+            0.9997112441266717,
+            -0.017596895487385546,
+            0.023638757738783232
+          ],
+          "hand_end": [
+            0.14550956991292005,
+            -0.10950901689429643,
+            0.22882483515870172,
+            0.9702527670114386,
+            0.24182736809062,
+            -0.24145375825581145,
+            0.9700313052551107,
+            -0.017596895487385574,
+            0.02363875773878324
+          ],
+          "initial_state_sha256": "5025cd50ce05d9392739b597ab98624c99034dcdae57ff439eb50c86be03ea24",
+          "model_fingerprint": "dc7199658397a4d5e027a426cb3e936a46199b779d6bc9dc73113f400a5ca68a"
+        },
+        {
+          "case": {
+            "id": "innate_mars:v2:audit:fixed_world_hand:8",
+            "seed": 35700008,
+            "split": "audit",
+            "mode": "fixed_world_hand",
+            "travel_m": 0.0,
+            "turn_rad": 0,
+            "arm_delta": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "base_mask": [
+              true,
+              true,
+              true
+            ],
+            "self_motion_scale": -0.75,
+            "purpose": "hand_hold_nullspace_diagnostic"
+          },
+          "accepted": true,
+          "admission": {
+            "accepted": true,
+            "reason": null,
+            "minimum_support_margin_m": 0.017824750867808107,
+            "fixed_hand_witness_position_m": 2.0510035794376817e-08,
+            "fixed_hand_witness_orientation_rad": 2.9962435818951714e-12,
+            "dynamic_feasibility_verified": false,
+            "geometry_sample_period_s": 0.025
+          },
+          "tracking_success": true,
+          "stop_confirmed": true,
+          "post_stop_pose_in_contract": true,
+          "code": "ok",
+          "retarget_expected": false,
+          "retarget_delivered": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "control_ticks": 500,
+          "metrics": {
+            "ee_position_error": 1.1145093699550659e-07,
+            "ee_orientation_error": 0.0,
+            "rms_hand_position_error": 3.207795297504401e-05,
+            "peak_hand_position_error": 0.00010302873312357606,
+            "peak_hand_orientation_error": 0.0002973349591869455,
+            "base_goal_error": 3.906953970065207e-05,
+            "base_heading_error_rad": 0.00014934296793506826,
+            "peak_base_linear_jerk_m_s3": 0.5190473246445396,
+            "peak_base_yaw_jerk_rad_s3": 0.11448227871187905,
+            "peak_joint_jerk": [
+              0.03284720957199197,
+              1.0053854290214044,
+              0.6642698732853602,
+              0.21730876732280058,
+              0.015666861576982077
+            ],
+            "peak_contact_force": 0.19620000000000054,
+            "contact_impulse": 4.904999999999551,
+            "max_penetration": 0.0001077554202162101,
+            "max_wheel_gap": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "min_wheel_load": [
+              4.645709236625423,
+              6.6832500717640695,
+              1.6642690320576456
+            ],
+            "time_to_first_settle": 5.899999999999461,
+            "peak_hold_base_drift_m": 3.2667894298794907e-06,
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "retention_lost": false,
+            "base_linear_norm_m_s": 1.7291341765039503e-07,
+            "base_angular_norm_rad_s": 2.086895205889359e-06,
+            "max_joint_velocity": 1.6494750048100727e-06
+          },
+          "base_start": [
+            -0.0004109467739328644,
+            1.679033202128294e-05,
+            0.000265331819973785
+          ],
+          "base_end": [
+            -0.00577494512725917,
+            2.2702058848803953e-05,
+            -0.0024850845464973394
+          ],
+          "hand_start": [
+            0.3025074996265113,
+            -0.043701613638311376,
+            0.2566426565404604,
+            0.9939861362365009,
+            -0.04185658613179898,
+            0.04209405236043274,
+            0.9991136301507545,
+            0.10109229310639842,
+            -0.004469926663104869
+          ],
+          "hand_end": [
+            0.3025074996265113,
+            -0.043701613638311376,
+            0.2566426565404604,
+            0.9939861362365009,
+            -0.04185658613179898,
+            0.04209405236043274,
+            0.9991136301507545,
+            0.10109229310639842,
+            -0.004469926663104869
+          ],
+          "initial_state_sha256": "78780084994faef1dda8562811214e5daa5c67e4e0fca8732e7a8a1624ac66e0",
+          "model_fingerprint": "dc7199658397a4d5e027a426cb3e936a46199b779d6bc9dc73113f400a5ca68a"
+        },
+        {
+          "case": {
+            "id": "innate_mars:v2:audit:hand_free_base:9",
+            "seed": 35700009,
+            "split": "audit",
+            "mode": "hand_free_base",
+            "travel_m": 0.15,
+            "turn_rad": 0,
+            "arm_delta": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "base_mask": [
+              false,
+              false,
+              false
+            ],
+            "retarget": {
+              "at_fraction": 0.5,
+              "travel_m": -0.15
+            },
+            "purpose": "tracking"
+          },
+          "accepted": true,
+          "admission": {
+            "accepted": true,
+            "reason": null,
+            "minimum_support_margin_m": 0.018025381784758637,
+            "fixed_hand_witness_position_m": 0.0,
+            "fixed_hand_witness_orientation_rad": 0.0,
+            "dynamic_feasibility_verified": false,
+            "geometry_sample_period_s": 0.025
+          },
+          "tracking_success": false,
+          "stop_confirmed": true,
+          "post_stop_pose_in_contract": false,
+          "code": "unsafe_contact",
+          "retarget_expected": true,
+          "retarget_delivered": true,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": true,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "control_ticks": 103,
+          "metrics": {
+            "ee_position_error": 0.0053086854797854644,
+            "ee_orientation_error": 0.019994787130011925,
+            "rms_hand_position_error": 0.00250695368719322,
+            "peak_hand_position_error": 0.009751638731043705,
+            "peak_hand_orientation_error": 0.007876154923014092,
+            "base_goal_error": 0.0,
+            "base_heading_error_rad": 0.0,
+            "peak_base_linear_jerk_m_s3": 7.596737647225404,
+            "peak_base_yaw_jerk_rad_s3": 10.740756824195534,
+            "peak_joint_jerk": [
+              1.187755474393818,
+              23.241839135646664,
+              18.19609675131513,
+              11.279398729851193,
+              0.802164492146594
+            ],
+            "peak_contact_force": 32.42897605765857,
+            "contact_impulse": 5.3679909678481845,
+            "max_penetration": 0.0014232359341994174,
+            "max_wheel_gap": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "min_wheel_load": [
+              2.258932783101617,
+              0.9400872177664965,
+              0.27059050424904585
+            ],
+            "time_to_first_settle": null,
+            "peak_hold_base_drift_m": 0.0,
+            "unsafe_contact": true,
+            "wheel_lift": false,
+            "retention_lost": false,
+            "base_linear_norm_m_s": 0.0005070007279666682,
+            "base_angular_norm_rad_s": 0.0011418074771641538,
+            "max_joint_velocity": 0.02392840603431045
+          },
+          "base_start": [
+            -0.0004161810698961735,
+            1.583084813933743e-05,
+            0.00021656328271034688
+          ],
+          "base_end": [
+            0.1495838154126294,
+            4.831534029197081e-05,
+            0.00021656328271034688
+          ],
+          "hand_start": [
+            0.30677240680564855,
+            -0.04781022654886538,
+            0.25028817063935327,
+            0.9972116662900847,
+            -0.024981087755434613,
+            0.022819682649485643,
+            0.9992471737833843,
+            0.07105036733703579,
+            0.029682165360237645
+          ],
+          "hand_end": [
+            0.45677240328817414,
+            -0.047777742056712744,
+            0.25028817063935327,
+            0.9972116662900847,
+            -0.024981087755434613,
+            0.022819682649485643,
+            0.9992471737833843,
+            0.07105036733703579,
+            0.029682165360237645
+          ],
+          "initial_state_sha256": "8bdee26864fcc22efed1785f0479534616ad24668dcddeeb2a9f61606bbcf42d",
+          "model_fingerprint": "dc7199658397a4d5e027a426cb3e936a46199b779d6bc9dc73113f400a5ca68a"
+        }
+      ]
+    },
+    "stretch": {
+      "source_state_digest": "3647b7fa34fb4978abfbd5bec7cf5734ebfc915aa68b83b79464ea500a3d8fca",
+      "suite_sha256": "5a5964e202561361f0ae31bfff27ceb4102ef4d2c57430bc72ceb56585c0e930",
+      "acceptance": {
+        "base_xy_tolerance": 0.05,
+        "base_heading_tolerance": 0.08726646259971647,
+        "hand_position_tolerance": 0.003,
+        "hand_orientation_tolerance": 0.02
+      },
+      "report_sha256": "8598cd776e00263f779491e79ba822b0830fe5562870cc1d34d9c04944150f46",
+      "attempts": 10,
+      "successes": 9,
+      "ready_for_training": false,
+      "cases": [
+        {
+          "case": {
+            "id": "stretch:v2:train:base_only:0",
+            "seed": 35710000,
+            "split": "train",
+            "mode": "base_only",
+            "travel_m": 0.15,
+            "turn_rad": 0,
+            "arm_delta": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "base_mask": [
+              true,
+              true,
+              true
+            ],
+            "purpose": "tracking"
+          },
+          "accepted": true,
+          "admission": {
+            "accepted": true,
+            "reason": null,
+            "minimum_support_margin_m": 0.07560387005953612,
+            "fixed_hand_witness_position_m": 0.0,
+            "fixed_hand_witness_orientation_rad": 0.0,
+            "dynamic_feasibility_verified": false,
+            "geometry_sample_period_s": 0.025
+          },
+          "tracking_success": true,
+          "stop_confirmed": true,
+          "post_stop_pose_in_contract": true,
+          "code": "ok",
+          "retarget_expected": false,
+          "retarget_delivered": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "control_ticks": 500,
+          "metrics": {
+            "ee_position_error": 0.004893891517421746,
+            "ee_orientation_error": 0.004325543938776975,
+            "rms_hand_position_error": 0.0,
+            "peak_hand_position_error": 0.0,
+            "peak_hand_orientation_error": 0.0,
+            "base_goal_error": 0.0029789257219787154,
+            "base_heading_error_rad": 1.241704689595221e-06,
+            "peak_base_linear_jerk_m_s3": 0.7007711176915273,
+            "peak_base_yaw_jerk_rad_s3": 0.0014324997198184725,
+            "peak_joint_jerk": [
+              0.02917160577765108,
+              0.00219652921265085,
+              0.2779160317881474,
+              0.010251307179756749,
+              0.14799475543291382
+            ],
+            "peak_contact_force": 4.905000000000013,
+            "contact_impulse": 122.62500000001776,
+            "max_penetration": 0.00010775542021620316,
+            "max_wheel_gap": [
+              0.0,
+              0.0
+            ],
+            "min_wheel_load": [
+              83.7663973850348,
+              67.68543998691064
+            ],
+            "time_to_first_settle": 5.899999999999461,
+            "peak_hold_base_drift_m": 0.00010208270148773113,
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "retention_lost": false,
+            "base_linear_norm_m_s": 5.342906961368328e-06,
+            "base_angular_norm_rad_s": 1.9816019201705587e-10,
+            "max_joint_velocity": 0.00013929111244303098
+          },
+          "base_start": [
+            -0.001757862705833513,
+            -1.4927404615171916e-05,
+            0.0003932450130896749
+          ],
+          "base_end": [
+            0.14824212569604334,
+            4.405934582797788e-05,
+            0.0003932450130896749
+          ],
+          "hand_start": [
+            -0.04201561762956428,
+            -0.544359412030225,
+            0.5336520321848589,
+            0.013010433859246277,
+            0.08048451609275234,
+            -0.2653021825644566,
+            0.9613085906867445,
+            0.9640775282814803,
+            0.2634540493922599
+          ],
+          "hand_end": [
+            0.10798437077231256,
+            -0.5443004252797818,
+            0.5336520321848589,
+            0.013010433859246277,
+            0.08048451609275234,
+            -0.2653021825644566,
+            0.9613085906867445,
+            0.9640775282814803,
+            0.2634540493922599
+          ],
+          "initial_state_sha256": "763a8362b8143ab5df7f7aa18b2d25759a96e70912d18f4f59d01f65bdeea72b",
+          "model_fingerprint": "54313796e6ec921bfa418539ac09b66a4e38a277a6ffebf2b80961e0d02260ed"
+        },
+        {
+          "case": {
+            "id": "stretch:v2:train:hand_free_base:1",
+            "seed": 35710001,
+            "split": "train",
+            "mode": "hand_free_base",
+            "travel_m": 0.15,
+            "turn_rad": 0,
+            "arm_delta": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "base_mask": [
+              false,
+              false,
+              false
+            ],
+            "purpose": "tracking"
+          },
+          "accepted": true,
+          "admission": {
+            "accepted": true,
+            "reason": null,
+            "minimum_support_margin_m": 0.0752755626627443,
+            "fixed_hand_witness_position_m": 0.0,
+            "fixed_hand_witness_orientation_rad": 0.0,
+            "dynamic_feasibility_verified": false,
+            "geometry_sample_period_s": 0.025
+          },
+          "tracking_success": true,
+          "stop_confirmed": true,
+          "post_stop_pose_in_contract": true,
+          "code": "ok",
+          "retarget_expected": false,
+          "retarget_delivered": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "control_ticks": 500,
+          "metrics": {
+            "ee_position_error": 0.0007717830206017918,
+            "ee_orientation_error": 8.453396045545327e-05,
+            "rms_hand_position_error": 0.0022529579863303185,
+            "peak_hand_position_error": 0.007971890042465615,
+            "peak_hand_orientation_error": 0.017541677264738605,
+            "base_goal_error": 0.0,
+            "base_heading_error_rad": 0.0,
+            "peak_base_linear_jerk_m_s3": 0.852272503248247,
+            "peak_base_yaw_jerk_rad_s3": 5.453481399304905,
+            "peak_joint_jerk": [
+              0.33977752041767356,
+              4.118250913357018,
+              8.180322309002186,
+              1.589252465902127,
+              0.9876332979613351
+            ],
+            "peak_contact_force": 4.905000000000013,
+            "contact_impulse": 122.62500000001776,
+            "max_penetration": 0.00010775542021620316,
+            "max_wheel_gap": [
+              2.0738035034356672e-07,
+              7.653341443369932e-07
+            ],
+            "min_wheel_load": [
+              0.0,
+              0.0
+            ],
+            "time_to_first_settle": 5.949999999999456,
+            "peak_hold_base_drift_m": 7.970713414040717e-05,
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "retention_lost": false,
+            "base_linear_norm_m_s": 3.965509813422108e-06,
+            "base_angular_norm_rad_s": 1.2646043292538415e-05,
+            "max_joint_velocity": 0.001461707673995412
+          },
+          "base_start": [
+            -0.001756424413523689,
+            -1.7047285486594662e-05,
+            0.00020929192744889474
+          ],
+          "base_end": [
+            0.14824357230124272,
+            1.4346503401548553e-05,
+            0.00020929192744889474
+          ],
+          "hand_start": [
+            -0.024107978230378545,
+            -0.5334326113278689,
+            0.5686942962659775,
+            0.011465325758814671,
+            0.012737233444927998,
+            -0.2638324845506682,
+            0.9645240479666314,
+            0.9645003713846183,
+            0.26368754953208107
+          ],
+          "hand_end": [
+            0.12589201848438789,
+            -0.5334012175389807,
+            0.5686942962659775,
+            0.011465325758814671,
+            0.012737233444927998,
+            -0.2638324845506682,
+            0.9645240479666314,
+            0.9645003713846183,
+            0.26368754953208107
+          ],
+          "initial_state_sha256": "a54116718f3175078e880030fd5909e67cefbba28b16eca4f52d1be166411c39",
+          "model_fingerprint": "54313796e6ec921bfa418539ac09b66a4e38a277a6ffebf2b80961e0d02260ed"
+        },
+        {
+          "case": {
+            "id": "stretch:v2:train:hand_free_base:2",
+            "seed": 35710002,
+            "split": "train",
+            "mode": "hand_free_base",
+            "travel_m": 0.15,
+            "turn_rad": 0.24,
+            "arm_delta": [
+              0,
+              0.005,
+              -0.005,
+              0,
+              0
+            ],
+            "base_mask": [
+              false,
+              false,
+              false
+            ],
+            "purpose": "tracking"
+          },
+          "accepted": true,
+          "admission": {
+            "accepted": true,
+            "reason": null,
+            "minimum_support_margin_m": 0.07574048553759535,
+            "fixed_hand_witness_position_m": 0.0,
+            "fixed_hand_witness_orientation_rad": 0.0,
+            "dynamic_feasibility_verified": false,
+            "geometry_sample_period_s": 0.025
+          },
+          "tracking_success": true,
+          "stop_confirmed": true,
+          "post_stop_pose_in_contract": true,
+          "code": "ok",
+          "retarget_expected": false,
+          "retarget_delivered": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "control_ticks": 500,
+          "metrics": {
+            "ee_position_error": 0.0009834595361728335,
+            "ee_orientation_error": 7.788945145316573e-05,
+            "rms_hand_position_error": 0.0023536585169674443,
+            "peak_hand_position_error": 0.007836421200386764,
+            "peak_hand_orientation_error": 0.014388850439234211,
+            "base_goal_error": 0.0,
+            "base_heading_error_rad": 0.0,
+            "peak_base_linear_jerk_m_s3": 1.7995358988694476,
+            "peak_base_yaw_jerk_rad_s3": 11.471332256100197,
+            "peak_joint_jerk": [
+              1.1343763041723685,
+              2.8725006096539496,
+              7.99306754649276,
+              3.7303219793501072,
+              0.991228474393277
+            ],
+            "peak_contact_force": 4.905000555146978,
+            "contact_impulse": 122.62500050352777,
+            "max_penetration": 0.0001421532957929952,
+            "max_wheel_gap": [
+              1.8038998098740544e-06,
+              1.926811508477788e-06
+            ],
+            "min_wheel_load": [
+              0.0,
+              0.0
+            ],
+            "time_to_first_settle": 5.949999999999456,
+            "peak_hold_base_drift_m": 7.464770736896233e-05,
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "retention_lost": false,
+            "base_linear_norm_m_s": 3.3797739644913657e-06,
+            "base_angular_norm_rad_s": 1.0178358486050017e-05,
+            "max_joint_velocity": 0.00029434087226415227
+          },
+          "base_start": [
+            -0.0017499933110245714,
+            -1.576804887907196e-05,
+            0.00039894194220247244
+          ],
+          "base_end": [
+            0.1468069898312978,
+            0.01795726470865888,
+            0.24039894194220204
+          ],
+          "hand_start": [
+            -0.010552408086799258,
+            -0.5421404631725422,
+            0.5397885259577779,
+            0.051795476388316615,
+            -0.03887858003986844,
+            -0.26176839650905903,
+            0.9637750869814656,
+            0.963739869059481,
+            0.2638674624275488
+          ],
+          "hand_end": [
+            0.26709092334956275,
+            -0.5159276660356749,
+            0.5397930157715976,
+            0.11131876503587447,
+            -0.2622193738457017,
+            -0.2424971350771491,
+            0.9282369079821808,
+            0.9637444018152658,
+            0.263850796170203
+          ],
+          "initial_state_sha256": "9f5c3af06f0f8daae3e8ce064a3cf34c2a86815775086145bd0a2c9ad192ed18",
+          "model_fingerprint": "54313796e6ec921bfa418539ac09b66a4e38a277a6ffebf2b80961e0d02260ed"
+        },
+        {
+          "case": {
+            "id": "stretch:v2:train:coupled:3",
+            "seed": 35710003,
+            "split": "train",
+            "mode": "coupled",
+            "travel_m": 0.15,
+            "turn_rad": -0.24,
+            "arm_delta": [
+              0,
+              -0.005,
+              0.005,
+              0,
+              0
+            ],
+            "base_mask": [
+              true,
+              true,
+              true
+            ],
+            "purpose": "tracking"
+          },
+          "accepted": true,
+          "admission": {
+            "accepted": true,
+            "reason": null,
+            "minimum_support_margin_m": 0.07449966432268136,
+            "fixed_hand_witness_position_m": 0.0,
+            "fixed_hand_witness_orientation_rad": 0.0,
+            "dynamic_feasibility_verified": false,
+            "geometry_sample_period_s": 0.025
+          },
+          "tracking_success": true,
+          "stop_confirmed": true,
+          "post_stop_pose_in_contract": true,
+          "code": "ok",
+          "retarget_expected": false,
+          "retarget_delivered": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "control_ticks": 500,
+          "metrics": {
+            "ee_position_error": 0.0024759459269104245,
+            "ee_orientation_error": 0.0008360100727106808,
+            "rms_hand_position_error": 0.002757889430885887,
+            "peak_hand_position_error": 0.005783582431748324,
+            "peak_hand_orientation_error": 0.0050646678846496835,
+            "base_goal_error": 0.0030446578688870605,
+            "base_heading_error_rad": 0.0016674302191709567,
+            "peak_base_linear_jerk_m_s3": 0.7024279580753029,
+            "peak_base_yaw_jerk_rad_s3": 1.5270390293647014,
+            "peak_joint_jerk": [
+              0.2067177451416251,
+              0.6410691492118357,
+              1.0328784929071633,
+              0.2654155518393872,
+              0.15066642699418936
+            ],
+            "peak_contact_force": 4.905000555146978,
+            "contact_impulse": 122.62500050352777,
+            "max_penetration": 0.0001421532957929952,
+            "max_wheel_gap": [
+              0.0,
+              0.0
+            ],
+            "min_wheel_load": [
+              82.13281083119965,
+              50.27242612835639
+            ],
+            "time_to_first_settle": 7.249999999999424,
+            "peak_hold_base_drift_m": 9.483855207266817e-05,
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "retention_lost": false,
+            "base_linear_norm_m_s": 5.341622083188163e-06,
+            "base_angular_norm_rad_s": 8.118512669112699e-06,
+            "max_joint_velocity": 0.0003705404970535553
+          },
+          "base_start": [
+            -0.0017182313859635853,
+            -1.8596743129259327e-05,
+            0.0002056480300975854
+          ],
+          "base_end": [
+            0.14684959092012934,
+            -0.01790181015898341,
+            -0.23979435196990198
+          ],
+          "hand_start": [
+            -0.004577616034628579,
+            -0.5146781685892396,
+            0.6224358645335306,
+            0.018578521092280663,
+            -0.06059474915085576,
+            -0.263293719160919,
+            0.9626335011970839,
+            0.9645368090458925,
+            0.26394131686491695
+          ],
+          "hand_end": [
+            0.02417479409899432,
+            -0.5124924774902824,
+            0.6224313763945766,
+            -0.043242046335515344,
+            0.16521217854463782,
+            -0.26039902523199004,
+            0.950279501210072,
+            0.9645322561153374,
+            0.2639579618811824
+          ],
+          "initial_state_sha256": "5ca40b575598135ea8fc0a1111b2e9d63130703a3196fa91c70ca38bab6415af",
+          "model_fingerprint": "54313796e6ec921bfa418539ac09b66a4e38a277a6ffebf2b80961e0d02260ed"
+        },
+        {
+          "case": {
+            "id": "stretch:v2:train:coupled:4",
+            "seed": 35710004,
+            "split": "train",
+            "mode": "coupled",
+            "travel_m": 0.15,
+            "turn_rad": 0.24,
+            "arm_delta": [
+              0,
+              0,
+              0,
+              0,
+              0.01
+            ],
+            "base_mask": [
+              true,
+              true,
+              false
+            ],
+            "purpose": "tracking"
+          },
+          "accepted": true,
+          "admission": {
+            "accepted": true,
+            "reason": null,
+            "minimum_support_margin_m": 0.07454100927957893,
+            "fixed_hand_witness_position_m": 0.0,
+            "fixed_hand_witness_orientation_rad": 0.0,
+            "dynamic_feasibility_verified": false,
+            "geometry_sample_period_s": 0.025
+          },
+          "tracking_success": true,
+          "stop_confirmed": true,
+          "post_stop_pose_in_contract": true,
+          "code": "ok",
+          "retarget_expected": false,
+          "retarget_delivered": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "control_ticks": 500,
+          "metrics": {
+            "ee_position_error": 0.0007674489233989382,
+            "ee_orientation_error": 2.1971973140584933e-05,
+            "rms_hand_position_error": 0.0016759812183393507,
+            "peak_hand_position_error": 0.004852734961360591,
+            "peak_hand_orientation_error": 0.008080355843215519,
+            "base_goal_error": 0.012304720770135755,
+            "base_heading_error_rad": 0.0,
+            "peak_base_linear_jerk_m_s3": 0.7448770103664126,
+            "peak_base_yaw_jerk_rad_s3": 5.5539381384461795,
+            "peak_joint_jerk": [
+              0.24873907904639356,
+              2.7032509043302637,
+              3.9511326170946184,
+              2.1358090149831965,
+              0.5194827929094894
+            ],
+            "peak_contact_force": 4.905000555146978,
+            "contact_impulse": 122.62500050352777,
+            "max_penetration": 0.0001421532957929952,
+            "max_wheel_gap": [
+              6.553906894968264e-07,
+              9.274462656749805e-07
+            ],
+            "min_wheel_load": [
+              0.0,
+              0.0
+            ],
+            "time_to_first_settle": 7.0999999999993735,
+            "peak_hold_base_drift_m": 0.006474145789886641,
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "retention_lost": false,
+            "base_linear_norm_m_s": 4.831882037480013e-06,
+            "base_angular_norm_rad_s": 1.8544332586437663e-05,
+            "max_joint_velocity": 0.0020430969860129756
+          },
+          "base_start": [
+            -0.0017309917237651143,
+            -1.1455309817497516e-05,
+            0.0002800509866696788
+          ],
+          "base_end": [
+            0.1468281271996597,
+            0.017943915239060318,
+            0.24028005098666927
+          ],
+          "hand_start": [
+            0.0043152972926802265,
+            -0.5088233057937854,
+            0.6010867415634313,
+            0.03677842725045084,
+            -0.09462590146775655,
+            -0.26169751052618256,
+            0.959853509584815,
+            0.9644489412474785,
+            0.2640590443615373
+          ],
+          "hand_end": [
+            0.2736470305455532,
+            -0.47484713841140425,
+            0.6010867415634313,
+            0.08850255233327538,
+            -0.3200734317138511,
+            -0.24878761185150705,
+            0.9098493388478064,
+            0.9645061028421333,
+            0.2640590443615375
+          ],
+          "initial_state_sha256": "bf6d781c31501cd6a880c68220cb4452ef50e0df6919e91f89be1294f49a210c",
+          "model_fingerprint": "54313796e6ec921bfa418539ac09b66a4e38a277a6ffebf2b80961e0d02260ed"
+        },
+        {
+          "case": {
+            "id": "stretch:v2:train:fixed_world_hand:5",
+            "seed": 35710005,
+            "split": "train",
+            "mode": "fixed_world_hand",
+            "travel_m": 0.0,
+            "turn_rad": 0,
+            "arm_delta": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "base_mask": [
+              true,
+              true,
+              true
+            ],
+            "self_motion_scale": 1.0,
+            "purpose": "hand_hold_nullspace_diagnostic"
+          },
+          "accepted": true,
+          "admission": {
+            "accepted": true,
+            "reason": null,
+            "minimum_support_margin_m": 0.07775982476537273,
+            "fixed_hand_witness_position_m": 8.700779214358804e-08,
+            "fixed_hand_witness_orientation_rad": 4.115623406776211e-10,
+            "dynamic_feasibility_verified": false,
+            "geometry_sample_period_s": 0.025
+          },
+          "tracking_success": true,
+          "stop_confirmed": true,
+          "post_stop_pose_in_contract": true,
+          "code": "ok",
+          "retarget_expected": false,
+          "retarget_delivered": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "control_ticks": 500,
+          "metrics": {
+            "ee_position_error": 0.0010426989439561946,
+            "ee_orientation_error": 0.00014388677000896905,
+            "rms_hand_position_error": 0.0008700476539530443,
+            "peak_hand_position_error": 0.0011675314007445307,
+            "peak_hand_orientation_error": 0.00288550402373821,
+            "base_goal_error": 0.000684693005252258,
+            "base_heading_error_rad": 0.0012534366993558893,
+            "peak_base_linear_jerk_m_s3": 0.2512264846728356,
+            "peak_base_yaw_jerk_rad_s3": 0.8696213392911933,
+            "peak_joint_jerk": [
+              0.20264814913742618,
+              0.013378941732534386,
+              0.6749779450124823,
+              0.021072521088081123,
+              0.006352110136609971
+            ],
+            "peak_contact_force": 4.905000000000013,
+            "contact_impulse": 122.62500000001776,
+            "max_penetration": 0.00010775542021620316,
+            "max_wheel_gap": [
+              0.0,
+              0.0
+            ],
+            "min_wheel_load": [
+              88.45867220642948,
+              73.56056466978053
+            ],
+            "time_to_first_settle": 5.899999999999461,
+            "peak_hold_base_drift_m": 8.26813231203725e-06,
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "retention_lost": false,
+            "base_linear_norm_m_s": 4.333384796441041e-07,
+            "base_angular_norm_rad_s": 1.2151730882665444e-06,
+            "max_joint_velocity": 0.00041763374804633423
+          },
+          "base_start": [
+            -0.0017518141203521462,
+            -2.9258026222774484e-05,
+            0.00041918424801289187
+          ],
+          "base_end": [
+            0.01084453179373209,
+            -0.000257871010607244,
+            -0.03670046613021054
+          ],
+          "hand_start": [
+            -0.011821181964389797,
+            -0.5929406736824151,
+            0.4940708503928165,
+            0.030708058406212706,
+            -0.034564732534713205,
+            -0.262864343310492,
+            0.9639426826972479,
+            0.9643440009482428,
+            0.2638556115363791
+          ],
+          "hand_end": [
+            -0.011821181964389797,
+            -0.5929406736824151,
+            0.4940708503928165,
+            0.030708058406212706,
+            -0.034564732534713205,
+            -0.262864343310492,
+            0.9639426826972479,
+            0.9643440009482428,
+            0.2638556115363791
+          ],
+          "initial_state_sha256": "6b002b02d710308eebbc218ffeb17c338276a9d505abde3d83b78ebbd08e1476",
+          "model_fingerprint": "54313796e6ec921bfa418539ac09b66a4e38a277a6ffebf2b80961e0d02260ed"
+        },
+        {
+          "case": {
+            "id": "stretch:v2:audit:hand_free_base:6",
+            "seed": 35710006,
+            "split": "audit",
+            "mode": "hand_free_base",
+            "travel_m": -0.15,
+            "turn_rad": 0,
+            "arm_delta": [
+              0,
+              0,
+              0,
+              0,
+              -0.01
+            ],
+            "base_mask": [
+              false,
+              false,
+              false
+            ],
+            "purpose": "tracking"
+          },
+          "accepted": true,
+          "admission": {
+            "accepted": true,
+            "reason": null,
+            "minimum_support_margin_m": 0.07637352739052682,
+            "fixed_hand_witness_position_m": 0.0,
+            "fixed_hand_witness_orientation_rad": 0.0,
+            "dynamic_feasibility_verified": false,
+            "geometry_sample_period_s": 0.025
+          },
+          "tracking_success": true,
+          "stop_confirmed": true,
+          "post_stop_pose_in_contract": true,
+          "code": "ok",
+          "retarget_expected": false,
+          "retarget_delivered": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "control_ticks": 500,
+          "metrics": {
+            "ee_position_error": 0.0006447150980886282,
+            "ee_orientation_error": 0.00010316207240252527,
+            "rms_hand_position_error": 0.0023500761526794403,
+            "peak_hand_position_error": 0.00844316320944881,
+            "peak_hand_orientation_error": 0.017833246664873254,
+            "base_goal_error": 0.0,
+            "base_heading_error_rad": 0.0,
+            "peak_base_linear_jerk_m_s3": 0.7437756694530478,
+            "peak_base_yaw_jerk_rad_s3": 4.013404124496245,
+            "peak_joint_jerk": [
+              0.3521145679037574,
+              2.772655294331461,
+              4.476421518302809,
+              2.748429541915961,
+              0.5046467928652962
+            ],
+            "peak_contact_force": 4.905000555146978,
+            "contact_impulse": 122.62500050352777,
+            "max_penetration": 0.0001421532957929952,
+            "max_wheel_gap": [
+              8.21507810042088e-08,
+              6.594218246447348e-07
+            ],
+            "min_wheel_load": [
+              0.0,
+              0.0
+            ],
+            "time_to_first_settle": 5.949999999999456,
+            "peak_hold_base_drift_m": 6.990880298386759e-05,
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "retention_lost": false,
+            "base_linear_norm_m_s": 4.7988437461499695e-06,
+            "base_angular_norm_rad_s": 1.3687379704094197e-05,
+            "max_joint_velocity": 0.002070198952174338
+          },
+          "base_start": [
+            -0.0017331845244809437,
+            -4.033038918227362e-05,
+            -2.4338397226461464e-05
+          ],
+          "base_end": [
+            -0.15173318448005385,
+            -3.6679629598664835e-05,
+            -2.4338397226461464e-05
+          ],
+          "hand_start": [
+            -0.03167998287316685,
+            -0.5614146314305103,
+            0.6062057110719292,
+            0.02303658849866446,
+            0.0418206753151269,
+            -0.26467789051572116,
+            0.9637286214118437,
+            0.9640616836398452,
+            0.26358713054285454
+          ],
+          "hand_end": [
+            -0.18167998282873957,
+            -0.5614109806709268,
+            0.6062057110719292,
+            0.03302386543317702,
+            0.04182067531512687,
+            -0.2650071066478663,
+            0.9637286214118438,
+            0.9636807862243492,
+            0.2635871305428546
+          ],
+          "initial_state_sha256": "e8abfceda848269e23d1f542f1d33c23bccad6fdd25776c162d871296b651608",
+          "model_fingerprint": "54313796e6ec921bfa418539ac09b66a4e38a277a6ffebf2b80961e0d02260ed"
+        },
+        {
+          "case": {
+            "id": "stretch:v2:audit:coupled:7",
+            "seed": 35710007,
+            "split": "audit",
+            "mode": "coupled",
+            "travel_m": -0.15,
+            "turn_rad": -0.24,
+            "arm_delta": [
+              0,
+              0.007,
+              -0.007,
+              0,
+              0
+            ],
+            "base_mask": [
+              true,
+              true,
+              true
+            ],
+            "purpose": "tracking"
+          },
+          "accepted": true,
+          "admission": {
+            "accepted": true,
+            "reason": null,
+            "minimum_support_margin_m": 0.0780600062991724,
+            "fixed_hand_witness_position_m": 0.0,
+            "fixed_hand_witness_orientation_rad": 0.0,
+            "dynamic_feasibility_verified": false,
+            "geometry_sample_period_s": 0.025
+          },
+          "tracking_success": false,
+          "stop_confirmed": true,
+          "post_stop_pose_in_contract": false,
+          "code": "tracking_timeout",
+          "retarget_expected": false,
+          "retarget_delivered": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "control_ticks": 500,
+          "metrics": {
+            "ee_position_error": 0.003138836989856199,
+            "ee_orientation_error": 0.0006057921019694555,
+            "rms_hand_position_error": 0.0032439853215872087,
+            "peak_hand_position_error": 0.005591987901065326,
+            "peak_hand_orientation_error": 0.004502773982594327,
+            "base_goal_error": 0.0027116230498515533,
+            "base_heading_error_rad": 0.0016582824338827185,
+            "peak_base_linear_jerk_m_s3": 0.7023328597785398,
+            "peak_base_yaw_jerk_rad_s3": 1.432354363411063,
+            "peak_joint_jerk": [
+              0.2065546015523168,
+              0.5682574974838667,
+              0.6503215509139844,
+              0.17911480864437843,
+              0.1509305303634427
+            ],
+            "peak_contact_force": 4.905000555146978,
+            "contact_impulse": 122.62500050352777,
+            "max_penetration": 0.0001421532957929952,
+            "max_wheel_gap": [
+              0.0,
+              0.0
+            ],
+            "min_wheel_load": [
+              83.65831069804024,
+              54.14144057416907
+            ],
+            "time_to_first_settle": 6.349999999999412,
+            "peak_hold_base_drift_m": 9.984180868169985e-05,
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "retention_lost": false,
+            "base_linear_norm_m_s": 5.351564350740588e-06,
+            "base_angular_norm_rad_s": 8.11117370993713e-06,
+            "max_joint_velocity": 0.00036574207939676115
+          },
+          "base_start": [
+            -0.0017282593997290186,
+            -6.047596388284623e-05,
+            -0.00021705615962091472
+          ],
+          "base_end": [
+            -0.15028850912384828,
+            0.01788553609337145,
+            -0.2402170561596205
+          ],
+          "hand_start": [
+            -0.007689310856395654,
+            -0.5988490140277275,
+            0.6107798204971143,
+            0.012718420438242251,
+            -0.0494576924896363,
+            -0.26359951737777165,
+            0.9632798607263376,
+            0.9645483586735113,
+            0.26390499535372725
+          ],
+          "hand_end": [
+            -0.3018235229981637,
+            -0.5687853822006277,
+            0.6107860919546024,
+            -0.05211111510588875,
+            0.18756298506660568,
+            -0.2586862662524856,
+            0.9461430069302558,
+            0.9645547404552898,
+            0.2638816724781787
+          ],
+          "initial_state_sha256": "1f2b8a9ec3da7d57df1c6e8aebcfc6857a0f8ae751f34e132aba6de7f3c1fcf9",
+          "model_fingerprint": "54313796e6ec921bfa418539ac09b66a4e38a277a6ffebf2b80961e0d02260ed"
+        },
+        {
+          "case": {
+            "id": "stretch:v2:audit:fixed_world_hand:8",
+            "seed": 35710008,
+            "split": "audit",
+            "mode": "fixed_world_hand",
+            "travel_m": 0.0,
+            "turn_rad": 0,
+            "arm_delta": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "base_mask": [
+              true,
+              true,
+              true
+            ],
+            "self_motion_scale": -0.75,
+            "purpose": "hand_hold_nullspace_diagnostic"
+          },
+          "accepted": true,
+          "admission": {
+            "accepted": true,
+            "reason": null,
+            "minimum_support_margin_m": 0.07503648309770615,
+            "fixed_hand_witness_position_m": 8.545201276224988e-08,
+            "fixed_hand_witness_orientation_rad": 3.8164155504946404e-10,
+            "dynamic_feasibility_verified": false,
+            "geometry_sample_period_s": 0.025
+          },
+          "tracking_success": true,
+          "stop_confirmed": true,
+          "post_stop_pose_in_contract": true,
+          "code": "ok",
+          "retarget_expected": false,
+          "retarget_delivered": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "control_ticks": 500,
+          "metrics": {
+            "ee_position_error": 0.00102601226981832,
+            "ee_orientation_error": 5.457785395720694e-05,
+            "rms_hand_position_error": 0.0008462533308951915,
+            "peak_hand_position_error": 0.0010999353458062864,
+            "peak_hand_orientation_error": 0.0029245112960543463,
+            "base_goal_error": 0.00022888491137191094,
+            "base_heading_error_rad": 0.0012122339236671845,
+            "peak_base_linear_jerk_m_s3": 0.1908178785415202,
+            "peak_base_yaw_jerk_rad_s3": 0.8435880771345827,
+            "peak_joint_jerk": [
+              0.19363598360436043,
+              0.016054069589396116,
+              0.49434157577062193,
+              0.020986372796348227,
+              0.00703231856232077
+            ],
+            "peak_contact_force": 4.905000555146978,
+            "contact_impulse": 122.62500050352777,
+            "max_penetration": 0.0001421532957929952,
+            "max_wheel_gap": [
+              0.0,
+              0.0
+            ],
+            "min_wheel_load": [
+              87.82841071047562,
+              72.39790101756714
+            ],
+            "time_to_first_settle": 5.899999999999461,
+            "peak_hold_base_drift_m": 6.740088939073562e-06,
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "retention_lost": false,
+            "base_linear_norm_m_s": 3.5344515419907093e-07,
+            "base_angular_norm_rad_s": 1.1721938166451568e-06,
+            "max_joint_velocity": 0.0004140245607660146
+          },
+          "base_start": [
+            -0.0017751260832817453,
+            -7.403972480830721e-07,
+            0.0005323703617251431
+          ],
+          "base_end": [
+            -0.011718778726164681,
+            -0.00018385452369219468,
+            0.036308585684472115
+          ],
+          "hand_start": [
+            -0.03420530864843144,
+            -0.5320376940295397,
+            0.5031860761472866,
+            0.018458849289854966,
+            0.05048936495539684,
+            -0.264749205691348,
+            0.9633214428574746,
+            0.964140616802702,
+            0.26355762511715336
+          ],
+          "hand_end": [
+            -0.03420530864843144,
+            -0.5320376940295397,
+            0.5031860761472866,
+            0.018458849289854966,
+            0.05048936495539684,
+            -0.264749205691348,
+            0.9633214428574746,
+            0.964140616802702,
+            0.26355762511715336
+          ],
+          "initial_state_sha256": "c4c955c873fd9f36ef3e1ff049e3b5292c3b4526840757ea850e40c19b0f0665",
+          "model_fingerprint": "54313796e6ec921bfa418539ac09b66a4e38a277a6ffebf2b80961e0d02260ed"
+        },
+        {
+          "case": {
+            "id": "stretch:v2:audit:hand_free_base:9",
+            "seed": 35710009,
+            "split": "audit",
+            "mode": "hand_free_base",
+            "travel_m": 0.15,
+            "turn_rad": 0,
+            "arm_delta": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "base_mask": [
+              false,
+              false,
+              false
+            ],
+            "retarget": {
+              "at_fraction": 0.5,
+              "travel_m": -0.15
+            },
+            "purpose": "tracking"
+          },
+          "accepted": true,
+          "admission": {
+            "accepted": true,
+            "reason": null,
+            "minimum_support_margin_m": 0.07498987925771756,
+            "fixed_hand_witness_position_m": 0.0,
+            "fixed_hand_witness_orientation_rad": 0.0,
+            "dynamic_feasibility_verified": false,
+            "geometry_sample_period_s": 0.025
+          },
+          "tracking_success": true,
+          "stop_confirmed": true,
+          "post_stop_pose_in_contract": true,
+          "code": "ok",
+          "retarget_expected": true,
+          "retarget_delivered": true,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "control_ticks": 500,
+          "metrics": {
+            "ee_position_error": 0.0010261307543223644,
+            "ee_orientation_error": 0.00010673223601442649,
+            "rms_hand_position_error": 0.002919268015534284,
+            "peak_hand_position_error": 0.010047046614183536,
+            "peak_hand_orientation_error": 0.02121983484940011,
+            "base_goal_error": 0.0,
+            "base_heading_error_rad": 0.0,
+            "peak_base_linear_jerk_m_s3": 2.9979154198455453,
+            "peak_base_yaw_jerk_rad_s3": 15.389833021737575,
+            "peak_joint_jerk": [
+              1.6980030413650282,
+              2.4806951590748016,
+              15.001442164772527,
+              1.618255185071259,
+              1.7975915557945554
+            ],
+            "peak_contact_force": 4.905000000000013,
+            "contact_impulse": 122.62500000001776,
+            "max_penetration": 0.00010775542021620316,
+            "max_wheel_gap": [
+              2.870649923117363e-07,
+              9.417904876796168e-07
+            ],
+            "min_wheel_load": [
+              0.0,
+              0.0
+            ],
+            "time_to_first_settle": 7.999999999999674,
+            "peak_hold_base_drift_m": 8.47913589694213e-05,
+            "unsafe_contact": false,
+            "wheel_lift": false,
+            "retention_lost": false,
+            "base_linear_norm_m_s": 4.999324675664184e-06,
+            "base_angular_norm_rad_s": 1.5955524038929667e-05,
+            "max_joint_velocity": 0.00023211697904675077
+          },
+          "base_start": [
+            -0.0019355768885535758,
+            -3.687333731132564e-05,
+            0.00031344164786961833
+          ],
+          "base_end": [
+            0.1480644157430212,
+            1.0142909099259934e-05,
+            0.00031344164786961833
+          ],
+          "hand_start": [
+            -0.027875716222974387,
+            -0.5262615949454226,
+            0.6489978420385055,
+            0.025995636563647544,
+            0.027520561254496964,
+            -0.2643398375922396,
+            0.9642288137392894,
+            0.9640791861363649,
+            0.26363879354745356
+          ],
+          "hand_end": [
+            0.12212427640860042,
+            -0.526214578699012,
+            0.6489978420385055,
+            0.025995636563647544,
+            0.027520561254496964,
+            -0.2643398375922396,
+            0.9642288137392894,
+            0.9640791861363649,
+            0.26363879354745356
+          ],
+          "initial_state_sha256": "3350168d0736cdbf55429b069288752555373c0e8d8b524e62965c204d2525c0",
+          "model_fingerprint": "54313796e6ec921bfa418539ac09b66a4e38a277a6ffebf2b80961e0d02260ed"
+        }
+      ]
+    }
+  },
+  "actor": {
+    "source_weights_sha256": "6b0daae2e87e50eebcfccc6885699b16bfd85efc96b791530c62d5b40a1bc8cc",
+    "candidate_weights_sha256": "5ffdf83921f2e9bd6ea9c457fb7a058d33030a45a51ae6e4887cd41b82e99a92",
+    "base_rate_feedback": false,
+    "continuation": {
+      "reason": "first runner keyword typo, then missing spawn main guard; both before any TAMP actor decision",
+      "excluded_spawn_setup_report_sha256": "88611036b2b3afb29f138a8d5f3db6478796a602cfd3dd81e4b6f69b39513790",
+      "new_general_episodes": 0,
+      "new_tamp_episodes": 6,
+      "parent_report_sha256": "9d752aab4db71668d8b848735671fce6697892df2a14ea03ed295fc9823c7a79",
+      "runner_sha256": "1bd312721d3cd2c1a6b383f5ef9e31bb5398e4dcc9de4d3550f7b92e5e2f8a7d"
+    },
+    "report_sha256": "fb62be493b269c49790896a04bc41a6e8485a817645a7f83224fa979bfc40a83",
+    "general": {
+      "coupled-tracking-v1": {
+        "attempts": 10,
+        "successes": 9,
+        "cases": [
+          {
+            "case": {
+              "id": "innate_mars:train:base_only:0",
+              "seed": 35600000,
+              "split": "train",
+              "mode": "base_only",
+              "travel_m": 0.03,
+              "turn_rad": 0,
+              "arm_delta": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "base_mask": [
+                true,
+                true,
+                true
+              ]
+            },
+            "tracking_success": false,
+            "code": "tracking_timeout",
+            "control_ticks": 500,
+            "stop_confirmed": true,
+            "reference_sha256": "16b39370301eea7701e2e0914e084f4221f799602298d6dbd1ad3e3b8650d42e",
+            "metrics": {
+              "ee_position_error": 0.5965728145852623,
+              "ee_orientation_error": 2.21916101965223,
+              "rms_hand_position_error": 0.0,
+              "peak_hand_position_error": 0.0,
+              "peak_hand_orientation_error": 0.0,
+              "base_goal_error": 0.030099466451914077,
+              "base_heading_error_rad": 2.2191594981826395,
+              "peak_base_linear_jerk_m_s3": 6.132881633938056,
+              "peak_base_yaw_jerk_rad_s3": 54.66588408347307,
+              "peak_joint_jerk": [
+                2.1534685938327858,
+                3.939816463861357,
+                3.2162805062918256,
+                0.7309401810621097,
+                0.07401450265927999
+              ],
+              "peak_contact_force": 0.1962000000000006,
+              "contact_impulse": 4.904999999999551,
+              "max_penetration": 0.0001077554202162101,
+              "max_wheel_gap": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "min_wheel_load": [
+                3.9234693325983447,
+                6.294463547999837,
+                0.752661876604281
+              ],
+              "time_to_first_settle": null,
+              "peak_hold_base_drift_m": 0.0,
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "retention_lost": false,
+              "base_linear_norm_m_s": 0.0014077279454884747,
+              "base_angular_norm_rad_s": 0.017670949656536775,
+              "max_joint_velocity": 6.341636701323209e-06
+            },
+            "post_stop_metrics": {
+              "ee_position_error": 0.5965728145852623,
+              "ee_orientation_error": 2.21916101965223,
+              "rms_hand_position_error": 0.0,
+              "peak_hand_position_error": 0.0,
+              "peak_hand_orientation_error": 0.0,
+              "base_goal_error": 0.030099466451914077,
+              "base_heading_error_rad": 2.2191594981826395,
+              "peak_base_linear_jerk_m_s3": 6.132881633938056,
+              "peak_base_yaw_jerk_rad_s3": 54.66588408347307,
+              "peak_joint_jerk": [
+                2.1534685938327858,
+                3.939816463861357,
+                3.2162805062918256,
+                0.7309401810621097,
+                0.07401450265927999
+              ],
+              "peak_contact_force": 0.1962000000000006,
+              "contact_impulse": 4.904999999999551,
+              "max_penetration": 0.0001077554202162101,
+              "max_wheel_gap": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "min_wheel_load": [
+                3.9234693325983447,
+                6.294463547999837,
+                0.752661876604281
+              ],
+              "time_to_first_settle": null,
+              "peak_hold_base_drift_m": 0.0,
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "retention_lost": false,
+              "base_linear_norm_m_s": 0.0014077279454884747,
+              "base_angular_norm_rad_s": 0.017670949656536775,
+              "max_joint_velocity": 6.341636701323209e-06
+            }
+          },
+          {
+            "case": {
+              "id": "innate_mars:train:hand_free_base:1",
+              "seed": 35600001,
+              "split": "train",
+              "mode": "hand_free_base",
+              "travel_m": 0.04,
+              "turn_rad": 0,
+              "arm_delta": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "base_mask": [
+                false,
+                false,
+                false
+              ]
+            },
+            "tracking_success": true,
+            "code": "ok",
+            "control_ticks": 500,
+            "stop_confirmed": true,
+            "reference_sha256": "e95f258541a7ad034a4156c2da490969b2375c53b581954d0f21bd055215f19d",
+            "metrics": {
+              "ee_position_error": 9.867313086092628e-07,
+              "ee_orientation_error": 2.7222264132089693e-06,
+              "rms_hand_position_error": 0.00045412266133857716,
+              "peak_hand_position_error": 0.0016201321393880498,
+              "peak_hand_orientation_error": 0.0096997671429526,
+              "base_goal_error": 0.0,
+              "base_heading_error_rad": 0.0,
+              "peak_base_linear_jerk_m_s3": 0.2262153452901279,
+              "peak_base_yaw_jerk_rad_s3": 0.07250969348088654,
+              "peak_joint_jerk": [
+                0.10576960734116164,
+                0.17875203148739377,
+                0.09876841484627072,
+                0.0457517727287686,
+                0.06908611841857942
+              ],
+              "peak_contact_force": 0.1962000000000006,
+              "contact_impulse": 4.904999999999551,
+              "max_penetration": 0.0001077554202162101,
+              "max_wheel_gap": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "min_wheel_load": [
+                4.4507353804284575,
+                6.532156941622548,
+                1.0620396615139995
+              ],
+              "time_to_first_settle": 5.899999999999461,
+              "peak_hold_base_drift_m": 0.00016889642809722122,
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "retention_lost": false,
+              "base_linear_norm_m_s": 1.5118943585682212e-06,
+              "base_angular_norm_rad_s": 7.354407921965826e-07,
+              "max_joint_velocity": 1.0273767058765306e-05
+            },
+            "post_stop_metrics": {
+              "ee_position_error": 9.867313086092628e-07,
+              "ee_orientation_error": 2.7222264132089693e-06,
+              "rms_hand_position_error": 0.00045412266133857716,
+              "peak_hand_position_error": 0.0016201321393880498,
+              "peak_hand_orientation_error": 0.0096997671429526,
+              "base_goal_error": 0.0,
+              "base_heading_error_rad": 0.0,
+              "peak_base_linear_jerk_m_s3": 0.2262153452901279,
+              "peak_base_yaw_jerk_rad_s3": 0.07250969348088654,
+              "peak_joint_jerk": [
+                0.10576960734116164,
+                0.17875203148739377,
+                0.09876841484627072,
+                0.0457517727287686,
+                0.06908611841857942
+              ],
+              "peak_contact_force": 0.1962000000000006,
+              "contact_impulse": 4.904999999999551,
+              "max_penetration": 0.0001077554202162101,
+              "max_wheel_gap": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "min_wheel_load": [
+                4.4507353804284575,
+                6.532156941622548,
+                1.0620396615139995
+              ],
+              "time_to_first_settle": 5.899999999999461,
+              "peak_hold_base_drift_m": 0.00016889642809722122,
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "retention_lost": false,
+              "base_linear_norm_m_s": 1.5118943585682212e-06,
+              "base_angular_norm_rad_s": 7.354407921965826e-07,
+              "max_joint_velocity": 1.0273767058765306e-05
+            }
+          },
+          {
+            "case": {
+              "id": "innate_mars:train:hand_free_base:2",
+              "seed": 35600002,
+              "split": "train",
+              "mode": "hand_free_base",
+              "travel_m": 0.02,
+              "turn_rad": 0.06,
+              "arm_delta": [
+                0,
+                0.005,
+                -0.005,
+                0,
+                0
+              ],
+              "base_mask": [
+                false,
+                false,
+                false
+              ]
+            },
+            "tracking_success": true,
+            "code": "ok",
+            "control_ticks": 500,
+            "stop_confirmed": true,
+            "reference_sha256": "2df36447c99392c38e3b8d60cf3bd9fc09b1d7c5ffaf813b3130f03c144b9e97",
+            "metrics": {
+              "ee_position_error": 1.3411843016018197e-06,
+              "ee_orientation_error": 3.704429871598662e-06,
+              "rms_hand_position_error": 0.0007165667530691822,
+              "peak_hand_position_error": 0.002695816656222715,
+              "peak_hand_orientation_error": 0.010578129396678092,
+              "base_goal_error": 0.0,
+              "base_heading_error_rad": 0.0,
+              "peak_base_linear_jerk_m_s3": 0.027080032193593267,
+              "peak_base_yaw_jerk_rad_s3": 0.08953230389789059,
+              "peak_joint_jerk": [
+                0.08442051497303742,
+                0.15634003981154987,
+                0.08483584451954726,
+                0.06510585693484013,
+                0.08240879874480365
+              ],
+              "peak_contact_force": 0.19620000000000115,
+              "contact_impulse": 4.904999999999551,
+              "max_penetration": 0.00014215299777013368,
+              "max_wheel_gap": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "min_wheel_load": [
+                4.586634954827728,
+                6.77265509996284,
+                1.5853860817962402
+              ],
+              "time_to_first_settle": 5.899999999999461,
+              "peak_hold_base_drift_m": 0.00013757670725112365,
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "retention_lost": false,
+              "base_linear_norm_m_s": 1.9281481763338136e-06,
+              "base_angular_norm_rad_s": 1.2150026019945599e-06,
+              "max_joint_velocity": 1.2284657273772462e-05
+            },
+            "post_stop_metrics": {
+              "ee_position_error": 1.3411843016018197e-06,
+              "ee_orientation_error": 3.704429871598662e-06,
+              "rms_hand_position_error": 0.0007165667530691822,
+              "peak_hand_position_error": 0.002695816656222715,
+              "peak_hand_orientation_error": 0.010578129396678092,
+              "base_goal_error": 0.0,
+              "base_heading_error_rad": 0.0,
+              "peak_base_linear_jerk_m_s3": 0.027080032193593267,
+              "peak_base_yaw_jerk_rad_s3": 0.08953230389789059,
+              "peak_joint_jerk": [
+                0.08442051497303742,
+                0.15634003981154987,
+                0.08483584451954726,
+                0.06510585693484013,
+                0.08240879874480365
+              ],
+              "peak_contact_force": 0.19620000000000115,
+              "contact_impulse": 4.904999999999551,
+              "max_penetration": 0.00014215299777013368,
+              "max_wheel_gap": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "min_wheel_load": [
+                4.586634954827728,
+                6.77265509996284,
+                1.5853860817962402
+              ],
+              "time_to_first_settle": 5.899999999999461,
+              "peak_hold_base_drift_m": 0.00013757670725112365,
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "retention_lost": false,
+              "base_linear_norm_m_s": 1.9281481763338136e-06,
+              "base_angular_norm_rad_s": 1.2150026019945599e-06,
+              "max_joint_velocity": 1.2284657273772462e-05
+            }
+          },
+          {
+            "case": {
+              "id": "innate_mars:train:coupled:3",
+              "seed": 35600003,
+              "split": "train",
+              "mode": "coupled",
+              "travel_m": 0.025,
+              "turn_rad": -0.04,
+              "arm_delta": [
+                0,
+                -0.005,
+                0.005,
+                0,
+                0
+              ],
+              "base_mask": [
+                true,
+                true,
+                true
+              ]
+            },
+            "tracking_success": true,
+            "code": "ok",
+            "control_ticks": 500,
+            "stop_confirmed": true,
+            "reference_sha256": "3d0adbb3a2d3ae9efa87fab671344c3f26eb02356bf659022c2402742a998f88",
+            "metrics": {
+              "ee_position_error": 0.00013105656426751444,
+              "ee_orientation_error": 0.00036280748190966667,
+              "rms_hand_position_error": 0.00042497616201885924,
+              "peak_hand_position_error": 0.0016099896561417584,
+              "peak_hand_orientation_error": 0.004710882462200167,
+              "base_goal_error": 0.000245900298157328,
+              "base_heading_error_rad": 0.0003546396533283813,
+              "peak_base_linear_jerk_m_s3": 0.06616601780754303,
+              "peak_base_yaw_jerk_rad_s3": 0.09443071010234536,
+              "peak_joint_jerk": [
+                0.12056184049803978,
+                0.2965400699873625,
+                0.09637725001983277,
+                0.04953170541452376,
+                0.02253326540304001
+              ],
+              "peak_contact_force": 0.19620000000000057,
+              "contact_impulse": 4.904999999999551,
+              "max_penetration": 0.0001077554202162101,
+              "max_wheel_gap": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "min_wheel_load": [
+                4.485388118822131,
+                6.431242783525888,
+                1.4886372045041512
+              ],
+              "time_to_first_settle": 5.899999999999461,
+              "peak_hold_base_drift_m": 2.039341657940343e-05,
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "retention_lost": false,
+              "base_linear_norm_m_s": 4.905930912594358e-08,
+              "base_angular_norm_rad_s": 7.07113949009589e-08,
+              "max_joint_velocity": 1.283963290084047e-07
+            },
+            "post_stop_metrics": {
+              "ee_position_error": 0.00013105656426751444,
+              "ee_orientation_error": 0.00036280748190966667,
+              "rms_hand_position_error": 0.00042497616201885924,
+              "peak_hand_position_error": 0.0016099896561417584,
+              "peak_hand_orientation_error": 0.004710882462200167,
+              "base_goal_error": 0.000245900298157328,
+              "base_heading_error_rad": 0.0003546396533283813,
+              "peak_base_linear_jerk_m_s3": 0.06616601780754303,
+              "peak_base_yaw_jerk_rad_s3": 0.09443071010234536,
+              "peak_joint_jerk": [
+                0.12056184049803978,
+                0.2965400699873625,
+                0.09637725001983277,
+                0.04953170541452376,
+                0.02253326540304001
+              ],
+              "peak_contact_force": 0.19620000000000057,
+              "contact_impulse": 4.904999999999551,
+              "max_penetration": 0.0001077554202162101,
+              "max_wheel_gap": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "min_wheel_load": [
+                4.485388118822131,
+                6.431242783525888,
+                1.4886372045041512
+              ],
+              "time_to_first_settle": 5.899999999999461,
+              "peak_hold_base_drift_m": 2.039341657940343e-05,
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "retention_lost": false,
+              "base_linear_norm_m_s": 4.905930912594358e-08,
+              "base_angular_norm_rad_s": 7.07113949009589e-08,
+              "max_joint_velocity": 1.283963290084047e-07
+            }
+          },
+          {
+            "case": {
+              "id": "innate_mars:train:coupled:4",
+              "seed": 35600004,
+              "split": "train",
+              "mode": "coupled",
+              "travel_m": 0.02,
+              "turn_rad": 0.04,
+              "arm_delta": [
+                0,
+                0,
+                0,
+                0,
+                0.01
+              ],
+              "base_mask": [
+                true,
+                true,
+                false
+              ]
+            },
+            "tracking_success": true,
+            "code": "ok",
+            "control_ticks": 500,
+            "stop_confirmed": true,
+            "reference_sha256": "30a5b51290bbc5dcc8c77e01f48ec912d7a9a0d659a3cfc028f679cac326e8f2",
+            "metrics": {
+              "ee_position_error": 0.0002937810702082045,
+              "ee_orientation_error": 0.0006776544108513182,
+              "rms_hand_position_error": 0.0007750709946345365,
+              "peak_hand_position_error": 0.0028872137391410804,
+              "peak_hand_orientation_error": 0.008020962965820904,
+              "base_goal_error": 0.0002930892665192465,
+              "base_heading_error_rad": 0.0,
+              "peak_base_linear_jerk_m_s3": 0.04388679879055524,
+              "peak_base_yaw_jerk_rad_s3": 0.09282522049490459,
+              "peak_joint_jerk": [
+                0.08276494026753022,
+                0.18592340617032072,
+                0.05777067134576214,
+                0.06352552927911456,
+                0.056444584732319274
+              ],
+              "peak_contact_force": 0.19620000000000054,
+              "contact_impulse": 4.904999999999551,
+              "max_penetration": 0.0001077554202162101,
+              "max_wheel_gap": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "min_wheel_load": [
+                4.561853453377051,
+                6.071360523357372,
+                1.72915458043621
+              ],
+              "time_to_first_settle": 5.899999999999461,
+              "peak_hold_base_drift_m": 3.674264993337561e-05,
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "retention_lost": false,
+              "base_linear_norm_m_s": 2.758642602702469e-08,
+              "base_angular_norm_rad_s": 8.140604946197712e-08,
+              "max_joint_velocity": 3.2396710897807175e-08
+            },
+            "post_stop_metrics": {
+              "ee_position_error": 0.0002937810702082045,
+              "ee_orientation_error": 0.0006776544108513182,
+              "rms_hand_position_error": 0.0007750709946345365,
+              "peak_hand_position_error": 0.0028872137391410804,
+              "peak_hand_orientation_error": 0.008020962965820904,
+              "base_goal_error": 0.0002930892665192465,
+              "base_heading_error_rad": 0.0,
+              "peak_base_linear_jerk_m_s3": 0.04388679879055524,
+              "peak_base_yaw_jerk_rad_s3": 0.09282522049490459,
+              "peak_joint_jerk": [
+                0.08276494026753022,
+                0.18592340617032072,
+                0.05777067134576214,
+                0.06352552927911456,
+                0.056444584732319274
+              ],
+              "peak_contact_force": 0.19620000000000054,
+              "contact_impulse": 4.904999999999551,
+              "max_penetration": 0.0001077554202162101,
+              "max_wheel_gap": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "min_wheel_load": [
+                4.561853453377051,
+                6.071360523357372,
+                1.72915458043621
+              ],
+              "time_to_first_settle": 5.899999999999461,
+              "peak_hold_base_drift_m": 3.674264993337561e-05,
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "retention_lost": false,
+              "base_linear_norm_m_s": 2.758642602702469e-08,
+              "base_angular_norm_rad_s": 8.140604946197712e-08,
+              "max_joint_velocity": 3.2396710897807175e-08
+            }
+          },
+          {
+            "case": {
+              "id": "innate_mars:train:fixed_world_hand:5",
+              "seed": 35600005,
+              "split": "train",
+              "mode": "fixed_world_hand",
+              "travel_m": 0.0,
+              "turn_rad": 0,
+              "arm_delta": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "base_mask": [
+                true,
+                true,
+                true
+              ],
+              "self_motion_scale": 1.0
+            },
+            "tracking_success": true,
+            "code": "ok",
+            "control_ticks": 500,
+            "stop_confirmed": true,
+            "reference_sha256": "115e85eed97994faa0ae0eb2f7e4ec1578f987cce7a0e1eda41b746db555a265",
+            "metrics": {
+              "ee_position_error": 1.2716813686019706e-06,
+              "ee_orientation_error": 3.3487521149144887e-06,
+              "rms_hand_position_error": 0.00012379825924493977,
+              "peak_hand_position_error": 0.0004879753083913954,
+              "peak_hand_orientation_error": 0.002303384200682941,
+              "base_goal_error": 2.042352569941995e-06,
+              "base_heading_error_rad": 2.0038293934653527e-06,
+              "peak_base_linear_jerk_m_s3": 0.023442520203643315,
+              "peak_base_yaw_jerk_rad_s3": 0.03726281300355286,
+              "peak_joint_jerk": [
+                0.10665598110046512,
+                0.17214495757093543,
+                0.10667187578832567,
+                0.027776961918772783,
+                0.008496094315770189
+              ],
+              "peak_contact_force": 0.19620000000000115,
+              "contact_impulse": 4.904999999999551,
+              "max_penetration": 0.00014215299777013376,
+              "max_wheel_gap": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "min_wheel_load": [
+                4.538049291478311,
+                6.203530367280694,
+                1.8105649518652793
+              ],
+              "time_to_first_settle": 5.899999999999461,
+              "peak_hold_base_drift_m": 1.1199691615567929e-05,
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "retention_lost": false,
+              "base_linear_norm_m_s": 9.34650218202017e-09,
+              "base_angular_norm_rad_s": 2.18461847997467e-08,
+              "max_joint_velocity": 3.120063590746233e-08
+            },
+            "post_stop_metrics": {
+              "ee_position_error": 1.2716813686019706e-06,
+              "ee_orientation_error": 3.3487521149144887e-06,
+              "rms_hand_position_error": 0.00012379825924493977,
+              "peak_hand_position_error": 0.0004879753083913954,
+              "peak_hand_orientation_error": 0.002303384200682941,
+              "base_goal_error": 2.042352569941995e-06,
+              "base_heading_error_rad": 2.0038293934653527e-06,
+              "peak_base_linear_jerk_m_s3": 0.023442520203643315,
+              "peak_base_yaw_jerk_rad_s3": 0.03726281300355286,
+              "peak_joint_jerk": [
+                0.10665598110046512,
+                0.17214495757093543,
+                0.10667187578832567,
+                0.027776961918772783,
+                0.008496094315770189
+              ],
+              "peak_contact_force": 0.19620000000000115,
+              "contact_impulse": 4.904999999999551,
+              "max_penetration": 0.00014215299777013376,
+              "max_wheel_gap": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "min_wheel_load": [
+                4.538049291478311,
+                6.203530367280694,
+                1.8105649518652793
+              ],
+              "time_to_first_settle": 5.899999999999461,
+              "peak_hold_base_drift_m": 1.1199691615567929e-05,
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "retention_lost": false,
+              "base_linear_norm_m_s": 9.34650218202017e-09,
+              "base_angular_norm_rad_s": 2.18461847997467e-08,
+              "max_joint_velocity": 3.120063590746233e-08
+            }
+          },
+          {
+            "case": {
+              "id": "innate_mars:audit:hand_free_base:6",
+              "seed": 35600006,
+              "split": "audit",
+              "mode": "hand_free_base",
+              "travel_m": -0.03,
+              "turn_rad": 0,
+              "arm_delta": [
+                0,
+                0,
+                0,
+                0,
+                -0.01
+              ],
+              "base_mask": [
+                false,
+                false,
+                false
+              ]
+            },
+            "tracking_success": true,
+            "code": "ok",
+            "control_ticks": 500,
+            "stop_confirmed": true,
+            "reference_sha256": "940c76089b508b28427c6738016bae6dee2889806d725c32addc6cd6b49a01e4",
+            "metrics": {
+              "ee_position_error": 4.922438404949948e-07,
+              "ee_orientation_error": 1.3089293990134785e-06,
+              "rms_hand_position_error": 0.000702663941264131,
+              "peak_hand_position_error": 0.0025659820541419484,
+              "peak_hand_orientation_error": 0.008857148761819002,
+              "base_goal_error": 0.0,
+              "base_heading_error_rad": 0.0,
+              "peak_base_linear_jerk_m_s3": 0.09437125430970411,
+              "peak_base_yaw_jerk_rad_s3": 0.09752167254846791,
+              "peak_joint_jerk": [
+                0.08525787158595936,
+                0.11860546302412067,
+                0.12672843112717797,
+                0.053906794837231126,
+                0.03462858378220487
+              ],
+              "peak_contact_force": 0.19620000000000123,
+              "contact_impulse": 4.904999999999551,
+              "max_penetration": 0.00014215299777013514,
+              "max_wheel_gap": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "min_wheel_load": [
+                3.8010754032111302,
+                4.6754625719216385,
+                1.5146214512061102
+              ],
+              "time_to_first_settle": 5.899999999999461,
+              "peak_hold_base_drift_m": 0.0002212450730127659,
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "retention_lost": false,
+              "base_linear_norm_m_s": 6.818740918083742e-07,
+              "base_angular_norm_rad_s": 5.755553065536801e-08,
+              "max_joint_velocity": 4.161204548240172e-06
+            },
+            "post_stop_metrics": {
+              "ee_position_error": 4.922438404949948e-07,
+              "ee_orientation_error": 1.3089293990134785e-06,
+              "rms_hand_position_error": 0.000702663941264131,
+              "peak_hand_position_error": 0.0025659820541419484,
+              "peak_hand_orientation_error": 0.008857148761819002,
+              "base_goal_error": 0.0,
+              "base_heading_error_rad": 0.0,
+              "peak_base_linear_jerk_m_s3": 0.09437125430970411,
+              "peak_base_yaw_jerk_rad_s3": 0.09752167254846791,
+              "peak_joint_jerk": [
+                0.08525787158595936,
+                0.11860546302412067,
+                0.12672843112717797,
+                0.053906794837231126,
+                0.03462858378220487
+              ],
+              "peak_contact_force": 0.19620000000000123,
+              "contact_impulse": 4.904999999999551,
+              "max_penetration": 0.00014215299777013514,
+              "max_wheel_gap": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "min_wheel_load": [
+                3.8010754032111302,
+                4.6754625719216385,
+                1.5146214512061102
+              ],
+              "time_to_first_settle": 5.899999999999461,
+              "peak_hold_base_drift_m": 0.0002212450730127659,
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "retention_lost": false,
+              "base_linear_norm_m_s": 6.818740918083742e-07,
+              "base_angular_norm_rad_s": 5.755553065536801e-08,
+              "max_joint_velocity": 4.161204548240172e-06
+            }
+          },
+          {
+            "case": {
+              "id": "innate_mars:audit:coupled:7",
+              "seed": 35600007,
+              "split": "audit",
+              "mode": "coupled",
+              "travel_m": -0.02,
+              "turn_rad": -0.06,
+              "arm_delta": [
+                0,
+                0.007,
+                -0.007,
+                0,
+                0
+              ],
+              "base_mask": [
+                true,
+                true,
+                true
+              ]
+            },
+            "tracking_success": true,
+            "code": "ok",
+            "control_ticks": 500,
+            "stop_confirmed": true,
+            "reference_sha256": "0cd154ccc7dd65c902d61174a2e368ba40d910529b71a9672ceec47b01ae5062",
+            "metrics": {
+              "ee_position_error": 0.0003601800167121188,
+              "ee_orientation_error": 0.0009828750782961905,
+              "rms_hand_position_error": 0.0005977936751496568,
+              "peak_hand_position_error": 0.002022120609303051,
+              "peak_hand_orientation_error": 0.009915838766281394,
+              "base_goal_error": 0.000620043620491752,
+              "base_heading_error_rad": 0.0007377036777546642,
+              "peak_base_linear_jerk_m_s3": 0.171264733578008,
+              "peak_base_yaw_jerk_rad_s3": 0.1713227262398226,
+              "peak_joint_jerk": [
+                0.1477702004469525,
+                0.15552379689627818,
+                0.1758496700647315,
+                0.04549484114814376,
+                0.053488435761683134
+              ],
+              "peak_contact_force": 0.19620000000000112,
+              "contact_impulse": 4.904999999999551,
+              "max_penetration": 0.00014215299777013023,
+              "max_wheel_gap": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "min_wheel_load": [
+                4.660392418459511,
+                6.141709457418051,
+                1.464178786565597
+              ],
+              "time_to_first_settle": 5.899999999999461,
+              "peak_hold_base_drift_m": 1.9957217467413508e-05,
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "retention_lost": false,
+              "base_linear_norm_m_s": 2.610444458437498e-07,
+              "base_angular_norm_rad_s": 3.1698591813795244e-07,
+              "max_joint_velocity": 7.184512535362382e-07
+            },
+            "post_stop_metrics": {
+              "ee_position_error": 0.0003601800167121188,
+              "ee_orientation_error": 0.0009828750782961905,
+              "rms_hand_position_error": 0.0005977936751496568,
+              "peak_hand_position_error": 0.002022120609303051,
+              "peak_hand_orientation_error": 0.009915838766281394,
+              "base_goal_error": 0.000620043620491752,
+              "base_heading_error_rad": 0.0007377036777546642,
+              "peak_base_linear_jerk_m_s3": 0.171264733578008,
+              "peak_base_yaw_jerk_rad_s3": 0.1713227262398226,
+              "peak_joint_jerk": [
+                0.1477702004469525,
+                0.15552379689627818,
+                0.1758496700647315,
+                0.04549484114814376,
+                0.053488435761683134
+              ],
+              "peak_contact_force": 0.19620000000000112,
+              "contact_impulse": 4.904999999999551,
+              "max_penetration": 0.00014215299777013023,
+              "max_wheel_gap": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "min_wheel_load": [
+                4.660392418459511,
+                6.141709457418051,
+                1.464178786565597
+              ],
+              "time_to_first_settle": 5.899999999999461,
+              "peak_hold_base_drift_m": 1.9957217467413508e-05,
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "retention_lost": false,
+              "base_linear_norm_m_s": 2.610444458437498e-07,
+              "base_angular_norm_rad_s": 3.1698591813795244e-07,
+              "max_joint_velocity": 7.184512535362382e-07
+            }
+          },
+          {
+            "case": {
+              "id": "innate_mars:audit:fixed_world_hand:8",
+              "seed": 35600008,
+              "split": "audit",
+              "mode": "fixed_world_hand",
+              "travel_m": 0.0,
+              "turn_rad": 0,
+              "arm_delta": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "base_mask": [
+                true,
+                true,
+                true
+              ],
+              "self_motion_scale": -0.75
+            },
+            "tracking_success": true,
+            "code": "ok",
+            "control_ticks": 500,
+            "stop_confirmed": true,
+            "reference_sha256": "07547395e1536b2eb8be0ef8da12c0dab3aec459c382a6c22a346b20164b5b71",
+            "metrics": {
+              "ee_position_error": 1.0395055048107795e-05,
+              "ee_orientation_error": 2.8850803118415694e-05,
+              "rms_hand_position_error": 0.00010486125489116228,
+              "peak_hand_position_error": 0.0003990643895441196,
+              "peak_hand_orientation_error": 0.00211339339605811,
+              "base_goal_error": 1.8450801603901744e-05,
+              "base_heading_error_rad": 2.297677353658425e-05,
+              "peak_base_linear_jerk_m_s3": 0.021283959766257535,
+              "peak_base_yaw_jerk_rad_s3": 0.02400851893549923,
+              "peak_joint_jerk": [
+                0.11374933718075217,
+                0.14584296526379842,
+                0.12015833730925812,
+                0.025536700845321537,
+                0.012165182502581027
+              ],
+              "peak_contact_force": 0.19620000000000115,
+              "contact_impulse": 4.904999999999551,
+              "max_penetration": 0.00014215299777013354,
+              "max_wheel_gap": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "min_wheel_load": [
+                4.68595777345392,
+                6.762613033207929,
+                1.6939482157198424
+              ],
+              "time_to_first_settle": 5.899999999999461,
+              "peak_hold_base_drift_m": 5.1627537936605785e-06,
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "retention_lost": false,
+              "base_linear_norm_m_s": 1.3184216462293943e-08,
+              "base_angular_norm_rad_s": 1.856455952139018e-08,
+              "max_joint_velocity": 3.792771066186575e-08
+            },
+            "post_stop_metrics": {
+              "ee_position_error": 1.0395055048107795e-05,
+              "ee_orientation_error": 2.8850803118415694e-05,
+              "rms_hand_position_error": 0.00010486125489116228,
+              "peak_hand_position_error": 0.0003990643895441196,
+              "peak_hand_orientation_error": 0.00211339339605811,
+              "base_goal_error": 1.8450801603901744e-05,
+              "base_heading_error_rad": 2.297677353658425e-05,
+              "peak_base_linear_jerk_m_s3": 0.021283959766257535,
+              "peak_base_yaw_jerk_rad_s3": 0.02400851893549923,
+              "peak_joint_jerk": [
+                0.11374933718075217,
+                0.14584296526379842,
+                0.12015833730925812,
+                0.025536700845321537,
+                0.012165182502581027
+              ],
+              "peak_contact_force": 0.19620000000000115,
+              "contact_impulse": 4.904999999999551,
+              "max_penetration": 0.00014215299777013354,
+              "max_wheel_gap": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "min_wheel_load": [
+                4.68595777345392,
+                6.762613033207929,
+                1.6939482157198424
+              ],
+              "time_to_first_settle": 5.899999999999461,
+              "peak_hold_base_drift_m": 5.1627537936605785e-06,
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "retention_lost": false,
+              "base_linear_norm_m_s": 1.3184216462293943e-08,
+              "base_angular_norm_rad_s": 1.856455952139018e-08,
+              "max_joint_velocity": 3.792771066186575e-08
+            }
+          },
+          {
+            "case": {
+              "id": "innate_mars:audit:hand_free_base:9",
+              "seed": 35600009,
+              "split": "audit",
+              "mode": "hand_free_base",
+              "travel_m": 0.03,
+              "turn_rad": 0,
+              "arm_delta": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "base_mask": [
+                false,
+                false,
+                false
+              ],
+              "retarget": {
+                "at_fraction": 0.5,
+                "travel_m": -0.02
+              }
+            },
+            "tracking_success": true,
+            "code": "ok",
+            "control_ticks": 500,
+            "stop_confirmed": true,
+            "reference_sha256": "9733c72bacc9202a2222ba28a10bd66eb67725cdec39a35c12ead9f040f4fd90",
+            "metrics": {
+              "ee_position_error": 6.762303428597762e-08,
+              "ee_orientation_error": 1.7504900879369298e-07,
+              "rms_hand_position_error": 0.00022618328142990482,
+              "peak_hand_position_error": 0.0007781824517734004,
+              "peak_hand_orientation_error": 0.0061795810466497595,
+              "base_goal_error": 0.0,
+              "base_heading_error_rad": 0.0,
+              "peak_base_linear_jerk_m_s3": 1.8063025712454994,
+              "peak_base_yaw_jerk_rad_s3": 5.955889056254757,
+              "peak_joint_jerk": [
+                4.064452289486562,
+                7.438991195309026,
+                7.207428180969502,
+                4.360918635481321,
+                1.5652147440383812
+              ],
+              "peak_contact_force": 0.19620000000000112,
+              "contact_impulse": 4.904999999999551,
+              "max_penetration": 0.00014215299777013154,
+              "max_wheel_gap": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "min_wheel_load": [
+                4.32445923277077,
+                5.273887261692529,
+                0.15395160083127973
+              ],
+              "time_to_first_settle": 7.899999999999641,
+              "peak_hold_base_drift_m": 6.804597135339032e-05,
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "retention_lost": false,
+              "base_linear_norm_m_s": 1.0158978489167664e-07,
+              "base_angular_norm_rad_s": 3.681507700697949e-08,
+              "max_joint_velocity": 6.432578414247731e-07
+            },
+            "post_stop_metrics": {
+              "ee_position_error": 6.762303428597762e-08,
+              "ee_orientation_error": 1.7504900879369298e-07,
+              "rms_hand_position_error": 0.00022618328142990482,
+              "peak_hand_position_error": 0.0007781824517734004,
+              "peak_hand_orientation_error": 0.0061795810466497595,
+              "base_goal_error": 0.0,
+              "base_heading_error_rad": 0.0,
+              "peak_base_linear_jerk_m_s3": 1.8063025712454994,
+              "peak_base_yaw_jerk_rad_s3": 5.955889056254757,
+              "peak_joint_jerk": [
+                4.064452289486562,
+                7.438991195309026,
+                7.207428180969502,
+                4.360918635481321,
+                1.5652147440383812
+              ],
+              "peak_contact_force": 0.19620000000000112,
+              "contact_impulse": 4.904999999999551,
+              "max_penetration": 0.00014215299777013154,
+              "max_wheel_gap": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "min_wheel_load": [
+                4.32445923277077,
+                5.273887261692529,
+                0.15395160083127973
+              ],
+              "time_to_first_settle": 7.899999999999641,
+              "peak_hold_base_drift_m": 6.804597135339032e-05,
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "retention_lost": false,
+              "base_linear_norm_m_s": 1.0158978489167664e-07,
+              "base_angular_norm_rad_s": 3.681507700697949e-08,
+              "max_joint_velocity": 6.432578414247731e-07
+            }
+          }
+        ]
+      },
+      "coupled-tracking-v2": {
+        "attempts": 10,
+        "successes": 5,
+        "cases": [
+          {
+            "case": {
+              "id": "innate_mars:v2:train:base_only:0",
+              "seed": 35700000,
+              "split": "train",
+              "mode": "base_only",
+              "travel_m": 0.15,
+              "turn_rad": 0,
+              "arm_delta": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "base_mask": [
+                true,
+                true,
+                true
+              ],
+              "purpose": "tracking"
+            },
+            "tracking_success": false,
+            "code": "tracking_timeout",
+            "control_ticks": 500,
+            "stop_confirmed": true,
+            "reference_sha256": "6606dc46c838ff674553b29a5754b244a52629026561d3edc0e50661b8acabe2",
+            "metrics": {
+              "ee_position_error": 0.5844279201453255,
+              "ee_orientation_error": 2.181849926951252,
+              "rms_hand_position_error": 0.0,
+              "peak_hand_position_error": 0.0,
+              "peak_hand_orientation_error": 0.0,
+              "base_goal_error": 0.027470651898569082,
+              "base_heading_error_rad": 2.181848931927965,
+              "peak_base_linear_jerk_m_s3": 5.991922520266451,
+              "peak_base_yaw_jerk_rad_s3": 73.11508367984133,
+              "peak_joint_jerk": [
+                1.9390125165503163,
+                2.1011843142162747,
+                2.2429238907349913,
+                0.5197074271853287,
+                0.0652640429314151
+              ],
+              "peak_contact_force": 0.19620000000000112,
+              "contact_impulse": 4.904999999999551,
+              "max_penetration": 0.00014215299777013346,
+              "max_wheel_gap": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "min_wheel_load": [
+                3.8380650686946103,
+                6.293569151803775,
+                0.29078362859961226
+              ],
+              "time_to_first_settle": null,
+              "peak_hold_base_drift_m": 0.0,
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "retention_lost": false,
+              "base_linear_norm_m_s": 0.0001162795011420828,
+              "base_angular_norm_rad_s": 0.0017830175836764635,
+              "max_joint_velocity": 5.922281005594195e-07
+            },
+            "post_stop_metrics": {
+              "ee_position_error": 0.5844279201453255,
+              "ee_orientation_error": 2.181849926951252,
+              "rms_hand_position_error": 0.0,
+              "peak_hand_position_error": 0.0,
+              "peak_hand_orientation_error": 0.0,
+              "base_goal_error": 0.027470651898569082,
+              "base_heading_error_rad": 2.181848931927965,
+              "peak_base_linear_jerk_m_s3": 5.991922520266451,
+              "peak_base_yaw_jerk_rad_s3": 73.11508367984133,
+              "peak_joint_jerk": [
+                1.9390125165503163,
+                2.1011843142162747,
+                2.2429238907349913,
+                0.5197074271853287,
+                0.0652640429314151
+              ],
+              "peak_contact_force": 0.19620000000000112,
+              "contact_impulse": 4.904999999999551,
+              "max_penetration": 0.00014215299777013346,
+              "max_wheel_gap": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "min_wheel_load": [
+                3.8380650686946103,
+                6.293569151803775,
+                0.29078362859961226
+              ],
+              "time_to_first_settle": null,
+              "peak_hold_base_drift_m": 0.0,
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "retention_lost": false,
+              "base_linear_norm_m_s": 0.0001162795011420828,
+              "base_angular_norm_rad_s": 0.0017830175836764635,
+              "max_joint_velocity": 5.922281005594195e-07
+            }
+          },
+          {
+            "case": {
+              "id": "innate_mars:v2:train:hand_free_base:1",
+              "seed": 35700001,
+              "split": "train",
+              "mode": "hand_free_base",
+              "travel_m": 0.15,
+              "turn_rad": 0,
+              "arm_delta": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "base_mask": [
+                false,
+                false,
+                false
+              ],
+              "purpose": "tracking"
+            },
+            "tracking_success": true,
+            "code": "ok",
+            "control_ticks": 500,
+            "stop_confirmed": true,
+            "reference_sha256": "3b7ec7e755486f58ce8d465ad151674b02190510b374880b2d3ebe5a76e49aa8",
+            "metrics": {
+              "ee_position_error": 8.572243537272448e-07,
+              "ee_orientation_error": 2.30867033086641e-06,
+              "rms_hand_position_error": 0.0024681315643652183,
+              "peak_hand_position_error": 0.009810237500053567,
+              "peak_hand_orientation_error": 0.029775802644683894,
+              "base_goal_error": 0.0,
+              "base_heading_error_rad": 0.0,
+              "peak_base_linear_jerk_m_s3": 0.7072804445927768,
+              "peak_base_yaw_jerk_rad_s3": 1.3150892561353822,
+              "peak_joint_jerk": [
+                0.5209354231346482,
+                0.8307894199512944,
+                1.2498397992952048,
+                1.1476857083737828,
+                1.0569911804081302
+              ],
+              "peak_contact_force": 0.19620000000000115,
+              "contact_impulse": 4.904999999999551,
+              "max_penetration": 0.00014215299777013313,
+              "max_wheel_gap": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "min_wheel_load": [
+                2.14788338728141,
+                2.3524897616851765,
+                0.04835565223884995
+              ],
+              "time_to_first_settle": 6.299999999999417,
+              "peak_hold_base_drift_m": 0.00037582327250322003,
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "retention_lost": false,
+              "base_linear_norm_m_s": 6.226673549734928e-07,
+              "base_angular_norm_rad_s": 1.1138386325468396e-06,
+              "max_joint_velocity": 9.072845497820405e-06
+            },
+            "post_stop_metrics": {
+              "ee_position_error": 8.572243537272448e-07,
+              "ee_orientation_error": 2.30867033086641e-06,
+              "rms_hand_position_error": 0.0024681315643652183,
+              "peak_hand_position_error": 0.009810237500053567,
+              "peak_hand_orientation_error": 0.029775802644683894,
+              "base_goal_error": 0.0,
+              "base_heading_error_rad": 0.0,
+              "peak_base_linear_jerk_m_s3": 0.7072804445927768,
+              "peak_base_yaw_jerk_rad_s3": 1.3150892561353822,
+              "peak_joint_jerk": [
+                0.5209354231346482,
+                0.8307894199512944,
+                1.2498397992952048,
+                1.1476857083737828,
+                1.0569911804081302
+              ],
+              "peak_contact_force": 0.19620000000000115,
+              "contact_impulse": 4.904999999999551,
+              "max_penetration": 0.00014215299777013313,
+              "max_wheel_gap": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "min_wheel_load": [
+                2.14788338728141,
+                2.3524897616851765,
+                0.04835565223884995
+              ],
+              "time_to_first_settle": 6.299999999999417,
+              "peak_hold_base_drift_m": 0.00037582327250322003,
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "retention_lost": false,
+              "base_linear_norm_m_s": 6.226673549734928e-07,
+              "base_angular_norm_rad_s": 1.1138386325468396e-06,
+              "max_joint_velocity": 9.072845497820405e-06
+            }
+          },
+          {
+            "case": {
+              "id": "innate_mars:v2:train:hand_free_base:2",
+              "seed": 35700002,
+              "split": "train",
+              "mode": "hand_free_base",
+              "travel_m": 0.15,
+              "turn_rad": 0.24,
+              "arm_delta": [
+                0,
+                0.005,
+                -0.005,
+                0,
+                0
+              ],
+              "base_mask": [
+                false,
+                false,
+                false
+              ],
+              "purpose": "tracking"
+            },
+            "tracking_success": true,
+            "code": "ok",
+            "control_ticks": 500,
+            "stop_confirmed": true,
+            "reference_sha256": "04041c467c3af019cbd7a99fb6d909f9d61bae7ec8f8a67f50c9b89e7ed93dd0",
+            "metrics": {
+              "ee_position_error": 3.3210051716094064e-07,
+              "ee_orientation_error": 9.410174729733185e-07,
+              "rms_hand_position_error": 0.0029402724611663857,
+              "peak_hand_position_error": 0.011330725138253301,
+              "peak_hand_orientation_error": 0.056508964231674445,
+              "base_goal_error": 0.0,
+              "base_heading_error_rad": 0.0,
+              "peak_base_linear_jerk_m_s3": 0.10697292242826528,
+              "peak_base_yaw_jerk_rad_s3": 0.28221279119206544,
+              "peak_joint_jerk": [
+                0.08862617407798812,
+                0.3417028654069774,
+                0.2559465603634913,
+                0.1955093546191776,
+                0.4421397422790199
+              ],
+              "peak_contact_force": 0.19620000000000115,
+              "contact_impulse": 4.904999999999551,
+              "max_penetration": 0.00014215299777013015,
+              "max_wheel_gap": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "min_wheel_load": [
+                4.115294918844711,
+                5.7710609220767255,
+                0.5264115786318835
+              ],
+              "time_to_first_settle": 6.349999999999412,
+              "peak_hold_base_drift_m": 0.0004021111724996342,
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "retention_lost": false,
+              "base_linear_norm_m_s": 4.747926973608221e-07,
+              "base_angular_norm_rad_s": 5.976657700420262e-07,
+              "max_joint_velocity": 4.408844692169073e-06
+            },
+            "post_stop_metrics": {
+              "ee_position_error": 3.3210051716094064e-07,
+              "ee_orientation_error": 9.410174729733185e-07,
+              "rms_hand_position_error": 0.0029402724611663857,
+              "peak_hand_position_error": 0.011330725138253301,
+              "peak_hand_orientation_error": 0.056508964231674445,
+              "base_goal_error": 0.0,
+              "base_heading_error_rad": 0.0,
+              "peak_base_linear_jerk_m_s3": 0.10697292242826528,
+              "peak_base_yaw_jerk_rad_s3": 0.28221279119206544,
+              "peak_joint_jerk": [
+                0.08862617407798812,
+                0.3417028654069774,
+                0.2559465603634913,
+                0.1955093546191776,
+                0.4421397422790199
+              ],
+              "peak_contact_force": 0.19620000000000115,
+              "contact_impulse": 4.904999999999551,
+              "max_penetration": 0.00014215299777013015,
+              "max_wheel_gap": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "min_wheel_load": [
+                4.115294918844711,
+                5.7710609220767255,
+                0.5264115786318835
+              ],
+              "time_to_first_settle": 6.349999999999412,
+              "peak_hold_base_drift_m": 0.0004021111724996342,
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "retention_lost": false,
+              "base_linear_norm_m_s": 4.747926973608221e-07,
+              "base_angular_norm_rad_s": 5.976657700420262e-07,
+              "max_joint_velocity": 4.408844692169073e-06
+            }
+          },
+          {
+            "case": {
+              "id": "innate_mars:v2:train:coupled:3",
+              "seed": 35700003,
+              "split": "train",
+              "mode": "coupled",
+              "travel_m": 0.15,
+              "turn_rad": -0.24,
+              "arm_delta": [
+                0,
+                -0.005,
+                0.005,
+                0,
+                0
+              ],
+              "base_mask": [
+                true,
+                true,
+                true
+              ],
+              "purpose": "tracking"
+            },
+            "tracking_success": true,
+            "code": "ok",
+            "control_ticks": 500,
+            "stop_confirmed": true,
+            "reference_sha256": "6cdefcf700289ec1621541476f82d2e0028a9eb5086e3b1a38e3efeb41feab15",
+            "metrics": {
+              "ee_position_error": 0.0023879925511036716,
+              "ee_orientation_error": 0.006559186754492603,
+              "rms_hand_position_error": 0.00349705388976349,
+              "peak_hand_position_error": 0.010167151402155756,
+              "peak_hand_orientation_error": 0.028406778422594734,
+              "base_goal_error": 0.004350786008998111,
+              "base_heading_error_rad": 0.005892068464623229,
+              "peak_base_linear_jerk_m_s3": 0.34426250040046485,
+              "peak_base_yaw_jerk_rad_s3": 0.5229805737083256,
+              "peak_joint_jerk": [
+                0.17899228243411675,
+                0.9696762105576843,
+                0.6874400964555766,
+                0.32750594121065624,
+                0.13014875610475735
+              ],
+              "peak_contact_force": 0.19620000000000112,
+              "contact_impulse": 4.904999999999551,
+              "max_penetration": 0.00014215299777013026,
+              "max_wheel_gap": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "min_wheel_load": [
+                3.7651760411232775,
+                4.6037547003508505,
+                1.233488177551612
+              ],
+              "time_to_first_settle": 6.049999999999445,
+              "peak_hold_base_drift_m": 6.547775010994226e-05,
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "retention_lost": false,
+              "base_linear_norm_m_s": 1.1866738413336997e-07,
+              "base_angular_norm_rad_s": 1.632853482369911e-07,
+              "max_joint_velocity": 2.943882696546833e-07
+            },
+            "post_stop_metrics": {
+              "ee_position_error": 0.0023879925511036716,
+              "ee_orientation_error": 0.006559186754492603,
+              "rms_hand_position_error": 0.00349705388976349,
+              "peak_hand_position_error": 0.010167151402155756,
+              "peak_hand_orientation_error": 0.028406778422594734,
+              "base_goal_error": 0.004350786008998111,
+              "base_heading_error_rad": 0.005892068464623229,
+              "peak_base_linear_jerk_m_s3": 0.34426250040046485,
+              "peak_base_yaw_jerk_rad_s3": 0.5229805737083256,
+              "peak_joint_jerk": [
+                0.17899228243411675,
+                0.9696762105576843,
+                0.6874400964555766,
+                0.32750594121065624,
+                0.13014875610475735
+              ],
+              "peak_contact_force": 0.19620000000000112,
+              "contact_impulse": 4.904999999999551,
+              "max_penetration": 0.00014215299777013026,
+              "max_wheel_gap": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "min_wheel_load": [
+                3.7651760411232775,
+                4.6037547003508505,
+                1.233488177551612
+              ],
+              "time_to_first_settle": 6.049999999999445,
+              "peak_hold_base_drift_m": 6.547775010994226e-05,
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "retention_lost": false,
+              "base_linear_norm_m_s": 1.1866738413336997e-07,
+              "base_angular_norm_rad_s": 1.632853482369911e-07,
+              "max_joint_velocity": 2.943882696546833e-07
+            }
+          },
+          {
+            "case": {
+              "id": "innate_mars:v2:train:coupled:4",
+              "seed": 35700004,
+              "split": "train",
+              "mode": "coupled",
+              "travel_m": 0.15,
+              "turn_rad": 0.24,
+              "arm_delta": [
+                0,
+                0,
+                0,
+                0,
+                0.01
+              ],
+              "base_mask": [
+                true,
+                true,
+                false
+              ],
+              "purpose": "tracking"
+            },
+            "tracking_success": false,
+            "code": "tracking_timeout",
+            "control_ticks": 500,
+            "stop_confirmed": true,
+            "reference_sha256": "22c378752140c5b1c36d3602d534c4166dd1365b8f68c0c0d3d6726ad51c1564",
+            "metrics": {
+              "ee_position_error": 0.0046062947013488405,
+              "ee_orientation_error": 0.010885502392509216,
+              "rms_hand_position_error": 0.005511664047583329,
+              "peak_hand_position_error": 0.014631604821063076,
+              "peak_hand_orientation_error": 0.050910104370131645,
+              "base_goal_error": 0.004718405023165889,
+              "base_heading_error_rad": 0.0,
+              "peak_base_linear_jerk_m_s3": 1.4394871783590413,
+              "peak_base_yaw_jerk_rad_s3": 0.648478050579539,
+              "peak_joint_jerk": [
+                0.32132919999397935,
+                0.7707393542987703,
+                0.588497002995847,
+                0.47570563936225524,
+                0.5719206094608866
+              ],
+              "peak_contact_force": 0.1962000000000006,
+              "contact_impulse": 4.904999999999551,
+              "max_penetration": 0.0001077554202162101,
+              "max_wheel_gap": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "min_wheel_load": [
+                4.07293455932601,
+                3.317370508710936,
+                1.3059728617485846
+              ],
+              "time_to_first_settle": null,
+              "peak_hold_base_drift_m": 0.0,
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "retention_lost": false,
+              "base_linear_norm_m_s": 5.385422539655884e-08,
+              "base_angular_norm_rad_s": 1.4430703206613007e-07,
+              "max_joint_velocity": 6.350715054032959e-08
+            },
+            "post_stop_metrics": {
+              "ee_position_error": 0.0046062947013488405,
+              "ee_orientation_error": 0.010885502392509216,
+              "rms_hand_position_error": 0.005511664047583329,
+              "peak_hand_position_error": 0.014631604821063076,
+              "peak_hand_orientation_error": 0.050910104370131645,
+              "base_goal_error": 0.004718405023165889,
+              "base_heading_error_rad": 0.0,
+              "peak_base_linear_jerk_m_s3": 1.4394871783590413,
+              "peak_base_yaw_jerk_rad_s3": 0.648478050579539,
+              "peak_joint_jerk": [
+                0.32132919999397935,
+                0.7707393542987703,
+                0.588497002995847,
+                0.47570563936225524,
+                0.5719206094608866
+              ],
+              "peak_contact_force": 0.1962000000000006,
+              "contact_impulse": 4.904999999999551,
+              "max_penetration": 0.0001077554202162101,
+              "max_wheel_gap": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "min_wheel_load": [
+                4.07293455932601,
+                3.317370508710936,
+                1.3059728617485846
+              ],
+              "time_to_first_settle": null,
+              "peak_hold_base_drift_m": 0.0,
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "retention_lost": false,
+              "base_linear_norm_m_s": 5.385422539655884e-08,
+              "base_angular_norm_rad_s": 1.4430703206613007e-07,
+              "max_joint_velocity": 6.350715054032959e-08
+            }
+          },
+          {
+            "case": {
+              "id": "innate_mars:v2:train:fixed_world_hand:5",
+              "seed": 35700005,
+              "split": "train",
+              "mode": "fixed_world_hand",
+              "travel_m": 0.0,
+              "turn_rad": 0,
+              "arm_delta": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "base_mask": [
+                true,
+                true,
+                true
+              ],
+              "self_motion_scale": 1.0,
+              "purpose": "hand_hold_nullspace_diagnostic"
+            },
+            "tracking_success": true,
+            "code": "ok",
+            "control_ticks": 500,
+            "stop_confirmed": true,
+            "reference_sha256": "53104a375b312ceb3f8d0cb9bad6a540cce2da2ef5f33c4919527437522b8e75",
+            "metrics": {
+              "ee_position_error": 7.165404210474434e-06,
+              "ee_orientation_error": 1.9566058777309716e-05,
+              "rms_hand_position_error": 0.0001018681326589028,
+              "peak_hand_position_error": 0.00039867809122555865,
+              "peak_hand_orientation_error": 0.0019833705277328088,
+              "base_goal_error": 1.2516688390317795e-05,
+              "base_heading_error_rad": 1.5509851310420517e-05,
+              "peak_base_linear_jerk_m_s3": 0.025235570625770896,
+              "peak_base_yaw_jerk_rad_s3": 0.03690753847606156,
+              "peak_joint_jerk": [
+                0.1163989119312022,
+                0.18303049694575857,
+                0.11311401603522137,
+                0.030038484101960822,
+                0.008624617994682938
+              ],
+              "peak_contact_force": 0.19620000000000115,
+              "contact_impulse": 4.904999999999551,
+              "max_penetration": 0.0001421529977701328,
+              "max_wheel_gap": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "min_wheel_load": [
+                4.678275517843429,
+                6.2215745231995205,
+                1.7058082876330303
+              ],
+              "time_to_first_settle": 5.899999999999461,
+              "peak_hold_base_drift_m": 1.1785173120185352e-05,
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "retention_lost": false,
+              "base_linear_norm_m_s": 4.2685574439163674e-09,
+              "base_angular_norm_rad_s": 7.797824212312615e-09,
+              "max_joint_velocity": 3.92150162517416e-08
+            },
+            "post_stop_metrics": {
+              "ee_position_error": 7.165404210474434e-06,
+              "ee_orientation_error": 1.9566058777309716e-05,
+              "rms_hand_position_error": 0.0001018681326589028,
+              "peak_hand_position_error": 0.00039867809122555865,
+              "peak_hand_orientation_error": 0.0019833705277328088,
+              "base_goal_error": 1.2516688390317795e-05,
+              "base_heading_error_rad": 1.5509851310420517e-05,
+              "peak_base_linear_jerk_m_s3": 0.025235570625770896,
+              "peak_base_yaw_jerk_rad_s3": 0.03690753847606156,
+              "peak_joint_jerk": [
+                0.1163989119312022,
+                0.18303049694575857,
+                0.11311401603522137,
+                0.030038484101960822,
+                0.008624617994682938
+              ],
+              "peak_contact_force": 0.19620000000000115,
+              "contact_impulse": 4.904999999999551,
+              "max_penetration": 0.0001421529977701328,
+              "max_wheel_gap": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "min_wheel_load": [
+                4.678275517843429,
+                6.2215745231995205,
+                1.7058082876330303
+              ],
+              "time_to_first_settle": 5.899999999999461,
+              "peak_hold_base_drift_m": 1.1785173120185352e-05,
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "retention_lost": false,
+              "base_linear_norm_m_s": 4.2685574439163674e-09,
+              "base_angular_norm_rad_s": 7.797824212312615e-09,
+              "max_joint_velocity": 3.92150162517416e-08
+            }
+          },
+          {
+            "case": {
+              "id": "innate_mars:v2:audit:hand_free_base:6",
+              "seed": 35700006,
+              "split": "audit",
+              "mode": "hand_free_base",
+              "travel_m": -0.15,
+              "turn_rad": 0,
+              "arm_delta": [
+                0,
+                0,
+                0,
+                0,
+                -0.01
+              ],
+              "base_mask": [
+                false,
+                false,
+                false
+              ],
+              "purpose": "tracking"
+            },
+            "tracking_success": false,
+            "code": "unsafe_contact",
+            "control_ticks": 35,
+            "stop_confirmed": false,
+            "reference_sha256": "f758a52b8c0978e8b1177394e813f76d61d461e35eb5ef9857f5c74c48a6cdec",
+            "metrics": {
+              "ee_position_error": 0.011422081568472787,
+              "ee_orientation_error": 0.04895786478984657,
+              "rms_hand_position_error": 0.003809783777074425,
+              "peak_hand_position_error": 0.011422081568472787,
+              "peak_hand_orientation_error": 0.04895786478984657,
+              "base_goal_error": 0.0,
+              "base_heading_error_rad": 0.0,
+              "peak_base_linear_jerk_m_s3": 1.6222311795148614,
+              "peak_base_yaw_jerk_rad_s3": 4.403207235869344,
+              "peak_joint_jerk": [
+                4.240335681993596,
+                64.16288736445883,
+                46.683169895968994,
+                20.00772260300576,
+                7.38365699293661
+              ],
+              "peak_contact_force": 34.65232815664665,
+              "contact_impulse": 1.6263475734964783,
+              "max_penetration": 0.002232612673673124,
+              "max_wheel_gap": [
+                0.0,
+                2.420840874706176e-07,
+                0.0
+              ],
+              "min_wheel_load": [
+                0.35506812113997355,
+                0.0,
+                1.169557443354702
+              ],
+              "time_to_first_settle": null,
+              "peak_hold_base_drift_m": 0.0,
+              "unsafe_contact": true,
+              "wheel_lift": false,
+              "retention_lost": false,
+              "base_linear_norm_m_s": 0.011585128640714221,
+              "base_angular_norm_rad_s": 0.03060966687106617,
+              "max_joint_velocity": 0.3329971808706794
+            },
+            "post_stop_metrics": {
+              "ee_position_error": 0.0170896327396287,
+              "ee_orientation_error": 0.07349097241725405,
+              "rms_hand_position_error": 0.003809783777074425,
+              "peak_hand_position_error": 0.011422081568472787,
+              "peak_hand_orientation_error": 0.04895786478984657,
+              "base_goal_error": 0.0,
+              "base_heading_error_rad": 0.0,
+              "peak_base_linear_jerk_m_s3": 1.6222311795148614,
+              "peak_base_yaw_jerk_rad_s3": 4.403207235869344,
+              "peak_joint_jerk": [
+                4.240335681993596,
+                64.16288736445883,
+                46.683169895968994,
+                20.00772260300576,
+                7.38365699293661
+              ],
+              "peak_contact_force": 34.65232815664665,
+              "contact_impulse": 10.407260350703964,
+              "max_penetration": 0.0023349855212250054,
+              "max_wheel_gap": [
+                1.5711155856988623e-05,
+                9.912886748189575e-07,
+                0.0
+              ],
+              "min_wheel_load": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "time_to_first_settle": null,
+              "peak_hold_base_drift_m": 0.0,
+              "unsafe_contact": true,
+              "wheel_lift": false,
+              "retention_lost": false,
+              "base_linear_norm_m_s": 0.0013951295473131223,
+              "base_angular_norm_rad_s": 0.010554611871582934,
+              "max_joint_velocity": 0.03717838643303359
+            }
+          },
+          {
+            "case": {
+              "id": "innate_mars:v2:audit:coupled:7",
+              "seed": 35700007,
+              "split": "audit",
+              "mode": "coupled",
+              "travel_m": -0.15,
+              "turn_rad": -0.24,
+              "arm_delta": [
+                0,
+                0.007,
+                -0.007,
+                0,
+                0
+              ],
+              "base_mask": [
+                true,
+                true,
+                true
+              ],
+              "purpose": "tracking"
+            },
+            "tracking_success": false,
+            "code": "tracking_timeout",
+            "control_ticks": 500,
+            "stop_confirmed": true,
+            "reference_sha256": "b35be316bc7d4c1a9b29e2d2b86a36c9c206d3ec5c6e064e12a83bbbb0a5c61a",
+            "metrics": {
+              "ee_position_error": 0.010089435095614163,
+              "ee_orientation_error": 0.028329431233706872,
+              "rms_hand_position_error": 0.009941915183233254,
+              "peak_hand_position_error": 0.012636916653786124,
+              "peak_hand_orientation_error": 0.05276240073608666,
+              "base_goal_error": 0.02017868563737597,
+              "base_heading_error_rad": 0.032799186323955176,
+              "peak_base_linear_jerk_m_s3": 2.7219951156235878,
+              "peak_base_yaw_jerk_rad_s3": 19.5681498900562,
+              "peak_joint_jerk": [
+                6.488097014841426,
+                8.703944334033395,
+                10.906370110255356,
+                8.927862459109548,
+                7.465626935225586
+              ],
+              "peak_contact_force": 0.1962000000000006,
+              "contact_impulse": 4.904999999999551,
+              "max_penetration": 0.00010775542021621357,
+              "max_wheel_gap": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "min_wheel_load": [
+                0.6481882290501529,
+                0.34085733947124197,
+                0.03876397945471128
+              ],
+              "time_to_first_settle": null,
+              "peak_hold_base_drift_m": 0.0,
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "retention_lost": false,
+              "base_linear_norm_m_s": 4.153887127461719e-08,
+              "base_angular_norm_rad_s": 1.8527119711144414e-07,
+              "max_joint_velocity": 7.588925697257562e-07
+            },
+            "post_stop_metrics": {
+              "ee_position_error": 0.010089435095614163,
+              "ee_orientation_error": 0.028329431233706872,
+              "rms_hand_position_error": 0.009941915183233254,
+              "peak_hand_position_error": 0.012636916653786124,
+              "peak_hand_orientation_error": 0.05276240073608666,
+              "base_goal_error": 0.02017868563737597,
+              "base_heading_error_rad": 0.032799186323955176,
+              "peak_base_linear_jerk_m_s3": 2.7219951156235878,
+              "peak_base_yaw_jerk_rad_s3": 19.5681498900562,
+              "peak_joint_jerk": [
+                6.488097014841426,
+                8.703944334033395,
+                10.906370110255356,
+                8.927862459109548,
+                7.465626935225586
+              ],
+              "peak_contact_force": 0.1962000000000006,
+              "contact_impulse": 4.904999999999551,
+              "max_penetration": 0.00010775542021621357,
+              "max_wheel_gap": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "min_wheel_load": [
+                0.6481882290501529,
+                0.34085733947124197,
+                0.03876397945471128
+              ],
+              "time_to_first_settle": null,
+              "peak_hold_base_drift_m": 0.0,
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "retention_lost": false,
+              "base_linear_norm_m_s": 4.153887127461719e-08,
+              "base_angular_norm_rad_s": 1.8527119711144414e-07,
+              "max_joint_velocity": 7.588925697257562e-07
+            }
+          },
+          {
+            "case": {
+              "id": "innate_mars:v2:audit:fixed_world_hand:8",
+              "seed": 35700008,
+              "split": "audit",
+              "mode": "fixed_world_hand",
+              "travel_m": 0.0,
+              "turn_rad": 0,
+              "arm_delta": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "base_mask": [
+                true,
+                true,
+                true
+              ],
+              "self_motion_scale": -0.75,
+              "purpose": "hand_hold_nullspace_diagnostic"
+            },
+            "tracking_success": true,
+            "code": "ok",
+            "control_ticks": 500,
+            "stop_confirmed": true,
+            "reference_sha256": "0b1a87f4f0a035ea025dea69083c99019982c2c1469c11e0293bf89efec080f0",
+            "metrics": {
+              "ee_position_error": 2.4939654536847817e-05,
+              "ee_orientation_error": 6.766361832053483e-05,
+              "rms_hand_position_error": 0.00010940786674276083,
+              "peak_hand_position_error": 0.00040486317937878775,
+              "peak_hand_orientation_error": 0.0020288557410263796,
+              "base_goal_error": 4.2404704070828666e-05,
+              "base_heading_error_rad": 4.996731048514426e-05,
+              "peak_base_linear_jerk_m_s3": 0.024350932866666283,
+              "peak_base_yaw_jerk_rad_s3": 0.02334510157129101,
+              "peak_joint_jerk": [
+                0.10623006899117375,
+                0.13247197425978394,
+                0.11302896224048752,
+                0.024193376437994327,
+                0.014095687297515855
+              ],
+              "peak_contact_force": 0.19620000000000054,
+              "contact_impulse": 4.904999999999551,
+              "max_penetration": 0.0001077554202162101,
+              "max_wheel_gap": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "min_wheel_load": [
+                4.641838462363525,
+                6.668702389882869,
+                1.8070141190192222
+              ],
+              "time_to_first_settle": 5.899999999999461,
+              "peak_hold_base_drift_m": 7.34927800950184e-06,
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "retention_lost": false,
+              "base_linear_norm_m_s": 5.617382327498437e-09,
+              "base_angular_norm_rad_s": 1.3471701334096882e-07,
+              "max_joint_velocity": 3.4907342609622e-07
+            },
+            "post_stop_metrics": {
+              "ee_position_error": 2.4939654536847817e-05,
+              "ee_orientation_error": 6.766361832053483e-05,
+              "rms_hand_position_error": 0.00010940786674276083,
+              "peak_hand_position_error": 0.00040486317937878775,
+              "peak_hand_orientation_error": 0.0020288557410263796,
+              "base_goal_error": 4.2404704070828666e-05,
+              "base_heading_error_rad": 4.996731048514426e-05,
+              "peak_base_linear_jerk_m_s3": 0.024350932866666283,
+              "peak_base_yaw_jerk_rad_s3": 0.02334510157129101,
+              "peak_joint_jerk": [
+                0.10623006899117375,
+                0.13247197425978394,
+                0.11302896224048752,
+                0.024193376437994327,
+                0.014095687297515855
+              ],
+              "peak_contact_force": 0.19620000000000054,
+              "contact_impulse": 4.904999999999551,
+              "max_penetration": 0.0001077554202162101,
+              "max_wheel_gap": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "min_wheel_load": [
+                4.641838462363525,
+                6.668702389882869,
+                1.8070141190192222
+              ],
+              "time_to_first_settle": 5.899999999999461,
+              "peak_hold_base_drift_m": 7.34927800950184e-06,
+              "unsafe_contact": false,
+              "wheel_lift": false,
+              "retention_lost": false,
+              "base_linear_norm_m_s": 5.617382327498437e-09,
+              "base_angular_norm_rad_s": 1.3471701334096882e-07,
+              "max_joint_velocity": 3.4907342609622e-07
+            }
+          },
+          {
+            "case": {
+              "id": "innate_mars:v2:audit:hand_free_base:9",
+              "seed": 35700009,
+              "split": "audit",
+              "mode": "hand_free_base",
+              "travel_m": 0.15,
+              "turn_rad": 0,
+              "arm_delta": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "base_mask": [
+                false,
+                false,
+                false
+              ],
+              "retarget": {
+                "at_fraction": 0.5,
+                "travel_m": -0.15
+              },
+              "purpose": "tracking"
+            },
+            "tracking_success": false,
+            "code": "unsafe_contact",
+            "control_ticks": 95,
+            "stop_confirmed": false,
+            "reference_sha256": "6d54f7b1c64092351467e1b9ef55a807440fd2383b5483b6e894b46d9e39beee",
+            "metrics": {
+              "ee_position_error": 0.018194476462212134,
+              "ee_orientation_error": 0.07824682409246528,
+              "rms_hand_position_error": 0.006185200946291002,
+              "peak_hand_position_error": 0.018194476462212134,
+              "peak_hand_orientation_error": 0.07824682409246528,
+              "base_goal_error": 0.0,
+              "base_heading_error_rad": 0.0,
+              "peak_base_linear_jerk_m_s3": 6.25554261440669,
+              "peak_base_yaw_jerk_rad_s3": 16.59170626358375,
+              "peak_joint_jerk": [
+                7.458732479654998,
+                60.03137497778782,
+                28.360300354763556,
+                13.849128205768153,
+                7.359437985244672
+              ],
+              "peak_contact_force": 31.552410427885867,
+              "contact_impulse": 2.147434645369958,
+              "max_penetration": 0.0024487349240954253,
+              "max_wheel_gap": [
+                3.9701310185213945e-07,
+                1.327282275517816e-06,
+                0.0
+              ],
+              "min_wheel_load": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "time_to_first_settle": null,
+              "peak_hold_base_drift_m": 0.0,
+              "unsafe_contact": true,
+              "wheel_lift": false,
+              "retention_lost": false,
+              "base_linear_norm_m_s": 0.004243061298744402,
+              "base_angular_norm_rad_s": 0.04340453079220299,
+              "max_joint_velocity": 0.29379376283891123
+            },
+            "post_stop_metrics": {
+              "ee_position_error": 0.026485041977092824,
+              "ee_orientation_error": 0.11330815852323395,
+              "rms_hand_position_error": 0.006185200946291002,
+              "peak_hand_position_error": 0.018194476462212134,
+              "peak_hand_orientation_error": 0.07824682409246528,
+              "base_goal_error": 0.0,
+              "base_heading_error_rad": 0.0,
+              "peak_base_linear_jerk_m_s3": 6.25554261440669,
+              "peak_base_yaw_jerk_rad_s3": 16.59170626358375,
+              "peak_joint_jerk": [
+                7.458732479654998,
+                60.03137497778782,
+                28.360300354763556,
+                13.849128205768153,
+                7.359437985244672
+              ],
+              "peak_contact_force": 31.552410427885867,
+              "contact_impulse": 16.535216325276718,
+              "max_penetration": 0.0029308128790688105,
+              "max_wheel_gap": [
+                1.1950838284313647e-05,
+                1.5603242510126014e-06,
+                0.0
+              ],
+              "min_wheel_load": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "time_to_first_settle": null,
+              "peak_hold_base_drift_m": 0.0,
+              "unsafe_contact": true,
+              "wheel_lift": false,
+              "retention_lost": false,
+              "base_linear_norm_m_s": 0.0014597072677781842,
+              "base_angular_norm_rad_s": 0.008283739281803556,
+              "max_joint_velocity": 0.03734797624209868
+            }
+          }
+        ]
+      }
+    },
+    "tamp": {
+      "attempts": 6,
+      "successes": 6,
+      "cases": [
+        {
+          "id": "development:left:20g:0",
+          "primitive": "grasp_pose",
+          "planning_scope": "unloaded_prefix",
+          "boundary_reached": true,
+          "terminal_pose": {
+            "position_error_m": 0.0014863210302168894,
+            "orientation_error_rad": 0.004715214791667734,
+            "position_tolerance_m": 0.003,
+            "orientation_tolerance_rad": 0.02
+          },
+          "terminal_pose_in_contract": true,
+          "gripper_open": true,
+          "success": true,
+          "code": "grasp_pose_complete",
+          "stop_confirmed": true,
+          "control_ticks": 193,
+          "decisions": 129,
+          "inference_counts": {
+            "policy_calls": 129,
+            "reference_controller_calls": 0
+          },
+          "full_pick_place_success": false,
+          "object_translation_m": [
+            0.0025095035751800387,
+            -0.0009435116619914904,
+            -2.5233466985075115e-06
+          ],
+          "object_rotation_rad": 0.107648321071006,
+          "initial_state_sha256": "f91850bde6e7388d9ca2c6ef54d8cd7d630d51f94eaba0e65ca342f0a90e0c03",
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "initialization_failed": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          }
+        },
+        {
+          "id": "development:right:50g:1",
+          "primitive": "grasp_pose",
+          "planning_scope": "unloaded_prefix",
+          "boundary_reached": true,
+          "terminal_pose": {
+            "position_error_m": 0.0013261251938843821,
+            "orientation_error_rad": 0.004034279674779303,
+            "position_tolerance_m": 0.003,
+            "orientation_tolerance_rad": 0.02
+          },
+          "terminal_pose_in_contract": true,
+          "gripper_open": true,
+          "success": true,
+          "code": "grasp_pose_complete",
+          "stop_confirmed": true,
+          "control_ticks": 191,
+          "decisions": 129,
+          "inference_counts": {
+            "policy_calls": 129,
+            "reference_controller_calls": 0
+          },
+          "full_pick_place_success": false,
+          "object_translation_m": [
+            0.002300746426795064,
+            -0.000949445635156046,
+            -1.4068308845094357e-06
+          ],
+          "object_rotation_rad": 0.12195016644093595,
+          "initial_state_sha256": "c9be93d91f1f090da402d12d7a0d8e6ee0fff54dfeb2f083771b17efdb89b168",
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "initialization_failed": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          }
+        },
+        {
+          "id": "development:left:50g:2",
+          "primitive": "grasp_pose",
+          "planning_scope": "unloaded_prefix",
+          "boundary_reached": true,
+          "terminal_pose": {
+            "position_error_m": 0.002082874492853421,
+            "orientation_error_rad": 0.006509124176025879,
+            "position_tolerance_m": 0.003,
+            "orientation_tolerance_rad": 0.02
+          },
+          "terminal_pose_in_contract": true,
+          "gripper_open": true,
+          "success": true,
+          "code": "grasp_pose_complete",
+          "stop_confirmed": true,
+          "control_ticks": 235,
+          "decisions": 148,
+          "inference_counts": {
+            "policy_calls": 148,
+            "reference_controller_calls": 0
+          },
+          "full_pick_place_success": false,
+          "object_translation_m": [
+            0.0034225744163729477,
+            -0.0014390263882661028,
+            -4.600498593188007e-10
+          ],
+          "object_rotation_rad": 0.15648776666448042,
+          "initial_state_sha256": "4ea9902356ec4e14c89d3adcd9fb221922e40376b9d807c60dae63ecbeeabcbe",
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "initialization_failed": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          }
+        },
+        {
+          "id": "development:right:20g:3",
+          "primitive": "grasp_pose",
+          "planning_scope": "unloaded_prefix",
+          "boundary_reached": true,
+          "terminal_pose": {
+            "position_error_m": 0.0029471444485339544,
+            "orientation_error_rad": 0.008849365593172995,
+            "position_tolerance_m": 0.003,
+            "orientation_tolerance_rad": 0.02
+          },
+          "terminal_pose_in_contract": true,
+          "gripper_open": true,
+          "success": true,
+          "code": "grasp_pose_complete",
+          "stop_confirmed": true,
+          "control_ticks": 235,
+          "decisions": 150,
+          "inference_counts": {
+            "policy_calls": 150,
+            "reference_controller_calls": 0
+          },
+          "full_pick_place_success": false,
+          "object_translation_m": [
+            0.003794049221546525,
+            -0.0018787401437594664,
+            -7.749078492769179e-07
+          ],
+          "object_rotation_rad": 0.1410994501912333,
+          "initial_state_sha256": "2e4fee9a0d7ef5e87cc71ff453618df6357d03f10365fc614c4d55c50aae9913",
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "initialization_failed": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          }
+        },
+        {
+          "id": "audit:left:20g:0",
+          "primitive": "grasp_pose",
+          "planning_scope": "unloaded_prefix",
+          "boundary_reached": true,
+          "terminal_pose": {
+            "position_error_m": 0.0016102903345920241,
+            "orientation_error_rad": 0.004843512132372061,
+            "position_tolerance_m": 0.003,
+            "orientation_tolerance_rad": 0.02
+          },
+          "terminal_pose_in_contract": true,
+          "gripper_open": true,
+          "success": true,
+          "code": "grasp_pose_complete",
+          "stop_confirmed": true,
+          "control_ticks": 198,
+          "decisions": 131,
+          "inference_counts": {
+            "policy_calls": 131,
+            "reference_controller_calls": 0
+          },
+          "full_pick_place_success": false,
+          "object_translation_m": [
+            0.003294297711989247,
+            -0.0009107789055981946,
+            -6.40392352466157e-06
+          ],
+          "object_rotation_rad": 0.14926838713413323,
+          "initial_state_sha256": "99c3b1df14643c065f63b3fcfa59e547094e49247dc3227a48c85e2188e9e136",
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "initialization_failed": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          }
+        },
+        {
+          "id": "audit:right:50g:1",
+          "primitive": "grasp_pose",
+          "planning_scope": "unloaded_prefix",
+          "boundary_reached": true,
+          "terminal_pose": {
+            "position_error_m": 0.00141411931414533,
+            "orientation_error_rad": 0.004475979858498739,
+            "position_tolerance_m": 0.003,
+            "orientation_tolerance_rad": 0.02
+          },
+          "terminal_pose_in_contract": true,
+          "gripper_open": true,
+          "success": true,
+          "code": "grasp_pose_complete",
+          "stop_confirmed": true,
+          "control_ticks": 198,
+          "decisions": 132,
+          "inference_counts": {
+            "policy_calls": 132,
+            "reference_controller_calls": 0
+          },
+          "full_pick_place_success": false,
+          "object_translation_m": [
+            0.0031937647484037712,
+            -0.0010742042469247051,
+            -2.595527924015295e-05
+          ],
+          "object_rotation_rad": 0.1751102701656031,
+          "initial_state_sha256": "1bc9cff77c159e8d6c1f032900dd14765d5e5743102cb184a789fe2c925e7bf8",
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "initialization_failed": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          }
+        }
+      ]
+    }
+  },
+  "source_state_digest": "3647b7fa34fb4978abfbd5bec7cf5734ebfc915aa68b83b79464ea500a3d8fca",
+  "jobs": {
+    "physical_readouts": "20261116_103052_9e24e7",
+    "excluded_zero_decision_tamp_setup": "20261116_103756_57d871",
+    "tamp_completion": "20261116_103852_c627a6",
+    "regressions": "20261116_103052_6add36"
+  },
+  "software": {
+    "status": "running"
+  }
+}

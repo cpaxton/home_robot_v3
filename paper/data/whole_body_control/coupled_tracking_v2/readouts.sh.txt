@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+.venv/bin/python -u -m emet.rl.manipulation.coupled_tracking --suite configs/benchmarks/coupled_tracking_v2.json --robot innate_mars --teacher --output logs/eval/coupled-coarse-mars-teacher-v1
+.venv/bin/python -u -m emet.rl.manipulation.coupled_tracking --suite configs/benchmarks/coupled_tracking_v2.json --robot stretch --teacher --output logs/eval/coupled-coarse-stretch-teacher-v1
+.venv/bin/python -u logs/recovery/coupled-coarse-v1/actor_readout.py

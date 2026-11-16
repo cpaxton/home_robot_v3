@@ -3,7 +3,9 @@
 Implementation is consolidated into the canonical thread and #239 → #240 →
 #241 development stack. [Active work](../rl/ACTIVE_WORK.md) owns current
 ownership, receipts and launch status; this page owns the technical sequence.
-The immediate task is explicit unloaded-prefix planning scope, before new PPO.
+The unloaded-prefix scope and coupled v1 teacher readouts are complete. Current
+work isolates base hunting, coarse base acceptance and phase/reset coverage; see
+the [2026-11-16 report](../experiments/coupled_tracking_20261116.md).
 Older conditional experiments below remain historical/optional proposals,
 not competing automatic training launches.
 
@@ -12,7 +14,7 @@ The goal is one reactive actor that follows base/hand references, settles and
 satisfies physical smoothness, support, force and retention contracts. A better
 hand endpoint is useful progress; it is not the full objective.
 
-## Latest decision after actual-reset validation
+## Historical decision after actual-reset validation
 
 The [completed reset/baseline study](../experiments/mars_current_feedback_reset_validation_20261115.md)
 passes all 24 loop stop checks and 1,299 fresh software regressions. Current-COM

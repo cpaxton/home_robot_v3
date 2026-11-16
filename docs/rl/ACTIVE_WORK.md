@@ -31,7 +31,7 @@ the controller branches look clean.
 | --- | --- | --- |
 | 1 | [#239](https://github.com/cpaxton/home_robot_v3/pull/239), `feat/wbc-jerk-measurements` → `main` | Current-COM feedback, bounded nonfault hold reacquisition, task diagnostics and semantic failure reporting. Ready for review. |
 | 2 | [#240](https://github.com/cpaxton/home_robot_v3/pull/240), `feat/wbc-directional-curriculum` → #239 | Seventeen prepared direction cases, twenty-four audit cases and strict loader. Ready for review; not admitted or trained. |
-| 3 | [#241](https://github.com/cpaxton/home_robot_v3/pull/241), `feat/wbc-grasp-primitive` → #240 | Unloaded grasp-pose execution boundary, teacher admission, and this consolidated development line. Draft while stage admission is blocked. |
+| 3 | [#241](https://github.com/cpaxton/home_robot_v3/pull/241), `feat/wbc-grasp-primitive` → #240 | Unloaded grasp-pose execution boundary, teacher admission, and this consolidated development line. Draft while learned-policy stability and task progression remain incomplete. |
 
 #241 includes both parent branches; use it for the next controller change.
 Keep each PR's diff scoped to its parent. When a parent is squash-merged,
@@ -41,81 +41,59 @@ files. No PR is merged or actor promoted by this consolidation.
 
 ## Current state and evidence
 
-**No PPO run is active.** Recent progress repaired execution and expanded the
-unloaded primitive boundary with unchanged retained policy weights. No full
+**No PPO run is active.** The bounded 4,096-decision pilot and 1,024-update
+teacher-action bootstrap are complete. Current work isolates base hunting,
+coarse general base acceptance and physically valid phase coverage. No full
 pick-and-place or hardware controller is qualified.
 
 | Evidence | Scope / result |
 | --- | --- |
-| [Task-stage diagnosis](../experiments/mars_task_arrival_20261115.md) | Same actor reaches declared grasp region and executor closure after one bounded hold reacquisition. Lift support reserve, loaded retention and fixed-world-hand/base coordination remain gaps. Twelve development attempts are not independent reliability trials. |
-| [Unloaded-stage admission](../experiments/mars_unloaded_grasp_admission_20261116.md) | Strict original contracts: teacher 5/6 at both pregrasp and grasp-pose boundaries, all twelve stops confirmed, no closure/loaded commands. Both stage admissions remain false. |
-| #239 runtime `2cbf70d8` | 1,330 passing source-bound canonical regressions, verified against that runtime. |
-| Pre-consolidation #241 runtime `9cd439bf` | 1,367 passing source-bound canonical regressions, exactly bound to the twelve-episode teacher source; four offline readout tests pass. |
-| Combined runtime `c2d82bb7` | **1,389/1,389 passing canonical regressions**, zero failures/errors/skips, 744.87 s. Fresh receipt verified against the consolidated source; [compact validation record](../../paper/data/whole_body_control/mars_controller_consolidation_v1/validation.json). Parent receipts are not reused. |
+| [Current complete readout](../experiments/coupled_tracking_20261116.md) | Explicit unloaded-prefix teacher 6/6 at pregrasp and 6/6 at open-jaw grasp-pose; Mars and Stretch coupled v1 teachers each 10/10. |
+| `db6b6964` full regressions | 1,421 passing source-bound tests, zero failures/errors/skips, 863.76 s; exact producer of those native readouts. |
+| Direct PPO pilot | 4,096 decisions / 4,314 physical ticks, approximately 53/47 general/TAMP. General 0/10 → 0/10, grasp-pose 0/6 → 0/6. General case/phase exposure is incomplete. |
+| Teacher-action bootstrap | 1,024 supervised updates, train labels only. Actor-only TAMP grasp-pose 5/6; raw general 0/10 with settling/self-contact failures. |
+| Fixed-weight base-rate ablation | Full-horizon general 9/10 versus raw 0/10; arm rate feedback retained. Base-only becomes worse; not a promoted replacement. |
+| Explicit completion-hold diagnostic | 10/10 using existing executor hold/reacquisition. Keep separate from raw actor stability. |
+| Current runtime `57e8e73b` | New v2 coarse base acceptance, unchanged hand precision, serialized opt-in base feedback mode. Physical readouts: teacher Mars 8/10, Stretch 9/10; fixed-weight Mars actor v1 9/10, v2 5/10, original TAMP grasp-pose 6/6. Fresh full regressions running; old receipts do not qualify this source. |
 
-The combined check ran as managed job `20261116_014840_fbac92` on CPU15.
-Its full XML/receipt remain ignored under
-`logs/eval/mars-controller-unification-v1/`; the compact record binds their
-hashes and the preserved source archive. This is software validation only,
-with no additional teacher episodes, PPO steps or hardware use.
+The preceding [unloaded-stage report](../experiments/mars_unloaded_grasp_admission_20261116.md)
+remains historical 5/6 at both boundaries, under full-task planning scope.
+Consolidation runtime `c2d82bb7` remains historical 1,389/1,389 software evidence.
+Neither is silently relabeled as the new prefix/coupled result. Source archives,
+failed setup attempts, all case outcomes and offline W&B runs are retained.
 
-Keep EE pose-tracking rotation distinct from object rotation relative to the
-hand. Successful teacher unloaded grasp errors are 0.000295–0.001423 rad;
-loaded retention failures cross the separate 0.1 rad object-rotation limit.
-Rotvec features exist but have not received a trained ablation; the old C1
-quarter-pitch experiment does not establish broad direction coverage.
-
-## Current implementation awaiting fresh readouts
-
-The explicit native unloaded planning scope is implemented, retaining the
-historical full-task default. Coupled Mars/Stretch reference generation,
-geometry admission, teacher readout/plots and a PPO-compatible general environment
-are implemented in [the current run instructions](../plans/general_whole_body_tracking.md#coupled-simulator-implementation-2026-11-16).
-Focused tests cover native scope isolation, both embodiments, mask invariance,
-private-witness geometry and grouped PPO collection/update without critic leakage.
-Fresh full-source regressions and physical readouts are required for this new
-runtime; the 1,389-test consolidation receipt above is historical. No new policy
-is trained or promoted by implementing these interfaces. Preserve old failures.
+Keep hand pose rotation distinct from object rotation relative to the hand.
+The failed bootstrap audit-right case is `object_changed_replan`, not a successful
+grasp. Open-jaw pose operations do not establish loaded retention.
 
 ## Next milestone, in order
 
-1. **Scope unloaded planning to requested motion.** The current full-task
-   executor replans a prospective loaded lift before either unloaded boundary.
-   Its support rejection blocks one case even though lift is not requested.
-   Add explicit unloaded-prefix planning/admission at the TAMP/reference seam.
-   Preserve collision, support and geometry checks for every requested segment,
-   default full-task loaded validation, closure/release authority and all frozen
-   failures. Do not fabricate a lift witness, drop the case or borrow the old
-   expected-failure exception. Obtain a fresh stage-specific readout before PPO.
-2. **Add reachable coupled whole-body coverage for Mars and Stretch.** The
-   teacher can execute a 20 mm forward preparation while holding the world hand; the actor advances
-   about 2.15 mm. Include this motion, actual unloaded grasp trajectories,
-   hand-only goals with authorized free-base motion, jointly feasible masked
-   base/hand targets, ordinary reach/base goals, goal changes and reset/hold
-   transitions. Sample/admit full-robot paths, not only stationary-arm poses. Keep
-   #240's frozen train/audit identities separate from new coverage.
-3. **Register and run bounded mixed training only after admission.** Preserve
-   the outer 50/50 general/task exposure by physical control ticks, report
-   per-stage exposure and compare unchanged initial/final checkpoints with the
-   teacher on identical cases. Keep reward/representation ablations isolated,
-   retain smoothness/force/support/stop checks, log source/config/seed/case
-   identities and outcomes to W&B, and do not select checkpoints post hoc.
-4. **Qualify loaded progression separately.** Plan support reserve and examine
-   grasp fit/wrench stability and angular creep using the existing evidence.
-   Do not increase torque/friction, relax retention or replay closed-loop holds
-   as a substitute for evidence. Herman remains observation-only until a
-   separately authorized, qualified hardware test.
+1. **Complete current readouts.** Preserve v1 and frozen TAMP contracts. V2 uses
+   a 5 cm / 5° general base region, 15 cm required base travel and unchanged
+   3 mm / 0.02 rad hand targets. Explicitly label small nullspace motion as
+   hand-hold coverage. Compare teacher and actor without pooling repeated seeds.
+2. **Fix base-only stability and final approach.** The learned base's direct
+   rate path causes substantial hunting; disabling it helps nine hand/coupled
+   cases but harms base-only. Retain native servo limits and reactive arm
+   compensation. Diagnose that remaining mode before general replacement.
+3. **Improve training exposure, then run a bounded comparison.** Preserve outer
+   50/50 general/task physical ticks, train/audit separation and fixed-final
+   evaluation. Use the [SuperMimic handoff](../plans/supermimic_controller_training.md)
+   to design physically valid phase/reset sampling; that sampler and a learned
+   dynamics backend are not yet implemented. Log per-phase/case exposure.
+4. **Qualify loaded progression separately.** Repair support reserve, grasp
+   fit/retention and continuous grasp/lift transitions before broader agent
+   tasks. Do not increase torque/friction, relax retention or clear stop latches.
+   Herman remains observation-only pending separate hardware qualification.
 
-Coupled control is the framework for both first robots; limited stationary-arm
-DoF does not establish failure of general whole-body control. The
+The current prefix endpoint is terminal and needs simulator reset; continuous
+prefix-to-loaded handoff remains work. Stretch static support includes its
+caster, but dynamic unloading metrics currently cover only its drive wheels.
+
+Coupled control remains the framework for both first robots. The
 [embodiment comparison plan](../plans/general_whole_body_tracking.md#coupled-control-and-embodiment-comparison)
-records MABEL as an optional, unintegrated redundant-robot diagnostic if model,
-reference and learning investigations leave a suspected embodiment limitation.
-This does not displace the unloaded-prefix fix or authorize another training run.
-
-The controller owns smooth reactive pose/trajectory tracking. TAMP owns task
-choice, feasible stance/reference construction and planning scope. Neither
-side should conceal the other's failures.
+keeps MABEL as an optional, unintegrated diagnostic. TAMP owns task choice and
+feasible reference construction; the controller owns smooth reactive tracking.
 
 ## Partner work and archived threads
 

@@ -161,21 +161,26 @@ merges, measured policy improvement and hardware readiness are separate decision
       now completes grasp pose and executor closure; lift planning rejects
       insufficient support reserve. Keep the original precision failures and
       all [twelve task diagnostics](docs/experiments/mars_task_arrival_20261115.md).
-- [ ] **Train actual grasp-pose and fixed-world-hand/base motion.** Resolve
-      unloaded-prefix planning admission, obtain fresh stage-specific teacher
-      admission, and mix these reachable references with general tracking.
-      The isolated [unloaded-grasp extension](docs/plans/mars_unloaded_grasp_admission.md)
-      adds an explicit pre-closure boundary. The completed
-      [twelve-episode readout](docs/experiments/mars_unloaded_grasp_admission_20261116.md)
-      gives 5/6 at each boundary, all stops confirmed, with unchanged default
-      physical results. The known loaded-lift replan blocks the unloaded
-      prefix too; admit that prefix explicitly before training. Its fresh
-      1,367/1,367 regression receipt verifies against the teacher-frozen runtime;
-      stage admission remains closed. [PR #241](https://github.com/cpaxton/home_robot_v3/pull/241)
-      is separate from PR #239's receipt and PR #240's case preparation.
-      Do not increase timeouts or accept the actor's 2.15 mm advance as a
-      completed 20 mm support-preparation goal. Keep loaded retention/grasp-fit
-      repair separate, with original force/support/retention thresholds.
+- [x] **Admit unloaded prefixes and both-robot coupled v1 references.** Explicit
+      native scope gives teacher 6/6 pregrasp and 6/6 open-jaw grasp-pose; coupled
+      Mars and Stretch each pass 10/10. Exact runtime `db6b6964` passes 1,421
+      source-bound tests. Preserve historical full-task-scope 5/6 results and
+      original force/support/retention thresholds. See the
+      [complete readout](docs/experiments/coupled_tracking_20261116.md).
+- [x] **Run bounded mixed-policy diagnostics.** Direct PPO (4,096 decisions)
+      stays 0/10 general and 0/6 TAMP. A separate 1,024-update teacher-action
+      bootstrap reaches 5/6 TAMP but raw general remains 0/10. Fixed-weight
+      base-rate-path ablation reaches 9/10 full-horizon general, while base-only
+      worsens. Keep all producers, modes, failures and original scores distinct.
+- [ ] **Fix base-only stability, final approach and coverage.** Preserve fine
+      reactive arm feedback, native servo limits and the outer general/task mix.
+      Current v2 starts general base acceptance at 5 cm / 5° with 15 cm required
+      travel and unchanged precise hand targets. Preserve frozen task contracts;
+      independently test commanded versus measured rates and quiet settling.
+      Its sampled geometry passes, but new physical/readout gates remain open.
+      Small nullspace motions are hand-hold diagnostics, not required-base progress.
+      Do not accept the prior actor's 2.15 mm advance as a completed 20 mm
+      support-preparation goal. Loaded retention/grasp fit remain separate.
 - [x] Prepare the exact [17-case directional curriculum and 24-case audit](docs/plans/mars_directional_curriculum.md)
       with a strict separate loader, source/control hashes, unchanged contracts
       and disjoint audit resets/motions. This is case preparation only: no

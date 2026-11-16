@@ -1,0 +1,27 @@
+"""Finish only the six unexecuted TAMP evaluations after a runner API typo."""
+import hashlib,json
+from pathlib import Path
+import torch
+from emet.rl.manipulation.carry_benchmark import digest
+from emet.rl.manipulation.coupled_evaluation import json_value
+from emet.rl.manipulation.whole_body_bundle import WholeBodyBundle
+from emet.rl.manipulation.whole_body_training import load_development,primitive_rollout
+from emet.rl.regression_gate import ROOT,source_state
+
+torch.set_num_threads(1)
+out=ROOT/'logs/eval/coupled-base-feedback-v1'
+report=json.loads((out/'results.json').read_text())
+assert not report['complete'] and not report['tamp'] and len(report['general'])==20
+assert report['source_state_digest']==digest(source_state(ROOT))
+assert not (out/'results-complete.json').exists()
+bundle=WholeBodyBundle(out/'actor');assert bundle.actor.base_rate_feedback is False
+report['continuation']={'reason':'original runner supplied unsupported oracle keyword before any TAMP episode','new_general_episodes':0,'new_tamp_episodes':6,'parent_report_sha256':hashlib.sha256((out/'results.json').read_bytes()).hexdigest(),'runner_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest()}
+development,_=load_development()
+for case in development['train_cases']+development['audit_cases']:
+ row=primitive_rollout([case],policy=bundle.actor,primitive='grasp_pose',planning_scope='unloaded_prefix',wheel_feedback_current_velocity=True)[0]
+ report['tamp'].append(row)
+ (out/'results-complete.json').write_text(json.dumps(report,indent=2,default=json_value,allow_nan=False)+'\n')
+ print(case['id'],row.get('success'),row.get('code'),flush=True)
+assert report['source_state_digest']==digest(source_state(ROOT))
+report['complete']=True
+(out/'results-complete.json').write_text(json.dumps(report,indent=2,default=json_value,allow_nan=False)+'\n')
