@@ -1379,6 +1379,7 @@ class StretchZmqClient(ZmqStreamPauseMixin, AbstractRobotClient):
                 received_monotonic=self._obs.get('_received_monotonic'),
                 emet_session=read_emet_session(self._obs),
                 image_timing=read_image_timing(self._obs),
+                is_simulation=self._obs.get('is_simulation') is True,
             )
             observation.joint = self._obs.get("joint", None)
             observation.joint_velocities = self._obs.get("joint_velocities", None)

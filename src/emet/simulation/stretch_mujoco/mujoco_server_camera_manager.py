@@ -7,6 +7,7 @@
 # Some code may be adapted from other open-source works with their respective licenses. Original
 # license information maybe found below, if so.
 
+import os
 import platform
 import threading
 import time
@@ -17,13 +18,18 @@ import mujoco
 import mujoco._enums
 import numpy as np
 
-from emet.simulation.stretch_mujoco import utils
+from emet.simulation.depth_registration import rendered_camera_intrinsics
 from emet.simulation.stretch_mujoco.datamodels.status_stretch_camera import StatusStretchCameras
 from emet.simulation.stretch_mujoco.enums.stretch_cameras import StretchCameras
 from emet.simulation.stretch_mujoco.utils import FpsCounter, switch_to_glfw_renderer
+from emet.simulation.synchronized_capture import capture_scene_for_sensors, capture_stretch_motors
 
 if TYPE_CHECKING:
     from emet.simulation.stretch_mujoco.mujoco_server import MujocoServer
+
+
+def synchronized_rgbd_enabled():
+    return os.environ.get('EMET_SIM_SYNCHRONIZED_RGBD', '0').strip().lower() in {'1', 'true', 'yes', 'on'}
 
 
 def robot_body_geom_groups(model: mujoco.MjModel, base_body_name: str = "base_link") -> set[int]:
@@ -63,6 +69,8 @@ def head_camera_geomgroup_mask(model: mujoco.MjModel, base_body_name: str = "bas
     # Preserve MuJoCo's visual defaults: groups 3-5 are hidden. Enabling all
     # groups exposes collision proxies (e.g. MolmoSpaces' green group-4 hulls).
     mask = mujoco.MjvOption().geomgroup.copy()
+    if os.environ.get("EMET_SIM_HEAD_RENDER_ROBOT", "0").strip().lower() in {"1", "true", "yes", "on"}:
+        return mask
     for grp in robot_body_geom_groups(model, base_body_name=base_body_name):
         if 0 <= grp < 6:
             mask[grp] = 0
@@ -131,18 +139,73 @@ class MujocoServerCameraManagerSync:
         """
         Render a scene at each camera using the simulator and populate the imagery dictionary with the raw image pixels and camera params.
         """
+        if synchronized_rgbd_enabled():
+            self._pull_synchronized_camera_data()
+            return
         new_imagery = StatusStretchCameras.default()
         new_imagery.time = self.mujoco_server.mjdata.time
         new_imagery.fps = self.camera_fps_counter.fps
 
         for camera, renderer in self.camera_renderers.items():
-            (_, data, timestamp_ns) = self._render_camera(renderer, camera)
-            new_imagery.set_camera_data(camera, data, timestamp_ns=timestamp_ns)
+            (_, data, timestamp_ns, end_ns) = self._render_camera(renderer, camera)
+            new_imagery.set_camera_data(camera, data, timestamp_ns=timestamp_ns, capture_end_ns=end_ns)
 
         new_imagery.cam_d405_K = self.get_camera_params(StretchCameras.cam_d405_rgb)
         new_imagery.cam_d435i_K = self.get_camera_params(StretchCameras.cam_d435i_rgb)
 
+        self._register_head_depth(new_imagery)
         self.mujoco_server.data_proxies.set_cameras(new_imagery)
+
+    def _pull_synchronized_camera_data(self):
+        cameras = {
+            camera.name: (camera.camera_name_in_mjcf, camera in (StretchCameras.cam_d435i_rgb, StretchCameras.cam_d435i_depth))
+            for camera in self.camera_renderers
+        }
+        probe, packet = capture_scene_for_sensors(
+            self.mujoco_server.mjmodel, self.mujoco_server.mjdata, self.camera_lock, cameras=cameras
+        )
+        imagery = StatusStretchCameras.default()
+        imagery.time, imagery.fps = probe.time, self.camera_fps_counter.fps
+        start, end = packet['interval_ns']
+        for camera, renderer in self.camera_renderers.items():
+            renderer.update_scene(data=probe, camera=camera.camera_name_in_mjcf)
+            pixels = renderer.render()
+            if camera.post_processing_callback:
+                pixels = camera.post_processing_callback(pixels)
+            imagery.set_camera_data(camera, pixels, timestamp_ns=start, capture_end_ns=end)
+        imagery.cam_d405_K = self.get_camera_params(StretchCameras.cam_d405_rgb)
+        imagery.cam_d435i_K = self.get_camera_params(StretchCameras.cam_d435i_rgb)
+        self._register_head_depth(imagery)
+        imagery.synchronized_robot_sample = packet
+        imagery.synchronized_camera_poses = packet['camera_poses']
+        imagery.synchronized_motor_sample = capture_stretch_motors(self.mujoco_server.mjmodel, probe, packet)
+        self.mujoco_server.data_proxies.set_cameras(imagery)
+
+    def _register_head_depth(self, imagery):
+        from emet.simulation.depth_registration import register_depth, rendered_camera_intrinsics
+
+        if imagery.cam_d435i_rgb is None or imagery.cam_d435i_depth is None:
+            return
+        model = self.mujoco_server.mjmodel
+        rgb_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, "d435i_camera_rgb")
+        depth_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, "d435i_camera_depth")
+        if rgb_id < 0 or depth_id < 0 or model.cam_bodyid[rgb_id] != model.cam_bodyid[depth_id]:
+            raise ValueError("head_depth_registration_requires_rigid_camera_pair")
+        # Both optical cameras are rigidly attached to the same head body.
+        # MuJoCo camera axes are OpenGL; reprojection uses x-right/y-down/z-forward.
+        rotations = []
+        for camera_id in (rgb_id, depth_id):
+            matrix = np.empty(9)
+            mujoco.mju_quat2Mat(matrix, model.cam_quat[camera_id])
+            rotations.append(matrix.reshape(3, 3) @ np.diag([1., -1., -1.]))
+        transform = np.eye(4)
+        transform[:3, :3] = rotations[0].T @ rotations[1]
+        transform[:3, 3] = rotations[0].T @ (model.cam_pos[depth_id] - model.cam_pos[rgb_id])
+        rgb_shape, depth_shape = imagery.cam_d435i_rgb.shape[:2], imagery.cam_d435i_depth.shape
+        rgb_k = rendered_camera_intrinsics(model.cam_fovy[rgb_id], rgb_shape[1], rgb_shape[0])
+        depth_k = rendered_camera_intrinsics(model.cam_fovy[depth_id], depth_shape[1], depth_shape[0])
+        imagery.cam_d435i_depth = register_depth(imagery.cam_d435i_depth, depth_k, rgb_k, transform, rgb_shape)
+        imagery.cam_d435i_K = rgb_k
 
     def _create_camera_renderer(self, for_camera: StretchCameras):
         settings = for_camera.initial_camera_settings
@@ -198,12 +261,15 @@ class MujocoServerCameraManagerSync:
             renderer.update_scene(data=self.mujoco_server.mjdata, camera=camera.camera_name_in_mjcf)
 
             render = renderer.render()
+            # Physics uses this same lock. Bounds describe this renderer's
+            # acquisition, not a joint sensor clock or synchronized stereo pair.
+            capture_end_ns = time.monotonic_ns()
 
         post_render = camera.post_processing_callback
         if post_render:
             render = post_render(render)
 
-        return (camera, render, timestamp_ns)
+        return (camera, render, timestamp_ns, capture_end_ns)
 
     def _remove_camera_renderer(self, camera: StretchCameras):
         """
@@ -233,17 +299,9 @@ class MujocoServerCameraManagerSync:
         Get camera parameters
         """
         cam = self.mujoco_server.mjmodel.camera(camera.camera_name_in_mjcf)
-        d = {
-            "f": self.mujoco_server.mjmodel.cam_intrinsic[cam.id][:2],
-            "p": self.mujoco_server.mjmodel.cam_intrinsic[cam.id][2:],
-            "res": self.mujoco_server.mjmodel.cam_resolution[cam.id],
-        }
-        camera_k = utils.compute_K(
-            camera.initial_camera_settings.field_of_view_vertical_in_degrees,
-            d["res"][0],
-            d["res"][1],
-        )
-        return camera_k
+        settings = camera.initial_camera_settings
+        return rendered_camera_intrinsics(self.mujoco_server.mjmodel.cam_fovy[cam.id],
+            settings.width, settings.height)
 
     def set_camera_params(self, camera: StretchCameras) -> None:
         """
@@ -369,6 +427,9 @@ class MujocoServerCameraManagerThreaded(MujocoServerCameraManagerSync):
         """
         Uses a ThreadPoolExecutor to render a scene at each camera using the simulator and populate the imagery dictionary with the raw image pixels and camera params.
         """
+        if synchronized_rgbd_enabled():
+            self.cameras_rendering_thread_pool.submit(self._pull_synchronized_camera_data).result()
+            return
         new_imagery = StatusStretchCameras.default()
         new_imagery.time = self.mujoco_server.mjdata.time
         new_imagery.fps = self.camera_fps_counter.fps
@@ -385,10 +446,11 @@ class MujocoServerCameraManagerThreaded(MujocoServerCameraManagerSync):
 
         for future in futures:
             # Put the rendered image data into the new_imagery dictionary
-            (camera, render, timestamp_ns) = future.result()
-            new_imagery.set_camera_data(camera, render, timestamp_ns=timestamp_ns)
+            (camera, render, timestamp_ns, end_ns) = future.result()
+            new_imagery.set_camera_data(camera, render, timestamp_ns=timestamp_ns, capture_end_ns=end_ns)
 
         new_imagery.cam_d405_K = self.get_camera_params(StretchCameras.cam_d405_rgb)
         new_imagery.cam_d435i_K = self.get_camera_params(StretchCameras.cam_d435i_rgb)
 
+        self._register_head_depth(new_imagery)
         self.mujoco_server.data_proxies.set_cameras(new_imagery)

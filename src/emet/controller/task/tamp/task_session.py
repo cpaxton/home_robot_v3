@@ -68,6 +68,11 @@ class TaskSession:
         self._plans: dict[str, StoredTaskPlan] = {}
         self._lock = threading.RLock()
 
+    def invalidate(self):
+        """External motion invalidates stored handles, including failed motion."""
+        with self._lock:
+            self._plans.clear()
+
     def discover(self, object_filter: str = "", robot: str = "") -> dict:
         with self._lock:
             if object_filter or robot:

@@ -1,5 +1,11 @@
 # Living TODOs (small / near-term)
 
+- [ ] Qualify observed robot self-occupancy and phase-specific contact admission:
+      [issue #245](https://github.com/cpaxton/home_robot_v3/issues/245). PR #226
+      supplies evidence/adapter contracts only. Preserve unknown-space rejection
+      and read-only default discovery; require an actual observed transfer before
+      claiming live observed execution. Native privileged controls remain separate.
+
 - [ ] Profile failed-search cost without answer overrides or target-specific rules:
       final S0 seed 1 misses the receptacle in both arms but candidate takes
       798.6 s versus control 287.2 s. Seed 2 succeeds faster (478.0 vs 790.4 s).

@@ -37,6 +37,7 @@ from emet.agent.env_flags import env_agent_camera_debug
 from emet.agent.model_debug import print_embodied_model_report, print_llm_invoke_line
 from emet.agent.prompt import DEFAULT_AGENT_NAME, AgentPromptBuilder, parse_tool_calls_response
 from emet.agent.tamp_session import tamp_followup
+from emet.agent.tamp_world import task_world_change
 from emet.agent.thinking_status import (
     env_agent_thinking_status,
     format_action_running_status,
@@ -236,6 +237,7 @@ def _dispatch_tool_calls(
     debug: bool = False,
     verbose_tools: bool = False,
     on_tool_start: Callable[[str], None] | None = None,
+    tamp_context: dict | None = None,
 ) -> tuple[bool, list[str], bool]:
     """Execute a list of parsed tool_calls in model-specified order.
 
@@ -302,7 +304,8 @@ def _dispatch_tool_calls(
                 return False, results, has_info
             if verbose_tools:
                 print(colored("[executor]", "yellow"), json.dumps(cmds, default=str), flush=True)
-            keep_going = executor(cmds)
+            with task_world_change(name, tamp_context):
+                keep_going = executor(cmds)
             if not keep_going:
                 # Quit (or stop) — abort the agent turn.
                 ok = False
@@ -341,7 +344,8 @@ def _dispatch_tool_calls(
             continue
 
         try:
-            result = tool.func(**args) if args else tool.func()
+            with task_world_change(name, tamp_context):
+                result = tool.func(**args) if args else tool.func()
             outcome = ToolOutcome.coerce(name, result)
             if isinstance(result, ToolOutcome) or (isinstance(result, dict) and "ok" in result):
                 result_str = outcome.render()
@@ -590,6 +594,7 @@ def run_agent_with_robot(
     state_only_sim: bool = False,
     max_tool_rounds: int = _MAX_TOOL_ROUNDS,
     observed_tamp_provider: ObservedTaskProvider | None = None,
+    observed_native_factory: Callable | None = None,
     tamp_task_session: Any | None = None,
     native_task_config: dict | None = None,
     **kwargs: Any,
@@ -604,6 +609,10 @@ def run_agent_with_robot(
     ``scene_tasks``. Otherwise the existing open-vocabulary scene-graph processor
     supplies its RGBD proposal provider when enabled. Discovery does not enable
     native planning or execution.
+
+    *observed_native_factory*, when supplied, explicitly constructs a qualified
+    observed adapter from (robot_client, executor). It requires physical/observed
+    mode and never derives execution geometry from discovery proposals.
 
     *tamp_task_session* optionally binds a qualified multi-step provider to the
     production CHAT tools. With no provider, multi-step calls explicitly return
@@ -856,6 +865,29 @@ def run_agent_with_robot(
         "camera_debug": camera_debug,
         "agent_memory_backend": mb,
     }
+
+    if observed_native_factory is not None:
+        from emet.controller.task.tamp.observed_adapter import ObservedNativeAdapter
+
+        try:
+            if executor._manip_mode != "physical" or executor._tamp_inputs != "observed":
+                raise ValueError("observed_native_factory requires physical mode with observed inputs")
+            adapter = observed_native_factory(robot_client, executor)
+            if not isinstance(adapter, ObservedNativeAdapter) or adapter.robot is not robot_client:
+                raise ValueError("invalid_observed_native_provider")
+            context["observed_native_adapter"] = adapter
+            if adapter.task_session is not None:
+                if tamp_task_session is not None:
+                    raise ValueError("conflicting task providers")
+                tamp_task_session = adapter.task_session
+                context["tamp_task_session"] = tamp_task_session
+        except Exception:
+            robot_client.stop()
+            raise
+
+    from emet.controller.task.tamp.observed_capture import bind_observed_capture_source
+
+    bind_observed_capture_source(context["observed_tamp_provider"], robot_client, executor._tamp_inputs)
 
     def update_xyt():
         if executor.agent.robot is not None and hasattr(executor.agent.robot, "get_base_pose"):
@@ -1357,6 +1389,7 @@ def run_agent_with_robot(
                         debug=debug_llm,
                         verbose_tools=verbose_tools,
                         on_tool_start=_on_tool_start if show_thinking_status else None,
+                        tamp_context=context,
                     )
                 tools_elapsed = timeit.default_timer() - tools_t0
                 print_terminal(

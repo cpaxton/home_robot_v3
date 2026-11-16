@@ -12,7 +12,7 @@ recovery information. Plans bind to a scene snapshot and server identity;
 execution consumes a handle once and rejects changed state. An acknowledgement
 timeout after execution begins produces a partial outcome requiring inspection,
 rather than permission to replay the plan. These contracts support composition,
-but availability of tools alone does not establish multi-step task competence.
+but availability of tools alone does not establish multi-step task competence. The merged task layer adds \texttt{plan\_task} and \texttt{execute\_task\_plan}, with protected goals and measured per-step effects; Appendix~\ref{app:combined_agent} describes the complete interface.
 
 \paragraph{Controlled native-contact acceptance.}
 At implementation revision \texttt{d1d451c5}, four fresh live ZMQ transfers
@@ -84,7 +84,7 @@ records the full patch hash, job identifier and per-episode denominators.
 
 \paragraph{Proposed household experiment.}
 We next target RoboCasa365 composites and MolmoSpaces fixed episode
-specifications~\citep{robocasa365protocol2026,molmospaceseval2026}.
+specifications~\citep{nasiriany2026robocasa365,robocasa365protocol2026,molmospaceseval2026}.
 The proposed adapted suite includes clearing an occupied destination, swapping
 objects through temporary storage, retrieving and closing a cabinet, and
 collecting objects across work areas. These are \emph{planned} experiments:
@@ -101,7 +101,8 @@ must remain a separate condition.
 The implementation program standardizes on MuJoCo and separates upstream
 robot/task protocols from Stretch and Sourccey adaptations. Shared episode and
 scene-binding contracts, native control-step accounting, and measured multi-step
-plan verification are under development. Greedy, beam and UCT search use a
+plan verification are implemented; environment-specific qualification and shared
+whole-agent budget enforcement remain incomplete. Greedy, beam and UCT search use a
 common grounded-operator interface; LLM sequence planning, affordance ranking
 and PDDLStream integration remain qualification work. These interfaces and
 runtime smoke tests are not evidence of household agent success. No six-suite
@@ -138,3 +139,23 @@ measured endpoints without reconstructing unobserved intermediate paths.
   trajectory or observed-perception evidence.}
   \label{fig:native-task-integration}
 \end{figure}
+
+
+\paragraph{Preplanned control repeats and a format failure.}
+At observed-integration revision \texttt{fb0fb6cc}, we preplanned three fresh
+repeats of each of two existing privileged stationary configurations. All
+attempts remain in their respective denominators: the two-goal task passes
+3/3 episodes (six completed transfers), and the buffered swap passes 2/3
+(six completed transfers). In the failed swap episode the agent obtains a valid
+three-step plan, then emits malformed JSON with a missing list terminator.
+The strict parser dispatches no execution call; seven startup commands are
+recorded and no transfer is attempted. This is an agent-format failure, not a
+successful plan-only task or a physical grasp failure. The six episodes record
+3,094 audited commands and zero forbidden actions. No executed tool fails in
+this repeat batch, so recovery after a failed physical tool remains unassessed;
+no post-failure dispatch is observed. These repeats use the same two development fixtures, Caliban model
+identifier and configured goals; checkpoint/sampling are not independently
+pinned. They are a small reliability diagnostic, not held-out household or
+observed-input acceptance. Source/job identifiers, failed-attempt accounting,
+final predicates and raw-result hashes are retained in
+\texttt{paper/data/native\_tamp/agent\_control\_repeats\_20261023.json}.

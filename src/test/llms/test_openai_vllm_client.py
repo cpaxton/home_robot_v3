@@ -7,10 +7,13 @@
 from __future__ import annotations
 
 import base64
+import copy
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock
 
 import numpy as np
+import pytest
 
 from emet.llms.eqa_vl_settings import resolve_vl_endpoint
 from emet.llms.openai_vllm_client import OpenaiVLLMClient, parse_openai_endpoint_spec
@@ -180,3 +183,87 @@ def test_serve_llm_help_lists_vl() -> None:
     r = CliRunner().invoke(serve_llm_main, ["--help"])
     assert r.exit_code == 0
     assert "--vl" in r.output
+
+
+def test_call_timing_separates_encoding_from_request_and_preserves_errors():
+    from types import SimpleNamespace
+
+    import pytest
+
+    client = OpenaiVLLMClient(model="model", base_url="http://localhost:8000/v1")
+    client._openai = MagicMock()
+    client._openai.chat.completions.create.return_value = SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content="ok"))]
+    )
+    assert client.generate_multimodal(["look", np.zeros((8, 8, 3), dtype=np.uint8)]) == "ok"
+    metrics = client.last_call_metrics
+    assert metrics["completed"] and metrics["image_count"] == 1
+    assert metrics["encode_s"] >= 0 and metrics["request_s"] >= 0
+    assert abs(metrics["total_s"] - metrics["encode_s"] - metrics["request_s"]) < 1e-6
+    client._openai.chat.completions.create.side_effect = TimeoutError("timeout")
+    with pytest.raises(TimeoutError):
+        client.generate_multimodal("look")
+    assert client.last_call_metrics["completed"] is False
+    assert client.last_call_metrics["image_count"] == 0
+
+
+def test_opt_in_continuation_replays_images_but_next_default_call_discards_them():
+    client = OpenaiVLLMClient(model="fixture", base_url="http://localhost:9999/v1")
+    complete = MagicMock(
+        return_value=SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content="answer"))])
+    )
+    client._openai.chat.completions.create = complete
+    image = np.zeros((4, 4, 3), np.uint8)
+    client.generate_multimodal(["first", image])
+    first_blocks = copy.deepcopy(complete.call_args.kwargs["messages"][0]["content"])
+    client.generate_multimodal(["followup", image + 127], reset_context=False)
+    continued = complete.call_args.kwargs["messages"]
+    assert [row["role"] for row in continued] == ["user", "assistant", "user"]
+    assert continued[0]["content"] == first_blocks
+    assert client.steps == 2
+    prior_metrics = client.last_call_metrics.copy()
+    assert prior_metrics["image_count"] == 1 and prior_metrics["request_image_count"] == 2
+    client.generate_multimodal("independent caption")
+    assert complete.call_args.kwargs["messages"] == [
+        {"role": "user", "content": [{"type": "text", "text": "independent caption"}]}
+    ]
+    assert client.steps == 1 and client.last_call_metrics["request_image_count"] == 0
+    assert prior_metrics["request_image_count"] == 2
+
+
+@pytest.mark.parametrize("raises", [False, True])
+def test_explicit_dialogue_encodes_prior_images_and_restores_shared_state(raises):
+    client = OpenaiVLLMClient(model="fixture", base_url="http://localhost:9999/v1")
+    complete = MagicMock(
+        return_value=SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content="answer"))])
+    )
+    client._openai.chat.completions.create = complete
+    client.generate_multimodal("unrelated perception")
+    history, steps = copy.deepcopy(client.get_history()), client.steps
+    hook = MagicMock(wraps=client._conversation_user_content)
+    client._conversation_user_content = hook
+    image = np.zeros((4, 4, 3), np.uint8)
+    prior_content = ["earlier observation", image, image + 127]
+    dialogue = [
+        {"role": "system", "content": "agent task"},
+        {"role": "user", "content": prior_content},
+        {"role": "assistant", "content": "inspect next"},
+        {"role": "user", "content": ["current observation", image + 255]},
+    ]
+    if raises:
+        complete.side_effect = TimeoutError("remote timeout")
+        with pytest.raises(TimeoutError):
+            client.generate_messages(dialogue)
+    else:
+        assert client.generate_messages(dialogue) == "answer"
+    sent = complete.call_args.kwargs["messages"]
+    assert [row["role"] for row in sent] == ["system", "user", "assistant", "user"]
+    assert sent[2]["content"] == "inspect next"
+    assert [b["type"] for b in sent[1]["content"]] == ["text", "image_url", "image_url"]
+    assert sent[3]["content"][1]["type"] == "image_url"
+    assert "unrelated perception" not in str(sent)
+    assert hook.call_count == 1 and hook.call_args.args[0] is prior_content
+    assert client.get_history() == history and client.steps == steps
+    assert client.last_call_metrics["image_count"] == 1
+    assert client.last_call_metrics["request_image_count"] == 3
+    assert client.last_call_metrics["completed"] is not raises

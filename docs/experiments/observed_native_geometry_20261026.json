@@ -1,0 +1,27 @@
+{
+  "input_capture": ".tamp-runs/capture-binding-20261026/postmerge/capture-0.npz",
+  "counts": {
+    "unknown": 5446,
+    "free": 8343,
+    "occupied": 35
+  },
+  "total_cells": 13824,
+  "build_wall_s": 0.1385346719999916,
+  "missing_depth_free_cells": 0,
+  "scope": "Offline sensor geometry diagnostic; no tracking, grasping, task or agent trial.",
+  "regression": {
+    "job_id": "20261026_184551_55ff3a",
+    "passed": 521,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "test_time_s": 123.454
+  },
+  "source_sha256": {
+    "src/emet/controller/manipulation/observed_collision.py": "1d1d5fc587c30eb1e1518a331695044acb02dbb5553a2d2c852f759b740edbf6",
+    "src/emet/motion/observed_workspace.py": "39551b5c5ce0934e3f5c3e5a4722fff8652b64fc1783cf093d82dfe65ee53d46",
+    "src/emet/controller/manipulation/physical_pick_place.py": "b4b50ec89c2fe0e39c8a01988709ef3960ad1f7648062a9804ea77d2e31c54ea",
+    "src/emet/motion/placement_geometry.py": "45bce53bb0b048dec34d7e9c0d023d428952d0f0c5575a7961e717645820543f",
+    "src/emet/motion/mujoco_collision.py": "65e6a1b43920a9c199ec642daba9be72534f8536fcfed11e48965aac7ce06309"
+  }
+}

@@ -216,3 +216,55 @@ def test_real_chat_logs_explicit_user_boundary_before_new_authorized_turn(monkey
     failures = failure_boundaries(rows)
     assert len(failures) == 1
     assert failures[0]['unexpected_tools'] == []
+
+
+@pytest.mark.parametrize('inputs,expected', [('observed', True), ('privileged', False)])
+def test_real_chat_startup_binds_only_observed_rgbd_capture(monkeypatch, inputs, expected):
+    from emet.controller.task.tamp.observed_discovery import RgbdTaskProvider
+
+    robot = setup_chat_loop(monkeypatch)
+    executor = loop.DynamemTaskExecutor()
+    executor._tamp_inputs = inputs
+    provider = RgbdTaskProvider()
+    loop.run_agent_with_robot(discord=False, use_llm=False, commands=['QUIT'],
+                              device='cpu', thinking_status=False,
+                              observed_tamp_provider=provider)
+    assert (provider._observation_source is not None) is expected
+    if expected:
+        assert provider._observation_source == robot.get_observation
+
+
+def test_real_chat_bootstrap_installs_only_explicit_observed_native_factory(monkeypatch):
+    from types import SimpleNamespace
+
+    from emet.controller.task.tamp.observed_adapter import ObservedNativeAdapter, ObservedNativeTask
+
+    robot = setup_chat_loop(monkeypatch)
+    executor = loop.DynamemTaskExecutor()
+    executor._manip_mode, executor._tamp_inputs = 'physical', 'observed'
+    source = SimpleNamespace(input_mode='observed', snapshot=lambda *args: None,
+        collect=lambda *args, **kwargs: (), current_revision=lambda: 'revision', invalidate=lambda: None)
+    adapter = ObservedNativeAdapter(robot, source=source, refine=lambda *args: None,
+        tasks=[ObservedNativeTask('opaque', 'support', 'block', 'counter')])
+    factory = MagicMock(return_value=adapter)
+    def tools(context):
+        assert context['observed_native_adapter'] is adapter
+        return []
+    monkeypatch.setattr(loop, 'get_tools', tools)
+    loop.run_agent_with_robot(discord=False, use_llm=False, commands=['QUIT'], device='cpu',
+                              thinking_status=False, observed_native_factory=factory)
+    factory.assert_called_once_with(robot, executor)
+    robot.stop.assert_called_once()
+
+
+@pytest.mark.parametrize('mode,inputs', [('physical', 'privileged'), ('auto', 'observed')])
+def test_observed_native_factory_rejects_wrong_mode_and_cleans_up(monkeypatch, mode, inputs):
+    robot = setup_chat_loop(monkeypatch)
+    executor = loop.DynamemTaskExecutor()
+    executor._manip_mode, executor._tamp_inputs = mode, inputs
+    factory = MagicMock()
+    with pytest.raises(ValueError, match='requires physical mode with observed inputs'):
+        loop.run_agent_with_robot(discord=False, use_llm=False, commands=['QUIT'], device='cpu',
+                                  thinking_status=False, observed_native_factory=factory)
+    factory.assert_not_called()
+    robot.stop.assert_called_once()

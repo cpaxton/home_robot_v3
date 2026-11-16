@@ -33,6 +33,29 @@ def test_dynamem_preserves_enabled_negative_obstacle_evidence(tmp_path, remove_v
     assert obstacles.any(), "A measured drop must not be flattened into traversable floor"
 
 
+@pytest.mark.parametrize("enabled", [False, True])
+@pytest.mark.parametrize("minimum_density", [0.5, 1.5])
+def test_negative_obstacle_flag_and_density_remain_effective_after_visited_filter(tmp_path, enabled, minimum_density):
+    vm = SparseVoxelMap(
+        grid_size=[40, 40],
+        grid_resolution=0.1,
+        smooth_kernel_size=0,
+        obs_min_height=0.1,
+        obs_min_density=minimum_density,
+        use_negative_obstacles=enabled,
+        neg_obs_height=-0.1,
+        remove_visited_from_obstacles=True,
+        log=str(tmp_path),
+        use_instance_memory=False,
+        device="cpu",
+        image_shape=None,
+    )
+    vm.voxel_pcd.add(torch.tensor([[0.0, 0.0, -0.2]]), features=None, rgb=torch.zeros(1, 3), obs_count=1)
+    vm._visited[:] = 1
+    obstacles, _ = vm.get_navigation_map()
+    assert bool(obstacles.any()) == (enabled and minimum_density < 1.0)
+
+
 @pytest.mark.parametrize("xy", [(10.0, 0.0), (-2.2, 0.0), (0.0, 10.0), (0.0, -2.2)])
 @pytest.mark.parametrize("grid_size", [[40, 40], [40, 20]])
 def test_out_of_grid_negative_points_never_crash_or_wrap(tmp_path, xy, grid_size):

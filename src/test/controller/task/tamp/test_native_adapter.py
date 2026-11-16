@@ -102,8 +102,14 @@ def test_observed_mode_never_reads_privileged_metadata(native):
     robot.get_emet_session.assert_not_called()
 
 
-def test_native_model_mismatch_rejects_before_actuation(native):
-    robot, _, _, call = native
+def test_native_model_mismatch_rejects_before_actuation(native, monkeypatch):
+    robot, _, context, call = native
+    model = context['_native_tamp_adapter'].model
+    # This test isolates model binding. Reuse the loaded fixture model when the
+    # mismatch invalidates the cache; cold mesh loading can outlast the two-second
+    # snapshot lifetime and mask the intended rejection as stale_observation.
+    monkeypatch.setattr('emet.controller.task.tamp.native_adapter.NativeTableAdapter',
+                        lambda client: NativeTableAdapter(client, model=model))
     robot._state['native_tamp_snapshot']['model_signature'] = 'different-physics-model'
     assert call('scene_tasks')['code'] == 'native_model_mismatch'
     robot.arm_to.assert_not_called()
