@@ -1,5 +1,12 @@
 # Mars WBC: stabilize the base, define smoothness, then train
 
+Implementation is consolidated into the canonical thread and #239 → #240 →
+#241 development stack. [Active work](../rl/ACTIVE_WORK.md) owns current
+ownership, receipts and launch status; this page owns the technical sequence.
+The immediate task is explicit unloaded-prefix planning scope, before new PPO.
+Older conditional experiments below remain historical/optional proposals,
+not competing automatic training launches.
+
 This is the ordered continuation after [PR #238](https://github.com/cpaxton/home_robot_v3/pull/238).
 The goal is one reactive actor that follows base/hand references, settles and
 satisfies physical smoothness, support, force and retention contracts. A better

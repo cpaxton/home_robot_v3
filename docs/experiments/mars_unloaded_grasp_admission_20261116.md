@@ -89,12 +89,15 @@ ignored under `logs/eval/mars-unloaded-grasp-admission-v1/`.
 Twenty-two pure admission/runner tests pass after final endpoint instrumentation.
 The completed canonical gate covers the new native grasp-boundary and reward-timing
 test, with zero failures, errors or skips. Its receipt independently verifies
-against the current runtime/canonical tests, whose source manifest exactly matches
+against the pre-consolidation runtime/canonical tests, whose source manifest exactly matches
 the teacher freeze. The separate
 [validation record](../../paper/data/whole_body_control/mars_unloaded_grasp_admission_v1/validation.json)
 binds the XML/receipt and original teacher results; PR #239's older receipt is
 not reused. Later changes are offline readout code, separately tested outside the
 canonical suite, and documentation/evidence; the frozen runtime is unchanged.
+The later #240/#241 consolidation adds the separate directional source/manifest;
+its fresh combined validation is recorded in [Active work](../rl/ACTIVE_WORK.md).
+It does not turn this historical 5/6 teacher readout into successful admission.
 
 These are six resets observed under two boundaries, rather than twelve independent
 trials for a reliability estimate. No new actor, PPO step, policy export, default

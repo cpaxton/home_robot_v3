@@ -1,5 +1,9 @@
 # Reinforcement learning and whole-body control
 
+For current ownership, the linear review stack, training status and the next
+milestone, use [Active Mars controller work](ACTIVE_WORK.md). Continue work in
+the canonical thread/worktree listed there rather than an older parallel thread.
+
 Start with [whole-body control philosophy](whole_body_control.md) for the task
 contract, controller boundaries, training approach and evidence needed to adopt
 a learned controller. Mars is the first target; the same pose contract motivates
@@ -9,7 +13,8 @@ other embodiments, with their own actions, models and qualification.
 
 | Need | Document |
 | --- | --- |
-| Complete setup, measured results and research comparison | [WBC status, updated 2026-11-15](status_20261114.md) |
+| Current owner, branches, training gate and next milestone | [Active Mars controller work](ACTIVE_WORK.md) |
+| Architecture, historical results and research comparison | [2026-11-14/15 snapshot](status_20261114.md) |
 | Ordered changes, decision criteria and bounded next experiments | [Mars WBC next steps](../plans/mars_wbc_next_steps.md) |
 | WBC design principles and lessons | [Whole-body control philosophy](whole_body_control.md) |
 | Simulator setup, CLI and runtime details | [Mars reactive RL runbook](../mars_reactive_rl.md) |
