@@ -95,7 +95,7 @@ class TaskSession:
 
     def discover(self, object_filter: str = "", robot: str = "") -> dict:
         with self._lock:
-            if object_filter or robot:
+            if object_filter or robot and robot != getattr(self.provider, 'robot_name', None):
                 return response("scene_tasks", code="task_filter_unsupported")
             describe = getattr(self.provider, "describe", None)
             if describe is None:

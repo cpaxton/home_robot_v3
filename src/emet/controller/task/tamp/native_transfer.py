@@ -48,6 +48,7 @@ def validate_native_task_config(config):
 
 
 class NativeTableTransferProvider(RegionTransferProvider):
+    robot_name = 'stretch'
     def __init__(self, robot, config, *, adapter=None, planning_ik_budget=2048, diagnostic_state=False, native_policy='legacy'):
         validate_native_task_config(config)
         if type(planning_ik_budget) is not int or planning_ik_budget <= 0:
@@ -78,7 +79,8 @@ class NativeTableTransferProvider(RegionTransferProvider):
         super().__init__(regions, observe=self._observe_native, transfer=self._transfer_native, input_mode='privileged')
 
     def describe(self):
-        return {**super().describe(), 'native_motion_policy': getattr(self.adapter, 'policy', 'legacy'),
+        return {**super().describe(), 'robot': self.robot_name,
+                'native_motion_policy': getattr(self.adapter, 'policy', 'legacy'),
                 'base_motion': 'checked_unloaded_approach' if getattr(self.adapter, 'checked_base_approach', False) else 'stationary'}
 
     def _observe_native(self):

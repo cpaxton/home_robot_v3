@@ -28,3 +28,11 @@ GPU hidden, managed CPU-only jobs and at most two simulator bridges. Preserve al
 failed attempts and model text. This does not qualify physical grasp-loss,
 held-object recovery, observed grounding or hardware. PR242's motion policy and
 acceptance thresholds remain unchanged.
+
+The first frozen live pair at `d9fb0273` accurately reports named partial progress
+and stops in both trials; stop-only passes. Recovery fails on the subsequent
+request: the model proposes an unavailable inspection tool, then the bound
+session rejects its own `robot="stretch"` selector. Preserve that failure.
+Accept the configured native robot selector, clarify the advertised inspection
+tool, and stop mixed TAMP batches at unavailable tools. Repeat both declared
+trials on the next clean source; do not replace or rescore the first pair.

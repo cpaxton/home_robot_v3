@@ -96,6 +96,13 @@ after one completed transfer and a second-step admission refusal, overall
 execution exception preserves possible dispatch. Any partial result still stops
 the agent until a separately authorized request and fresh measured admission.
 
+For bound native Stretch tasks, `scene_tasks(robot="stretch")` is equivalent to
+omitting the robot selector. A different robot or nonempty object filter still
+rejects: task discovery must retain the complete bound occupancy context. Use
+`scene_tasks` for task-state inspection on a newly authorized recovery request.
+An unavailable tool in a TAMP-containing batch prevents dispatch of its remaining
+calls; it cannot silently fall through into planning or execution.
+
 ## Provider failures and budgets
 
 Discovery and planning use the same public failure translation as execution.

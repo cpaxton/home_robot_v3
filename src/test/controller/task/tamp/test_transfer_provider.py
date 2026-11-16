@@ -228,6 +228,15 @@ def test_invalid_public_step_description_rejects_before_commands():
     assert 'secret-path' not in json.dumps(result)
 
 
+def test_connected_robot_selector_is_accepted_but_cross_robot_and_filters_reject():
+    domain, _, _ = make_domain()
+    domain.robot_name = 'stretch'
+    session = TaskSession(domain)
+    assert session.discover(robot='stretch')['status'] == 'ok'
+    assert session.discover(robot='rby1')['code'] == 'task_filter_unsupported'
+    assert session.discover(object_filter='alpha')['code'] == 'task_filter_unsupported'
+
+
 def test_debug_state_is_json_in_logs_but_not_public_motion_evidence(caplog):
     import numpy as np
     domain, _ = native_probe_domain()
