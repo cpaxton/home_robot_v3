@@ -198,3 +198,14 @@ local GPU lock, allowing other local GPU work to resume. No live agent, physical
 tool or simulation is scheduled by this cohort. The durable protocol, frozen
 inputs, runner, test report, model metadata, wire requests and results live under
 `~/runs/emet/frozen-model-triage-20261116-r1/`; job IDs are recorded there at launch.
+
+The first comparison and follow-up image-history audit are complete; see
+[the audit](../experiments/history_context_audit_20261116.md). Historical pixels
+reach local preprocessing, but current-turn presentation changes the response.
+Recall can confuse current presence on local int4, while Caliban passes that
+control. Neutral acknowledgement alone does not explain the original failure.
+Any replay that appends recalled images must avoid falsely claiming all attached
+images are in acquisition order. Keep source capture order separate from
+presentation order and retain both historical and current-view negative controls.
+Next compare packet placement on frozen trajectories before another live sweep;
+do not interpret the first eight replies as a general precision comparison.

@@ -1,5 +1,19 @@
 # Living TODOs (small / near-term)
 
+- [x] Audit the frozen history failure through real preprocessing and controlled
+      presentation tests. Both frames reach local preprocessing (575 tokens),
+      but both backends abstain on earlier-turn pixels and read them in one
+      current message. Recall restores historical color; local int4 then
+      confuses past/current presence while Caliban does not. Neutral
+      acknowledgement does not fix history. Twenty-two completed diagnostic
+      calls; remote precision remains unverified; no runtime policy flip:
+      `docs/experiments/history_context_audit_20261116.md`.
+- [ ] Compare a bounded current-decision evidence bundle with images attached
+      only in earlier turns, preserving original dialogue and truthful capture
+      order/roles. Qualify historical positives AND current-view negatives
+      before paired EQA/OVMM checks. Use existing view-selection machinery;
+      do not force model answers or add another recovery policy.
+
 - [ ] Simplify the active agent before adding recovery policies: separate
       last-observed find geometry from current physical-action authorization,
       remove duplicate advertised tools and task-irrelevant state instructions,
