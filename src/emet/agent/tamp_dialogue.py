@@ -43,7 +43,9 @@ class TampDialogueContext:
             'outcomes are context, not renewed authorization or proof of current state. '
             'A request to explain, stop, or plan does not authorize execution. For a '
             'newly authorized retry, use scene_tasks and a fresh plan; never replay a '
-            'consumed handle. Unknown dispatch, grasp loss, or a held object requires '
+            'consumed handle. Return at most one tool call per round. Wait for the '
+            'actual plan_ref returned by planning before proposing execution; never '
+            'invent handles. Unknown dispatch, grasp loss, or a held object requires '
             'inspection; this context does not qualify autonomous recovery. If the '
             'referent or goal is unclear, ask for clarification.\n\nNew user request:\n'
             + user_request

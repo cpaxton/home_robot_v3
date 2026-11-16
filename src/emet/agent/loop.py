@@ -37,7 +37,7 @@ from emet.agent.env_flags import env_agent_camera_debug
 from emet.agent.model_debug import print_embodied_model_report, print_llm_invoke_line
 from emet.agent.prompt import DEFAULT_AGENT_NAME, AgentPromptBuilder, parse_tool_calls_response
 from emet.agent.tamp_dialogue import TampDialogueContext
-from emet.agent.tamp_session import tamp_followup
+from emet.agent.tamp_session import serial_tamp_calls, tamp_followup
 from emet.agent.tamp_world import task_world_change
 from emet.agent.thinking_status import (
     env_agent_thinking_status,
@@ -1361,12 +1361,14 @@ def run_agent_with_robot(
 
                 parsed = parse_tool_calls_response(raw_response)
                 tool_calls = parsed.get("tool_calls") or []
+                tool_calls, deferred_calls = serial_tamp_calls(tool_calls)
                 message = parsed.get("message") or ""
 
                 if debug_llm or verbose_tools:
                     print(colored("[DEBUG] Parsed:", "blue"), json.dumps(parsed, indent=2))
 
-                chat_log.log("assistant", message, tool_calls=tool_calls, raw=raw_response, time_s=elapsed)
+                chat_log.log("assistant", message, tool_calls=tool_calls,
+                             deferred_tool_calls=deferred_calls, raw=raw_response, time_s=elapsed)
 
                 # No tool calls — this is the final answer
                 if not tool_calls:
@@ -1424,6 +1426,12 @@ def run_agent_with_robot(
                     break
 
                 result_text = "\n".join(results)
+                deferred_note = (
+                    '\nOnly the first proposed TAMP call was dispatched. Later proposals '
+                    'were deferred, not executed or queued. Reconsider the next call from '
+                    'the actual result. Return at most one tool call per round; use only '
+                    'handles returned by tools.\n' if deferred_calls else ''
+                )
                 if verbose_tools and result_text.strip():
                     print(colored("[tool results combined]", "magenta"), result_text, sep="\n", flush=True)
 
@@ -1445,7 +1453,7 @@ def run_agent_with_robot(
                     tamp_stopped = any(c.get("name") in TAMP_TOOLS for c in tool_calls) and continuation is None
                     last_round = _round >= max_tool_rounds - 1 or tamp_stopped
                     followup = (
-                        f"[Tool results]\n{result_text}\n\n"
+                        f"[Tool results]\n{result_text}\n{deferred_note}\n"
                         "Summarize these results for the user in your message. "
                         "Use completed_actions and failed_action to name the verified progress and failed step. "
                         "A later failure does not undo completed work. Distinguish overall execution_started from "
@@ -1497,7 +1505,7 @@ def run_agent_with_robot(
                             color="cyan",
                         )
                         break
-                    current_input = continuation or followup
+                    current_input = (continuation + deferred_note) if continuation else followup
                     if debug_llm or verbose_tools:
                         print(
                             colored("[→ LLM follow-up user message]", "magenta"),

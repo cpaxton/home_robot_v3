@@ -364,6 +364,14 @@ A newly authorized retry requires fresh `scene_tasks` and a fresh plan. An
 explanation or plan-only request must not execute; ambiguous referents require
 clarification. Unknown dispatch and held-object recovery remain unqualified.
 
+CHAT dispatches only the first proposal from an all-TAMP batch, then returns its
+actual result to the model. Later proposals are logged in `deferred_tool_calls`
+and retained in the raw response; they are not executed or queued. The model must
+choose the next call from fresh results, including actual returned plan handles.
+Failure still ends the turn. Mixed capability batches retain the existing
+dispatcher stop rules. This prevents a bundled discovery/plan/execute response
+from dispatching a handle invented before planning has returned one.
+
 `--state-only-sim --memory-backend dynamem` is an explicit camera-free Stretch
 simulation diagnostic. It requires LLM CHAT, no EQA/camera input or checkpoint,
 and server metadata advertising zero cameras. Its CPU/manipulation-only executor

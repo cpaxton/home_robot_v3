@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from emet.agent import loop
-from emet.agent.tamp_session import tamp_followup
+from emet.agent.tamp_session import serial_tamp_calls, tamp_followup
 from emet.agent.tools import Tool
 from emet.controller.task.tamp.api import response
 
@@ -304,3 +304,47 @@ def test_actual_loop_resets_llm_but_supplies_context_and_never_replays_final_too
     assert original in recovery_call.args[1]
     assert 'goal_verified' in recovery_call.args[1]
     assert recovery_call.args[1].endswith('New user request:\n'+new_request)
+
+
+@pytest.mark.parametrize('first_fails', [False, True])
+def test_tamp_batch_waits_for_tool_result_and_never_dispatches_invented_handle(monkeypatch, first_fails):
+    setup_chat_loop(monkeypatch)
+    discover = MagicMock(return_value=json.dumps(response('scene_tasks',
+        status='error' if first_fails else 'ok', code='stale_observation' if first_fails else 'ok')))
+    plan = MagicMock(return_value=json.dumps(response('plan_task', data={'plan_ref': 'actual'})))
+    execute = MagicMock(return_value=json.dumps(response('execute_task_plan')))
+    tools = [Tool(name=name, description='test', parameters={'type': 'object', 'properties': {}},
+                  func=fn, returns_info=True) for name, fn in (
+                      ('scene_tasks', discover), ('plan_task', plan), ('execute_task_plan', execute))]
+    monkeypatch.setattr(loop, 'get_tools', lambda _: tools)
+
+    def reply(calls):
+        return json.dumps({'tool_calls': calls}), .1
+
+    proposed = [{'name': 'scene_tasks', 'arguments': {}}, {'name': 'plan_task', 'arguments': {}},
+                {'name': 'execute_task_plan', 'arguments': {'plan_ref': 'invented'}}]
+    replies = [reply(proposed)]
+    if not first_fails:
+        replies += [reply(proposed[1:]), reply([{'name': 'execute_task_plan', 'arguments': {'plan_ref': 'actual'}}])]
+    replies += [('{"message":"Stopped","tool_calls":[]}', .1)]
+    llm = MagicMock(side_effect=replies)
+    monkeypatch.setattr(loop, '_call_llm', llm)
+    loop.run_agent_with_robot(discord=False, use_llm=True, commands=['Move both objects'],
+        device='cpu', thinking_status=False, max_tool_rounds=8, tamp_task_session=object())
+    discover.assert_called_once()
+    if first_fails:
+        plan.assert_not_called()
+        execute.assert_not_called()
+        assert 'Do not call any more tools' in llm.call_args_list[1].args[1]
+    else:
+        plan.assert_called_once()
+        execute.assert_called_once_with(plan_ref='actual')
+        assert 'not executed or queued' in llm.call_args_list[1].args[1]
+        assert 'actual' in llm.call_args_list[2].args[1]
+    logs = loop.ChatLog.return_value.log.call_args_list
+    assert any(call.kwargs.get('deferred_tool_calls') == proposed[1:] for call in logs)
+
+
+def test_mixed_capability_batches_keep_existing_dispatch_semantics():
+    calls = [{'name': 'describe_scene'}, {'name': 'plan_task'}]
+    assert serial_tamp_calls(calls) == (calls, [])

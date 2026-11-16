@@ -21,6 +21,19 @@ physical goals, and no forbidden commands. Repeat the stop-only control on the
 same source. These are development diagnostics, not a new held-out cohort or
 contact/unknown-dispatch recovery qualification.
 
+The first frozen pair at `0e4e3959` passes stop-only and returns correct partial
+feedback, but contextual recovery fails: the model bundles discovery, planning
+and execution with an invented `plan_123`. Planning returns a real one-step
+handle; the invented handle is rejected with `unknown_plan`, with no second
+transfer. Preserve this attempt and its 482 passing affected tests.
+
+Serialize all-TAMP model batches: dispatch only the first proposal, log later
+ones as deferred, and require the model to reconsider after the actual result.
+Deferred calls are never queued automatically. Preserve hard failure boundaries
+and mixed capability batch semantics. Add real-loop regressions for repeated
+bundling, actual returned handles and first-call failure, then freeze a new
+source and repeat both declared trials without replacing the first pair.
+
 ## Relation to Agentic GenTAMP
 
 [Coding Agents for Generalized Task and Motion Planning Problems](https://arxiv.org/abs/2609.30233)

@@ -32,7 +32,7 @@ def test_context_preserves_named_partial_progress_but_no_handles_or_sensor_data(
     for text in (request, 'alpha', 'beta', 'preflight', 'failed_step_execution_started',
                  'not current scene evidence', 'Only the new user request', 'fresh plan'):
         assert text in prompt
-    for text in ('consumed-secret', 'private-body', 'old-base64', 'plan_ref'):
+    for text in ('consumed-secret', 'private-body', 'old-base64', '"plan_ref":'):
         assert text not in prompt
     assert prompt.endswith('New user request:\nPlease retry')
 
