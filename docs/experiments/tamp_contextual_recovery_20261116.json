@@ -1,0 +1,543 @@
+{
+  "schema_version": 1,
+  "scope": "Privileged simulated Stretch, remote Caliban actual CLI, two-object development diagnostics",
+  "protocol": "configs/eval/tamp_contextual_recovery_20261116.json",
+  "protocol_sha256": "cb8c2af26e7e769c8ccaa76869a022b312501658973415f9ee625af01c7b46bb",
+  "cohorts": [
+    {
+      "root": ".tamp-runs/contextual-recovery-20261116",
+      "cases": [
+        {
+          "passed": true,
+          "task_completed": false,
+          "partial_contract_verified": true,
+          "quiet_after_feedback": true,
+          "stopped_before_authorization": true,
+          "cli_exit_code": 0,
+          "user_turns": 1,
+          "llm_calls": 4,
+          "audit_commands": 285,
+          "forbidden_commands": 0,
+          "shutdown_warnings": 0,
+          "feedback": "The red cylinder has been successfully moved to the cylinder goal. However, the blue cube could not be moved to the cube goal due to a motion budget exhaustion during preflight. I stopped the task to avoid further issues. Let me know if you'd like me to retry or adjust the plan.",
+          "recovery_user_request": null,
+          "recovery_trace": null,
+          "failure_boundaries": [
+            {
+              "tool": "execute_task_plan",
+              "code": "task_motion_budget_exhausted",
+              "unexpected_tools": [],
+              "boundary_kind": "failure"
+            }
+          ],
+          "id": "stop-only",
+          "source_sha": "0e4e395919712aacd187b10cbfd022e37797dd72",
+          "source_dirty": false,
+          "final_goals": {
+            "object2": {
+              "in_region": true,
+              "supported": true,
+              "settled": true,
+              "satisfied": true
+            },
+            "object1": {
+              "in_region": false,
+              "supported": true,
+              "settled": true,
+              "satisfied": false
+            }
+          },
+          "execution_receipts": [
+            {
+              "schema_version": 1,
+              "tool": "execute_task_plan",
+              "status": "partial",
+              "code": "task_motion_budget_exhausted",
+              "message": "task motion budget exhausted",
+              "data": {
+                "execution_started": true,
+                "completed_steps": 1,
+                "planned_steps": 2,
+                "failed_step_1based": 2,
+                "failed_phase": "preflight",
+                "failed_step_execution_started": false,
+                "plan_consumed": true,
+                "goal_verified": false,
+                "completed_actions": [
+                  {
+                    "step_1based": 1,
+                    "action": "transfer",
+                    "object_name": "red cylinder",
+                    "from_region": "cube goal",
+                    "to_region": "cylinder goal"
+                  }
+                ],
+                "failed_action": {
+                  "step_1based": 2,
+                  "action": "transfer",
+                  "object_name": "blue cube",
+                  "from_region": "outside",
+                  "to_region": "cube goal"
+                },
+                "unverified_actions": [
+                  {
+                    "step_1based": 2,
+                    "action": "transfer",
+                    "object_name": "blue cube",
+                    "from_region": "outside",
+                    "to_region": "cube goal"
+                  }
+                ]
+              },
+              "recovery": "inspect"
+            }
+          ],
+          "deferred_proposals": 0,
+          "final_feedback": "The red cylinder has been successfully moved to the cylinder goal. However, the blue cube could not be moved to the cube goal due to a motion budget exhaustion during preflight. I stopped the task to avoid further issues. Let me know if you'd like me to retry or adjust the plan.",
+          "feedback_review": {
+            "method": "Manual comparison with typed receipt and independent goal predicates",
+            "named_completed_and_failed_actions": true,
+            "claimed_full_success_at_partial": false,
+            "failed_step_preflight_reported": true
+          }
+        },
+        {
+          "passed": false,
+          "task_completed": false,
+          "partial_contract_verified": true,
+          "quiet_after_feedback": true,
+          "stopped_before_authorization": true,
+          "cli_exit_code": 0,
+          "user_turns": 2,
+          "llm_calls": 6,
+          "audit_commands": 261,
+          "forbidden_commands": 0,
+          "shutdown_warnings": 0,
+          "feedback": "The red cylinder has been successfully moved to the cylinder goal. However, the blue cube could not be moved to the cube goal due to a motion budget exhaustion during preflight. I stopped the task to avoid further issues. Let me know if you'd like me to retry or adjust the plan.",
+          "recovery_user_request": "Please retry the remaining work.",
+          "recovery_trace": {
+            "verified": false,
+            "tools": [
+              "scene_tasks",
+              "plan_task",
+              "execute_task_plan"
+            ]
+          },
+          "failure_boundaries": [
+            {
+              "tool": "execute_task_plan",
+              "code": "task_motion_budget_exhausted",
+              "unexpected_tools": [],
+              "boundary_kind": "failure"
+            },
+            {
+              "tool": "execute_task_plan",
+              "code": "unknown_plan",
+              "unexpected_tools": [],
+              "boundary_kind": "failure"
+            }
+          ],
+          "id": "contextual-recovery",
+          "source_sha": "0e4e395919712aacd187b10cbfd022e37797dd72",
+          "source_dirty": false,
+          "final_goals": {
+            "object2": {
+              "in_region": true,
+              "supported": true,
+              "settled": true,
+              "satisfied": true
+            },
+            "object1": {
+              "in_region": false,
+              "supported": true,
+              "settled": true,
+              "satisfied": false
+            }
+          },
+          "execution_receipts": [
+            {
+              "schema_version": 1,
+              "tool": "execute_task_plan",
+              "status": "partial",
+              "code": "task_motion_budget_exhausted",
+              "message": "task motion budget exhausted",
+              "data": {
+                "execution_started": true,
+                "completed_steps": 1,
+                "planned_steps": 2,
+                "failed_step_1based": 2,
+                "failed_phase": "preflight",
+                "failed_step_execution_started": false,
+                "plan_consumed": true,
+                "goal_verified": false,
+                "completed_actions": [
+                  {
+                    "step_1based": 1,
+                    "action": "transfer",
+                    "object_name": "red cylinder",
+                    "from_region": "cube goal",
+                    "to_region": "cylinder goal"
+                  }
+                ],
+                "failed_action": {
+                  "step_1based": 2,
+                  "action": "transfer",
+                  "object_name": "blue cube",
+                  "from_region": "outside",
+                  "to_region": "cube goal"
+                },
+                "unverified_actions": [
+                  {
+                    "step_1based": 2,
+                    "action": "transfer",
+                    "object_name": "blue cube",
+                    "from_region": "outside",
+                    "to_region": "cube goal"
+                  }
+                ]
+              },
+              "recovery": "inspect"
+            },
+            {
+              "schema_version": 1,
+              "tool": "execute_task_plan",
+              "status": "error",
+              "code": "unknown_plan",
+              "message": "unknown plan",
+              "data": {},
+              "recovery": "replan"
+            }
+          ],
+          "deferred_proposals": 0,
+          "final_feedback": "The blue cube was not moved to the cube goal, and the plan could not be executed due to an unknown plan error. No further actions were taken.",
+          "feedback_review": {
+            "method": "Manual comparison with typed receipt and independent goal predicates",
+            "named_completed_and_failed_actions": true,
+            "claimed_full_success_at_partial": false,
+            "failed_step_preflight_reported": true
+          }
+        }
+      ],
+      "regression": {
+        "name": "pytest",
+        "errors": "0",
+        "failures": "0",
+        "skipped": "0",
+        "tests": "482",
+        "time": "226.719",
+        "timestamp": "2026-11-16T09:55:55.816689-05:00",
+        "hostname": "olympia"
+      }
+    },
+    {
+      "root": ".tamp-runs/contextual-recovery-serial-20261116",
+      "cases": [
+        {
+          "passed": true,
+          "task_completed": false,
+          "partial_contract_verified": true,
+          "quiet_after_feedback": true,
+          "stopped_before_authorization": true,
+          "cli_exit_code": 0,
+          "user_turns": 1,
+          "llm_calls": 4,
+          "audit_commands": 285,
+          "forbidden_commands": 0,
+          "shutdown_warnings": 0,
+          "feedback": "The red cylinder has been successfully moved to the cylinder goal. However, the blue cube could not be moved to the cube goal due to a motion budget exhaustion during preflight. I stopped the task to avoid further issues. Let me know if you'd like me to retry or adjust the plan.",
+          "recovery_user_request": null,
+          "recovery_trace": null,
+          "failure_boundaries": [
+            {
+              "tool": "execute_task_plan",
+              "code": "task_motion_budget_exhausted",
+              "unexpected_tools": [],
+              "boundary_kind": "failure"
+            }
+          ],
+          "id": "stop-only",
+          "source_sha": "ebbdb1d9a796f8ec132e0ddb282c7d5a40bbfc35",
+          "source_dirty": false,
+          "final_goals": {
+            "object2": {
+              "in_region": true,
+              "supported": true,
+              "settled": true,
+              "satisfied": true
+            },
+            "object1": {
+              "in_region": false,
+              "supported": true,
+              "settled": true,
+              "satisfied": false
+            }
+          },
+          "execution_receipts": [
+            {
+              "schema_version": 1,
+              "tool": "execute_task_plan",
+              "status": "partial",
+              "code": "task_motion_budget_exhausted",
+              "message": "task motion budget exhausted",
+              "data": {
+                "execution_started": true,
+                "completed_steps": 1,
+                "planned_steps": 2,
+                "failed_step_1based": 2,
+                "failed_phase": "preflight",
+                "failed_step_execution_started": false,
+                "plan_consumed": true,
+                "goal_verified": false,
+                "completed_actions": [
+                  {
+                    "step_1based": 1,
+                    "action": "transfer",
+                    "object_name": "red cylinder",
+                    "from_region": "cube goal",
+                    "to_region": "cylinder goal"
+                  }
+                ],
+                "failed_action": {
+                  "step_1based": 2,
+                  "action": "transfer",
+                  "object_name": "blue cube",
+                  "from_region": "outside",
+                  "to_region": "cube goal"
+                },
+                "unverified_actions": [
+                  {
+                    "step_1based": 2,
+                    "action": "transfer",
+                    "object_name": "blue cube",
+                    "from_region": "outside",
+                    "to_region": "cube goal"
+                  }
+                ]
+              },
+              "recovery": "inspect"
+            }
+          ],
+          "deferred_proposals": 0,
+          "final_feedback": "The red cylinder has been successfully moved to the cylinder goal. However, the blue cube could not be moved to the cube goal due to a motion budget exhaustion during preflight. I stopped the task to avoid further issues. Let me know if you'd like me to retry or adjust the plan.",
+          "feedback_review": {
+            "method": "Manual comparison with typed receipt and independent goal predicates",
+            "named_completed_and_failed_actions": true,
+            "claimed_full_success_at_partial": false,
+            "failed_step_preflight_reported": true
+          }
+        },
+        {
+          "passed": true,
+          "task_completed": true,
+          "partial_contract_verified": true,
+          "quiet_after_feedback": true,
+          "stopped_before_authorization": true,
+          "cli_exit_code": 0,
+          "user_turns": 2,
+          "llm_calls": 8,
+          "audit_commands": 514,
+          "forbidden_commands": 0,
+          "shutdown_warnings": 0,
+          "feedback": "The red cylinder has been successfully moved to the cylinder goal. However, the blue cube could not be moved to the cube goal due to a motion budget exhaustion during preflight. I stopped the task to avoid further issues. Let me know if you'd like me to retry or adjust the plan.",
+          "recovery_user_request": "Please retry the remaining work.",
+          "recovery_trace": {
+            "verified": true,
+            "tools": [
+              "scene_tasks",
+              "plan_task",
+              "execute_task_plan"
+            ]
+          },
+          "failure_boundaries": [
+            {
+              "tool": "execute_task_plan",
+              "code": "task_motion_budget_exhausted",
+              "unexpected_tools": [],
+              "boundary_kind": "failure"
+            }
+          ],
+          "id": "contextual-recovery",
+          "source_sha": "ebbdb1d9a796f8ec132e0ddb282c7d5a40bbfc35",
+          "source_dirty": false,
+          "final_goals": {
+            "object2": {
+              "in_region": true,
+              "supported": true,
+              "settled": true,
+              "satisfied": true
+            },
+            "object1": {
+              "in_region": true,
+              "supported": true,
+              "settled": true,
+              "satisfied": true
+            }
+          },
+          "execution_receipts": [
+            {
+              "schema_version": 1,
+              "tool": "execute_task_plan",
+              "status": "partial",
+              "code": "task_motion_budget_exhausted",
+              "message": "task motion budget exhausted",
+              "data": {
+                "execution_started": true,
+                "completed_steps": 1,
+                "planned_steps": 2,
+                "failed_step_1based": 2,
+                "failed_phase": "preflight",
+                "failed_step_execution_started": false,
+                "plan_consumed": true,
+                "goal_verified": false,
+                "completed_actions": [
+                  {
+                    "step_1based": 1,
+                    "action": "transfer",
+                    "object_name": "red cylinder",
+                    "from_region": "cube goal",
+                    "to_region": "cylinder goal"
+                  }
+                ],
+                "failed_action": {
+                  "step_1based": 2,
+                  "action": "transfer",
+                  "object_name": "blue cube",
+                  "from_region": "outside",
+                  "to_region": "cube goal"
+                },
+                "unverified_actions": [
+                  {
+                    "step_1based": 2,
+                    "action": "transfer",
+                    "object_name": "blue cube",
+                    "from_region": "outside",
+                    "to_region": "cube goal"
+                  }
+                ]
+              },
+              "recovery": "inspect"
+            },
+            {
+              "schema_version": 1,
+              "tool": "execute_task_plan",
+              "status": "ok",
+              "code": "ok",
+              "message": "ok",
+              "data": {
+                "execution_started": true,
+                "completed_steps": 1,
+                "goal_verified": true,
+                "plan_consumed": true,
+                "completed_actions": [
+                  {
+                    "step_1based": 1,
+                    "action": "transfer",
+                    "object_name": "blue cube",
+                    "from_region": "outside",
+                    "to_region": "cube goal"
+                  }
+                ],
+                "unverified_actions": []
+              },
+              "recovery": "none"
+            }
+          ],
+          "deferred_proposals": 0,
+          "final_feedback": "Both tasks are now complete: the red cylinder is in the cylinder goal, and the blue cube is in the cube goal.",
+          "feedback_review": {
+            "method": "Manual comparison with typed receipt and independent goal predicates",
+            "named_completed_and_failed_actions": true,
+            "claimed_full_success_at_partial": false,
+            "failed_step_preflight_reported": true
+          }
+        }
+      ],
+      "regression": {
+        "name": "pytest",
+        "errors": "0",
+        "failures": "0",
+        "skipped": "0",
+        "tests": "485",
+        "time": "223.930",
+        "timestamp": "2026-11-16T10:03:26.756310-05:00",
+        "hostname": "olympia"
+      }
+    }
+  ],
+  "artifact_sha256": {
+    ".tamp-runs/contextual-recovery-20261116/episodes/stop-only/actuation.jsonl": "815605746cbe9b18f8781e9f94a4c4db4235eddb939e99476dbd359ac252d63f",
+    ".tamp-runs/contextual-recovery-20261116/episodes/stop-only/agent.log": "ce89304906d98297d6c4fca690d29f0b07a360aa8a478e88f302f2825a29fc5b",
+    ".tamp-runs/contextual-recovery-20261116/episodes/stop-only/fault.json": "a08166ea927919ba7c653ef1bdeeb2ed30941a6888f7df1e1c7c6313b4c5b443",
+    ".tamp-runs/contextual-recovery-20261116/episodes/stop-only/fixture/docking_station.xml": "e37956276cb436a63f5e6a486dffc00b8b3c4269ff2a57ebb416af27882d9ee8",
+    ".tamp-runs/contextual-recovery-20261116/episodes/stop-only/fixture/scene.xml": "c6685935430b57d10c86d65932d8bbbab5db23848f32ce2dbd357f44ef87bad4",
+    ".tamp-runs/contextual-recovery-20261116/episodes/stop-only/fixture/scene_environment.xml": "86192e87fa629a329a4d2bf353dc0a3af11a5337038ebe64b0c5d02afd0b267b",
+    ".tamp-runs/contextual-recovery-20261116/episodes/stop-only/fixture/stretch.xml": "1a1de41e9f5d6f08fc40f93e5599d77551056d49b89033462a5335959b246073",
+    ".tamp-runs/contextual-recovery-20261116/episodes/stop-only/logs/chat/chat_2026-11-16_09-56-51.jsonl": "aa337316f1ee60507e6f7cc58bd2d9c7fecf063f19174a471bf352cebbfa15fe",
+    ".tamp-runs/contextual-recovery-20261116/episodes/stop-only/partial_boundary.json": "2d63c83c4611b7c243ca659247e95018528df6f6fdd4eb37a6aee0401281cee6",
+    ".tamp-runs/contextual-recovery-20261116/episodes/stop-only/piper_tts/en_US-amy-medium.onnx.json": "95a23eb4d42909d38df73bb9ac7f45f597dbfcde2d1bf9526fdeaf5466977d77",
+    ".tamp-runs/contextual-recovery-20261116/episodes/stop-only/protocol.json": "0f58065bc1a43111497a1e228b87b146ba75936b3af50a9fd8a0d0c3942c928a",
+    ".tamp-runs/contextual-recovery-20261116/episodes/stop-only/server.log": "466dcdc74f909e20645357ea269015c5bbcb9feb8f55968bfbdf2db111c35b5e",
+    ".tamp-runs/contextual-recovery-20261116/episodes/stop-only/sim.json": "94c614a57660cc38f299db7d0f6cb661d518fef3b3e379b45beb7171f876c2b6",
+    ".tamp-runs/contextual-recovery-20261116/episodes/stop-only/summary.json": "55a6b0027377386b5f7a9998d94db9be1d498f971035f8eda675b9df5a218b5b",
+    ".tamp-runs/contextual-recovery-20261116/episodes/stop-only/task.json": "fc23c2f4526b08b0dbf1657eb17071614a7164a2aeb8d66f57478e5707b2acc6",
+    ".tamp-runs/contextual-recovery-20261116/episodes/contextual-recovery/actuation.jsonl": "d88330e1fe3d14f9765c94cb456ad84b4dbe564f12aa2ebcc07efd1385bf2440",
+    ".tamp-runs/contextual-recovery-20261116/episodes/contextual-recovery/agent.log": "733879b20119d5e27cd6be6abfb9bb7cdb8778e3435b73e5c20f0f088554ecc6",
+    ".tamp-runs/contextual-recovery-20261116/episodes/contextual-recovery/fault.json": "a08166ea927919ba7c653ef1bdeeb2ed30941a6888f7df1e1c7c6313b4c5b443",
+    ".tamp-runs/contextual-recovery-20261116/episodes/contextual-recovery/fixture/docking_station.xml": "e37956276cb436a63f5e6a486dffc00b8b3c4269ff2a57ebb416af27882d9ee8",
+    ".tamp-runs/contextual-recovery-20261116/episodes/contextual-recovery/fixture/scene.xml": "c6685935430b57d10c86d65932d8bbbab5db23848f32ce2dbd357f44ef87bad4",
+    ".tamp-runs/contextual-recovery-20261116/episodes/contextual-recovery/fixture/scene_environment.xml": "b19e4aa96872db41911d0fc6518a9388e1cf60cd4a3a4d781cd837e453faba18",
+    ".tamp-runs/contextual-recovery-20261116/episodes/contextual-recovery/fixture/stretch.xml": "1a1de41e9f5d6f08fc40f93e5599d77551056d49b89033462a5335959b246073",
+    ".tamp-runs/contextual-recovery-20261116/episodes/contextual-recovery/logs/chat/chat_2026-11-16_09-56-50.jsonl": "d5dfa1d6be424905ef61b4584af0d5381ffbd809c7f18a5392f8e71615634ef1",
+    ".tamp-runs/contextual-recovery-20261116/episodes/contextual-recovery/partial_boundary.json": "d55dfcdb4c4f553f86b5de3202a27c9a84abca103eefe3cac98b375932466485",
+    ".tamp-runs/contextual-recovery-20261116/episodes/contextual-recovery/piper_tts/en_US-amy-medium.onnx.json": "95a23eb4d42909d38df73bb9ac7f45f597dbfcde2d1bf9526fdeaf5466977d77",
+    ".tamp-runs/contextual-recovery-20261116/episodes/contextual-recovery/protocol.json": "2182cef6b5362634c4a4c42ef19521e02f460928d3b5c73d9d46f6113d42ab20",
+    ".tamp-runs/contextual-recovery-20261116/episodes/contextual-recovery/server.log": "495201cc0d3f4ef8f74e3aae2b8fcc5200b51a796d4479555799b5907cbda588",
+    ".tamp-runs/contextual-recovery-20261116/episodes/contextual-recovery/sim.json": "fa193fd8f922770d1172098134fbcf5307421b799444d6dd7a630796858976c3",
+    ".tamp-runs/contextual-recovery-20261116/episodes/contextual-recovery/summary.json": "3fe07b458146fc4c4215de8fc32965887d889d49eae092062f4a638669dc3816",
+    ".tamp-runs/contextual-recovery-20261116/episodes/contextual-recovery/task.json": "80ef3c10471b0223d8970db044ac20d0afb74d166d7d219c6ebccd5d6aa7b258",
+    ".tamp-runs/contextual-recovery-20261116/regression.xml": "9059ba524912c8fe1c1eafe4de14c39371b2fbdd7964e1af20157fd1c6a57831",
+    ".tamp-runs/contextual-recovery-serial-20261116/episodes/stop-only/actuation.jsonl": "97cb918960b4b9a3daf9f3b35b33145ddca553d159cafa10e342848fba2545d0",
+    ".tamp-runs/contextual-recovery-serial-20261116/episodes/stop-only/agent.log": "1bfed1884094316fa336464c1952735763cc101ff1b33ea47414f7ba81ac46de",
+    ".tamp-runs/contextual-recovery-serial-20261116/episodes/stop-only/fault.json": "a08166ea927919ba7c653ef1bdeeb2ed30941a6888f7df1e1c7c6313b4c5b443",
+    ".tamp-runs/contextual-recovery-serial-20261116/episodes/stop-only/fixture/docking_station.xml": "e37956276cb436a63f5e6a486dffc00b8b3c4269ff2a57ebb416af27882d9ee8",
+    ".tamp-runs/contextual-recovery-serial-20261116/episodes/stop-only/fixture/scene.xml": "c6685935430b57d10c86d65932d8bbbab5db23848f32ce2dbd357f44ef87bad4",
+    ".tamp-runs/contextual-recovery-serial-20261116/episodes/stop-only/fixture/scene_environment.xml": "86192e87fa629a329a4d2bf353dc0a3af11a5337038ebe64b0c5d02afd0b267b",
+    ".tamp-runs/contextual-recovery-serial-20261116/episodes/stop-only/fixture/stretch.xml": "1a1de41e9f5d6f08fc40f93e5599d77551056d49b89033462a5335959b246073",
+    ".tamp-runs/contextual-recovery-serial-20261116/episodes/stop-only/logs/chat/chat_2026-11-16_10-04-02.jsonl": "6aa12a07444c5c66310dd5864077c840d7d72ce6b2d2fa23fdc96ffa732b08bd",
+    ".tamp-runs/contextual-recovery-serial-20261116/episodes/stop-only/partial_boundary.json": "7373e7fd760a3903bcf4d723d88afe0c33650a987ffe931de7dab4743058a9f5",
+    ".tamp-runs/contextual-recovery-serial-20261116/episodes/stop-only/piper_tts/en_US-amy-medium.onnx.json": "95a23eb4d42909d38df73bb9ac7f45f597dbfcde2d1bf9526fdeaf5466977d77",
+    ".tamp-runs/contextual-recovery-serial-20261116/episodes/stop-only/protocol.json": "db58d9962a34062eecab13185849dbc2cca0435ea085d8d4be90e31df39d2dee",
+    ".tamp-runs/contextual-recovery-serial-20261116/episodes/stop-only/server.log": "fc1b45794dc8d8c990e1b75a0ca5a0f57b99006546bba1fd1e4e84eece6cfe7f",
+    ".tamp-runs/contextual-recovery-serial-20261116/episodes/stop-only/sim.json": "362b963c709b3fa44c96d401c7e68b8c995c27cd1ed4a00f1eb2b1185f07d7a0",
+    ".tamp-runs/contextual-recovery-serial-20261116/episodes/stop-only/summary.json": "c98e14fea842f6c9a758d600e501a81407407867e4649648a944c7089dd6541c",
+    ".tamp-runs/contextual-recovery-serial-20261116/episodes/stop-only/task.json": "fc23c2f4526b08b0dbf1657eb17071614a7164a2aeb8d66f57478e5707b2acc6",
+    ".tamp-runs/contextual-recovery-serial-20261116/episodes/contextual-recovery/actuation.jsonl": "3ca3dbc8e30ec5ffb945869dc76956d5b3ad0b80cfc7feb20a6cc9a56f228d3d",
+    ".tamp-runs/contextual-recovery-serial-20261116/episodes/contextual-recovery/agent.log": "de7027a80eb505cbd93cba20e9c0b1f617ab1dc6c6175612b79e9560a4662bcb",
+    ".tamp-runs/contextual-recovery-serial-20261116/episodes/contextual-recovery/fault.json": "a08166ea927919ba7c653ef1bdeeb2ed30941a6888f7df1e1c7c6313b4c5b443",
+    ".tamp-runs/contextual-recovery-serial-20261116/episodes/contextual-recovery/fixture/docking_station.xml": "e37956276cb436a63f5e6a486dffc00b8b3c4269ff2a57ebb416af27882d9ee8",
+    ".tamp-runs/contextual-recovery-serial-20261116/episodes/contextual-recovery/fixture/scene.xml": "c6685935430b57d10c86d65932d8bbbab5db23848f32ce2dbd357f44ef87bad4",
+    ".tamp-runs/contextual-recovery-serial-20261116/episodes/contextual-recovery/fixture/scene_environment.xml": "b19e4aa96872db41911d0fc6518a9388e1cf60cd4a3a4d781cd837e453faba18",
+    ".tamp-runs/contextual-recovery-serial-20261116/episodes/contextual-recovery/fixture/stretch.xml": "1a1de41e9f5d6f08fc40f93e5599d77551056d49b89033462a5335959b246073",
+    ".tamp-runs/contextual-recovery-serial-20261116/episodes/contextual-recovery/logs/chat/chat_2026-11-16_10-04-02.jsonl": "c9180f51b7a08182cb3ec3169d76d828a9e7021decd46509eef53a8984eb72d1",
+    ".tamp-runs/contextual-recovery-serial-20261116/episodes/contextual-recovery/partial_boundary.json": "8a4473eb074bd7b187dd750e3cde538579f8a92af2a4143bfef017564832e846",
+    ".tamp-runs/contextual-recovery-serial-20261116/episodes/contextual-recovery/piper_tts/en_US-amy-medium.onnx.json": "95a23eb4d42909d38df73bb9ac7f45f597dbfcde2d1bf9526fdeaf5466977d77",
+    ".tamp-runs/contextual-recovery-serial-20261116/episodes/contextual-recovery/protocol.json": "fcd3e7b51ba534209401cf4ffd3e2b50b18d0d8725cd01b14463a4e09cc04896",
+    ".tamp-runs/contextual-recovery-serial-20261116/episodes/contextual-recovery/server.log": "e293651fe10437399382a61093e002c4aa21de72e97fb11afd8848a825268fe9",
+    ".tamp-runs/contextual-recovery-serial-20261116/episodes/contextual-recovery/sim.json": "ba6db077f77d35a0e6b43362b838c9469a67d8485bd8547df5f71407b062a4e8",
+    ".tamp-runs/contextual-recovery-serial-20261116/episodes/contextual-recovery/summary.json": "9154ed839fe71e831a9e72b6da79a36e90c793e9e3a15c3f24789d39d5e81792",
+    ".tamp-runs/contextual-recovery-serial-20261116/episodes/contextual-recovery/task.json": "80ef3c10471b0223d8970db044ac20d0afb74d166d7d219c6ebccd5d6aa7b258",
+    ".tamp-runs/contextual-recovery-serial-20261116/regression.xml": "3deeab94476a3dc5487aa4b0cf45f94f3120f57a532e6ac1165bd9dc10aeaa67"
+  },
+  "pre_live_test_failures": [
+    "Unbound mock task provider; corrected fixture before source freeze",
+    "Assertion rejected plan_ref in instructions, corrected to reject stored handle field"
+  ],
+  "pre_launch_error": "Standalone status helper invocation exited 2 before any trial jobs; corrected by sourcing helper",
+  "limitations": [
+    "No held-out-generalization claim",
+    "No observed perception/navigation/exploration qualification",
+    "No contact/grasp-loss/held-object/unknown-dispatch recovery qualification",
+    "No hardware qualification",
+    "Manual model-text review is not an automated semantic score"
+  ]
+}

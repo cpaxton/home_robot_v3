@@ -34,6 +34,13 @@ and mixed capability batch semantics. Add real-loop regressions for repeated
 bundling, actual returned handles and first-call failure, then freeze a new
 source and repeat both declared trials without replacing the first pair.
 
+The repeat at `ebbdb1d9` passes stop-only and contextual recovery. The new retry
+turn uses fresh discovery, a one-step beam plan and the returned handle, then
+completes exactly the remaining cube transfer. Both original physical goals
+hold. There are 799 audited commands, zero forbidden commands or shutdown
+warnings, and 485 affected tests pass with no errors/skips. See
+[both frozen source histories and limitations](../experiments/tamp_contextual_recovery_20261116.md).
+
 ## Relation to Agentic GenTAMP
 
 [Coding Agents for Generalized Task and Motion Planning Problems](https://arxiv.org/abs/2609.30233)

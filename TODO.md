@@ -51,14 +51,18 @@ Strike through or move to a PR when done.
       fresh one-transfer recovery. Preserve the initial discovery-filter failure.
       Review: [PR #243](https://github.com/cpaxton/home_robot_v3/pull/243).
       [Feedback/recovery results](docs/experiments/tamp_partial_agent_20261116.md).
-- [ ] Finish bounded contextual recovery on `feat/tamp-recovery-dialogue`:
+- [x] Finish bounded contextual recovery on `feat/tamp-recovery-dialogue`:
       [plan and Agentic GenTAMP baseline implications](docs/plans/2026-11-16_tamp_recovery_dialogue.md).
       Freeze source, test a short retry through the actual CLI and repeat stop-only;
       retain fresh discovery, consumed-plan and physical-effect checks.
+      Corrected source `ebbdb1d9`: stop-only passes; short retry completes only the
+      remaining transfer and both original goals hold; 485 tests pass. Preserve
+      the first invented-handle failure. [Results](docs/experiments/tamp_contextual_recovery_20261116.md).
 - [ ] Qualify observed task admission and exploration. The completed recovery
       fault is injected planning admission, not grasp loss, unknown dispatch or
-      held-object recovery. A bare "retry" dialogue and broad reliability remain
-      untested; the model also makes extra read-only checks after completion.
+      held-object recovery. Short retry now passes one familiar diagnostic;
+      broad reliability remains unqualified. The prior restated-goal trial also
+      makes extra read-only checks after completion.
 
 ## Shared evidence/navigation stack (#199 / #202)
 
