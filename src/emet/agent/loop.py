@@ -660,10 +660,11 @@ def run_agent_with_robot(
     )
 
     native_tamp_policy = parameters.get("agent", {}).get("native_tamp_policy", "legacy")
-    if native_tamp_policy not in ("legacy", "bounded_release"):
-        raise ValueError("invalid_native_tamp_policy")
     if native_tamp_policy != "legacy":
+        # Native simulation dependencies remain deferred for ordinary CHAT.
+        from emet.controller.task.tamp.native_policy import require_native_policy
         from emet.simulation.sim_manipulation import resolve_agent_manip_mode
+        require_native_policy(native_tamp_policy)
         configured = parameters.get("agent", {})
         mode = resolve_agent_manip_mode(config_mode=configured.get("manip_mode"), visual_servo=bool(kwargs.get("visual_servo", False)))
         if mode != "physical" or configured.get("tamp_inputs", "observed") != "privileged":

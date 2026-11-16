@@ -112,7 +112,8 @@ def main():
         rows = [json.loads(line) for p in sorted((out / 'logs/chat').glob('*.jsonl'))
                 for line in p.read_text().splitlines()]
         outcomes = [row['content'] for row in rows if row['role'] == 'tool']
-        audit = [json.loads(line) for line in (out / 'actuation.jsonl').read_text().splitlines()]
+        audit_path = out / 'actuation.jsonl'
+        audit = [json.loads(line) for line in audit_path.read_text().splitlines()] if audit_path.exists() else []
         envelopes = []
         for row in outcomes:
             try:
@@ -130,6 +131,7 @@ def main():
                   'cli_exit_code': rc, 'failure_boundaries': failure_boundaries(rows),
                   'requested_rejection_observed': rejection_seen if args.reject_first else None,
                   'final_predicates': goal_predicates(robot, goals), 'tool_outcomes': envelopes,
+                  'audit_present': audit_path.exists(),
                   'audit_commands': len(audit), 'forbidden_commands': sum(bool(r.get('forbidden')) for r in audit)}
         result['passed'] = result['task_passed'] and result['agent_integration']['result_contracts_valid'] is True and bool(audit) and result['forbidden_commands'] == 0 and (
             not args.reject_first or rejection_seen) and not any(
