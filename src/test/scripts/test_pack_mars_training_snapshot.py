@@ -55,6 +55,7 @@ def test_snapshot_includes_bridge_and_resolved_assets_and_checksums(repo):
         names = archive.getnames()
         assert set(packer.REQUIRED) <= set(names)
         assert "src/emet/assets/robot/native.STL" in names
+        assert "src/emet/rl/test_drive.html" in names
         assert not any(name.endswith(".gz") or "secret" in name or name.startswith("logs/") for name in names)
         assert json.load(archive.extractfile("snapshot-manifest.json")) == manifest
         for entry in manifest["files"]:

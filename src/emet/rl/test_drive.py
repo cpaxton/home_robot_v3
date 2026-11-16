@@ -31,6 +31,29 @@ SCENARIOS = {
 }
 
 
+def _nudge_values(translation, rotation_z):
+    delta = np.asarray(translation, dtype=float)
+    if (
+        delta.shape != (3,) or not np.isfinite(delta).all() or not np.isfinite(rotation_z)
+        or np.linalg.norm(delta) > 0.08 or abs(rotation_z) > 0.2
+    ):
+        raise ValueError("invalid target movement")
+    return delta, rotation_z
+
+
+def _drain_goal_updates(commands, first):
+    """Coalesce adjacent goal edits without consuming a later stop/mode command."""
+    updates = [first]
+    while True:
+        try:
+            following = commands.get_nowait()
+        except queue.Empty:
+            return updates, None
+        if following.get("op") not in {"goal", "nudge"}:
+            return updates, following
+        updates.append(following)
+
+
 def checkpoints(roots, mode):
     result = {}
     if mode in MANIPULATION_MODES:
@@ -194,6 +217,11 @@ class Simulation:
                     "retention_context": False,
                     "wheel_feedback_gain": 2.0,
                     "whole_body_settling": False,
+                    "wheel_feedback_current_velocity": False,
+                    "physical_wheel_slew": False,
+                    "wheel_jerk_limits": None,
+                    "terminal_hold_seconds": 1.0,
+                    "base_turn_progress_guard": False,
                 }
             else:
                 if (
@@ -212,6 +240,11 @@ class Simulation:
                     "retention_context": source.get("retention_context", False),
                     "wheel_feedback_gain": source.get("wheel_feedback_gain", 2.0),
                     "whole_body_settling": source.get("whole_body_settling", False),
+                    "wheel_feedback_current_velocity": source.get("wheel_feedback_current_velocity", False),
+                    "physical_wheel_slew": source.get("physical_wheel_slew", False),
+                    "wheel_jerk_limits": source.get("wheel_jerk_limits"),
+                    "terminal_hold_seconds": source.get("terminal_hold_seconds", 1.0),
+                    "base_turn_progress_guard": source.get("base_turn_progress_guard", False),
                     **{
                         key: source[key]
                         for key in (
@@ -224,6 +257,10 @@ class Simulation:
                     },
                 }
             self.env.config = replace(self.env.config, **settings)
+            self.env.control.set_physical_wheel_slew(
+                self.env.config.physical_wheel_slew, jerk_limits=self.env.config.wheel_jerk_limits
+            )
+            self.env.control.clear_task_trajectory()
             self.env.control.retention_context_enabled = self.env.config.retention_context
             self.env._configure_preview()
             self.env.control.history = None  # Contract changes restart inputs, never physics.
@@ -287,6 +324,7 @@ class Simulation:
         self.control_mode = selected
         if self.mode in MANIPULATION_MODES:
             c = self.env.control
+            c.clear_task_trajectory()
             reference = c.reference.copy() if sampled and selected != 1 else c.positions()
             base = c.base_goal.copy() if sampled and selected != 2 else c.base_pose()
             hand = self.env._fk_hand_pose(base, reference) if sampled else c.ee_pose()
@@ -340,6 +378,16 @@ class Simulation:
             if target.shape != (3,) or not np.isfinite(target).all():
                 raise ValueError("base target must contain x, y, yaw")
             control = self.env.control
+            if self.uses_base_references():
+                from emet.rl.manipulation.base_goal_reference import install_base_goal
+
+                path, admission = install_base_goal(self.env, target)
+                self.obs = control.observe()
+                self.interventions.append({
+                    "time": float(self.env.data.time), "goal": path.target.tolist(),
+                    "reference_format": path.record()["format"], "admission": admission,
+                })
+                return
             control.set_reference(control.positions(), phase=control.phase)
             control.set_pose_targets(target, [True, True, True], control.ee_pose(), False)
             self.env._previous_cost = self.env._tracking_cost()
@@ -365,6 +413,7 @@ class Simulation:
                 pose,
                 True,
             )
+            control.clear_task_trajectory()
             self.env._previous_cost = self.env._tracking_cost()
             self.obs = control.observe()
             self.interventions.append({"time": float(self.env.data.time), "goal": pose.tolist()})
@@ -492,15 +541,7 @@ class Simulation:
 
     def nudge_goal(self, translation, rotation_z=0.0):
         """Move the active Cartesian goal a small amount in the rendered view plane."""
-        delta = np.asarray(translation, dtype=float)
-        if (
-            delta.shape != (3,)
-            or not np.isfinite(delta).all()
-            or not np.isfinite(rotation_z)
-            or np.linalg.norm(delta) > 0.08
-            or abs(rotation_z) > 0.2
-        ):
-            raise ValueError("invalid target movement")
+        delta, rotation_z = _nudge_values(translation, rotation_z)
         if self.done:
             raise ValueError("reset the finished episode before changing its goal")
         if self.mode == "mars-base":
@@ -510,7 +551,7 @@ class Simulation:
             self.goal(target)
             return
         if self.mode in MANIPULATION_MODES and self.control_mode == 1:
-            target = self.env.control.base_goal.copy()
+            target = self.base_endpoint()
             target[:2] += delta[:2]
             target[2] = (target[2] + rotation_z + np.pi) % (2 * np.pi) - np.pi
             self.goal(target)
@@ -600,7 +641,7 @@ class Simulation:
     def state(self):
         env = self.env
         if self.mode in MANIPULATION_MODES and self.control_mode == 1:
-            current, target = env.control.base_pose().tolist(), env.control.base_goal.tolist()
+            current, target = env.control.base_pose().tolist(), self.base_endpoint().tolist()
             limits = [[-2, 2], [-2, 2], [-np.pi, np.pi]]
             fields = ["Base X (m)", "Base Y (m)", "Base yaw (rad)"]
         elif self.mode in MANIPULATION_MODES:
@@ -643,6 +684,10 @@ class Simulation:
             "initialization_failed",
         )
         metrics = {key: self.info[key] for key in keys if key in self.info}
+        if self.uses_base_references():
+            delta = self.base_endpoint() - env.control.base_pose()
+            metrics["base_endpoint_xy_error_m"] = float(np.linalg.norm(delta[:2]))
+            metrics["base_endpoint_heading_error_rad"] = float(abs(np.arctan2(np.sin(delta[2]), np.cos(delta[2]))))
         return {
             "mode": self.mode,
             "control_mode": self.control_mode,
@@ -665,6 +710,38 @@ class Simulation:
             "evaluation_scope": "interactive experiment, not acceptance evidence",
         }
 
+    def base_endpoint(self):
+        """Keep the marker/nudge anchor at the endpoint while its reference moves."""
+        from emet.rl.manipulation.base_goal_reference import BaseGoalReference
+
+        path = self.env.control.task_trajectory
+        return path.target.copy() if isinstance(path, BaseGoalReference) else self.env.control.base_goal.copy()
+
+    def uses_base_references(self):
+        navigation = getattr(getattr(self.policy, "actor", None), "base_navigation_feedback", None)
+        return (
+            self.mode in MANIPULATION_MODES and self.control_mode == 1
+            and navigation is not None and navigation.reference_tracking
+        )
+
+    def update_base_goals(self, updates):
+        """Validate a batch, then admit its final goal once; relative edits add up."""
+        if not self.uses_base_references():
+            raise ValueError("base edit batching requires the reference-tracking policy")
+        target = self.base_endpoint()
+        for edit in updates:
+            if edit["op"] == "goal":
+                target = np.asarray(edit["values"], dtype=float).copy()
+                if target.shape != (3,) or not np.isfinite(target).all():
+                    raise ValueError("base target must contain x, y, yaw")
+            elif edit["op"] == "nudge":
+                delta, yaw = _nudge_values(edit["translation"], edit.get("rotation_z", 0.0))
+                target[:2] += delta[:2]
+                target[2] = (target[2] + yaw + np.pi) % (2 * np.pi) - np.pi
+            else:
+                raise ValueError("only adjacent goal edits can be batched")
+        self.goal(target)
+
     def close(self):
         self.env.close()
 
@@ -686,6 +763,7 @@ class TestDrive:
         sim = renderer = None
         running, repeat, single_steps, error = True, False, 0, None
         last_episode = None
+        pending_command = None
         camera = mujoco.MjvCamera()
         camera.azimuth, camera.elevation, camera.distance = 135, -25, (1.2 if mode == "mars-arm" else 2.8)
         option = mujoco.MjvOption()
@@ -721,13 +799,19 @@ class TestDrive:
             while not self.closed.is_set():
                 started = time.monotonic()
                 simulation_started = float(sim.env.data.time)
-                try:
-                    command = self.commands.get_nowait()
-                except queue.Empty:
-                    command = None
+                if pending_command is not None:
+                    command, pending_command = pending_command, None
+                else:
+                    try:
+                        command = self.commands.get_nowait()
+                    except queue.Empty:
+                        command = None
+                if command and command.get("op") in {"goal", "nudge"} and sim.uses_base_references():
+                    edits, pending_command = _drain_goal_updates(self.commands, command)
+                    command = {"op": "base_edits", "edits": edits}
                 if command:
                     try:
-                        op = command["op"]
+                        op = command.get("op")
                         if op == "reset":
                             running, repeat, single_steps = True, False, 0
                             new_mode = command.get("mode", sim.mode)
@@ -749,6 +833,10 @@ class TestDrive:
                         elif op == "goal":
                             reset_if_finished()
                             sim.goal(command["values"])
+                        elif op == "base_edits":
+                            reset_if_finished()
+                            sim.update_base_goals(command["edits"])
+                            running, repeat = True, False
                             running = True
                         elif op == "nudge":
                             reset_if_finished()
@@ -760,6 +848,7 @@ class TestDrive:
                         elif op == "hold":
                             if sim.mode not in MANIPULATION_MODES or not sim.resume_completed_reach():
                                 raise ValueError("hold requires a nonfaulted arm simulation")
+                            sim.env.control.clear_task_trajectory()
                             sim.env.control.hold_position()
                             sim.obs = sim.env.control.observe()
                             running, repeat = True, False
@@ -788,7 +877,10 @@ class TestDrive:
                             raise ValueError("unknown simulation command")
                         error = None
                     except (ValueError, KeyError, TypeError, OSError) as exc:
-                        running = False
+                        # Rejected updates retain the previous valid motion;
+                        # pause/hold/reset and fault handling keep their order.
+                        if op not in {"goal", "nudge", "base_edits"}:
+                            running = False
                         error = str(exc)
                 if (running or single_steps) and not sim.done:
                     sim.step()

@@ -23,8 +23,9 @@ REQUIRED = (
     "src/innate_mars_bridge/innate_mars_bridge/ros/camera.py",
     "src/emet/perception/matterport_category_mappings.tsv",
     "src/test/core/test_image_timing.py",
+    "src/emet/rl/test_drive.html",
 )
-TEXT = {".py", ".sh", ".json", ".yaml", ".yml", ".toml", ".tsv", ".txt", ".xml", ".urdf", ".srdf", ".md", ".svg"}
+TEXT = {".py", ".sh", ".json", ".yaml", ".yml", ".toml", ".tsv", ".txt", ".xml", ".urdf", ".srdf", ".md", ".svg", ".html"}
 
 
 def build_snapshot(root, output):

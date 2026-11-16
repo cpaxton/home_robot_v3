@@ -88,6 +88,10 @@ def test_target_list_is_pinned_to_control_and_safety_suites():
     } <= set(gate.REGRESSION_TARGETS)
 
 
+def test_runtime_viewer_asset_is_bound_in_the_source_receipt():
+    assert "src/emet/rl/test_drive.html" in gate.source_state(gate.ROOT)
+
+
 @pytest.mark.parametrize('count', ['oops', '-1', 'NaN'])
 def test_malformed_xml_counts_fail_closed(tmp_path, count):
     path = tmp_path / 'bad.xml'

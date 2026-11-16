@@ -74,6 +74,7 @@ def source_state(root):
             root / "scripts/check_generated_artifacts.py",
             root / "scripts/control_artifacts.py",
             root / "scripts/pack_mars_training_snapshot.py",
+            root / "src/emet/rl/test_drive.html",
             root / "scripts/prove_mars_c1_recovery.py",
             root / "scripts/validate_mars_unloaded_primitives.py",
             root / "src/innate_mars_bridge/innate_mars_bridge/ros/camera.py",
