@@ -1,0 +1,120 @@
+{
+  "format": "mars-c1-source-recovery-v1",
+  "scope": "Recover only remaining shared-normalization4096 decisions; never rewrite original control/source identities. Requires fresh current-source regression and teacher admission plus reviewed equivalence proof.",
+  "reference_revision": "e0d8df022a6f3cff91c2a8b8acbbb82a5b37a300",
+  "merged_base_revision": "529e2572e94def4f15b7c86a72960b051f0649ba",
+  "reference_run_sha256": "571521ac3b2d33f5c7e067f2f2b73d3ddeae5a791b7903d4d448269847b5b8b5",
+  "reference_run_digest": "f10c99563702f7dd3c77ffc36b85e6906200fbd076f75d8cbcd166cf21867464",
+  "reference_preflight": "logs/eval/mars-whole-body-advantage-preflight-v1/preflight.json",
+  "basic_cases_sha256": "92373854f3ba56f066384ec2ae77cb459107246190705d240514c3cfb313b5a0",
+  "protocol_sha256": "e70909f0c5b721d1dee1d8e68cdb98cd35dac127656b1fa894a60fda5e8cf019",
+  "remaining_training_decisions": 4096,
+  "completed_control_decisions": 4096,
+  "previous_failed_candidate_unoptimized_ticks": 256,
+  "seed": 90,
+  "rollout_steps": 256,
+  "physical_ticks_per_decision": 1,
+  "tamp_training_ticks": 0,
+  "replay_script_sha256": "c0a7ec48988d3c3be7a7cb484162886f31f8f0329969a5fa7a2019f6b22ac63a",
+  "source_changes": {
+    "rl/manipulation/__main__.py": {
+      "before": "b267e4cbc977eb7545970dd5945b393777ae71da051ec52b85a35183fabd7eec",
+      "after": "50699fc9ee63830903b26363acc1df6b26c5d1d9058594b79c2d2fd838415efe",
+      "reason": "Legacy SB3 options/metadata only; not called by direct C1 training."
+    },
+    "rl/manipulation/arm_adaptation.py": {
+      "before": null,
+      "after": "321ce6d059ddc3e612c92710d2abb856e9be27cbdb47859f1a50e9bac55578a3",
+      "reason": "New opt-in legacy SB3 arm adaptation; not instantiated by C1."
+    },
+    "rl/manipulation/arm_component.py": {
+      "before": "c146b1695d24363a53afd5d53b4cec9e01f902182c670853989fb915cb7f9589",
+      "after": "41b2f39483457b40cd8887e4a44b1f622b103b5d3702aec47675207ad551df2d",
+      "reason": "Legacy component trainer option forwarding; not called by C1."
+    },
+    "rl/manipulation/base_component.py": {
+      "before": "6ff99c05d48fcc43dce90fcc554552cb8c1bb1d6289223e3b66c930b334a2699",
+      "after": "923f5b5b1d8c6e8e1bce5e03e0a4f94fbff5ca8faa3b8075a529d03fef1e366e",
+      "reason": "Legacy component trainer option forwarding; not called by C1."
+    },
+    "rl/manipulation/component_transfer.py": {
+      "before": "0f76877ea03e769e76f570ad3f35c114edea65584d0a2d3c5e61ca059490e609",
+      "after": "c237e5888a52087f8331f4523a64ae9ebe59618c7246f0b6af411c7408ec83c5",
+      "reason": "Legacy transfer option; no component transfer occurs in C1."
+    },
+    "rl/manipulation/env.py": {
+      "before": "e2207c5350faad012a7c7b84587f4cce8a083ae85260e18c4156c50fb3cc231e",
+      "after": "ca4b3af1d51f18eae3284e4f2dc0cfe9636443c0ba7c810f9414a0b524eb0e4c",
+      "reason": "Adds default-off legacy feature configuration/validation; ManipulationEnv AST unchanged."
+    },
+    "rl/manipulation/feedback_geometry.py": {
+      "before": null,
+      "after": "0392918bb18ba0acb25f1ffffa907cbe3eac3806841bdd0080a388fa285bd3b0",
+      "reason": "New optional legacy feature geometry; not used by the GRU actor."
+    },
+    "rl/manipulation/feedback_policy.py": {
+      "before": "1cf87a45e35e9ef2c7dc26a9e4911aee46eed5356b3510b457f7bdc5b8c514ce",
+      "after": "e62ef38500c67234f2d45834d93f7e69c06e718b396d509f9b3c576f94994566",
+      "reason": "Optional legacy feature encoding; the GRU actor imports no feedback policy."
+    },
+    "rl/manipulation/hold_experiment.py": {
+      "before": "ec4e8bbfb84c508bb109eac2016ed9cd9420d58ba4214a70d46200a75650d878",
+      "after": "ff286289eac3cf996f0fc2e4a2276372dbce535af666c7469eacb6f78cd79bd2",
+      "reason": "Legacy experiment option forwarding; not called by C1."
+    },
+    "rl/manipulation/initialization.py": {
+      "before": "e4ce49fe4c00d8c73b53bc8b73a4165bedeb8908ec027f4b3392e36b6a930e5f",
+      "after": "235fa9d0f039f92128d48c6e5d5c3be9c17ee29e5462df4cf199cf6596958933",
+      "reason": "Legacy transfer support; C1 remains identical cold initialization."
+    },
+    "rl/manipulation/mastery.py": {
+      "before": "d1de316809ced3beb6e4365cf068257e2b6d403cafdb05484128f5857678206e",
+      "after": "7b828fda2e8bece79ffb457f5106d291157ff0362545610696ff7749a6f2bb91",
+      "reason": "Legacy trainer adaptation; MasteryEnv AST unchanged."
+    },
+    "rl/manipulation/multi_critic_ppo.py": {
+      "before": "35e41e599c298eb9a06af9663fec232f3c3592e98a70848b231b6a9cdfb28f1f",
+      "after": "28204f63d4d7dec3ae48826d627fbf7ff0e77a5d75e52934b8eb147a688060c6",
+      "reason": "Tick-discount helper and gamma guard; single-tick bytes preserved, GAE/combine AST unchanged and complete first update replayed exactly."
+    },
+    "rl/manipulation/pair_recovery.py": {
+      "before": null,
+      "after": "ee27538b6b512ea8d5d49bbeb27b99b11c33cd881a102a3c1df8172b91ab5ee2",
+      "reason": "New narrowly scoped artifact/source/teacher/state verifier; no actor or physics changes."
+    },
+    "rl/manipulation/policy.py": {
+      "before": "5b2da1e43bc258a1ebfb2115d75385400d10114cb5795ff376bf32e1ff2cef61",
+      "after": "3d6ed2ec10447e4d54a02181b68078768b3ca4e9040ebf2738909e8702d0d8f2",
+      "reason": "Legacy policy metadata validation; C1 initial/final actor uses WholeBodyBundle."
+    },
+    "rl/manipulation/tamp_policy.py": {
+      "before": "79574e84be42377c1ac50d6eb1470c40fd435e5a55259eefe37afd8fe6dfdd65",
+      "after": "c868d1d5630ad8a14e60b5c4724ddb6c1245e4ca958ccc28a1abeb662b35edf1",
+      "reason": "Legacy TAMP policy metadata validation; no TAMP exposure in C1."
+    },
+    "rl/manipulation/tamp_primitive_env.py": {
+      "before": "17bae1207d68ae784dddfad044c6fd67a41fb7041c2955c04446562c4e74a897",
+      "after": "ca762ae0c83daef01e8129027536a17f75b316837610a96648295cef36a5f8f0",
+      "reason": "Per-tick TAMP reward accounting; C1 factory never instantiates this environment."
+    },
+    "rl/manipulation/whole_body_training.py": {
+      "before": "50192cfd4383300d7de96dfd807870a91d8e5ffc445f2f90814da2ddf8fe9670",
+      "after": "571419f2eec8e289d2380914a16c1ebabc4ea1f8346552f55213b56486cded85",
+      "reason": "JSON settings repair, one-tick identity-preserving collector and explicit recovery verification; make_environment AST unchanged."
+    },
+    "rl/manipulation/yaw_audit.py": {
+      "before": "0e72901d1e8db5d964927fad205835dda784e634ef69653bf5e50ec7e479b2ac",
+      "after": "2a30a56447549b80357741df0b4dd1cbab2eee7e42e1cd010749a2386b2b53ba",
+      "reason": "Legacy audit option forwarding; not called by C1."
+    },
+    "rl/regression_gate.py": {
+      "before": "f10b1b14936f2a2712a4976174c87470f4c45b48d9ab165beab952a4071c2c75",
+      "after": "c42cce23596e7b8df575cfdeb1b1a112c3102d8780e874fe5ada61a8a9979cac",
+      "reason": "Bind recovery code/recipe and existing timing artifacts to fresh source receipts; no numerical training changes."
+    }
+  },
+  "extra_variants": false,
+  "extra_seeds": false,
+  "automatic_retry": false,
+  "hardware_used": false
+}

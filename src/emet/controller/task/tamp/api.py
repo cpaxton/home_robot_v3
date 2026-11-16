@@ -212,6 +212,24 @@ def failure_code(message: str) -> str:
     for part in reversed(parts):
         if part in PLACEMENT_CODES:
             return part
+        control_codes = {
+            "wheel_lift": "wheel_lift",
+            "unsafe_contact": "unsafe_contact",
+            "retention_lost": "retention_lost",
+            "invalid_physics": "invalid_physics",
+            "transport_tracking_timeout": "tracking_timeout",
+            "cartesian_tracking_timeout": "tracking_timeout",
+            "cartesian_hold_unsettled": "tracking_timeout",
+            "cartesian_path_tracking_envelope": "tracking_timeout",
+            "cartesian_witness_goal_mismatch": "invalid_plan",
+            "cartesian_schedule_too_long": "invalid_plan",
+            "invalid_cartesian_witness": "invalid_plan",
+            "arm_joint_margin": "joint_bounds",
+            "arm_static_support_margin": "planning_failed",
+            "arm_path_static_support_margin": "planning_failed",
+        }
+        if part in control_codes:
+            return control_codes[part]
         for code in ("placement_stale_observation", "placement_missing_joint_state",
                      "placement_nonfinite_joint_state", "placement_path_invalidated"):
             if part == code or part.endswith("_" + code):
@@ -235,7 +253,7 @@ def failure_code(message: str) -> str:
         "invalid_tamp_inputs", "observed_scene_unavailable",
         "invalid_placement_region", "placement_region_unavailable", "placement_region_unsupported",
         "privileged_inputs_require_simulation", "native_execution_unavailable",
-        "native_model_mismatch", "native_robot_unsupported", "invalid_measured_state",
+        "native_model_mismatch", "native_robot_unsupported", "native_policy_unsupported", "invalid_measured_state",
         "task_not_found", "payload_not_retained", "object_not_lifted", "base_drift_during_arm",
         "unknown_plan",
         "command_outcome_unknown",

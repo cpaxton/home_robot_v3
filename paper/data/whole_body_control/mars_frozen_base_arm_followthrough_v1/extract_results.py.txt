@@ -1,0 +1,132 @@
+# Copyright (c) Chris Paxton 2026
+# Licensed under the Apache License, Version 2.0.
+"""Archive completed fixed-final arm outcomes without loading native physics."""
+import argparse
+import gzip
+import hashlib
+import json
+from pathlib import Path
+import statistics
+
+
+def sha(p):
+    return hashlib.sha256(Path(p).read_bytes()).hexdigest()
+
+
+def read(p):
+    p = Path(p)
+    return json.loads(gzip.decompress(p.read_bytes()) if p.suffix == '.gz' else p.read_text())
+
+
+def compact(row):
+    return {k: row[k] for k in ('id', 'stage', 'split', 'reset_seed', 'mastered',
+            'tracking_and_settling_pass', 'smoothness_pass', 'failure_reasons', 'code')} | {
+        'metrics_measured_at_stop': row['metrics'],
+        'reference_complete': row['final_info'].get('reference_complete'),
+        'initial_state_sha256': row['admission']['initial_state_sha256'],
+        'reference_sha256': row['admission']['reference_sha256'],
+    }
+
+
+def main():
+    p = argparse.ArgumentParser()
+    p.add_argument('artifacts', type=Path)
+    p.add_argument('output', type=Path)
+    args = p.parse_args()
+    root = args.artifacts
+    result = read(root / 'comparison/results.json')
+    verification = read(root / 'frozen-function-verification.json')
+    assert result['complete'] and len(result['runs']) == 2
+    assert read(root / 'supervisor.json')['phase'] == 'complete'
+    out = {
+        'format': 'mars-frozen-base-arm-followthrough-v1-compact',
+        'complete': True, 'hardware_used': False, 'safety_promoted': False,
+        'protocol': read(root / 'protocol.json'),
+        'managed_job': '20261115_012253_ef3fda',
+        'cpu14_handoff': read(root / 'cpu14-handoff.json'),
+        'serialized_verification': verification,
+        'comparison': result,
+        'artifact_sha256': {}, 'runs': [],
+    }
+    out['supervisor'] = read(root / 'supervisor.json')
+    out['elapsed_handoff_to_complete_seconds'] = (
+        out['supervisor']['updated_unix'] - out['cpu14_handoff']['released_unix'])
+    def bind(file):
+        out['artifact_sha256'][str(file)] = sha(file)
+    for f in ('protocol.json', 'supervise.py', 'cpu14-handoff.json',
+              'comparison/results.json', 'frozen-function-verification.json', 'supervisor.json'):
+        bind(root / f)
+    bind(root / 'source/actor/policy.zip')
+    bind(root / 'source/actor/manifest.json')
+    receipt = Path(out['protocol']['regression_receipt'])
+    bind(receipt)
+    gate = read(receipt)
+    assert gate['returncode'] == 0 and len(gate['test_ids']) == 1249
+    out['source_regressions'] = {'tests': 1249, 'returncode': 0,
+        'receipt_sha256': sha(receipt), 'xml_sha256': gate['xml_sha256']}
+    identities = []
+    for run in result['runs']:
+        folder = root / 'comparison' / f"{run['variant']}-seed-{run['seed']}"
+        meta = read(folder / 'run.json')
+        assert meta['steps'] == 16384 and meta['arm_adaptation_only']
+        assert meta['normalization_frozen'] and meta['base_actor_context_and_grip_frozen']
+        updates = [json.loads(line) for line in (folder / 'updates.jsonl').read_text().splitlines()]
+        assert updates[-1]['timesteps'] == 16384
+        record = {'variant': run['variant'], 'seed': run['seed'],
+                  'training': {k: v for k, v in meta.items() if k not in ('suite', 'source_hashes', 'training_cases')},
+                  'updates': updates, 'readouts': {}}
+        for file in ('run.json', 'complete.json', 'updates.jsonl', 'metrics.jsonl'):
+            bind(folder / file)
+        teacher = root / 'comparison' / f"{run['variant']}-preflight/report.json.gz"
+        bind(teacher)
+        teacher_rows = read(teacher)['cases']
+        assert len(teacher_rows) == 122 and all(row['mastered'] for row in teacher_rows)
+        record['teacher'] = {'cases': 122, 'mastered': 122}
+        for label in ('step-0', 'last'):
+            for file in ('manifest.json', 'policy.zip'):
+                bind(folder / label / file)
+            file = folder / f'{label}-admission-evaluation/report.json.gz'
+            bind(file)
+            report = read(file)
+            assert report['complete'] and len(report['cases']) == 122
+            rows = [compact(row) for row in report['cases']]
+            assert len({row['id'] for row in rows}) == 122
+            per_group = {}
+            for stage in ('base', 'arm', 'coupled'):
+                population = [r for r in rows if r['stage'] == stage]
+                per_group[stage] = {
+                    'cases': len(population),
+                    'reference_completed': sum(r['reference_complete'] is True for r in population),
+                    'errors_at_stop': {k: {
+                        'median': statistics.median(r['metrics_measured_at_stop'][k] for r in population),
+                        'maximum': max(r['metrics_measured_at_stop'][k] for r in population),
+                    } for k in ('hand_position_error_m', 'hand_orientation_error_rad',
+                                'base_linear_jerk', 'base_yaw_jerk', 'joint_jerk')},
+                }
+            record['readouts'][label] = {'cases': rows, 'metrics': per_group}
+            del report
+        old, new = [{r['id']: r for r in record['readouts'][label]['cases']}
+                    for label in ('step-0', 'last')]
+        fields = ('initial_state_sha256', 'reference_sha256')
+        assert old.keys() == new.keys() and all(all(old[k][f] == new[k][f] for f in fields) for k in old)
+        record['paired_identities'] = 122
+        record['changed_full_outcomes'] = [{
+            'id': k, 'initial': old[k]['mastered'], 'final': new[k]['mastered'],
+            'final_failure_reasons': new[k]['failure_reasons'],
+        } for k in old if old[k]['mastered'] != new[k]['mastered']]
+        record['base_outcomes_and_metrics_bitwise_equal'] = all(
+            all(old[k][f] == new[k][f] for f in ('mastered', 'tracking_and_settling_pass',
+                'smoothness_pass', 'failure_reasons', 'code', 'metrics_measured_at_stop'))
+            for k in old if old[k]['stage'] == 'base')
+        identities.append({k: tuple(old[k][f] for f in fields) for k in old})
+        out['runs'].append(record)
+    assert identities[0] == identities[1]
+    out['cross_variant_physical_identities_equal'] = True
+    out['archive_script_sha256'] = sha(__file__)
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_text(json.dumps(out, indent=2, allow_nan=False) + '\n')
+    print(f'Archived 488 outcomes and all 244 initial/final identity pairs: {args.output}')
+
+
+if __name__ == '__main__':
+    main()

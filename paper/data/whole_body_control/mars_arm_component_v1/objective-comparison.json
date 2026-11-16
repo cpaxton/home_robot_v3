@@ -1,0 +1,130 @@
+[
+  {
+    "id": "train:arm:pitch_up",
+    "teacher_discounted_return": 79.35892045907045,
+    "zero_discounted_return": -11.736194606642918,
+    "margin": 91.09511506571337,
+    "teacher_mastered": true,
+    "zero_mastered": false
+  },
+  {
+    "id": "train:arm:pitch_down",
+    "teacher_discounted_return": 81.06985760405468,
+    "zero_discounted_return": -12.383735929970308,
+    "margin": 93.45359353402499,
+    "teacher_mastered": true,
+    "zero_mastered": false
+  },
+  {
+    "id": "train:arm:roll_left",
+    "teacher_discounted_return": 78.97777639856538,
+    "zero_discounted_return": 18.3363543787516,
+    "margin": 60.64142201981378,
+    "teacher_mastered": true,
+    "zero_mastered": false
+  },
+  {
+    "id": "train:arm:roll_right",
+    "teacher_discounted_return": 80.36549482039851,
+    "zero_discounted_return": 18.360266977277572,
+    "margin": 62.005227843120934,
+    "teacher_mastered": true,
+    "zero_mastered": false
+  },
+  {
+    "id": "validation:arm:pitch_up",
+    "teacher_discounted_return": 77.47731205265683,
+    "zero_discounted_return": -12.255007709360612,
+    "margin": 89.73231976201744,
+    "teacher_mastered": true,
+    "zero_mastered": false
+  },
+  {
+    "id": "validation:arm:pitch_down",
+    "teacher_discounted_return": 77.01898631084714,
+    "zero_discounted_return": -12.845577787911353,
+    "margin": 89.86456409875849,
+    "teacher_mastered": true,
+    "zero_mastered": false
+  },
+  {
+    "id": "validation:arm:roll_left",
+    "teacher_discounted_return": 79.21426405748072,
+    "zero_discounted_return": 15.30201377298394,
+    "margin": 63.91225028449678,
+    "teacher_mastered": true,
+    "zero_mastered": false
+  },
+  {
+    "id": "validation:arm:roll_right",
+    "teacher_discounted_return": 79.97926303898396,
+    "zero_discounted_return": 15.040304898671359,
+    "margin": 64.9389581403126,
+    "teacher_mastered": true,
+    "zero_mastered": false
+  },
+  {
+    "id": "train:arm:pitch_up@amplitude:0.25",
+    "teacher_discounted_return": 80.54444209100353,
+    "zero_discounted_return": 34.57901399746866,
+    "margin": 45.965428093534875,
+    "teacher_mastered": true,
+    "zero_mastered": false
+  },
+  {
+    "id": "train:arm:pitch_up@amplitude:0.5",
+    "teacher_discounted_return": 78.24973421820964,
+    "zero_discounted_return": 14.676175688146614,
+    "margin": 63.573558530063025,
+    "teacher_mastered": true,
+    "zero_mastered": false
+  },
+  {
+    "id": "train:arm:pitch_down@amplitude:0.25",
+    "teacher_discounted_return": 80.72457201223571,
+    "zero_discounted_return": 26.302979788895602,
+    "margin": 54.42159222334011,
+    "teacher_mastered": true,
+    "zero_mastered": false
+  },
+  {
+    "id": "train:arm:pitch_down@amplitude:0.5",
+    "teacher_discounted_return": 79.04734305474942,
+    "zero_discounted_return": 11.38518293312191,
+    "margin": 67.66216012162751,
+    "teacher_mastered": true,
+    "zero_mastered": false
+  },
+  {
+    "id": "train:arm:roll_left@amplitude:0.25",
+    "teacher_discounted_return": 78.13053640153038,
+    "zero_discounted_return": 49.63584386133855,
+    "margin": 28.494692540191828,
+    "teacher_mastered": true,
+    "zero_mastered": false
+  },
+  {
+    "id": "train:arm:roll_left@amplitude:0.5",
+    "teacher_discounted_return": 81.02068411142866,
+    "zero_discounted_return": 34.927074520630185,
+    "margin": 46.09360959079848,
+    "teacher_mastered": true,
+    "zero_mastered": false
+  },
+  {
+    "id": "train:arm:roll_right@amplitude:0.25",
+    "teacher_discounted_return": 81.6781352835233,
+    "zero_discounted_return": 49.30601202160425,
+    "margin": 32.37212326191905,
+    "teacher_mastered": true,
+    "zero_mastered": false
+  },
+  {
+    "id": "train:arm:roll_right@amplitude:0.5",
+    "teacher_discounted_return": 76.42991321988713,
+    "zero_discounted_return": 34.981817653962224,
+    "margin": 41.4480955659249,
+    "teacher_mastered": true,
+    "zero_mastered": false
+  }
+]

@@ -1,0 +1,44 @@
+{
+  "complete": true,
+  "controller": "dd764bd7248517d05203838e69e579ea044cd205ad5d8cca43cf1428fc579b0a",
+  "population": "canonical",
+  "groups": {
+    "base/train": {
+      "cases": 5,
+      "admitted": 5,
+      "mastered": 1,
+      "tracking_and_settling_passed": 4,
+      "smoothness_passed": 1,
+      "failure_reasons": {
+        "smoothness/base_linear_jerk": 1,
+        "smoothness/base_yaw_jerk": 1,
+        "smoothness/joint_jerk": 2,
+        "tracking_timeout": 1,
+        "terminal_hold": 1
+      },
+      "codes": {
+        "ok": 4,
+        "tracking_timeout": 1
+      },
+      "all_pass": false
+    },
+    "base/validation": {
+      "cases": 5,
+      "admitted": 5,
+      "mastered": 2,
+      "tracking_and_settling_passed": 5,
+      "smoothness_passed": 2,
+      "failure_reasons": {
+        "smoothness/base_linear_jerk": 1,
+        "smoothness/base_yaw_jerk": 1,
+        "smoothness/joint_jerk": 1
+      },
+      "codes": {
+        "ok": 5
+      },
+      "all_pass": false
+    }
+  },
+  "all_pass": false,
+  "safety_promoted": false
+}

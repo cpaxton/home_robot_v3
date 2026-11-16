@@ -1,0 +1,75 @@
+{
+  "controller_tests": 902,
+  "hardware_used": false,
+  "training_started": false,
+  "safety_promoted": false,
+  "variants": {
+    "unguarded": {
+      "teacher_passed": 30,
+      "cases": 30,
+      "mastered": 13,
+      "tracking_and_holding": 20,
+      "codes": {
+        "ok": 20,
+        "tracking_timeout": 9,
+        "mastery_tracking_envelope": 1
+      },
+      "faults": []
+    },
+    "guarded": {
+      "teacher_passed": 30,
+      "cases": 30,
+      "mastered": 13,
+      "tracking_and_holding": 20,
+      "codes": {
+        "ok": 20,
+        "tracking_timeout": 7,
+        "base_turn_divergence": 3
+      },
+      "faults": [
+        {
+          "id": "train:base:yaw_left:0.06@posture:hold",
+          "time": 3.9519999999996758,
+          "evidence": {
+            "duration_s": 0.9499999999998958,
+            "away_rad": 0.002527599729751949,
+            "error_rad": 0.06269145160037193,
+            "command_rad_s": -0.005065025761723518,
+            "measured_rad_s": -0.002712976229337296
+          }
+        },
+        {
+          "id": "train:base:yaw_left:0.04@posture:yaw_left",
+          "time": 4.101999999999659,
+          "evidence": {
+            "duration_s": 1.0999999999998793,
+            "away_rad": 0.0025090531267999102,
+            "error_rad": 0.04437419287837331,
+            "command_rad_s": -0.004402457736432552,
+            "measured_rad_s": -0.002061627620778916
+          }
+        },
+        {
+          "id": "train:base:yaw_left:0.06@posture:yaw_left",
+          "time": 3.55199999999972,
+          "evidence": {
+            "duration_s": 0.5499999999999399,
+            "away_rad": 0.0029529744787262792,
+            "error_rad": 0.06879276886690085,
+            "command_rad_s": -0.009618175216019154,
+            "measured_rad_s": -0.005402896882548211
+          }
+        }
+      ]
+    }
+  },
+  "matched_initial_states_and_references": true,
+  "training_cases": 45,
+  "canonical_evaluation_cases": 10,
+  "teacher_admission_passed": 50,
+  "guarded_canonical": {
+    "cases": 10,
+    "mastered": 6,
+    "tracking_and_holding": 9
+  }
+}

@@ -14,10 +14,17 @@ ROOT = Path(__file__).resolve().parents[3]
 REGRESSION_TARGETS = (
     "src/test/rl",
     "src/test/core",
+    "src/test/controller/task/tamp",
+    "src/test/eval/test_mars_tamp_agent_driver.py",
+    "src/test/eval/test_mars_tamp_control.py",
+    "src/test/eval/test_mars_tamp_sequences.py",
     "src/test/robots/test_mars_motion_boundary.py",
+    "src/test/robots/test_mars_control_session.py",
     "src/test/robots/test_head_capability.py",
     "src/test/scripts/test_train_mars_carry_when_ready.py",
     "src/test/scripts/test_trace_mars_carry.py",
+    "src/test/scripts/test_control_artifacts.py",
+    "src/test/scripts/test_pack_mars_training_snapshot.py",
 )
 
 
@@ -33,6 +40,21 @@ def test_files(root):
     return sorted(files)
 
 
+def test_sources(root):
+    """Bind helper/package/fixture code as well as collected test modules."""
+    paths = set(test_files(root))
+    for target in REGRESSION_TARGETS:
+        path = root / target
+        if path.is_dir():
+            paths.update(path.rglob("*.py"))
+    for path in list(paths):
+        for parent in path.parents:
+            if not parent.is_relative_to(root / "src/test"):
+                break
+            paths.update(p for name in ("conftest.py", "__init__.py") if (p := parent / name).is_file())
+    return sorted(paths)
+
+
 def source_state(root):
     from emet.rl.manipulation.carry_benchmark import source_hashes
 
@@ -40,14 +62,56 @@ def source_state(root):
     paths = (
         list((root / "src/emet/core").rglob("*.py"))
         + list((root / "src/emet_core/emet/core").rglob("*.py"))
-        + test_files(root)
+        + list((root / "src/emet/controller/task/tamp").rglob("*.py"))
+        + list((root / "src/emet/agent").rglob("*.py"))
+        + test_sources(root)
         + [
             root / "src/test/conftest.py",
             root / "pyproject.toml",
             root / "uv.lock",
             root / "scripts/train_mars_carry_when_ready.py",
             root / "scripts/trace_mars_carry.py",
+            root / "scripts/check_generated_artifacts.py",
+            root / "scripts/control_artifacts.py",
+            root / "scripts/pack_mars_training_snapshot.py",
+            root / "scripts/prove_mars_c1_recovery.py",
+            root / "src/innate_mars_bridge/innate_mars_bridge/ros/camera.py",
+            root / "src/emet/perception/matterport_category_mappings.tsv",
             root / "scripts/sync_core_runtime.py",
+            root / "scripts/eval_manipulation_tamp_oracle.py",
+            root / "src/emet/eval/mars_tamp_control.py",
+            root / "src/emet/eval/mars_tamp_agent.py",
+            root / "src/emet/eval/mars_tamp_metrics.py",
+            root / "src/emet/eval/mars_tamp_sequences.py",
+            root / "src/emet/eval/mars_policy_audit.py",
+            root / "src/emet/eval/mars_hold_dynamics.py",
+            root / "configs/benchmarks/mars_public_tamp_whole_body_v2.json",
+            root / "configs/benchmarks/mars_agent_controller_v1.json",
+            root / "configs/benchmarks/mars_grasp_lift_curriculum_v1.json",
+            root / "configs/benchmarks/mars_jerk_tracking_curriculum_v1.json",
+            root / "configs/benchmarks/mars_tracking_mastery_v1.json",
+            root / "configs/benchmarks/mars_tracking_mastery_v2.json",
+            root / "configs/benchmarks/mars_tracking_mastery_unfiltered_v1.json",
+            root / "configs/benchmarks/mars_tracking_mastery_crossed_v1.json",
+            root / "configs/benchmarks/mars_tracking_mastery_turn_guard_v1.json",
+            root / "configs/benchmarks/mars_tracking_mastery_yaw_curriculum_v1.json",
+            root / "configs/benchmarks/mars_tracking_mastery_restoring_yaw_v1.json",
+            root / "configs/benchmarks/mars_tracking_mastery_hand_accuracy_v1.json",
+            root / "configs/benchmarks/mars_tracking_mastery_arm_to_whole_body_v1.json",
+            root / "configs/benchmarks/mars_tracking_mastery_step_budget_v1.json",
+            root / "configs/benchmarks/mars_tracking_mastery_command_history_v1.json",
+            root / "configs/benchmarks/mars_tracking_mastery_full_arm_v1.json",
+            root / "configs/benchmarks/mars_tracking_mastery_tamp_postures_v1.json",
+            root / "configs/benchmarks/mars_tracking_mastery_tamp_translation_v1.json",
+            root / "configs/benchmarks/mars_tracking_mastery_supported_v1.json",
+            root / "configs/benchmarks/mars_whole_body_v2_development.json",
+            root / "configs/benchmarks/mars_whole_body_basic_learning_v1.json",
+            root / "configs/benchmarks/mars_directional_curriculum_v1.json",
+            root / "configs/benchmarks/mars_whole_body_advantage_pair_v1.json",
+            root / "configs/benchmarks/mars_whole_body_advantage_recovery_v1.json",
+            root / "paper/data/whole_body_control/mars_tamp_translation_audit_v1/cases.json",
+            root / "paper/data/whole_body_control/mars_supported_contact_audit_v1/cases.json",
+            root / "paper/data/whole_body_control/mars_matched_reference_v1/stop-cases.json",
         ]
     )
     for path in paths:
@@ -151,3 +215,12 @@ def verify_regressions(path, *, root=ROOT):
     if evidence.get("xml_sha256") != file_digest(xml) or evidence.get("test_ids") != check_xml(xml, root):
         raise RuntimeError("regression XML does not match its receipt")
     return evidence
+
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output", type=Path, required=True, help="fresh JUnit XML path (must not exist)")
+    arguments = parser.parse_args()
+    print(run_regressions(arguments.output))

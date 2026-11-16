@@ -1,0 +1,55 @@
+{
+  "robot": "innate_mars",
+  "steps": 16384,
+  "weights_sha256": "20ce2ed2e31f1f215e0294b8c8cd12de51deab492161a1ce2d73ec6ade637eb2",
+  "calibration": {
+    "kind": "hand_pose_feedback_gain",
+    "factor": 3.0,
+    "arm_action_rows": [
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "feedback_columns": [
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23
+    ],
+    "source_weights_sha256": "74dc0f8fc351f0d67932c485f7587eb2a740680e5887bc02d0f8e85fe7b4c3af",
+    "source_manifest_sha256": "cf6f616cb8cb7c9f2acd97aa4caf94a119e3c7b572825625d4b1be03edfd9733",
+    "source_admission": {
+      "format": "mars-tamp-policy-admission-v1",
+      "robot_sha256": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+      "weights_sha256": "74dc0f8fc351f0d67932c485f7587eb2a740680e5887bc02d0f8e85fe7b4c3af",
+      "training_fingerprint": "1e1110aaac94d6d32015c02262ef033f4810b8651e5780c88213beca94c2bb17",
+      "training_evidence_sha256": "52b9ec105aa3c15eee46f7a109b46c0b9ca46505ac67b5ac63a9dda845ff4b87",
+      "simulation_only": true,
+      "safety_promoted": false
+    },
+    "base_and_gripper_heads_unchanged": true,
+    "measured_velocity_feedback_unchanged": true,
+    "ppo_steps_added": 0,
+    "optimizer_reset": true,
+    "safety_promoted": false
+  },
+  "fingerprint": "1e1110aaac94d6d32015c02262ef033f4810b8651e5780c88213beca94c2bb17",
+  "full_manifest_sha256": "aca585c91c20e034693b2ea06be7b5fbe8f93b624da8b06f5fc94703f44c7e1a",
+  "full_manifest_source": "Exact manifest and normalization retained in checkpoint_evidence.json.gz"
+}
