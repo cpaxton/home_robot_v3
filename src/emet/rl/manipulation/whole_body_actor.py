@@ -5,6 +5,7 @@ import math
 import torch
 from torch import nn
 
+from emet.rl.manipulation.base_navigation_feedback import BaseNavigationFeedback, navigation_feedback_gain
 from emet.rl.manipulation.observation_layout import history_layout, preview_layout
 from emet.rl.manipulation.profiles import PROFILES
 from emet.rl.manipulation.whole_body_observation import PRIVILEGED_WIDTH
@@ -77,14 +78,19 @@ class SensorEncoder(nn.Module):
 
 
 class WholeBodyActor(nn.Module):
-    def __init__(self, robot="innate_mars", hidden=64, *, base_rate_feedback=True):
+    def __init__(self, robot="innate_mars", hidden=64, *, base_rate_feedback=True, base_navigation_feedback=None):
         super().__init__()
         if type(base_rate_feedback) is not bool:
             raise ValueError("base_rate_feedback must be a boolean")
         self.robot, self.hidden = robot, hidden
         self.base_rate_feedback = base_rate_feedback
+        if base_navigation_feedback is not None and not isinstance(base_navigation_feedback, BaseNavigationFeedback):
+            raise ValueError("expected an explicit BaseNavigationFeedback contract")
+        self.base_navigation_feedback = base_navigation_feedback
         self.encoder = SensorEncoder(robot)
         p = self.encoder.profile
+        if base_navigation_feedback is not None and not p.wheel_bodies:
+            raise ValueError("base navigation feedback requires a wheeled profile")
         self.gru = nn.GRU(self.encoder.token_width, hidden, batch_first=True)
         self.context = nn.Sequential(nn.Linear(hidden + 126 + 9, 128), nn.ELU(), nn.Linear(128, 128), nn.ELU())
         self.feedback_width = 24 + p.arm_size + 6 + 9
@@ -119,6 +125,10 @@ class WholeBodyActor(nn.Module):
         base_velocity = history[:, -1, -9:-3]
         feedback = torch.cat([*errors, velocities, base_velocity, motion], dim=-1)
         gain = self.gain(context).reshape(-1, self.encoder.profile.action_size - 1, self.feedback_width)
+        if self.base_navigation_feedback is not None:
+            current = obs["history"][:, -1]
+            eligible = (current[:, f["hand_mask"]].squeeze(-1) < 0.5) & (current[:, f["base_mask"]] > 0.5).all(-1)
+            gain = navigation_feedback_gain(gain, preview, motion, eligible, pf, self.base_navigation_feedback)
         if not self.base_rate_feedback and self.encoder.profile.wheel_bodies:
             # The native base servo already closes its velocity loop. This
             # opt-in ablation removes only the base head's instantaneous linear
@@ -145,12 +155,15 @@ class MultiCriticPolicy(nn.Module):
         stationary_base_std_scale=1.0,
         *,
         base_rate_feedback=True,
+        base_navigation_feedback=None,
     ):
         super().__init__()
         if isinstance(stationary_base_std_scale, bool) or not 0 < stationary_base_std_scale <= 1:
             raise ValueError("stationary base exploration scale must be finite and in (0,1]")
         self.stationary_base_std_scale = float(stationary_base_std_scale)
-        self.actor = WholeBodyActor(robot, hidden, base_rate_feedback=base_rate_feedback)
+        self.actor = WholeBodyActor(
+            robot, hidden, base_rate_feedback=base_rate_feedback, base_navigation_feedback=base_navigation_feedback
+        )
         self.critic_encoder = SensorEncoder(robot)
         self.privileged = bool(privileged)
         width = self.critic_encoder.token_width + 126 + 9 + PRIVILEGED_WIDTH

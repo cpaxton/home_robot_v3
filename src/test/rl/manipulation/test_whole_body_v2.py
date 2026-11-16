@@ -9,6 +9,7 @@ import pytest
 import torch
 from gymnasium import spaces
 
+from emet.rl.manipulation.base_navigation_feedback import BaseNavigationFeedback
 from emet.rl.manipulation.env import ManipulationConfig
 from emet.rl.manipulation.jerk_reference import compile_joint_path, polynomial_peaks
 from emet.rl.manipulation.multi_critic_ppo import MultiCriticPPO, PPOConfig, combine_advantages, grouped_gae
@@ -545,3 +546,118 @@ def test_exported_v2_actor_loads_through_source_bound_tamp_backend(tmp_path):
         assert policy.calls == 1 and policy.admission["simulation_only"]
     finally:
         env.close()
+
+
+@pytest.mark.parametrize("robot", ["innate_mars", "stretch"])
+@pytest.mark.parametrize("mode", ["active_hand", "partial_base"])
+def test_navigation_structure_preserves_coupled_and_partial_mask_actions(robot, mode):
+    torch.manual_seed(82)
+    original = WholeBodyActor(robot, base_rate_feedback=False)
+    structured = WholeBodyActor(robot, base_rate_feedback=False, base_navigation_feedback=BaseNavigationFeedback())
+    with torch.no_grad():
+        original.gain.weight.normal_(0, 0.1)
+        original.gain.bias.normal_(0, 0.2)
+        structured.load_state_dict(original.state_dict())
+    obs = observation(robot)
+    pf, f = original.encoder.preview_fields, original.encoder.fields
+    obs["preview"][..., pf["base_error"]] = torch.tensor([0.1, 0.03, -0.2])
+    obs["preview"][..., pf["hand_error"]][..., 0] = 0.01
+    if mode == "partial_base":
+        obs["history"][..., f["hand_mask"]] = 0
+        obs["preview"][..., pf["hand_mask"]] = 0
+        obs["history"][..., f["base_mask"]][..., 2] = 0
+    torch.testing.assert_close(structured(obs), original(obs), rtol=0, atol=0)
+
+
+def navigation_observation(actor):
+    obs = observation(actor.robot, count=1)
+    obs["history"][..., actor.encoder.fields["hand_mask"]] = 0
+    obs["preview"][..., actor.encoder.preview_fields["hand_mask"]] = 0
+    obs["preview"][..., actor.encoder.preview_fields["hand_error"]] = 0
+    return obs
+
+
+@pytest.mark.parametrize("robot", ["innate_mars", "stretch"])
+def test_navigation_structure_corrects_heading_sign_and_holds_inside_declared_region(robot):
+    actor = WholeBodyActor(robot, base_rate_feedback=False, base_navigation_feedback=BaseNavigationFeedback())
+    with torch.no_grad():
+        gain = actor.gain.bias.reshape(-1, actor.feedback_width)
+        for offset in (0, 12):
+            gain[0, offset] = -3
+            gain[1, offset] = -20  # longitudinal-to-yaw leakage must disappear
+            gain[1, offset + 1] = -4
+            gain[1, offset + 2] = -2
+    obs = navigation_observation(actor)
+    error = actor.encoder.preview_fields["base_error"]
+    obs["preview"][..., error] = torch.tensor([0.01, 0.001, 0.01])
+    torch.testing.assert_close(actor(obs), torch.zeros(1, 8), rtol=0, atol=0)
+    for sign in (-1, 1):
+        obs["preview"][..., error] = torch.tensor([0.0, 0.0, sign * 0.2])
+        assert actor(obs)[0, 1] * sign > 0
+        assert actor(obs)[0, 0] == 0
+        obs["preview"][..., error] = torch.tensor([sign * 0.1, 0.0, 0.0])
+        assert actor(obs)[0, 0] * sign > 0
+        assert actor(obs)[0, 1] == 0
+
+
+def test_navigation_structure_retains_signed_lateral_correction_during_announced_motion():
+    actor = WholeBodyActor(base_rate_feedback=False, base_navigation_feedback=BaseNavigationFeedback())
+    with torch.no_grad():
+        gain = actor.gain.bias.reshape(-1, actor.feedback_width)
+        gain[1, 1] = gain[1, 13] = -4
+    obs = navigation_observation(actor)
+    obs["preview"][..., actor.encoder.preview_fields["base_error"]] = torch.tensor([0.0, 0.01, 0.0])
+    for sign in (-1, 1):
+        obs["motion"][0, 0] = sign * 0.1
+        assert actor(obs)[0, 1] * sign > 0
+
+
+def test_navigation_zero_initialized_gains_can_learn_and_state_derivatives_are_finite():
+    actor = WholeBodyActor(base_rate_feedback=False, base_navigation_feedback=BaseNavigationFeedback())
+    obs = navigation_observation(actor)
+    obs["preview"][..., actor.encoder.preview_fields["base_error"]] = torch.tensor([0.1, 0.001, 0.2])
+    actor(obs)[:, :2].sum().backward()
+    gain_grad = actor.gain.bias.grad.reshape(-1, actor.feedback_width)
+    assert gain_grad[0, 0] > 0 and gain_grad[1, 2] > 0
+    with torch.no_grad():
+        actor.gain.bias.normal_(0, 0.1)
+    obs["preview"].requires_grad_(True)
+    actor.zero_grad()
+    actor(obs)[:, :2].sum().backward()
+    assert torch.isfinite(obs["preview"].grad).all()
+    assert torch.count_nonzero(obs["preview"].grad) > 0
+
+
+@pytest.mark.parametrize("xy,yaw", [(0.0, 0.1), (True, 0.1), (float("nan"), 0.1), (0.05, float("inf")), (0.05, 4.0)])
+def test_navigation_contract_rejects_invalid_units(xy, yaw):
+    with pytest.raises(ValueError):
+        BaseNavigationFeedback(xy, yaw)
+
+
+def test_navigation_bundle_pins_contract_and_rejects_incompatible_declared_tolerance(tmp_path):
+    cfg = replace(
+        ManipulationConfig(),
+        retention_context=True,
+        trajectory_preview=True,
+        action_mode="direct_velocity",
+        base_xy_tolerance=0.05,
+        base_heading_tolerance=np.deg2rad(5),
+    )
+    actor = WholeBodyActor(base_rate_feedback=False, base_navigation_feedback=BaseNavigationFeedback())
+    destination = tmp_path / "actor"
+    export_actor(actor, destination, cfg, "test-model", steps=0)
+    bundle = WholeBodyBundle(destination)
+    assert bundle.actor.base_navigation_feedback == actor.base_navigation_feedback
+    obs = navigation_observation(actor)
+    obs["preview"][..., actor.encoder.preview_fields["base_error"]] = torch.tensor([0.1, 0.0, 0.2])
+    expected = actor(obs)[0].detach().numpy()
+    sensor = {k: v[0].numpy() for k, v in obs.items() if k != "critic"}
+    np.testing.assert_array_equal(bundle(sensor), expected)
+    path = destination / "manifest.json"
+    manifest = json.loads(path.read_text())
+    manifest["base_navigation_feedback"]["xy_region_m"] = 0.06
+    path.write_text(json.dumps(manifest))
+    with pytest.raises(ValueError, match="navigation contract"):
+        WholeBodyBundle(destination)
+    with pytest.raises(ValueError, match="inner hold region"):
+        export_actor(actor, tmp_path / "incompatible", replace(cfg, base_xy_tolerance=0.005), "test-model", steps=0)

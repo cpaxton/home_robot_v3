@@ -10,6 +10,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
+from emet.rl.manipulation.base_navigation_feedback import BaseNavigationFeedback
 from emet.rl.manipulation.profiles import PROFILES
 from emet.rl.manipulation.whole_body_actor import WholeBodyActor
 from emet.rl.manipulation.whole_body_observation import ACTOR_KEYS
@@ -19,6 +20,10 @@ MOTION_CONTRACT = "world_base_xy_yaw_and_hand_linear_angular_velocity_v1"
 
 
 def export_actor(actor, destination, environment, fingerprint, *, steps, training=None):
+    navigation = actor.base_navigation_feedback
+    if navigation is not None:
+        navigation.validate_tolerances(environment.base_xy_tolerance, environment.base_heading_tolerance)
+    navigation_record = None if navigation is None else navigation.record()
     destination = Path(destination)
     if destination.exists():
         raise FileExistsError(destination)
@@ -31,6 +36,7 @@ def export_actor(actor, destination, environment, fingerprint, *, steps, trainin
                 "robot": actor.robot,
                 "hidden": actor.hidden,
                 "base_rate_feedback": actor.base_rate_feedback,
+                "base_navigation_feedback": navigation_record,
                 "state_dict": actor.state_dict(),
             },
             directory / "policy.zip",
@@ -48,6 +54,7 @@ def export_actor(actor, destination, environment, fingerprint, *, steps, trainin
             "history_steps": PROFILES[actor.robot].history_steps,
             "motion_contract": MOTION_CONTRACT,
             "base_rate_feedback": actor.base_rate_feedback,
+            "base_navigation_feedback": navigation_record,
             "critic_exported": False,
             "hardware_used": False,
             "safety_promoted": False,
@@ -95,7 +102,17 @@ class WholeBodyBundle:
         declared_rate = m.get("base_rate_feedback", True)
         if type(rate) is not bool or type(declared_rate) is not bool or rate != declared_rate:
             raise ValueError("whole-body base feedback contract mismatch")
-        self.actor = WholeBodyActor(self.robot, data["hidden"], base_rate_feedback=rate)
+        navigation = BaseNavigationFeedback.from_record(data.get("base_navigation_feedback"))
+        declared_navigation = BaseNavigationFeedback.from_record(m.get("base_navigation_feedback"))
+        if navigation != declared_navigation:
+            raise ValueError("whole-body base navigation contract mismatch")
+        if navigation is not None:
+            navigation.validate_tolerances(
+                m["environment"].get("base_xy_tolerance"), m["environment"].get("base_heading_tolerance")
+            )
+        self.actor = WholeBodyActor(
+            self.robot, data["hidden"], base_rate_feedback=rate, base_navigation_feedback=navigation
+        )
         self.actor.load_state_dict(data["state_dict"], strict=True)
         if any(not torch.isfinite(value).all() for value in self.actor.state_dict().values()):
             raise ValueError("nonfinite whole-body weights")
