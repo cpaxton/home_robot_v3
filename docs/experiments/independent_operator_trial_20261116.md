@@ -169,3 +169,24 @@ also fails with the previous dispatcher, independently of this repair.
 Next remains the measured-head simulation contract probe, followed by the
 bounded operator retry. The failed live trials above remain the recorded
 localization outcomes until that retry is actually run.
+
+## Physics-log audit correction
+
+The subsequent head investigation found a startup exception in r3's
+`private/server.log`: `_sim_loop` called the legacy idle base-pose hold, and
+the physical-execution guard raised
+`forbidden_physical_actuation:stationary_base_pose_hold`. The observation
+threads remained alive after the physics thread died. Thus the head failures
+are not evidence of a functioning dynamics loop rejecting these configurations:
+this run has an infrastructure failure. Public `complete: true` never checked
+physics liveness. This also explains why frame-delivery sequence alone is not
+an adequate simulator progress gate. The independently traced FIND feedback bug
+still stands, but no model-performance conclusions should use these trials.
+
+The physical-mode repair skips legacy idle pose pinning and deactivates its
+named world weld, leaving support to dynamics; the guard still rejects direct
+pose-hold actions. Headless physics failure clears server running state and is
+re-raised on the main server thread. A small MuJoCo control verifies time,
+measured joint and optical-pose change without pinning; separate tests cover
+legacy-mode compatibility, fatal physics failure and step-limit shutdown.
+Furnished-scene head qualification remains necessary after this repair.
