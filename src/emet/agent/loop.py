@@ -1436,7 +1436,12 @@ def run_agent_with_robot(
                     followup = (
                         f"[Tool results]\n{result_text}\n\n"
                         "Summarize these results for the user in your message. "
-                        "Use completed_steps and failed_step_1based when present: a later failure does not undo completed work. "
+                        "Use completed_actions and failed_action to name the verified progress and failed step. "
+                        "A later failure does not undo completed work. Distinguish overall execution_started from "
+                        "failed_step_execution_started: a preflight refusal need not have sent that step. "
+                        "Unverified actions are not confirmed outcomes or permission to retry. "
+                        "For partial/failed results, report incomplete goals and that you stopped; "
+                        "do not claim full success. "
                         "Do not call any more tools."
                     )
                     if last_round:

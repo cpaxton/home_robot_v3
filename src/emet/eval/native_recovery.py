@@ -6,12 +6,15 @@ This injects an admission failure, not a contact or sensor failure. The wrapped
 provider still owns all planning, commands and measured effect verification.
 """
 
+import json
+
 from emet.controller.task.tamp.task_session import TaskExecutionResult
 
 
 class RefuseAfterOneTransfer:
-    def __init__(self, provider, audit_path):
+    def __init__(self, provider, audit_path, *, record_path=None):
         self.provider, self.audit_path = provider, audit_path
+        self.record_path = record_path
         self.completed = 0
         self.records = []
 
@@ -26,6 +29,8 @@ class RefuseAfterOneTransfer:
             self.records.append({"kind": "injected_between_transfer_admission_refusal",
                                  "completed_before_refusal": self.completed,
                                  "no_commands": before == after})
+            if self.record_path is not None:
+                self.record_path.write_text(json.dumps(self.records, indent=2) + '\n')
             return receipt
         receipt = self.provider.execute(operator)
         if isinstance(receipt, TaskExecutionResult) and receipt.success or receipt is True:
