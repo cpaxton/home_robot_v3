@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "pr": 231,
+  "scope": "Current-main merge integration, not a new benchmark",
+  "source_sha": "c8a34bfdd03fd91bfde27546798b59766f3a687c",
+  "parent_main": "fb9f9bf1fe57c05205006fcdc3fcfcb1c23d1c9d",
+  "external_review_comments_seen": 0,
+  "review": "Author code review plus source-bound tests/smokes; not independent approval",
+  "changes": [
+    "Preserve Mars grasp/approach/transport hooks and model binding",
+    "Reject Stretch bounded_release on Mars before commands, with no handle resurrection",
+    "Reuse loaded models in policy/model cache tests; freshness unchanged"
+  ],
+  "tests": {
+    "motion": {
+      "tests": "446",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "158.134"
+    },
+    "integration": {
+      "tests": "657",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "404.149"
+    },
+    "compatibility": {
+      "tests": "3",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "8.971"
+    }
+  },
+  "disjoint_motion_integration_tests": 1103,
+  "native": {
+    "passed": true,
+    "completed_steps": 2,
+    "audit_commands": 528,
+    "forbidden_commands": 0
+  },
+  "agent": {
+    "task_passed": true,
+    "physical_goals_satisfied": true,
+    "execution_completion_verified": true,
+    "cli_exit_code": 0,
+    "requested_rejection_observed": true,
+    "failure_boundaries": [
+      {
+        "tool": "execute_pick_place_plan",
+        "code": "unknown_plan",
+        "unexpected_tools": [],
+        "boundary_kind": "failure"
+      }
+    ],
+    "audit_commands": 509,
+    "forbidden_commands": 0
+  },
+  "llm_calls": 6,
+  "historical_scores_unchanged": true,
+  "held_out_claim": false,
+  "hardware_claim": false,
+  "observed_execution_claim": false,
+  "artifacts": [
+    {
+      "path": ".tamp-runs/native-stack-20261116/pr231/motion.xml",
+      "sha256": "16dd8be4abd68bc1da6743d4540ba2d2e55e47a4df8807bb8fe8d989f8232684"
+    },
+    {
+      "path": ".tamp-runs/native-stack-20261116/pr231/integration.xml",
+      "sha256": "edf25eb4d639f97bc9def0e9eb402f7dae0727ebdf5daeb1239407af016bbc69"
+    },
+    {
+      "path": ".tamp-runs/native-stack-20261116/pr231/compatibility.xml",
+      "sha256": "17cb18511506e9b3d47964da20f8c7761ac12a36ce62556e1f9fbd947f77628f"
+    },
+    {
+      "path": ".tamp-runs/native-stack-20261116/pr231/native/protocol.json",
+      "sha256": "dbec01b65765d803fef9ecd9465869f2f5f00412ac6287a4041b788ca9938ec8"
+    },
+    {
+      "path": ".tamp-runs/native-stack-20261116/pr231/native/summary.json",
+      "sha256": "51124e7ffca08d8bf0f65bf07ad9862618ab3ba9eafe44efb836206b2fcc5e25"
+    },
+    {
+      "path": ".tamp-runs/native-stack-20261116/pr231/agent/protocol.json",
+      "sha256": "78c804bfabd0471cdf11347c9ae1d0c3777a3397fce89f094b9561648695c641"
+    },
+    {
+      "path": ".tamp-runs/native-stack-20261116/pr231/agent/summary.json",
+      "sha256": "2ec1ed615e03621baed9ab9e5af4e6b37c67916a2d25e628ef9127c82326b8d9"
+    },
+    {
+      "path": ".tamp-runs/native-stack-20261116/pr231/agent/actuation.jsonl",
+      "sha256": "a042cf1d62fa1c9768da602f988a808db011d14145f17bb70224277f75c97a95"
+    },
+    {
+      "path": ".tamp-runs/native-stack-20261116/pr231/native/actuation.jsonl",
+      "sha256": "d6aa3f5258851e82a4d3883069a6dabe5af31a0545d4708e1489ab7a6a4253eb"
+    }
+  ]
+}

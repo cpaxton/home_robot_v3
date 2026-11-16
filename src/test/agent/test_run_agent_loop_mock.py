@@ -108,3 +108,15 @@ def test_merge_chat_agent_manip_parameters_falls_back_to_config():
     )
     agent = params.get("agent") or {}
     assert agent.get("manip_mode") == "teleport"
+
+
+def test_native_policy_configuration_rejects_before_client_start():
+    import pytest
+
+    from emet.config.loader import AgentSectionConfig
+    from emet.core.parameters import Parameters
+    with patch('emet.agent.loop.StretchZmqClient') as client:
+        with pytest.raises(ValueError, match='native_tamp_policy requires physical mode'):
+            run_agent_with_robot(parameters=Parameters(), agent_section=AgentSectionConfig(
+                manip_mode='physical', tamp_inputs='observed', native_tamp_policy='bounded_release'))
+        client.assert_not_called()

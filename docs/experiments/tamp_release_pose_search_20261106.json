@@ -1,0 +1,564 @@
+{
+  "schema_version": 1,
+  "scope": "Native asynchronous Stretch tool reference; privileged release-search diagnostic, zero agent/VLM calls",
+  "source_commit": "d5e1df78",
+  "protocol": "configs/eval/tamp_release_pose_search.json",
+  "agent_score": false,
+  "original_agent_result_unchanged": "2/4",
+  "hardware_trials": false,
+  "llm_calls": 0,
+  "production_policy_changed": false,
+  "cases": [
+    {
+      "id": "shift-legacy",
+      "case_id": "two-goal-shift",
+      "release_policy": "legacy",
+      "job_id": "20261106_071830_61d116",
+      "run_status": "complete",
+      "passed": false,
+      "code": "collision",
+      "status": "partial",
+      "completed_transfers": 1,
+      "declared_transfers": 2,
+      "failed_phase": "execution",
+      "native_failure_stages": [
+        "release"
+      ],
+      "audit_commands": 495,
+      "forbidden_commands": 0,
+      "malformed_audit_rows": 0,
+      "wall_time_s": 282.2993041849695,
+      "final_predicates": {
+        "object2": {
+          "in_region": true,
+          "supported": true,
+          "settled": true,
+          "satisfied": true,
+          "bounds_xy": [
+            [
+              -0.04097565012603964,
+              -0.8205570183597449
+            ],
+            [
+              0.0001869706629935991,
+              -0.7793962392355157
+            ]
+          ]
+        },
+        "object1": {
+          "in_region": true,
+          "supported": false,
+          "settled": true,
+          "satisfied": false,
+          "bounds_xy": [
+            [
+              -0.04608186675393487,
+              -0.7186320171594787
+            ],
+            [
+              0.0064024688968459115,
+              -0.6352162634814529
+            ]
+          ]
+        }
+      },
+      "release_events": [
+        {
+          "object_body": "object2",
+          "sim_time": 28.68599999999498,
+          "event": {
+            "phase": "release",
+            "controller_success": true
+          }
+        }
+      ],
+      "artifacts": [
+        {
+          "path": ".tamp-runs/release-search-20261106/episodes/shift-legacy/protocol.json",
+          "sha256": "b64d7c17690a0fe6dec31ab8b8fcb306a3a325818a1890a8cdc09c5c89871428"
+        },
+        {
+          "path": ".tamp-runs/release-search-20261106/episodes/shift-legacy/summary.json",
+          "sha256": "9ca4384cc81601e2887d2fbd0214162b193fdd4b146396e9ff5583c7c3720904"
+        },
+        {
+          "path": ".tamp-runs/release-search-20261106/episodes/shift-legacy/initial.json",
+          "sha256": "e8d62ba7cef2201557def3f42da309821a61c610d342756187f58578b379691a"
+        },
+        {
+          "path": ".tamp-runs/release-search-20261106/episodes/shift-legacy/contact.jsonl",
+          "sha256": "1b163f312e63cc8e4f3240bc8e917cb21fcc69228ea905834e238dd5c0787ef5"
+        },
+        {
+          "path": ".tamp-runs/release-search-20261106/episodes/shift-legacy/actuation.jsonl",
+          "sha256": "3345d3de4cd01da706a8057efa01b961f6c5e2654c02b7365d8b7c79927593e3"
+        }
+      ]
+    },
+    {
+      "id": "shift-bounded",
+      "case_id": "two-goal-shift",
+      "release_policy": "bounded",
+      "job_id": "20261106_071840_8fb2d9",
+      "run_status": "complete",
+      "passed": false,
+      "code": "no_plan_within_budget",
+      "status": "partial",
+      "completed_transfers": 0,
+      "declared_transfers": 2,
+      "failed_phase": "execution",
+      "native_failure_stages": [
+        "release"
+      ],
+      "audit_commands": 224,
+      "forbidden_commands": 0,
+      "malformed_audit_rows": 0,
+      "wall_time_s": 181.2701918949606,
+      "final_predicates": {
+        "object2": {
+          "in_region": true,
+          "supported": false,
+          "settled": true,
+          "satisfied": false,
+          "bounds_xy": [
+            [
+              -0.04219633178773992,
+              -0.8208094521764144
+            ],
+            [
+              0.0030687275756610816,
+              -0.7776502529841498
+            ]
+          ]
+        },
+        "object1": {
+          "in_region": false,
+          "supported": true,
+          "settled": true,
+          "satisfied": false,
+          "bounds_xy": [
+            [
+              -0.025,
+              -0.5900000000000001
+            ],
+            [
+              0.015,
+              -0.51
+            ]
+          ]
+        }
+      },
+      "release_events": [
+        {
+          "object_body": "object2",
+          "sim_time": 28.509999999995078,
+          "event": {
+            "phase": "release_plan",
+            "accepted": true,
+            "reason": null,
+            "target_z": 0.5400879051452037,
+            "max_drop_m": 0.04
+          }
+        },
+        {
+          "object_body": "object2",
+          "sim_time": 28.55799999999505,
+          "event": {
+            "phase": "release_adjustment",
+            "command": [
+              0.6091140213385767,
+              0.12690974435593602,
+              0.12690990304794547,
+              0.12690929070394763,
+              0.1269084433086795,
+              0.09125371869000841,
+              -0.7937324660372586,
+              -0.05989464189143711
+            ],
+            "measured": [
+              0.5949079355418766,
+              0.1268970800856349,
+              0.12689831504569157,
+              0.12689777356468704,
+              0.12689676942528758,
+              0.09243629213783124,
+              -0.8112642074245251,
+              -0.059942775483588645
+            ],
+            "residual": 0.017531741387266542,
+            "controller_success": true
+          }
+        },
+        {
+          "object_body": "object2",
+          "sim_time": 28.86599999999488,
+          "event": {
+            "phase": "release_plan",
+            "accepted": true,
+            "reason": null,
+            "target_z": 0.5430879051452037,
+            "max_drop_m": 0.04
+          }
+        },
+        {
+          "object_body": "object2",
+          "sim_time": 28.92199999999485,
+          "event": {
+            "phase": "release_adjustment",
+            "command": [
+              0.6128538906867416,
+              0.12691111832302812,
+              0.12690999698677374,
+              0.12690970232007442,
+              0.1269099405826447,
+              0.09110175523437596,
+              -0.792537204402263,
+              -0.05984978451068039
+            ],
+            "measured": [
+              0.5938202005266247,
+              0.1269012627488716,
+              0.12690119369808245,
+              0.12690079707943397,
+              0.12690058059423626,
+              0.09219549960235732,
+              -0.81264245597158,
+              -0.060049549485821245
+            ],
+            "residual": 0.020105251569316973,
+            "controller_success": true
+          }
+        },
+        {
+          "object_body": "object2",
+          "sim_time": 29.231999999994677,
+          "event": {
+            "phase": "release_plan",
+            "accepted": true,
+            "reason": null,
+            "target_z": 0.5470879051452037,
+            "max_drop_m": 0.04
+          }
+        }
+      ],
+      "artifacts": [
+        {
+          "path": ".tamp-runs/release-search-20261106/episodes/shift-bounded/protocol.json",
+          "sha256": "223e8b97f2af5a179db81828bd17d2e2e899c26a5b525c4d861383201ccf17cc"
+        },
+        {
+          "path": ".tamp-runs/release-search-20261106/episodes/shift-bounded/summary.json",
+          "sha256": "d90aa26fa2b4e6a129325d52ad97eb3d8492949bf434fe873fd92fe86af42a37"
+        },
+        {
+          "path": ".tamp-runs/release-search-20261106/episodes/shift-bounded/initial.json",
+          "sha256": "e0bd268ec82cdaa6bcfb76f7dce34752cea3d9536f1d8c9e9f948fe407d5b82d"
+        },
+        {
+          "path": ".tamp-runs/release-search-20261106/episodes/shift-bounded/contact.jsonl",
+          "sha256": "059ca9dc87b67b996668483a5a3a033b196ed760cdf436aeeee91797370a6e80"
+        },
+        {
+          "path": ".tamp-runs/release-search-20261106/episodes/shift-bounded/actuation.jsonl",
+          "sha256": "3c9da7025b56cf06671553d99944d26852f00afa6490bff90ddffdba63ee797c"
+        }
+      ]
+    },
+    {
+      "id": "control-legacy",
+      "case_id": "two-goal-control",
+      "release_policy": "legacy",
+      "job_id": "20261106_071852_f64bad",
+      "run_status": "complete",
+      "passed": true,
+      "code": "ok",
+      "status": "ok",
+      "completed_transfers": 2,
+      "declared_transfers": 2,
+      "failed_phase": null,
+      "native_failure_stages": [],
+      "audit_commands": 524,
+      "forbidden_commands": 0,
+      "malformed_audit_rows": 0,
+      "wall_time_s": 319.3650599330431,
+      "final_predicates": {
+        "object2": {
+          "in_region": true,
+          "supported": true,
+          "settled": true,
+          "satisfied": true,
+          "bounds_xy": [
+            [
+              -0.03964253034236052,
+              -0.8194156484592768
+            ],
+            [
+              0.0007957661564522572,
+              -0.7789784375309242
+            ]
+          ]
+        },
+        "object1": {
+          "in_region": true,
+          "supported": true,
+          "settled": true,
+          "satisfied": true,
+          "bounds_xy": [
+            [
+              -0.039570297799532986,
+              -0.7205468966635228
+            ],
+            [
+              0.0014592813863216689,
+              -0.6400371084202808
+            ]
+          ]
+        }
+      },
+      "release_events": [
+        {
+          "object_body": "object2",
+          "sim_time": 29.04599999999478,
+          "event": {
+            "phase": "release",
+            "controller_success": true
+          }
+        },
+        {
+          "object_body": "object1",
+          "sim_time": 50.42200000001566,
+          "event": {
+            "phase": "release",
+            "controller_success": true
+          }
+        }
+      ],
+      "artifacts": [
+        {
+          "path": ".tamp-runs/release-search-20261106/episodes/control-legacy/protocol.json",
+          "sha256": "425daf61ed64b15f5dc8eb2979d08fd34bc998cfa1eab598b1e4f7455a069c4b"
+        },
+        {
+          "path": ".tamp-runs/release-search-20261106/episodes/control-legacy/summary.json",
+          "sha256": "16836c5088da0c24a7ce617df9d7aa99a64331093c1755de0e1887d940942a8d"
+        },
+        {
+          "path": ".tamp-runs/release-search-20261106/episodes/control-legacy/initial.json",
+          "sha256": "e7affb4746fed6dd03f1e63641e5e1d4e49cd8b90ae85e826ddcf657a25902ad"
+        },
+        {
+          "path": ".tamp-runs/release-search-20261106/episodes/control-legacy/contact.jsonl",
+          "sha256": "9cab2ddf4d20a92021cd0e05bae55b551658a884a0bc6a3c64f6724b444b53aa"
+        },
+        {
+          "path": ".tamp-runs/release-search-20261106/episodes/control-legacy/actuation.jsonl",
+          "sha256": "cdfa1a7eb2c7f257f3441bc260155ef01b248508085d0ad2a0c2c98421cbb592"
+        }
+      ]
+    },
+    {
+      "id": "control-bounded",
+      "case_id": "two-goal-control",
+      "release_policy": "bounded",
+      "job_id": "20261106_071853_a092a4",
+      "run_status": "complete",
+      "passed": true,
+      "code": "ok",
+      "status": "ok",
+      "completed_transfers": 2,
+      "declared_transfers": 2,
+      "failed_phase": null,
+      "native_failure_stages": [],
+      "audit_commands": 524,
+      "forbidden_commands": 0,
+      "malformed_audit_rows": 0,
+      "wall_time_s": 316.460591059993,
+      "final_predicates": {
+        "object2": {
+          "in_region": true,
+          "supported": true,
+          "settled": true,
+          "satisfied": true,
+          "bounds_xy": [
+            [
+              -0.039817224049048625,
+              -0.819439480359758
+            ],
+            [
+              0.0006404945426175188,
+              -0.7789838465278673
+            ]
+          ]
+        },
+        "object1": {
+          "in_region": true,
+          "supported": true,
+          "settled": true,
+          "satisfied": true,
+          "bounds_xy": [
+            [
+              -0.0396093970740506,
+              -0.7204335771693726
+            ],
+            [
+              0.001329691965485956,
+              -0.6399681910879356
+            ]
+          ]
+        }
+      },
+      "release_events": [
+        {
+          "object_body": "object2",
+          "sim_time": 28.70599999999497,
+          "event": {
+            "phase": "release_plan",
+            "accepted": true,
+            "reason": null,
+            "target_z": 0.5319845217750298,
+            "max_drop_m": 0.04
+          }
+        },
+        {
+          "object_body": "object2",
+          "sim_time": 28.71999999999496,
+          "event": {
+            "phase": "release",
+            "controller_success": true
+          }
+        },
+        {
+          "object_body": "object2",
+          "sim_time": 28.88199999999487,
+          "event": {
+            "phase": "release_open_verified",
+            "controller_success": true,
+            "source": "simulator_ground_truth_debug"
+          }
+        },
+        {
+          "object_body": "object1",
+          "sim_time": 49.98200000001512,
+          "event": {
+            "phase": "release_plan",
+            "accepted": true,
+            "reason": null,
+            "target_z": 0.5313394293117382,
+            "max_drop_m": 0.04
+          }
+        },
+        {
+          "object_body": "object1",
+          "sim_time": 49.986000000015125,
+          "event": {
+            "phase": "release",
+            "controller_success": true
+          }
+        },
+        {
+          "object_body": "object1",
+          "sim_time": 50.13600000001531,
+          "event": {
+            "phase": "release_open_verified",
+            "controller_success": true,
+            "source": "simulator_ground_truth_debug"
+          }
+        }
+      ],
+      "artifacts": [
+        {
+          "path": ".tamp-runs/release-search-20261106/episodes/control-bounded/protocol.json",
+          "sha256": "8ff18d1a83c2c96160fa7500a4b00cb0e8cc03c1b0376961c87a3e172a391acc"
+        },
+        {
+          "path": ".tamp-runs/release-search-20261106/episodes/control-bounded/summary.json",
+          "sha256": "c793fd86f6ecd64398150772762762609be90630ca8b0fcd2ba13aa687cafd76"
+        },
+        {
+          "path": ".tamp-runs/release-search-20261106/episodes/control-bounded/initial.json",
+          "sha256": "86cf02678cdfc71b703fa3dcfe8f737e0de12c9850083d57a9f41c214694e65f"
+        },
+        {
+          "path": ".tamp-runs/release-search-20261106/episodes/control-bounded/contact.jsonl",
+          "sha256": "5326c2f73b1b07150a79813ef72d3851688054984e0c50fb77cc198a81683c10"
+        },
+        {
+          "path": ".tamp-runs/release-search-20261106/episodes/control-bounded/actuation.jsonl",
+          "sha256": "dc3dd350b87356410d06e743bb77079adafac21654f5fb078fb6dc872e307e33"
+        }
+      ]
+    }
+  ],
+  "completion_by_policy": {
+    "legacy": {
+      "passed": 1,
+      "cases": 2,
+      "completed_transfers": 3,
+      "declared_transfers": 4
+    },
+    "bounded": {
+      "passed": 1,
+      "cases": 2,
+      "completed_transfers": 2,
+      "declared_transfers": 4
+    }
+  },
+  "aggregate": {
+    "audit_commands": 1767,
+    "forbidden_commands": 0,
+    "malformed_audit_rows": 0,
+    "completed_transfers": 5,
+    "declared_transfers": 8,
+    "infrastructure_errors": 0
+  },
+  "initial_pair_comparisons": {
+    "control": {
+      "nominal_scene_hashes_match": true,
+      "max_qpos_difference_mixed_units": 0.0002576007611763218,
+      "bit_identical": false
+    },
+    "shift": {
+      "nominal_scene_hashes_match": true,
+      "max_qpos_difference_mixed_units": 0.0011918938472392116,
+      "bit_identical": false
+    }
+  },
+  "replay": {
+    "artifact": {
+      "path": ".tamp-runs/release-search-20261106/replay.json",
+      "sha256": "1dceb682da0e77bf32e671ba777e76b445e60e78fa626b9a45da924f6a97ed65"
+    },
+    "results": [
+      {
+        "episode": "shift-checked-preserve",
+        "original_error": "gripper_open_path_failed:invalid_goal:collision",
+        "alternative": true,
+        "error": null,
+        "unchanged": true,
+        "commands": 0,
+        "target_z": 0.5420270697313251,
+        "gap_m": 0.02087845699450941
+      },
+      {
+        "episode": "shift-loaded-bind",
+        "original_error": "gripper_open_path_failed:invalid_goal:collision",
+        "alternative": true,
+        "error": null,
+        "unchanged": true,
+        "commands": 0,
+        "target_z": 0.5415746526870949,
+        "gap_m": 0.02089511812153222
+      }
+    ]
+  },
+  "validation": {
+    "tests": 125,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "artifact": {
+      "path": ".tamp-runs/release-search-20261106/combined-final.xml",
+      "sha256": "6b88c11ef36aae0e426bac025103b3f735a1136871dc9cc7b38ac9290cf8c3f1"
+    }
+  }
+}

@@ -350,7 +350,9 @@ class MujocoServer:
 
         self.mjmodel = model
         from emet.controller.manipulation.native_scene import model_signature
+
         self._native_model_signature = model_signature(model)
+        self._native_signature_model = model
 
         self.mjdata = MjData(self.mjmodel)
 
@@ -377,7 +379,8 @@ class MujocoServer:
             from emet.eval.manipulation_trace import create_trace
 
             self._eval_trace = create_trace(
-                self.mjmodel, json.loads(Path(trace_config).read_text()),
+                self.mjmodel,
+                json.loads(Path(trace_config).read_text()),
                 Path(os.environ["EMET_SIM_EVAL_TRACE"]),
             )
 
@@ -555,8 +558,13 @@ class MujocoServer:
         """
         self.mjdata = data
         self.mjmodel = model
-        from emet.controller.manipulation.native_scene import model_signature
-        self._native_model_signature = model_signature(model)
+        # The fingerprint binds the compiled geometry/dynamics, not live qpos.
+        # Mesh arrays are large: hash once per loaded model, never per tick.
+        if getattr(self, "_native_signature_model", None) is not model:
+            from emet.controller.manipulation.native_scene import model_signature
+
+            self._native_model_signature = model_signature(model)
+            self._native_signature_model = model
 
         if not self.mjdata or not self.mjdata.time:
             print("WARNING: no mujoco data to report")

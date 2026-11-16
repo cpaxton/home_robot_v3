@@ -17,3 +17,7 @@ manip_mode: teleport
 manip_collision: none
 # Joint-space path between IK start/goal: rrt_connect (default) | rrt | linear. EMET_MANIP_PLANNER.
 manip_planner: rrt_connect
+
+# Native simulator policy, opt-in only with physical mode and privileged inputs.
+# bounded_release uses measured handoff and bounded release refinement.
+native_tamp_policy: legacy

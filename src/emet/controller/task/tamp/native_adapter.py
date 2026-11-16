@@ -21,7 +21,9 @@ from emet.controller.manipulation.native_inputs import ObservationUnavailable
 from emet.controller.manipulation.native_scene import model_signature, read_snapshot
 from emet.controller.manipulation.physical_pick_place import PhysicalMotionResult, PhysicalPickPlaceExecutor
 from emet.controller.task.tamp.api import failure_code, response
+from emet.controller.task.tamp.native_policy import FINE_GRASP_YAWS, bind_loaded_payload, native_policy
 from emet.motion.mujoco_collision import body_subtree
+from emet.motion.release import refine_release
 from emet.robots.stretch import STRETCH_ARM_CHAIN
 from emet.simulation.sim_object_placements import placements_from_mujoco_model
 
@@ -48,9 +50,19 @@ class NativeTableAdapter:
     base_body = "base_link"
     finger_bodies = ("rubber_tip_left", "rubber_tip_right")
     max_planning_ik_calls = 256
+    grasp_yaw_offsets = (0., -.35, .35, -.7, .7, -1.57, 1.57)
     input_mode = 'privileged'
+    policy = 'legacy'
+    payload_binding = 'preserve'
+    release_limits = None
+    pregrasp_fallback_offset_m = None
 
-    def __init__(self, robot, *, model=None):
+    def __init__(self, robot, *, model=None, policy='legacy'):
+        selected = native_policy(policy)
+        self.policy, self.payload_binding, self.release_limits = selected.name, selected.payload_binding, selected.release_limits
+        self.pregrasp_fallback_offset_m = selected.pregrasp_fallback_offset_m
+        if policy == 'bounded_release':
+            self.grasp_yaw_offsets = FINE_GRASP_YAWS
         if model is None:
             from emet.simulation.mujoco_server_stretch import default_scene_xml_path
             model = mujoco.MjModel.from_xml_path(default_scene_xml_path)
@@ -80,7 +92,7 @@ class NativeTableAdapter:
         mujoco.mj_kinematics(self.model, data)
 
     def _data(self, **extra):
-        return {'mode': 'physical', 'inputs': 'privileged', 'geometry_source': 'simulator_ground_truth',
+        return {'mode': 'physical', 'inputs': 'privileged', 'native_motion_policy': self.policy, 'geometry_source': 'simulator_ground_truth',
                 'assistance': [], 'base_motion': 'stationary',
                 'collision_scope': 'sampled_arm_and_payload', **extra}
 
@@ -259,9 +271,9 @@ class NativeTableAdapter:
         self.planning_ik_calls += 1
         return executor.plan_pose(target, rotation, ordered_groups=ordered_groups)
 
-    def _grasp_candidates(self, executor, before, point, frames, pinch_offset, obj):
+    def _grasp_candidates(self, executor, before, point, frames, pinch_offset, obj, *, approach_offset=None):
         for frame, grasp_height in frames:
-            for yaw in (0., -.35, .35, -.7, .7, -1.57, 1.57):
+            for yaw in self.grasp_yaw_offsets:
                 self.data.qpos[:] = before
                 executor.collision.set_payload(self.model, self.data, None)
                 mujoco.mj_kinematics(self.model, self.data)
@@ -269,6 +281,8 @@ class NativeTableAdapter:
                 rotation = np.array([[c, -sn, 0], [sn, c, 0], [0, 0, 1]]) @ frame
                 grasp = point - rotation @ pinch_offset + [0, 0, grasp_height]
                 executor.grasp_targets = self._grasp_targets(grasp, rotation)
+                if approach_offset is not None:
+                    executor.grasp_targets[0] = (grasp + approach_offset, rotation)
                 _, error = executor.plan_gripper_open()
                 if error:
                     self._record_rejection('gripper_open', error, executor)
@@ -284,6 +298,14 @@ class NativeTableAdapter:
                     paths.append(path)
                 if len(paths) == 3:
                     yield rotation, paths
+
+    def _grasp_options(self, executor, before, point, frames, pinch_offset, obj):
+        # Preserve every existing candidate and the common IK budget before
+        # trying a collision-checked vertical approach. No grasp is executed here.
+        yield from self._grasp_candidates(executor, before, point, frames, pinch_offset, obj)
+        if self.pregrasp_fallback_offset_m is not None:
+            yield from self._grasp_candidates(executor, before, point, frames, pinch_offset, obj,
+                                             approach_offset=self.pregrasp_fallback_offset_m)
 
     def plan(self, task_ref='', object_name='', receptacle_name='', placement_region=None):
         with self.lock:
@@ -346,7 +368,7 @@ class NativeTableAdapter:
                     home_rotation = self._home_rotation(executor)
                     height = float(np.diff(np.asarray(placements[obj]['bounds'])[:, 2])[0])
                     frames = self._grasp_frames(home_rotation, rotation, height)
-                    for rotation, paths in self._grasp_candidates(executor, grasp_start, point, frames, pinch_offset, obj):
+                    for rotation, paths in self._grasp_options(executor, grasp_start, point, frames, pinch_offset, obj):
                         executor.grasp_paths = paths
                         lifted = self.data.qpos.copy()
                         # Reuse the placement stack's obstacle-subtracted support search.
@@ -463,6 +485,9 @@ class NativeTableAdapter:
             time.sleep(.05)
         return False
 
+    def _bind_loaded_payload(self, plan, *, rebind=True):
+        return bind_loaded_payload(self, plan, rebind=rebind)
+
     def execute(self, plan_ref):
         with self.lock:
             plan = self.plans.pop(plan_ref, None)
@@ -492,11 +517,15 @@ class NativeTableAdapter:
                     return fail(result.message, started=True, phase=result.phase)
                 if not self._verify(plan, released=False, seconds=1):
                     return fail('grasp_verification_failed', started=True, phase='lift')
+                if self.payload_binding != 'preserve' and not self._bind_loaded_payload(plan, rebind=self.payload_binding == 'verified_lift'):
+                    return fail('grasp_verification_failed', started=True, phase='lift')
                 completed.append('grasp')
                 self.synchronize(self.data)
                 ex.place_targets = self._place_targets(ex, plan.object_body, plan.goal, plan.rotation)
                 ex.transport = lambda: self._transport(plan)
                 phase = 'place'
+                if self.release_limits is not None:
+                    ex.release_refiner = lambda: refine_release(ex, support=plan.support_body, region=plan.placement_region, limits=self.release_limits)
                 result = ex.place_only('', object_gt_body=plan.object_body, receptacle_gt_body=plan.support_body)
                 if not result.success:
                     return fail(result.message, completed=completed, phase=result.phase)
@@ -525,17 +554,23 @@ def adapter_for(context, robot):
         return None
     cached = context.get('_native_tamp_adapter')
     boot = (state.get('command_protocol') or {}).get('server_boot_id')
+    policy = context.get('native_tamp_policy')
+    robot_name = state.get('native_tamp_robot', 'stretch')
     snapshot_signature = state['native_tamp_snapshot'].get('model_signature')
-    if cached is None or cached.robot is not robot or cached.boot != boot or cached.signature != snapshot_signature:
-        robot_name = state.get('native_tamp_robot', 'stretch')
+    policy_changed = cached is not None and policy is not None and cached.policy != policy
+    if (cached is None or cached.robot is not robot or cached.boot != boot
+            or cached.signature != snapshot_signature or cached.robot_name != robot_name or policy_changed):
+        context.pop('_native_tamp_adapter', None)
         if robot_name == 'innate_mars':
+            if policy not in (None, 'legacy'):
+                raise ObservationUnavailable('native_policy_unsupported')
             from emet.controller.task.tamp.mars_native_adapter import MarsNativeTableAdapter
             model = context.get('_native_tamp_model')
             if model is None:
                 raise ObservationUnavailable('native_mars_model_required')
             cached = MarsNativeTableAdapter(robot, model=model)
         elif robot_name == 'stretch':
-            cached = NativeTableAdapter(robot)
+            cached = NativeTableAdapter(robot, policy=policy or 'legacy')
         else:
             raise ObservationUnavailable('native_robot_unsupported')
         context['_native_tamp_adapter'] = cached

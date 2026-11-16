@@ -11,7 +11,7 @@ import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import draccus
 import yaml
@@ -68,7 +68,7 @@ _CHAT_AGENT_SUBKEYS = frozenset({"llm", "eqa", "discord", "share_memory_vllm", "
 # Manip settings are chat-agent keys too: ``--set agent.manip_mode=kinematic`` on a flat
 # legacy config creates a top-level ``agent: {manip_mode: ...}`` block with no other chat
 # keys; treat it as the chat agent section (not the mapping-explore block).
-_MANIP_AGENT_SUBKEYS = frozenset({"manip_mode", "manip_collision", "manip_planner", "tamp_inputs"})
+_MANIP_AGENT_SUBKEYS = frozenset({"manip_mode", "manip_collision", "manip_planner", "tamp_inputs", "native_tamp_policy"})
 
 
 def default_config_path() -> str:
@@ -322,6 +322,7 @@ class AgentSectionConfig:
     manip_mode: str = "teleport"
     # Native execution inputs; privileged is simulator-only and always explicit.
     tamp_inputs: str = "observed"
+    native_tamp_policy: Literal["legacy", "bounded_release"] = "legacy"
     # Arm collision filter for kinematic mode: none | voxel (agent map).
     manip_collision: str = "none"
     # Joint-space path between IK start/goal: rrt_connect | rrt | linear.

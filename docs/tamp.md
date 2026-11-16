@@ -110,6 +110,15 @@ privileged. No fictitious tactile sensors are assumed on hardware.
 
 ## What has been demonstrated
 
+New experiments follow a [simulation realism progression](plans/2026-11-01_tamp_sim_realism.md).
+Stretch in MuJoCo supports shared-agent integration; real Stretch hardware trials
+are paused. Panda provides upstream native references, while Sourccey is a separate
+robot-transfer track requiring native task-adapter qualification. The
+[first native references](experiments/tamp_sim_realism_20261101.md) are controller
+diagnostics, not production agent or observed task results. Clutter, RGBD geometry,
+observed grounding and timing/physics stress retain their separate gates. Earlier
+Stretch experiments below remain historical evidence.
+
 The [main-integration regression](experiments/tamp_main_integration_20261022.md)
 passes 616 selected checks and repeats both successful multi-step controls
 (2/2 and 3/3 transfers) after main's runtime, navigation and wheel-contact updates.
@@ -170,6 +179,24 @@ to 6/12. Remaining failures are bounded planning and one malformed region argume
 
 ## Implementation and detailed references
 
+The [November 1 live agent pilot](experiments/tamp_stretch_realism_20261101.md)
+completes 2/4 fixed development tasks: familiar two-goal/swap controls pass,
+while both +15 mm initial-X variants stop on cube lift rotation. The separate
+[November 3 native diagnostic](experiments/tamp_contact_stability_20261103.md)
+shows finer grasp candidates can complete the shifted lift, but placement still
+fails the retained-payload pose check. No observed or household success is
+inferred, and the earlier populations remain unchanged.
+The subsequent [checked handoff comparison](experiments/tamp_loaded_payload_handoff_20261103.md)
+is masked by an earlier fingertip/table collision in the shifted release
+preflight. The [November 6 release-search experiment](experiments/tamp_release_pose_search_20261106.md)
+keeps the familiar controls passing but exposes a loaded command/FK offset: small
+nominal corrections can leave the measured opening invalid. The opt-in follow-up
+uses that measured offset as a search reserve, under explicit raise/drop limits;
+it still requires fresh geometry, measured opening and final support checks.
+With exact shape extents and support settling, the latest separate native pair
+passes 2/2 development tasks (4/4 transfers). These historical native results
+remain separate from the broader November 13 gate below; the profile stays opt-in.
+
 | Topic | Reference |
 | --- | --- |
 | Agent tools, capabilities, and modes | [Tool index](agent_tools.md) |
@@ -182,6 +209,7 @@ to 6/12. Remaining failures are bounded planning and one malformed region argume
 | IK, collision, and motion planning | [Motion implementation](../src/emet/motion/) |
 | API and native-adapter regression coverage | [TAMP tests](../src/test/controller/task/tamp/) |
 | Comparing experiments without changing denominators | [Paired metrics](experiments/tamp_paired_metrics.md) |
+| Live grasp/contact diagnostics and fixed-policy comparisons | [Contact stability experiment](plans/2026-11-03_tamp_contact_stability.md) |
 
 
 The [PR #213 merge scope](plans/2026-10-15_tamp_213_merge_scope.md) fixes the
@@ -193,3 +221,24 @@ The [household experiment plan](plans/2026-10-18_household_agent_tamp.md) select
 RoboCasa365 composites and MolmoSpaces episode specifications for the next gate.
 Its JSON protocol is design-only; kitchen native-contact integration and the
 expanded household sweep are not yet completed.
+
+The [November 13 native qualification](experiments/tamp_native_qualification_20261113.md)
+expands the population to eight task candidates and four interface-boundary
+checks. Its first complete run passes 1/8 tasks and all four boundary checks,
+exposing a too-short release-settling budget and restrictive pregrasp approaches.
+The [unchanged-population development replay](experiments/tamp_native_followup_20261113.md)
+passes 4/8 tasks, 11/18 transfers and all four boundary checks after settling and
+pregrasp fixes. It retains release-motion, cube-retention and joint-limit failures.
+The policy is shared by the production primitive tools, task provider and diagnostic
+wrapper, with an explicit opt-in setting documented in the
+[task-plan API](api/tamp_task_plans.md#native-motion-policy). These native scores
+do not qualify observed navigation/exploration. See the
+[qualification plan](plans/2026-11-13_native_tamp_qualification.md).
+
+The separate [November 13 actual-agent repeat](experiments/tamp_agent_followup_20261113.md)
+uses Caliban and the production `run agent` CLI: **3/4 tasks, 8/10 transfers**,
+with valid JSON in all four trials and correct stops at both failure boundaries.
+The shifted two-goal task now passes; the shifted swap fails native cube lift
+verification. The earlier 2/4 baseline remains recorded separately. These are
+familiar development cases; broader native robustness and the observed
+exploration/manipulation chain remain unqualified.

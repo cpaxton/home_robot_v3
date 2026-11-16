@@ -77,3 +77,14 @@ def failure_boundaries(rows):
                 if active is None:
                     active = failure
     return failures
+
+
+def completion_receipt(envelopes, *, multi_step):
+    """Public execution completion is required in addition to physical final goals."""
+    if multi_step:
+        return any(e.get('tool') == 'execute_task_plan' and e.get('status') == 'ok'
+                   and e.get('data', {}).get('goal_verified') is True for e in envelopes)
+    completed = {e.get('data', {}).get('object_name') for e in envelopes
+                 if e.get('tool') in {'execute_pick_place_plan', 'pick_place'} and e.get('status') == 'ok'
+                 and 'place' in e.get('data', {}).get('completed_ops', [])}
+    return {'red cylinder', 'blue cube'} <= completed

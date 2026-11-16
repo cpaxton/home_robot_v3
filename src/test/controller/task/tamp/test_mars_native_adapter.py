@@ -46,6 +46,23 @@ def test_public_discovery_routes_mars_and_preserves_live_state(mars):
     assert call("scene_tasks", robot="stretch")["code"] == "native_robot_unsupported"
 
 
+def test_stretch_release_profile_cannot_silently_enter_mars_or_resurrect_cached_handles(mars):
+    _, robot, context, call = mars
+    adapter = adapter_for(context, robot)
+    adapter.plans['old-policy-plan'] = object()
+    before = len(robot.commands)
+    context['native_tamp_policy'] = 'bounded_release'
+    result = call('scene_tasks', robot='innate_mars')
+    assert result['status'] == 'error' and result['code'] == 'native_policy_unsupported'
+    assert '_native_tamp_adapter' not in context
+    assert len(robot.commands) == before
+    context['native_tamp_policy'] = 'legacy'
+    restored = adapter_for(context, robot)
+    assert isinstance(restored, MarsNativeTableAdapter) and restored is not adapter
+    assert restored.execute('old-policy-plan')['code'] == 'unknown_plan'
+    assert len(robot.commands) == before
+
+
 def test_policy_backend_receives_only_actor_observations_without_teacher_fallback(mars, monkeypatch):
     env, _, _, _ = mars
     observations = []

@@ -445,6 +445,20 @@ def test_mcts_grounding_failure_preserves_only_known_public_code(reason, expecte
     assert failure_code(reason) == expected
 
 
+@pytest.mark.parametrize("reason", [
+    "grasp_verification_failed",
+    "place_verification_failed",
+    "private_body_id:grasp_verification_failed:/private/path",
+])
+def test_native_verification_failure_remains_actionable_without_private_details(reason):
+    from emet.controller.task.tamp.api import failure_code
+    from emet.controller.task.tamp.task_session import TaskExecutionResult
+
+    code = failure_code(reason)
+    assert code == "verification_failed"
+    assert TaskExecutionResult(False, True, code).failure_code == code
+
+
 def test_unsupported_adapter_does_not_ignore_placement_region():
     tools = {t.name: t for t in get_tools({})}
     result = decoded(tools['plan_pick_place'].func(object_name='bowl', receptacle_name='table',

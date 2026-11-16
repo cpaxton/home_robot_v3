@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "status": "frozen_development_followup",
+  "runner": "scripts/eval_tamp_contact_stability.py",
+  "prior_comparison": "configs/eval/tamp_contact_stability.json",
+  "case_file": "configs/eval/tamp_stretch_realism_pilot.json",
+  "scope": "Checked loaded-grasp handoff plus full placement replanning; privileged native tool diagnostic, no agent score",
+  "policy": "fine_yaw",
+  "payload_binding_policies": ["verified_lift_keep", "verified_lift"],
+  "startup_settle_sim_s": 6.0,
+  "additional_stability_window_sim_s": 0.3,
+  "stability_translation_limit_m": 0.002,
+  "stability_rotation_limit_rad": 0.01,
+  "original_retention_translation_limit_m": 0.02,
+  "original_retention_rotation_limit_rad": 0.1,
+  "one_binding_per_executed_grasp": true,
+  "hardware_trials": false,
+  "llm_calls": 0,
+  "production_policy_changed": false,
+  "episodes": [
+    {"id": "shift-checked-preserve", "case_id": "two-goal-shift", "payload_binding": "verified_lift_keep", "port_offset": 1980},
+    {"id": "shift-loaded-bind", "case_id": "two-goal-shift", "payload_binding": "verified_lift", "port_offset": 1990},
+    {"id": "control-checked-preserve", "case_id": "two-goal-control", "payload_binding": "verified_lift_keep", "port_offset": 2000},
+    {"id": "control-loaded-bind", "case_id": "two-goal-control", "payload_binding": "verified_lift", "port_offset": 2010}
+  ],
+  "invariants": {
+    "original_bound_checked_before_binding": true,
+    "native_bilateral_hold_verified_first": true,
+    "stable_interval_anchor_never_reset": true,
+    "hold_only_control_uses_identical_additional_stability_interval": true,
+    "fully_replan_place_with_new_geometry": true,
+    "no_waypoint_reference_renewal": true,
+    "old_failed_episodes_unchanged": true
+  }
+}

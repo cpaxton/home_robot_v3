@@ -207,6 +207,7 @@ def failure_code(message: str) -> str:
             ("ik_failed", "ik_failed"),
             ("planning_failed", "planning_failed"),
             ("verify_failed", "verification_failed"),
+            ("verification_failed", "verification_failed"),
         ):
             if part.endswith(suffix):
                 return code
@@ -214,7 +215,7 @@ def failure_code(message: str) -> str:
         "invalid_tamp_inputs", "observed_scene_unavailable",
         "invalid_placement_region", "placement_region_unavailable", "placement_region_unsupported",
         "privileged_inputs_require_simulation", "native_execution_unavailable",
-        "native_model_mismatch", "native_robot_unsupported", "invalid_measured_state",
+        "native_model_mismatch", "native_robot_unsupported", "native_policy_unsupported", "invalid_measured_state",
         "task_not_found", "payload_not_retained", "object_not_lifted", "base_drift_during_arm",
         "unknown_plan",
         "command_outcome_unknown",
