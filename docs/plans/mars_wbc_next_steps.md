@@ -45,12 +45,19 @@ an actual fixed-world-hand/base preparation let the teacher pass that bottleneck
 but retention still fails. The actor also under-tracks the fixed-hand 20 mm
 base shift, confirming a concrete coupled-motion curriculum gap.
 
-Keep the repaired handoff and all guards. Before new training, extend the real
-TAMP primitive boundary through the unloaded grasp pose, admit it independently,
-and include reachable fixed-world-hand/base references alongside general
-tracking. Keep the outer general/task balance; do not train only TAMP or require
-a broken loaded grasp to supervise unloaded tracking. Loaded progression needs
-support-reserved planning and independently stable grasp/wrench evidence.
+Keep the repaired handoff and all guards. The
+[unloaded-grasp extension and teacher readout](../experiments/mars_unloaded_grasp_admission_20261116.md)
+now execute through grasp pose before closure: 5/6 successes at each of the
+pregrasp/grasp-pose boundaries, all twelve stops confirmed, and 1,367 passing
+source-bound regressions. Stage admission remains closed because the full-task
+executor still replans the prospective loaded lift before executing either
+unloaded boundary. Next, explicitly admit the requested unloaded planning prefix
+while preserving its own collision/support checks and full loaded validation
+when lift is requested. Then include reachable fixed-world-hand/base references
+alongside general tracking. Keep the outer general/task balance; do not train
+only TAMP or require a broken loaded grasp to supervise unloaded tracking.
+Loaded progression needs support-reserved planning and independently stable
+grasp/wrench evidence. No PPO follows from the current failed stage admission.
 
 ## Why this order
 

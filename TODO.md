@@ -58,7 +58,7 @@ Strike through or move to a PR when done.
 
 Accepted plan: [Mars controller integration](docs/plans/mars_controller_integration.md).
 
-### Current WBC follow-through (2026-11-15)
+### Current WBC follow-through (2026-11-16)
 
 Use the [complete setup/status](docs/rl/status_20261114.md) and
 [WBC philosophy](docs/rl/whole_body_control.md) alongside the ordered work below.
@@ -148,7 +148,9 @@ merges, measured policy improvement and hardware readiness are separate decision
       gives 5/6 at each boundary, all stops confirmed, with unchanged default
       physical results. The known loaded-lift replan blocks the unloaded
       prefix too; admit that prefix explicitly before training. Its fresh
-      checks/admission are separate from PR #239's receipt.
+      1,367/1,367 regression receipt verifies against the teacher-frozen runtime;
+      stage admission remains closed. [PR #241](https://github.com/cpaxton/home_robot_v3/pull/241)
+      is separate from PR #239's receipt and PR #240's case preparation.
       Do not increase timeouts or accept the actor's 2.15 mm advance as a
       completed 20 mm support-preparation goal. Keep loaded retention/grasp-fit
       repair separate, with original force/support/retention thresholds.
