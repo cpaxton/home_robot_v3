@@ -1,0 +1,258 @@
+# Copyright (c) Chris Paxton 2026
+# Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
+"""Run the declared arm pair only after an explicit, verified CPU14 handoff."""
+
+import fcntl
+import hashlib
+import json
+import os
+import signal
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+OUT = Path(__file__).resolve().parent
+PLAN = json.loads((OUT / "protocol.json").read_text())
+ROOT = Path(PLAN["runtime"])
+PYTHON = str(ROOT / ".venv/bin/python")
+os.environ.update(
+    PYTHONPATH=str(ROOT / "src"), CUDA_VISIBLE_DEVICES="", MUJOCO_GL="disable",
+    OMP_NUM_THREADS="1", OPENBLAS_NUM_THREADS="1", MKL_NUM_THREADS="1", NUMEXPR_NUM_THREADS="1",
+    MPLCONFIGDIR=str(OUT / "mpl"), EMET_UV_RUN="1",
+)
+os.sched_setaffinity(0, {14})
+sys.path.insert(0, str(ROOT / "src"))
+CHILD = None
+PHASE = "verify_admission_and_handoff"
+STARTED = None
+
+
+def write(path, value):
+    temporary = path.with_suffix(".tmp")
+    temporary.write_text(json.dumps(value, indent=2, allow_nan=False) + "\n")
+    temporary.replace(path)
+
+
+def progress():
+    total = 0
+    for variant in PLAN["variants"]:
+        path = OUT / "comparison" / f"{variant}-seed-90/updates.jsonl"
+        maximum = 0
+        if path.exists():
+            with path.open("rb") as stream:
+                stream.seek(max(0, path.stat().st_size - 16384))
+                for line in stream.read().decode().splitlines():
+                    try:
+                        maximum = max(maximum, int(json.loads(line).get("timesteps", 0)))
+                    except ValueError:
+                        continue
+        if maximum > PLAN["steps_per_run"]:
+            raise RuntimeError("declared transition budget exceeded")
+        total += maximum
+    return total
+
+
+def state(**extra):
+    steps = progress()
+    value = dict(
+        phase=PHASE, pid=os.getpid(), updated_unix=time.time(),
+        implementation_revision=PLAN["implementation_revision"], runtime=str(ROOT), output=str(OUT),
+        training_transitions_recorded=steps, total_training_transitions=PLAN["total_training_transitions"],
+        ppo_started=steps > 0, hardware_used=False, safety_promoted=False, **extra,
+    )
+    write(OUT / "supervisor.json", value)
+    if job := os.environ.get("EMET_JOB_ID"):
+        from emet.utils.job_registry import update_job
+
+        update_job(job, status="waiting" if PHASE.startswith("waiting_") else "running", phase=PHASE, units_done=steps,
+                   units_total=PLAN["total_training_transitions"],
+                   meta_update={"supervisor_state": str(OUT / "supervisor.json"),
+                                "frozen_base_arm_adaptation": True, "legacy_mlp_only": True})
+
+
+def cleanup():
+    if CHILD is not None and CHILD.poll() is None:
+        os.killpg(CHILD.pid, signal.SIGTERM)
+        try:
+            CHILD.wait(timeout=15)
+        except subprocess.TimeoutExpired:
+            os.killpg(CHILD.pid, signal.SIGKILL)
+            CHILD.wait()
+
+
+def stop(signum, frame):
+    cleanup()
+    raise SystemExit(128 + signum)
+
+
+signal.signal(signal.SIGTERM, stop)
+signal.signal(signal.SIGINT, stop)
+
+
+def source_intact():
+    source = Path(PLAN["source"])
+    for filename, key in (("policy.zip", "source_weights_sha256"), ("manifest.json", "source_manifest_sha256")):
+        if hashlib.sha256((source / filename).read_bytes()).hexdigest() != PLAN[key]:
+            raise RuntimeError("retained source changed: " + filename)
+
+
+def busy_workers():
+    active = []
+    for directory in Path("/proc").iterdir():
+        if not directory.name.isdigit() or int(directory.name) == os.getpid():
+            continue
+        try:
+            command = (directory / "cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace")
+            if not any(token in command for token in (
+                "emet.rl.manipulation.", "emet.rl.regression_gate", "prove_mars_c1_recovery.py",
+                " -m pytest ", "multiprocessing.spawn", "multiprocessing.resource_tracker",
+                "run_mars_feedback_ablation.py",
+            )):
+                continue
+            status = (directory / "stat").read_text().rsplit(")", 1)[1].split()[0]
+            if status != "Z" and 14 in os.sched_getaffinity(int(directory.name)):
+                active.append(int(directory.name))
+        except (OSError, ValueError, IndexError):
+            continue
+    return active
+
+
+def wait_for_handoff():
+    global PHASE
+    from emet.utils.job_registry import load_job
+
+    deadline = time.monotonic() + PLAN["wait_timeout_seconds"]
+    while time.monotonic() < deadline:
+        upstream = load_job(PLAN["prerequisite_job"])
+        try:
+            recovery = json.loads(Path(PLAN["prerequisite_state"]).read_text())
+        except (OSError, ValueError):
+            recovery = {}
+        busy = busy_workers()
+        if (
+            upstream and upstream.status == "done" and recovery.get("phase") == "complete"
+            and recovery.get("job_id") == PLAN["prerequisite_job"]
+            and recovery.get("implementation_revision") == PLAN["implementation_revision"]
+            and not busy
+        ):
+            # Explicit conditional authorization from the CPU14 owner:
+            # successful C1 completion AND real host child vacancy, not PID
+            # disappearance in a sandbox or a failed upstream job.
+            write(Path(PLAN["training_lane_handoff"]), dict(
+                released=True, owner_thread="01a1373d-ef6f-7a83-a81f-ac02e6edd5c0",
+                protocol=PLAN["format"], verified_host_child_exit=True, released_unix=time.time(),
+                prerequisite_job=PLAN["prerequisite_job"], prerequisite_phase="complete",
+            ))
+            return
+        PHASE = "waiting_c1_completion_and_host_vacancy"
+        if upstream and upstream.status in {"failed", "cancelled"}:
+            PHASE = "waiting_upstream_recovery_decision"
+        state(upstream_status=None if upstream is None else upstream.status,
+              upstream_phase=recovery.get("phase"), busy_cpu14_workers=busy)
+        time.sleep(30)
+    raise TimeoutError("separate prerequisite wait budget exhausted before PPO")
+
+
+def main():
+    global CHILD, PHASE, STARTED
+    lock = (OUT / "supervisor.lock").open("a")
+    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    try:
+        if (
+            PLAN["variants"] != ["baseline", "velocity"] or PLAN["seeds"] != [90]
+            or PLAN["steps_per_run"] != 16384 or PLAN["total_training_transitions"] != 32768
+            or PLAN["learning_rate"] != 1e-5 or PLAN["arm_std"] != 0.03
+            or PLAN["arm_adaptation_only"] is not True
+        ):
+            raise ValueError("declared two-run protocol changed")
+        wait_for_handoff()
+        STARTED = time.monotonic()
+        PHASE = "verify_admission_and_handoff"
+        release = json.loads(Path(PLAN["training_lane_handoff"]).read_text())
+        if not (
+            release.get("released") is True
+            and release.get("owner_thread") == "01a1373d-ef6f-7a83-a81f-ac02e6edd5c0"
+            and release.get("protocol") == PLAN["format"]
+            and release.get("verified_host_child_exit") is True
+            and release.get("released_unix", 0) >= PLAN["prepared_unix"]
+        ):
+            raise RuntimeError("explicit current CPU14 release and host vacancy required")
+        revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
+        if revision != PLAN["implementation_revision"]:
+            raise RuntimeError("immutable runtime revision changed")
+        runner = ROOT / "scripts/run_mars_feedback_ablation.py"
+        if hashlib.sha256(runner.read_bytes()).hexdigest() != PLAN["runner_sha256"]:
+            raise RuntimeError("declared paired runner changed")
+        source_intact()
+        from emet.rl.regression_gate import verify_regressions
+
+        receipt = verify_regressions(PLAN["regression_receipt"])
+        state(regression_tests=len(receipt["test_ids"]))
+        PHASE = "teacher_preflight_then_paired_training_and_evaluation"
+        command = [
+            "taskset", "-c", "14", PYTHON, "-u", "scripts/run_mars_feedback_ablation.py",
+            "--regression-receipt", PLAN["regression_receipt"], "--suite", PLAN["suite"],
+            "--source", PLAN["source"], "--variants", *PLAN["variants"],
+            "--stages", "arm", "--evaluation-stages", "base", "arm", "coupled",
+            "--evaluation-population", "admission", "--steps", str(PLAN["steps_per_run"]),
+            "--seeds", "90", "--learning-rate", str(PLAN["learning_rate"]),
+            "--arm-std", str(PLAN["arm_std"]), "--arm-adaptation-only", "--output", str(OUT / "comparison"),
+        ]
+        write(OUT / "command.json", {"command": command, "cwd": str(ROOT)})
+        with (OUT / "comparison-supervisor.log").open("x") as log:
+            CHILD = subprocess.Popen(command, cwd=ROOT, env=os.environ.copy(), stdout=log,
+                                     stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, start_new_session=True)
+            while True:
+                remaining = PLAN["active_timeout_seconds"] - (time.monotonic() - STARTED)
+                if remaining <= 0:
+                    raise TimeoutError("declared active runtime budget exhausted")
+                try:
+                    result = CHILD.wait(timeout=min(30, remaining))
+                    break
+                except subprocess.TimeoutExpired:
+                    state(child_pid=CHILD.pid)
+            if result:
+                raise RuntimeError(f"paired runner exited {result}; no automatic retry")
+        CHILD = None
+        source_intact()
+        result = json.loads((OUT / "comparison/results.json").read_text())
+        if result.get("complete") is not True or len(result["runs"]) != 2:
+            raise RuntimeError("missing declared final readouts")
+        PHASE = "verify_serialized_frozen_functions"
+        state()
+        from emet.rl.manipulation.policy import ManipulationPolicy
+        import torch
+
+        verification = []
+        for run in result["runs"]:
+            directory = OUT / "comparison" / f"{run['variant']}-seed-{run['seed']}"
+            initial = ManipulationPolicy(directory / "step-0")
+            final = ManipulationPolicy(directory / "last")
+            final.model.policy.assert_frozen_function(initial.model.policy.frozen_function_state())
+            norm_fields = ("mean", "var", "count", "epsilon", "clip", "normalization")
+            before = {key: initial.manifest[key] for key in norm_fields}
+            after = {key: final.manifest[key] for key in norm_fields}
+            if json.dumps(before, sort_keys=True) != json.dumps(after, sort_keys=True):
+                raise RuntimeError("frozen normalization changed")
+            if final.manifest["steps"] != PLAN["steps_per_run"]:
+                raise RuntimeError("serialized final transition count differs")
+            old, new = initial.model.policy.state_dict(), final.model.policy.state_dict()
+            verification.append(dict(
+                variant=run["variant"], seed=run["seed"],
+                base_context_grip_function_bitwise_preserved=True, normalization_preserved=True,
+                arm_gain_changed=not torch.equal(old["action_net.gain.weight"], new["action_net.gain.weight"]),
+                critic_changed=not torch.equal(old["value_net.weight"], new["value_net.weight"]),
+            ))
+        write(OUT / "frozen-function-verification.json", verification)
+        PHASE = "complete"
+        state(returncode=0, results=str(OUT / "comparison/results.json"))
+    except BaseException as exc:
+        cleanup()
+        PHASE = "failed"
+        state(error=repr(exc))
+        raise
+
+
+if __name__ == "__main__":
+    main()

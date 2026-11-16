@@ -1,0 +1,24 @@
+{
+  "format": "mars-reference-base-exploration-review-validation-v1",
+  "reviewed_implementation_revision": "0c31adf440f650deee52837c9a8c7e0b07d3258e",
+  "original_experiment_revision": "3ac722e1096dc901d68192b803dc9596471c46c7",
+  "managed_job": "20261115_115438_2c3205",
+  "focused_tests": 50,
+  "full_tests": 1262,
+  "failures": 0,
+  "errors": 0,
+  "skips": 0,
+  "full_elapsed_seconds": 1016.9818801879883,
+  "returncode": 0,
+  "receipt_path": "/home/cpaxton/src/home_robot_v4/.worktrees/wbc-reference-base-exploration/logs/manipulation/mars-reference-base-exploration-review-v1/full.receipt.json",
+  "receipt_sha256": "ec1f74b3eb03c5e50a1f31ef6f1fe4ac8305995f09aea6d5913e52cebf423532",
+  "xml_sha256": "c9180b6bd0775357fd284800c58a05c04ff47620a7c072133378c273377c73e5",
+  "source_files": {
+    "src/emet/rl/manipulation/whole_body_actor.py": "3bb2b23a4641089b3b478201d170124da570672dfae102a4b10e0413189df26f",
+    "src/emet/rl/manipulation/whole_body_training.py": "d3c5538a0cb599653bf91e0db44e8fe97a20740b589f65c296b872745dd349df",
+    "src/test/rl/manipulation/test_basic_learning.py": "4b357a7477b4672205c41b36986f8fb87cb007a31a805916aaf669db42ac085c",
+    "src/test/rl/manipulation/test_whole_body_v2.py": "6251878acd94c39119d315541c2a835650d386474cccf7035cb78bbe14d79eea"
+  },
+  "new_ppo_steps": 0,
+  "scope": "review fixes and source validation only; original experiment producer and results retained"
+}

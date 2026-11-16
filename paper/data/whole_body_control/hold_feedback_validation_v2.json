@@ -1,0 +1,1003 @@
+{
+  "scope": "Selected development cases, no task or hardware qualification",
+  "complete": true,
+  "candidate": {
+    "checkpoint": "logs/manipulation/hold-feedback-continued-v5/seed-64/step-12288",
+    "evidence": "logs/manipulation/hold-feedback-continued-v5/seed-64/checkpoint_evidence.json"
+  },
+  "rows": [
+    {
+      "selector": "checkpoint_policy",
+      "warmup_s": 0.0,
+      "accepted": true,
+      "failure": null,
+      "stop_confirmed": null,
+      "quiet_at_end": false,
+      "joint_delta": null,
+      "hand_error_at_end_m": 0.0007748334080246058,
+      "orientation_error_at_end_rad": 0.00181907624837135,
+      "goal_reached_at_end": false,
+      "completed_duration": true,
+      "scored_policy_calls": 200,
+      "max_base_drift_m": 0.0006489026662051624,
+      "max_hand_error_m": 0.0007748334080246058,
+      "sim_duration_s": 10.000000000000343,
+      "contact": {
+        "peak_contact_force": 0.3933321652562822,
+        "contact_impulse": 3.3130660017424267,
+        "contact": true,
+        "max_penetration": 0.0002146395952861528,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "min_wheel_load": [
+          3.926298255235833,
+          6.0875151957686775,
+          0.47690435224497996
+        ]
+      },
+      "case_id": "left:20g:1",
+      "kind": "hold10",
+      "duration_requested_s": 10,
+      "quiet_dwell": {
+        "samples": 200,
+        "quiet_pose_fraction": 0.085,
+        "longest_quiet_pose_dwell_s": 0.15000000000000002,
+        "two_second_quiet_pose_hold": false,
+        "scope": "raw pre-step actor measurements; same six-DOF stop scales and pose bounds; failed stops never count"
+      }
+    },
+    {
+      "selector": "checkpoint_policy",
+      "warmup_s": 0.0,
+      "accepted": true,
+      "failure": null,
+      "stop_confirmed": null,
+      "quiet_at_end": false,
+      "joint_delta": [
+        0.0,
+        -0.05,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "hand_error_at_end_m": 0.007480360547703353,
+      "orientation_error_at_end_rad": 0.0247632398242041,
+      "goal_reached_at_end": false,
+      "completed_duration": true,
+      "scored_policy_calls": 60,
+      "max_base_drift_m": 0.003188846834846995,
+      "max_hand_error_m": 0.014064184902265589,
+      "sim_duration_s": 2.9999999999997806,
+      "contact": {
+        "peak_contact_force": 0.3921426346483181,
+        "contact_impulse": 1.000116827617179,
+        "contact": true,
+        "max_penetration": 0.00023947141718025367,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "min_wheel_load": [
+          3.9162747183325815,
+          6.079026013688207,
+          0.3768000974636755
+        ]
+      },
+      "case_id": "left:20g:1",
+      "kind": "near3",
+      "duration_requested_s": 3,
+      "quiet_dwell": {
+        "samples": 60,
+        "quiet_pose_fraction": 0.0,
+        "longest_quiet_pose_dwell_s": 0.0,
+        "two_second_quiet_pose_hold": false,
+        "scope": "raw pre-step actor measurements; same six-DOF stop scales and pose bounds; failed stops never count"
+      }
+    },
+    {
+      "selector": "checkpoint_policy",
+      "warmup_s": 0.0,
+      "accepted": true,
+      "failure": null,
+      "stop_confirmed": null,
+      "quiet_at_end": false,
+      "joint_delta": [
+        0.0,
+        -0.05,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "hand_error_at_end_m": 0.0039495089505272914,
+      "orientation_error_at_end_rad": 0.020222153700969716,
+      "goal_reached_at_end": false,
+      "completed_duration": true,
+      "scored_policy_calls": 120,
+      "max_base_drift_m": 0.005786630416873679,
+      "max_hand_error_m": 0.014064184902265589,
+      "sim_duration_s": 5.99999999999945,
+      "contact": {
+        "peak_contact_force": 0.3921426346483181,
+        "contact_impulse": 1.9210787149638193,
+        "contact": true,
+        "max_penetration": 0.00023947141718025367,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "min_wheel_load": [
+          3.9162747183325815,
+          6.079026013688207,
+          0.3768000974636755
+        ]
+      },
+      "case_id": "left:20g:1",
+      "kind": "near6",
+      "duration_requested_s": 6,
+      "quiet_dwell": {
+        "samples": 120,
+        "quiet_pose_fraction": 0.041666666666666664,
+        "longest_quiet_pose_dwell_s": 0.05,
+        "two_second_quiet_pose_hold": false,
+        "scope": "raw pre-step actor measurements; same six-DOF stop scales and pose bounds; failed stops never count"
+      }
+    },
+    {
+      "selector": "checkpoint_policy",
+      "warmup_s": 0.0,
+      "accepted": true,
+      "failure": null,
+      "stop_confirmed": null,
+      "quiet_at_end": true,
+      "joint_delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.12
+      ],
+      "hand_error_at_end_m": 0.0015829472381351788,
+      "orientation_error_at_end_rad": 0.12084186810317953,
+      "goal_reached_at_end": false,
+      "completed_duration": true,
+      "scored_policy_calls": 120,
+      "max_base_drift_m": 0.00038702887103482693,
+      "max_hand_error_m": 0.0015829472381351788,
+      "sim_duration_s": 5.99999999999945,
+      "contact": {
+        "peak_contact_force": 0.6311738798617335,
+        "contact_impulse": 3.1742266174839386,
+        "contact": true,
+        "max_penetration": 0.00035810203582056777,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "min_wheel_load": [
+          3.903360021888687,
+          6.084404801659295,
+          0.4882831776580012
+        ]
+      },
+      "case_id": "left:20g:1",
+      "kind": "rotation6",
+      "duration_requested_s": 6,
+      "quiet_dwell": {
+        "samples": 120,
+        "quiet_pose_fraction": 0.0,
+        "longest_quiet_pose_dwell_s": 0.0,
+        "two_second_quiet_pose_hold": false,
+        "scope": "raw pre-step actor measurements; same six-DOF stop scales and pose bounds; failed stops never count"
+      }
+    },
+    {
+      "selector": "checkpoint_policy",
+      "warmup_s": 0.0,
+      "accepted": true,
+      "failure": null,
+      "stop_confirmed": null,
+      "quiet_at_end": false,
+      "joint_delta": null,
+      "hand_error_at_end_m": 0.00040225045247790014,
+      "orientation_error_at_end_rad": 0.0007177222970347664,
+      "goal_reached_at_end": false,
+      "completed_duration": true,
+      "scored_policy_calls": 200,
+      "max_base_drift_m": 0.0006603624352031522,
+      "max_hand_error_m": 0.0006582745475795897,
+      "sim_duration_s": 10.000000000000343,
+      "contact": {
+        "peak_contact_force": 0.4685622818364478,
+        "contact_impulse": 3.3729197534480693,
+        "contact": true,
+        "max_penetration": 0.00022147343075212475,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "min_wheel_load": [
+          3.9179880513477228,
+          6.160149362390403,
+          0.26011686560884895
+        ]
+      },
+      "case_id": "right:20g:2",
+      "kind": "hold10",
+      "duration_requested_s": 10,
+      "quiet_dwell": {
+        "samples": 200,
+        "quiet_pose_fraction": 0.48,
+        "longest_quiet_pose_dwell_s": 0.15000000000000002,
+        "two_second_quiet_pose_hold": false,
+        "scope": "raw pre-step actor measurements; same six-DOF stop scales and pose bounds; failed stops never count"
+      }
+    },
+    {
+      "selector": "checkpoint_policy",
+      "warmup_s": 0.0,
+      "accepted": true,
+      "failure": null,
+      "stop_confirmed": null,
+      "quiet_at_end": false,
+      "joint_delta": [
+        0.0,
+        -0.05,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "hand_error_at_end_m": 0.007298791240972262,
+      "orientation_error_at_end_rad": 0.023505168491642234,
+      "goal_reached_at_end": false,
+      "completed_duration": true,
+      "scored_policy_calls": 60,
+      "max_base_drift_m": 0.0035134614312310086,
+      "max_hand_error_m": 0.01434762846323879,
+      "sim_duration_s": 2.9999999999997806,
+      "contact": {
+        "peak_contact_force": 0.3963800291042088,
+        "contact_impulse": 0.9777791055035255,
+        "contact": true,
+        "max_penetration": 0.00022856643524621703,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "min_wheel_load": [
+          3.7969104999907697,
+          5.923297939730279,
+          0.3214252064555232
+        ]
+      },
+      "case_id": "right:20g:2",
+      "kind": "near3",
+      "duration_requested_s": 3,
+      "quiet_dwell": {
+        "samples": 60,
+        "quiet_pose_fraction": 0.0,
+        "longest_quiet_pose_dwell_s": 0.0,
+        "two_second_quiet_pose_hold": false,
+        "scope": "raw pre-step actor measurements; same six-DOF stop scales and pose bounds; failed stops never count"
+      }
+    },
+    {
+      "selector": "checkpoint_policy",
+      "warmup_s": 0.0,
+      "accepted": true,
+      "failure": null,
+      "stop_confirmed": null,
+      "quiet_at_end": false,
+      "joint_delta": [
+        0.0,
+        -0.05,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "hand_error_at_end_m": 0.0038122112262634336,
+      "orientation_error_at_end_rad": 0.01871781072171829,
+      "goal_reached_at_end": false,
+      "completed_duration": true,
+      "scored_policy_calls": 120,
+      "max_base_drift_m": 0.006124432964780403,
+      "max_hand_error_m": 0.01434762846323879,
+      "sim_duration_s": 5.99999999999945,
+      "contact": {
+        "peak_contact_force": 0.3963800291042088,
+        "contact_impulse": 1.8807336643929178,
+        "contact": true,
+        "max_penetration": 0.00022856643524621703,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "min_wheel_load": [
+          3.7969104999907697,
+          5.923297939730279,
+          0.3214252064555232
+        ]
+      },
+      "case_id": "right:20g:2",
+      "kind": "near6",
+      "duration_requested_s": 6,
+      "quiet_dwell": {
+        "samples": 120,
+        "quiet_pose_fraction": 0.05,
+        "longest_quiet_pose_dwell_s": 0.05,
+        "two_second_quiet_pose_hold": false,
+        "scope": "raw pre-step actor measurements; same six-DOF stop scales and pose bounds; failed stops never count"
+      }
+    },
+    {
+      "selector": "checkpoint_policy",
+      "warmup_s": 0.0,
+      "accepted": true,
+      "failure": "policy_inference_deadline",
+      "stop_confirmed": null,
+      "quiet_at_end": true,
+      "joint_delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.12
+      ],
+      "hand_error_at_end_m": 0.0014629539448013991,
+      "orientation_error_at_end_rad": 0.1214838866577774,
+      "goal_reached_at_end": false,
+      "completed_duration": false,
+      "scored_policy_calls": 99,
+      "max_base_drift_m": 0.0012856286592383421,
+      "max_hand_error_m": 0.0015152832548502614,
+      "sim_duration_s": 4.949999999999566,
+      "contact": {
+        "peak_contact_force": 0.4941130206762806,
+        "contact_impulse": 1.9149574279336228,
+        "contact": true,
+        "max_penetration": 0.00034939313685640114,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "min_wheel_load": [
+          3.8903973491152333,
+          6.17409040736387,
+          0.262656945649527
+        ]
+      },
+      "case_id": "right:20g:2",
+      "kind": "rotation6",
+      "duration_requested_s": 6,
+      "quiet_dwell": {
+        "samples": 99,
+        "quiet_pose_fraction": 0.0,
+        "longest_quiet_pose_dwell_s": 0.0,
+        "two_second_quiet_pose_hold": false,
+        "scope": "raw pre-step actor measurements; same six-DOF stop scales and pose bounds; failed stops never count"
+      }
+    },
+    {
+      "selector": "checkpoint_policy",
+      "warmup_s": 0.0,
+      "accepted": true,
+      "failure": null,
+      "stop_confirmed": null,
+      "quiet_at_end": false,
+      "joint_delta": null,
+      "hand_error_at_end_m": 0.001167889482121881,
+      "orientation_error_at_end_rad": 0.0023913079947937275,
+      "goal_reached_at_end": false,
+      "completed_duration": true,
+      "scored_policy_calls": 200,
+      "max_base_drift_m": 0.001696955390304075,
+      "max_hand_error_m": 0.001167889482121881,
+      "sim_duration_s": 10.000000000000343,
+      "contact": {
+        "peak_contact_force": 0.915593761142458,
+        "contact_impulse": 8.69146050717418,
+        "contact": true,
+        "max_penetration": 0.0002341369271663743,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "min_wheel_load": [
+          4.00842920309494,
+          6.233121751693813,
+          0.5928397294662526
+        ]
+      },
+      "case_id": "left:50g:1",
+      "kind": "hold10",
+      "duration_requested_s": 10,
+      "quiet_dwell": {
+        "samples": 200,
+        "quiet_pose_fraction": 0.475,
+        "longest_quiet_pose_dwell_s": 0.05,
+        "two_second_quiet_pose_hold": false,
+        "scope": "raw pre-step actor measurements; same six-DOF stop scales and pose bounds; failed stops never count"
+      }
+    },
+    {
+      "selector": "checkpoint_policy",
+      "warmup_s": 0.0,
+      "accepted": true,
+      "failure": null,
+      "stop_confirmed": null,
+      "quiet_at_end": true,
+      "joint_delta": [
+        0.0,
+        -0.05,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "hand_error_at_end_m": 0.007403939617415172,
+      "orientation_error_at_end_rad": 0.024507196648187946,
+      "goal_reached_at_end": false,
+      "completed_duration": true,
+      "scored_policy_calls": 60,
+      "max_base_drift_m": 0.0032059646955198222,
+      "max_hand_error_m": 0.013854155888096058,
+      "sim_duration_s": 2.9999999999997806,
+      "contact": {
+        "peak_contact_force": 0.8436066364513863,
+        "contact_impulse": 2.1613732763399818,
+        "contact": true,
+        "max_penetration": 0.00023652329517173318,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "min_wheel_load": [
+          3.9419408555473257,
+          6.230203746977429,
+          0.44181406984378413
+        ]
+      },
+      "case_id": "left:50g:1",
+      "kind": "near3",
+      "duration_requested_s": 3,
+      "quiet_dwell": {
+        "samples": 60,
+        "quiet_pose_fraction": 0.0,
+        "longest_quiet_pose_dwell_s": 0.0,
+        "two_second_quiet_pose_hold": false,
+        "scope": "raw pre-step actor measurements; same six-DOF stop scales and pose bounds; failed stops never count"
+      }
+    },
+    {
+      "selector": "checkpoint_policy",
+      "warmup_s": 0.0,
+      "accepted": true,
+      "failure": null,
+      "stop_confirmed": null,
+      "quiet_at_end": true,
+      "joint_delta": [
+        0.0,
+        -0.05,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "hand_error_at_end_m": 0.004990970887228284,
+      "orientation_error_at_end_rad": 0.019412870464538955,
+      "goal_reached_at_end": true,
+      "completed_duration": true,
+      "scored_policy_calls": 120,
+      "max_base_drift_m": 0.004096096196747237,
+      "max_hand_error_m": 0.013854155888096058,
+      "sim_duration_s": 5.99999999999945,
+      "contact": {
+        "peak_contact_force": 0.8436066364513863,
+        "contact_impulse": 4.606762536096695,
+        "contact": true,
+        "max_penetration": 0.00024706858725674977,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "min_wheel_load": [
+          3.9419408555473257,
+          6.230203746977429,
+          0.44181406984378413
+        ]
+      },
+      "case_id": "left:50g:1",
+      "kind": "near6",
+      "duration_requested_s": 6,
+      "quiet_dwell": {
+        "samples": 120,
+        "quiet_pose_fraction": 0.0,
+        "longest_quiet_pose_dwell_s": 0.0,
+        "two_second_quiet_pose_hold": false,
+        "scope": "raw pre-step actor measurements; same six-DOF stop scales and pose bounds; failed stops never count"
+      }
+    },
+    {
+      "selector": "checkpoint_policy",
+      "warmup_s": 0.0,
+      "accepted": true,
+      "failure": null,
+      "stop_confirmed": null,
+      "quiet_at_end": true,
+      "joint_delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.12
+      ],
+      "hand_error_at_end_m": 0.000825254951774059,
+      "orientation_error_at_end_rad": 0.12221529412512487,
+      "goal_reached_at_end": false,
+      "completed_duration": true,
+      "scored_policy_calls": 120,
+      "max_base_drift_m": 0.0011536947925376271,
+      "max_hand_error_m": 0.0009320753957592627,
+      "sim_duration_s": 5.99999999999945,
+      "contact": {
+        "peak_contact_force": 0.9095942011760085,
+        "contact_impulse": 4.147570859758718,
+        "contact": true,
+        "max_penetration": 0.00023520518081353303,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "min_wheel_load": [
+          3.9058259617884588,
+          6.1259184008954115,
+          0.3613690942189113
+        ]
+      },
+      "case_id": "left:50g:1",
+      "kind": "rotation6",
+      "duration_requested_s": 6,
+      "quiet_dwell": {
+        "samples": 120,
+        "quiet_pose_fraction": 0.0,
+        "longest_quiet_pose_dwell_s": 0.0,
+        "two_second_quiet_pose_hold": false,
+        "scope": "raw pre-step actor measurements; same six-DOF stop scales and pose bounds; failed stops never count"
+      }
+    },
+    {
+      "selector": "checkpoint_policy",
+      "warmup_s": 0.0,
+      "accepted": true,
+      "failure": null,
+      "stop_confirmed": null,
+      "quiet_at_end": true,
+      "joint_delta": null,
+      "hand_error_at_end_m": 0.0003388774971623771,
+      "orientation_error_at_end_rad": 0.00142342422942843,
+      "goal_reached_at_end": true,
+      "completed_duration": true,
+      "scored_policy_calls": 200,
+      "max_base_drift_m": 0.00026748885199436755,
+      "max_hand_error_m": 0.0003389008965763318,
+      "sim_duration_s": 10.000000000000343,
+      "contact": {
+        "peak_contact_force": 1.6083495109645876,
+        "contact_impulse": 17.536276363532124,
+        "contact": true,
+        "max_penetration": 0.00024296076627787835,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "min_wheel_load": [
+          2.8888909234740403,
+          5.927705517915779,
+          1.479134648273792
+        ]
+      },
+      "case_id": "left:100g:3",
+      "kind": "hold10",
+      "duration_requested_s": 10,
+      "quiet_dwell": {
+        "samples": 200,
+        "quiet_pose_fraction": 0.485,
+        "longest_quiet_pose_dwell_s": 0.35000000000000003,
+        "two_second_quiet_pose_hold": false,
+        "scope": "raw pre-step actor measurements; same six-DOF stop scales and pose bounds; failed stops never count"
+      }
+    },
+    {
+      "selector": "checkpoint_policy",
+      "warmup_s": 0.0,
+      "accepted": true,
+      "failure": null,
+      "stop_confirmed": null,
+      "quiet_at_end": true,
+      "joint_delta": [
+        0.0,
+        -0.05,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "hand_error_at_end_m": 0.006778785964671802,
+      "orientation_error_at_end_rad": 0.02139522465895115,
+      "goal_reached_at_end": false,
+      "completed_duration": true,
+      "scored_policy_calls": 60,
+      "max_base_drift_m": 0.004812760717258712,
+      "max_hand_error_m": 0.014323939031880853,
+      "sim_duration_s": 2.9999999999997806,
+      "contact": {
+        "peak_contact_force": 1.9749850941657277,
+        "contact_impulse": 4.528730798057749,
+        "contact": true,
+        "max_penetration": 0.00023328540930277544,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "min_wheel_load": [
+          2.6034460705007305,
+          6.018892068953422,
+          0.9628304591582986
+        ]
+      },
+      "case_id": "left:100g:3",
+      "kind": "near3",
+      "duration_requested_s": 3,
+      "quiet_dwell": {
+        "samples": 60,
+        "quiet_pose_fraction": 0.0,
+        "longest_quiet_pose_dwell_s": 0.0,
+        "two_second_quiet_pose_hold": false,
+        "scope": "raw pre-step actor measurements; same six-DOF stop scales and pose bounds; failed stops never count"
+      }
+    },
+    {
+      "selector": "checkpoint_policy",
+      "warmup_s": 0.0,
+      "accepted": true,
+      "failure": null,
+      "stop_confirmed": null,
+      "quiet_at_end": true,
+      "joint_delta": [
+        0.0,
+        -0.05,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "hand_error_at_end_m": 0.006084993113186175,
+      "orientation_error_at_end_rad": 0.0350601282257221,
+      "goal_reached_at_end": false,
+      "completed_duration": true,
+      "scored_policy_calls": 120,
+      "max_base_drift_m": 0.007398822569599551,
+      "max_hand_error_m": 0.014323939031880853,
+      "sim_duration_s": 5.99999999999945,
+      "contact": {
+        "peak_contact_force": 1.9749850941657277,
+        "contact_impulse": 8.788293839674907,
+        "contact": true,
+        "max_penetration": 0.00024160611596727583,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "min_wheel_load": [
+          2.6034460705007305,
+          6.018892068953422,
+          0.9628304591582986
+        ]
+      },
+      "case_id": "left:100g:3",
+      "kind": "near6",
+      "duration_requested_s": 6,
+      "quiet_dwell": {
+        "samples": 120,
+        "quiet_pose_fraction": 0.0,
+        "longest_quiet_pose_dwell_s": 0.0,
+        "two_second_quiet_pose_hold": false,
+        "scope": "raw pre-step actor measurements; same six-DOF stop scales and pose bounds; failed stops never count"
+      }
+    },
+    {
+      "selector": "checkpoint_policy",
+      "warmup_s": 0.0,
+      "accepted": true,
+      "failure": null,
+      "stop_confirmed": null,
+      "quiet_at_end": false,
+      "joint_delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.12
+      ],
+      "hand_error_at_end_m": 0.0006516976813303476,
+      "orientation_error_at_end_rad": 0.11848986909636279,
+      "goal_reached_at_end": false,
+      "completed_duration": true,
+      "scored_policy_calls": 120,
+      "max_base_drift_m": 0.0020277080998364052,
+      "max_hand_error_m": 0.0006674806242948838,
+      "sim_duration_s": 5.99999999999945,
+      "contact": {
+        "peak_contact_force": 1.795748414716603,
+        "contact_impulse": 10.119309748577603,
+        "contact": true,
+        "max_penetration": 0.00024874412690003775,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "min_wheel_load": [
+          2.812795275896758,
+          5.888837591420904,
+          1.4933380540601093
+        ]
+      },
+      "case_id": "left:100g:3",
+      "kind": "rotation6",
+      "duration_requested_s": 6,
+      "quiet_dwell": {
+        "samples": 120,
+        "quiet_pose_fraction": 0.0,
+        "longest_quiet_pose_dwell_s": 0.0,
+        "two_second_quiet_pose_hold": false,
+        "scope": "raw pre-step actor measurements; same six-DOF stop scales and pose bounds; failed stops never count"
+      }
+    },
+    {
+      "selector": "checkpoint_policy",
+      "warmup_s": 0.0,
+      "accepted": true,
+      "failure": null,
+      "stop_confirmed": null,
+      "quiet_at_end": true,
+      "joint_delta": null,
+      "hand_error_at_end_m": 0.00012370213196318135,
+      "orientation_error_at_end_rad": 0.0011869496490122255,
+      "goal_reached_at_end": true,
+      "completed_duration": true,
+      "scored_policy_calls": 200,
+      "max_base_drift_m": 0.0005308031410780833,
+      "max_hand_error_m": 0.0007438914539100619,
+      "sim_duration_s": 10.000000000000343,
+      "contact": {
+        "peak_contact_force": 0.8279656311746648,
+        "contact_impulse": 7.748750789120906,
+        "contact": true,
+        "max_penetration": 0.00020246669285893526,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "min_wheel_load": [
+          4.044463188720073,
+          6.278595771390062,
+          0.34019610939883826
+        ]
+      },
+      "case_id": "right:50g:4",
+      "kind": "hold10",
+      "duration_requested_s": 10,
+      "quiet_dwell": {
+        "samples": 200,
+        "quiet_pose_fraction": 0.47,
+        "longest_quiet_pose_dwell_s": 0.1,
+        "two_second_quiet_pose_hold": false,
+        "scope": "raw pre-step actor measurements; same six-DOF stop scales and pose bounds; failed stops never count"
+      }
+    },
+    {
+      "selector": "checkpoint_policy",
+      "warmup_s": 0.0,
+      "accepted": true,
+      "failure": null,
+      "stop_confirmed": null,
+      "quiet_at_end": false,
+      "joint_delta": [
+        0.0,
+        -0.05,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "hand_error_at_end_m": 0.006401711666122497,
+      "orientation_error_at_end_rad": 0.02132079046957028,
+      "goal_reached_at_end": false,
+      "completed_duration": true,
+      "scored_policy_calls": 60,
+      "max_base_drift_m": 0.004272673082539007,
+      "max_hand_error_m": 0.014335743345012432,
+      "sim_duration_s": 2.9999999999997806,
+      "contact": {
+        "peak_contact_force": 0.8441307259716238,
+        "contact_impulse": 2.0705563138835394,
+        "contact": true,
+        "max_penetration": 0.0002278535528850191,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "min_wheel_load": [
+          3.9546683766134465,
+          6.265158787355386,
+          0.3922422476407198
+        ]
+      },
+      "case_id": "right:50g:4",
+      "kind": "near3",
+      "duration_requested_s": 3,
+      "quiet_dwell": {
+        "samples": 60,
+        "quiet_pose_fraction": 0.0,
+        "longest_quiet_pose_dwell_s": 0.0,
+        "two_second_quiet_pose_hold": false,
+        "scope": "raw pre-step actor measurements; same six-DOF stop scales and pose bounds; failed stops never count"
+      }
+    },
+    {
+      "selector": "checkpoint_policy",
+      "warmup_s": 0.0,
+      "accepted": true,
+      "failure": null,
+      "stop_confirmed": null,
+      "quiet_at_end": true,
+      "joint_delta": [
+        0.0,
+        -0.05,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "hand_error_at_end_m": 0.004107470147158164,
+      "orientation_error_at_end_rad": 0.017569499852038387,
+      "goal_reached_at_end": true,
+      "completed_duration": true,
+      "scored_policy_calls": 120,
+      "max_base_drift_m": 0.0052201857027716885,
+      "max_hand_error_m": 0.014335743345012432,
+      "sim_duration_s": 5.99999999999945,
+      "contact": {
+        "peak_contact_force": 0.8441307259716238,
+        "contact_impulse": 3.9241413830154506,
+        "contact": true,
+        "max_penetration": 0.0002278535528850191,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "min_wheel_load": [
+          3.9546683766134465,
+          6.265158787355386,
+          0.3922422476407198
+        ]
+      },
+      "case_id": "right:50g:4",
+      "kind": "near6",
+      "duration_requested_s": 6,
+      "quiet_dwell": {
+        "samples": 120,
+        "quiet_pose_fraction": 0.125,
+        "longest_quiet_pose_dwell_s": 0.05,
+        "two_second_quiet_pose_hold": false,
+        "scope": "raw pre-step actor measurements; same six-DOF stop scales and pose bounds; failed stops never count"
+      }
+    },
+    {
+      "selector": "checkpoint_policy",
+      "warmup_s": 0.0,
+      "accepted": true,
+      "failure": null,
+      "stop_confirmed": null,
+      "quiet_at_end": false,
+      "joint_delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.12
+      ],
+      "hand_error_at_end_m": 0.0009274056996145131,
+      "orientation_error_at_end_rad": 0.12219235712695606,
+      "goal_reached_at_end": false,
+      "completed_duration": true,
+      "scored_policy_calls": 120,
+      "max_base_drift_m": 0.0009750416072351651,
+      "max_hand_error_m": 0.0009508503333510191,
+      "sim_duration_s": 5.99999999999945,
+      "contact": {
+        "peak_contact_force": 0.9339126561991746,
+        "contact_impulse": 4.681824310407021,
+        "contact": true,
+        "max_penetration": 0.0002514859886251948,
+        "wheel_lift": false,
+        "wheel_support_evaluated": true,
+        "max_wheel_gap": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "min_wheel_load": [
+          4.024047369307187,
+          6.29766637101376,
+          0.318096512322081
+        ]
+      },
+      "case_id": "right:50g:4",
+      "kind": "rotation6",
+      "duration_requested_s": 6,
+      "quiet_dwell": {
+        "samples": 120,
+        "quiet_pose_fraction": 0.0,
+        "longest_quiet_pose_dwell_s": 0.0,
+        "two_second_quiet_pose_hold": false,
+        "scope": "raw pre-step actor measurements; same six-DOF stop scales and pose bounds; failed stops never count"
+      }
+    }
+  ],
+  "full_report_archive": "paper/data/whole_body_control/hold_feedback_validation_v2.json.gz",
+  "uncompressed_sha256": "440cec2e7cf9a55be0a76090d72fd9b5c48a4f5d648b7ef40573f7d647d18043",
+  "safety_promoted": false
+}

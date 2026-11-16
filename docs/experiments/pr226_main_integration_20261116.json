@@ -1,0 +1,236 @@
+{
+  "schema_version": 1,
+  "scope": "PR226 foundation integration and review disposition; no observed execution qualification",
+  "prior_head": "bac27abbc508a134ecd41e02f82dd123afa729bc",
+  "integrated_main": "e065325a368cd9c5ae0ba55b6111dcef520dafe5",
+  "frozen_runtime_source": "daa2619462ad4ea14678bfc960b972c9d10daadb",
+  "merge_conflicts": [
+    "paper/references.bib"
+  ],
+  "self_occupancy_blocker_resolved": false,
+  "execution_qualified": false,
+  "followup_issue": "https://github.com/cpaxton/home_robot_v3/issues/245",
+  "validation": {
+    "initial_incomplete_checkout": {
+      "tests": 1022,
+      "failures": 13,
+      "errors": 0,
+      "skipped": 42,
+      "seconds": 382.71
+    },
+    "completed_checkout_and_fixture_repair": {
+      "tests": 1022,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 434.955
+    },
+    "initial_review_contracts": {
+      "tests": 74,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 2,
+      "seconds": 16.954
+    },
+    "complete_review_contracts": {
+      "tests": 74,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 18.498
+    },
+    "multiview_gap_regressions": {
+      "tests": 21,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 7.026
+    },
+    "counts_overlap": true,
+    "initial_failures": "12 missing mesh assets and 1 model-mismatch fixture cold-load expiry; 42 missing sim-package-path skips",
+    "fixture_repair": "Reuse the fixture model only when the model-mismatch test rebuilds its adapter; no retiming or production freshness change",
+    "unit_runs_launched_on_precommit_merged_tree": true,
+    "paper_pages": 63,
+    "paper_unresolved_references_or_citations": false
+  },
+  "jobs": {
+    "initial": "20261116_102703_e903dd",
+    "completed_regression": "20261116_103505_5497e5",
+    "review_contracts": "20261116_103508_405005",
+    "cpu_head_wrist": "20261116_103738_4a3e33"
+  },
+  "shared_navigation_get_2d_map_ast_sha256": "34602f74ea8792f4c05bb00b0c23eea0ac54fcb89a6e35c373c765fc8700e880",
+  "shared_navigation_equals_current_main": true,
+  "unchanged_tracking_module_sha256": {
+    "src/emet/controller/manipulation/multiview_rgbd_tracking.py": "95cc6f60a86983a84cd994a89375770f60d4d9994f781b56e427d1b163d2c8d0",
+    "src/emet/controller/manipulation/moving_rgbd_tracking.py": "4bcc4a2e77b71c907c9c324d8cc755ce174a2c7a2d47b1556fdf81698aca21fa",
+    "src/emet/controller/manipulation/geometry_tracking.py": "fc15223bbe1c1e3f850631f5bc39d955635b7a3dd0195130807d33196f2d6818",
+    "src/emet/controller/manipulation/geometry_models.py": "d6b105010e5ec630c07be24ebbb434669bb26cda6b71262744dd5a673230035b"
+  },
+  "head_wrist": {
+    "scope": "co-sampled camera handoff during privileged contact control",
+    "observed_task_success_assessed": false,
+    "execution_qualified": false,
+    "privileged_control_passed": true,
+    "frames": 81,
+    "candidate_frames": 1,
+    "rejection_codes": [
+      "geometry_tracking_no_match",
+      "moving_tracking_lost_reinitialize"
+    ]
+  },
+  "tracking_timing_replays": [
+    {
+      "root": "../tamp-benchmark-runtime/.tamp-runs/observed-transfer-20261030/head-wrist-v5",
+      "scope": "Offline original-capture-clock replay; no live evidence, controller commands or task success score",
+      "frames": 81,
+      "candidates": 81,
+      "first_update": {
+        "dt": 0.8841174400295131,
+        "displacement_m": 0.22602936000737828,
+        "candidate_masks": {
+          "head": {
+            "pixels": 262,
+            "bounds": [
+              [
+                -0.03864355580562509,
+                -0.5666753672944621,
+                0.4942910508473264
+              ],
+              [
+                -0.0029334981461976873,
+                -0.5292114923464631,
+                0.5610281548145867
+              ]
+            ]
+          },
+          "wrist": {
+            "error": "moving_mask_lost"
+          }
+        }
+      },
+      "first_failure": null
+    },
+    {
+      "root": ".tamp-runs/pr226-main-integration-20261116/head-wrist",
+      "scope": "Offline original-capture-clock replay; no live evidence, controller commands or task success score",
+      "frames": 81,
+      "candidates": 1,
+      "first_update": {
+        "dt": 1.3418753880541772,
+        "displacement_m": 0.3404688470135443,
+        "candidate_masks": {
+          "head": {
+            "pixels": 264,
+            "bounds": [
+              [
+                -0.03864355580562509,
+                -0.5666753672944621,
+                0.4942910508473264
+              ],
+              [
+                -0.001758626362740972,
+                -0.34769325220383707,
+                0.79201824475211
+              ]
+            ]
+          },
+          "wrist": {
+            "error": "moving_mask_lost"
+          }
+        }
+      },
+      "first_failure": {
+        "index": 1,
+        "state": "unknown",
+        "reason": "geometry_tracking_no_match"
+      }
+    }
+  ],
+  "first_two_capture_arrays_identical_between_archived_and_new_runs": [
+    "head/rgb",
+    "head/depth",
+    "head/K",
+    "head/camera_pose",
+    "wrist/rgb",
+    "wrist/depth",
+    "wrist/K",
+    "wrist/camera_pose"
+  ],
+  "replay_scope": "Original recorded source clocks only; no retiming or live evidence; native/observed task success not scored by replay",
+  "local_gpu_used": false,
+  "vlm_calls": 0,
+  "raw_artifacts_publicly_archived": false,
+  "artifacts": [
+    {
+      "path": ".tamp-runs/pr226-main-integration-20261116/regression.xml",
+      "sha256": "b17de03ca088db1183d8d85ec5fbd2345d912151830952df73beda07bc59f951"
+    },
+    {
+      "path": ".tamp-runs/pr226-main-integration-20261116/regression-v2.xml",
+      "sha256": "a691ec418d2fb919067e573ca622ea88cae8954b02bc236750446e27e393e318"
+    },
+    {
+      "path": ".tamp-runs/pr226-main-integration-20261116/review-contracts.xml",
+      "sha256": "b5008f92ea46b5e54394571563b4a6653ae12615ce011d51a37645a331ad321d"
+    },
+    {
+      "path": ".tamp-runs/pr226-main-integration-20261116/review-contracts-v2.xml",
+      "sha256": "7df6228d6fa302681cf324665cf41fcca078c2b4a7c4f39a05084c216c8c3717"
+    },
+    {
+      "path": ".tamp-runs/pr226-main-integration-20261116/gap-regressions.xml",
+      "sha256": "7a643b3dad926b1d46be0fead56f39b927eb915b7b23618f8658339f7ecfc35a"
+    },
+    {
+      "path": ".tamp-runs/pr226-main-integration-20261116/frozen-source.json",
+      "sha256": "533576602833df59028b9047c8d07d19f9be847aa859b725d0884ed3a4be7010"
+    },
+    {
+      "path": ".tamp-runs/pr226-main-integration-20261116/head-wrist/summary.json",
+      "sha256": "2b9647fa23a4fa482e275e6b4d4fee176cd5f3c7c98f6a3d1266af98e0a39e7c"
+    },
+    {
+      "path": ".tamp-runs/pr226-main-integration-20261116/head-wrist/control.json",
+      "sha256": "9028fd806a674b9a3e12c26e3afae0d8ba5442c95c35db87327500aaf00165fb"
+    },
+    {
+      "path": ".tamp-runs/pr226-main-integration-20261116/head-wrist/tracking.json",
+      "sha256": "4768aa4f65d45a3a85ae66b0021a64bd49e4fd164dfd4cc0d0b15417af41de75"
+    },
+    {
+      "path": ".tamp-runs/pr226-main-integration-20261116/timing-replay.json",
+      "sha256": "338f3feb7dfa3670d4a40a9481eb287cc1682bb54d82195943afccf89b00a6a5"
+    },
+    {
+      "path": ".tamp-runs/pr226-main-integration-20261116/replay-timing.py",
+      "sha256": "afa39c077d496f3d37244cf117fe30d6be0fd7e9bf79953daaf59890eaa39fb7"
+    },
+    {
+      "path": ".tamp-runs/pr226-main-integration-20261116/head-wrist.sh",
+      "sha256": "d45a209ff5bead553621729276674760aaed8325b85f0ed4fa1f394973624371"
+    },
+    {
+      "path": ".tamp-runs/pr226-main-integration-20261116/regression-v2.sh",
+      "sha256": "d383bf8142b9e83a29a6f80552d956f799124604000807c7677278a4c11a762d"
+    },
+    {
+      "path": ".tamp-runs/pr226-main-integration-20261116/review-contracts-v2.sh",
+      "sha256": "8147df05da5491b937535e9f12f6dd79d9c96bf67d69b766c8791a93effa25ca"
+    },
+    {
+      "path": ".tamp-runs/pr226-main-integration-20261116/gap-regressions.log",
+      "sha256": "32faef56d0289369b1ac111e68ee0bb7b2ed1bcf92d3f33b75313bd0556c3e6f"
+    },
+    {
+      "path": ".tamp-runs/pr226-main-integration-20261116/model-mismatch-fixed.log",
+      "sha256": "423b1d0e014eb1eab96f4420f7b344c2615be505dd574b756ac884826ca74f2d"
+    },
+    {
+      "path": ".tamp-runs/pr226-main-integration-20261116/paper-build-v3.log",
+      "sha256": "2fb083ec00abe0ee676c70ff6b7fe48618929c90eee5ccfef451813bd8235ef8"
+    }
+  ],
+  "threshold_changes_beyond_main": false,
+  "mujoco_version": "3.5.0"
+}

@@ -1,0 +1,20 @@
+{
+  "format": "mars-whole-body-basic-learning-v1",
+  "scope": "Diagnostic C1 learning only: hold and two short reachable free-space arm references. Original cases and thresholds unchanged; not full whole-body qualification.",
+  "parent_suite": "configs/benchmarks/mars_tracking_mastery_supported_v1.json",
+  "parent_suite_file_sha256": "16b5252f7007ec82d87b68c311e003b37c68d336bfa88cb8e929dbc422feb083",
+  "training_stage_weights": {"base": 0.5, "arm": 0.5},
+  "train_case_ids": [
+    "train:base:hold",
+    "train:arm:pitch_up@amplitude:0.25",
+    "train:arm:pitch_down@amplitude:0.25"
+  ],
+  "evaluation_case_ids": [
+    "train:base:hold", "train:base:forward",
+    "train:arm:pitch_up", "train:arm:pitch_down",
+    "train:arm:roll_left", "train:arm:roll_right",
+    "train:arm:pitch_up@amplitude:0.25", "train:arm:pitch_up@amplitude:0.5",
+    "train:arm:pitch_down@amplitude:0.25", "train:arm:pitch_down@amplitude:0.5",
+    "train:arm:supported_A_up@amplitude:0.25", "train:arm:supported_A_up"
+  ]
+}

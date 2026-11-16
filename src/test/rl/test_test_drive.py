@@ -352,6 +352,9 @@ def test_preview_policy_contract_survives_simulation_replacement_and_feedback_sw
                 "pose_only_targets": True,
                 "environment": {
                     "tracking_reward": True,
+                    "wheel_feedback_gain": 0.5,
+                    "retention_context": True,
+                    "whole_body_settling": True,
                     "base_xy_tolerance": 0.05,
                     "hand_position_tolerance": 0.005,
                     "hand_orientation_tolerance": 0.05,
@@ -361,10 +364,12 @@ def test_preview_policy_contract_survives_simulation_replacement_and_feedback_sw
             def __call__(self, observation):
                 assert set(observation) == {"history", "preview"}
                 assert observation["preview"].shape == (7, 18)
+                assert observation["history"].shape == (20, 101)
                 return np.zeros(8, dtype=np.float32)
 
         policy = PreviewPolicy()
         sim.use_policy(policy, "preview-test")
+        assert sim.env.control.base_velocity_feedback_gain == 0.5
 
         def no_ik(*args, **kwargs):
             raise AssertionError("learned Cartesian targets must not run UI IK")
@@ -389,6 +394,8 @@ def test_preview_policy_contract_survives_simulation_replacement_and_feedback_sw
         assert replacement.env.observation_space.contains(replacement.obs)
         replacement.step()
         replacement.use_policy(None, "Feedback controller")
+        assert replacement.env.control.base_velocity_feedback_gain == 2.0
+        assert not replacement.env.control.retention_context_enabled
         assert set(replacement.obs) == {"history"}
         assert replacement.env.observation_space.contains(replacement.obs)
         replacement.step()

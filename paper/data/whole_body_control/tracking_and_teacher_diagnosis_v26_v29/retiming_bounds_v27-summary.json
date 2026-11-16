@@ -1,0 +1,103 @@
+{
+  "complete": true,
+  "scope": "Retiming diagnostic for teacher retention failures; original baseline unchanged.",
+  "uncompressed_sha256": "6d11505eab24aec61c3744d442f66858652dd9ba9193f14c7d91388b1268707d",
+  "cases": [
+    {
+      "seed": 33000010,
+      "time_scale": 1.0,
+      "code": "retention_lost",
+      "success": false,
+      "retention_lost": true,
+      "wheel_lift": false,
+      "position_error_m": 0.0016871368110994592,
+      "orientation_error_rad": 0.0013346355237282659,
+      "duration_s": 8.491454439466901,
+      "initial_state_matches_original": true
+    },
+    {
+      "seed": 33000010,
+      "time_scale": 1.25,
+      "code": "retimed_reference_exceeds_original_horizon",
+      "success": false,
+      "retention_lost": null,
+      "wheel_lift": null,
+      "position_error_m": null,
+      "orientation_error_rad": null,
+      "duration_s": 10.614318049333626,
+      "initial_state_matches_original": true
+    },
+    {
+      "seed": 33000010,
+      "time_scale": 1.5,
+      "code": "retimed_reference_exceeds_original_horizon",
+      "success": false,
+      "retention_lost": null,
+      "wheel_lift": null,
+      "position_error_m": null,
+      "orientation_error_rad": null,
+      "duration_s": 12.737181659200353,
+      "initial_state_matches_original": true
+    },
+    {
+      "seed": 33000010,
+      "time_scale": 2.0,
+      "code": "retimed_reference_exceeds_original_horizon",
+      "success": false,
+      "retention_lost": null,
+      "wheel_lift": null,
+      "position_error_m": null,
+      "orientation_error_rad": null,
+      "duration_s": 16.982908878933802,
+      "initial_state_matches_original": true
+    },
+    {
+      "seed": 33000012,
+      "time_scale": 1.0,
+      "code": "retention_lost",
+      "success": false,
+      "retention_lost": true,
+      "wheel_lift": false,
+      "position_error_m": 0.0010348926006523464,
+      "orientation_error_rad": 0.0028728859657637497,
+      "duration_s": 8.798118403462292,
+      "initial_state_matches_original": true
+    },
+    {
+      "seed": 33000012,
+      "time_scale": 1.25,
+      "code": "retimed_reference_exceeds_original_horizon",
+      "success": false,
+      "retention_lost": null,
+      "wheel_lift": null,
+      "position_error_m": null,
+      "orientation_error_rad": null,
+      "duration_s": 10.997648004327864,
+      "initial_state_matches_original": true
+    },
+    {
+      "seed": 33000012,
+      "time_scale": 1.5,
+      "code": "retimed_reference_exceeds_original_horizon",
+      "success": false,
+      "retention_lost": null,
+      "wheel_lift": null,
+      "position_error_m": null,
+      "orientation_error_rad": null,
+      "duration_s": 13.197177605193438,
+      "initial_state_matches_original": true
+    },
+    {
+      "seed": 33000012,
+      "time_scale": 2.0,
+      "code": "retimed_reference_exceeds_original_horizon",
+      "success": false,
+      "retention_lost": null,
+      "wheel_lift": null,
+      "position_error_m": null,
+      "orientation_error_rad": null,
+      "duration_s": 17.596236806924583,
+      "initial_state_matches_original": true
+    }
+  ]
+}

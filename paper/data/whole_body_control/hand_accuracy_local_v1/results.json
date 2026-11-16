@@ -1,0 +1,806 @@
+{
+  "scope": "One-worker fallback after ARM fixture gate rejection; not an eight-worker result. No checkpoint selection or promotion.",
+  "steps": 65536,
+  "num_envs": 1,
+  "aggregate_rollout": 256,
+  "checkpoints": [
+    {
+      "checkpoint": "step-0",
+      "summary": {
+        "complete": true,
+        "controller": "e47e99b815b5ca88bb92a76a6cdcfa8d7d587f655d37e406364b0ce21930fef1",
+        "population": "canonical",
+        "groups": {
+          "base/train": {
+            "cases": 5,
+            "admitted": 5,
+            "mastered": 4,
+            "tracking_and_settling_passed": 5,
+            "smoothness_passed": 4,
+            "failure_reasons": {
+              "smoothness/base_linear_jerk": 1
+            },
+            "codes": {
+              "ok": 5
+            },
+            "all_pass": false
+          },
+          "base/validation": {
+            "cases": 5,
+            "admitted": 5,
+            "mastered": 2,
+            "tracking_and_settling_passed": 5,
+            "smoothness_passed": 2,
+            "failure_reasons": {
+              "smoothness/base_linear_jerk": 1,
+              "smoothness/base_yaw_jerk": 1,
+              "smoothness/joint_jerk": 1
+            },
+            "codes": {
+              "ok": 5
+            },
+            "all_pass": false
+          },
+          "arm/train": {
+            "cases": 4,
+            "admitted": 4,
+            "mastered": 0,
+            "tracking_and_settling_passed": 0,
+            "smoothness_passed": 4,
+            "failure_reasons": {
+              "mastery_tracking_envelope": 2,
+              "terminal_hold": 4,
+              "tracking_timeout": 2
+            },
+            "codes": {
+              "mastery_tracking_envelope": 2,
+              "tracking_timeout": 2
+            },
+            "all_pass": false
+          },
+          "arm/validation": {
+            "cases": 4,
+            "admitted": 4,
+            "mastered": 0,
+            "tracking_and_settling_passed": 0,
+            "smoothness_passed": 2,
+            "failure_reasons": {
+              "mastery_tracking_envelope": 2,
+              "terminal_hold": 4,
+              "tracking_timeout": 2,
+              "smoothness/base_linear_jerk": 2
+            },
+            "codes": {
+              "mastery_tracking_envelope": 2,
+              "tracking_timeout": 2
+            },
+            "all_pass": false
+          }
+        },
+        "all_pass": false,
+        "safety_promoted": false
+      }
+    },
+    {
+      "checkpoint": "step-16384",
+      "summary": {
+        "complete": true,
+        "controller": "a5630b256c493c48c1e85ac887979b1513b877d3b1dccf795a5ecdfc735866ed",
+        "population": "canonical",
+        "groups": {
+          "base/train": {
+            "cases": 5,
+            "admitted": 5,
+            "mastered": 3,
+            "tracking_and_settling_passed": 5,
+            "smoothness_passed": 3,
+            "failure_reasons": {
+              "smoothness/base_linear_jerk": 1,
+              "smoothness/joint_jerk": 1
+            },
+            "codes": {
+              "ok": 5
+            },
+            "all_pass": false
+          },
+          "base/validation": {
+            "cases": 5,
+            "admitted": 5,
+            "mastered": 3,
+            "tracking_and_settling_passed": 5,
+            "smoothness_passed": 3,
+            "failure_reasons": {
+              "smoothness/base_linear_jerk": 1,
+              "smoothness/joint_jerk": 1
+            },
+            "codes": {
+              "ok": 5
+            },
+            "all_pass": false
+          },
+          "arm/train": {
+            "cases": 4,
+            "admitted": 4,
+            "mastered": 0,
+            "tracking_and_settling_passed": 0,
+            "smoothness_passed": 0,
+            "failure_reasons": {
+              "tracking_timeout": 4,
+              "terminal_hold": 4,
+              "smoothness/base_linear_jerk": 4,
+              "smoothness/base_yaw_jerk": 1
+            },
+            "codes": {
+              "tracking_timeout": 4
+            },
+            "all_pass": false
+          },
+          "arm/validation": {
+            "cases": 4,
+            "admitted": 4,
+            "mastered": 0,
+            "tracking_and_settling_passed": 0,
+            "smoothness_passed": 2,
+            "failure_reasons": {
+              "mastery_tracking_envelope": 2,
+              "terminal_hold": 4,
+              "tracking_timeout": 2,
+              "smoothness/base_linear_jerk": 2
+            },
+            "codes": {
+              "mastery_tracking_envelope": 2,
+              "tracking_timeout": 2
+            },
+            "all_pass": false
+          }
+        },
+        "all_pass": false,
+        "safety_promoted": false
+      }
+    },
+    {
+      "checkpoint": "step-32768",
+      "summary": {
+        "complete": true,
+        "controller": "903a9103994f186b575f828764ad5e37ea76771cd4a57ab990baf594a81929af",
+        "population": "canonical",
+        "groups": {
+          "base/train": {
+            "cases": 5,
+            "admitted": 5,
+            "mastered": 2,
+            "tracking_and_settling_passed": 5,
+            "smoothness_passed": 2,
+            "failure_reasons": {
+              "smoothness/base_linear_jerk": 1,
+              "smoothness/joint_jerk": 3
+            },
+            "codes": {
+              "ok": 5
+            },
+            "all_pass": false
+          },
+          "base/validation": {
+            "cases": 5,
+            "admitted": 5,
+            "mastered": 3,
+            "tracking_and_settling_passed": 5,
+            "smoothness_passed": 3,
+            "failure_reasons": {
+              "smoothness/base_linear_jerk": 1,
+              "smoothness/joint_jerk": 1
+            },
+            "codes": {
+              "ok": 5
+            },
+            "all_pass": false
+          },
+          "arm/train": {
+            "cases": 4,
+            "admitted": 4,
+            "mastered": 0,
+            "tracking_and_settling_passed": 0,
+            "smoothness_passed": 2,
+            "failure_reasons": {
+              "mastery_tracking_envelope": 4,
+              "terminal_hold": 4,
+              "smoothness/base_linear_jerk": 2,
+              "smoothness/base_yaw_jerk": 1
+            },
+            "codes": {
+              "mastery_tracking_envelope": 4
+            },
+            "all_pass": false
+          },
+          "arm/validation": {
+            "cases": 4,
+            "admitted": 4,
+            "mastered": 0,
+            "tracking_and_settling_passed": 0,
+            "smoothness_passed": 1,
+            "failure_reasons": {
+              "mastery_tracking_envelope": 4,
+              "terminal_hold": 4,
+              "smoothness/base_yaw_jerk": 2,
+              "smoothness/base_linear_jerk": 2
+            },
+            "codes": {
+              "mastery_tracking_envelope": 4
+            },
+            "all_pass": false
+          }
+        },
+        "all_pass": false,
+        "safety_promoted": false
+      }
+    },
+    {
+      "checkpoint": "step-49152",
+      "summary": {
+        "complete": true,
+        "controller": "bb79ed80fb851831c0730e227ddc5de1212a42f2f0fa98a6f5a16de1b005c1e4",
+        "population": "canonical",
+        "groups": {
+          "base/train": {
+            "cases": 5,
+            "admitted": 5,
+            "mastered": 3,
+            "tracking_and_settling_passed": 5,
+            "smoothness_passed": 3,
+            "failure_reasons": {
+              "smoothness/base_linear_jerk": 1,
+              "smoothness/joint_jerk": 1
+            },
+            "codes": {
+              "ok": 5
+            },
+            "all_pass": false
+          },
+          "base/validation": {
+            "cases": 5,
+            "admitted": 5,
+            "mastered": 3,
+            "tracking_and_settling_passed": 5,
+            "smoothness_passed": 3,
+            "failure_reasons": {
+              "smoothness/base_yaw_jerk": 1,
+              "smoothness/joint_jerk": 1
+            },
+            "codes": {
+              "ok": 5
+            },
+            "all_pass": false
+          },
+          "arm/train": {
+            "cases": 4,
+            "admitted": 4,
+            "mastered": 0,
+            "tracking_and_settling_passed": 0,
+            "smoothness_passed": 2,
+            "failure_reasons": {
+              "mastery_tracking_envelope": 4,
+              "terminal_hold": 4,
+              "smoothness/base_linear_jerk": 2
+            },
+            "codes": {
+              "mastery_tracking_envelope": 4
+            },
+            "all_pass": false
+          },
+          "arm/validation": {
+            "cases": 4,
+            "admitted": 4,
+            "mastered": 0,
+            "tracking_and_settling_passed": 0,
+            "smoothness_passed": 1,
+            "failure_reasons": {
+              "mastery_tracking_envelope": 4,
+              "terminal_hold": 4,
+              "smoothness/base_linear_jerk": 3,
+              "smoothness/base_yaw_jerk": 1
+            },
+            "codes": {
+              "mastery_tracking_envelope": 4
+            },
+            "all_pass": false
+          }
+        },
+        "all_pass": false,
+        "safety_promoted": false
+      }
+    },
+    {
+      "checkpoint": "last",
+      "summary": {
+        "complete": true,
+        "controller": "0d534e755cc4b9f048689bbc4b6053ae7484da39763019646a3c054a32da31a4",
+        "population": "canonical",
+        "groups": {
+          "base/train": {
+            "cases": 5,
+            "admitted": 5,
+            "mastered": 3,
+            "tracking_and_settling_passed": 5,
+            "smoothness_passed": 3,
+            "failure_reasons": {
+              "smoothness/base_linear_jerk": 1,
+              "smoothness/joint_jerk": 1
+            },
+            "codes": {
+              "ok": 5
+            },
+            "all_pass": false
+          },
+          "base/validation": {
+            "cases": 5,
+            "admitted": 5,
+            "mastered": 3,
+            "tracking_and_settling_passed": 5,
+            "smoothness_passed": 3,
+            "failure_reasons": {
+              "smoothness/base_linear_jerk": 1,
+              "smoothness/joint_jerk": 1
+            },
+            "codes": {
+              "ok": 5
+            },
+            "all_pass": false
+          },
+          "arm/train": {
+            "cases": 4,
+            "admitted": 4,
+            "mastered": 0,
+            "tracking_and_settling_passed": 0,
+            "smoothness_passed": 1,
+            "failure_reasons": {
+              "mastery_tracking_envelope": 4,
+              "terminal_hold": 4,
+              "smoothness/base_linear_jerk": 3
+            },
+            "codes": {
+              "mastery_tracking_envelope": 4
+            },
+            "all_pass": false
+          },
+          "arm/validation": {
+            "cases": 4,
+            "admitted": 4,
+            "mastered": 0,
+            "tracking_and_settling_passed": 0,
+            "smoothness_passed": 0,
+            "failure_reasons": {
+              "mastery_tracking_envelope": 4,
+              "terminal_hold": 4,
+              "smoothness/base_linear_jerk": 4
+            },
+            "codes": {
+              "mastery_tracking_envelope": 4
+            },
+            "all_pass": false
+          }
+        },
+        "all_pass": false,
+        "safety_promoted": false
+      }
+    }
+  ],
+  "cases": [
+    {
+      "id": "train:base:hold",
+      "split": "train",
+      "stage": "base",
+      "code": "ok",
+      "mastered": false,
+      "tracking_and_settling_pass": true,
+      "failure_reasons": [
+        "smoothness/base_linear_jerk"
+      ],
+      "metrics": {
+        "peak_force_N": 0.49050000000000127,
+        "base_linear_jerk": 0.1679071604299616,
+        "base_yaw_jerk": 0.0970738212430107,
+        "joint_jerk": 0.862938943958594,
+        "hand_position_error_m": 0.0006900582429227468,
+        "hand_orientation_error_rad": 0.0028323687763004393,
+        "base_error_m": 4.839999221630238e-05,
+        "base_heading_error_rad": 3.115781325260282e-07,
+        "hold_drift_m": 4.293425402644944e-05,
+        "settled_seconds": 8.999999999999993
+      }
+    },
+    {
+      "id": "train:base:forward",
+      "split": "train",
+      "stage": "base",
+      "code": "ok",
+      "mastered": true,
+      "tracking_and_settling_pass": true,
+      "failure_reasons": [],
+      "metrics": {
+        "peak_force_N": 0.49050000000000127,
+        "base_linear_jerk": 0.6881153031564663,
+        "base_yaw_jerk": 0.47678827682620833,
+        "joint_jerk": 1.1010821252005438,
+        "hand_position_error_m": 0.0006933984657487261,
+        "hand_orientation_error_rad": 0.002930601746970649,
+        "base_error_m": 1.2106843540694256e-05,
+        "base_heading_error_rad": 1.4904743124504903e-05,
+        "hold_drift_m": 0.0007152348667673115,
+        "settled_seconds": 8.899999999999991
+      }
+    },
+    {
+      "id": "train:base:reverse",
+      "split": "train",
+      "stage": "base",
+      "code": "ok",
+      "mastered": false,
+      "tracking_and_settling_pass": true,
+      "failure_reasons": [
+        "smoothness/joint_jerk"
+      ],
+      "metrics": {
+        "peak_force_N": 0.49050000000000127,
+        "base_linear_jerk": 0.7439988863308785,
+        "base_yaw_jerk": 0.3642617219120174,
+        "joint_jerk": 1.088291632950111,
+        "hand_position_error_m": 0.0006765874006722949,
+        "hand_orientation_error_rad": 0.0028852839958111855,
+        "base_error_m": 4.0233973751478484e-05,
+        "base_heading_error_rad": 0.00010018704498245727,
+        "hold_drift_m": 0.0009159001710848788,
+        "settled_seconds": 8.999999999999993
+      }
+    },
+    {
+      "id": "train:base:yaw_left",
+      "split": "train",
+      "stage": "base",
+      "code": "ok",
+      "mastered": true,
+      "tracking_and_settling_pass": true,
+      "failure_reasons": [],
+      "metrics": {
+        "peak_force_N": 0.49050000000000127,
+        "base_linear_jerk": 0.1752342571020485,
+        "base_yaw_jerk": 0.08921713215180332,
+        "joint_jerk": 0.7640558308967893,
+        "hand_position_error_m": 0.0007018602898511264,
+        "hand_orientation_error_rad": 0.003023817724161841,
+        "base_error_m": 0.00013734523785480837,
+        "base_heading_error_rad": 0.0010792812902581314,
+        "hold_drift_m": 0.0004160275511186204,
+        "settled_seconds": 6.849999999999984
+      }
+    },
+    {
+      "id": "train:base:yaw_right",
+      "split": "train",
+      "stage": "base",
+      "code": "ok",
+      "mastered": true,
+      "tracking_and_settling_pass": true,
+      "failure_reasons": [],
+      "metrics": {
+        "peak_force_N": 0.49050000000000127,
+        "base_linear_jerk": 0.3178612748180365,
+        "base_yaw_jerk": 0.4286624543732437,
+        "joint_jerk": 0.814611278414575,
+        "hand_position_error_m": 0.000685335720988582,
+        "hand_orientation_error_rad": 0.0028436890052396966,
+        "base_error_m": 0.00014590232055012954,
+        "base_heading_error_rad": 0.00040436171314709585,
+        "hold_drift_m": 0.0003917674173400707,
+        "settled_seconds": 7.049999999999983
+      }
+    },
+    {
+      "id": "train:arm:pitch_up",
+      "split": "train",
+      "stage": "arm",
+      "code": "mastery_tracking_envelope",
+      "mastered": false,
+      "tracking_and_settling_pass": false,
+      "failure_reasons": [
+        "mastery_tracking_envelope",
+        "terminal_hold"
+      ],
+      "metrics": {
+        "peak_force_N": 0.4905000000000012,
+        "base_linear_jerk": 0.2014927139484259,
+        "base_yaw_jerk": 0.2855451997971804,
+        "joint_jerk": 0.8269001164837936,
+        "hand_position_error_m": 0.010673383799642057,
+        "hand_orientation_error_rad": 0.04310748064708928,
+        "base_error_m": 5.820241486205289e-05,
+        "base_heading_error_rad": 0.0005798308354216003,
+        "hold_drift_m": 0.0,
+        "settled_seconds": 0
+      }
+    },
+    {
+      "id": "train:arm:pitch_down",
+      "split": "train",
+      "stage": "arm",
+      "code": "mastery_tracking_envelope",
+      "mastered": false,
+      "tracking_and_settling_pass": false,
+      "failure_reasons": [
+        "mastery_tracking_envelope",
+        "terminal_hold",
+        "smoothness/base_linear_jerk"
+      ],
+      "metrics": {
+        "peak_force_N": 0.49050000000000116,
+        "base_linear_jerk": 0.44698349842000495,
+        "base_yaw_jerk": 0.44871173698633054,
+        "joint_jerk": 0.8019881149682102,
+        "hand_position_error_m": 0.010315907833995778,
+        "hand_orientation_error_rad": 0.04319092152815178,
+        "base_error_m": 0.0009807136321207564,
+        "base_heading_error_rad": 0.0026802454630637618,
+        "hold_drift_m": 0.0,
+        "settled_seconds": 0
+      }
+    },
+    {
+      "id": "train:arm:roll_left",
+      "split": "train",
+      "stage": "arm",
+      "code": "mastery_tracking_envelope",
+      "mastered": false,
+      "tracking_and_settling_pass": false,
+      "failure_reasons": [
+        "mastery_tracking_envelope",
+        "terminal_hold",
+        "smoothness/base_linear_jerk"
+      ],
+      "metrics": {
+        "peak_force_N": 0.4905000000000012,
+        "base_linear_jerk": 0.5674221399857281,
+        "base_yaw_jerk": 0.2625154406211,
+        "joint_jerk": 0.6694636061623099,
+        "hand_position_error_m": 0.01080299261331805,
+        "hand_orientation_error_rad": 0.08727963744224922,
+        "base_error_m": 0.0014073308594049925,
+        "base_heading_error_rad": 0.0004270582289691684,
+        "hold_drift_m": 0.0,
+        "settled_seconds": 0
+      }
+    },
+    {
+      "id": "train:arm:roll_right",
+      "split": "train",
+      "stage": "arm",
+      "code": "mastery_tracking_envelope",
+      "mastered": false,
+      "tracking_and_settling_pass": false,
+      "failure_reasons": [
+        "mastery_tracking_envelope",
+        "terminal_hold",
+        "smoothness/base_linear_jerk"
+      ],
+      "metrics": {
+        "peak_force_N": 0.49050000000000027,
+        "base_linear_jerk": 0.4846552613705564,
+        "base_yaw_jerk": 0.3644905184568975,
+        "joint_jerk": 0.880640923075512,
+        "hand_position_error_m": 0.01016876170056342,
+        "hand_orientation_error_rad": 0.06751221201624652,
+        "base_error_m": 0.0004080664959695175,
+        "base_heading_error_rad": 0.003019469241617671,
+        "hold_drift_m": 0.0,
+        "settled_seconds": 0
+      }
+    },
+    {
+      "id": "validation:base:hold",
+      "split": "validation",
+      "stage": "base",
+      "code": "ok",
+      "mastered": false,
+      "tracking_and_settling_pass": true,
+      "failure_reasons": [
+        "smoothness/base_linear_jerk"
+      ],
+      "metrics": {
+        "peak_force_N": 0.49050000000000127,
+        "base_linear_jerk": 0.27263841431105673,
+        "base_yaw_jerk": 0.08626876969925965,
+        "joint_jerk": 0.7924009445535493,
+        "hand_position_error_m": 0.0006363593589704683,
+        "hand_orientation_error_rad": 0.0027614437894561447,
+        "base_error_m": 5.5541215403505534e-05,
+        "base_heading_error_rad": 1.7193026072372976e-06,
+        "hold_drift_m": 3.600652969880382e-05,
+        "settled_seconds": 8.999999999999993
+      }
+    },
+    {
+      "id": "validation:base:forward",
+      "split": "validation",
+      "stage": "base",
+      "code": "ok",
+      "mastered": true,
+      "tracking_and_settling_pass": true,
+      "failure_reasons": [],
+      "metrics": {
+        "peak_force_N": 0.4905000000000012,
+        "base_linear_jerk": 0.357535797690625,
+        "base_yaw_jerk": 0.3926002404790392,
+        "joint_jerk": 0.8221562009811301,
+        "hand_position_error_m": 0.000687505570935846,
+        "hand_orientation_error_rad": 0.002868324062450903,
+        "base_error_m": 3.6843635130262205e-05,
+        "base_heading_error_rad": 0.00011691269913587663,
+        "hold_drift_m": 0.0006611228898676814,
+        "settled_seconds": 8.299999999999983
+      }
+    },
+    {
+      "id": "validation:base:reverse",
+      "split": "validation",
+      "stage": "base",
+      "code": "ok",
+      "mastered": true,
+      "tracking_and_settling_pass": true,
+      "failure_reasons": [],
+      "metrics": {
+        "peak_force_N": 0.49050000000000127,
+        "base_linear_jerk": 0.6093140938656256,
+        "base_yaw_jerk": 0.5011665749598062,
+        "joint_jerk": 0.7339797966391551,
+        "hand_position_error_m": 0.0006460036161311328,
+        "hand_orientation_error_rad": 0.0027676070927253934,
+        "base_error_m": 7.855485872789343e-05,
+        "base_heading_error_rad": 0.00025929264000183576,
+        "hold_drift_m": 0.0013501342025314927,
+        "settled_seconds": 8.79999999999999
+      }
+    },
+    {
+      "id": "validation:base:yaw_left",
+      "split": "validation",
+      "stage": "base",
+      "code": "ok",
+      "mastered": false,
+      "tracking_and_settling_pass": true,
+      "failure_reasons": [
+        "smoothness/joint_jerk"
+      ],
+      "metrics": {
+        "peak_force_N": 0.4905000000000012,
+        "base_linear_jerk": 0.39433362207997763,
+        "base_yaw_jerk": 0.2528288368510989,
+        "joint_jerk": 1.035180263218819,
+        "hand_position_error_m": 0.0007273132484055862,
+        "hand_orientation_error_rad": 0.003099406456275791,
+        "base_error_m": 0.00012852699359372513,
+        "base_heading_error_rad": 0.0012324099454218906,
+        "hold_drift_m": 0.00026724623823816174,
+        "settled_seconds": 6.249999999999986
+      }
+    },
+    {
+      "id": "validation:base:yaw_right",
+      "split": "validation",
+      "stage": "base",
+      "code": "ok",
+      "mastered": true,
+      "tracking_and_settling_pass": true,
+      "failure_reasons": [],
+      "metrics": {
+        "peak_force_N": 0.49050000000000127,
+        "base_linear_jerk": 0.3412820581174601,
+        "base_yaw_jerk": 0.9053888046088996,
+        "joint_jerk": 0.755075636793097,
+        "hand_position_error_m": 0.0006809145408166214,
+        "hand_orientation_error_rad": 0.0027081253397347894,
+        "base_error_m": 0.0001869854269464799,
+        "base_heading_error_rad": 0.0003781069466987017,
+        "hold_drift_m": 0.0004945500495816417,
+        "settled_seconds": 6.649999999999984
+      }
+    },
+    {
+      "id": "validation:arm:pitch_up",
+      "split": "validation",
+      "stage": "arm",
+      "code": "mastery_tracking_envelope",
+      "mastered": false,
+      "tracking_and_settling_pass": false,
+      "failure_reasons": [
+        "mastery_tracking_envelope",
+        "terminal_hold",
+        "smoothness/base_linear_jerk"
+      ],
+      "metrics": {
+        "peak_force_N": 0.4905000000000002,
+        "base_linear_jerk": 0.30662120344535965,
+        "base_yaw_jerk": 0.42082563188833993,
+        "joint_jerk": 0.9636706792679519,
+        "hand_position_error_m": 0.010531722168838709,
+        "hand_orientation_error_rad": 0.041891231684929135,
+        "base_error_m": 6.89160854486389e-05,
+        "base_heading_error_rad": 0.00020494918889972383,
+        "hold_drift_m": 0.0,
+        "settled_seconds": 0
+      }
+    },
+    {
+      "id": "validation:arm:pitch_down",
+      "split": "validation",
+      "stage": "arm",
+      "code": "mastery_tracking_envelope",
+      "mastered": false,
+      "tracking_and_settling_pass": false,
+      "failure_reasons": [
+        "mastery_tracking_envelope",
+        "terminal_hold",
+        "smoothness/base_linear_jerk"
+      ],
+      "metrics": {
+        "peak_force_N": 0.4905000000000002,
+        "base_linear_jerk": 0.4849835575370609,
+        "base_yaw_jerk": 0.20702233621421387,
+        "joint_jerk": 0.8999635137313118,
+        "hand_position_error_m": 0.0103070596987444,
+        "hand_orientation_error_rad": 0.04073542101624668,
+        "base_error_m": 0.0005351874449594319,
+        "base_heading_error_rad": 0.001308209235951417,
+        "hold_drift_m": 0.0,
+        "settled_seconds": 0
+      }
+    },
+    {
+      "id": "validation:arm:roll_left",
+      "split": "validation",
+      "stage": "arm",
+      "code": "mastery_tracking_envelope",
+      "mastered": false,
+      "tracking_and_settling_pass": false,
+      "failure_reasons": [
+        "mastery_tracking_envelope",
+        "terminal_hold",
+        "smoothness/base_linear_jerk"
+      ],
+      "metrics": {
+        "peak_force_N": 0.49050000000000116,
+        "base_linear_jerk": 0.7844556677608708,
+        "base_yaw_jerk": 0.3355869857404048,
+        "joint_jerk": 0.8091821575304164,
+        "hand_position_error_m": 0.010892388804584019,
+        "hand_orientation_error_rad": 0.09142651457229933,
+        "base_error_m": 0.001675752622743385,
+        "base_heading_error_rad": 0.0015507272669062068,
+        "hold_drift_m": 0.0,
+        "settled_seconds": 0
+      }
+    },
+    {
+      "id": "validation:arm:roll_right",
+      "split": "validation",
+      "stage": "arm",
+      "code": "mastery_tracking_envelope",
+      "mastered": false,
+      "tracking_and_settling_pass": false,
+      "failure_reasons": [
+        "mastery_tracking_envelope",
+        "terminal_hold",
+        "smoothness/base_linear_jerk"
+      ],
+      "metrics": {
+        "peak_force_N": 0.49050000000000116,
+        "base_linear_jerk": 0.37854472823656893,
+        "base_yaw_jerk": 0.3242547785667488,
+        "joint_jerk": 0.7874215762488997,
+        "hand_position_error_m": 0.01030066949012031,
+        "hand_orientation_error_rad": 0.0803676440866778,
+        "base_error_m": 0.0006875249128954922,
+        "base_heading_error_rad": 0.003146934347685685,
+        "hold_drift_m": 0.0,
+        "settled_seconds": 0
+      }
+    }
+  ]
+}

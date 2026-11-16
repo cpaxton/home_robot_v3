@@ -129,7 +129,13 @@ execution and are never reclassified by the planning-only catch.
 
 `agent.native_tamp_policy` selects the shared native adapter implementation for
 both primitive tools and a bound multi-step native task provider. Default
-`legacy` preserves the existing motion policy. Explicit
+`legacy` preserves the existing motion policy. The opt-in bounded release profile
+is Stretch-specific. Selecting it on the Mars native adapter returns
+`native_policy_unsupported` before commands and invalidates the cached adapter;
+switching back cannot resurrect its old plan handles. Mars keeps its own grasp,
+approach and transport hooks under the legacy native profile.
+
+Explicit
 `--set agent.native_tamp_policy=bounded_release` enables the finer grasp yaw set,
 a checked loaded-payload handoff, and bounded measured-state release search.
 Use it with `agent.manip_mode=physical` and `agent.tamp_inputs=privileged` in

@@ -9,6 +9,10 @@ from dataclasses import dataclass
 
 import numpy as np
 
+TARGET_TOKEN_WIDTH = 10
+BASE_MASK_COLUMNS = slice(7, 10)
+HAND_MASK_COLUMN = 9
+
 
 def _finite_array(value, shape, name):
     array = np.asarray(value, dtype=np.float32)
@@ -68,11 +72,11 @@ class PoseTargets:
         count = len(self.hands) if max_hands is None else int(max_hands)
         if count < len(self.hands) or count < 0:
             raise ValueError("max_hands cannot be smaller than the supplied hand set")
-        tokens = np.zeros((count + 1, 10), dtype=np.float32)
+        tokens = np.zeros((count + 1, TARGET_TOKEN_WIDTH), dtype=np.float32)
         tokens[0, :4] = [self.base[0], self.base[1], np.sin(self.base[2]), np.cos(self.base[2])]
-        tokens[0, 7:10] = self.base_mask
+        tokens[0, BASE_MASK_COLUMNS] = self.base_mask
         tokens[1 : len(self.hands) + 1, :9] = self.hands
-        tokens[1 : len(self.hands) + 1, 9] = self.hand_mask
+        tokens[1 : len(self.hands) + 1, HAND_MASK_COLUMN] = self.hand_mask
         token_mask = np.zeros(count + 1, dtype=bool)
         token_mask[0] = bool(self.base_mask.any())
         token_mask[1 : len(self.hands) + 1] = self.hand_mask

@@ -1,0 +1,22 @@
+{
+  "scope": "New development parents, teacher/policy and nearby children. No qualification.",
+  "regression_tests": 841,
+  "hardware_used": false,
+  "safety_promoted": false,
+  "files": {
+    "diagnose_policy_v22.py": "65adabd10f3ce8e26c2469b1078bb07d6e23c760e369e02bbc5b6d461e0b03fb",
+    "failure-replay-regressions-v2.receipt.json": "d16d8daf5628954a991a09c78fe7496ad0c0eb6a74c43a9c72a8f96d9c5e58df",
+    "corpus.json": "d3e67417ee371b6f6f7a9a35631550ac942f560879e605133362895b9b571590",
+    "teacher-report.json.gz": "2cc62128326477aabefe6b2658a37e24bebbf18d04da7ab33170d9def0357c1f",
+    "children-report.json.gz": "65c246c27fc514c6216932f5b09ea5ace8b97ba6bdddb8da97a355326f2539ad",
+    "policy-report.json.gz": "533dfef95fe77e49e2182969e8dcc9745fb3b6868aa490d347f09b64cbf2d98c",
+    "config.json": "956c61d4222398b4943a00a5d6dd8f1807f2217a231b1ec0f0b6da09e377cf2f",
+    "audit_replay_children.py": "ce9c8e75ae5d3cb1baa5fd5b15ccd482d28446b65a9cf56a871083fa976d239a",
+    "prepare_failure_replay.py": "06dddfe9c7ae02ed7eb7b998c833200f3b42c172803f3786549724e53583ea1c",
+    "summary.json": "cc0dddc0368b7a38d514abd5f105e23a3d1466e5f23f3f92812d36a320d86641",
+    "children-summary.json": "a9e0b787797d07207cc6057ba6ebf5ad6078176aa4c2abd45901bded22a987ed",
+    "reward_audit.json": "c2223391beffeff1156e12d2fd0e8010232c5a915940c5254e830672fb26f1f5",
+    "failure-replay-regressions-v2.xml": "1824d41b7014261f5840baec49071343e9f53dde4faf6078e343ade412b8f8f6",
+    "diagnose_endpoint_v23.py": "f4030e54f0d1d79dc9656b5607b9678600a0dcc6a0d9176d535a92426aa51ff6"
+  }
+}

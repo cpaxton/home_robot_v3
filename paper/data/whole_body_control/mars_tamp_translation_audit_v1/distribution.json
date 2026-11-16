@@ -1,0 +1,1832 @@
+{
+  "complete": true,
+  "scope": "Offline training-reference vs actual TAMP pregrasp amplitude/speed audit; no rollout.",
+  "hardware_used": false,
+  "not_a_causal_experiment": true,
+  "summary": {
+    "training_cases": 60,
+    "position_excursion_min_max_m": [
+      0.0,
+      0.02966740077952145
+    ],
+    "training_cases_entire_path_within_3mm": 20,
+    "training_joint_velocity_peak_rad_s": [
+      0.05000000000000001,
+      0.03750000000000005,
+      0.07500000000000002,
+      0.06250000000000007,
+      0.05000000000000001
+    ],
+    "training_linear_speed_max_m_s": 0.018539506018843473,
+    "training_angular_speed_max_rad_s": 0.07494446297713891
+  },
+  "training_and_validation_cases": [
+    {
+      "position_excursion_max_m": 0.016256956548656394,
+      "rotation_excursion_max_rad": 0.059999999999994044,
+      "sampled_linear_speed_peak_m_s": 0.010154595618663585,
+      "sampled_angular_speed_peak_rad_s": 0.037472231472554095,
+      "id": "train:arm:pitch_up",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.0,
+        0.03750000000000005,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "position_excursion_max_m": 0.01627056203847898,
+      "rotation_excursion_max_rad": 0.059999999999994044,
+      "sampled_linear_speed_peak_m_s": 0.010163094026525803,
+      "sampled_angular_speed_peak_rad_s": 0.037472231482035025,
+      "id": "train:arm:pitch_down",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.0,
+        0.03750000000000005,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "position_excursion_max_m": 5.551115123125783e-17,
+      "rotation_excursion_max_rad": 0.08000000000002017,
+      "sampled_linear_speed_peak_m_s": 1.1102230246251605e-15,
+      "sampled_angular_speed_peak_rad_s": 0.04996297532474245,
+      "id": "train:arm:roll_left",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.05000000000000001
+      ]
+    },
+    {
+      "position_excursion_max_m": 0.0,
+      "rotation_excursion_max_rad": 0.08000000000003961,
+      "sampled_linear_speed_peak_m_s": 0.0,
+      "sampled_angular_speed_peak_rad_s": 0.04996297533896384,
+      "id": "train:arm:roll_right",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.05000000000000001
+      ]
+    },
+    {
+      "position_excursion_max_m": 0.018412031334254446,
+      "rotation_excursion_max_rad": 0.0690000000000373,
+      "sampled_linear_speed_peak_m_s": 0.01150127754249413,
+      "sampled_angular_speed_peak_rad_s": 0.043093066224016194,
+      "id": "validation:arm:pitch_up",
+      "split": "validation",
+      "joint_velocity_peak_rad_s": [
+        0.0,
+        0.043125000000000004,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "position_excursion_max_m": 0.01838701685801241,
+      "rotation_excursion_max_rad": 0.06900000000010816,
+      "sampled_linear_speed_peak_m_s": 0.011485651975245566,
+      "sampled_angular_speed_peak_rad_s": 0.04309306624050477,
+      "id": "validation:arm:pitch_down",
+      "split": "validation",
+      "joint_velocity_peak_rad_s": [
+        0.0,
+        0.043125000000000004,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "position_excursion_max_m": 5.551115123125783e-17,
+      "rotation_excursion_max_rad": 0.09200000000000277,
+      "sampled_linear_speed_peak_m_s": 1.1102230246251605e-15,
+      "sampled_angular_speed_peak_rad_s": 0.05745742160947957,
+      "id": "validation:arm:roll_left",
+      "split": "validation",
+      "joint_velocity_peak_rad_s": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.057500000000000016
+      ]
+    },
+    {
+      "position_excursion_max_m": 5.551115123125783e-17,
+      "rotation_excursion_max_rad": 0.09200000000007529,
+      "sampled_linear_speed_peak_m_s": 1.1102230246251605e-15,
+      "sampled_angular_speed_peak_rad_s": 0.057457421648124944,
+      "id": "validation:arm:roll_right",
+      "split": "validation",
+      "joint_velocity_peak_rad_s": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.057500000000000016
+      ]
+    },
+    {
+      "position_excursion_max_m": 0.017756726426499354,
+      "rotation_excursion_max_rad": 0.07999999999999793,
+      "sampled_linear_speed_peak_m_s": 0.011092690980735639,
+      "sampled_angular_speed_peak_rad_s": 0.049962975317631525,
+      "id": "train:arm:shoulder_left",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.05000000000000001,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "position_excursion_max_m": 0.01727577957118152,
+      "rotation_excursion_max_rad": 0.07999999999999238,
+      "sampled_linear_speed_peak_m_s": 0.010792241747241998,
+      "sampled_angular_speed_peak_rad_s": 0.04996297530163267,
+      "id": "train:arm:shoulder_right",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.05000000000000001,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "position_excursion_max_m": 0.029511859882000238,
+      "rotation_excursion_max_rad": 0.12000000000001207,
+      "sampled_linear_speed_peak_m_s": 0.018442306691299804,
+      "sampled_angular_speed_peak_rad_s": 0.07494446297121332,
+      "id": "train:arm:elbow_up",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.0,
+        0.0,
+        0.07500000000000002,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "position_excursion_max_m": 0.02966740077952145,
+      "rotation_excursion_max_rad": 0.12000000000003433,
+      "sampled_linear_speed_peak_m_s": 0.018539506018843473,
+      "sampled_angular_speed_peak_rad_s": 0.07494446297713891,
+      "id": "train:arm:elbow_down",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.0,
+        0.0,
+        0.07500000000000002,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "position_excursion_max_m": 0.011079182327246905,
+      "rotation_excursion_max_rad": 0.09999999999998722,
+      "sampled_linear_speed_peak_m_s": 0.006922242509075787,
+      "sampled_angular_speed_peak_rad_s": 0.06245371912901238,
+      "id": "train:arm:wrist_up",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.0,
+        0.0,
+        0.0,
+        0.062499999999999944,
+        0.0
+      ]
+    },
+    {
+      "position_excursion_max_m": 0.011079182327246927,
+      "rotation_excursion_max_rad": 0.09999999999998944,
+      "sampled_linear_speed_peak_m_s": 0.006922242509075758,
+      "sampled_angular_speed_peak_rad_s": 0.0624537191261681,
+      "id": "train:arm:wrist_down",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.0,
+        0.0,
+        0.0,
+        0.06250000000000007,
+        0.0
+      ]
+    },
+    {
+      "position_excursion_max_m": 0.011941102408477707,
+      "rotation_excursion_max_rad": 7.598131170262078e-08,
+      "sampled_linear_speed_peak_m_s": 0.007464773006085063,
+      "sampled_angular_speed_peak_rad_s": 1.519626234052416e-06,
+      "id": "train:arm:translate_down",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.0,
+        0.024999999999999994,
+        0.07500000000000002,
+        0.050000000000000024,
+        0.0
+      ]
+    },
+    {
+      "position_excursion_max_m": 0.011368856765142162,
+      "rotation_excursion_max_rad": 9.185692672385244e-08,
+      "sampled_linear_speed_peak_m_s": 0.007107557982827419,
+      "sampled_angular_speed_peak_rad_s": 1.8848643661548875e-06,
+      "id": "train:arm:translate_up",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.0,
+        0.024999999999999994,
+        0.07500000000000002,
+        0.05000000000000001,
+        0.0
+      ]
+    },
+    {
+      "position_excursion_max_m": 0.010355195906582203,
+      "rotation_excursion_max_rad": 7.300048299977716e-08,
+      "sampled_linear_speed_peak_m_s": 0.00647465584393382,
+      "sampled_angular_speed_peak_rad_s": 1.685873940435762e-06,
+      "id": "train:arm:near_straight_A_translate_up",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.0,
+        0.024999999999999994,
+        0.07500000000000002,
+        0.04999999999999999,
+        0.0
+      ]
+    },
+    {
+      "position_excursion_max_m": 0.010944575652961969,
+      "rotation_excursion_max_rad": 7.300048299977716e-08,
+      "sampled_linear_speed_peak_m_s": 0.006842670797235735,
+      "sampled_angular_speed_peak_rad_s": 1.5769906706002954e-06,
+      "id": "train:arm:near_straight_A_translate_down",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.0,
+        0.024999999999999994,
+        0.07500000000000002,
+        0.050000000000000024,
+        0.0
+      ]
+    },
+    {
+      "position_excursion_max_m": 0.0,
+      "rotation_excursion_max_rad": 0.08000000000001738,
+      "sampled_linear_speed_peak_m_s": 0.0,
+      "sampled_angular_speed_peak_rad_s": 0.04996297531940942,
+      "id": "train:arm:near_straight_A_roll",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.05000000000000001
+      ]
+    },
+    {
+      "position_excursion_max_m": 0.017282993117963087,
+      "rotation_excursion_max_rad": 0.08000000000001738,
+      "sampled_linear_speed_peak_m_s": 0.010796748075908512,
+      "sampled_angular_speed_peak_rad_s": 0.04996297533363082,
+      "id": "train:arm:near_straight_A_shoulder",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.05000000000000001,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "position_excursion_max_m": 0.010749438548060835,
+      "rotation_excursion_max_rad": 8.161702118890975e-08,
+      "sampled_linear_speed_peak_m_s": 0.006720832159267463,
+      "sampled_angular_speed_peak_rad_s": 1.8371385344770553e-06,
+      "id": "train:arm:near_straight_B_translate_up",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.0,
+        0.024999999999999994,
+        0.07500000000000002,
+        0.050000000000000024,
+        0.0
+      ]
+    },
+    {
+      "position_excursion_max_m": 0.011330252797590257,
+      "rotation_excursion_max_rad": 8.161702118890975e-08,
+      "sampled_linear_speed_peak_m_s": 0.007083458046821685,
+      "sampled_angular_speed_peak_rad_s": 1.8371385344770491e-06,
+      "id": "train:arm:near_straight_B_translate_down",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.0,
+        0.024999999999999994,
+        0.07500000000000002,
+        0.050000000000000024,
+        0.0
+      ]
+    },
+    {
+      "position_excursion_max_m": 5.594315114139762e-17,
+      "rotation_excursion_max_rad": 0.08000000000002294,
+      "sampled_linear_speed_peak_m_s": 1.1188630228279563e-15,
+      "sampled_angular_speed_peak_rad_s": 0.04996297532296477,
+      "id": "train:arm:near_straight_B_roll",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.05000000000000001
+      ]
+    },
+    {
+      "position_excursion_max_m": 0.01707345803969823,
+      "rotation_excursion_max_rad": 0.08000000000002572,
+      "sampled_linear_speed_peak_m_s": 0.010665850757507169,
+      "sampled_angular_speed_peak_rad_s": 0.049962975340741296,
+      "id": "train:arm:near_straight_B_shoulder",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.05000000000000001,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "position_excursion_max_m": 0.004064810729201827,
+      "rotation_excursion_max_rad": 0.014999999999941305,
+      "sampled_linear_speed_peak_m_s": 0.002538649252780178,
+      "sampled_angular_speed_peak_rad_s": 0.009368057838573543,
+      "id": "train:arm:pitch_up@amplitude:0.25",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.0,
+        0.009375000000000015,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "position_excursion_max_m": 0.008129392813871886,
+      "rotation_excursion_max_rad": 0.029999999999991703,
+      "sampled_linear_speed_peak_m_s": 0.005077298366315384,
+      "sampled_angular_speed_peak_rad_s": 0.0187361157311633,
+      "id": "train:arm:pitch_up@amplitude:0.5",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.0,
+        0.018750000000000017,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "position_excursion_max_m": 0.004068212580024368,
+      "rotation_excursion_max_rad": 0.01499999999995611,
+      "sampled_linear_speed_peak_m_s": 0.0025407738550376137,
+      "sampled_angular_speed_peak_rad_s": 0.009368057895459128,
+      "id": "train:arm:pitch_down@amplitude:0.25",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.0,
+        0.009375000000000015,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "position_excursion_max_m": 0.008136196324163727,
+      "rotation_excursion_max_rad": 0.0299999999999769,
+      "sampled_linear_speed_peak_m_s": 0.005081547570712849,
+      "sampled_angular_speed_peak_rad_s": 0.01873611573590368,
+      "id": "train:arm:pitch_down@amplitude:0.5",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.0,
+        0.01874999999999999,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "position_excursion_max_m": 5.551115123125783e-17,
+      "rotation_excursion_max_rad": 0.02000000000010103,
+      "sampled_linear_speed_peak_m_s": 1.1102230246251605e-15,
+      "sampled_angular_speed_peak_rad_s": 0.01249074390201957,
+      "id": "train:arm:roll_left@amplitude:0.25",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.012500000000000004
+      ]
+    },
+    {
+      "position_excursion_max_m": 5.551115123125783e-17,
+      "rotation_excursion_max_rad": 0.04000000000003948,
+      "sampled_linear_speed_peak_m_s": 1.1102230246251605e-15,
+      "sampled_angular_speed_peak_rad_s": 0.02498148768166683,
+      "id": "train:arm:roll_left@amplitude:0.5",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.025000000000000012
+      ]
+    },
+    {
+      "position_excursion_max_m": 0.0,
+      "rotation_excursion_max_rad": 0.020000000000178753,
+      "sampled_linear_speed_peak_m_s": 0.0,
+      "sampled_angular_speed_peak_rad_s": 0.012490743944683674,
+      "id": "train:arm:roll_right@amplitude:0.25",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.012500000000000004
+      ]
+    },
+    {
+      "position_excursion_max_m": 0.0,
+      "rotation_excursion_max_rad": 0.04000000000009501,
+      "sampled_linear_speed_peak_m_s": 0.0,
+      "sampled_angular_speed_peak_rad_s": 0.02498148771366496,
+      "id": "train:arm:roll_right@amplitude:0.5",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.025000000000000012
+      ]
+    },
+    {
+      "position_excursion_max_m": 0.004440291603673029,
+      "rotation_excursion_max_rad": 0.01999999999994559,
+      "sampled_linear_speed_peak_m_s": 0.0027731734212257967,
+      "sampled_angular_speed_peak_rad_s": 0.012490743845134026,
+      "id": "train:arm:shoulder_left@amplitude:0.25",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.012500000000000004,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "position_excursion_max_m": 0.008880139181885889,
+      "rotation_excursion_max_rad": 0.04000000000001727,
+      "sampled_linear_speed_peak_m_s": 0.005546346572034814,
+      "sampled_angular_speed_peak_rad_s": 0.02498148763544732,
+      "id": "train:arm:shoulder_left@amplitude:0.5",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.024999999999999988,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "position_excursion_max_m": 0.0043200248252034555,
+      "rotation_excursion_max_rad": 0.01999999999994559,
+      "sampled_linear_speed_peak_m_s": 0.0026980610945415606,
+      "sampled_angular_speed_peak_rad_s": 0.01249074383091264,
+      "id": "train:arm:shoulder_right@amplitude:0.25",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.012499999999999999,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "position_excursion_max_m": 0.00863961765152438,
+      "rotation_excursion_max_rad": 0.03999999999997285,
+      "sampled_linear_speed_peak_m_s": 0.005396121925990468,
+      "sampled_angular_speed_peak_rad_s": 0.02498148764255801,
+      "id": "train:arm:shoulder_right@amplitude:0.5",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.024999999999999988,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "position_excursion_max_m": 0.007382116772789635,
+      "rotation_excursion_max_rad": 0.03000000000007313,
+      "sampled_linear_speed_peak_m_s": 0.004610579201741814,
+      "sampled_angular_speed_peak_rad_s": 0.018736115783308388,
+      "id": "train:arm:elbow_up@amplitude:0.25",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.0,
+        0.0,
+        0.018749999999999982,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "position_excursion_max_m": 0.014762572600448543,
+      "rotation_excursion_max_rad": 0.06000000000003107,
+      "sampled_linear_speed_peak_m_s": 0.00922115739191723,
+      "sampled_angular_speed_peak_rad_s": 0.037472231503367114,
+      "id": "train:arm:elbow_up@amplitude:0.5",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.0,
+        0.0,
+        0.03750000000000005,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "position_excursion_max_m": 0.007421023879052543,
+      "rotation_excursion_max_rad": 0.030000000000117547,
+      "sampled_linear_speed_peak_m_s": 0.00463487904695699,
+      "sampled_angular_speed_peak_rad_s": 0.018736115821232087,
+      "id": "train:arm:elbow_down@amplitude:0.25",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.0,
+        0.0,
+        0.018749999999999982,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "position_excursion_max_m": 0.014840378059039667,
+      "rotation_excursion_max_rad": 0.0600000000000607,
+      "sampled_linear_speed_peak_m_s": 0.009269757077014683,
+      "sampled_angular_speed_peak_rad_s": 0.03747223151521827,
+      "id": "train:arm:elbow_down@amplitude:0.5",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.0,
+        0.0,
+        0.03750000000000005,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "position_excursion_max_m": 0.002770877840407534,
+      "rotation_excursion_max_rad": 0.02499999999994513,
+      "sampled_linear_speed_peak_m_s": 0.0017305612864483859,
+      "sampled_angular_speed_peak_rad_s": 0.015613429745785236,
+      "id": "train:arm:wrist_up@amplitude:0.25",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.0,
+        0.0,
+        0.0,
+        0.01562500000000003,
+        0.0
+      ]
+    },
+    {
+      "position_excursion_max_m": 0.005541322736789793,
+      "rotation_excursion_max_rad": 0.049999999999981504,
+      "sampled_linear_speed_peak_m_s": 0.003461122309224984,
+      "sampled_angular_speed_peak_rad_s": 0.031226859546689117,
+      "id": "train:arm:wrist_up@amplitude:0.5",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.0,
+        0.0,
+        0.0,
+        0.03125000000000003,
+        0.0
+      ]
+    },
+    {
+      "position_excursion_max_m": 0.002770877840407507,
+      "rotation_excursion_max_rad": 0.024999999999962892,
+      "sampled_linear_speed_peak_m_s": 0.001730561286448357,
+      "sampled_angular_speed_peak_rad_s": 0.01561342975147386,
+      "id": "train:arm:wrist_down@amplitude:0.25",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.0,
+        0.0,
+        0.0,
+        0.015625000000000007,
+        0.0
+      ]
+    },
+    {
+      "position_excursion_max_m": 0.005541322736789798,
+      "rotation_excursion_max_rad": 0.04999999999998595,
+      "sampled_linear_speed_peak_m_s": 0.003461122309225076,
+      "sampled_angular_speed_peak_rad_s": 0.031226859549533532,
+      "id": "train:arm:wrist_down@amplitude:0.5",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.0,
+        0.0,
+        0.0,
+        0.03125000000000003,
+        0.0
+      ]
+    },
+    {
+      "position_excursion_max_m": 0.002933929664767108,
+      "rotation_excursion_max_rad": 6.989264130329237e-08,
+      "sampled_linear_speed_peak_m_s": 0.0018327158255036248,
+      "sampled_angular_speed_peak_rad_s": 1.3978528260658523e-06,
+      "id": "train:arm:translate_down@amplitude:0.25",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.0,
+        0.006250000000000005,
+        0.018749999999999982,
+        0.012499999999999987,
+        0.0
+      ]
+    },
+    {
+      "position_excursion_max_m": 0.005902440995531101,
+      "rotation_excursion_max_rad": 6.989264130329237e-08,
+      "sampled_linear_speed_peak_m_s": 0.0036878664807648716,
+      "sampled_angular_speed_peak_rad_s": 1.3978528260658523e-06,
+      "id": "train:arm:translate_down@amplitude:0.5",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.0,
+        0.012500000000000006,
+        0.03750000000000005,
+        0.025000000000000022,
+        0.0
+      ]
+    },
+    {
+      "position_excursion_max_m": 0.0028961200153275308,
+      "rotation_excursion_max_rad": 9.424321830774487e-08,
+      "sampled_linear_speed_peak_m_s": 0.001809105583989342,
+      "sampled_angular_speed_peak_rad_s": 1.931411236050095e-06,
+      "id": "train:arm:translate_up@amplitude:0.25",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.0,
+        0.006250000000000005,
+        0.018749999999999982,
+        0.012499999999999987,
+        0.0
+      ]
+    },
+    {
+      "position_excursion_max_m": 0.00575662404467903,
+      "rotation_excursion_max_rad": 9.185692672385244e-08,
+      "sampled_linear_speed_peak_m_s": 0.0035968226716464255,
+      "sampled_angular_speed_peak_rad_s": 1.837138534477047e-06,
+      "id": "train:arm:translate_up@amplitude:0.5",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.0,
+        0.012500000000000006,
+        0.03750000000000005,
+        0.025000000000000022,
+        0.0
+      ]
+    },
+    {
+      "position_excursion_max_m": 0.0026449854794979716,
+      "rotation_excursion_max_rad": 7.300048299977716e-08,
+      "sampled_linear_speed_peak_m_s": 0.001652278038828531,
+      "sampled_angular_speed_peak_rad_s": 1.685873940435762e-06,
+      "id": "train:arm:near_straight_A_translate_up@amplitude:0.25",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.0,
+        0.006250000000000005,
+        0.018749999999999982,
+        0.01250000000000001,
+        0.0
+      ]
+    },
+    {
+      "position_excursion_max_m": 0.005252746307466463,
+      "rotation_excursion_max_rad": 7.300048299977716e-08,
+      "sampled_linear_speed_peak_m_s": 0.0032821870133615994,
+      "sampled_angular_speed_peak_rad_s": 1.7881393432617099e-06,
+      "id": "train:arm:near_straight_A_translate_up@amplitude:0.5",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.0,
+        0.012500000000000006,
+        0.03750000000000005,
+        0.02500000000000002,
+        0.0
+      ]
+    },
+    {
+      "position_excursion_max_m": 0.002681840926306666,
+      "rotation_excursion_max_rad": 7.300048299977716e-08,
+      "sampled_linear_speed_peak_m_s": 0.0016752941173617478,
+      "sampled_angular_speed_peak_rad_s": 1.7881393432617257e-06,
+      "id": "train:arm:near_straight_A_translate_down@amplitude:0.25",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.0,
+        0.006250000000000005,
+        0.018749999999999982,
+        0.01250000000000001,
+        0.0
+      ]
+    },
+    {
+      "position_excursion_max_m": 0.0054001527268311665,
+      "rotation_excursion_max_rad": 7.300048299977716e-08,
+      "sampled_linear_speed_peak_m_s": 0.003374236589664113,
+      "sampled_angular_speed_peak_rad_s": 1.685873940435762e-06,
+      "id": "train:arm:near_straight_A_translate_down@amplitude:0.5",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.0,
+        0.012500000000000006,
+        0.03750000000000005,
+        0.02500000000000002,
+        0.0
+      ]
+    },
+    {
+      "position_excursion_max_m": 0.0,
+      "rotation_excursion_max_rad": 0.020000000000078826,
+      "sampled_linear_speed_peak_m_s": 0.0,
+      "sampled_angular_speed_peak_rad_s": 0.012490743873576798,
+      "id": "train:arm:near_straight_A_roll@amplitude:0.25",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.012500000000000004
+      ]
+    },
+    {
+      "position_excursion_max_m": 0.0,
+      "rotation_excursion_max_rad": 0.040000000000033925,
+      "sampled_linear_speed_peak_m_s": 0.0,
+      "sampled_angular_speed_peak_rad_s": 0.02498148768522207,
+      "id": "train:arm:near_straight_A_roll@amplitude:0.5",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.025000000000000012
+      ]
+    },
+    {
+      "position_excursion_max_m": 0.004321828662827418,
+      "rotation_excursion_max_rad": 0.020000000000078826,
+      "sampled_linear_speed_peak_m_s": 0.0026991876769829415,
+      "sampled_angular_speed_peak_rad_s": 0.012490743866466049,
+      "id": "train:arm:near_straight_A_shoulder@amplitude:0.25",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.012500000000000004,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "position_excursion_max_m": 0.008643225146390085,
+      "rotation_excursion_max_rad": 0.040000000000056136,
+      "sampled_linear_speed_peak_m_s": 0.005398375090763523,
+      "sampled_angular_speed_peak_rad_s": 0.024981487688777417,
+      "id": "train:arm:near_straight_A_shoulder@amplitude:0.5",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.025000000000000012,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "position_excursion_max_m": 0.0027428757736328692,
+      "rotation_excursion_max_rad": 8.161702118890975e-08,
+      "sampled_linear_speed_peak_m_s": 0.0017134095719566784,
+      "sampled_angular_speed_peak_rad_s": 1.8371385344770553e-06,
+      "id": "train:arm:near_straight_B_translate_up@amplitude:0.25",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.0,
+        0.006250000000000005,
+        0.018749999999999982,
+        0.01250000000000001,
+        0.0
+      ]
+    },
+    {
+      "position_excursion_max_m": 0.005449010447396911,
+      "rotation_excursion_max_rad": 7.300048299977716e-08,
+      "sampled_linear_speed_peak_m_s": 0.0034047454421353147,
+      "sampled_angular_speed_peak_rad_s": 1.685873940435762e-06,
+      "id": "train:arm:near_straight_B_translate_up@amplitude:0.5",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.0,
+        0.012500000000000006,
+        0.03750000000000005,
+        0.02500000000000002,
+        0.0
+      ]
+    },
+    {
+      "position_excursion_max_m": 0.0027791943166229124,
+      "rotation_excursion_max_rad": 8.161702118890975e-08,
+      "sampled_linear_speed_peak_m_s": 0.001736089695789635,
+      "sampled_angular_speed_peak_rad_s": 1.837138534477047e-06,
+      "id": "train:arm:near_straight_B_translate_down@amplitude:0.25",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.0,
+        0.006250000000000005,
+        0.018749999999999992,
+        0.01250000000000001,
+        0.0
+      ]
+    },
+    {
+      "position_excursion_max_m": 0.005594270499090629,
+      "rotation_excursion_max_rad": 8.161702118890975e-08,
+      "sampled_linear_speed_peak_m_s": 0.0034954494789152216,
+      "sampled_angular_speed_peak_rad_s": 1.68587394043576e-06,
+      "id": "train:arm:near_straight_B_translate_down@amplitude:0.5",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.0,
+        0.012500000000000006,
+        0.03750000000000001,
+        0.02500000000000002,
+        0.0
+      ]
+    },
+    {
+      "position_excursion_max_m": 5.594315114139762e-17,
+      "rotation_excursion_max_rad": 0.020000000000078826,
+      "sampled_linear_speed_peak_m_s": 1.1188630228279563e-15,
+      "sampled_angular_speed_peak_rad_s": 0.012490743894908823,
+      "id": "train:arm:near_straight_B_roll@amplitude:0.25",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.012500000000000004
+      ]
+    },
+    {
+      "position_excursion_max_m": 5.551115123125783e-17,
+      "rotation_excursion_max_rad": 0.040000000000045034,
+      "sampled_linear_speed_peak_m_s": 1.1188630228279563e-15,
+      "sampled_angular_speed_peak_rad_s": 0.02498148768166683,
+      "id": "train:arm:near_straight_B_roll@amplitude:0.5",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.024999999999999988
+      ]
+    },
+    {
+      "position_excursion_max_m": 0.004269431794939344,
+      "rotation_excursion_max_rad": 0.02000000000012324,
+      "sampled_linear_speed_peak_m_s": 0.002666463339405234,
+      "sampled_angular_speed_peak_rad_s": 0.012490743930462343,
+      "id": "train:arm:near_straight_B_shoulder@amplitude:0.25",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.012500000000000004,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "position_excursion_max_m": 0.008538436650257025,
+      "rotation_excursion_max_rad": 0.040000000000067246,
+      "sampled_linear_speed_peak_m_s": 0.005332926418798766,
+      "sampled_angular_speed_peak_rad_s": 0.02498148771366485,
+      "id": "train:arm:near_straight_B_shoulder@amplitude:0.5",
+      "split": "train",
+      "joint_velocity_peak_rad_s": [
+        0.025000000000000012,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    }
+  ],
+  "actual_retimed_tamp_pregrasp": [
+    {
+      "position_excursion_max_m": 0.024415278967636383,
+      "rotation_excursion_max_rad": 0.0010373884238368326,
+      "sampled_linear_speed_peak_m_s": 0.023894335899610823,
+      "sampled_angular_speed_peak_rad_s": 0.027558800717421696,
+      "case_id": "left:20g:0",
+      "pose_only_correction_ticks": 42,
+      "retimed_linear_speed_peak_m_s": 0.011864616277807848,
+      "retimed_angular_speed_peak_rad_s": 0.002753532240825498,
+      "retimed_joint_velocity_peak_rad_s": [
+        0.001037467177194357,
+        0.037733415095941844,
+        0.12515838040751961,
+        0.08840744639293736,
+        0.0002916032168182256
+      ]
+    },
+    {
+      "position_excursion_max_m": 0.02462875517497672,
+      "rotation_excursion_max_rad": 0.0016442625483174083,
+      "sampled_linear_speed_peak_m_s": 0.01192930970157018,
+      "sampled_angular_speed_peak_rad_s": 0.03715816868168726,
+      "case_id": "left:50g:0",
+      "pose_only_correction_ticks": 44,
+      "retimed_linear_speed_peak_m_s": 0.01193319812062143,
+      "retimed_angular_speed_peak_rad_s": 0.002482492881860617,
+      "retimed_joint_velocity_peak_rad_s": [
+        0.0012946409244310962,
+        0.05082324212868773,
+        0.13481959469352534,
+        0.08405442169677602,
+        0.0002893871990077802
+      ]
+    },
+    {
+      "position_excursion_max_m": 0.024415278967636383,
+      "rotation_excursion_max_rad": 0.0010373884238368326,
+      "sampled_linear_speed_peak_m_s": 0.023894335899610823,
+      "sampled_angular_speed_peak_rad_s": 0.027558800717421696,
+      "case_id": "right:20g:0",
+      "pose_only_correction_ticks": 42,
+      "retimed_linear_speed_peak_m_s": 0.011864616277807848,
+      "retimed_angular_speed_peak_rad_s": 0.002753532240825498,
+      "retimed_joint_velocity_peak_rad_s": [
+        0.001037467177194357,
+        0.037733415095941844,
+        0.12515838040751961,
+        0.08840744639293736,
+        0.0002916032168182256
+      ]
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "logs/eval/mars-tamp-postures-v1-teacher/report.json.gz",
+      "sha256": "4adc11061e59bf498f9fd0c5160a8d3f05731a0565e5c466a80e471fed9d75eb",
+      "bytes": 16416727
+    },
+    {
+      "path": "logs/eval/mars-matched-reference-v1/report.json.gz",
+      "sha256": "5ea20fc7bc48736e924840567af3b0f9fcd11edb5abb6cf83a7c7d2eb65740b3",
+      "bytes": 17886908
+    },
+    {
+      "path": "/home/cpaxton/src/home_robot_v4/.worktrees/mars-controller-integration/logs/recovery/hand-accuracy-v1/reference-distribution-audit.py",
+      "sha256": "5a48945a3826090ad87d03570fa274c969e17fab3885ed1fc453fae0c7a28f3b",
+      "bytes": 3657
+    },
+    {
+      "path": "logs/recovery/hand-accuracy-v1/reference-distribution-audit.json",
+      "sha256": "997e092b5eebecb0024dbf18664ea30bb1d526c9450a8110ac283535fde8a1a0",
+      "bytes": 32785
+    },
+    {
+      "path": "logs/recovery/hand-accuracy-v1/tamp-translation-caliban-preview-v2.json",
+      "sha256": "ce1ad081f5b551407bc734d23a0807bf00cb38fdfee93f7228e15099cfaf4c82",
+      "bytes": 697441
+    },
+    {
+      "path": "logs/recovery/hand-accuracy-v1/tamp-translation-geometry-preview-v2.py",
+      "sha256": "6e16660364c639842d6ade79596c9e752d174196f2755386e69e3086290a2b80",
+      "bytes": 2632
+    }
+  ],
+  "near_constant_orientation_training": {
+    "angular_excursion_cap_rad": 0.005,
+    "cases": 18,
+    "position_excursion_max_m": 0.011941102408477707,
+    "sampled_linear_speed_max_m_s": 0.007464773006085063
+  },
+  "endpoint_tolerances": {
+    "position_m": 0.003,
+    "orientation_rad": 0.02,
+    "strictly_inside_both_for_entire_reference": 6,
+    "additional_on_angular_boundary": 4
+  },
+  "proposed_geometry": {
+    "qualification_eligible": false,
+    "scope": "ARM geometry-only preview of proposed translation cases; no training qualification.",
+    "control_version_note": "Uses isolated ARM snapshot pre-stop control; preview checks reset/FK/geometric support only. Current runtime/teacher/full-regression admission remains required.",
+    "suite_sha256": "41edd8938b6be5b166e7e7b13b952b32b70325472a651d092d5239781f45d05d",
+    "mastery_source_sha256": "325f0274c80f8071e3610774ab2939014467420bd28845b665e62dc7eb2a7ad9",
+    "script_sha256": "6e16660364c639842d6ade79596c9e752d174196f2755386e69e3086290a2b80",
+    "cases": [
+      {
+        "id": "train:arm:tamp_translation_A_elbow_translate_positive",
+        "admitted": true,
+        "reason": null,
+        "reset_seed": 34000005,
+        "duration_s": 2.5,
+        "joint_velocity_peak_rad_s": [
+          0.0,
+          0.03749999999999999,
+          0.1499999999999999,
+          0.11249999999999993,
+          0.0
+        ],
+        "joint_acceleration_peak_rad_s2": [
+          0.0,
+          0.04618764287999999,
+          0.18475057152000018,
+          0.13856292864000008,
+          0.0
+        ],
+        "joint_jerk_peak_rad_s3": [
+          0.0,
+          0.19199999999999995,
+          0.768,
+          0.5759999999999998,
+          0.0
+        ],
+        "position_excursion_m": 0.020315759946574467,
+        "orientation_excursion_rad": 8.940696716308596e-08
+      },
+      {
+        "id": "train:arm:tamp_translation_A_elbow_translate_negative",
+        "admitted": true,
+        "reason": null,
+        "reset_seed": 34000005,
+        "duration_s": 2.5,
+        "joint_velocity_peak_rad_s": [
+          0.0,
+          0.03749999999999999,
+          0.1499999999999999,
+          0.11249999999999993,
+          0.0
+        ],
+        "joint_acceleration_peak_rad_s2": [
+          0.0,
+          0.04618764287999999,
+          0.18475057152000018,
+          0.13856292864000008,
+          0.0
+        ],
+        "joint_jerk_peak_rad_s3": [
+          0.0,
+          0.19199999999999995,
+          0.768,
+          0.5759999999999998,
+          0.0
+        ],
+        "position_excursion_m": 0.019073002867592562,
+        "orientation_excursion_rad": 9.185692672385244e-08
+      },
+      {
+        "id": "train:arm:tamp_translation_A_shoulder_translate_positive",
+        "admitted": true,
+        "reason": null,
+        "reset_seed": 34000005,
+        "duration_s": 2.5,
+        "joint_velocity_peak_rad_s": [
+          0.0,
+          0.09000000000000004,
+          0.0,
+          0.0899999999999999,
+          0.0
+        ],
+        "joint_acceleration_peak_rad_s2": [
+          0.0,
+          0.11085034291200024,
+          0.0,
+          0.11085034291200047,
+          0.0
+        ],
+        "joint_jerk_peak_rad_s3": [
+          0.0,
+          0.4608000000000003,
+          0.0,
+          0.4607999999999999,
+          0.0
+        ],
+        "position_excursion_m": 0.025315472392677046,
+        "orientation_excursion_rad": 8.940696716308596e-08
+      },
+      {
+        "id": "train:arm:tamp_translation_A_shoulder_translate_negative",
+        "admitted": true,
+        "reason": null,
+        "reset_seed": 34000005,
+        "duration_s": 2.5,
+        "joint_velocity_peak_rad_s": [
+          0.0,
+          0.09000000000000004,
+          0.0,
+          0.09000000000000004,
+          0.0
+        ],
+        "joint_acceleration_peak_rad_s2": [
+          0.0,
+          0.11085034291200024,
+          0.0,
+          0.11085034291200024,
+          0.0
+        ],
+        "joint_jerk_peak_rad_s3": [
+          0.0,
+          0.4608000000000003,
+          0.0,
+          0.4608000000000003,
+          0.0
+        ],
+        "position_excursion_m": 0.025315472392677035,
+        "orientation_excursion_rad": 8.940696716308596e-08
+      },
+      {
+        "id": "train:arm:tamp_translation_B_elbow_translate_positive",
+        "admitted": true,
+        "reason": null,
+        "reset_seed": 34000005,
+        "duration_s": 2.5,
+        "joint_velocity_peak_rad_s": [
+          0.0,
+          0.03749999999999999,
+          0.1499999999999999,
+          0.1125,
+          0.0
+        ],
+        "joint_acceleration_peak_rad_s2": [
+          0.0,
+          0.04618764287999999,
+          0.18475057152000018,
+          0.13856292864000003,
+          0.0
+        ],
+        "joint_jerk_peak_rad_s3": [
+          0.0,
+          0.19199999999999995,
+          0.768,
+          0.5760000000000001,
+          0.0
+        ],
+        "position_excursion_m": 0.020808614167553086,
+        "orientation_excursion_rad": 0.0
+      },
+      {
+        "id": "train:arm:tamp_translation_B_elbow_translate_negative",
+        "admitted": true,
+        "reason": null,
+        "reset_seed": 34000005,
+        "duration_s": 2.5,
+        "joint_velocity_peak_rad_s": [
+          0.0,
+          0.03749999999999999,
+          0.1499999999999999,
+          0.11249999999999993,
+          0.0
+        ],
+        "joint_acceleration_peak_rad_s2": [
+          0.0,
+          0.04618764287999999,
+          0.18475057152000018,
+          0.13856292864000008,
+          0.0
+        ],
+        "joint_jerk_peak_rad_s3": [
+          0.0,
+          0.19199999999999995,
+          0.768,
+          0.5759999999999998,
+          0.0
+        ],
+        "position_excursion_m": 0.01957020141802604,
+        "orientation_excursion_rad": 0.0
+      },
+      {
+        "id": "train:arm:tamp_translation_B_shoulder_translate_positive",
+        "admitted": true,
+        "reason": null,
+        "reset_seed": 34000005,
+        "duration_s": 2.5,
+        "joint_velocity_peak_rad_s": [
+          0.0,
+          0.09000000000000004,
+          0.0,
+          0.0899999999999999,
+          0.0
+        ],
+        "joint_acceleration_peak_rad_s2": [
+          0.0,
+          0.11085034291200024,
+          0.0,
+          0.11085034291200047,
+          0.0
+        ],
+        "joint_jerk_peak_rad_s3": [
+          0.0,
+          0.4608000000000003,
+          0.0,
+          0.4607999999999999,
+          0.0
+        ],
+        "position_excursion_m": 0.02455171006914697,
+        "orientation_excursion_rad": 0.0
+      },
+      {
+        "id": "train:arm:tamp_translation_B_shoulder_translate_negative",
+        "admitted": true,
+        "reason": null,
+        "reset_seed": 34000005,
+        "duration_s": 2.5,
+        "joint_velocity_peak_rad_s": [
+          0.0,
+          0.09000000000000004,
+          0.0,
+          0.09000000000000004,
+          0.0
+        ],
+        "joint_acceleration_peak_rad_s2": [
+          0.0,
+          0.11085034291200024,
+          0.0,
+          0.11085034291200024,
+          0.0
+        ],
+        "joint_jerk_peak_rad_s3": [
+          0.0,
+          0.4608000000000003,
+          0.0,
+          0.4608000000000003,
+          0.0
+        ],
+        "position_excursion_m": 0.024551710069146995,
+        "orientation_excursion_rad": 0.0
+      },
+      {
+        "id": "train:arm:tamp_translation_A_elbow_translate_positive@amplitude:0.25",
+        "admitted": true,
+        "reason": null,
+        "reset_seed": 34000005,
+        "duration_s": 2.5,
+        "joint_velocity_peak_rad_s": [
+          0.0,
+          0.009375000000000019,
+          0.03750000000000002,
+          0.028125000000000004,
+          0.0
+        ],
+        "joint_acceleration_peak_rad_s2": [
+          0.0,
+          0.011546910720000017,
+          0.04618764288000002,
+          0.03464073215999999,
+          0.0
+        ],
+        "joint_jerk_peak_rad_s3": [
+          0.0,
+          0.048000000000000154,
+          0.1920000000000005,
+          0.14399999999999996,
+          0.0
+        ],
+        "position_excursion_m": 0.004966858918842186,
+        "orientation_excursion_rad": 8.940696716308596e-08
+      },
+      {
+        "id": "train:arm:tamp_translation_A_elbow_translate_positive@amplitude:0.5",
+        "admitted": true,
+        "reason": null,
+        "reset_seed": 34000005,
+        "duration_s": 2.5,
+        "joint_velocity_peak_rad_s": [
+          0.0,
+          0.018750000000000034,
+          0.07500000000000008,
+          0.056249999999999994,
+          0.0
+        ],
+        "joint_acceleration_peak_rad_s2": [
+          0.0,
+          0.023093821440000033,
+          0.09237528576000004,
+          0.06928146432000015,
+          0.0
+        ],
+        "joint_jerk_peak_rad_s3": [
+          0.0,
+          0.09600000000000011,
+          0.38400000000000056,
+          0.2880000000000001,
+          0.0
+        ],
+        "position_excursion_m": 0.010009720485571864,
+        "orientation_excursion_rad": 9.185692672385244e-08
+      },
+      {
+        "id": "train:arm:tamp_translation_A_elbow_translate_negative@amplitude:0.25",
+        "admitted": true,
+        "reason": null,
+        "reset_seed": 34000005,
+        "duration_s": 2.5,
+        "joint_velocity_peak_rad_s": [
+          0.0,
+          0.009375000000000019,
+          0.03750000000000002,
+          0.028125000000000004,
+          0.0
+        ],
+        "joint_acceleration_peak_rad_s2": [
+          0.0,
+          0.011546910720000017,
+          0.04618764288000002,
+          0.03464073215999999,
+          0.0
+        ],
+        "joint_jerk_peak_rad_s3": [
+          0.0,
+          0.048000000000000154,
+          0.1920000000000005,
+          0.14399999999999996,
+          0.0
+        ],
+        "position_excursion_m": 0.00488905802348203,
+        "orientation_excursion_rad": 8.940696716308596e-08
+      },
+      {
+        "id": "train:arm:tamp_translation_A_elbow_translate_negative@amplitude:0.5",
+        "admitted": true,
+        "reason": null,
+        "reset_seed": 34000005,
+        "duration_s": 2.5,
+        "joint_velocity_peak_rad_s": [
+          0.0,
+          0.018750000000000034,
+          0.07500000000000008,
+          0.056249999999999994,
+          0.0
+        ],
+        "joint_acceleration_peak_rad_s2": [
+          0.0,
+          0.023093821440000033,
+          0.09237528576000004,
+          0.06928146432000015,
+          0.0
+        ],
+        "joint_jerk_peak_rad_s3": [
+          0.0,
+          0.09600000000000011,
+          0.38400000000000056,
+          0.2880000000000001,
+          0.0
+        ],
+        "position_excursion_m": 0.00969861977252158,
+        "orientation_excursion_rad": 8.940696716308596e-08
+      },
+      {
+        "id": "train:arm:tamp_translation_A_shoulder_translate_positive@amplitude:0.25",
+        "admitted": true,
+        "reason": null,
+        "reset_seed": 34000005,
+        "duration_s": 2.5,
+        "joint_velocity_peak_rad_s": [
+          0.0,
+          0.02250000000000001,
+          0.0,
+          0.02249999999999997,
+          0.0
+        ],
+        "joint_acceleration_peak_rad_s2": [
+          0.0,
+          0.027712585728000116,
+          0.0,
+          0.02771258572800006,
+          0.0
+        ],
+        "joint_jerk_peak_rad_s3": [
+          0.0,
+          0.1152000000000001,
+          0.0,
+          0.11519999999999989,
+          0.0
+        ],
+        "position_excursion_m": 0.006332429542167032,
+        "orientation_excursion_rad": 8.940696716308596e-08
+      },
+      {
+        "id": "train:arm:tamp_translation_A_shoulder_translate_positive@amplitude:0.5",
+        "admitted": true,
+        "reason": null,
+        "reset_seed": 34000005,
+        "duration_s": 2.5,
+        "joint_velocity_peak_rad_s": [
+          0.0,
+          0.044999999999999984,
+          0.0,
+          0.044999999999999984,
+          0.0
+        ],
+        "joint_acceleration_peak_rad_s2": [
+          0.0,
+          0.05542517145600001,
+          0.0,
+          0.05542517145600001,
+          0.0
+        ],
+        "joint_jerk_peak_rad_s3": [
+          0.0,
+          0.23040000000000016,
+          0.0,
+          0.23040000000000016,
+          0.0
+        ],
+        "position_excursion_m": 0.01266343431440187,
+        "orientation_excursion_rad": 8.940696716308596e-08
+      },
+      {
+        "id": "train:arm:tamp_translation_A_shoulder_translate_negative@amplitude:0.25",
+        "admitted": true,
+        "reason": null,
+        "reset_seed": 34000005,
+        "duration_s": 2.5,
+        "joint_velocity_peak_rad_s": [
+          0.0,
+          0.02250000000000001,
+          0.0,
+          0.02249999999999997,
+          0.0
+        ],
+        "joint_acceleration_peak_rad_s2": [
+          0.0,
+          0.027712585728000116,
+          0.0,
+          0.02771258572800006,
+          0.0
+        ],
+        "joint_jerk_peak_rad_s3": [
+          0.0,
+          0.1152000000000001,
+          0.0,
+          0.11519999999999989,
+          0.0
+        ],
+        "position_excursion_m": 0.006332429542167038,
+        "orientation_excursion_rad": 9.185692672385244e-08
+      },
+      {
+        "id": "train:arm:tamp_translation_A_shoulder_translate_negative@amplitude:0.5",
+        "admitted": true,
+        "reason": null,
+        "reset_seed": 34000005,
+        "duration_s": 2.5,
+        "joint_velocity_peak_rad_s": [
+          0.0,
+          0.044999999999999984,
+          0.0,
+          0.044999999999999984,
+          0.0
+        ],
+        "joint_acceleration_peak_rad_s2": [
+          0.0,
+          0.05542517145600001,
+          0.0,
+          0.05542517145600001,
+          0.0
+        ],
+        "joint_jerk_peak_rad_s3": [
+          0.0,
+          0.23040000000000016,
+          0.0,
+          0.23040000000000016,
+          0.0
+        ],
+        "position_excursion_m": 0.012663434314401941,
+        "orientation_excursion_rad": 8.940696716308596e-08
+      },
+      {
+        "id": "train:arm:tamp_translation_B_elbow_translate_positive@amplitude:0.25",
+        "admitted": true,
+        "reason": null,
+        "reset_seed": 34000005,
+        "duration_s": 2.5,
+        "joint_velocity_peak_rad_s": [
+          0.0,
+          0.009375000000000019,
+          0.037499999999999985,
+          0.028124999999999963,
+          0.0
+        ],
+        "joint_acceleration_peak_rad_s2": [
+          0.0,
+          0.011546910720000017,
+          0.04618764287999999,
+          0.03464073216000002,
+          0.0
+        ],
+        "joint_jerk_peak_rad_s3": [
+          0.0,
+          0.048000000000000154,
+          0.19200000000000017,
+          0.1439999999999999,
+          0.0
+        ],
+        "position_excursion_m": 0.005091048150218019,
+        "orientation_excursion_rad": 0.0
+      },
+      {
+        "id": "train:arm:tamp_translation_B_elbow_translate_positive@amplitude:0.5",
+        "admitted": true,
+        "reason": null,
+        "reset_seed": 34000005,
+        "duration_s": 2.5,
+        "joint_velocity_peak_rad_s": [
+          0.0,
+          0.018750000000000034,
+          0.07500000000000008,
+          0.056249999999999994,
+          0.0
+        ],
+        "joint_acceleration_peak_rad_s2": [
+          0.0,
+          0.023093821440000033,
+          0.09237528576000004,
+          0.06928146432000015,
+          0.0
+        ],
+        "joint_jerk_peak_rad_s3": [
+          0.0,
+          0.09600000000000011,
+          0.38400000000000056,
+          0.2880000000000001,
+          0.0
+        ],
+        "position_excursion_m": 0.010257594050963952,
+        "orientation_excursion_rad": 0.0
+      },
+      {
+        "id": "train:arm:tamp_translation_B_elbow_translate_negative@amplitude:0.25",
+        "admitted": true,
+        "reason": null,
+        "reset_seed": 34000005,
+        "duration_s": 2.5,
+        "joint_velocity_peak_rad_s": [
+          0.0,
+          0.009375000000000019,
+          0.03750000000000002,
+          0.028125000000000004,
+          0.0
+        ],
+        "joint_acceleration_peak_rad_s2": [
+          0.0,
+          0.011546910720000017,
+          0.04618764288000002,
+          0.03464073215999999,
+          0.0
+        ],
+        "joint_jerk_peak_rad_s3": [
+          0.0,
+          0.048000000000000154,
+          0.1920000000000005,
+          0.14399999999999996,
+          0.0
+        ],
+        "position_excursion_m": 0.005013526322124481,
+        "orientation_excursion_rad": 0.0
+      },
+      {
+        "id": "train:arm:tamp_translation_B_elbow_translate_negative@amplitude:0.5",
+        "admitted": true,
+        "reason": null,
+        "reset_seed": 34000005,
+        "duration_s": 2.5,
+        "joint_velocity_peak_rad_s": [
+          0.0,
+          0.018750000000000034,
+          0.07500000000000008,
+          0.056249999999999994,
+          0.0
+        ],
+        "joint_acceleration_peak_rad_s2": [
+          0.0,
+          0.023093821440000033,
+          0.09237528576000004,
+          0.06928146432000015,
+          0.0
+        ],
+        "joint_jerk_peak_rad_s3": [
+          0.0,
+          0.09600000000000011,
+          0.38400000000000056,
+          0.2880000000000001,
+          0.0
+        ],
+        "position_excursion_m": 0.009947603568311482,
+        "orientation_excursion_rad": 0.0
+      },
+      {
+        "id": "train:arm:tamp_translation_B_shoulder_translate_positive@amplitude:0.25",
+        "admitted": true,
+        "reason": null,
+        "reset_seed": 34000005,
+        "duration_s": 2.5,
+        "joint_velocity_peak_rad_s": [
+          0.0,
+          0.02250000000000001,
+          0.0,
+          0.02249999999999997,
+          0.0
+        ],
+        "joint_acceleration_peak_rad_s2": [
+          0.0,
+          0.027712585728000116,
+          0.0,
+          0.02771258572800006,
+          0.0
+        ],
+        "joint_jerk_peak_rad_s3": [
+          0.0,
+          0.1152000000000001,
+          0.0,
+          0.11519999999999989,
+          0.0
+        ],
+        "position_excursion_m": 0.006141381513289892,
+        "orientation_excursion_rad": 0.0
+      },
+      {
+        "id": "train:arm:tamp_translation_B_shoulder_translate_positive@amplitude:0.5",
+        "admitted": true,
+        "reason": null,
+        "reset_seed": 34000005,
+        "duration_s": 2.5,
+        "joint_velocity_peak_rad_s": [
+          0.0,
+          0.044999999999999984,
+          0.0,
+          0.044999999999999984,
+          0.0
+        ],
+        "joint_acceleration_peak_rad_s2": [
+          0.0,
+          0.05542517145600001,
+          0.0,
+          0.05542517145600001,
+          0.0
+        ],
+        "joint_jerk_peak_rad_s3": [
+          0.0,
+          0.23040000000000016,
+          0.0,
+          0.23040000000000016,
+          0.0
+        ],
+        "position_excursion_m": 0.012281381241648029,
+        "orientation_excursion_rad": 0.0
+      },
+      {
+        "id": "train:arm:tamp_translation_B_shoulder_translate_negative@amplitude:0.25",
+        "admitted": true,
+        "reason": null,
+        "reset_seed": 34000005,
+        "duration_s": 2.5,
+        "joint_velocity_peak_rad_s": [
+          0.0,
+          0.02250000000000001,
+          0.0,
+          0.02249999999999997,
+          0.0
+        ],
+        "joint_acceleration_peak_rad_s2": [
+          0.0,
+          0.027712585728000116,
+          0.0,
+          0.02771258572800006,
+          0.0
+        ],
+        "joint_jerk_peak_rad_s3": [
+          0.0,
+          0.1152000000000001,
+          0.0,
+          0.11519999999999989,
+          0.0
+        ],
+        "position_excursion_m": 0.006141381513289849,
+        "orientation_excursion_rad": 0.0
+      },
+      {
+        "id": "train:arm:tamp_translation_B_shoulder_translate_negative@amplitude:0.5",
+        "admitted": true,
+        "reason": null,
+        "reset_seed": 34000005,
+        "duration_s": 2.5,
+        "joint_velocity_peak_rad_s": [
+          0.0,
+          0.044999999999999984,
+          0.0,
+          0.044999999999999984,
+          0.0
+        ],
+        "joint_acceleration_peak_rad_s2": [
+          0.0,
+          0.05542517145600001,
+          0.0,
+          0.05542517145600001,
+          0.0
+        ],
+        "joint_jerk_peak_rad_s3": [
+          0.0,
+          0.23040000000000016,
+          0.0,
+          0.23040000000000016,
+          0.0
+        ],
+        "position_excursion_m": 0.012281381241647953,
+        "orientation_excursion_rad": 0.0
+      }
+    ],
+    "admitted": 24,
+    "full_regressions_and_native_teacher_still_required": true
+  },
+  "new_recipe": {
+    "all_prior_cases_preserved": 122,
+    "expanded_cases": 146,
+    "stages": {
+      "base": 50,
+      "arm": 88,
+      "coupled": 8
+    },
+    "arm_sampling_mass": {
+      "new_translation": 0.5,
+      "all_prior_families": 0.5
+    },
+    "added_family_minimum_duration_s": 2.5,
+    "canonical_minimum_duration_s": 3,
+    "hardware_limits_changed": false,
+    "reward_shape_changed": false,
+    "separate_frozen_audit_cases": 12
+  }
+}

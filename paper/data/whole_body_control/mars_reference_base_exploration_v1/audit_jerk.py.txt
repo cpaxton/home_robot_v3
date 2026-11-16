@@ -1,0 +1,43 @@
+# Copyright (c) Chris Paxton 2026
+# Licensed under the Apache License, Version 2.0.
+"""Replay the unchanged pose-difference acceptance jerk from saved traces."""
+import gzip
+import hashlib
+import json
+import math
+from pathlib import Path
+
+OUT = Path(__file__).resolve().parent
+rows = []
+for mode in ('control','candidate'):
+    for label in ('initial','final'):
+        file = OUT / mode / (label+'-evaluation.json.gz')
+        report = json.loads(gzip.decompress(file.read_bytes()))
+        for case in report['cases']:
+            previous = case['admission']['reference']['base'][0]
+            velocity = [0.0,0.0]
+            acceleration = [0.0,0.0]
+            maximum, peak_time, peak_code = [0.0,0.0], [None,None], [None,None]
+            for trace in case['trace']:
+                current = trace['base']
+                delta = [b-a for a,b in zip(previous,current,strict=True)]
+                observed = [math.hypot(*delta[:2])/.05, math.atan2(math.sin(delta[2]),math.cos(delta[2]))/.05]
+                accel = [(b-a)/.05 for a,b in zip(velocity,observed,strict=True)]
+                jerk = [(b-a)/.05 for a,b in zip(acceleration,accel,strict=True)]
+                for axis in (0,1):
+                    if abs(jerk[axis]) > maximum[axis]:
+                        maximum[axis] = abs(jerk[axis]);peak_time[axis] = trace['time'];peak_code[axis] = trace['code']
+                previous,velocity,acceleration = current,observed,accel
+            recorded = [case['metrics']['base_linear_jerk'],case['metrics']['base_yaw_jerk']]
+            error = max(abs(a-b) for a,b in zip(recorded,maximum,strict=True))
+            rows.append({'mode':mode,'evaluation':label,'id':case['id'],'recorded':recorded,
+                         'replayed':maximum,'max_abs_delta':error,'peak_time_s':peak_time,'peak_code':peak_code})
+result = {'format':'mars-reference-base-exploration-jerk-replay-v1','cases':len(rows),
+          'method':'constant50ms; unsigned planar displacement speed and wrapped heading rate; initial reference base pose, zero derivative state',
+          'maximum_absolute_error':max(r['max_abs_delta'] for r in rows),'rows':rows,
+          'script_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest()}
+(OUT/'jerk-audit.json').write_text(json.dumps(result,indent=2)+'\n')
+print('Gate replay max abs error:',result['maximum_absolute_error'])
+for row in rows:
+    if row['mode']=='candidate' and row['evaluation']=='final':
+        print(row['id'],row['recorded'],row['peak_time_s'],row['peak_code'],row['max_abs_delta'])

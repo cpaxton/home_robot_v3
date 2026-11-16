@@ -1,0 +1,48 @@
+{
+  "complete": true,
+  "controller": "97a8f21dbd7095d3a0e01cd2b681c7931281d57239a5e74131929ab07ed68028",
+  "groups": {
+    "base/train": {
+      "cases": 5,
+      "admitted": 5,
+      "mastered": 0,
+      "tracking_and_settling_passed": 1,
+      "smoothness_passed": 2,
+      "failure_reasons": {
+        "smoothness/base_linear_jerk": 1,
+        "mastery_tracking_envelope": 2,
+        "terminal_hold": 4,
+        "tracking_timeout": 2,
+        "smoothness/joint_jerk": 2
+      },
+      "codes": {
+        "ok": 1,
+        "mastery_tracking_envelope": 2,
+        "tracking_timeout": 2
+      },
+      "all_pass": false
+    },
+    "base/validation": {
+      "cases": 5,
+      "admitted": 5,
+      "mastered": 0,
+      "tracking_and_settling_passed": 1,
+      "smoothness_passed": 3,
+      "failure_reasons": {
+        "smoothness/base_linear_jerk": 1,
+        "smoothness/joint_jerk": 2,
+        "mastery_tracking_envelope": 2,
+        "terminal_hold": 4,
+        "tracking_timeout": 2
+      },
+      "codes": {
+        "ok": 1,
+        "mastery_tracking_envelope": 2,
+        "tracking_timeout": 2
+      },
+      "all_pass": false
+    }
+  },
+  "all_pass": false,
+  "safety_promoted": false
+}
