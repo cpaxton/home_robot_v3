@@ -46,10 +46,14 @@ Strike through or move to a PR when done.
       `feat/tamp-prospective-evaluation`: 4/4 new native tasks and 4/4 actual-agent
       tasks, 10/10 transfers each; 2/2 scripted recovery tasks, 5/5 boundary checks;
       416 affected tests pass. [Results](docs/experiments/tamp_prospective_20261116.md).
-- [ ] Exercise the same between-transfer partial failure through the LLM, then
-      qualify observed task admission and exploration. The completed recovery
-      trials are scripted planning-admission faults, not grasp-loss or held-object
-      recovery; four new layouts do not establish broad reliability.
+- [x] Exercise between-transfer partial failure through the actual agent: named
+      verified progress, no-command step-2 refusal, stop, separate authorization,
+      fresh one-transfer recovery. Preserve the initial discovery-filter failure.
+      [Feedback/recovery results](docs/experiments/tamp_partial_agent_20261116.md).
+- [ ] Qualify observed task admission and exploration. The completed recovery
+      fault is injected planning admission, not grasp loss, unknown dispatch or
+      held-object recovery. A bare "retry" dialogue and broad reliability remain
+      untested; the model also makes extra read-only checks after completion.
 
 ## Shared evidence/navigation stack (#199 / #202)
 

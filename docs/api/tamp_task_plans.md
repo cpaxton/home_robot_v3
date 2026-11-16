@@ -79,7 +79,8 @@ transfer. Debug mode can include private simulator state in JSON logs for offlin
 replay; public tool responses and public motion evidence never include it.
 See [measured integration cases and captured-state controls](../experiments/tamp_native_task_provider_20261022.md).
 
-Planning also returns ordered `step_details` with 1-based indices. Region-transfer
+Planning also returns ordered `step_details` with 1-based indices local to each
+plan; a new one-action recovery plan starts at step 1. Region-transfer
 providers describe public object roles and source/target region names; private
 operator refs and body IDs are never serialized. Providers without a qualified
 description hook return indices only.

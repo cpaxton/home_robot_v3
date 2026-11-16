@@ -426,3 +426,34 @@ separately. One independently initialized trial per cell does not estimate broad
 reliability. XY offsets are in millimetres; yaw is in radians.}
 \label{fig:tamp_prospective}
 \end{figure}
+
+\paragraph{Actual-agent partial feedback and reauthorization.}
+The next pair uses the actual CLI with an evaluator-only native provider
+constructor seam: after one real, measured transfer, admission for step two is
+refused without dispatch. Public receipts now name the measured-effect-verified
+completed actions and the failed/unverified actions. They distinguish overall
+execution progress from possible dispatch of the failed step, consume the handle
+and explicitly retain \texttt{goal\_verified=false}. No motion or acceptance
+threshold changes accompany this feedback contract.
+
+At \texttt{d9fb0273}, both model reports correctly name the completed cylinder
+placement, unfinished cube and stop. The stop-only condition passes while the
+task remains incomplete. Subsequent authorized recovery fails because discovery
+rejects its configured robot selector after an unavailable inspection-tool
+proposal; this failed attempt is retained. The fix accepts the connected robot,
+clarifies the advertised inspection tool and stops mixed TAMP batches at
+unavailable calls. On the unchanged request pair at \texttt{d2b24610}, both
+feedback/control tests pass. Only after the expected partial receipt, supported
+settled objects and a quiet audit interval does a new stdin user request authorize
+fresh discovery/planning. Recovery executes exactly one cube transfer and both
+original object goals hold. Stop-only remains incomplete; it is not scored as
+full-task success. There are 799 audited commands, zero forbidden commands or
+shutdown warnings, and all 468 affected tests pass. The corrected pair uses
+12 remote model calls. Extra read-only discovery and a zero-step plan after
+completion are retained, not presented as optimal tool efficiency.
+Verbatim feedback, both source histories and hashes are in
+\path{docs/experiments/tamp_partial_agent_20261116.json}. Model-text accuracy is
+manually reviewed against the receipt and independent physical goals. The fault
+represents injected planning admission, not actual solver exhaustion, contact
+loss or sensor failure. Recovery from a bare ``retry'' without restated goals,
+unknown outcomes, held objects, observed inputs and hardware remains unqualified.

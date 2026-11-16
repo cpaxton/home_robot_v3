@@ -36,3 +36,10 @@ session rejects its own `robot="stretch"` selector. Preserve that failure.
 Accept the configured native robot selector, clarify the advertised inspection
 tool, and stop mixed TAMP batches at unavailable tools. Repeat both declared
 trials on the next clean source; do not replace or rescore the first pair.
+
+The complete replay at `d2b24610` passes both feedback/control tests. Stop-only
+correctly leaves the task incomplete. After explicit reauthorization, recovery
+completes just the remaining cube action and satisfies both original goals.
+All 468 affected tests pass. The model's extra read-only discovery and zero-step
+plan after completion are preserved; no efficiency claim is made. See
+[the receipts, verbatim feedback and limitations](../experiments/tamp_partial_agent_20261116.md).

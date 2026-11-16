@@ -64,7 +64,8 @@ class TaskSession:
 
     Scene revision after each action is expected to advance. Boot/reset/model/
     robot identity must remain stable throughout, and every subsequent action is
-    revalidated from a new measured snapshot. No retries after partial progress.
+    revalidated from a new measured snapshot. Partial progress forbids automatic
+    retry or failed-handle reuse; a new request must ground and plan again.
     """
     def __init__(self, provider: TaskProvider, *, budget: BudgetSpec | None = None):
         self.provider = provider
