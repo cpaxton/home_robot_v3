@@ -31,6 +31,9 @@ find/OVMM consumers, invalidation and checkpoint restoration, manipulation
 reacquisition, EQA answer/room routing, memory rendering and runner configuration.
 `/tmp/agent-simplification-contracts-20261116.xml` records the result.
 Small live qualification remains a distinct gate; CPU success is not task success.
+The first live check is now complete: bowl passes and microwave fails (1/2),
+without OOM. Its audit and limitations are in
+[the development report](../experiments/agent_simplification_20261116.md).
 
 ## Freeze before comparing models
 
@@ -69,17 +72,21 @@ This stage proposes actions but executes none, so it requires no simulation.
 
 | Packet | What to inspect |
 | --- | --- |
-| Bowl admitted, camera turns away | Does the coordinator distinguish remembered location from present visibility and choose a meaningful finish/inspection? |
+| Task switch after bowl completion | Does the coordinator follow the new microwave request without confusing earlier bowl images/IDs with its target? |
 | Microwave visible, geometry rejected | Does it distinguish semantic presence from metric admission and ask for a feasible closer view? |
 | Motion rejected for unknown floor | Does it read the actual rejection, avoid claiming movement, and choose an appropriate sensing/motion tool? |
 | EQA requiring a historical image | Does it retain the task/history and answer from evidence or request the missing image? |
 
 Existing Molmo trace inputs are under
+`~/runs/emet/simplified-find-20261116-r1/` and
 `~/runs/emet/context-image-ids-find-20261115-r5/`. The earlier out-of-range
 microwave examples are under `~/runs/emet/image-context-find-20261115-r1/`.
 Freeze the EQA history packet from existing pilot evidence before inference;
 record all selected packet paths and hashes in a single case manifest. These
 correlated development examples diagnose interfaces, not benchmark accuracy.
+The camera-turn handoff case is covered independently by deterministic contract
+tests; retain it as a regression rather than spending model calls to validate
+the same adapter rule again.
 
 `scripts/replay_vlm_context.py` currently prepares/audits packets without model
 calls. The next tooling increment is a small opt-in generation mode on that
@@ -136,7 +143,11 @@ PYTHONPATH=src .venv/bin/python scripts/run_shared_room_pairs.py \
 ```
 
 This is a find-only complete-system run, not an isolated precision or placement
-test. A seed request does not establish deterministic remote decoding. The
+test. The endpoint supplies the shared VLM roles, including coordinator and
+perception/grounding calls. Stage 1 isolates coordinator choices using frozen
+tool receipts; live results must be labeled as a whole-VLM-backend comparison
+unless role-specific clients are explicitly held fixed. A seed request does not
+establish deterministic remote decoding. The
 current runner timeout is 1,500 seconds per invocation; qualify remote latency
 with packet replays first, and retain timeouts rather than extending limits after
 observing a failure.

@@ -15,6 +15,11 @@
       simulator opt-ins skip; live qualification and fixed-packet model calls
       remain separate. Staged test plan and budgets:
       `docs/plans/2026-11-16_harness_simplification_and_model_eval.md`.
+      First live simplified check completes without OOM: 1/2 phases; bowl ends
+      in four rounds, microwave still lacks geometry after eleven. All 15
+      executions match model choices and 30 assistant/tool messages stay exact.
+      No stable performance gain is established. Report:
+      `docs/experiments/agent_simplification_20261116.md`.
 
 - [x] Connect the sensor-only active GraphEQA baseline. Supplied-model inference,
       learned native graph and observed-space navigation run together; a real
