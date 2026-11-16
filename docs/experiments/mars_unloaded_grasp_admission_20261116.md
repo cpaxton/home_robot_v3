@@ -83,12 +83,18 @@ ignored under `logs/eval/mars-unloaded-grasp-admission-v1/`.
 | --- | --- | --- | --- |
 | Initial focused checks | development tree | `20261116_010149_755d4c` | 107 pass; precedes final endpoint instrumentation |
 | Fixed twelve teacher attempts | `9cd439bf` | `20261116_010524_d39c9d` | complete, 105.03 s, both stage admissions false |
-| Fresh canonical regressions | `9cd439bf` | `20261116_010523_f3750c` | running; not yet a passing receipt |
+| Fresh canonical regressions | `9cd439bf` | `20261116_010523_f3750c` | 1,367/1,367 pass, 760.52 s; receipt independently verified |
+| Offline readout checks and paper | diagnostic source | `20261116_011315_aa8bfe` | four tests pass; paper builds at 58 pages with no undefined citations |
 
 Twenty-two pure admission/runner tests pass after final endpoint instrumentation.
-The canonical gate covers the new native grasp-boundary and reward-timing test;
-its full receipt must finish and verify before this source can be described as
-fully regression-checked. PR #239's older receipt is not reused.
+The completed canonical gate covers the new native grasp-boundary and reward-timing
+test, with zero failures, errors or skips. Its receipt independently verifies
+against the current runtime/canonical tests, whose source manifest exactly matches
+the teacher freeze. The separate
+[validation record](../../paper/data/whole_body_control/mars_unloaded_grasp_admission_v1/validation.json)
+binds the XML/receipt and original teacher results; PR #239's older receipt is
+not reused. Later changes are offline readout code, separately tested outside the
+canonical suite, and documentation/evidence; the frozen runtime is unchanged.
 
 These are six resets observed under two boundaries, rather than twelve independent
 trials for a reliability estimate. No new actor, PPO step, policy export, default

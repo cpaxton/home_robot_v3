@@ -22,6 +22,7 @@ python scripts/summarize_mars_unloaded_primitives.py \
 ```
 
 The readout never advances physics. Its own script hash is in `results.json`;
-the runtime/canonical-regression source is independently bound. Later software
-validation belongs in a separate `validation.json`, preserving the original
-teacher producer identity and results.
+the runtime/canonical-regression source is independently bound. The separate
+`validation.json` records 1,367 passing canonical tests, independent receipt
+verification, four offline readout tests and the 58-page paper build, preserving
+the original teacher producer identity and results. All managed jobs are done.
