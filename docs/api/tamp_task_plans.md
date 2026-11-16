@@ -249,7 +249,10 @@ it does not establish observed navigation/exploration or hardware support.
 
 After verified pickup, this profile refreshes held-object bounds and free support
 centers inside the original destination region. Initial and loaded placement use
-one shared path-planning function. Loaded refinement can try up to 16 centers
+one shared path-planning function and the same local support patches. The original
+release proposal is retained when its measured whole footprint still fits the
+original support/region, and its complete updated paths must certify it again.
+Loaded refinement can try up to 16 centers
 using the initial primitive's unused IK/time budget; its extra calls also debit
 the task provider's episode budget. Controller execution time is excluded from
 planning time. The original grasp reference is preserved and no command is sent

@@ -35,3 +35,10 @@ Historical native 4/8 and Caliban 3/4 records are unchanged.
 [source/job/artifact manifest](tamp_native_base_approach_initial_20261116.json).
 Raw trials and component/probe records remain in ignored
 `.tamp-runs/base-approach-20261116/`.
+
+The first refinement replay at `2477cd3f` passes all 365 software tests but loses
+the first swap placement: its loaded sampler omitted the original proposal and
+the initial planner's local reach patches. The control had completed successfully;
+remaining trials were stopped and their interruptions retained. The next source
+restores those candidates, retains whole-footprint containment and complete path
+checks, and replays the original population. The failed run is not rescored.

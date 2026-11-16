@@ -409,5 +409,17 @@
       "sha256": "b305ac9b93311f70bb78202437d7aeade307d20f7d831f18810aa13407078991"
     },
     "scope": "Measured wheel move and stop only; no manipulation/task claim"
+  },
+  "refinement_source_interruption": {
+    "source_commit": "2477cd3f",
+    "artifact": {
+      "path": ".tamp-runs/base-approach-refined-20261116/interruption.json",
+      "sha256": "25ac6cc4760ab12c775c608936dd304bde3b0995040ee6a6898ff39789d05619"
+    },
+    "swap_failure": "no_collision_free_placement after pickup; no completed transfer",
+    "cause": "Loaded refinement omitted original preplanned release candidate and local reach patches",
+    "software_tests": 365,
+    "software_failures": 0,
+    "original_case_population_replayed_next": true
   }
 }

@@ -555,6 +555,23 @@ def test_loaded_placement_refresh_preserves_reference_and_shared_budget(native, 
         command.assert_not_called()
 
 
+def test_loaded_refinement_retains_valid_original_goal_when_sampler_has_no_proposals(native, monkeypatch):
+    from emet.controller.task.tamp import native_placement
+    _, _, context, call = native
+    adapter = context['_native_tamp_adapter']
+    plan = adapter.plans[make_plan(call)]
+    ex = plan.executor
+    ex.payload_body = plan.object_body
+    ex.collision.set_payload(adapter.model, adapter.data, plan.object_body, ex.ee_body)
+    goal = plan.goal.copy()
+    monkeypatch.setattr(native_placement, 'free_surface_centers', lambda *a, **k: SimpleNamespace(centers=[]))
+    planner = Mock(return_value=([[], [], []], None))
+    monkeypatch.setattr(native_placement, 'placement_paths', planner)
+    assert native_placement.refine_loaded_placement(adapter, plan).success
+    planner.assert_called_once()
+    np.testing.assert_array_equal(plan.goal, goal)
+
+
 @pytest.mark.parametrize('started', [False, True])
 def test_failed_base_approach_cannot_dispatch_grasp(native, monkeypatch, started):
     from emet.controller.task.tamp.native_approach import ApproachResult, BaseApproach

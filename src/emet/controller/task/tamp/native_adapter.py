@@ -26,7 +26,7 @@ from emet.controller.task.tamp.native_approach import (
     execute_approach,
     planning_starts,
 )
-from emet.controller.task.tamp.native_placement import placement_paths, refine_loaded_placement
+from emet.controller.task.tamp.native_placement import local_support_patches, placement_paths, refine_loaded_placement
 from emet.controller.task.tamp.native_policy import (
     FINE_GRASP_YAWS,
     bind_loaded_payload,
@@ -452,14 +452,7 @@ class NativeTableAdapter:
                                 ee_position=ee.xpos, ee_rotation=ee.xmat.reshape(3, 3))
                             # Stationary reach is local: include clipped subpatches near the
                             # grasp, rather than only centers across the whole tabletop.
-                            patches = list(surfaces)
-                            for radius in (.08, .16, .32):
-                                for surface in surfaces:
-                                    patch = surface.copy()
-                                    patch[0, :2] = np.maximum(patch[0, :2], point[:2]-radius)
-                                    patch[1, :2] = np.minimum(patch[1, :2], point[:2]+radius)
-                                    if np.all(patch[0, :2] < patch[1, :2]):
-                                        patches.append(patch)
+                            patches = local_support_patches(surfaces, point)
                             centers = free_surface_centers(patches, scene=scene, payload=payload,
                                 ee_rotation=rotation, max_centers=64).centers
                             if not centers:

@@ -13,6 +13,19 @@ from emet.motion.placement_surfaces import free_surface_centers
 from emet.simulation.sim_object_placements import placements_from_mujoco_model
 
 
+def local_support_patches(surfaces, point):
+    """Retain full support patches and the same local reach patches in both stages."""
+    patches = list(surfaces)
+    for radius in (.08, .16, .32):
+        for surface in surfaces:
+            patch = surface.copy()
+            patch[0, :2] = np.maximum(patch[0, :2], point[:2]-radius)
+            patch[1, :2] = np.minimum(patch[1, :2], point[:2]+radius)
+            if np.all(patch[0, :2] < patch[1, :2]):
+                patches.append(patch)
+    return patches
+
+
 def placement_paths(adapter, executor, targets):
     """Use one planning path for initial candidates and loaded refinements."""
     paths = []
@@ -61,10 +74,18 @@ def refine_loaded_placement(adapter, plan):
         ee = data.body(ex.ee_body)
         held = HeldObject.from_world_bounds(entries[plan.object_body]['bounds'],
             ee_position=ee.xpos, ee_rotation=ee.xmat.reshape(3, 3))
-        centers = free_surface_centers(surfaces, scene=scene, payload=held,
+        patches = local_support_patches(surfaces, np.asarray(entries[plan.object_body]['pos']))
+        centers = free_surface_centers(patches, scene=scene, payload=held,
             ee_rotation=plan.rotation, max_centers=16).centers
         centers.sort(key=lambda c: float(np.linalg.norm(c[:2]-plan.goal[:2])))
-        for goal in centers:
+        # Preserve the original proposal if its newly measured full footprint
+        # still fits the requested support/region. All updated arm/payload paths
+        # must certify it again; nominal planning alone never authorizes motion.
+        half = np.ptp(held.vertices_ee @ plan.rotation.T, axis=0)/2
+        if any(np.all(plan.goal[:2]-half[:2] >= patch[0, :2])
+               and np.all(plan.goal[:2]+half[:2] <= patch[1, :2]) for patch in surfaces):
+            centers = [plan.goal.copy(), *[c for c in centers if not np.allclose(c, plan.goal, atol=1e-9)]]
+        for goal in centers[:16]:
             data.qpos[:] = before
             ex.collision.restore_payload(payload)
             mujoco.mj_kinematics(model, data)
