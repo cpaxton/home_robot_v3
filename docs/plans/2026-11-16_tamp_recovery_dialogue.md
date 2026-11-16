@@ -60,25 +60,33 @@ or paper-to-paper numerical comparison is claimed in this change.
 ## Review and merge status (November 16)
 
 Dependency order is #226 → #231 → #234 → #242 → #243 → #244. The first
-three foundations are merged. Remaining children receive integration checks
-against the resulting main before landing.
+five foundations are merged. This change completes the reviewed dialogue layer;
+its final integration gate passes on source `a7ee2ab4`. Integrating the landed
+parents preserves the tested runtime, scripts, configs and paper trees.
 
-| PR | Scope | Work before landing |
+| PR | Scope | Review and integration evidence |
 | --- | --- | --- |
 | [#226](https://github.com/cpaxton/home_robot_v3/pull/226) | Observed evidence/adapter foundation | Merged as `fb9f9bf1`; foundation scope only. Default observed discovery stays read-only. Open self-occupancy/tracking limitations are tracked in #245; no observed task success is claimed. |
 | [#231](https://github.com/cpaxton/home_robot_v3/pull/231) | Shared bounded native release policy | Merged as `e9478d3d`. Current-main integration: 1,103 tests and native/actual-agent two-goal smokes pass. Independent review agent: no blocker, 30 focused tests pass. Historical failed cohorts remain unchanged. |
 | [#234](https://github.com/cpaxton/home_robot_v3/pull/234) | Native IK reserve, grasp ordering and retention diagnostics | Merged as `db35f08b`. 467 integration tests and native 2/2 control pass; independent review agent passed 19 focused tests. Review includes closing, ordering and verification additions. Integrating landed #231 preserved the complete tested tree. |
-| [#242](https://github.com/cpaxton/home_robot_v3/pull/242) | Checked unloaded approach and loaded placement refresh | Original and updated-parent integration reviews find no blocker. Integration tests and shifted-swap native/actual-agent smokes are the gate. Parent fixture fix reuses the loaded model; production freshness guards remain unchanged. |
-| [#243](https://github.com/cpaxton/home_robot_v3/pull/243) | Named partial receipts, prospective trials and restated-goal recovery | Author and independent-agent reviews find no production blocker. 199 exact-head targeted tests pass; original recovery sequence was manually verified. Parent integration remains required. |
-| [#244](https://github.com/cpaxton/home_robot_v3/pull/244) | Contextual retry, serial TAMP proposals and prior work | Independent review agent: no production blocker; 55 focused tests pass. This ledger update resolves its documentation nit. Parent integration remains required; historical corrected live pair and 485 tests remain separate evidence. |
+| [#242](https://github.com/cpaxton/home_robot_v3/pull/242) | Checked unloaded approach and loaded placement refresh | Merged as `5e2a643e`. Integration reviews find no blocker; 585 tests pass. Native and actual-agent shifted swaps each complete 3/3 transfers and independent goals; 1,691 audited commands, none forbidden. Parent fixture fix preserves production freshness guards. |
+| [#243](https://github.com/cpaxton/home_robot_v3/pull/243) | Named partial receipts, prospective trials and restated-goal recovery | Merged as `6d0750bd`. Independent original/final integration reviews find no blocker; 205 integration tests pass. Original recovery sequence was manually verified; #244 supplies automatic sequence scoring. |
+| [#244](https://github.com/cpaxton/home_robot_v3/pull/244) | Contextual retry, serial TAMP proposals and prior work | Independent review finds no production blocker; 55 focused checks plus 230 integration tests pass (overlapping). Updated-main actual-agent stop/retry pair passes: named no-command step-2 failure, stop, then fresh one-step contextual retry and both goals. 794 audited commands, none forbidden; 12 model calls, no shutdown warnings. Ledger nit resolved; full paper builds to 70 pages. |
 
 The [#243 self-review](https://github.com/cpaxton/home_robot_v3/pull/243#pullrequestreview-5922413427)
 is author review, not independent approval. It notes that #243's original recovery
 scorer does not automatically enforce the fresh-admission sequence; the recorded
-trace supplies that evidence and #244 adds explicit checks. No GitHub commit
-statuses or Actions check runs exist on #243's head; local validation is not
-described as hosted CI. The new 199-test review run does not replace or rerun its
-previous 468-test/live cohorts.
+trace supplies that evidence and #244 adds explicit checks. Review-agent feedback
+is posted by the repository author and is not human approval. Reported tests
+are local checks, not hosted CI. The earlier 199-test review run and later
+integration checks do not replace or rescore the previous 468-test/live cohorts.
+
+Final [#244 integration evidence](../experiments/pr244_main_integration_20261116.md)
+records both actual-agent controls, exact partial receipts, source and artifact
+hashes. Stop-only deliberately leaves the full task incomplete; the retry case
+alone completes both goals. The refusal is injected planning admission after a
+real verified transfer, not natural solver exhaustion or contact/unknown-outcome
+recovery. Historical failures and all earlier populations remain separate.
 
 Preserve independently landed state and controller fixes, and keep #226's
 foundation-only scope explicit while observed execution remains gated. Merge
