@@ -1,5 +1,7 @@
 # Actual-agent partial feedback and authorized recovery
 
+Review: [PR #243](https://github.com/cpaxton/home_robot_v3/pull/243), stacked on #242.
+
 Predeclare two trials in [the JSON protocol](../../configs/eval/tamp_partial_agent_20261116.json)
 before live execution. Use the actual `emet.app.run_agent` CLI with a diagnostic
 bootstrap that replaces only the native provider constructor with the existing
