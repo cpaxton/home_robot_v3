@@ -252,11 +252,13 @@ class Simulation:
                             "base_heading_tolerance",
                             "hand_position_tolerance",
                             "hand_orientation_tolerance",
+                            "tracking_precision",
                         )
                         if key in source
                     },
                 }
             self.env.config = replace(self.env.config, **settings)
+            self.env.set_tracking_precision(self.env.config.tracking_precision)
             self.env.control.set_physical_wheel_slew(
                 self.env.config.physical_wheel_slew, jerk_limits=self.env.config.wheel_jerk_limits
             )

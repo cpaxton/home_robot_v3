@@ -415,6 +415,7 @@ def navigation_policy(sim, tmp_path):
         sim.env.config, action_mode="direct_velocity", retention_context=True,
         trajectory_preview=True, tracking_reward=True, physical_wheel_slew=True,
         wheel_feedback_gain=0.5, wheel_feedback_current_velocity=True,
+        tracking_precision=4, terminal_hold_seconds=2,
         base_xy_tolerance=0.05, base_heading_tolerance=np.deg2rad(5),
     )
     return export_actor(
@@ -430,6 +431,8 @@ def test_navigation_ui_replans_preserve_physics_and_show_endpoint_not_intermedia
         sim.use_policy(navigation_policy(sim, tmp_path), "navigation-test")
         assert sim.env.control.base_velocity_feedback_current
         assert sim.env.control.physical_wheel_slew_enabled
+        assert sim.env.tracking_precision == 4
+        assert sim.env.config.terminal_hold_seconds == 2
         sim.select_target_mode(1)
         target = sim.env.control.base_pose() + [0.08, 0, 0]
         sim.goal(target)
