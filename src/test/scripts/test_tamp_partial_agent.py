@@ -62,3 +62,35 @@ def test_fault_bootstrap_requires_native_simulation(monkeypatch, tmp_path):
         bootstrap.main()
     assert error.value.code == 2
     invoke.assert_not_called()
+
+
+def test_contextual_retry_does_not_restate_or_leak_the_goal(runner):
+    case = {'instruction': 'secret original goal'}
+    assert runner.recovery_request(case, 'contextual') == 'Please retry the remaining work.'
+    assert case['instruction'] in runner.recovery_request(case, 'restated')
+
+
+@pytest.mark.parametrize('change', [None, 'reuse', 'no_discovery', 'two_steps', 'double_execute', 'error'])
+def test_recovery_requires_fresh_one_transfer_admission(runner, change):
+    import json
+
+    from emet.controller.task.tamp.api import response
+
+    def row(name, data):
+        return {'role': 'tool', 'content': '['+name+'] '+json.dumps(response(name, data=data))}
+
+    rows = [{'role': 'user'}, row('plan_task', {'plan_ref': 'old', 'steps': 2}),
+            {'role': 'user'}, row('scene_tasks', {}),
+            row('plan_task', {'plan_ref': 'new', 'steps': 1}),
+            row('execute_task_plan', {'completed_steps': 1, 'goal_verified': True})]
+    if change == 'reuse':
+        rows[4] = row('plan_task', {'plan_ref': 'old', 'steps': 1})
+    elif change == 'no_discovery':
+        rows.pop(3)
+    elif change == 'two_steps':
+        rows[4] = row('plan_task', {'plan_ref': 'new', 'steps': 2})
+    elif change == 'double_execute':
+        rows.append(copy.deepcopy(rows[-1]))
+    elif change == 'error':
+        rows.append({'role': 'tool', 'content': '[scene_tasks] malformed'})
+    assert runner.recovery_trace(rows)['verified'] is (change is None)

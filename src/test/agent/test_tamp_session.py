@@ -268,3 +268,39 @@ def test_observed_native_factory_rejects_wrong_mode_and_cleans_up(monkeypatch, m
                                   thinking_status=False, observed_native_factory=factory)
     factory.assert_not_called()
     robot.stop.assert_called_once()
+
+
+@pytest.mark.parametrize('new_request,retry', [
+    ('Please retry the remaining work', True), ('Explain what happened', False),
+    ('Stop', False), ('Only plan the remaining work', False),
+])
+def test_actual_loop_resets_llm_but_supplies_context_and_never_replays_final_tools(monkeypatch, new_request, retry):
+    setup_chat_loop(monkeypatch)
+    execute = MagicMock(side_effect=[json.dumps(response('execute_task_plan', status='partial', code='task_motion_budget_exhausted', data={'completed_steps': 1, 'goal_verified': False})), json.dumps(response('execute_task_plan'))])
+    discover = MagicMock(return_value=json.dumps(response('scene_tasks')))
+    tools = [Tool(name=name, description='test', parameters={'type': 'object', 'properties': {}},
+                  func=fn, returns_info=True) for name, fn in (
+                      ('execute_task_plan', execute), ('scene_tasks', discover))]
+    monkeypatch.setattr(loop, 'get_tools', lambda _: tools)
+
+    def call(name):
+        return json.dumps({'tool_calls': [{'name': name, 'arguments': {}}]}), .1
+
+    # The hostile final summarizer must not execute its proposed extra command.
+    replies = [call('execute_task_plan'), call('execute_task_plan')]
+    if retry:
+        replies += [call('scene_tasks')]
+    replies += [('{"message":"Stopped","tool_calls":[]}', .1)]
+    llm = MagicMock(side_effect=replies)
+    monkeypatch.setattr(loop, '_call_llm', llm)
+    original = 'Move alpha left and beta right; leave gamma alone'
+    loop.run_agent_with_robot(discord=False, use_llm=True, commands=[original, new_request],
+                              device='cpu', thinking_status=False, max_tool_rounds=8,
+                              tamp_task_session=object())
+    execute.assert_called_once()
+    assert discover.call_count == int(retry)
+    recovery_call = llm.call_args_list[2]
+    assert recovery_call.kwargs['reset_context'] is True
+    assert original in recovery_call.args[1]
+    assert 'goal_verified' in recovery_call.args[1]
+    assert recovery_call.args[1].endswith('New user request:\n'+new_request)

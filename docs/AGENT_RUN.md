@@ -64,7 +64,9 @@ flowchart LR
 (`reset_context=True`). Passing `False` deliberately replays the full retained
 dialogue, including encoded prior images; it does not evict old images to save
 tokens. CHAT resets at the first tool round of each user turn and continues for
-tool follow-ups/summarization. Interactive `emet run chat` also intentionally keeps
+tool follow-ups/summarization. TAMP retains a bounded text-only summary across
+consecutive TAMP turns, described below; it does not replay earlier images.
+Interactive `emet run chat` also intentionally keeps
 history; its single-turn mode resets. DynaMem caption/keyword calls go through
 `dynamem_vllm_call`, which explicitly resets on each inference.
 
@@ -351,6 +353,16 @@ for example 12, for discovery, planning, execution, and rediscovery across objec
 A failed/partial/unknown TAMP outcome ends that turn with a summary; no action
 returned by that final summary executes. Inspect before an explicit recovery
 turn. A request only to plan does not authorize execution.
+
+For contextual requests such as “please retry the remaining work,” CHAT supplies
+up to two preceding consecutive TAMP user requests and public outcome summaries.
+These contain named historical progress and failure/dispatch flags, without
+plan handles, raw observations or images. Each record is limited to 8192
+characters; oversized records are dropped whole, and a non-TAMP turn clears the
+history. This summary is not current scene evidence or renewed authorization.
+A newly authorized retry requires fresh `scene_tasks` and a fresh plan. An
+explanation or plan-only request must not execute; ambiguous referents require
+clarification. Unknown dispatch and held-object recovery remain unqualified.
 
 `--state-only-sim --memory-backend dynamem` is an explicit camera-free Stretch
 simulation diagnostic. It requires LLM CHAT, no EQA/camera input or checkpoint,

@@ -70,7 +70,7 @@ MolmoSpaces also hosts an open manipulation leaderboard; \textbf{TiPToP}~\citep{
 TiPToP constructs object geometry and symbolic goals from images, then searches action sequences including obstacle relocation.
 Its documented execution uses open-loop trajectories with joint impedance control, and its perception assumes task-relevant objects are at least partially visible from a fixed capture viewpoint.
 This motivates explicit geometric feasibility checks beneath language-level task selection.
-Our current manipulation evidence is narrower: a stationary Stretch simulator executes public JSON tools using privileged geometry and measured execution checks (Appendix~\ref{app:native_tamp}).
+Our current manipulation evidence is narrower: tabletop Stretch simulation executes public JSON tools using privileged geometry, checked unloaded base approaches, and measured execution checks (Appendix~\ref{app:native_tamp}).
 Connecting those tools to dynamic observed memory, exploration, and verified multi-step execution remains an integration objective; we do not claim comparable end-to-end manipulation performance.
 
 
@@ -97,5 +97,16 @@ connects symbolic planning to black-box continuous samplers. Our shared operator
 and motion-refinement interfaces are related design choices, but the current
 greedy/beam/UCT implementations are not PDDLStream. TiPToP's pixel-to-manipulation
 system remains the closer end-to-end comparison target, while our present native
-results use privileged stationary inputs. Appendix~\ref{app:combined_agent}
+results use privileged simulator inputs. Appendix~\ref{app:combined_agent}
 separates implemented orchestration from the remaining observed-execution gate.
+
+\citet{merler2026agenticgentamp} study coding agents that probe a simulator and
+synthesize reusable policies for generalized TAMP. Their policies are frozen
+before evaluation on unseen instances, with no LLM at test time; the setting
+uses fully observed object-centric states and distinguishes black-box simulator
+access from source access. This provides a useful policy-synthesis baseline and
+motivates separate development and deployment budgets. Our current trials
+instead evaluate online language-agent orchestration over validated robot tools,
+including measured partial progress and explicitly authorized recovery. We have
+not reproduced their benchmark or established performance under observed
+perception uncertainty.

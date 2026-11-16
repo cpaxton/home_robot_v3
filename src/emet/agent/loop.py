@@ -36,6 +36,7 @@ from termcolor import colored
 from emet.agent.env_flags import env_agent_camera_debug
 from emet.agent.model_debug import print_embodied_model_report, print_llm_invoke_line
 from emet.agent.prompt import DEFAULT_AGENT_NAME, AgentPromptBuilder, parse_tool_calls_response
+from emet.agent.tamp_dialogue import TampDialogueContext
 from emet.agent.tamp_session import tamp_followup
 from emet.agent.tamp_world import task_world_change
 from emet.agent.thinking_status import (
@@ -1257,6 +1258,7 @@ def run_agent_with_robot(
             print(file=sys.stdout)
         print("-" * 60, flush=True)
 
+    tamp_dialogue = TampDialogueContext()
     while ok:
         update_xyt()
 
@@ -1279,7 +1281,9 @@ def run_agent_with_robot(
             # --- Multi-turn tool-use loop ---
             # The LLM may call tools that return information (e.g. query_memory).
             # When that happens we feed the results back and let the LLM summarize.
-            current_input = user_text
+            turn_request = tamp_dialogue.prompt(user_text)
+            current_input = turn_request
+            turn_results = []
             turn_t0 = timeit.default_timer()
             for _round in range(max_tool_rounds):
                 cam_image = None
@@ -1410,6 +1414,7 @@ def run_agent_with_robot(
                         tamp_context=context,
                     )
                 tools_elapsed = timeit.default_timer() - tools_t0
+                turn_results.extend(results)
                 print_terminal(
                     f"tools done in {tools_elapsed:.1f}s ({', '.join(tool_names)})",
                     color="cyan",
@@ -1436,7 +1441,7 @@ def run_agent_with_robot(
                             break
                     # Last round: do not continue into exhaustion with a silent turn —
                     # force a no-tool summarize or relay tool text.
-                    continuation = tamp_followup(user_text, results)
+                    continuation = tamp_followup(turn_request, results)
                     tamp_stopped = any(c.get("name") in TAMP_TOOLS for c in tool_calls) and continuation is None
                     last_round = _round >= max_tool_rounds - 1 or tamp_stopped
                     followup = (
@@ -1525,6 +1530,7 @@ def run_agent_with_robot(
                         chat_log.log("assistant", fallback, silent_action_fallback=True)
                     print_terminal(f"turn done in {timeit.default_timer() - turn_t0:.1f}s", color="cyan")
                     break
+            tamp_dialogue.record_turn(user_text, turn_results)
             if ok:
                 _print_user_turn_separator()
             continue
