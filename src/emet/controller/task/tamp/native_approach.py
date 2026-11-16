@@ -125,13 +125,20 @@ def execute_approach(robot, executor, approach):
     current = base_pose(model, data)
     if np.linalg.norm(current[:2]-start[:2]) > .01 or abs(_angle(current[2]-start[2])) > .015:
         return ApproachResult(False, 'base_approach_invalidated')
+    before_check = data.qpos.copy()
     if not sweep_clear(model, data, current, goal, event=executor.event):
         return ApproachResult(False, 'base_approach_invalidated')
-    arm = data.qpos[executor.qadr].copy()
     robot_ids = body_subtree(model, 'base_link')
     scene_addresses = [address for j in range(model.njnt) if model.jnt_bodyid[j] not in robot_ids
                        for address in range(int(model.jnt_qposadr[j]),
                                             int(model.jnt_qposadr[j+1]) if j+1 < model.njnt else model.nq)]
+    executor.synchronize(data)
+    current = base_pose(model, data)
+    if (np.linalg.norm(current[:2]-start[:2]) > .01 or abs(_angle(current[2]-start[2])) > .015
+            or np.max(np.abs(data.qpos[executor.qadr]-before_check[executor.qadr])) > .002
+            or scene_addresses and np.max(np.abs(data.qpos[scene_addresses]-before_check[scene_addresses])) > .0001):
+        return ApproachResult(False, 'base_approach_invalidated')
+    arm = data.qpos[executor.qadr].copy()
     scene_reference = data.qpos[scene_addresses].copy()
     direction = goal[:2]-start[:2]
     length = float(np.linalg.norm(direction))

@@ -246,3 +246,19 @@ Results publish `base_motion=checked_unloaded_approach` and
 handle. Physical task success still requires the existing retention, release
 and final-goal gates. Live qualification of this experimental profile is pending;
 it does not establish observed navigation/exploration or hardware support.
+
+After verified pickup, this profile refreshes held-object bounds and free support
+centers inside the original destination region. Initial and loaded placement use
+one shared path-planning function. Loaded refinement can try up to 16 centers
+using the initial primitive's unused IK/time budget; its extra calls also debit
+the task provider's episode budget. Controller execution time is excluded from
+planning time. The original grasp reference is preserved and no command is sent
+during this refinement. Exhaustion remains a partial held-object failure with
+`verification.substage=loaded_placement_planning`. The execution receipt reports
+the resulting world-space placement goal.
+
+Payload-center offsets are expressed in the measured EE frame and transformed
+through the desired placement rotation, rather than reusing a world-frame
+offset when the target EE orientation differs. All placement/release/effect
+checks still apply. See the [initial base-approach pilot](../experiments/tamp_native_base_approach_initial_20261116.md)
+for the retained third-transfer failure motivating this refinement.

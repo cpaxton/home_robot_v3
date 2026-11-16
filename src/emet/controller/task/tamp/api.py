@@ -20,7 +20,8 @@ class VerificationFailure:
 
     def __post_init__(self):
         if not isinstance(self.substage, str) or not isinstance(self.reason, str) or self.substage not in {
-            "lift_motion", "post_lift_hold", "loaded_payload_handoff", "loaded_motion", "post_release_support"
+            "lift_motion", "post_lift_hold", "loaded_payload_handoff", "loaded_motion", "post_release_support",
+            "loaded_placement_planning",
         } or self.reason not in {
             "payload_not_retained", "motion_unverified", "reference_binding_invalid",
             "bilateral_contact_unverified", "support_contact_persists", "unexpected_contact",
@@ -135,7 +136,7 @@ def response(
                 "receptacle_not_found",
             }
             else "replan"
-            if code in {"scene_changed_replan", "unknown_plan", "approach_changed_replan", "stale_task_plan"}
+            if code in {"scene_changed_replan", "unknown_plan", "approach_changed_replan", "stale_task_plan", "base_approach_invalidated"}
             else "inspect"
         )
     return {

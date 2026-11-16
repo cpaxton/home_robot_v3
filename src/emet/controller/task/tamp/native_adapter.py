@@ -26,6 +26,7 @@ from emet.controller.task.tamp.native_approach import (
     execute_approach,
     planning_starts,
 )
+from emet.controller.task.tamp.native_placement import placement_paths, refine_loaded_placement
 from emet.controller.task.tamp.native_policy import (
     FINE_GRASP_YAWS,
     bind_loaded_payload,
@@ -52,6 +53,9 @@ class NativePlan:
     object_name: str = ""
     receptacle_name: str = ""
     base_approach: BaseApproach | None = None
+    planning_ik_calls: int = 0
+    planning_ik_limit: int = 256
+    planning_seconds_remaining: float | None = None
 
 
 class NativeTableAdapter:
@@ -290,8 +294,9 @@ class NativeTableAdapter:
     def _place_targets(self, executor, obj, goal, rotation):
         # Compute the measured/predicted payload offset, not a category-specific center assumption.
         placements = placements_from_mujoco_model(self.model, self.data)
-        offset = np.asarray(placements[obj]['pos']) - self.data.body(executor.ee_body).xpos
-        release = goal - offset
+        ee = self.data.body(executor.ee_body)
+        offset = ee.xmat.reshape(3, 3).T @ (np.asarray(placements[obj]['pos']) - ee.xpos)
+        release = goal - rotation @ offset
         return [(release + [0, 0, .12], rotation), (release, rotation),
                 (release + [0, .10, .12], rotation)]
 
@@ -467,23 +472,15 @@ class NativeTableAdapter:
                                 mujoco.mj_kinematics(self.model, self.data)
                                 executor.place_targets = self._place_targets(executor, obj, goal, rotation)
                                 # Pure planning: never call the measured-state replan here, which would reset the hypothetical lift.
-                                candidates = []
-                                for i, (target, rot) in enumerate(executor.place_targets):
-                                    if i == 2:
-                                        executor.collision.set_payload(self.model, self.data, None)
-                                        _, error = executor.plan_gripper_open()
-                                        if error:
-                                            self._record_rejection('release_open', error, executor)
-                                            break
-                                    path, error = self._plan_candidate_pose(executor, target, rot)
-                                    if error:
-                                        self._record_rejection(('preplace', 'place', 'retreat')[i], error, executor)
-                                        break
-                                    candidates.append(path)
-                                if len(candidates) == 3:
+                                candidates, error = placement_paths(self, executor, executor.place_targets)
+                                if candidates is not None:
                                     executor.place_paths = candidates
                                     ref = f'plan:{self.namespace}:{uuid.uuid4().hex}'
-                                    self.plans[ref] = NativePlan(obj, support, initial, goal, rotation, executor, self.boot, region, base_approach=approach, **identity)
+                                    self.plans[ref] = NativePlan(obj, support, initial, goal, rotation, executor, self.boot, region, base_approach=approach,
+                                        planning_ik_calls=self.planning_ik_calls,
+                                        planning_ik_limit=self.max_planning_ik_calls,
+                                        planning_seconds_remaining=max(0., self._planning_deadline-time.monotonic())
+                                            if self._planning_deadline is not None else None, **identity)
                                     return response('plan_pick_place', data=self._data(**identity, plan_ref=ref,
                                         approach_required=approach is not None,
                                         planned_ops=['grasp', 'place'], completed_ops=[], failed_stage=None, measurements=[],
@@ -605,6 +602,12 @@ class NativeTableAdapter:
                 completed.append('grasp')
                 self.synchronize(self.data)
                 ex.place_targets = self._place_targets(ex, plan.object_body, plan.goal, plan.rotation)
+                if self.checked_base_approach:
+                    phase = 'place_refinement'
+                    refined = refine_loaded_placement(self, plan)
+                    if not refined.success:
+                        return fail(refined.message, completed=completed, phase=phase,
+                            verification=VerificationFailure('loaded_placement_planning', 'motion_unverified'))
                 ex.transport = lambda: PhysicalMotionResult(True, 'stationary', 'transport')
                 phase = 'place'
                 if self.release_limits is not None:
@@ -618,6 +621,7 @@ class NativeTableAdapter:
                     return fail('placement_verify_failed', completed=completed, phase='release', verification=self.last_verification)
                 completed.append('place')
                 return response('execute_pick_place_plan', data=self._data(**identity, plan_ref=plan_ref,
+                    placement_goal={'frame': 'world', 'object_center': plan.goal.tolist()},
                     planned_ops=['grasp','place'], completed_ops=completed, failed_stage=None,
                     measurements=[{'source':'simulator_ground_truth','bilateral_hold_s':1.,'stable_support_s':2.,
                                    'placement_region_verified': plan.placement_region is not None}]))

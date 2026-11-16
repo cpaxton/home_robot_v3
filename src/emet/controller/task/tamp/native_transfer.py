@@ -208,7 +208,12 @@ class NativeTableTransferProvider(RegionTransferProvider):
             if plan_ref is None:
                 code = 'task_motion_budget_exhausted' if self._ik_remaining <= 0 else 'task_motion_planning_failed'
                 return TaskExecutionResult(False, False, code)
-            result = self.adapter.execute(plan_ref)
+            before_calls = int(getattr(self.adapter, 'planning_ik_calls', 0))
+            try:
+                result = self.adapter.execute(plan_ref)
+            finally:
+                extra = max(0, int(getattr(self.adapter, 'planning_ik_calls', 0))-before_calls)
+                self._ik_remaining = max(0, self._ik_remaining-extra)
             started = result.get('data', {}).get('execution_started')
             from .api import VerificationFailure, failure_code
             code = failure_code(result.get('code', ''))

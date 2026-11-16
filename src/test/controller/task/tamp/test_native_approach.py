@@ -85,7 +85,7 @@ def test_changed_geometry_rejects_before_dispatch(monkeypatch):
     m, d = scene(obstacle='<geom type="box" pos=".02 0 .1" size=".002 .01 .01"/>')
     robot = SimpleNamespace(get_emet_session=lambda: {'is_simulation': True},
         move_base_to=Mock(), cancel_navigation=Mock())
-    executor = SimpleNamespace(model=m, data=d, synchronize=lambda data: None)
+    executor = SimpleNamespace(model=m, data=d, synchronize=lambda data: None, event=Mock())
     result = module.execute_approach(robot, executor, module.BaseApproach((0., 0., 0.), (.04, 0., 0.)))
     assert result.reason == 'base_approach_invalidated' and not result.execution_started
     robot.move_base_to.assert_not_called()
@@ -125,3 +125,31 @@ def test_moving_object_revalidates_remaining_sweep_before_arrival(monkeypatch):
     assert clock[0] < .5
     assert executor.event.call_args.kwargs['reason'] == 'scene_changed_collision'
     robot.cancel_navigation.assert_called_once()
+
+
+def test_arrival_budget_starts_after_expensive_preflight(monkeypatch):
+    monkeypatch.setenv('EMET_SIM_NAV_TELEPORT', '0')
+    m, d = scene()
+    clock, sent, checked = [0.], [False], [False]
+    def sweep(*args, **kwargs):
+        if not checked[0]:
+            checked[0] = True
+            clock[0] += 20.
+        return True
+    def send(*args, **kwargs):
+        sent[0] = True
+        return True
+    def sync(data):
+        data.time = clock[0]
+        if sent[0]:
+            data.qpos[0] = min(.04, .04*(clock[0]-20.))
+        mujoco.mj_kinematics(m, data)
+    monkeypatch.setattr(module, 'sweep_clear', sweep)
+    monkeypatch.setattr(module, 'time', SimpleNamespace(monotonic=lambda: clock[0],
+        sleep=lambda dt: clock.__setitem__(0, clock[0]+dt)))
+    robot = SimpleNamespace(get_emet_session=lambda: {'is_simulation': True},
+        move_base_to=Mock(side_effect=send), cancel_navigation=Mock(return_value=True))
+    ex = SimpleNamespace(model=m, data=d, synchronize=sync, qadr=np.array([7]),
+                         joint_tolerance=.03, event=Mock())
+    result = module.execute_approach(robot, ex, module.BaseApproach((0., 0., 0.), (.04, 0., 0.)))
+    assert result.success and clock[0] >= 21.5

@@ -107,7 +107,7 @@ def prepare(args, pilot, case, out):
     for name in ('scripts/eval_tamp_contact_stability.py', 'src/emet/eval/contact_stability.py',
                  'src/emet/simulation/stretch_mujoco/config.py', 'src/emet/motion/kinematics.py',
                  'src/emet/motion/grasp_alignment.py',
-                 'src/emet/controller/task/tamp/native_approach.py',
+                 'src/emet/controller/task/tamp/native_approach.py', 'src/emet/controller/task/tamp/native_placement.py',
                  'src/emet/controller/task/tamp/api.py', 'src/emet/controller/task/tamp/task_session.py',
                  'src/emet/motion/release.py', 'src/emet/controller/task/tamp/native_policy.py',
                  'src/emet/controller/task/tamp/native_transfer.py',
