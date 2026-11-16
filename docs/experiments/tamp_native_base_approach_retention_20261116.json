@@ -1,0 +1,238 @@
+{
+  "source": "158fd427",
+  "scope": "Same-source development diagnostic; independent resets, not matched initial-state pairs; sparse samples end before any loaded rebind",
+  "series": [
+    {
+      "case_id": "stationary-swap-ablation",
+      "time_origin": "first sampled lift command",
+      "points": [
+        {
+          "sim_time": 167.4640000000715,
+          "rotation_rad": 0.0019222706632768404,
+          "phase": "lift"
+        },
+        {
+          "sim_time": 167.66400000007246,
+          "rotation_rad": 0.007286884457389617,
+          "phase": "lift"
+        },
+        {
+          "sim_time": 168.1100000000746,
+          "rotation_rad": 0.04629303287382771,
+          "phase": "lift"
+        },
+        {
+          "sim_time": 168.54200000007665,
+          "rotation_rad": 0.06050989735636671,
+          "phase": "lift"
+        },
+        {
+          "sim_time": 168.9720000000787,
+          "rotation_rad": 0.06538849966800268,
+          "phase": "lift"
+        },
+        {
+          "sim_time": 169.42200000008086,
+          "rotation_rad": 0.068597961068667,
+          "phase": "lift"
+        },
+        {
+          "sim_time": 169.8500000000829,
+          "rotation_rad": 0.07141574631578457,
+          "phase": "lift"
+        },
+        {
+          "sim_time": 170.30000000008505,
+          "rotation_rad": 0.0743776808253401,
+          "phase": "lift"
+        },
+        {
+          "sim_time": 170.74400000008717,
+          "rotation_rad": 0.07725926456864834,
+          "phase": "lift"
+        },
+        {
+          "sim_time": 171.18000000008925,
+          "rotation_rad": 0.08002494399171654,
+          "phase": "lift"
+        },
+        {
+          "sim_time": 171.61800000009134,
+          "rotation_rad": 0.08272316739234223,
+          "phase": "lift"
+        },
+        {
+          "sim_time": 172.05600000009343,
+          "rotation_rad": 0.08533082947877457,
+          "phase": "lift"
+        },
+        {
+          "sim_time": 172.49400000009553,
+          "rotation_rad": 0.08784040360144722,
+          "phase": "lift"
+        },
+        {
+          "sim_time": 172.9300000000976,
+          "rotation_rad": 0.09023779957676402,
+          "phase": "lift"
+        },
+        {
+          "sim_time": 173.4120000000999,
+          "rotation_rad": 0.09277305112470854,
+          "phase": "lift"
+        },
+        {
+          "sim_time": 174.14800000010342,
+          "rotation_rad": 0.0964224512583581,
+          "phase": "lift_complete"
+        },
+        {
+          "sim_time": 174.98400000010741,
+          "rotation_rad": 0.10020729751962343,
+          "phase": "payload_retention"
+        },
+        {
+          "sim_time": 174.98400000010741,
+          "rotation_rad": 0.10020729751962343,
+          "phase": "native_verification"
+        }
+      ],
+      "label": "Stationary",
+      "completed_transfers": 1,
+      "declared_transfers": 3,
+      "task_passed": false
+    },
+    {
+      "case_id": "approach-swap",
+      "time_origin": "first sampled lift command",
+      "points": [
+        {
+          "sim_time": 194.34000000019984,
+          "rotation_rad": 0.00018274192140036534,
+          "phase": "lift"
+        },
+        {
+          "sim_time": 194.53200000020075,
+          "rotation_rad": 0.0019518432418424707,
+          "phase": "lift"
+        },
+        {
+          "sim_time": 194.90800000020255,
+          "rotation_rad": 0.003555595236770191,
+          "phase": "lift"
+        },
+        {
+          "sim_time": 195.3560000002047,
+          "rotation_rad": 0.003675623480036697,
+          "phase": "lift"
+        },
+        {
+          "sim_time": 195.79400000020678,
+          "rotation_rad": 0.0038201499067460182,
+          "phase": "lift"
+        },
+        {
+          "sim_time": 196.22400000020883,
+          "rotation_rad": 0.003983336183164385,
+          "phase": "lift"
+        },
+        {
+          "sim_time": 196.66200000021092,
+          "rotation_rad": 0.00416913883218343,
+          "phase": "lift"
+        },
+        {
+          "sim_time": 197.10800000021305,
+          "rotation_rad": 0.004376333913928748,
+          "phase": "lift"
+        },
+        {
+          "sim_time": 197.5340000002151,
+          "rotation_rad": 0.004585431151355845,
+          "phase": "lift"
+        },
+        {
+          "sim_time": 197.97000000021717,
+          "rotation_rad": 0.0048131508564043446,
+          "phase": "lift"
+        },
+        {
+          "sim_time": 198.44400000021943,
+          "rotation_rad": 0.005077466320639614,
+          "phase": "lift"
+        },
+        {
+          "sim_time": 198.90200000022162,
+          "rotation_rad": 0.005339202360331522,
+          "phase": "lift"
+        },
+        {
+          "sim_time": 199.34800000022375,
+          "rotation_rad": 0.005598230336925204,
+          "phase": "lift"
+        },
+        {
+          "sim_time": 199.7780000002258,
+          "rotation_rad": 0.00585593265900765,
+          "phase": "lift"
+        },
+        {
+          "sim_time": 200.23000000022796,
+          "rotation_rad": 0.0061370126822299555,
+          "phase": "lift"
+        },
+        {
+          "sim_time": 200.96200000023146,
+          "rotation_rad": 0.006634906994191432,
+          "phase": "lift_complete"
+        },
+        {
+          "sim_time": 202.0000000002364,
+          "rotation_rad": 0.007309662679063586,
+          "phase": "loaded_grasp_check"
+        },
+        {
+          "sim_time": 202.05400000023667,
+          "rotation_rad": 0.007345116555804158,
+          "phase": "loaded_grasp_check"
+        },
+        {
+          "sim_time": 202.1040000002369,
+          "rotation_rad": 0.007377979869664884,
+          "phase": "loaded_grasp_check"
+        },
+        {
+          "sim_time": 202.15400000023715,
+          "rotation_rad": 0.007410876684842293,
+          "phase": "loaded_grasp_check"
+        },
+        {
+          "sim_time": 202.2060000002374,
+          "rotation_rad": 0.007445124105499,
+          "phase": "loaded_grasp_check"
+        },
+        {
+          "sim_time": 202.24400000023758,
+          "rotation_rad": 0.007470172990835656,
+          "phase": "loaded_grasp_check"
+        },
+        {
+          "sim_time": 202.29600000023783,
+          "rotation_rad": 0.007504479765725821,
+          "phase": "loaded_grasp_check"
+        },
+        {
+          "sim_time": 202.3520000002381,
+          "rotation_rad": 0.007541462606991825,
+          "phase": "loaded_grasp_check"
+        }
+      ],
+      "label": "Checked approach",
+      "completed_transfers": 3,
+      "declared_transfers": 3,
+      "task_passed": true
+    }
+  ],
+  "rotation_tolerance_rad": 0.1,
+  "raw_record_sha256": "a65ecd0df641ce5958402acfacf33c34eded7a05edab01165ba4029aa43c50af"
+}

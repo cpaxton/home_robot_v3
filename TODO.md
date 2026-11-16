@@ -26,19 +26,23 @@ Strike through or move to a PR when done.
 
 ## Native TAMP base approach (follow-up to #234)
 
-- [ ] Implement checked unloaded base positioning on
+- [x] Implement checked unloaded base positioning on
       [`feat/tamp-native-base-approach`](https://github.com/cpaxton/home_robot_v3/tree/feat/tamp-native-base-approach),
       stacked on `fix/tamp-native-joint-margin` (#234). Keep it out of #234's
       frozen refinement scope. Plan: [native base approach](docs/plans/2026-11-14_native_tamp_base_approach.md).
       Use private combined base/arm planning, swept robot geometry, ordinary base
       controllers, measured arrival and fresh grasp refinement. No live pose writes.
-- [ ] Preserve the failed swap: the latest #234 pilot passes 2/3 tasks and 5/7
-      transfers; fixed-base IK rejects better-aligned pregrasps. Private +25/+40 mm
-      base-offset IK success is not navigation or task acceptance. Finish the
-      original control/shift/swap live gate, then all eight native tasks and four
-      interface boundaries, followed by the four actual remote-VLM agent cases.
-      Historical native 4/8 and Caliban 3/4 scores remain unchanged. Observed
-      exploration and hardware qualification stay separate.
+- [x] Finish the original control/shift/swap gate, the complete eight-task native
+      replay and four actual remote-VLM agent cases. November 16: pilot 3/3 tasks,
+      full native 8/8 tasks and 18/18 transfers, boundaries 4/4; actual agent 4/4
+      tasks and 10/10 transfers. Preserve #234's failed swap and historical native
+      4/8 / Caliban 3/4. These are separate development cohorts. Evidence:
+      [base approach results](docs/experiments/tamp_native_base_approach_20261116.md).
+- [ ] Review and merge the opt-in stack in dependency order (#226, #231, #234,
+      checked base approach); repeat integration checks after retargeting. Add a
+      predeclared held-out native cohort and explicit execution-failure/recovery
+      trials before reliability claims. Observed task execution, exploration,
+      household native adapters and hardware remain separate gates.
 
 ## Shared evidence/navigation stack (#199 / #202)
 

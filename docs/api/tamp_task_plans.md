@@ -210,15 +210,18 @@ is removed or added, and the shared IK cap stays unchanged. This is a geometric
 preference, not a contact/force certificate; execution still has to pass the
 same physical checks.
 The [geometric-order pilot](../experiments/tamp_native_face_alignment_pilot_20261114.md)
-also retains the failed swap. Broader reliability and an executed base approach
-remain unqualified; the private base-offset IK probe is not task success.
+also retains the failed swap. At that revision, an executed base approach was
+unqualified; the private base-offset IK probe is not task success. The separate
+approach follow-up below records subsequent live development results.
 
 ### Experimental checked base approach
 
 `agent.native_tamp_policy=bounded_approach` extends the opt-in bounded policy
 with unloaded pre-grasp base positioning in the native simulated Stretch path.
-Legacy and `bounded_release` behavior remain unchanged. The same option is
-accepted by the native evaluators and actual `run agent` configuration.
+The default remains `legacy`; base motion and loaded candidate refresh require
+this explicit opt-in. A shared placement-frame correction described below also
+applies to the other profiles. The same option is accepted by the native
+evaluators and actual `run agent` configuration through shared policy validation.
 
 The planner tries the current base and short forward/reverse alternatives at
 40/80 mm along the measured drive axis, preferring the best box-face alignment
@@ -244,8 +247,9 @@ Results publish `base_motion=checked_unloaded_approach` and
 `collision_scope=sampled_base_sweep_arm_and_payload`. Pre-command rejection has
 `execution_started=false`; possible dispatch remains partial and consumes the
 handle. Physical task success still requires the existing retention, release
-and final-goal gates. Live qualification of this experimental profile is pending;
-it does not establish observed navigation/exploration or hardware support.
+and final-goal gates. The [November 16 development replay](../experiments/tamp_native_base_approach_20261116.md)
+passes eight native tasks and four actual-agent tasks. These tuned layouts are
+not held-out reliability, observed navigation/exploration or hardware support.
 
 After verified pickup, this profile refreshes held-object bounds and free support
 centers inside the original destination region. Initial and loaded placement use
@@ -262,6 +266,12 @@ the resulting world-space placement goal.
 
 Payload-center offsets are expressed in the measured EE frame and transformed
 through the desired placement rotation, rather than reusing a world-frame
-offset when the target EE orientation differs. All placement/release/effect
+offset when the target EE orientation differs. This coordinate-frame correction
+is shared by all native profiles. All placement/release/effect
 checks still apply. See the [initial base-approach pilot](../experiments/tamp_native_base_approach_initial_20261116.md)
 for the retained third-transfer failure motivating this refinement.
+
+The command client retains one exact boot/session/sequence stop witness after
+a navigation cancellation is confirmed. Later arm commands may evict the server's
+terminal receipt without losing that witness at client shutdown. A different
+goal, server restart or unconfirmed stop cannot use it to release ownership.
