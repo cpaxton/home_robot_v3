@@ -5,9 +5,44 @@ from __future__ import annotations
 import functools
 import json
 import math
+from dataclasses import asdict, dataclass
 from typing import Any
 
 SCHEMA_VERSION = 1
+
+
+@dataclass(frozen=True)
+class VerificationFailure:
+    """Public failure witness: finite vocabulary, no body IDs or private text."""
+
+    substage: str
+    reason: str
+
+    def __post_init__(self):
+        if not isinstance(self.substage, str) or not isinstance(self.reason, str) or self.substage not in {
+            "lift_motion", "post_lift_hold", "loaded_payload_handoff", "loaded_motion", "post_release_support"
+        } or self.reason not in {
+            "payload_not_retained", "motion_unverified", "reference_binding_invalid",
+            "bilateral_contact_unverified", "support_contact_persists", "unexpected_contact",
+            "relative_pose_unstable", "settling_timeout", "effect_unverified",
+            "support_contact_unverified", "fingertip_contact_persists", "object_not_settled",
+            "placement_region_unverified",
+        }:
+            raise ValueError("invalid_verification_failure")
+
+    def to_dict(self):
+        return asdict(self)
+
+    @classmethod
+    def from_data(cls, value):
+        if not isinstance(value, dict) or set(value) != {"substage", "reason"}:
+            return None
+        try:
+            return cls(**value)
+        except (ValueError, TypeError):
+            return None
+
+
 TAMP_TOOLS = frozenset({"scene_tasks", "plan_pick_place", "execute_pick_place_plan", "pick_place", "set_receptacle_state", "plan_task", "execute_task_plan"})
 PLACEMENT_CODES = frozenset({
     "receptacle_requires_open", "articulation_unsupported", "articulation_state_unavailable",
@@ -167,6 +202,9 @@ def failure_code(message: str) -> str:
     message = {
         "ambiguous_object_use_scene_tasks": "ambiguous_object",
         "ambiguous_receptacle_use_scene_tasks": "ambiguous_receptacle",
+        "gripper_close_command_failed": "execution_error",
+        "gripper_hold_command_failed": "execution_error",
+        "invalid_gripper_feedback": "invalid_measured_state",
     }.get(message, message)
     # MCTS wraps a bounded grounding failure; preserve only its known code,
     # never arbitrary body identifiers or planner details from that wrapper.

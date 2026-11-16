@@ -209,7 +209,8 @@ class NativeTableTransferProvider(RegionTransferProvider):
                 return TaskExecutionResult(False, False, code)
             result = self.adapter.execute(plan_ref)
             started = result.get('data', {}).get('execution_started')
-            from .api import failure_code
+            from .api import VerificationFailure, failure_code
             code = failure_code(result.get('code', ''))
             return TaskExecutionResult(result['status'] == 'ok', started if type(started) is bool else True,
-                                       code if code not in {'ok', 'operation_failed'} else 'task_execution_failed')
+                                       code if code not in {'ok', 'operation_failed'} else 'task_execution_failed',
+                                       VerificationFailure.from_data(result.get('data', {}).get('verification')))

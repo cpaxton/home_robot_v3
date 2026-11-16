@@ -38,6 +38,8 @@ class PhysicalPickPlaceExecutor:
     release_refiner: Callable[[], PhysicalMotionResult] | None = None
     release_verifier: Callable[[], PhysicalMotionResult] | None = None
     released_collision = None
+    gripper_close_command: Callable[[], bool] | None = None
+    gripper_hold_command: Callable[[], bool] | None = None
 
     def __init__(
         self,
@@ -62,6 +64,7 @@ class PhysicalPickPlaceExecutor:
         base_body: str | None = None,
         joint_limit_margins=None,
         gripper_open_configuration=(),
+        gripper_close_command=None,
         input_mode: str = "observed",
         object_pose_provider=None,
         visual_verifier=None,
@@ -100,6 +103,7 @@ class PhysicalPickPlaceExecutor:
         self.base_body = base_body
         self.joint_limit_margins = dict(joint_limit_margins or {})
         self.gripper_open_configuration = dict(gripper_open_configuration)
+        self.gripper_close_command = gripper_close_command
         self.grasp_paths: list = []
         self.place_paths: list = []
         self.grasp_targets: list = []
@@ -293,18 +297,40 @@ class PhysicalPickPlaceExecutor:
         position = getattr(self.robot, "get_gripper_position", None)
         if not callable(position):
             return PhysicalMotionResult(False, "unsupported_gripper_feedback", "grasp")
-        response = self.robot.close_gripper(blocking=False)
+        response = (self.gripper_close_command() if self.gripper_close_command is not None
+                    else self.robot.close_gripper(blocking=False))
         if not isinstance(response, (bool, np.bool_)) or not response:
             return PhysicalMotionResult(False, "gripper_close_command_failed", "grasp")
         self.synchronize(self.data)
+        started = self._motion_time()
+        result = self._wait_gripper_still(position, timeout_s,
+            event_phase="gripper_motor_settled" if self.gripper_hold_command is not None else "gripper_settled")
+        if not result.success or self.gripper_hold_command is None:
+            return result
+        response = self.gripper_hold_command()
+        if not isinstance(response, (bool, np.bool_)) or not response:
+            return PhysicalMotionResult(False, "gripper_hold_command_failed", "grasp")
+        self.synchronize(self.data)
+        remaining = timeout_s - (self._motion_time() - started)
+        if remaining <= 0:
+            return PhysicalMotionResult(False, "gripper_settling_timeout", "grasp")
+        return self._wait_gripper_still(position, remaining)
+
+    def _wait_gripper_still(self, position, timeout_s, *, event_phase="gripper_settled"):
         start_sim_time = float(self.data.time)
-        previous = float(position())
+        try:
+            previous = float(position())
+        except (TypeError, ValueError):
+            return PhysicalMotionResult(False, "invalid_gripper_feedback", "grasp")
         active = self._settling_window(timeout_s)
         stable_since = self._motion_time()
         while active():
             time.sleep(0.05)
             self.synchronize(self.data)
-            current = float(position())
+            try:
+                current = float(position())
+            except (TypeError, ValueError):
+                return PhysicalMotionResult(False, "invalid_gripper_feedback", "grasp")
             if not np.isfinite([current, previous]).all():
                 return PhysicalMotionResult(False, "invalid_gripper_feedback", "grasp")
             # Accumulate small drift relative to the stable-interval anchor.
@@ -313,7 +339,7 @@ class PhysicalPickPlaceExecutor:
                 previous = current
             if (self._motion_time() - stable_since >= 0.3
                     and (not self.use_sim_time or self.data.time - start_sim_time >= 0.25)):
-                self.event(phase="gripper_settled", measured=current, controller_success=True)
+                self.event(phase=event_phase, measured=current, controller_success=True)
                 return PhysicalMotionResult(True, "gripper_settled", "grasp")
         return PhysicalMotionResult(False, "gripper_settling_timeout", "grasp")
 

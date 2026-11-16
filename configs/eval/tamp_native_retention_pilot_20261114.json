@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "status": "frozen_development_pilot",
+  "case_file": "configs/eval/tamp_native_qualification_20261113.json",
+  "case_file_sha256": "f493a411885581766a0a6eefaffc357d1c878592a21243603a8febdab72def4c",
+  "native_policy": "bounded_release",
+  "changes": {
+    "gripper_close": "existing robot loose-close position preset; no force sensor or force-limit claim",
+    "original_retention_checked_at_every_post_lift_hold_sample": true,
+    "typed_verification_substage_in_primitive_and_task_failure_receipts": true,
+    "physical_model_contact_parameters_changed": false,
+    "retention_collision_release_and_goal_thresholds_changed": false,
+    "renew_failed_payload_reference": false
+  },
+  "episodes": [
+    {"id": "default-swap", "case_id": "swap-right25", "role": "same_source_ablation", "gripper_close_preset_override": "default", "port_offset": 2580},
+    {"id": "loose-swap", "case_id": "swap-right25", "role": "production_candidate", "gripper_close_preset_override": null, "port_offset": 2590},
+    {"id": "loose-control", "case_id": "control", "role": "production_candidate", "gripper_close_preset_override": null, "port_offset": 2600}
+  ],
+  "cpu_set": [0, 1, 2, 3, 4, 5, 6, 7],
+  "serialized": true,
+  "planning_seconds": 120.0,
+  "exact_paired_initial_state_certificate": false,
+  "old_scores_and_attempts_preserved": true,
+  "held_out_or_training_claim": false,
+  "hardware_trials": false,
+  "local_vlm_or_gpu": false,
+  "pass_requires": ["complete public receipt", "independent supported settled whole-footprint goals", "nonempty audit with zero forbidden commands"]
+}

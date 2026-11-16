@@ -36,6 +36,7 @@ compact-manifest policy.
 | Graph room timeline A/B | [graph_room_evidence.md](graph_room_evidence.md) |
 | Joint agentic loop (cross-task) | [hmeqa_joint_agentic_loop.md](hmeqa_joint_agentic_loop.md) · [HMEQA_STRATEGY](../plans/HMEQA_STRATEGY.md) |
 | Profiles / merge policy | [`configs/benchmarks/dynagraph.yaml`](../../configs/benchmarks/dynagraph.yaml) |
+| Native retention pilots and preserved failures | [Fixed presets](tamp_native_closure_pilot_20261114.md) · [Contact-relative hold](tamp_native_contact_relative_pilot_20261114.md) · [Geometric ordering / base sensitivity](tamp_native_face_alignment_pilot_20261114.md) |
 | LaTeX | `paper/sections/04_experiments.tex`, `05_results.tex` |
 | Mars controller timing and smoothness | [Matched wheel-feedback diagnosis](mars_aligned_jerk_measurements_20261115.md): same actor, 2/12→8/12 full passes; simulator diagnostic, zero new PPO |
 | Mars corrected-reset baselines | [Complete reset/TAMP readout](mars_current_feedback_reset_validation_20261115.md): legacy 151/164 general, 0/6 actual pregrasps; teacher 5/6; full 1,299 regressions |

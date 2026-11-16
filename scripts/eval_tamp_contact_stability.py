@@ -85,6 +85,10 @@ def effective_release_limits(args):
     return None
 
 
+def gripper_close_override(args):
+    return None if args.gripper_close_preset is None else args.gripper_close_preset == 'loose'
+
+
 def prepare(args, pilot, case, out):
     validate_native_task_config(case['task'])
     scene = prepare_fixture(out, case.get('initial_object_positions', pilot['initial_object_positions']), case['initial_x_shift_m'], case.get('initial_object_quaternions'))
@@ -101,6 +105,9 @@ def prepare(args, pilot, case, out):
     sources.mkdir()
     hashes = {}
     for name in ('scripts/eval_tamp_contact_stability.py', 'src/emet/eval/contact_stability.py',
+                 'src/emet/simulation/stretch_mujoco/config.py', 'src/emet/motion/kinematics.py',
+                 'src/emet/motion/grasp_alignment.py',
+                 'src/emet/controller/task/tamp/api.py', 'src/emet/controller/task/tamp/task_session.py',
                  'src/emet/motion/release.py', 'src/emet/controller/task/tamp/native_policy.py',
                  'src/emet/controller/task/tamp/native_transfer.py',
                  'src/emet/simulation/stretch_mujoco/mujoco_server.py',
@@ -109,9 +116,14 @@ def prepare(args, pilot, case, out):
         path = REPO / name
         shutil.copyfile(path, sources / path.name)
         hashes[name] = sha256(path)
+    policy_config = asdict(native_policy(args.native_policy)) if args.native_policy else None
+    if policy_config is not None and gripper_close_override(args) is not None:
+        policy_config['gripper_close_loose'] = gripper_close_override(args)
+        policy_config['gripper_contact_hold_fraction'] = 0.0
     protocol = {'case_id': case['case_id'], 'instruction': case['instruction'], 'task': case['task'],
                 'policy': args.policy, 'native_policy': args.native_policy,
-                'native_policy_config': asdict(native_policy(args.native_policy)) if args.native_policy else None,
+                'native_policy_config': policy_config,
+                'gripper_close_preset_override': args.gripper_close_preset,
                 'scenario': case.get('scenario', 'task'), 'case': case,
                 'grasp_yaw_offsets_rad': GRASP_POLICIES.get(args.policy),
                 'payload_binding': args.payload_binding,
@@ -185,6 +197,7 @@ def run(args, pilot, case, out, result):
         try:
             adapter = TracedNativeAdapter(robot, model=model, trace=trace, policy=args.policy if args.native_policy is None else None,
                                           native_policy=args.native_policy or 'legacy',
+                                          gripper_close_loose=gripper_close_override(args),
                                           payload_binding=args.payload_binding,
                                           release_limits=effective_release_limits(args))
             provider = NativeTableTransferProvider(robot, case['task'], adapter=adapter)
@@ -232,7 +245,9 @@ def main():
     parser.add_argument('--case-file', type=Path, default=REPO / 'configs/eval/tamp_stretch_realism_pilot.json')
     parser.add_argument('--case-id', required=True)
     parser.add_argument('--policy', choices=tuple(GRASP_POLICIES), default='baseline')
-    parser.add_argument('--native-policy', choices=('legacy', 'bounded_release'), help='Shared production adapter policy; disables diagnostic overrides')
+    parser.add_argument('--native-policy', choices=('legacy', 'bounded_release'), help='Shared production profile; only the explicitly recorded gripper-preset ablation can override it')
+    parser.add_argument('--gripper-close-preset', choices=('default', 'loose'),
+                        help='Diagnostic ablation only; absent uses the production profile unchanged')
     parser.add_argument('--payload-binding', choices=('preserve', 'verified_lift_keep', 'verified_lift'), default='preserve',
                         help='Diagnostic only: bind measured payload once after a verified stable lift, before full place replan')
     parser.add_argument('--port-offset', type=int, required=True)

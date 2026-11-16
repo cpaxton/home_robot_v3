@@ -20,8 +20,14 @@ import numpy as np
 from emet.controller.manipulation.native_inputs import ObservationUnavailable
 from emet.controller.manipulation.native_scene import model_signature, read_snapshot
 from emet.controller.manipulation.physical_pick_place import PhysicalMotionResult, PhysicalPickPlaceExecutor
-from emet.controller.task.tamp.api import failure_code, response
-from emet.controller.task.tamp.native_policy import FINE_GRASP_YAWS, bind_loaded_payload, native_policy
+from emet.controller.task.tamp.api import VerificationFailure, failure_code, response
+from emet.controller.task.tamp.native_policy import (
+    FINE_GRASP_YAWS,
+    bind_loaded_payload,
+    native_policy,
+    verification_failed,
+)
+from emet.motion.grasp_alignment import face_aligned_grasp_order
 from emet.motion.mujoco_collision import body_subtree
 from emet.motion.release import refine_release
 from emet.robots.stretch import STRETCH_ARM_CHAIN
@@ -56,11 +62,19 @@ class NativeTableAdapter:
     payload_binding = 'preserve'
     release_limits = None
     pregrasp_fallback_offset_m = None
+    arm_extension_margin_m = 0.0
+    gripper_close_loose = False
+    gripper_contact_hold_fraction = 0.0
+    prefer_face_aligned_grasps = False
 
     def __init__(self, robot, *, model=None, policy='legacy'):
         selected = native_policy(policy)
         self.policy, self.payload_binding, self.release_limits = selected.name, selected.payload_binding, selected.release_limits
         self.pregrasp_fallback_offset_m = selected.pregrasp_fallback_offset_m
+        self.arm_extension_margin_m = selected.arm_extension_margin_m
+        self.gripper_close_loose = selected.gripper_close_loose
+        self.gripper_contact_hold_fraction = selected.gripper_contact_hold_fraction
+        self.prefer_face_aligned_grasps = selected.prefer_face_aligned_grasps
         if policy == 'bounded_release':
             self.grasp_yaw_offsets = FINE_GRASP_YAWS
         if model is None:
@@ -74,6 +88,7 @@ class NativeTableAdapter:
         self.tasks, self.plans = {}, {}
         self.lock = threading.RLock()
         self.events = []
+        self.last_verification = None
         self.planning_rejections = {}
         self.planning_ik_calls = 0
         self.synchronize(self.data)
@@ -103,7 +118,7 @@ class NativeTableAdapter:
         self.events.append({'phase': 'planning_rejection', 'stage': phase, 'code': code, 'reason': reason,
                             'detail': reason, 'contacts': list(executor.collision.last_contacts) if code == 'collision' else []})
 
-    def _failure(self, tool, reason, *, completed=(), phase=None, started=False, identity=None):
+    def _failure(self, tool, reason, *, completed=(), phase=None, started=False, identity=None, verification=None):
         logging.getLogger(__name__).warning("Native TAMP %s failed at %s: %s", tool, phase, reason)
         # Preserve actionable semantic evidence without exposing arbitrary
         # planner strings or simulator body identities to the agent.
@@ -112,6 +127,7 @@ class NativeTableAdapter:
                     else {})
         return response(tool, code=failure_code(reason), status='partial' if completed or started else 'error',
                         data=self._data(**(identity or {}), completed_ops=list(completed), failed_stage=phase, execution_started=bool(started or completed),
+                            **({'verification': verification.to_dict()} if verification is not None else {}),
                             **evidence,
                             **({'planning_rejections': dict(self.planning_rejections),
                                 'planning_ik_calls': self.planning_ik_calls, 'max_ik_calls': self.max_planning_ik_calls}
@@ -174,16 +190,65 @@ class NativeTableAdapter:
             # The client's generic "stopped moving" heuristic rejects loaded grasps
             # even inside the executor's unchanged 0.03 joint tolerance.
             return self.robot.arm_to(cmd, head=head, blocking=False)
-        return PhysicalPickPlaceExecutor(self.robot, model=self.model, data=self.data,
+        executor = PhysicalPickPlaceExecutor(self.robot, model=self.model, data=self.data,
             ee_body=chain.ee_body, joint_names=joints, collision=checker,
             synchronize=self.synchronize, command_joints=command,
             coupled_groups=(tuple(f'joint_arm_l{i}' for i in range(4)),),
+            # Reserve controller room at the telescoping limits. This narrows
+            # IK targets, not the model limits or measured-start validation.
+            joint_limit_margins={f'joint_arm_l{i}': self.arm_extension_margin_m
+                                 for i in range(4)} if self.arm_extension_margin_m else None,
             gripper_open_configuration=chain.gripper_open_configuration,
+            # Use the robot's existing position preset, never a claimed force
+            # sensor or a change to gripper/contact physics. Lift still verifies.
+            gripper_close_command=(lambda: self.robot.close_gripper(loose=True, blocking=False))
+                                  if self.gripper_close_loose else None,
             base_body='base_link', input_mode='privileged', endpoint_settle_s=.3,
             use_sim_time=True, position_tolerance_m=.003,
             event=lambda **row: self.events.append({"sim_time": float(self.data.time), **row}))
+        if self.gripper_contact_hold_fraction:
+            executor.gripper_hold_command = lambda: self._hold_gripper_contact(executor)
+        return executor
+
+    def _hold_gripper_contact(self, executor):
+        """Relax the full-close target relative to the measured motor stop.
+
+        Uses the existing encoder/position command and known command bounds,
+        not pad pose, contact force, or a hardware force rating.
+        Later lift/retention checks must still establish a physical grasp.
+        """
+        from emet.motion.kinematics import HelloStretchKinematics
+        from emet.simulation.stretch_mujoco.config import robot_settings
+        self.synchronize(self.data)
+        try:
+            measured = float(self.robot.get_gripper_position())
+        except (TypeError, ValueError):
+            return False
+        lo, hi = robot_settings['gripper_min_max']
+        fraction = self.gripper_contact_hold_fraction
+        robot_model = getattr(self.robot, '_robot_model', None)
+        closed = float(getattr(robot_model, 'GRIPPER_CLOSED', HelloStretchKinematics.GRIPPER_CLOSED))
+        if (not np.isfinite([measured, fraction, closed]).all()
+                or not lo <= measured <= hi or not 0 < fraction <= 1 or not lo <= closed <= hi):
+            return False
+        # Retain a fraction of the stopped motor's full-close position error.
+        # Never command more closure than the original robot preset. This is
+        # position feedback, not a force measurement or a force guarantee.
+        command = max(closed, measured - fraction * (measured - closed))
+        returned = self.robot.gripper_to(command, blocking=False)
+        # Stretch gripper_to returns None after its reliable send, as also used
+        # by close_gripper. It is a transport return, never pickup acceptance.
+        ok = returned is None or (isinstance(returned, (bool, np.bool_)) and bool(returned))
+        executor.event(phase='gripper_hold_target', command_returned=bool(ok),
+                       measured_encoder_position=measured, target_encoder_position=command,
+                       default_close_target=closed, retained_error_fraction=fraction,
+                       position_units='stretch_gripper_command')
+        return ok
 
     def _pinch_center_offset(self):
+        return self._pinch_geometry()[0]
+
+    def _pinch_geometry(self):
         """Nominal opposing contact midpoint in the EE frame, from robot geometry.
 
         The named grasp frame is ahead of the pads. Centering an object on that
@@ -221,7 +286,8 @@ class NativeTableAdapter:
             vertex = np.where(np.abs(local) > .01, np.sign(local), 0.) * self.model.geom_size[g]
             contacts.append(scratch.geom_xpos[g] + rotation @ vertex)
         ee = scratch.body(STRETCH_ARM_CHAIN.ee_body)
-        return ee.xmat.reshape(3, 3).T @ (np.mean(contacts, axis=0) - ee.xpos)
+        ee_rotation = ee.xmat.reshape(3, 3).T
+        return ee_rotation @ (np.mean(contacts, axis=0) - ee.xpos), ee_rotation @ axis
 
     def _home_rotation(self, executor):
         home = mujoco.MjData(self.model)
@@ -272,32 +338,40 @@ class NativeTableAdapter:
         return executor.plan_pose(target, rotation, ordered_groups=ordered_groups)
 
     def _grasp_candidates(self, executor, before, point, frames, pinch_offset, obj, *, approach_offset=None):
+        candidates = []
         for frame, grasp_height in frames:
             for yaw in self.grasp_yaw_offsets:
-                self.data.qpos[:] = before
-                executor.collision.set_payload(self.model, self.data, None)
-                mujoco.mj_kinematics(self.model, self.data)
                 c, sn = np.cos(yaw), np.sin(yaw)
                 rotation = np.array([[c, -sn, 0], [sn, c, 0], [0, 0, 1]]) @ frame
-                grasp = point - rotation @ pinch_offset + [0, 0, grasp_height]
-                executor.grasp_targets = self._grasp_targets(grasp, rotation)
-                if approach_offset is not None:
-                    executor.grasp_targets[0] = (grasp + approach_offset, rotation)
-                _, error = executor.plan_gripper_open()
+                candidates.append((rotation, grasp_height))
+        if self.prefer_face_aligned_grasps:
+            self.data.qpos[:] = before
+            mujoco.mj_kinematics(self.model, self.data)
+            candidates = face_aligned_grasp_order(self.model, self.data, obj,
+                closing_axis=self._pinch_geometry()[1], candidates=candidates)
+        for rotation, grasp_height in candidates:
+            self.data.qpos[:] = before
+            executor.collision.set_payload(self.model, self.data, None)
+            mujoco.mj_kinematics(self.model, self.data)
+            grasp = point - rotation @ pinch_offset + [0, 0, grasp_height]
+            executor.grasp_targets = self._grasp_targets(grasp, rotation)
+            if approach_offset is not None:
+                executor.grasp_targets[0] = (grasp + approach_offset, rotation)
+            _, error = executor.plan_gripper_open()
+            if error:
+                self._record_rejection('gripper_open', error, executor)
+                return
+            paths = []
+            for phase, (target, rot) in zip(('pregrasp', 'grasp', 'lift'), executor.grasp_targets, strict=True):
+                if phase == 'lift':
+                    executor.collision.set_payload(self.model, self.data, obj, executor.ee_body)
+                path, error = self._plan_candidate_pose(executor, target, rot, ordered_groups=phase == "pregrasp")
                 if error:
-                    self._record_rejection('gripper_open', error, executor)
-                    return
-                paths = []
-                for phase, (target, rot) in zip(('pregrasp', 'grasp', 'lift'), executor.grasp_targets, strict=True):
-                    if phase == 'lift':
-                        executor.collision.set_payload(self.model, self.data, obj, executor.ee_body)
-                    path, error = self._plan_candidate_pose(executor, target, rot, ordered_groups=phase == "pregrasp")
-                    if error:
-                        self._record_rejection(phase, error, executor)
-                        break
-                    paths.append(path)
-                if len(paths) == 3:
-                    yield rotation, paths
+                    self._record_rejection(phase, error, executor)
+                    break
+                paths.append(path)
+            if len(paths) == 3:
+                yield rotation, paths
 
     def _grasp_options(self, executor, before, point, frames, pinch_offset, obj):
         # Preserve every existing candidate and the common IK budget before
@@ -309,6 +383,9 @@ class NativeTableAdapter:
 
     def plan(self, task_ref='', object_name='', receptacle_name='', placement_region=None):
         with self.lock:
+            if self.gripper_contact_hold_fraction and not all(callable(getattr(self.robot, name, None))
+                    for name in ('gripper_to', 'get_gripper_position')):
+                return self._failure('plan_pick_place', 'native_execution_unavailable')
             self.planning_rejections = {}
             self.planning_ik_calls = 0
             try:
@@ -444,12 +521,19 @@ class NativeTableAdapter:
                 return self._failure('plan_pick_place', str(exc))
 
     def _verify(self, plan, *, released, seconds):
+        self.last_verification = None
         self.synchronize(self.data)
         start = None
         active = plan.executor._settling_window(12.)
         reference = None
+        substage = 'post_release_support' if released else 'post_lift_hold'
+        reason = 'settling_timeout'
         while active():
             self.synchronize(self.data)
+            # The original retained-payload contract applies throughout the
+            # hold, not only to a later handoff sample after an unchecked gap.
+            if not released and not plan.executor.payload_retained():
+                return verification_failed(self, plan.executor, substage, 'payload_not_retained')
             scratch = mujoco.MjData(self.model)
             mujoco.mj_copyData(scratch, self.model, self.data)
             mujoco.mj_collision(self.model, scratch)
@@ -466,16 +550,26 @@ class NativeTableAdapter:
                 height_error = abs(float(entry['pos'][2]) - (plan.goal[2]-.02))
                 valid = (plan.support_body in contacts and not set(self.finger_bodies) & contacts
                          and error <= .04 and height_error <= .025 and speed <= .01 and spin <= .1)
+                region_valid = True
                 if plan.placement_region is not None:
                     bounds = np.asarray(entry['bounds'])[:, :2]
-                    valid = valid and bool(np.all(bounds[0] >= plan.placement_region[0] - .005)
-                                           and np.all(bounds[1] <= plan.placement_region[1] + .005))
+                    region_valid = bool(np.all(bounds[0] >= plan.placement_region[0] - .005)
+                                        and np.all(bounds[1] <= plan.placement_region[1] + .005))
+                    valid = valid and region_valid
+                reason = ('support_contact_unverified' if plan.support_body not in contacts else
+                          'fingertip_contact_persists' if set(self.finger_bodies) & contacts else
+                          'object_not_settled' if speed > .01 or spin > .1 else
+                          'placement_region_unverified' if not region_valid else 'effect_unverified')
             else:
                 ee = self.data.body(plan.executor.ee_body)
                 relative = ee.xmat.reshape(3,3).T @ (self.data.body(plan.object_body).xpos-ee.xpos)
                 if reference is None:
                     reference = relative.copy()
                 valid = set(self.finger_bodies) <= contacts and plan.support_body not in contacts and np.linalg.norm(relative-reference) <= .025
+                reason = ('bilateral_contact_unverified' if not set(self.finger_bodies) <= contacts else
+                          'support_contact_persists' if plan.support_body in contacts else 'relative_pose_unstable')
+            if valid:
+                reason = 'settling_timeout'
             if not valid:
                 start = None
             elif start is None:
@@ -483,13 +577,14 @@ class NativeTableAdapter:
             elif self.data.time-start >= seconds:
                 return True
             time.sleep(.05)
-        return False
+        return verification_failed(self, plan.executor, substage, reason)
 
     def _bind_loaded_payload(self, plan, *, rebind=True):
         return bind_loaded_payload(self, plan, rebind=rebind)
 
     def execute(self, plan_ref):
         with self.lock:
+            self.last_verification = None
             plan = self.plans.pop(plan_ref, None)
             if plan is None:
                 return self._failure('execute_pick_place_plan', 'unknown_plan')
@@ -514,11 +609,14 @@ class NativeTableAdapter:
                 phase = 'grasp'
                 result = ex.grasp_only('', object_gt_body=plan.object_body)
                 if not result.success:
-                    return fail(result.message, started=True, phase=result.phase)
+                    witness = (VerificationFailure('lift_motion', 'payload_not_retained'
+                               if 'payload_not_retained' in result.message else 'motion_unverified')
+                               if result.phase == 'lift' else None)
+                    return fail(result.message, started=True, phase=result.phase, verification=witness)
                 if not self._verify(plan, released=False, seconds=1):
-                    return fail('grasp_verification_failed', started=True, phase='lift')
+                    return fail('grasp_verification_failed', started=True, phase='lift', verification=self.last_verification)
                 if self.payload_binding != 'preserve' and not self._bind_loaded_payload(plan, rebind=self.payload_binding == 'verified_lift'):
-                    return fail('grasp_verification_failed', started=True, phase='lift')
+                    return fail('grasp_verification_failed', started=True, phase='lift', verification=self.last_verification)
                 completed.append('grasp')
                 self.synchronize(self.data)
                 ex.place_targets = self._place_targets(ex, plan.object_body, plan.goal, plan.rotation)
@@ -528,9 +626,11 @@ class NativeTableAdapter:
                     ex.release_refiner = lambda: refine_release(ex, support=plan.support_body, region=plan.placement_region, limits=self.release_limits)
                 result = ex.place_only('', object_gt_body=plan.object_body, receptacle_gt_body=plan.support_body)
                 if not result.success:
-                    return fail(result.message, completed=completed, phase=result.phase)
+                    witness = (VerificationFailure('loaded_motion', 'payload_not_retained')
+                               if result.message == 'payload_not_retained' else None)
+                    return fail(result.message, completed=completed, phase=result.phase, verification=witness)
                 if not self._verify(plan, released=True, seconds=2):
-                    return fail('placement_verify_failed', completed=completed, phase='release')
+                    return fail('placement_verify_failed', completed=completed, phase='release', verification=self.last_verification)
                 completed.append('place')
                 return response('execute_pick_place_plan', data=self._data(**identity, plan_ref=plan_ref,
                     execution_started=True,

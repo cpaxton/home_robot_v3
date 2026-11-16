@@ -12,6 +12,8 @@ import numpy as np
 
 from emet.motion.release import ReleaseLimits
 
+from .api import VerificationFailure
+
 FINE_GRASP_YAWS = (0.0, -0.175, 0.175, -0.35, 0.35, -0.7, 0.7, -1.57, 1.57)
 NATIVE_POLICIES = ("legacy", "bounded_release")
 
@@ -28,6 +30,10 @@ class NativePolicy:
     payload_binding: str = "preserve"
     release_limits: ReleaseLimits | None = None
     pregrasp_fallback_offset_m: tuple[float, float, float] | None = None
+    arm_extension_margin_m: float = 0.0
+    gripper_close_loose: bool = False
+    gripper_contact_hold_fraction: float = 0.0
+    prefer_face_aligned_grasps: bool = False
 
 
 def native_policy(name):
@@ -36,7 +42,13 @@ def native_policy(name):
         NativePolicy(name)
         if name == "legacy"
         else NativePolicy(
-            name, "verified_lift", ReleaseLimits(0.04, 0.04, open_settle_timeout_s=12.0), (0.0, 0.0, 0.08)
+            name,
+            payload_binding="verified_lift",
+            release_limits=ReleaseLimits(0.04, 0.04, open_settle_timeout_s=12.0),
+            pregrasp_fallback_offset_m=(0.0, 0.0, 0.08),
+            arm_extension_margin_m=0.0005,
+            gripper_contact_hold_fraction=0.5,
+            prefer_face_aligned_grasps=True,
         )
     )
 
@@ -50,14 +62,16 @@ def bind_loaded_payload(adapter, plan, *, rebind=True):
     replans all segments using the resulting measured transform.
     """
     executor = plan.executor
+    adapter.last_verification = None
     collision = executor.collision
     if (
         getattr(executor, "_loaded_binding_done", False)
         or executor.payload_body != plan.object_body
         or collision.payload_body != plan.object_body
         or collision.payload_parent != executor.ee_body
+        or collision.payload_transform is None
     ):
-        return False
+        return verification_failed(adapter, executor, "loaded_payload_handoff", "reference_binding_invalid")
     scratch = mujoco.MjData(adapter.model)
     adapter.synchronize(adapter.data)
     active = executor._settling_window(2.0)
@@ -65,7 +79,7 @@ def bind_loaded_payload(adapter, plan, *, rebind=True):
     while active():
         adapter.synchronize(adapter.data)
         if not executor.payload_retained():
-            return False
+            return verification_failed(adapter, executor, "loaded_payload_handoff", "payload_not_retained")
         mujoco.mj_copyData(scratch, adapter.model, adapter.data)
         mujoco.mj_kinematics(adapter.model, scratch)
         mujoco.mj_collision(adapter.model, scratch)
@@ -96,7 +110,10 @@ def bind_loaded_payload(adapter, plan, *, rebind=True):
             phase="loaded_grasp_check", accepted=stable, interval_translation_m=drift, interval_rotation_rad=angle
         )
         if not stable:
-            return False
+            reason = ("bilateral_contact_unverified" if not tips <= touched else
+                      "support_contact_persists" if adapter.model.body(plan.support_body).id in touched else
+                      "unexpected_contact" if touched != tips else "relative_pose_unstable")
+            return verification_failed(adapter, executor, "loaded_payload_handoff", reason)
         if adapter.data.time - started >= 0.3:
             previous = collision.payload_transform.copy()
             if rebind:
@@ -112,4 +129,10 @@ def bind_loaded_payload(adapter, plan, *, rebind=True):
             )
             return True
         time.sleep(0.05)
+    return verification_failed(adapter, executor, "loaded_payload_handoff", "settling_timeout")
+
+
+def verification_failed(adapter, executor, substage, reason):
+    adapter.last_verification = VerificationFailure(substage, reason)
+    executor.event(phase="native_verification", accepted=False, **adapter.last_verification.to_dict())
     return False

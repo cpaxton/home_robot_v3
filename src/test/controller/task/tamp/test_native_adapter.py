@@ -40,6 +40,7 @@ def native(table_model):
             'source': 'simulator_ground_truth', 'model_signature': model_signature(model),
             'qpos': data.qpos.tolist(), 'qvel': data.qvel.tolist(), 'sim_time': float(data.time),
             'captured_at': time.time()}}, arm_to=Mock(), open_gripper=Mock(), close_gripper=Mock(),
+        gripper_to=Mock(return_value=None), get_gripper_position=Mock(return_value=0.),
         get_emet_session=lambda: {'is_simulation': True, 'sim_object_placements': {
             'object1': {'cat': 'blue cube'}, 'object2': {'cat': 'red cylinder'}, 'table': {'cat': 'table'}}})
     context = {'robot': robot, 'manip_mode': 'physical', 'tamp_inputs': 'privileged',
@@ -421,11 +422,84 @@ def test_shared_bounded_policy_is_explicit_and_legacy_default_is_preserved(nativ
     assert adapter.grasp_yaw_offsets == FINE_GRASP_YAWS
     assert adapter.payload_binding == 'verified_lift'
     assert adapter.release_limits.max_drop_m == .04
+    assert adapter.arm_extension_margin_m == .0005
+    assert adapter.prefer_face_aligned_grasps is True
     assert context['_native_tamp_adapter'].policy == 'legacy'
     assert context['_native_tamp_adapter'].release_limits is None
+    assert context['_native_tamp_adapter'].prefer_face_aligned_grasps is False
+    assert context['_native_tamp_adapter']._executor('object1').joint_limit_margins == {}
     with pytest.raises(ValueError, match='invalid_native_tamp_policy'):
         NativeTableAdapter(None, policy='typo')
     robot.arm_to.assert_not_called()
+
+
+def test_bounded_plan_reserves_arm_extension_without_changing_measured_state_or_limits(native):
+    """The home-start fixture stays interior; this is not a general path bound."""
+    robot, _, context, _ = native
+    model = context['_native_tamp_adapter'].model
+    adapter = NativeTableAdapter(robot, model=model, policy='bounded_release')
+    before_q, before_limits = adapter.data.qpos.copy(), model.jnt_range.copy()
+    result = adapter.plan(object_name='blue cube', receptacle_name='table')
+    assert result['status'] == 'ok', result
+    executor = adapter.plans[result['data']['plan_ref']].executor
+    for path in executor.grasp_paths + executor.place_paths:
+        for i in range(4):
+            name = f'joint_arm_l{i}'
+            lo, hi = model.jnt_range[model.joint(name).id]
+            column = executor.joint_names.index(name)
+            values = np.asarray(path)[:, column]
+            assert np.all(values >= lo + .0005 - 1e-9)
+            assert np.all(values <= hi - .0005 + 1e-9)
+    np.testing.assert_array_equal(adapter.data.qpos, before_q)
+    np.testing.assert_array_equal(model.jnt_range, before_limits)
+    robot.arm_to.assert_not_called()
+    robot.open_gripper.assert_not_called()
+
+
+def test_bounded_margin_does_not_clamp_or_admit_out_of_range_measured_start(native):
+    robot, _, context, _ = native
+    adapter = NativeTableAdapter(robot, model=context['_native_tamp_adapter'].model, policy='bounded_release')
+    executor = adapter._executor('object1')
+    joint = adapter.model.joint('joint_arm_l0')
+    adapter.data.qpos[joint.qposadr[0]] = float(joint.range[1]) + 8e-6
+    before = adapter.data.qpos.copy()
+    goal = before[executor.qadr].copy()
+    goal[executor.joint_names.index('joint_arm_l0')] = float(joint.range[1]) - .0005
+    path, error = executor.plan_joint_target(goal)
+    assert path is None and 'invalid_start:joint_bounds:joint_arm_l0' in error
+    np.testing.assert_array_equal(adapter.data.qpos, before)
+    robot.arm_to.assert_not_called()
+
+
+def test_bounded_target_reserve_keeps_valid_margin_band_start_in_path(native):
+    robot, _, context, _ = native
+    adapter = NativeTableAdapter(robot, model=context['_native_tamp_adapter'].model, policy='bounded_release')
+    executor = adapter._executor('object1')
+    adapter.data.qpos[adapter.model.joint('joint_lift').qposadr[0]] = .85
+    adapter.data.qpos[adapter.model.joint('joint_wrist_pitch').qposadr[0]] = 0.
+    for i in range(4):
+        joint = adapter.model.joint(f'joint_arm_l{i}')
+        adapter.data.qpos[joint.qposadr[0]] = float(joint.range[1]) - .00025
+    before = adapter.data.qpos.copy()
+    start = before[executor.qadr].copy()
+    goal = start.copy()
+    for i in range(4):
+        name = f'joint_arm_l{i}'
+        goal[executor.joint_names.index(name)] = float(adapter.model.joint(name).range[1]) - .001
+    path, error = executor.plan_joint_target(goal)
+    assert error is None, error
+    np.testing.assert_array_equal(path[0], start)
+    np.testing.assert_allclose(path[-1], goal)
+    for i in range(4):
+        name = f'joint_arm_l{i}'
+        column = executor.joint_names.index(name)
+        upper = float(adapter.model.joint(name).range[1])
+        assert upper - .0005 < path[0][column] < upper
+    # Pure planning may leave private data at its goal, but never clamps the
+    # start waypoint or writes a measured configuration back to the robot.
+    robot.arm_to.assert_not_called()
+    robot.open_gripper.assert_not_called()
+    robot.close_gripper.assert_not_called()
 
 
 def test_policy_change_invalidates_cached_native_handles(native, monkeypatch):
@@ -442,6 +516,99 @@ def test_policy_change_invalidates_cached_native_handles(native, monkeypatch):
     assert current is not old and current.policy == 'bounded_release'
     assert current.execute('old')['code'] == 'unknown_plan'
     robot.arm_to.assert_not_called()
+
+
+@pytest.mark.parametrize('measured', [.12, -.05, -.375])
+def test_bounded_contact_hold_uses_measured_motor_position_and_normal_commands(native, measured):
+    robot, _, context, _ = native
+    robot.get_gripper_position.return_value = measured
+    adapter = NativeTableAdapter(robot, model=context['_native_tamp_adapter'].model, policy='bounded_release')
+    executor = adapter._executor('object1')
+    before = adapter.data.qpos.copy()
+    assert executor.gripper_close_command is None
+    assert executor.gripper_hold_command() is True
+    target = robot.gripper_to.call_args.args[0]
+    assert target == pytest.approx(max(-.3, .5 * (measured - .3)))
+    assert robot.gripper_to.call_args.kwargs == {'blocking': False}
+    np.testing.assert_array_equal(adapter.data.qpos, before)
+    robot.arm_to.assert_not_called()
+    robot.close_gripper.assert_not_called()
+    assert context['_native_tamp_adapter']._executor('object1').gripper_close_command is None
+    assert context['_native_tamp_adapter']._executor('object1').gripper_hold_command is None
+
+
+@pytest.mark.parametrize('feedback', [None, float('nan'), 'bad-feedback', -1., 1.])
+def test_contact_hold_rejects_invalid_encoder_without_a_command(native, feedback):
+    robot, _, context, _ = native
+    adapter = NativeTableAdapter(robot, model=context['_native_tamp_adapter'].model, policy='bounded_release')
+    robot.get_gripper_position.return_value = feedback
+    assert adapter._executor('object1').gripper_hold_command() is False
+    robot.gripper_to.assert_not_called()
+
+
+@pytest.mark.parametrize('missing', ['gripper_to', 'get_gripper_position'])
+def test_contact_hold_capability_is_required_before_planning_or_motion(native, missing):
+    robot, _, context, _ = native
+    adapter = NativeTableAdapter(robot, model=context['_native_tamp_adapter'].model, policy='bounded_release')
+    setattr(robot, missing, None)
+    assert adapter.plan(object_name='blue cube', receptacle_name='table')['code'] == 'native_execution_unavailable'
+    robot.arm_to.assert_not_called()
+    robot.open_gripper.assert_not_called()
+    robot.close_gripper.assert_not_called()
+
+
+def test_diagnostic_gripper_ablation_changes_only_closure_not_shared_limits(native):
+    from emet.eval.contact_stability import TracedNativeAdapter
+    robot, _, context, _ = native
+    model = context['_native_tamp_adapter'].model
+    adapter = TracedNativeAdapter(robot, model=model, trace=Mock(), native_policy='bounded_release', gripper_close_loose=False)
+    assert adapter._executor('object1').gripper_close_command is None
+    assert adapter._executor('object1').gripper_hold_command is None
+    assert adapter.gripper_contact_hold_fraction == 0.
+    assert adapter.arm_extension_margin_m == .0005 and adapter.payload_binding == 'verified_lift'
+    assert adapter.release_limits.open_settle_timeout_s == 12.
+
+
+@pytest.mark.parametrize('substage', ['post_lift_hold', 'loaded_payload_handoff', 'post_release_support'])
+def test_native_verification_substage_is_public_and_does_not_leak_to_next_handle(native, monkeypatch, substage):
+    from emet.controller.task.tamp.api import VerificationFailure
+    _, _, context, call = native
+    adapter = context['_native_tamp_adapter']
+    ref = make_plan(call)
+    ex = adapter.plans[ref].executor
+    ex.grasp_only = Mock(return_value=SimpleNamespace(success=True))
+    ex.place_only = Mock(return_value=SimpleNamespace(success=True))
+    def reject():
+        adapter.last_verification = VerificationFailure(substage, 'payload_not_retained')
+        return False
+    monkeypatch.setattr(adapter, '_verify', lambda *a, released, **k:
+                        reject() if (released == (substage == 'post_release_support') and
+                                     substage != 'loaded_payload_handoff') else True)
+    if substage == 'loaded_payload_handoff':
+        adapter.payload_binding = 'verified_lift'
+        monkeypatch.setattr(adapter, '_bind_loaded_payload', lambda *a, **k: reject())
+    result = call('execute_pick_place_plan', plan_ref=ref)
+    assert result['status'] == 'partial' and result['code'] == 'verification_failed'
+    assert result['data']['verification'] == {'substage': substage, 'reason': 'payload_not_retained'}
+    assert 'object1' not in json.dumps(result)
+    assert 'verification' not in call('execute_pick_place_plan', plan_ref=ref)['data']
+
+
+@pytest.mark.parametrize('phase', ['preplace', 'place'])
+def test_loaded_motion_retention_failure_has_its_own_witness(native, monkeypatch, phase):
+    from emet.controller.manipulation.physical_pick_place import PhysicalMotionResult
+    _, _, context, call = native
+    adapter = context['_native_tamp_adapter']
+    ref = make_plan(call)
+    ex = adapter.plans[ref].executor
+    ex.grasp_only = Mock(return_value=PhysicalMotionResult(True, 'ok', 'lift'))
+    ex.place_only = Mock(return_value=PhysicalMotionResult(False, 'payload_not_retained', phase))
+    monkeypatch.setattr(adapter, '_verify', lambda *a, **k: True)
+    result = call('execute_pick_place_plan', plan_ref=ref)
+    assert result['status'] == 'partial' and result['code'] == 'payload_not_retained'
+    assert result['data']['verification'] == {'substage': 'loaded_motion', 'reason': 'payload_not_retained'}
+    assert result['data']['completed_ops'] == ['grasp']
+    assert 'verification' not in call('execute_pick_place_plan', plan_ref=ref)['data']
 
 
 def test_bounded_grasp_fallback_preserves_old_order_and_budget():

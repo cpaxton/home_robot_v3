@@ -29,7 +29,8 @@ class ContactTrace:
 
     phases = frozenset(('grasp_complete', 'gripper_settled', 'lift', 'lift_complete',
                         'payload_retention', 'preplace_complete', 'place_complete', 'release',
-                        'loaded_grasp_check', 'loaded_grasp_binding'))
+                        'loaded_grasp_check', 'loaded_grasp_binding', 'native_verification',
+                        'gripper_motor_settled', 'gripper_hold_target'))
 
     def __init__(self, model, path: Path):
         self.model, self.scratch = model, mujoco.MjData(model)
@@ -90,10 +91,15 @@ class ContactTrace:
 class TracedNativeAdapter(NativeTableAdapter):
     """Reuse production execution with explicit diagnostic policy selections."""
 
-    def __init__(self, robot, *, model, trace, policy=None, payload_binding='preserve', release_limits=None, native_policy='legacy'):
+    def __init__(self, robot, *, model, trace, policy=None, payload_binding='preserve', release_limits=None, native_policy='legacy', gripper_close_loose=None):
         if payload_binding not in ('preserve', 'verified_lift_keep', 'verified_lift'):
             raise ValueError('invalid_payload_binding_policy')
+        if gripper_close_loose is not None and type(gripper_close_loose) is not bool:
+            raise ValueError('invalid_gripper_close_policy')
         super().__init__(robot, model=model, policy=native_policy)
+        if gripper_close_loose is not None:
+            self.gripper_close_loose = gripper_close_loose
+            self.gripper_contact_hold_fraction = 0.0
         self.trace = trace
         if policy is None:
             return

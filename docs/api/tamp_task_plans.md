@@ -161,3 +161,60 @@ IK cap. The native policy permits up to 12 simulated seconds for measured
 supported settling before retreat, matching the existing native verifier budget;
 this changes the wait budget, not the speed, collision or retention criteria.
 Invalid policy/mode/input combinations are rejected before starting the client.
+
+The bounded policy reserves 0.5 mm inside each telescoping arm segment's
+joint limits when solving IK targets. The coupled extension therefore reserves
+2 mm overall. This leaves room for the small measured limit overrun seen after
+opening; it is not a certified tracking-error bound. Model limits, measured-start
+validation, collision checks and acceptance thresholds remain unchanged. An
+already out-of-range measured start still rejects; no live state is clamped.
+This reserve applies to IK targets, not every path waypoint: the path planner
+uses the original model limits, so a valid measured start within the reserve
+band and the initial path segment can remain outside the target reserve.
+
+Failure receipts can include a finite-vocabulary `data.verification` witness:
+
+```json
+{"substage":"post_lift_hold","reason":"payload_not_retained"}
+```
+
+Native substages distinguish `lift_motion`, `post_lift_hold`,
+`loaded_payload_handoff`, `loaded_motion` and `post_release_support`. The primitive tool and
+multi-step receipt preserve the same witness without private object IDs or
+provider exception text. Unknown/malformed witness fields are discarded at the
+native-provider boundary. Missing evidence remains absent; it is not inferred
+from the generic failure code or reused from an earlier step/handle.
+
+Original payload retention is checked at every sampled post-lift hold update,
+as well as during motion and the loaded handoff. A sampled violation rejects
+immediately and cannot be renewed by a later good sample. This strengthens
+coverage of the existing bound; it does not relax its 20 mm / 0.1 rad limits or
+establish detection between samples.
+
+The bounded development policy tests a contact-relative **position target**.
+After the normal full-close command settles, it targets the midpoint between
+the measured motor position and the original close preset, then requires a
+second settling interval within the same total closing budget. This retains
+half the position error without using pad pose or force feedback. Lift,
+retention and bilateral hold must still pass; motor settling alone is not
+pickup success. The ordinary legacy command and observed/hardware defaults
+are unchanged. No contact physics or sensor availability is changed.
+
+The prior fixed loose-close pilot passed the swap but failed the familiar
+control; it is not a general solution. Its results remain in
+[the pilot report](../experiments/tamp_native_closure_pilot_20261114.md).
+The [live contact-relative pilot](../experiments/tamp_native_contact_relative_pilot_20261114.md)
+passes the two-goal controls but still fails swap retention. The diagnostic
+`--gripper-close-preset default|loose` override disables the contact-relative
+adjustment and archives the effective policy.
+
+For an object described by one collision box, the bounded development policy
+also ranks the existing grasp candidates by jaw alignment with the box's
+measured world-space face normals. This lets a higher aligned grasp precede a
+lower edge pinch. Compound and other shapes keep their prior order. No candidate
+is removed or added, and the shared IK cap stays unchanged. This is a geometric
+preference, not a contact/force certificate; execution still has to pass the
+same physical checks.
+The [geometric-order pilot](../experiments/tamp_native_face_alignment_pilot_20261114.md)
+also retains the failed swap. Broader reliability and an executed base approach
+remain unqualified; the private base-offset IK probe is not task success.
