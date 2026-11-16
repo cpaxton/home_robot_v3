@@ -89,6 +89,8 @@ cohesive feature; it must not be presented as already implemented in #234.
 
 ## November 16 implementation and development replay
 
+Review: [PR #242](https://github.com/cpaxton/home_robot_v3/pull/242), stacked on #234.
+
 The follow-up implements this contract behind `bounded_approach`, including
 sampled full-robot sweep checks, measured arrival/stop, fresh grasp planning and
 loaded placement refinement inside the original region and unused budgets.

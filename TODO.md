@@ -28,6 +28,7 @@ Strike through or move to a PR when done.
 
 - [x] Implement checked unloaded base positioning on
       [`feat/tamp-native-base-approach`](https://github.com/cpaxton/home_robot_v3/tree/feat/tamp-native-base-approach),
+      [PR #242](https://github.com/cpaxton/home_robot_v3/pull/242),
       stacked on `fix/tamp-native-joint-margin` (#234). Keep it out of #234's
       frozen refinement scope. Plan: [native base approach](docs/plans/2026-11-14_native_tamp_base_approach.md).
       Use private combined base/arm planning, swept robot geometry, ordinary base
@@ -39,7 +40,7 @@ Strike through or move to a PR when done.
       4/8 / Caliban 3/4. These are separate development cohorts. Evidence:
       [base approach results](docs/experiments/tamp_native_base_approach_20261116.md).
 - [ ] Review and merge the opt-in stack in dependency order (#226, #231, #234,
-      checked base approach); repeat integration checks after retargeting. Add a
+      #242); repeat integration checks after retargeting. Add a
       predeclared held-out native cohort and explicit execution-failure/recovery
       trials before reliability claims. Observed task execution, exploration,
       household native adapters and hardware remain separate gates.
