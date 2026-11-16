@@ -19,7 +19,7 @@ from emet.rl.regression_gate import ROOT, source_state
 PRIMITIVES = ("pregrasp", "grasp_pose")
 
 
-def run(output):
+def run(output, *, planning_scope="full_task"):
     development, _ = load_development()
     cases = development["train_cases"] + development["audit_cases"]
     if len(cases) != 6:
@@ -29,7 +29,8 @@ def run(output):
     before = source_state(ROOT)
     write_json(output / "sources.json", before)
     report = {
-        "format": "mars-unloaded-primitive-admission-v1",
+        "format": "mars-unloaded-primitive-admission-v2",
+        "planning_scope": planning_scope,
         "producer_revision": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
         "source_state_digest": digest(before),
         "source_manifest_sha256": hashlib.sha256((output / "sources.json").read_bytes()).hexdigest(),
@@ -52,6 +53,7 @@ def run(output):
         rows = primitive_rollout(
             cases,
             primitive=primitive,
+            planning_scope=planning_scope,
             wheel_feedback_current_velocity=True,
             trace_dir=output / primitive,
         )
@@ -77,8 +79,9 @@ def run(output):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--planning-scope", choices=("full_task", "unloaded_prefix"), default="full_task")
     args = parser.parse_args()
-    result = run(args.output)
+    result = run(args.output, planning_scope=args.planning_scope)
     print(
         json.dumps(
             {

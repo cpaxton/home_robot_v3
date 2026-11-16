@@ -65,6 +65,18 @@ loaded retention failures cross the separate 0.1 rad object-rotation limit.
 Rotvec features exist but have not received a trained ablation; the old C1
 quarter-pitch experiment does not establish broad direction coverage.
 
+## Current implementation awaiting fresh readouts
+
+The explicit native unloaded planning scope is implemented, retaining the
+historical full-task default. Coupled Mars/Stretch reference generation,
+geometry admission, teacher readout/plots and a PPO-compatible general environment
+are implemented in [the current run instructions](../plans/general_whole_body_tracking.md#coupled-simulator-implementation-2026-11-16).
+Focused tests cover native scope isolation, both embodiments, mask invariance,
+private-witness geometry and grouped PPO collection/update without critic leakage.
+Fresh full-source regressions and physical readouts are required for this new
+runtime; the 1,389-test consolidation receipt above is historical. No new policy
+is trained or promoted by implementing these interfaces. Preserve old failures.
+
 ## Next milestone, in order
 
 1. **Scope unloaded planning to requested motion.** The current full-task

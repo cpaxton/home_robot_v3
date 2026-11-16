@@ -162,3 +162,61 @@ fails loaded orientation/base tracking. See the
 [integrated report](../experiments/mars_agent_controller_20261026.md). Prioritize
 loaded transition coverage and first-failure evidence over longer unmeasured
 continuations; offline gain scaling adds no PPO training or qualification.
+
+## Coupled simulator implementation (2026-11-16)
+
+The new `emet.rl.manipulation.coupled_tracking` module supplies a reusable
+`CoupledTrackingEnv` and continuous `CoupledReference` for both initial robots.
+The versioned [case set](../../configs/benchmarks/coupled_tracking_v1.json)
+contains six train and four audit cases per robot with distinct IDs/reset seeds.
+It covers free-base hand targets, full/partial base constraints, base-only
+motion, compatible fixed-world-hand self-motion and a mid-motion goal reversal.
+This is a small diagnostic distribution, not workspace or reliability coverage.
+
+Ordinary references use a differential-drive axle arc and full-robot FK.
+Fixed-hand references sample a compatible whole-body Jacobian nullspace on
+scratch data; they do not prescribe an arbitrary straight base shift that a
+five-coordinate arm cannot cancel. Their base endpoint is generated with the
+arm path, and `self_motion_scale` is a sampling amplitude, not a promised travel
+distance. Neither private joint witnesses nor case metadata enter actor inputs.
+The existing history/preview/motion actor and grouped PPO collector consume the
+new environment; simulator-only critic observations remain separate. Native
+limits, contact/wheel monitors and precise hand tolerances remain in use.
+
+A rest-to-rest quintic phase drives the continuous arm spline. Coordinatewise
+arm derivative bounds and base reference limits are checked before emission.
+Full-path geometry is sampled every 25 ms with joint margins, collision checks
+and a 5 mm static support margin. Stretch uses its two drive wheels and the
+single modeled caster sphere; Mars retains its existing support computation.
+Geometric admission does not prove dynamics/contact feasibility. A goal change
+constructs a new admitted reference from measured state without clearing history
+or faults; its rest-to-rest derivative certificate does not claim C2 continuity
+across the retarget. Physical transition jerk is measured and penalized.
+
+Export targets, including orientation and heading data, or run the physical
+teacher using a fresh output directory on the reserved lane:
+
+```bash
+EMET_UV_RUN=1 PYTHONPATH=src CUDA_VISIBLE_DEVICES='' \
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 MUJOCO_GL=disable \
+taskset -c 14 .venv/bin/python -m emet.rl.manipulation.coupled_tracking \
+  --robot innate_mars --teacher --output logs/eval/coupled-mars-FRESH
+```
+
+Use `--robot stretch` for Stretch; omit `--teacher` for geometry export only.
+Outputs are ignored `references.json`, `sources.json` and `references.svg`.
+The plot shows base paths/headings, hand references versus measured paths, and
+tracking error. Every rejection remains in the denominator. A teacher readout
+requires all declared cases, delivered retargets, tracking/settling, measured
+whole-body stopping and no safety flags before marking its distribution ready.
+It is not policy promotion or hardware qualification. Full source-bound
+regressions and a separately declared mixed-training protocol remain required.
+
+The TAMP primitive environment separately accepts
+`planning_scope="unloaded_prefix"` with `primitive="pregrasp"` or `"grasp_pose"`.
+It requests that exact scope through the public tools; its default remains
+`"full_task"` for reproducibility of old experiments. The public plan handle
+cannot upgrade unloaded admission into closure/lift/placement. Prefix training
+and the new coupled general share must be admitted separately before the next
+50/50 physical-tick training run. No loaded grasp or additional robot is
+qualified by these interfaces.

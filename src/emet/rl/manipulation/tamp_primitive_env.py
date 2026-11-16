@@ -42,7 +42,7 @@ def _bounded_path(execute, primitive):
     return bounded
 
 
-def _worker(connection, case, oracle, arm_reference, initial_settle_s, wheel_feedback_current_velocity, trace_path, primitive):
+def _worker(connection, case, oracle, arm_reference, initial_settle_s, wheel_feedback_current_velocity, trace_path, primitive, planning_scope):
     import hashlib
     import json
 
@@ -104,6 +104,7 @@ def _worker(connection, case, oracle, arm_reference, initial_settle_s, wheel_fee
                     "elapsed_control_ticks": max(1, self.ticks),
                     "reward_group_ticks": np.asarray(self.tick_rewards, dtype=np.float32).reshape(-1, 3),
                     "primitive": primitive,
+                    "planning_scope": planning_scope,
                     "simulation_only": True,
                     "actor_action_applied": self.pending,
                 }
@@ -176,7 +177,10 @@ def _worker(connection, case, oracle, arm_reference, initial_settle_s, wheel_fee
             t for t in discovery.get("data", {}).get("tasks", []) if t["receptacle_name"] == "destination support"
         )
         planned = json.loads(
-            tools["plan_pick_place"].func(task_ref=task["task_ref"], placement_region=admission["placement_region"])
+            tools["plan_pick_place"].func(
+                task_ref=task["task_ref"], placement_region=admission["placement_region"],
+                **({"execution_scope": primitive} if planning_scope == "unloaded_prefix" else {}),
+            )
         )
         if planned["status"] != "ok":
             raise ValueError("public_plan:" + str(planned.get("code")))
@@ -248,6 +252,7 @@ def _worker(connection, case, oracle, arm_reference, initial_settle_s, wheel_fee
         info = {
             "case_id": case["id"],
             "primitive": primitive,
+            "planning_scope": planning_scope,
             "boundary_reached": boundary_reached,
             "terminal_pose": terminal_pose,
             "terminal_pose_in_contract": terminal_pose_in_contract,
@@ -325,6 +330,7 @@ def _worker(connection, case, oracle, arm_reference, initial_settle_s, wheel_fee
                         "case": case,
                         "oracle": bool(oracle),
                         "primitive": primitive,
+                        "planning_scope": planning_scope,
                         "initial_settle_s": initial_settle_s,
                         "wheel_feedback_current_velocity": wheel_feedback_current_velocity,
                         "outcome": outcome,
@@ -352,10 +358,14 @@ class TampPrimitiveEnv(gym.Env):
         wheel_feedback_current_velocity=False,
         trace_dir=None,
         primitive="pregrasp",
+        planning_scope="full_task",
     ):
         if type(primitive) is not str or primitive not in PRIMITIVE_PHASE:
             raise ValueError("primitive must be pregrasp or grasp_pose; loaded stages are not supported")
+        if type(planning_scope) is not str or planning_scope not in {"full_task", "unloaded_prefix"}:
+            raise ValueError("planning_scope must be full_task or unloaded_prefix")
         self.primitive = primitive
+        self.planning_scope = planning_scope
         if not cases or arm_reference not in {"s_curve", "jerk_limited"} or not np.isfinite(timeout) or timeout <= 0:
             raise ValueError("nonempty cases and a bounded simulator training configuration required")
         if not np.isfinite(initial_settle_s) or not 0 <= initial_settle_s <= 2.0:
@@ -418,6 +428,7 @@ class TampPrimitiveEnv(gym.Env):
                 self.wheel_feedback_current_velocity,
                 self.trace_path,
                 self.primitive,
+                self.planning_scope,
             ),
             daemon=True,
         )

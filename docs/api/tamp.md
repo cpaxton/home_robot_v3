@@ -537,3 +537,21 @@ of CPU processing and exposed incorrect support labels. Live discovery acceptanc
 is still pending; see the [diagnostic report](../experiments/tamp_observed_discovery_20261014.md).
 Controlled segmentation tests cover real depth projection and the processor/tool
 paths, but do not establish detector accuracy.
+
+### Explicit unloaded planning scope (native simulator)
+
+`plan_pick_place` optionally accepts `execution_scope="pregrasp"` or
+`execution_scope="grasp_pose"`. The default is `"full_task"`, preserving the
+full grasp/lift/transport/place admission and execution path. Unloaded scopes
+currently require a native simulator facade with measured hold and stop
+confirmation; unsupported backends return `execution_scope_unsupported`.
+
+An unloaded plan checks the requested approach/arm geometry and replans only
+that prefix from measured state. It never treats a prospective loaded lift as
+a prerequisite. The scope is sealed into the single-use `plan_ref`;
+`execute_pick_place_plan` has no argument to upgrade it. Prefix completion
+requires final pose tolerance, measured hold and confirmed stop, and does not
+close the gripper, attach a payload, lift, transport or release. Responses state
+`full_task_admitted=false` and `full_pick_place_success=false`. These are pose
+tracking operations, not successful grasp or transfer claims. A later loaded
+operation requires a separately admitted full task from the then-current state.

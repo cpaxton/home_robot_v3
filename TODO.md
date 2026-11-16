@@ -115,6 +115,10 @@ merges, measured policy improvement and hardware readiness are separate decision
       SE(2) base constraints and per-hand native gripper coordinates; distinguish
       arm-only diagnostics from full-robot feasibility. Record this in the
       [control philosophy](docs/rl/whole_body_control.md#coupled-control-across-embodiments).
+- [x] **Implement coupled simulator references and training interface.** Add
+      both-robot native geometry admission, compatible fixed-hand self-motion,
+      masked targets, reset/retarget cases and target/teacher trace exports.
+      Physical admission and policy training remain separate work below.
 - [ ] **Validate general coupled coverage, then optionally compare MABEL.**
       Generate/admit full-robot paths; test free-base hand goals, fixed-world-hand
       base motion, jointly feasible constraints, retargeting and settling on

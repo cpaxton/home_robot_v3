@@ -133,7 +133,10 @@ def task_pose_teacher_action(control, *, config=None):
             nominal_motion = np.linalg.norm(planar) > 1e-6 or abs(yaw_rate) > 1e-6
             planar *= c.task_progress_rate
             yaw_rate *= c.task_progress_rate
-            if p.wheel_bodies and nominal_motion:
+            # Only a fully constrained base admits this complete timed path.
+            # Partial targets use mask-aware pose feedback; inactive nominal
+            # coordinates must not become hidden teacher commands.
+            if p.wheel_bodies and nominal_motion and c.base_mask.all():
                 # Track a timed nonholonomic path, rather than repeatedly
                 # treating each sample as a new point-navigation goal. During
                 # a turn a small lateral caster error cannot be corrected by

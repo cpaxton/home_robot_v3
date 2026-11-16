@@ -76,6 +76,7 @@ def primitive_rollout(
     wheel_feedback_current_velocity=False,
     trace_dir=None,
     primitive="pregrasp",
+    planning_scope="full_task",
 ):
     from emet.rl.manipulation.tamp_primitive_env import TampPrimitiveEnv
 
@@ -87,6 +88,7 @@ def primitive_rollout(
         wheel_feedback_current_velocity=wheel_feedback_current_velocity,
         trace_dir=trace_dir,
         primitive=primitive,
+        planning_scope=planning_scope,
     )
     rows = []
     try:
@@ -119,6 +121,7 @@ def primitive_rollout(
                     {
                         "id": case["id"],
                         "primitive": primitive,
+                        "planning_scope": planning_scope,
                         "boundary_reached": info["boundary_reached"],
                         "terminal_pose": info["terminal_pose"],
                         "terminal_pose_in_contract": info["terminal_pose_in_contract"],
@@ -151,6 +154,7 @@ def primitive_rollout(
                     {
                         "id": case["id"],
                         "primitive": primitive,
+                        "planning_scope": planning_scope,
                         "success": False,
                         "code": str(exc),
                         "control_ticks": ticks,

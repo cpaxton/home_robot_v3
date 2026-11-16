@@ -31,7 +31,7 @@ class NativePlan:
     object_body: str
     support_body: str
     initial: np.ndarray
-    goal: np.ndarray
+    goal: np.ndarray | None
     rotation: np.ndarray
     executor: PhysicalPickPlaceExecutor
     boot: str
@@ -41,6 +41,7 @@ class NativePlan:
     transport: object | None = None
     approach: object | None = None
     object_initial_pose: np.ndarray | None = None
+    execution_scope: str = "full_task"
 
 
 class NativeTableAdapter:
@@ -259,7 +260,7 @@ class NativeTableAdapter:
         self.planning_ik_calls += 1
         return executor.plan_pose(target, rotation, ordered_groups=ordered_groups)
 
-    def _grasp_candidates(self, executor, before, point, frames, pinch_offset, obj):
+    def _grasp_candidates(self, executor, before, point, frames, pinch_offset, obj, *, execution_scope="full_task"):
         for frame, grasp_height in frames:
             for yaw in (0., -.35, .35, -.7, .7, -1.57, 1.57):
                 self.data.qpos[:] = before
@@ -268,13 +269,14 @@ class NativeTableAdapter:
                 c, sn = np.cos(yaw), np.sin(yaw)
                 rotation = np.array([[c, -sn, 0], [sn, c, 0], [0, 0, 1]]) @ frame
                 grasp = point - rotation @ pinch_offset + [0, 0, grasp_height]
-                executor.grasp_targets = self._grasp_targets(grasp, rotation)
+                count = {"full_task": 3, "pregrasp": 1, "grasp_pose": 2}[execution_scope]
+                executor.grasp_targets = self._grasp_targets(grasp, rotation)[:count]
                 _, error = executor.plan_gripper_open()
                 if error:
                     self._record_rejection('gripper_open', error, executor)
                     return
                 paths = []
-                for phase, (target, rot) in zip(('pregrasp', 'grasp', 'lift'), executor.grasp_targets, strict=True):
+                for phase, (target, rot) in zip(('pregrasp', 'grasp', 'lift')[:count], executor.grasp_targets, strict=True):
                     if phase == 'lift':
                         executor.collision.set_payload(self.model, self.data, obj, executor.ee_body)
                     path, error = self._plan_candidate_pose(executor, target, rot, ordered_groups=phase == "pregrasp")
@@ -282,10 +284,18 @@ class NativeTableAdapter:
                         self._record_rejection(phase, error, executor)
                         break
                     paths.append(path)
-                if len(paths) == 3:
+                if len(paths) == count:
                     yield rotation, paths
 
-    def plan(self, task_ref='', object_name='', receptacle_name='', placement_region=None):
+    def plan(self, task_ref='', object_name='', receptacle_name='', placement_region=None, *, execution_scope="full_task"):
+        # Scope is sealed into the consumed plan handle, never an execute-time
+        # override that could turn an unloaded witness into a loaded command.
+        if type(execution_scope) is not str or execution_scope not in {"full_task", "pregrasp", "grasp_pose"}:
+            return self._failure('plan_pick_place', 'invalid_execution_scope')
+        if execution_scope != "full_task" and not all(
+            callable(getattr(self.robot, name, None)) for name in ("finish_and_hold", "stop_and_confirm")
+        ):
+            return self._failure('plan_pick_place', 'execution_scope_unsupported')
         with self.lock:
             self.planning_rejections = {}
             self.planning_ik_calls = 0
@@ -346,8 +356,23 @@ class NativeTableAdapter:
                     home_rotation = self._home_rotation(executor)
                     height = float(np.diff(np.asarray(placements[obj]['bounds'])[:, 2])[0])
                     frames = self._grasp_frames(home_rotation, rotation, height)
-                    for rotation, paths in self._grasp_candidates(executor, grasp_start, point, frames, pinch_offset, obj):
+                    options = {} if execution_scope == "full_task" else {"execution_scope": execution_scope}
+                    for rotation, paths in self._grasp_candidates(executor, grasp_start, point, frames, pinch_offset, obj, **options):
                         executor.grasp_paths = paths
+                        if execution_scope != "full_task":
+                            ref = f'plan:{self.namespace}:{uuid.uuid4().hex}'
+                            self.plans[ref] = NativePlan(
+                                obj, support, initial, None, rotation, executor, self.boot, region,
+                                **identity, approach=approach, execution_scope=execution_scope,
+                            )
+                            return response('plan_pick_place', data=self._data(
+                                **identity, plan_ref=ref, execution_scope=execution_scope,
+                                full_task_admitted=False,
+                                planned_ops=['pregrasp'] if execution_scope == "pregrasp" else ['pregrasp', 'grasp_pose'],
+                                completed_ops=[], failed_stage=None, measurements=[],
+                                planning_rejections=dict(self.planning_rejections),
+                                planning_ik_calls=self.planning_ik_calls, max_ik_calls=self.max_planning_ik_calls,
+                            ))
                         lifted = self.data.qpos.copy()
                         # Reuse the placement stack's obstacle-subtracted support search.
                         from emet.motion.placement_geometry import HeldObject, PlacementScene
@@ -469,6 +494,12 @@ class NativeTableAdapter:
             if plan is None:
                 return self._failure('execute_pick_place_plan', 'unknown_plan')
             identity = {'object_name': plan.object_name, 'receptacle_name': plan.receptacle_name}
+            if plan.execution_scope not in {"full_task", "pregrasp", "grasp_pose"}:
+                return self._failure('execute_pick_place_plan', 'invalid_execution_scope', identity=identity)
+            if plan.execution_scope != "full_task" and not all(
+                callable(getattr(self.robot, name, None)) for name in ("finish_and_hold", "stop_and_confirm")
+            ):
+                return self._failure('execute_pick_place_plan', 'execution_scope_unsupported', identity=identity)
 
             def fail(reason, **kwargs):
                 return self._failure('execute_pick_place_plan', reason, identity=identity, **kwargs)
@@ -487,6 +518,31 @@ class NativeTableAdapter:
                 if not result.success:
                     return fail(result.message, started=True, phase=result.phase)
                 phase = 'grasp'
+                if plan.execution_scope != "full_task":
+                    result = ex.grasp_only('', object_gt_body=plan.object_body, stop_after=plan.execution_scope)
+                    held = result.success and self.robot.finish_and_hold()
+                    self.robot.stop_and_confirm(result.message if not held else 'unloaded_prefix_complete')
+                    stopped = self.robot.stop_confirmed is True
+                    self.synchronize(self.data)
+                    position, rotation = ex.grasp_targets[-1]
+                    measured = self.data.body(ex.ee_body)
+                    position_error = float(np.linalg.norm(measured.xpos.copy() - position))
+                    rotation_error = float(np.arccos(np.clip(
+                        (np.trace(np.asarray(rotation).T @ measured.xmat.copy().reshape(3, 3)) - 1) / 2, -1, 1
+                    )))
+                    in_contract = (position_error <= ex.position_tolerance_m
+                                   and rotation_error <= ex.orientation_tolerance_rad)
+                    if not held or not stopped or not in_contract:
+                        return fail(result.message if not result.success else
+                                    ('unloaded_prefix_pose_failed' if not in_contract else 'unloaded_prefix_stop_failed'),
+                                    started=True, phase=result.phase)
+                    return response('execute_pick_place_plan', data=self._data(
+                        **identity, plan_ref=plan_ref, execution_scope=plan.execution_scope,
+                        execution_started=True, completed_ops=[plan.execution_scope],
+                        failed_stage=None, stop_confirmed=True, full_pick_place_success=False,
+                        full_task_admitted=False,
+                        position_error_m=position_error, orientation_error_rad=rotation_error,
+                    ))
                 result = ex.grasp_only('', object_gt_body=plan.object_body)
                 if not result.success:
                     return fail(result.message, started=True, phase=result.phase)
