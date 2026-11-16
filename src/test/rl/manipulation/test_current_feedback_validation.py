@@ -59,7 +59,7 @@ def test_loop_manifest_has_exact_declared_conditions_and_preserves_sources(runne
     assert {c["source_case_id"].rsplit(":", 1)[-1] for c in suite["cases"] if c["probe_push"]} == set(runner["BASES"])
 
 
-@pytest.mark.parametrize("kind", ["emet-manipulation-v1", "emet-whole-body-v2", "emet-whole-body-v3"])
+@pytest.mark.parametrize("kind", ["emet-manipulation-v1", "emet-whole-body-v2", "emet-whole-body-v3", "emet-whole-body-v4"])
 def test_primitive_bundle_adapts_only_sensor_fields(runner, kind, monkeypatch):
     from emet.rl.manipulation import models, tamp_policy
 
@@ -91,7 +91,7 @@ def test_primitive_bundle_adapts_only_sensor_fields(runner, kind, monkeypatch):
     action = runner["PrimitiveBundle"](bundle)(observation)
     assert set(bundle.seen) == (
         {"history", "preview", "motion"}
-        if kind in {"emet-whole-body-v2", "emet-whole-body-v3"}
+        if kind in {"emet-whole-body-v2", "emet-whole-body-v3", "emet-whole-body-v4"}
         else {"history", "preview"}
     )
     assert action.shape == (1, 8)

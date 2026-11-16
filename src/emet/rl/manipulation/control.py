@@ -46,6 +46,7 @@ class ManipulationControl:
         self.action_mode = "residual"
         self.base_xy_tolerance = 0.02
         self.base_velocity_feedback_gain = 2.0
+        self.base_only_velocity_feedback_gains = None
         self.base_velocity_feedback_current = False
         self.base_velocity_integral_gain = 1.0
         self.base_feedback_at_rest = True
@@ -542,6 +543,16 @@ class ManipulationControl:
         self.release_authorized = False
         self.apply()
 
+    def wheel_feedback_gains(self):
+        """Select at the physics boundary so a mask change never lags one action.
+
+        Partial-base and active-hand commands retain the original scalar law.
+        Selection does not rebase targets, clear PI state or re-arm a stop.
+        """
+        if self.base_only_velocity_feedback_gains is not None and self.base_mask.all() and not self.hand_mask:
+            return np.asarray(self.base_only_velocity_feedback_gains)
+        return self.base_velocity_feedback_gain
+
     def apply(self):
         now = float(self.data.time)
         if self.turn_progress_guard_enabled and not self.stopped and len(self.wheel_act):
@@ -601,7 +612,7 @@ class ManipulationControl:
                     self.base_velocity_integral[:] = 0
                     self._base_velocity_time = now
                 drive = np.clip(
-                    drive + self.base_velocity_feedback_gain * velocity_error + self.base_velocity_integral,
+                    drive + self.wheel_feedback_gains() * velocity_error + self.base_velocity_integral,
                     -limits,
                     limits,
                 )

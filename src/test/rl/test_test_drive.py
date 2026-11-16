@@ -405,8 +405,9 @@ def test_preview_policy_contract_survives_simulation_replacement_and_feedback_sw
             replacement.close()
 
 
-def navigation_policy(sim, tmp_path):
+def navigation_policy(sim, tmp_path, **execution):
     from dataclasses import replace
+
     from emet.rl.manipulation.base_navigation_feedback import BaseNavigationFeedback
     from emet.rl.manipulation.whole_body_actor import WholeBodyActor
     from emet.rl.manipulation.whole_body_bundle import export_actor
@@ -416,7 +417,7 @@ def navigation_policy(sim, tmp_path):
         trajectory_preview=True, tracking_reward=True, physical_wheel_slew=True,
         wheel_feedback_gain=0.5, wheel_feedback_current_velocity=True,
         tracking_precision=4, terminal_hold_seconds=2,
-        base_xy_tolerance=0.05, base_heading_tolerance=np.deg2rad(5),
+        base_xy_tolerance=0.05, base_heading_tolerance=np.deg2rad(5), **execution,
     )
     return export_actor(
         WholeBodyActor(sim.env.profile.robot, hidden=16, base_rate_feedback=False,
@@ -479,6 +480,7 @@ def test_navigation_ui_replans_preserve_physics_and_show_endpoint_not_intermedia
 
 def test_adjacent_drag_updates_are_coalesced_without_dropping_pause_or_mode_commands():
     import queue
+
     from emet.rl.test_drive import _drain_goal_updates
 
     pending = queue.Queue()
@@ -539,6 +541,7 @@ def test_initial_navigation_reference_requires_all_six_base_velocities_to_be_qui
 
 def test_live_viewer_goal_command_resumes_paused_simulation_without_run_button():
     import time
+
     from emet.rl.test_drive import TestDrive
 
     app = TestDrive([], "mars-arm")
@@ -567,3 +570,20 @@ def test_live_viewer_goal_command_resumes_paused_simulation_without_run_button()
         app.closed.set()
         app.thread.join(timeout=10)
         assert not app.thread.is_alive()
+
+
+def test_scoped_execution_survives_viewer_selection_and_mode_changes(tmp_path):
+    sim=Simulation("mars-arm", "reach", seed=35874001)
+    try:
+        bundle=navigation_policy(sim,tmp_path,wheel_feedback_base_only_gains=(0.,.5))
+        assert bundle.manifest["format"] == "emet-whole-body-v4"
+        sim.use_policy(bundle,"scoped candidate")
+        sim.select_target_mode(1)
+        np.testing.assert_array_equal(sim.env.control.wheel_feedback_gains(),[0,.5])
+        sim.select_target_mode(2)
+        assert sim.env.control.wheel_feedback_gains()==.5
+        sim.use_policy(None,"Feedback controller")
+        assert sim.env.control.base_only_velocity_feedback_gains is None
+        assert sim.env.control.wheel_feedback_gains()==2.
+    finally:
+        sim.close()

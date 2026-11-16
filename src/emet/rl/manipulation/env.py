@@ -145,6 +145,7 @@ class ManipulationConfig:
     feedback_orientation_error: str = "rotation6"
     feedback_reference_velocity: bool = False
     wheel_feedback_gain: float = 2.0
+    wheel_feedback_base_only_gains: tuple[float, float] | None = None
     wheel_feedback_current_velocity: bool = False
     physical_wheel_slew: bool = False
     wheel_jerk_limits: tuple[float, float] | None = None
@@ -178,8 +179,16 @@ class ManipulationConfig:
             raise ValueError("nearby pose curriculum requires pregrasp fixtures")
         if self.reach_local_translation_probability and not self.reach_local_probability:
             raise ValueError("translation share requires a local reach curriculum")
-        if not np.isfinite(self.wheel_feedback_gain) or not 0 <= self.wheel_feedback_gain <= 2:
-            raise ValueError("wheel feedback gain must be in [0, 2]")
+        from emet.rl.manipulation.wheel_feedback import validate_base_only_gains, validate_gain
+
+        object.__setattr__(self, "wheel_feedback_gain", validate_gain(self.wheel_feedback_gain))
+        object.__setattr__(
+            self, "wheel_feedback_base_only_gains", validate_base_only_gains(self.wheel_feedback_base_only_gains)
+        )
+        if self.wheel_feedback_base_only_gains is not None and (
+            self.robot != "innate_mars" or not self.wheel_feedback_current_velocity or not self.physical_wheel_slew
+        ):
+            raise ValueError("base-only wheel feedback requires Mars current velocity and physical wheel slew")
         if type(self.wheel_feedback_current_velocity) is not bool:
             raise ValueError("current wheel feedback velocity must be boolean")
         if self.wheel_feedback_current_velocity and self.robot != "innate_mars":
@@ -465,8 +474,9 @@ class ManipulationEnv(gym.Env):
 
     def _configure_preview(self):
         self.control.turn_progress_guard_enabled = self.config.base_turn_progress_guard
-        self.control.base_velocity_feedback_gain = self.config.wheel_feedback_gain
-        self.control.base_velocity_feedback_current = self.config.wheel_feedback_current_velocity
+        from emet.rl.manipulation.wheel_feedback import configure_wheel_feedback
+
+        configure_wheel_feedback(self.control, self.config)
         # The old teacher's 0.015-rad deadband exceeds this task's 0.01-rad
         # heading success condition. Correct the new task's comparator without
         # changing historical reset/teacher behavior for other distributions.

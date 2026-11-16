@@ -119,9 +119,11 @@ def verify_checkpoint(directory, model, evidence):
             "rl/manipulation/tracking.py",
             "rl/pose_targets.py",
         }
-    if manifest.get("format") == "emet-whole-body-v3":
+    if manifest.get("format") in {"emet-whole-body-v3", "emet-whole-body-v4"}:
         required.add("rl/manipulation/base_navigation_feedback.py")
-    if manifest.get("format") in {"emet-whole-body-v2", "emet-whole-body-v3"}:
+    if manifest.get("format") == "emet-whole-body-v4":
+        required.add("rl/manipulation/wheel_feedback.py")
+    if manifest.get("format") in {"emet-whole-body-v2", "emet-whole-body-v3", "emet-whole-body-v4"}:
         required |= {
             "rl/manipulation/" + name
             for name in (
@@ -176,7 +178,7 @@ class CheckpointTampPolicy:
         self.policy = load_control_policy(directory, robot=env.profile.robot, fingerprint=manifest["fingerprint"])
         from emet.rl.manipulation.feedback_policy import FeedbackActorCriticPolicy, GoalFeedbackFeatures
 
-        recurrent_window = manifest.get("format") in {"emet-whole-body-v2", "emet-whole-body-v3"}
+        recurrent_window = manifest.get("format") in {"emet-whole-body-v2", "emet-whole-body-v3", "emet-whole-body-v4"}
         feedback = False if recurrent_window else isinstance(self.policy.model.policy, FeedbackActorCriticPolicy)
         if not recurrent_window and feedback != manifest["environment"].get("feedback_policy", False):
             raise ValueError("feedback policy metadata mismatch")
@@ -201,7 +203,9 @@ class CheckpointTampPolicy:
         execution = ManipulationConfig(**manifest["environment"])
         # Checkpoint settings may add protection, never disable an executor guard.
         control.turn_progress_guard_enabled |= execution.base_turn_progress_guard
-        control.base_velocity_feedback_gain = execution.wheel_feedback_gain
+        from emet.rl.manipulation.wheel_feedback import configure_wheel_feedback
+
+        configure_wheel_feedback(control, execution)
         current_jerk = None if control.physical_wheel_jerk_limits is None else tuple(control.physical_wheel_jerk_limits)
         if (
             control.physical_wheel_slew_enabled != execution.physical_wheel_slew

@@ -7,7 +7,6 @@ remain explicit. This is a primitive environment, never a full pick/place claim.
 
 import multiprocessing as mp
 import traceback
-from numbers import Real
 from pathlib import Path
 
 import gymnasium as gym
@@ -43,7 +42,19 @@ def _bounded_path(execute, primitive):
     return bounded
 
 
-def _worker(connection, case, oracle, arm_reference, initial_settle_s, wheel_feedback_current_velocity, trace_path, primitive, planning_scope, wheel_feedback_gain=0.5):
+def _worker(
+    connection,
+    case,
+    oracle,
+    arm_reference,
+    initial_settle_s,
+    wheel_feedback_current_velocity,
+    trace_path,
+    primitive,
+    planning_scope,
+    wheel_feedback_gain=0.5,
+    wheel_feedback_base_only_gains=None,
+):
     import hashlib
     import json
     from dataclasses import replace
@@ -70,8 +81,17 @@ def _worker(connection, case, oracle, arm_reference, initial_settle_s, wheel_fee
         compiled_robot_identity = robot_identity(env.model)
         env.control.retention_context_enabled = True
         env.control.history = None
-        env.config = replace(env.config, wheel_feedback_gain=wheel_feedback_gain)
-        env.control.base_velocity_feedback_gain = wheel_feedback_gain
+        from emet.rl.manipulation.wheel_feedback import configure_wheel_feedback
+
+        env.config = replace(
+            env.config,
+            wheel_feedback_gain=wheel_feedback_gain,
+            wheel_feedback_base_only_gains=wheel_feedback_base_only_gains,
+            physical_wheel_slew=env.config.physical_wheel_slew or wheel_feedback_base_only_gains is not None,
+        )
+        if wheel_feedback_base_only_gains is not None:
+            env.control.set_physical_wheel_slew(True)
+        configure_wheel_feedback(env.control, env.config)
         env.control.turn_progress_guard_enabled = True
 
         class Bridge:
@@ -181,7 +201,8 @@ def _worker(connection, case, oracle, arm_reference, initial_settle_s, wheel_fee
         )
         planned = json.loads(
             tools["plan_pick_place"].func(
-                task_ref=task["task_ref"], placement_region=admission["placement_region"],
+                task_ref=task["task_ref"],
+                placement_region=admission["placement_region"],
                 **({"execution_scope": primitive} if planning_scope == "unloaded_prefix" else {}),
             )
         )
@@ -280,6 +301,7 @@ def _worker(connection, case, oracle, arm_reference, initial_settle_s, wheel_fee
             "initial_settle_s": initial_settle_s,
             "wheel_feedback_current_velocity": env.control.base_velocity_feedback_current,
             "wheel_feedback_gain": env.control.base_velocity_feedback_gain,
+            "wheel_feedback_base_only_gains": env.control.base_only_velocity_feedback_gains,
             "initial_state_sha256": initial_state_sha256,
             "model_fingerprint": env.fingerprint,
             "compiled_robot_identity": compiled_robot_identity,
@@ -338,6 +360,7 @@ def _worker(connection, case, oracle, arm_reference, initial_settle_s, wheel_fee
                         "initial_settle_s": initial_settle_s,
                         "wheel_feedback_current_velocity": wheel_feedback_current_velocity,
                         "wheel_feedback_gain": wheel_feedback_gain,
+                        "wheel_feedback_base_only_gains": wheel_feedback_base_only_gains,
                         "outcome": outcome,
                         "stop_confirmed": robot.stop_confirmed if robot is not None else None,
                         "commands": robot.commands if robot is not None else [],
@@ -365,6 +388,7 @@ class TampPrimitiveEnv(gym.Env):
         primitive="pregrasp",
         planning_scope="full_task",
         wheel_feedback_gain=0.5,
+        wheel_feedback_base_only_gains=None,
     ):
         if type(primitive) is not str or primitive not in PRIMITIVE_PHASE:
             raise ValueError("primitive must be pregrasp or grasp_pose; loaded stages are not supported")
@@ -379,9 +403,12 @@ class TampPrimitiveEnv(gym.Env):
         if type(wheel_feedback_current_velocity) is not bool:
             raise ValueError("current wheel feedback velocity must be boolean")
         self.wheel_feedback_current_velocity = wheel_feedback_current_velocity
-        if isinstance(wheel_feedback_gain, bool) or not isinstance(wheel_feedback_gain, Real) or not np.isfinite(wheel_feedback_gain) or not 0 <= wheel_feedback_gain <= 2:
-            raise ValueError("wheel feedback gain must be finite and in [0,2]")
-        self.wheel_feedback_gain = float(wheel_feedback_gain)
+        from emet.rl.manipulation.wheel_feedback import validate_base_only_gains, validate_gain
+
+        self.wheel_feedback_gain = validate_gain(wheel_feedback_gain)
+        self.wheel_feedback_base_only_gains = validate_base_only_gains(wheel_feedback_base_only_gains)
+        if self.wheel_feedback_base_only_gains is not None and not wheel_feedback_current_velocity:
+            raise ValueError("base-only wheel feedback requires current velocity")
         self.cases, self.oracle, self.arm_reference, self.timeout = list(cases), bool(oracle), arm_reference, timeout
         self.initial_settle_s = float(initial_settle_s)
         self.trace_dir = Path(trace_dir).resolve() if trace_dir is not None else None
@@ -439,6 +466,7 @@ class TampPrimitiveEnv(gym.Env):
                 self.primitive,
                 self.planning_scope,
                 self.wheel_feedback_gain,
+                self.wheel_feedback_base_only_gains,
             ),
             daemon=True,
         )

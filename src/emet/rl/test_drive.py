@@ -78,6 +78,7 @@ def checkpoints(roots, mode):
                     "emet-manipulation-v1",
                     "emet-whole-body-v2",
                     "emet-whole-body-v3",
+                    "emet-whole-body-v4",
                 } and data.get("robot") == ("innate_mars" if mode == "mars-arm" else "stretch")
                 base = data.get("robot") == "innate_mars" and data.get("task") == "base"
                 coordinated = data.get("robot") == "innate_mars" and data.get("task") == "coordinated"
@@ -217,6 +218,7 @@ class Simulation:
                     "tracking_reward": False,
                     "retention_context": False,
                     "wheel_feedback_gain": 2.0,
+                    "wheel_feedback_base_only_gains": None,
                     "whole_body_settling": False,
                     "wheel_feedback_current_velocity": False,
                     "physical_wheel_slew": False,
@@ -234,12 +236,13 @@ class Simulation:
                 settings = {
                     "action_mode": candidate.action_mode,
                     "trajectory_preview": (
-                        candidate.manifest.get("format") in {"emet-whole-body-v2", "emet-whole-body-v3"}
+                        candidate.manifest.get("format") in {"emet-whole-body-v2", "emet-whole-body-v3", "emet-whole-body-v4"}
                         or "preview" in candidate.normalization
                     ),
                     "tracking_reward": source.get("tracking_reward", False),
                     "retention_context": source.get("retention_context", False),
                     "wheel_feedback_gain": source.get("wheel_feedback_gain", 2.0),
+                    "wheel_feedback_base_only_gains": source.get("wheel_feedback_base_only_gains"),
                     "whole_body_settling": source.get("whole_body_settling", False),
                     "wheel_feedback_current_velocity": source.get("wheel_feedback_current_velocity", False),
                     "physical_wheel_slew": source.get("physical_wheel_slew", False),

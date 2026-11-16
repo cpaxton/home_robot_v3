@@ -72,14 +72,18 @@ def test_rollout_propagates_boundary_and_keeps_early_failure(monkeypatch):
 
 
 @pytest.mark.sim
-@pytest.mark.parametrize("gain", [0.0, 0.5])
-def test_native_grasp_pose_stops_before_closure_and_preserves_tick_credit(gain):
+@pytest.mark.parametrize("gain,scoped", [(0.0, None), (0.5, None), (0.5, (0.0, 0.5))])
+def test_native_grasp_pose_stops_before_closure_and_preserves_tick_credit(gain, scoped):
     from emet.rl.manipulation.whole_body_training import load_development
 
     suite, _ = load_development()
     env = TampPrimitiveEnv(
-        suite["train_cases"][1:2], oracle=True, primitive="grasp_pose", wheel_feedback_current_velocity=True,
+        suite["train_cases"][1:2],
+        oracle=True,
+        primitive="grasp_pose",
+        wheel_feedback_current_velocity=True,
         wheel_feedback_gain=gain,
+        wheel_feedback_base_only_gains=scoped,
     )
     try:
         _, info = env.reset()
@@ -97,6 +101,7 @@ def test_native_grasp_pose_stops_before_closure_and_preserves_tick_credit(gain):
         assert info["terminal_pose"]["orientation_error_rad"] <= 0.02
         assert info["stop_confirmed"] and not info["full_pick_place_success"]
         assert info["wheel_feedback_gain"] == gain
+        assert info["wheel_feedback_base_only_gains"] == scoped
         commands = info["commands"]
         assert any(c.get("phase") == "grasp" for c in commands)
         assert not any(c.get("gripper") == "close" or c.get("phase") == "lift" for c in commands)
