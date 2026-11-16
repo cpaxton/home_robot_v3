@@ -1,0 +1,670 @@
+{
+  "format": "hand-tracking-deep-dive-v1",
+  "source_state_digest": "41880ebecc03340c50885dad525ed3239936d145b5a625a9e856142f959261fd",
+  "runtime_revision": "4b3c405960876825c57f5925300f001ee1d1ae78",
+  "runner_sha256": "41b7c6fe09d7d045cf3822fa08aeebf3063cb9a5b5213682b88231831dd4e8e3",
+  "mask_producer_sha256": "813072a2d4a42a9baa2970090c095bba5b9616b8ca8470df719464c8f87690fd",
+  "weights_sha256": "46291c71ea4dccd93feaf94d4b0e88f3deb1ee5945667964300f3c9f1c165813",
+  "tasks": [
+    {
+      "case": {
+        "case": {
+          "id": "mars:mask-handoff-audit-v1:0",
+          "seed": 35876000,
+          "split": "train",
+          "mode": "base_only",
+          "travel_m": 0.15,
+          "turn_rad": 0.0,
+          "arm_delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "base_mask": [
+            true,
+            true,
+            true
+          ]
+        },
+        "cohort": "mask-handoffs",
+        "mask_index": 0
+      },
+      "controller": "actor"
+    },
+    {
+      "case": {
+        "case": {
+          "id": "mars:mask-handoff-audit-v1:1",
+          "seed": 35876001,
+          "split": "train",
+          "mode": "base_only",
+          "travel_m": -0.15,
+          "turn_rad": 0.0,
+          "arm_delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "base_mask": [
+            true,
+            true,
+            true
+          ]
+        },
+        "cohort": "mask-handoffs",
+        "mask_index": 1
+      },
+      "controller": "actor"
+    },
+    {
+      "case": {
+        "case": {
+          "id": "mars:mask-handoff-audit-v1:2",
+          "seed": 35876002,
+          "split": "train",
+          "mode": "base_only",
+          "travel_m": 0.15,
+          "turn_rad": 0.24,
+          "arm_delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "base_mask": [
+            true,
+            true,
+            true
+          ]
+        },
+        "cohort": "mask-handoffs",
+        "mask_index": 2
+      },
+      "controller": "actor"
+    },
+    {
+      "case": {
+        "case": {
+          "id": "mars:mask-handoff-audit-v1:3",
+          "seed": 35876003,
+          "split": "train",
+          "mode": "base_only",
+          "travel_m": -0.15,
+          "turn_rad": -0.24,
+          "arm_delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "base_mask": [
+            true,
+            true,
+            true
+          ]
+        },
+        "cohort": "mask-handoffs",
+        "mask_index": 3
+      },
+      "controller": "actor"
+    },
+    {
+      "case": {
+        "case": {
+          "id": "innate_mars:v2:train:coupled:3",
+          "seed": 35700003,
+          "split": "train",
+          "mode": "coupled",
+          "travel_m": 0.15,
+          "turn_rad": -0.24,
+          "arm_delta": [
+            0,
+            -0.005,
+            0.005,
+            0,
+            0
+          ],
+          "base_mask": [
+            true,
+            true,
+            true
+          ],
+          "purpose": "tracking"
+        },
+        "cohort": "larger-coupled"
+      },
+      "controller": "actor"
+    },
+    {
+      "case": {
+        "case": {
+          "id": "innate_mars:v2:train:coupled:4",
+          "seed": 35700004,
+          "split": "train",
+          "mode": "coupled",
+          "travel_m": 0.15,
+          "turn_rad": 0.24,
+          "arm_delta": [
+            0,
+            0,
+            0,
+            0,
+            0.01
+          ],
+          "base_mask": [
+            true,
+            true,
+            false
+          ],
+          "purpose": "tracking"
+        },
+        "cohort": "larger-coupled"
+      },
+      "controller": "actor"
+    },
+    {
+      "case": {
+        "case": {
+          "id": "innate_mars:v2:audit:hand_free_base:6",
+          "seed": 35700006,
+          "split": "audit",
+          "mode": "hand_free_base",
+          "travel_m": -0.15,
+          "turn_rad": 0,
+          "arm_delta": [
+            0,
+            0,
+            0,
+            0,
+            -0.01
+          ],
+          "base_mask": [
+            false,
+            false,
+            false
+          ],
+          "purpose": "tracking"
+        },
+        "cohort": "larger-coupled"
+      },
+      "controller": "actor"
+    },
+    {
+      "case": {
+        "case": {
+          "id": "innate_mars:v2:audit:coupled:7",
+          "seed": 35700007,
+          "split": "audit",
+          "mode": "coupled",
+          "travel_m": -0.15,
+          "turn_rad": -0.24,
+          "arm_delta": [
+            0,
+            0.007,
+            -0.007,
+            0,
+            0
+          ],
+          "base_mask": [
+            true,
+            true,
+            true
+          ],
+          "purpose": "tracking"
+        },
+        "cohort": "larger-coupled"
+      },
+      "controller": "actor"
+    },
+    {
+      "case": {
+        "case": {
+          "id": "innate_mars:v2:audit:hand_free_base:9",
+          "seed": 35700009,
+          "split": "audit",
+          "mode": "hand_free_base",
+          "travel_m": 0.15,
+          "turn_rad": 0,
+          "arm_delta": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "base_mask": [
+            false,
+            false,
+            false
+          ],
+          "retarget": {
+            "at_fraction": 0.5,
+            "travel_m": -0.15
+          },
+          "purpose": "tracking"
+        },
+        "cohort": "larger-coupled"
+      },
+      "controller": "actor"
+    },
+    {
+      "case": {
+        "case": {
+          "id": "mars:mask-handoff-audit-v1:0",
+          "seed": 35876000,
+          "split": "train",
+          "mode": "base_only",
+          "travel_m": 0.15,
+          "turn_rad": 0.0,
+          "arm_delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "base_mask": [
+            true,
+            true,
+            true
+          ]
+        },
+        "cohort": "mask-handoffs",
+        "mask_index": 0
+      },
+      "controller": "teacher"
+    },
+    {
+      "case": {
+        "case": {
+          "id": "mars:mask-handoff-audit-v1:1",
+          "seed": 35876001,
+          "split": "train",
+          "mode": "base_only",
+          "travel_m": -0.15,
+          "turn_rad": 0.0,
+          "arm_delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "base_mask": [
+            true,
+            true,
+            true
+          ]
+        },
+        "cohort": "mask-handoffs",
+        "mask_index": 1
+      },
+      "controller": "teacher"
+    },
+    {
+      "case": {
+        "case": {
+          "id": "mars:mask-handoff-audit-v1:2",
+          "seed": 35876002,
+          "split": "train",
+          "mode": "base_only",
+          "travel_m": 0.15,
+          "turn_rad": 0.24,
+          "arm_delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "base_mask": [
+            true,
+            true,
+            true
+          ]
+        },
+        "cohort": "mask-handoffs",
+        "mask_index": 2
+      },
+      "controller": "teacher"
+    },
+    {
+      "case": {
+        "case": {
+          "id": "mars:mask-handoff-audit-v1:3",
+          "seed": 35876003,
+          "split": "train",
+          "mode": "base_only",
+          "travel_m": -0.15,
+          "turn_rad": -0.24,
+          "arm_delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "base_mask": [
+            true,
+            true,
+            true
+          ]
+        },
+        "cohort": "mask-handoffs",
+        "mask_index": 3
+      },
+      "controller": "teacher"
+    },
+    {
+      "case": {
+        "case": {
+          "id": "innate_mars:v2:train:coupled:3",
+          "seed": 35700003,
+          "split": "train",
+          "mode": "coupled",
+          "travel_m": 0.15,
+          "turn_rad": -0.24,
+          "arm_delta": [
+            0,
+            -0.005,
+            0.005,
+            0,
+            0
+          ],
+          "base_mask": [
+            true,
+            true,
+            true
+          ],
+          "purpose": "tracking"
+        },
+        "cohort": "larger-coupled"
+      },
+      "controller": "teacher"
+    },
+    {
+      "case": {
+        "case": {
+          "id": "innate_mars:v2:train:coupled:4",
+          "seed": 35700004,
+          "split": "train",
+          "mode": "coupled",
+          "travel_m": 0.15,
+          "turn_rad": 0.24,
+          "arm_delta": [
+            0,
+            0,
+            0,
+            0,
+            0.01
+          ],
+          "base_mask": [
+            true,
+            true,
+            false
+          ],
+          "purpose": "tracking"
+        },
+        "cohort": "larger-coupled"
+      },
+      "controller": "teacher"
+    },
+    {
+      "case": {
+        "case": {
+          "id": "innate_mars:v2:audit:hand_free_base:6",
+          "seed": 35700006,
+          "split": "audit",
+          "mode": "hand_free_base",
+          "travel_m": -0.15,
+          "turn_rad": 0,
+          "arm_delta": [
+            0,
+            0,
+            0,
+            0,
+            -0.01
+          ],
+          "base_mask": [
+            false,
+            false,
+            false
+          ],
+          "purpose": "tracking"
+        },
+        "cohort": "larger-coupled"
+      },
+      "controller": "teacher"
+    },
+    {
+      "case": {
+        "case": {
+          "id": "innate_mars:v2:audit:coupled:7",
+          "seed": 35700007,
+          "split": "audit",
+          "mode": "coupled",
+          "travel_m": -0.15,
+          "turn_rad": -0.24,
+          "arm_delta": [
+            0,
+            0.007,
+            -0.007,
+            0,
+            0
+          ],
+          "base_mask": [
+            true,
+            true,
+            true
+          ],
+          "purpose": "tracking"
+        },
+        "cohort": "larger-coupled"
+      },
+      "controller": "teacher"
+    },
+    {
+      "case": {
+        "case": {
+          "id": "innate_mars:v2:audit:hand_free_base:9",
+          "seed": 35700009,
+          "split": "audit",
+          "mode": "hand_free_base",
+          "travel_m": 0.15,
+          "turn_rad": 0,
+          "arm_delta": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "base_mask": [
+            false,
+            false,
+            false
+          ],
+          "retarget": {
+            "at_fraction": 0.5,
+            "travel_m": -0.15
+          },
+          "purpose": "tracking"
+        },
+        "cohort": "larger-coupled"
+      },
+      "controller": "teacher"
+    },
+    {
+      "case": {
+        "case": {
+          "id": "mars:mask-handoff-audit-v1:1",
+          "seed": 35876001,
+          "split": "train",
+          "mode": "base_only",
+          "travel_m": -0.15,
+          "turn_rad": 0.0,
+          "arm_delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "base_mask": [
+            true,
+            true,
+            true
+          ]
+        },
+        "cohort": "mask-handoffs",
+        "mask_index": 1
+      },
+      "controller": "base_error_zero"
+    },
+    {
+      "case": {
+        "case": {
+          "id": "mars:mask-handoff-audit-v1:3",
+          "seed": 35876003,
+          "split": "train",
+          "mode": "base_only",
+          "travel_m": -0.15,
+          "turn_rad": -0.24,
+          "arm_delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "base_mask": [
+            true,
+            true,
+            true
+          ]
+        },
+        "cohort": "mask-handoffs",
+        "mask_index": 3
+      },
+      "controller": "base_error_zero"
+    },
+    {
+      "case": {
+        "case": {
+          "id": "innate_mars:v2:audit:coupled:7",
+          "seed": 35700007,
+          "split": "audit",
+          "mode": "coupled",
+          "travel_m": -0.15,
+          "turn_rad": -0.24,
+          "arm_delta": [
+            0,
+            0.007,
+            -0.007,
+            0,
+            0
+          ],
+          "base_mask": [
+            true,
+            true,
+            true
+          ],
+          "purpose": "tracking"
+        },
+        "cohort": "larger-coupled"
+      },
+      "controller": "base_error_zero"
+    },
+    {
+      "case": {
+        "case": {
+          "id": "mars:mask-handoff-audit-v1:1",
+          "seed": 35876001,
+          "split": "train",
+          "mode": "base_only",
+          "travel_m": -0.15,
+          "turn_rad": 0.0,
+          "arm_delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "base_mask": [
+            true,
+            true,
+            true
+          ]
+        },
+        "cohort": "mask-handoffs",
+        "mask_index": 1
+      },
+      "controller": "hand_gain2"
+    },
+    {
+      "case": {
+        "case": {
+          "id": "mars:mask-handoff-audit-v1:3",
+          "seed": 35876003,
+          "split": "train",
+          "mode": "base_only",
+          "travel_m": -0.15,
+          "turn_rad": -0.24,
+          "arm_delta": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "base_mask": [
+            true,
+            true,
+            true
+          ]
+        },
+        "cohort": "mask-handoffs",
+        "mask_index": 3
+      },
+      "controller": "hand_gain2"
+    },
+    {
+      "case": {
+        "case": {
+          "id": "innate_mars:v2:audit:coupled:7",
+          "seed": 35700007,
+          "split": "audit",
+          "mode": "coupled",
+          "travel_m": -0.15,
+          "turn_rad": -0.24,
+          "arm_delta": [
+            0,
+            0.007,
+            -0.007,
+            0,
+            0
+          ],
+          "base_mask": [
+            true,
+            true,
+            true
+          ],
+          "purpose": "tracking"
+        },
+        "cohort": "larger-coupled"
+      },
+      "controller": "hand_gain2"
+    }
+  ],
+  "new_training_steps": 0,
+  "hardware_used": false,
+  "safety_promoted": false,
+  "fixed_before_launch": true
+}

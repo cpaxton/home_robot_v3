@@ -41,6 +41,31 @@ consistently to the mixed general/TAMP training factory, then run a bounded PPO
 comparison with unchanged physical contracts and separate teacher readouts.
 Loaded retention, per-plant agent admission and Herman remain separate gates.
 
+## Hand accuracy: evidence before the next PPO run
+
+The [24-episode hand audit](../experiments/hand_tracking_accuracy_20261116.md)
+identifies a false equilibrium in four quiet misses: learned base/hand error
+terms cancel, producing near-zero commands with residual hand error. Native
+tracking is close to its joint targets and actuators/limits have substantial
+headroom. Whole-body local rank is six; arm-only rank is five. Related failures
+need coordinated whole-body correction, without tightening the external base
+region. A global hand-gain boost improves final pose but worsens some transient
+error/jerk; simply removing base feedback adds a contact stop. Neither is promoted.
+
+Before further mixed PPO, give its actual RewardMeter an explicit serialized
+configuration and contract-scale coarse/fine/progress shaping. Test active-goal
+changes, velocity/quiet credit and 3/5/10/20 mm errors. Native environment reward
+flags alone do not affect this wrapper objective. Generate analogous non-audit
+cases with independent coupled corrections and mask transitions; retain ordinary
+tracking and outer 50/50 general/TAMP physical ticks. Then run bounded mastery
+PPO and compare full trajectories, safety and settling before increasing scale.
+
+Free-base cases also need safe allocation: actor and teacher fold link3 into the
+base collision proxy while the nominal witness remains separated. Preserve the
+force guard and model geometry; add self-clearance/posture coverage and an
+optional collision-aware teacher/reference comparison. The controller remains
+a task-agnostic trajectory tracker. Loaded carry and Herman remain separate.
+
 ## Historical decision after actual-reset validation
 
 The [completed reset/baseline study](../experiments/mars_current_feedback_reset_validation_20261115.md)

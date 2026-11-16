@@ -881,3 +881,21 @@ mask handoffs remain 2/4. Moving-audit yaw jerk decreases from 150.09 to
 Fresh source-bound regressions pass 1,538 tests. The setting remains experimental;
 loaded-task and hardware qualification are not established. Complete outcomes
 and separated producer identities are in \texttt{scoped\_wheel\_feedback\_v1/}.
+
+
+\paragraph{Hand-accuracy failure attribution.}
+A fixed 24-episode diagnostic replays nine selected actor/teacher cases and six
+feedback interventions without learning or changing physics. Nine actor replays
+exactly preserve the preceding primary metrics, and all 24 stops confirm. Four
+quiet misses exhibit nearly opposite learned base/hand feedback vectors; their
+small net commands preserve 4.61--11.78 mm hand errors despite available joint
+range and actuator authority. Whole-body local Jacobians have rank six versus
+arm-only rank five. Doubling hand-error terms reduces three final errors from
+6.26/11.78/10.09 mm to 1.56/3.88/3.14 mm, but increases some transient error and
+jerk; removing base terms creates a new contact stop. These are diagnostic
+interventions, not replacement policies. Two free-base cases also self-contact
+under both actor and teacher while admitted nominal witnesses remain separated.
+The actual mixed-training reward uses fixed-scale pose/velocity terms, replacing
+the native scalar objective; contract-scale reward and coupled-distribution
+alignment are explicit next steps. Complete producer-separated evidence is in
+\texttt{hand\_tracking\_deep\_dive\_v1/}.

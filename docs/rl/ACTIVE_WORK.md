@@ -86,6 +86,18 @@ mask handoffs remain 2/4. All 226 completed cases confirm a stop. Moving linear
 jerk worsens despite improved yaw jerk, so no default/hardware promotion. No PPO
 is active. See the [scoped-feedback report](../experiments/scoped_wheel_feedback_20261116.md).
 
+The [hand-accuracy deep dive](../experiments/hand_tracking_accuracy_20261116.md)
+completes **24 diagnostic episodes**, all stops confirmed, with unchanged source
+and actor tensors. All nine actor replays reproduce the prior primary metrics
+exactly. Four quiet misses are false equilibria: opposing learned base/hand
+feedback cancels while the hand remains wrong. Native actuator lag, force limits
+and joint limits do not explain them. Teacher and actor also share two modeled
+link3/base self-contact failures despite safe nominal witnesses. Fixed gain and
+feature probes are not exported: stronger hand feedback improves final error
+but worsens some transient error/jerk, while removing base terms creates a new
+contact stop. The current mixed wrappers replace native reward with a fixed
+RewardMeter; tune the objective the learner actually receives before more PPO.
+
 | Evidence | Scope / result |
 | --- | --- |
 | [Current complete readout](../experiments/coupled_tracking_20261116.md) | Explicit unloaded-prefix teacher 6/6 at pregrasp and 6/6 at open-jaw grasp-pose; Mars and Stretch coupled v1 teachers each 10/10. |
@@ -240,3 +252,10 @@ A single simulator viewer is running as `20261116_170847_aa8444` on CPU14,
 localhost8766, exposing the retained v3 and experimental v4 roots for explicit
 selection. The earlier viewer was stopped during native evaluation. Reset a finished/faulted scene
 before selecting an actor. Goal edits then resume automatically. No hardware.
+
+Completed hand-audit job: `20261116_175205_240a6d`, one offline worker on CPU15;
+static private-geometry checks add no rollouts. Offline W&B: `bjvggd38`. No workers remain active for training/evaluation; only the
+existing CPU14 viewer remains. The next implementation is explicit wrapper
+reward/contract alignment, analogous non-audit coupled/mask training cases and
+bounded direct-PPO mastery with trajectory/force/jerk comparisons. Preserve
+ordinary tracking and outer 50/50 general/TAMP physical ticks.

@@ -1,0 +1,9 @@
+import json
+from pathlib import Path
+import wandb
+root=Path.cwd();out=root/'logs/eval/hand-tracking-deep-dive-v1';report=json.loads((out/'results.json').read_text());assert report['complete']
+run=wandb.init(project='emet-control',name='mars-hand-tracking-accuracy-deep-dive',mode='offline',dir=str(root/'logs'),config={'scope':'failure-enriched deterministic causal diagnostic, not qualification','source_state_digest':report['protocol']['source_state_digest'],'weights_sha256':report['protocol']['weights_sha256'],'new_training_steps':0,'hardware_used':False})
+table=wandb.Table(columns=['controller','case','success','code','position_error_mm','rotation_error_rad','scored_peak_force_N','stop_confirmed'])
+for case in report['cases']:
+ m=case['metrics'];table.add_data(case['controller'],case['case']['id'],case['success'],case['code'],1000*m['ee_position_error'],m['ee_orientation_error'],m['peak_contact_force'],case['stop_confirmed'])
+run.log({'hand_accuracy_diagnostics':table,'episodes':len(report['cases']),'confirmed_stops':sum(c['stop_confirmed'] for c in report['cases']),'new_training_steps':0});identity={'id':run.id,'name':run.name,'mode':'offline','new_training_steps':0,'directory':run.dir};run.finish();(out/'wandb-evaluation.json').write_text(json.dumps(identity,indent=2)+'\n')

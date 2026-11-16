@@ -199,6 +199,21 @@ merges, measured policy improvement and hardware readiness are separate decision
       physics-rate motion and train analogous transitions without reusing audit
       seeds; preserve outer 50/50 general/TAMP ticks and precise hand targets.
       [Complete scoped readout](docs/experiments/scoped_wheel_feedback_20261116.md).
+- [x] **Diagnose hand accuracy with matched state/command evidence.** A fixed
+      24-episode audit finds learned base/hand feedback cancellation, not native
+      saturation, in four quiet failures. All stops confirm. Teacher and actor
+      share two modeled self-contact failures. Stronger hand terms improve final
+      error but can worsen overshoot/jerk; do not promote the diagnostic probes.
+      [Deep dive and full cases](docs/experiments/hand_tracking_accuracy_20261116.md).
+- [ ] **Align the wrapper reward and break coupled-feedback correlations.**
+      General/coupled/TAMP mixed wrappers use RewardMeter, discarding the native
+      scalar reward; tracking_precision and native endpoint shaping do not tune
+      that objective. Add explicit contract-scale coarse/fine hand tracking,
+      same-active-reference progress and pose-gated quiet credit, with force and
+      smoothness curriculum preserved. Generate analogous reachable mask and
+      independent coupled corrections outside the audit seeds. Keep regular
+      tracking and outer 50/50 general/TAMP physical ticks; compare bounded PPO
+      against teacher on full trajectories before scaling.
 - [ ] **Bind future actor exports to their actual training plants.** General
       and TAMP currently use different contact solver settings. Use explicit
       per-plant export/admission evidence or align the configurations before

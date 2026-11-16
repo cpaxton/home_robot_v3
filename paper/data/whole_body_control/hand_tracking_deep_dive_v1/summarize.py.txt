@@ -1,0 +1,79 @@
+"""Source-bound compact audit, command cancellation, and tracking figures."""
+import gzip,hashlib,json,shutil
+from pathlib import Path
+import numpy as np
+from emet.rl.regression_gate import ROOT,source_state,verify_regressions
+from emet.rl.manipulation.carry_benchmark import digest
+rawroot=ROOT/'logs/eval/hand-tracking-deep-dive-v1';out=ROOT/'paper/data/whole_body_control/hand_tracking_deep_dive_v1'
+def sha(p):return hashlib.sha256(p.read_bytes()).hexdigest()
+def read(p):return json.loads(p.read_text())
+def episode(index):
+ with gzip.open(rawroot/f'episode-{index:02d}.json.gz','rt') as f:return json.load(f)
+def main():
+ r=read(rawroot/'results.json');assert r['complete'] and len(r['cases'])==24
+ assert digest(source_state(ROOT))==r['protocol']['source_state_digest']
+ verified=verify_regressions(ROOT/'logs/eval/scoped-wheel-feedback-regressions-v2/full.receipt.json',root=ROOT)
+ for row in r['cases']:assert sha(Path(row['raw_trace']['path']))==row['raw_trace']['sha256']
+ protocol=r['protocol'];assert protocol['runner_sha256']==sha(Path(__file__).with_name('audit.py'))
+ report={'format':'hand-tracking-deep-dive-evidence-v1','protocol':protocol,'raw_results_sha256':sha(rawroot/'results.json'),'runtime_source_archive':read(ROOT/'logs/recovery/scoped-wheel-feedback-4b3c4059-source-record.json'),'unchanged_source_regression_receipt_tests':len(verified['test_ids']),'cases':r['cases'],'quiet_failures':[],'replay_agreement':[],'new_training_steps':0,'hardware_used':False,'safety_promoted':False}
+ for case in report['cases']:
+  trace=dict(case['raw_trace']);parts=Path(trace['path']).parts;trace['path']=str(Path(*parts[parts.index('logs'): ]));case['raw_trace']=trace
+ previous=ROOT/'logs/eval/scoped-wheel-feedback-v2/candidate'
+ prior={c['id']:c for file in ('general-v2.json','mask-handoffs.json') for c in read(previous/file)}
+ for c in r['cases'][:9]:
+  p=prior[c['case']['id']];keys=('ee_position_error','ee_orientation_error','peak_contact_force','wheel_lift','time');same=all(c['metrics'][k]==p['metrics'][k] for k in keys) and c['success']==p['success'] and c['code']==p['code'];assert same
+  report['replay_agreement'].append({'id':c['case']['id'],'exact_primary_metrics_equal':same})
+ for index in (1,3,5,7):
+  data=episode(index);rows=data['trace'];late=rows[-100:];last=rows[-1]
+  groups={k:np.mean([x['feedback_groups_preactivation'][k] for x in late],axis=0) for k in last['feedback_groups_preactivation']}
+  base=groups['base_current']+groups['base_future'];hand=groups['hand_current']+groups['hand_future'];net=sum(groups.values())
+  summary={'episode':index,'id':data['case']['case']['id'],'late_window_start_s':late[0]['physics_time_s']-rows[0]['physics_time_s'],'position_errors_mm_at_10_15_20_25s':{str(x['tick']*.05):x['position_error_m']*1000 for x in rows if x['tick'] in (200,300,400,499)},'mean_action':np.mean([x['command_action'] for x in late],axis=0).tolist(),'mean_measured_joint_velocity':np.mean([x['joint_velocity'] for x in late],axis=0).tolist(),'mean_commanded_joint_velocity':np.mean([x['joint_velocity_command'] for x in late],axis=0).tolist(),'max_joint_tracking_error_abs_rad':max(np.max(np.abs(x['joint_tracking_error'])) for x in late),'max_force_limit_fraction':max(max(x['joint_force_fraction']) for x in late),'minimum_joint_margin_rad':min(min(x['joint_limit_margin']) for x in late),'holding_or_stopped':any(x['holding'] or x['arm_holding'] or x['stopped'] for x in late),'mean_preactivation_groups':{k:v.tolist() for k,v in groups.items()},'base_hand_cosine':float(base@hand/(np.linalg.norm(base)*np.linalg.norm(hand))),'net_norm_over_base_plus_hand_norm':float(np.linalg.norm(net)/(np.linalg.norm(base)+np.linalg.norm(hand))),'last_local_kinematics':last['local_kinematics']}
+  report['quiet_failures'].append(summary)
+ report['probe_comparison']=[]
+ for actor_index,teacher_index,zero_index,gain_index in ((1,10,18,21),(3,12,19,22),(7,16,20,23)):
+  summary={'id':r['cases'][actor_index]['case']['id'],'controllers':{}}
+  for index in (actor_index,teacher_index,zero_index,gain_index):
+   e=episode(index);case=e['case'];active=[x for x in e['trace'] if x['hand_active']];metrics=case['metrics']
+   summary['controllers'][case['controller']]={'success':case['success'],'code':case['code'],'final_position_error_m':metrics['ee_position_error'],'final_orientation_error_rad':metrics['ee_orientation_error'],'peak_active_hand_position_error_m':max(x['position_error_m'] for x in active),'rms_active_hand_position_error_m':float(np.sqrt(np.mean([x['position_error_m']**2 for x in active]))),'peak_base_linear_jerk_m_s3':metrics['peak_base_linear_jerk_m_s3'],'peak_base_yaw_jerk_rad_s3':metrics['peak_base_yaw_jerk_rad_s3'],'scored_peak_force_N':metrics['peak_contact_force']}
+  report['probe_comparison'].append(summary)
+ sep=read(rawroot/'separation.json');report['static_geometry']={'raw_report_sha256':sha(rawroot/'separation.json'),'method':sep['scope'],'cases':[{k:v for k,v in x.items() if k not in ('nominal','actual')} for x in sep['cases']]}
+ # Deliberately distinguish scored force maxima from observer peaks which may
+ # increase during the unscored stop. The raw callback stays attached to stop.
+ report['contact_peak_scope']='peak_contact spans scored motion plus unscored stop; metrics.peak_contact_force is the scored episode value'
+ report['reward_audit']={'scope':'current wrapper source audit, not a claim that it caused all historic weights','sources':{name:sha(ROOT/'src/emet/rl/manipulation'/name) for name in ('whole_body_reward.py','whole_body_env.py','coupled_tracking.py','tamp_primitive_env.py')},'pose_scales_m_rad':[.01,.1],'velocity_bonus_max':.5,'base_velocity_bonus_max':.5,'environment_scalar_reward_discarded':True,'environment_tracking_precision_not_used_by_meter':True,'perfect_stationary_tracking_density_with_both_targets':3.0,'hold_examples':[{'position_error_mm':mm,'orientation_error_rad':.02,'pose_term':float(np.exp(-mm/10-.2)),'tracking_density_with_perfect_base_and_zero_velocity_error':float(2+np.exp(-mm/10-.2))} for mm in (3,5,10,20)]}
+ wb=rawroot/'wandb-evaluation.json'
+ if wb.exists():report['wandb_evaluation']=read(wb)
+ out.mkdir(parents=True,exist_ok=True)
+ def render(value,depth=0,key=None):
+  if isinstance(value,dict):return '{\n'+',\n'.join('  '*(depth+1)+json.dumps(k)+': '+render(v,depth+1,k) for k,v in value.items())+'\n'+'  '*depth+'}'
+  if isinstance(value,list):
+   if key=='cases':return '[\n'+',\n'.join('  '*(depth+1)+json.dumps(v,separators=(',',': '),allow_nan=False) for v in value)+'\n'+'  '*depth+']'
+   return json.dumps(value,allow_nan=False)
+  return json.dumps(value,allow_nan=False)
+ report['evidence_builder_sha256']=sha(Path(__file__));text=render(report)+'\n';assert json.loads(text)==report;(out/'results.json').write_text(text)
+ for name in ('audit.py','geometry.py','separation.py','summarize.py','log_wandb.py'):
+  p=Path(__file__).with_name(name)
+  if p.exists():shutil.copyfile(p,out/(name+'.txt'))
+ (out/'protocol.json').write_text(json.dumps(protocol,indent=2)+'\n')
+ import matplotlib
+ matplotlib.use('Agg')
+ import matplotlib.pyplot as plt
+ fig,axes=plt.subplots(2,2,figsize=(13,8))
+ for index,label in ((1,'Actor'),(10,'Teacher'),(21,'Hand feedback ×2'),(18,'Base error removed (diagnostic)')):
+  rows=episode(index)['trace'];t=np.array([x['physics_time_s']-rows[0]['physics_time_s'] for x in rows]);axes[0,0].plot(t,[1000*x['position_error_m'] for x in rows],label=label)
+ axes[0,0].axhline(3,color='black',linestyle=':',label='3 mm contract');axes[0,0].axvspan(0,1,color='grey',alpha=.1);axes[0,0].axvspan(3,4,color='grey',alpha=.1);axes[0,0].set(xlabel='Physical elapsed time (s)',ylabel='Hand position error (mm)',title='Mask case 1: settled pose error');axes[0,0].legend(fontsize=7)
+ quiet=report['quiet_failures'][1];g=quiet['mean_preactivation_groups'];base=np.array(g['base_current'])+g['base_future'];hand=np.array(g['hand_current'])+g['hand_future'];net=sum(np.array(v) for v in g.values());x=np.arange(7)
+ axes[0,1].bar(x-.16,base,width=.32,label='Base-pose terms');axes[0,1].bar(x+.16,hand,width=.32,label='Hand-pose terms');axes[0,1].plot(x,net,'ko-',label='Total incl. rates');axes[0,1].set_xticks(x,['Forward','Yaw','Joint 1','Joint 2','Joint 3','Joint 4','Joint 5'],fontsize=8);axes[0,1].set(ylabel='Normalized pre-tanh command',title='Mask case 3: large terms cancel at wrong pose');axes[0,1].legend(fontsize=7)
+ families=[(1,10,18,21),(3,12,19,22),(5,14,None,None),(7,16,20,23)];labels=['Mask 1','Mask 3','Coupled 4','Coupled 7'];colors=plt.rcParams['axes.prop_cycle'].by_key()['color']
+ for k,(controller,label) in enumerate((('actor','Actor'),('teacher','Teacher'),('base_error_zero','Base error removed'),('hand_gain2','Hand feedback ×2'))):
+  values=[r['cases'][f[k]]['metrics']['ee_position_error']*1000 if f[k] is not None else np.nan for f in families];bars=axes[1,0].bar(np.arange(4)+(k-1.5)*.2,values,width=.2,label=label)
+  for bar,f in zip(bars,families):
+   if f[k] is not None and r['cases'][f[k]]['code']=='unsafe_contact':axes[1,0].text(bar.get_x()+bar.get_width()/2,bar.get_height()+.3,'contact',rotation=90,ha='center',va='bottom',fontsize=6)
+ axes[1,0].axhline(3,color='black',linestyle=':');axes[1,0].set_xticks(np.arange(4),labels);axes[1,0].set(ylabel='Final position error (mm)',title='Diagnostic probes, unchanged targets/thresholds',ylim=(0,23));axes[1,0].legend(fontsize=7)
+ for item in sep['cases']:
+  if item['episode'] not in (6,15):continue
+  points=item['actual'];axes[1,1].plot([x['time_s']-1 for x in points],[1000*x['projection_gap_lower_bound_m'] for x in points],label=item['controller'])
+ axes[1,1].axhline(1000*sep['cases'][0]['nominal_projection_gap_minimum_m'],linestyle='--',label='Nominal safe witness');axes[1,1].axhline(0,color='black',linestyle=':');axes[1,1].set(xlabel='Physical elapsed time (s)',ylabel='Separating-axis projection gap (mm)',title='Free-base case 6: link3/base collision proxies');axes[1,1].legend(fontsize=7)
+ fig.tight_layout();fig.savefig(out/'hand-tracking.svg');fig.savefig(rawroot/'hand-tracking.png',dpi=130);plt.close(fig);p=out/'hand-tracking.svg';p.write_text('\n'.join(x.rstrip() for x in p.read_text().splitlines())+'\n')
+ print(json.dumps({'cases':len(r['cases']),'stops':sum(x['stop_confirmed'] for x in r['cases']),'quiet_failures':[(x['id'],x['base_hand_cosine'],x['net_norm_over_base_plus_hand_norm']) for x in report['quiet_failures']],'artifact_bytes':sum(p.stat().st_size for p in out.iterdir())}),flush=True)
+if __name__=='__main__':main()
