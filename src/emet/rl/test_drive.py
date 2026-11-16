@@ -51,9 +51,11 @@ def checkpoints(roots, mode):
         for manifest in root.rglob("manifest.json"):
             try:
                 data = json.loads(manifest.read_text())
-                arm = data.get("format") in {"emet-manipulation-v1", "emet-whole-body-v2"} and data.get("robot") == (
-                    "innate_mars" if mode == "mars-arm" else "stretch"
-                )
+                arm = data.get("format") in {
+                    "emet-manipulation-v1",
+                    "emet-whole-body-v2",
+                    "emet-whole-body-v3",
+                } and data.get("robot") == ("innate_mars" if mode == "mars-arm" else "stretch")
                 base = data.get("robot") == "innate_mars" and data.get("task") == "base"
                 coordinated = data.get("robot") == "innate_mars" and data.get("task") == "coordinated"
                 if not (
@@ -203,7 +205,8 @@ class Simulation:
                 settings = {
                     "action_mode": candidate.action_mode,
                     "trajectory_preview": (
-                        candidate.manifest.get("format") == "emet-whole-body-v2" or "preview" in candidate.normalization
+                        candidate.manifest.get("format") in {"emet-whole-body-v2", "emet-whole-body-v3"}
+                        or "preview" in candidate.normalization
                     ),
                     "tracking_reward": source.get("tracking_reward", False),
                     "retention_context": source.get("retention_context", False),

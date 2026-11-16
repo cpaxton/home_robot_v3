@@ -211,7 +211,7 @@ class PrimitiveBundle:
     def __call__(self, observation):
         keys = (
             ("history", "preview", "motion")
-            if self.bundle.manifest["format"] == "emet-whole-body-v2"
+            if self.bundle.manifest["format"] in {"emet-whole-body-v2", "emet-whole-body-v3"}
             else tuple(self.bundle.normalization)
         )
         sensor = {key: observation[key][0].detach().cpu().numpy().copy() for key in keys}

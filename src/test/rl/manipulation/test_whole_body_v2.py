@@ -661,3 +661,61 @@ def test_navigation_bundle_pins_contract_and_rejects_incompatible_declared_toler
         WholeBodyBundle(destination)
     with pytest.raises(ValueError, match="inner hold region"):
         export_actor(actor, tmp_path / "incompatible", replace(cfg, base_xy_tolerance=0.005), "test-model", steps=0)
+
+
+@pytest.mark.parametrize("navigation", [None, BaseNavigationFeedback()])
+def test_configured_bundles_require_versioned_format_and_explicit_metadata(tmp_path, navigation):
+    import hashlib
+
+    cfg = replace(
+        ManipulationConfig(),
+        retention_context=True,
+        trajectory_preview=True,
+        action_mode="direct_velocity",
+        base_xy_tolerance=0.05,
+        base_heading_tolerance=np.deg2rad(5),
+    )
+    actor = WholeBodyActor(base_rate_feedback=False, base_navigation_feedback=navigation)
+    path = tmp_path / "configured"
+    export_actor(actor, path, cfg, "test-model", steps=0)
+    manifest = json.loads((path / "manifest.json").read_text())
+    assert manifest["format"] == "emet-whole-body-v3"  # v2-only runtimes reject it
+    from emet.rl.manipulation.policy import load_control_policy
+
+    assert load_control_policy(path).actor.base_navigation_feedback == navigation
+    weights = torch.load(path / "policy.zip", weights_only=True)
+    weights.pop("base_navigation_feedback")
+    torch.save(weights, path / "policy.zip")
+    manifest["weights_sha256"] = hashlib.sha256((path / "policy.zip").read_bytes()).hexdigest()
+    (path / "manifest.json").write_text(json.dumps(manifest))
+    with pytest.raises(ValueError, match="explicit feedback options"):
+        WholeBodyBundle(path)
+
+
+def test_navigation_feedback_cannot_be_silently_downgraded_to_legacy_format(tmp_path):
+    import hashlib
+
+    cfg = replace(
+        ManipulationConfig(),
+        retention_context=True,
+        trajectory_preview=True,
+        action_mode="direct_velocity",
+        base_xy_tolerance=0.05,
+        base_heading_tolerance=np.deg2rad(5),
+    )
+    path = tmp_path / "actor"
+    export_actor(
+        WholeBodyActor(base_rate_feedback=False, base_navigation_feedback=BaseNavigationFeedback()),
+        path,
+        cfg,
+        "model",
+        steps=0,
+    )
+    manifest = json.loads((path / "manifest.json").read_text())
+    weights = torch.load(path / "policy.zip", weights_only=True)
+    manifest["format"] = weights["format"] = "emet-whole-body-v2"
+    torch.save(weights, path / "policy.zip")
+    manifest["weights_sha256"] = hashlib.sha256((path / "policy.zip").read_bytes()).hexdigest()
+    (path / "manifest.json").write_text(json.dumps(manifest))
+    with pytest.raises(ValueError, match="requires the configured v3 format"):
+        WholeBodyBundle(path)

@@ -16,6 +16,7 @@ from emet.rl.manipulation.whole_body_actor import WholeBodyActor
 from emet.rl.manipulation.whole_body_observation import ACTOR_KEYS
 
 FORMAT = "emet-whole-body-v2"
+CONFIGURED_FORMAT = "emet-whole-body-v3"
 MOTION_CONTRACT = "world_base_xy_yaw_and_hand_linear_angular_velocity_v1"
 
 
@@ -24,6 +25,9 @@ def export_actor(actor, destination, environment, fingerprint, *, steps, trainin
     if navigation is not None:
         navigation.validate_tolerances(environment.base_xy_tolerance, environment.base_heading_tolerance)
     navigation_record = None if navigation is None else navigation.record()
+    # Older v2 runtimes ignore unknown option fields. A changed feedback law
+    # therefore needs a new format they reject, even with identical tensors.
+    bundle_format = CONFIGURED_FORMAT if navigation is not None or not actor.base_rate_feedback else FORMAT
     destination = Path(destination)
     if destination.exists():
         raise FileExistsError(destination)
@@ -32,7 +36,7 @@ def export_actor(actor, destination, environment, fingerprint, *, steps, trainin
         directory = Path(temp)
         torch.save(
             {
-                "format": FORMAT,
+                "format": bundle_format,
                 "robot": actor.robot,
                 "hidden": actor.hidden,
                 "base_rate_feedback": actor.base_rate_feedback,
@@ -42,7 +46,7 @@ def export_actor(actor, destination, environment, fingerprint, *, steps, trainin
             directory / "policy.zip",
         )
         manifest = {
-            "format": FORMAT,
+            "format": bundle_format,
             "robot": actor.robot,
             "steps": steps,
             "environment": asdict(environment),
@@ -72,7 +76,11 @@ class WholeBodyBundle:
         self.manifest = json.loads((directory / "manifest.json").read_text())
         m = self.manifest
         self.robot = m.get("robot")
-        if m.get("format") != FORMAT or self.robot not in PROFILES or m.get("critic_exported") is not False:
+        if (
+            m.get("format") not in {FORMAT, CONFIGURED_FORMAT}
+            or self.robot not in PROFILES
+            or m.get("critic_exported") is not False
+        ):
             raise ValueError("invalid actor-only whole-body bundle")
         if robot is not None and robot != self.robot or fingerprint is not None and fingerprint != m["fingerprint"]:
             raise ValueError("whole-body robot/model mismatch")
@@ -92,8 +100,12 @@ class WholeBodyBundle:
         if hashlib.sha256(raw).hexdigest() != m["weights_sha256"]:
             raise ValueError("whole-body policy checksum mismatch")
         data = torch.load(directory / "policy.zip", map_location="cpu", weights_only=True)
-        if data.get("format") != FORMAT or data.get("robot") != self.robot:
+        if data.get("format") != m["format"] or data.get("robot") != self.robot:
             raise ValueError("whole-body weights metadata mismatch")
+        if m["format"] == CONFIGURED_FORMAT and any(
+            key not in record for record in (m, data) for key in ("base_rate_feedback", "base_navigation_feedback")
+        ):
+            raise ValueError("configured whole-body format requires explicit feedback options")
         if type(data.get("hidden")) is not int or not 1 <= data["hidden"] <= 1024:
             raise ValueError("invalid whole-body hidden width")
         # Missing fields are legacy bundles with the original rate path. Both
@@ -106,6 +118,8 @@ class WholeBodyBundle:
         declared_navigation = BaseNavigationFeedback.from_record(m.get("base_navigation_feedback"))
         if navigation != declared_navigation:
             raise ValueError("whole-body base navigation contract mismatch")
+        if navigation is not None and m["format"] != CONFIGURED_FORMAT:
+            raise ValueError("base navigation feedback requires the configured v3 format")
         if navigation is not None:
             navigation.validate_tolerances(
                 m["environment"].get("base_xy_tolerance"), m["environment"].get("base_heading_tolerance")

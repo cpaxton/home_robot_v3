@@ -119,7 +119,9 @@ def verify_checkpoint(directory, model, evidence):
             "rl/manipulation/tracking.py",
             "rl/pose_targets.py",
         }
-    if manifest.get("format") == "emet-whole-body-v2":
+    if manifest.get("format") == "emet-whole-body-v3":
+        required.add("rl/manipulation/base_navigation_feedback.py")
+    if manifest.get("format") in {"emet-whole-body-v2", "emet-whole-body-v3"}:
         required |= {
             "rl/manipulation/" + name
             for name in (
@@ -174,7 +176,7 @@ class CheckpointTampPolicy:
         self.policy = load_control_policy(directory, robot=env.profile.robot, fingerprint=manifest["fingerprint"])
         from emet.rl.manipulation.feedback_policy import FeedbackActorCriticPolicy, GoalFeedbackFeatures
 
-        recurrent_window = manifest.get("format") == "emet-whole-body-v2"
+        recurrent_window = manifest.get("format") in {"emet-whole-body-v2", "emet-whole-body-v3"}
         feedback = False if recurrent_window else isinstance(self.policy.model.policy, FeedbackActorCriticPolicy)
         if not recurrent_window and feedback != manifest["environment"].get("feedback_policy", False):
             raise ValueError("feedback policy metadata mismatch")
