@@ -1,5 +1,13 @@
 # Living TODOs (small / near-term)
 
+- [ ] Simplify the active agent before adding recovery policies: separate
+      last-observed find geometry from current physical-action authorization,
+      remove duplicate advertised tools and task-irrelevant state instructions,
+      then compare fixed contexts with local int4/Caliban using matched decoding.
+      Caliban HTTP is healthy; live dtype/revision remain unverified and the
+      current paired driver deliberately strips endpoint overrides.
+      Audit: `docs/experiments/agent_complexity_review_20261116.md`.
+
 - [x] Connect the sensor-only active GraphEQA baseline. Supplied-model inference,
       learned native graph and observed-space navigation run together; a real
       model-selected q6 frontier reaches a fresh assessment. Bounded retries,
