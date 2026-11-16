@@ -9,10 +9,12 @@ from emet.rl.manipulation.profiles import require_finite
 class ManipulationControl:
     def __init__(self, model, data, profile):
         self.model, self.data, self.profile = model, data, profile
+        self.base_yaw_deadband = 0.015
         self.q = [np.array([model.joint(n).qposadr[0] for n in group]) for group in profile.joint_groups]
         self.v = [np.array([model.joint(n).dofadr[0] for n in group]) for group in profile.joint_groups]
         self.act = np.array([model.actuator(n).id for n in profile.actuators])
         self.grip_q = model.joint(profile.gripper_joint).qposadr[0]
+        self.grip_v = model.joint(profile.gripper_joint).dofadr[0]
         self.grip_act = model.actuator(profile.gripper_actuator).id
         self.limits = np.array(
             [np.sum([model.joint(n).range for n in group], axis=0) for group in profile.joint_groups]
@@ -40,11 +42,16 @@ class ManipulationControl:
         self.pose_only_targets = False
         self.preview_enabled = False
         self.preview_sampler = None
+        self.retention_context_enabled = False
         self.action_mode = "residual"
         self.base_xy_tolerance = 0.02
         self.base_velocity_feedback_gain = 2.0
+        self.base_velocity_feedback_current = False
         self.base_velocity_integral_gain = 1.0
         self.base_feedback_at_rest = True
+        # Keep the qualified legacy servo until the opt-in mode is qualified.
+        self.physical_wheel_slew_enabled = False
+        self.physical_wheel_jerk_limits = None
         self.reset()
 
     def positions(self):
@@ -89,21 +96,33 @@ class ManipulationControl:
         self.reset()
 
     def reset(self):
+        from emet.rl.manipulation.turn_guard import TurnProgressGuard
+
+        self.turn_progress_guard = TurnProgressGuard(interval=self.profile.dt)
+        self.turn_progress_guard_enabled = False
+        self.motion_fault = None
         self.target = self.positions()
         self.reference = self.target.copy()
         self.velocity = np.zeros(self.profile.arm_size)
         self.grip_reference = float(self.data.qpos[self.grip_q])
         self.grip_target = self.grip_reference
         self.task_trajectory = None
+        self.task_progress = None
+        self.task_progress_rate = 1.0
+        self._task_completed_at = None
         self.preview_sampler = None
         self.phase = "reach"
         self.release_authorized = False
+        self.retain_object = False
         self.stopped = False
         self.holding = False
         self.arm_holding = False
         self.history = None
         self.last_action = np.zeros(self.profile.action_size)
         self.base_command = np.zeros(2)
+        self.applied_base_velocity = np.zeros(2)
+        self.applied_base_acceleration = np.zeros(2)
+        self._applied_base_time = float(self.data.time)
         self.base_velocity_integral = np.zeros(2)
         self.base_bias_compensation_enabled = False
         self._base_velocity_time = float(self.data.time)
@@ -176,13 +195,81 @@ class ManipulationControl:
         if np.any(trajectory.gripper < self.grip_limits[0]) or np.any(trajectory.gripper > self.grip_limits[1]):
             raise ValueError("gripper trajectory exceeds physical limits")
         self.task_trajectory = trajectory
+        self.task_progress = None
+        self.task_progress_rate = 1.0
+        self._task_completed_at = None
         self.arm_holding = False
         self.holding = False
         self._trim_time = float(self.data.time)
         self.task_trajectory_start = float(self.data.time)
-        self.preview_sampler = lambda time: trajectory.sample(time - self.task_trajectory_start)
+        self.preview_sampler = lambda time: trajectory.sample(
+            self.trajectory_elapsed() + (time - float(self.data.time)) * self.task_progress_rate
+        )
         base, hand, _ = trajectory.sample(0)
         self.set_pose_targets(base, trajectory.base_mask, hand, trajectory.hand_mask)
+
+    def clear_task_trajectory(self):
+        """End a timed schedule without clearing faults, goals, history or grip."""
+        self.task_trajectory = None
+        self.preview_sampler = None
+        self.task_progress = None
+        self.task_progress_rate = 1.0
+        self._task_completed_at = None
+
+    def trajectory_elapsed(self):
+        return float(self.data.time) - self.task_trajectory_start if self.task_progress is None else self.task_progress
+
+    def trajectory_end_elapsed(self):
+        """Time since actual completion; paused/retimed paths cannot finish early.
+
+        Progress is capped at the endpoint, so use physics time after reaching
+        it to retain the terminal hold ramp. Repeated endpoint packets do not
+        restart that clock.
+        """
+        remaining = self.trajectory_elapsed() - self.task_trajectory.end
+        if self.task_progress is None or remaining < 0:
+            return float(remaining)
+        if self._task_completed_at is None:
+            raise ValueError("retimed endpoint has no completion timestamp")
+        return float(self.data.time) - self._task_completed_at
+
+    def set_trajectory_progress(self, elapsed, *, rate):
+        """Executor retiming preserves poses, faults and grip authority.
+
+        Slow the announced path without rewinding it or exceeding nominal speed.
+        The executor must separately bound total time and report actual progress.
+        Ordinary schedules retain the physics clock unless explicitly retimed.
+        """
+        if self.stopped or self.task_trajectory is None:
+            raise ValueError("retiming requires an active trajectory")
+        previous = 0.0 if self.task_progress is None else self.task_progress
+        if (
+            not np.isfinite([elapsed, rate]).all()
+            or not previous <= elapsed <= self.task_trajectory.end
+            or not 0 <= rate <= 1
+        ):
+            raise ValueError("invalid monotonic trajectory progress")
+        self.task_progress, self.task_progress_rate = float(elapsed), float(rate)
+        if elapsed == self.task_trajectory.end and self._task_completed_at is None:
+            self._task_completed_at = float(self.data.time)
+        self.update_task_reference()
+
+    def set_physical_wheel_slew(self, enabled, *, jerk_limits=None):
+        """Opt into experimental final motor slew without resetting physical state."""
+        if type(enabled) is not bool or (enabled and self.stopped):
+            raise ValueError("invalid physical wheel slew transition")
+        if jerk_limits is not None:
+            limits = np.asarray(jerk_limits, dtype=float)
+            if not enabled or limits.shape != (2,) or not np.isfinite(limits).all() or np.any(limits <= 0):
+                raise ValueError("positive linear/yaw jerk limits require physical wheel slew")
+            if np.any(abs(self.applied_base_velocity) > 1e-6):
+                raise ValueError("configure wheel jerk limits only at rest")
+        else:
+            limits = None
+        self.physical_wheel_slew_enabled = enabled
+        self.physical_wheel_jerk_limits = None if limits is None else limits.copy()
+        self.applied_base_acceleration[:] = 0
+        self._applied_base_time = float(self.data.time)
 
     def set_reference(self, reference, *, phase="reach", grip=None, release=False):
         reference = require_finite(reference, (self.profile.arm_size,))
@@ -210,6 +297,7 @@ class ManipulationControl:
             self._trim_time = float(self.data.time)
         self.reference = reference.copy()
         self.phase, self.release_authorized = phase, bool(release)
+        self.retain_object = phase in {"close", "carry", "place", "disturbance"} and not release
         # Changing the reference does not clear history or a latched safety stop.
 
     def _base_tracking_delta(self):
@@ -265,7 +353,7 @@ class ManipulationControl:
             return np.zeros(2)
         error = self.base_goal[2] - pose[2]
         error = float(np.arctan2(np.sin(error), np.cos(error)))
-        if abs(error) < 0.015:
+        if abs(error) < self.base_yaw_deadband:
             self._base_yaw_integral = 0.0
             return np.zeros(2)
         self._base_yaw_integral = float(np.clip(self._base_yaw_integral + 0.2 * error * p.dt, -0.12, 0.12))
@@ -300,11 +388,14 @@ class ManipulationControl:
         if self.stopped:
             return
         if self.holding:
-            # A normal arm/base hold must not block the executor's explicitly
-            # authorized release. Policy actions still cannot move or open it.
-            if self.release_authorized:
-                rate = p.gripper_speed * p.grip_rate_fraction * p.dt
-                self.grip_target += float(np.clip(p.gripper_open - self.grip_target, -rate, rate))
+            # Explicit gripper phase changes may operate while the arm/base
+            # remain held. The actor cannot choose a phase or authorize release.
+            if self.release_authorized or self.phase == "close":
+                goal = p.gripper_open if self.release_authorized else self.grip_reference
+                fraction = p.grip_rate_fraction if self.release_authorized else 1.0
+                rate = p.gripper_speed * fraction * p.dt
+                self.grip_target += float(np.clip(goal - self.grip_target, -rate, rate))
+                self.grip_target = float(np.clip(self.grip_target, *self.grip_limits))
                 self.apply()
             return
         if p.wheel_bodies:
@@ -390,40 +481,88 @@ class ManipulationControl:
         Keep physical state and the closed-grip reference; discard release
         authorization and accumulated motion commands before accepting new goals.
         """
+        if self.motion_fault:
+            raise ValueError("cannot rearm a latched motion fault; reset required")
         self.stop()
         self.reference = self.target.copy()
         self.task_trajectory = None
+        self._task_completed_at = None
         self.tracking_integral[:] = 0
         self._base_yaw_integral = 0.0
         self._trim_time = float(self.data.time)
         self._base_velocity_time = float(self.data.time)
         self.stopped = False
 
+    def resume_tracking_from_hold(self):
+        """Executor reacquires the same goal after drift from a nonfault hold.
+
+        Preserve the trajectory clock, history, grip/release authority and
+        bounded servo compensation. This transition never clears a fault or
+        authorizes a new goal, and never changes the measured physical state.
+        """
+        if self.stopped or self.motion_fault or not self.holding:
+            raise ValueError("tracking may resume only from an unfaulted hold")
+        self.holding = False
+        self.arm_holding = False
+        self.velocity[:] = 0
+        self.base_command[:] = 0
+        self.last_action[:] = 0
+        self._trim_time = float(self.data.time)
+        self._base_velocity_time = float(self.data.time)
+        self.apply()
+
     def stop(self):
+        """Latch one measured hold target; repeated fault receipts cannot rebase it."""
+        first_stop = not self.stopped
         self.stopped = True
         self.arm_holding = False
         self.holding = False
-        measured = self.positions()
-        # Corrupt feedback must not turn a stop into a NaN actuator command.
-        self.target = np.where(np.isfinite(measured), measured, self.target)
+        if first_stop:
+            measured = self.positions()
+            # Corrupt feedback must not turn a stop into a NaN actuator command.
+            self.target = np.where(np.isfinite(measured), measured, self.target)
         self.velocity[:] = 0
         self.base_command[:] = 0
         self.base_velocity_integral[:] = 0
         self.base_bias_compensation_enabled = False
         self.last_action[:] = 0
-        measured_grip = float(self.data.qpos[self.grip_q])
-        if self.release_authorized:
-            # Freeze an authorized release at its measured position on fault.
-            self.grip_reference = measured_grip
-            self.grip_target = measured_grip
+        if first_stop:
+            if self.release_authorized:
+                # Freeze release once. Invalid feedback retains the last finite
+                # command; subsequent references/stops cannot open the jaw more.
+                measured_grip = float(self.data.qpos[self.grip_q])
+                frozen_grip = measured_grip if np.isfinite(measured_grip) else self.grip_target
+                self.grip_reference = self.grip_target = frozen_grip
+            else:
+                # Discard residual grip relaxation and return to the phase target.
+                self.grip_target = self.grip_reference
         else:
-            # Discard residual grip relaxation and return to the phase target.
-            self.grip_target = self.grip_reference
+            # References arriving after a fault cannot revise the latched grip.
+            self.grip_reference = self.grip_target
         self.release_authorized = False
         self.apply()
 
     def apply(self):
         now = float(self.data.time)
+        if self.turn_progress_guard_enabled and not self.stopped and len(self.wheel_act):
+            base = self.base_pose()
+            fault = self.turn_progress_guard.update(
+                time=now,
+                yaw=base[2],
+                target=self.base_goal[2],
+                command=self.base_command[1],
+                tolerance=self.base_yaw_deadband,
+                eligible=bool(
+                    self.base_mask[2]
+                    and not self.hand_mask
+                    and abs(self.base_command[0]) < 0.001
+                    and np.linalg.norm((self.base_goal[:2] - base[:2]) * self.base_mask[:2]) <= self.base_xy_tolerance
+                ),
+            )
+            if fault:
+                self.motion_fault = fault
+                self.stop()
+                return
         elapsed = max(0.0, now - self._trim_time)
         if elapsed >= self.model.opt.timestep - 1e-9 and not self.stopped and not self.holding and not self.arm_holding:
             tracking_error = self.target - self.positions()
@@ -444,10 +583,7 @@ class ManipulationControl:
                 and (not self.holding or self.base_bias_compensation_enabled)
                 and (self.base_feedback_at_rest or np.any(np.abs(self.base_command) > 1e-6))
             ):
-                spatial = np.zeros(6)
-                mujoco.mj_objectVelocity(self.model, self.data, mujoco.mjtObj.mjOBJ_BODY, self.base, spatial, 0)
-                forward = self.data.xmat[self.base].reshape(3, 3)[:, 0]
-                measured = np.array([spatial[3:] @ forward, spatial[2]])
+                measured = self._base_feedback_velocity()
                 limits = np.array([self.profile.base_speed, self.profile.base_yaw_speed])
                 velocity_error = drive - measured
                 interval = max(0.0, now - self._base_velocity_time)
@@ -469,6 +605,34 @@ class ManipulationControl:
                     -limits,
                     limits,
                 )
+            # Bound the final physical request, including feedback correction.
+            # Limiting only accept() lets PI compensation bypass acceleration
+            # limits at the 500 Hz physics/actuator boundary.
+            interval = max(0.0, now - self._applied_base_time)
+            acceleration = np.array([self.profile.base_acceleration, self.profile.base_yaw_acceleration])
+            if self.stopped:
+                self.applied_base_velocity[:] = 0
+                self.applied_base_acceleration[:] = 0
+            elif self.physical_wheel_jerk_limits is not None:
+                from emet.rl.manipulation.velocity_filter import smooth_velocity
+
+                self.applied_base_velocity, self.applied_base_acceleration = smooth_velocity(
+                    self.applied_base_velocity,
+                    self.applied_base_acceleration,
+                    drive,
+                    interval,
+                    np.array([self.profile.base_speed, self.profile.base_yaw_speed]),
+                    acceleration,
+                    self.physical_wheel_jerk_limits,
+                )
+            elif self.physical_wheel_slew_enabled:
+                self.applied_base_velocity += np.clip(
+                    drive - self.applied_base_velocity, -acceleration * interval, acceleration * interval
+                )
+            else:
+                self.applied_base_velocity[:] = drive
+            self._applied_base_time = now
+            drive = self.applied_base_velocity
             left = (drive[0] - drive[1] * self.profile.wheel_separation / 2) / self.profile.wheel_radius
             right = (drive[0] + drive[1] * self.profile.wheel_separation / 2) / self.profile.wheel_radius
             # Velocity actuator targets are transmission-space velocities:
@@ -481,9 +645,28 @@ class ManipulationControl:
         valid = self.base_hold_act[self.base_hold_act >= 0]
         self.data.ctrl[valid] = 0
 
+    def _base_feedback_velocity(self):
+        """COM forward/yaw velocity; current-qvel correction remains opt-in.
+
+        mj_step integrates qvel after computing cvel. Between substeps the
+        legacy spatial cache therefore belongs to the preceding solve. Reuse
+        position-stage Jacobians with current qvel without another forward
+        solve, retaining the same COM measurement point and physical bounds.
+        """
+        if self.base_velocity_feedback_current:
+            jp, jr = np.zeros((3, self.model.nv)), np.zeros((3, self.model.nv))
+            mujoco.mj_jacBodyCom(self.model, self.data, jp, jr, self.base)
+            velocity = self.data.qvel.copy()
+            forward = self.data.xmat[self.base].reshape(3, 3)[:, 0]
+            return np.array([(jp @ velocity) @ forward, (jr @ velocity)[2]])
+        spatial = np.zeros(6)
+        mujoco.mj_objectVelocity(self.model, self.data, mujoco.mjtObj.mjOBJ_BODY, self.base, spatial, 0)
+        forward = self.data.xmat[self.base].reshape(3, 3)[:, 0]
+        return np.array([spatial[3:] @ forward, spatial[2]])
+
     def update_task_reference(self):
         if self.task_trajectory is not None:
-            base, hand, _ = self.task_trajectory.sample(float(self.data.time) - self.task_trajectory_start)
+            base, hand, _ = self.task_trajectory.sample(self.trajectory_elapsed())
             self.set_pose_targets(base, self.task_trajectory.base_mask, hand, self.task_trajectory.hand_mask)
 
     def observe(self):
@@ -535,6 +718,12 @@ class ManipulationControl:
             target_tokens.ravel(),
             target_mask.astype(float),
         ].astype(np.float32)
+        if self.retention_context_enabled:
+            # Intent and encoder velocity are available without object/contact
+            # ground truth. Keep the established proprioceptive prefix intact.
+            token = np.r_[token, float(self.retain_object), self.data.qvel[self.grip_v] / p.gripper_speed].astype(
+                np.float32
+            )
         now = float(self.data.time)
         if self.history is None:
             self.history = np.repeat(token[None], p.history_steps, axis=0)

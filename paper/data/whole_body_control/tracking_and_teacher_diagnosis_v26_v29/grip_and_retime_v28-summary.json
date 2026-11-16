@@ -1,0 +1,235 @@
+{
+  "complete": true,
+  "scope": "Available-action probes for the teacher's two retention failures; no learned-success claim.",
+  "uncompressed_sha256": "91710d1ef130b678a9e564972a6382f57098d754472e14a79d5368ee0fb72cd1",
+  "cases": [
+    {
+      "seed": 33000010,
+      "time_scale": 1.0,
+      "grip_action": -1.0,
+      "code": "retention_lost",
+      "success": false,
+      "retention_lost": true,
+      "wheel_lift": false,
+      "unsafe_contact": false,
+      "peak_force_N": 5.3512165030910115,
+      "position_error_m": 0.0016871368110994592,
+      "orientation_error_rad": 0.0013346355237282659,
+      "grip_force_range_Nm": [
+        -0.08,
+        0.08
+      ],
+      "duration_s": 8.491454439466901,
+      "initial_state_matches_original": true
+    },
+    {
+      "seed": 33000010,
+      "time_scale": 1.0,
+      "grip_action": -0.5,
+      "code": "retention_lost",
+      "success": false,
+      "retention_lost": true,
+      "wheel_lift": false,
+      "unsafe_contact": false,
+      "peak_force_N": 5.3512165030910115,
+      "position_error_m": 0.0016871368110994592,
+      "orientation_error_rad": 0.0013346355237282659,
+      "grip_force_range_Nm": [
+        -0.08,
+        0.08
+      ],
+      "duration_s": 8.491454439466901,
+      "initial_state_matches_original": true
+    },
+    {
+      "seed": 33000010,
+      "time_scale": 1.0,
+      "grip_action": 0.0,
+      "code": "retention_lost",
+      "success": false,
+      "retention_lost": true,
+      "wheel_lift": false,
+      "unsafe_contact": false,
+      "peak_force_N": 5.3512165030910115,
+      "position_error_m": 0.0016871368110994592,
+      "orientation_error_rad": 0.0013346355237282659,
+      "grip_force_range_Nm": [
+        -0.08,
+        0.08
+      ],
+      "duration_s": 8.491454439466901,
+      "initial_state_matches_original": true
+    },
+    {
+      "seed": 33000010,
+      "time_scale": 1.0,
+      "grip_action": 0.5,
+      "code": "retention_lost",
+      "success": false,
+      "retention_lost": true,
+      "wheel_lift": false,
+      "unsafe_contact": false,
+      "peak_force_N": 5.3512165030910115,
+      "position_error_m": 0.0016871368110994592,
+      "orientation_error_rad": 0.0013346355237282659,
+      "grip_force_range_Nm": [
+        -0.08,
+        0.08
+      ],
+      "duration_s": 8.491454439466901,
+      "initial_state_matches_original": true
+    },
+    {
+      "seed": 33000010,
+      "time_scale": 1.0,
+      "grip_action": 1.0,
+      "code": "retention_lost",
+      "success": false,
+      "retention_lost": true,
+      "wheel_lift": false,
+      "unsafe_contact": false,
+      "peak_force_N": 5.3512165030910115,
+      "position_error_m": 0.0016871368110994592,
+      "orientation_error_rad": 0.0013346355237282659,
+      "grip_force_range_Nm": [
+        -0.08,
+        0.08
+      ],
+      "duration_s": 8.491454439466901,
+      "initial_state_matches_original": true
+    },
+    {
+      "seed": 33000010,
+      "time_scale": 1.1,
+      "grip_action": 0.0,
+      "code": "ok",
+      "success": true,
+      "retention_lost": false,
+      "wheel_lift": false,
+      "unsafe_contact": false,
+      "peak_force_N": 4.941995290705661,
+      "position_error_m": 0.0004879848207339753,
+      "orientation_error_rad": 0.000911364828929663,
+      "grip_force_range_Nm": [
+        -0.08,
+        0.08
+      ],
+      "duration_s": 9.340599883413592,
+      "initial_state_matches_original": true
+    },
+    {
+      "seed": 33000012,
+      "time_scale": 1.0,
+      "grip_action": -1.0,
+      "code": "retention_lost",
+      "success": false,
+      "retention_lost": true,
+      "wheel_lift": false,
+      "unsafe_contact": false,
+      "peak_force_N": 5.275271782143591,
+      "position_error_m": 0.0010348926006523464,
+      "orientation_error_rad": 0.0028728859657637497,
+      "grip_force_range_Nm": [
+        -0.08,
+        0.08
+      ],
+      "duration_s": 8.798118403462292,
+      "initial_state_matches_original": true
+    },
+    {
+      "seed": 33000012,
+      "time_scale": 1.0,
+      "grip_action": -0.5,
+      "code": "retention_lost",
+      "success": false,
+      "retention_lost": true,
+      "wheel_lift": false,
+      "unsafe_contact": false,
+      "peak_force_N": 5.275271782143591,
+      "position_error_m": 0.0010348926006523464,
+      "orientation_error_rad": 0.0028728859657637497,
+      "grip_force_range_Nm": [
+        -0.08,
+        0.08
+      ],
+      "duration_s": 8.798118403462292,
+      "initial_state_matches_original": true
+    },
+    {
+      "seed": 33000012,
+      "time_scale": 1.0,
+      "grip_action": 0.0,
+      "code": "retention_lost",
+      "success": false,
+      "retention_lost": true,
+      "wheel_lift": false,
+      "unsafe_contact": false,
+      "peak_force_N": 5.275271782143591,
+      "position_error_m": 0.0010348926006523464,
+      "orientation_error_rad": 0.0028728859657637497,
+      "grip_force_range_Nm": [
+        -0.08,
+        0.08
+      ],
+      "duration_s": 8.798118403462292,
+      "initial_state_matches_original": true
+    },
+    {
+      "seed": 33000012,
+      "time_scale": 1.0,
+      "grip_action": 0.5,
+      "code": "retention_lost",
+      "success": false,
+      "retention_lost": true,
+      "wheel_lift": false,
+      "unsafe_contact": false,
+      "peak_force_N": 5.275271782143591,
+      "position_error_m": 0.0010348926006523464,
+      "orientation_error_rad": 0.0028728859657637497,
+      "grip_force_range_Nm": [
+        -0.08,
+        0.08
+      ],
+      "duration_s": 8.798118403462292,
+      "initial_state_matches_original": true
+    },
+    {
+      "seed": 33000012,
+      "time_scale": 1.0,
+      "grip_action": 1.0,
+      "code": "retention_lost",
+      "success": false,
+      "retention_lost": true,
+      "wheel_lift": false,
+      "unsafe_contact": false,
+      "peak_force_N": 5.275271782143591,
+      "position_error_m": 0.0010348926006523464,
+      "orientation_error_rad": 0.0028728859657637497,
+      "grip_force_range_Nm": [
+        -0.08,
+        0.08
+      ],
+      "duration_s": 8.798118403462292,
+      "initial_state_matches_original": true
+    },
+    {
+      "seed": 33000012,
+      "time_scale": 1.1,
+      "grip_action": 0.0,
+      "code": "ok",
+      "success": true,
+      "retention_lost": false,
+      "wheel_lift": false,
+      "unsafe_contact": false,
+      "peak_force_N": 4.764285783661839,
+      "position_error_m": 0.0004900133614901848,
+      "orientation_error_rad": 0.0009209947334179993,
+      "grip_force_range_Nm": [
+        -0.08,
+        0.08
+      ],
+      "duration_s": 9.677930243808522,
+      "initial_state_matches_original": true
+    }
+  ]
+}

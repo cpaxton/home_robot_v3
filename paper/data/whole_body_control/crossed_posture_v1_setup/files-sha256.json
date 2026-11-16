@@ -1,0 +1,21 @@
+{
+  "archive_interim.py": "fc5f48a9ffbd3988e9db7275c39276dbb194ad7ee71fa0449e6304acc9f7da71",
+  "archive_setup.py": "7694f9fda09cec71cde82f82d28c7ef6fab8e05dc3939356ec6383c153c6b5bf",
+  "initial-checkpoint-cases.json": "0698028ec1f68398690dee322ea6b386efbba3b2680d049097447796cfa104b6",
+  "initial-summary.json": "3085ffe0f7e486b4eb7b30e8ae51a66158e095c712b18a132654e1f7ab9d1e8e",
+  "launch_when_ready.py": "3ca0d86bbaee4982e3ed261426cef9e44b77303aa5037ab1878f1083ef19a963",
+  "manifest.json": "3a447c60571f993890521845da1cf162f7d5d23b7741cc9c0d144e5d88084ec7",
+  "metrics-through-16384.jsonl.gz": "41709d59fee6ae1a9d7dcd72de50a94627c28e29ed7f034b8c3af118bcd1e442",
+  "plot_coverage.py": "52401a03a39fd5267cdfebb3bdab25414081a01aee427235eb1f308ce7ec48af",
+  "regressions.receipt.json": "1f48aa0c41b1d5738a77f24e4e8060043ace88963d36849e6b5658e93ab5ab0c",
+  "regressions.xml": "90679cd3e2214ce7187bcacdbd5820a88eee03c4029bd062cf9b0649b37b8d10",
+  "run.json": "2cad8c4996a9ab1b232882be412b71e307fa9c343673699e77231b6c2e6f8c74",
+  "step-16384-cases.json": "abd471ba7cbe7cc0736a4a026829d4dc5b5af2b74fad668130a3a7f0b2088a83",
+  "step-16384-evaluation.json.gz": "8d672bdbef3df173141483ab7526e1cea0128aa730ee3ee49171627ba4686a1d",
+  "step-16384-manifest.json": "f7a66d379d2f687293b3b2e956c05e93f1eae438db90e554298416aa798d268e",
+  "step-16384-summary.json": "7d437852550ff7c5739aec947cb0c4e687e54859f095fae3e5db586f452ee4ff",
+  "teacher-coverage.svg": "d87a431f334f11c7c10a867710cdc61d3e46001bb0d8bb82e932b791805c374e",
+  "teacher-report.json.gz": "495e8bbc4b3aa0c53e0f6fe387cab4fe6c0f162891611b2221b30f55183f9b38",
+  "teacher-summary.json": "1ee01a9dc46ac1d8c7b4c54fb06988ea5c538bb33b1e1a72d87d5aa0dee45e3d",
+  "teacher-targets.svg": "3e5492632bdb6c5612531fb6241d18c084b6b26678b7da477a89dd24fc446ac9"
+}

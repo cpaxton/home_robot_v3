@@ -14,6 +14,44 @@ def tracking_score(position_error, orientation_error, level):
     return float(np.exp(-position_error / sigma_position - orientation_error / sigma_orientation))
 
 
+def precision_base_score(outside_region, heading_error, position_tolerance, heading_tolerance):
+    """Coarse capture plus fine contract-scale yaw credit at every control tick."""
+    coarse = np.exp(-outside_region / max(0.05, position_tolerance) - abs(heading_error) / max(0.1, heading_tolerance))
+    fine = np.exp(-outside_region / position_tolerance - abs(heading_error) / heading_tolerance)
+    return float(0.25 * coarse + 0.75 * fine)
+
+
+def base_progress_potential(outside_region, heading_error):
+    return -float(np.log1p(outside_region / 0.02) + np.log1p(abs(heading_error) / 0.05))
+
+
+def normalized_jerk_cost(joint_jerk, base_jerk, joint_scales, base_scales):
+    """Smooth robust cost in explicit experimental rad/s^3 and m/s^3 scales."""
+    values = np.r_[np.asarray(joint_jerk) / joint_scales, np.asarray(base_jerk) / base_scales]
+    return float(np.sum(np.sqrt(1 + values**2) - 1))
+
+
+def whole_body_quiet_score(joint_velocity, base_velocity):
+    """Dense soft quiet credit; no waiting for the binary completion bonus."""
+    motion = np.sum((np.asarray(joint_velocity) / 0.03) ** 2)
+    motion += np.sum((np.asarray(base_velocity) / np.array([0.005] * 3 + [0.02] * 3)) ** 2)
+    return float(np.exp(-motion))
+
+
+def command_motion_cost(action, previous, previous_acceleration, dt, speeds, acceleration_scales, jerk_scales, mask):
+    """Penalize requested motion before motor smoothing, in physical time/units.
+
+    Inputs exclude the gripper's position-offset channel. Inactive arm/wheel
+    channels cannot be charged for commands the executor would ignore. This is
+    a training objective; it never modifies or delays an action.
+    """
+    acceleration = ((np.asarray(action) - previous) * speeds / dt) * mask
+    jerk = (acceleration - np.asarray(previous_acceleration) * mask) / dt
+    scaled = np.r_[acceleration / acceleration_scales, jerk / jerk_scales]
+    cost = float(np.sum(np.sqrt(1 + scaled**2) - 1))
+    return cost, acceleration
+
+
 def differential_base_score(outside_region, final_heading_error, travel_bearing, position_scale):
     """Reward travel alignment far away and final heading near the goal region.
 
@@ -44,6 +82,15 @@ def endpoint_motion_cost(elapsed, joint_velocity, base_velocity, *, hand_active,
     base = float(np.sum((np.asarray(base_velocity) / [0.005, 0.02]) ** 2))
     arm = float(np.sum((np.asarray(joint_velocity) / 0.03) ** 2)) if hand_active else 0.0
     return ramp * (base / (1 + base) + arm / (1 + arm))
+
+
+def body_motion_cost(velocity):
+    """Bounded cost of all six measured base DOFs at the stop-check scales."""
+    values = np.asarray(velocity, dtype=float)
+    if values.shape != (6,) or not np.isfinite(values).all():
+        raise ValueError("body motion cost requires six finite velocities")
+    motion = float(np.sum((values / np.array([0.005] * 3 + [0.02] * 3)) ** 2))
+    return motion / (1 + motion)
 
 
 def preview_contract():

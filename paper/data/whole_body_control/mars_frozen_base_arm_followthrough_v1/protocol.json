@@ -1,0 +1,61 @@
+{
+  "format": "mars-frozen-base-arm-followthrough-v1",
+  "status": "waiting_for_declared_c1_completion",
+  "prepared_unix": 1794723050.9770052,
+  "authorization": "User2026-11-15proceedwithplan",
+  "supersedes_failed_job": "20261114_091806_52e91d",
+  "output": "/home/cpaxton/src/home_robot_v4/.worktrees/wbc-research-followthrough/logs/manipulation/mars-frozen-base-arm-followthrough-v1",
+  "source": "/home/cpaxton/src/home_robot_v4/.worktrees/wbc-research-followthrough/logs/manipulation/mars-frozen-base-arm-followthrough-v1/source/actor",
+  "source_weights_sha256": "e7b425699510cc635485bdd8f59a5b25692fb165faf248aaecbc2707c0dbb883",
+  "source_manifest_sha256": "fb0df2c1f737017e208d2849a7cc2523aaa3a0d60a73f71871bbc623603345a1",
+  "runtime": "/tmp/mars-c1-recovery-afeef3d0",
+  "implementation_revision": "afeef3d0b2c24492f492c00efceddde21d420ce5",
+  "regression_receipt": "/tmp/mars-c1-recovery-afeef3d0/logs/manipulation/mars-whole-body-advantage-recovery-v1/full.receipt.json",
+  "training_lane_handoff": "/home/cpaxton/src/home_robot_v4/.worktrees/wbc-research-followthrough/logs/manipulation/mars-frozen-base-arm-followthrough-v1/cpu14-handoff.json",
+  "variants": [
+    "baseline",
+    "velocity"
+  ],
+  "seeds": [
+    90
+  ],
+  "steps_per_run": 16384,
+  "total_training_transitions": 32768,
+  "suite": "configs/benchmarks/mars_tracking_mastery_tamp_postures_v1.json",
+  "training_stages": [
+    "arm"
+  ],
+  "evaluation_stages": [
+    "base",
+    "arm",
+    "coupled"
+  ],
+  "evaluation_population": "admission",
+  "arm_adaptation_only": true,
+  "learning_rate": 1e-05,
+  "arm_std": 0.03,
+  "normalization_frozen": true,
+  "base_actor_context_and_grip_frozen": true,
+  "wheel_grip_sampling": "retained deterministic means",
+  "active_timeout_seconds": 10800,
+  "fixed_final_only": true,
+  "automatic_retries": false,
+  "automatic_extensions": false,
+  "hardware_used": false,
+  "safety_promoted": false,
+  "resources": {
+    "training_cpu": 14,
+    "test_cpu": 15,
+    "native_workers": 1,
+    "threads": 1,
+    "cuda_visible_devices": "",
+    "rendering": "disable"
+  },
+  "prerequisite_job": "20261115_011523_eebcfb",
+  "prerequisite_state": "/tmp/mars-c1-recovery-afeef3d0/logs/manipulation/mars-whole-body-advantage-recovery-v1/recovery-state.json",
+  "wait_timeout_seconds": 21600,
+  "supervisor_sha256": "60a551216d372bfaedb0d95cde6e26165fce02f85b72f2a5d59fa9a69dcf01b3",
+  "runner_sha256": "3ff3b119d5504fb7bf9f4fa0ab53848cd72c3f428d6fc3ff1e4c0650dea5c71b",
+  "protocol_finalized_unix": 1794723703.6609883,
+  "handoff_authorization": "Owner01a1373dexplicitconditionalrelease2026-11-15: C1statusdone +phasecomplete+actualhostchildvacancy; holdonfailure"
+}

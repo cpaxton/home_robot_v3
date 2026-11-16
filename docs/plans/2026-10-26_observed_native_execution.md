@@ -4,6 +4,10 @@ Status: attachment, reference tracking, visual-effect checks and the explicitly
 injected native/task adapter are implemented and pass synthetic integration tests.
 The default RGBD provider remains read-only pending live source assembly and
 sensor/geometry qualification.
+The independently reviewable foundation is PR #226. Its unresolved live
+self-occupancy/contact admission gate is tracked explicitly in
+[issue #245](https://github.com/cpaxton/home_robot_v3/issues/245); keep the raw-depth
+`invalid_start` regression and default read-only discovery when landing that PR.
 October 29: synchronized simulator images/motors and motor-only rigid EE FK pass
 live development checks. Full observed transfers remain unqualified: symmetry,
 unmeasured gripper geometry and contact/occupancy integration are the next gates.

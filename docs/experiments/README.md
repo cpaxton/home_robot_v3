@@ -37,6 +37,10 @@ compact-manifest policy.
 | Joint agentic loop (cross-task) | [hmeqa_joint_agentic_loop.md](hmeqa_joint_agentic_loop.md) · [HMEQA_STRATEGY](../plans/HMEQA_STRATEGY.md) |
 | Profiles / merge policy | [`configs/benchmarks/dynagraph.yaml`](../../configs/benchmarks/dynagraph.yaml) |
 | LaTeX | `paper/sections/04_experiments.tex`, `05_results.tex` |
+| Mars controller timing and smoothness | [Matched wheel-feedback diagnosis](mars_aligned_jerk_measurements_20261115.md): same actor, 2/12→8/12 full passes; simulator diagnostic, zero new PPO |
+| Mars corrected-reset baselines | [Complete reset/TAMP readout](mars_current_feedback_reset_validation_20261115.md): legacy 151/164 general, 0/6 actual pregrasps; teacher 5/6; full 1,299 regressions |
+| Mars actual TAMP input diagnosis | [Four fixed traced episodes](mars_tamp_input_diagnostic_20261115.md): recording parity and exact actor replay; weak arm commands, clipped grip feedback and separate support-margin replan failure |
+| Mars grasp/hold and support preparation | [Twelve bounded task diagnostics](mars_task_arrival_20261115.md): repaired hold reacquisition reaches grasp/closure; support reserve, retention and fixed-hand/base tracking remain unqualified |
 
 ## HM-EQA baselines
 
