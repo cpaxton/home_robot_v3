@@ -216,5 +216,68 @@ is removed or added, and the shared IK cap stays unchanged. This is a geometric
 preference, not a contact/force certificate; execution still has to pass the
 same physical checks.
 The [geometric-order pilot](../experiments/tamp_native_face_alignment_pilot_20261114.md)
-also retains the failed swap. Broader reliability and an executed base approach
-remain unqualified; the private base-offset IK probe is not task success.
+also retains the failed swap. At that revision, an executed base approach was
+unqualified; the private base-offset IK probe is not task success. The separate
+approach follow-up below records subsequent live development results.
+
+### Experimental checked base approach
+
+`agent.native_tamp_policy=bounded_approach` extends the opt-in bounded policy
+with unloaded pre-grasp base positioning in the native simulated Stretch path.
+The default remains `legacy`; base motion and loaded candidate refresh require
+this explicit opt-in. A shared placement-frame correction described below also
+applies to the other profiles. The same option is accepted by the native
+evaluators and actual `run agent` configuration through shared policy validation.
+
+The planner tries the current base and short forward/reverse alternatives at
+40/80 mm along the measured drive axis, preferring the best box-face alignment
+across those alternatives before stationary fallback grasps. All alternatives
+share 256 IK calls and a 120-second planning deadline. The complete grasp,
+placement and retreat must plan before an approach handle is stored.
+
+Base sweeps include the whole robot at its measured arm posture and forbid
+finger/object contact during transit. Samples are spaced at most 5 mm and
+0.025 rad, including a sampled ±10 mm XY / ±0.05 rad tracking envelope. This
+is a static sampled geometry check, not a continuous or dynamics certificate.
+A colliding held-arm posture rejects; no unchecked tuck is inserted.
+
+Execution rechecks current geometry, uses the ordinary world-frame base
+controller, and requires measured arrival within 10 mm / 0.015 rad, 0.3 seconds
+of quiet pose before confirmed navigation cancellation, then another 0.3 seconds
+of quiet pose. Measured arm drift, corridor departure, stale state, changed
+obstacle geometry or uncertain stops prevent grasp dispatch. Scene joint motion
+triggers a new remaining sweep. Grasp planning restarts from actual arrival.
+No loaded base transport or live root-pose writes are permitted by this path.
+
+Results publish `base_motion=checked_unloaded_approach` and
+`collision_scope=sampled_base_sweep_arm_and_payload`. Pre-command rejection has
+`execution_started=false`; possible dispatch remains partial and consumes the
+handle. Physical task success still requires the existing retention, release
+and final-goal gates. The [November 16 development replay](../experiments/tamp_native_base_approach_20261116.md)
+passes eight native tasks and four actual-agent tasks. These tuned layouts are
+not held-out reliability, observed navigation/exploration or hardware support.
+
+After verified pickup, this profile refreshes held-object bounds and free support
+centers inside the original destination region. Initial and loaded placement use
+one shared path-planning function and the same local support patches. The original
+release proposal is retained when its measured whole footprint still fits the
+original support/region, and its complete updated paths must certify it again.
+Loaded refinement can try up to 16 centers
+using the initial primitive's unused IK/time budget; its extra calls also debit
+the task provider's episode budget. Controller execution time is excluded from
+planning time. The original grasp reference is preserved and no command is sent
+during this refinement. Exhaustion remains a partial held-object failure with
+`verification.substage=loaded_placement_planning`. The execution receipt reports
+the resulting world-space placement goal.
+
+Payload-center offsets are expressed in the measured EE frame and transformed
+through the desired placement rotation, rather than reusing a world-frame
+offset when the target EE orientation differs. This coordinate-frame correction
+is shared by all native profiles. All placement/release/effect
+checks still apply. See the [initial base-approach pilot](../experiments/tamp_native_base_approach_initial_20261116.md)
+for the retained third-transfer failure motivating this refinement.
+
+The command client retains one exact boot/session/sequence stop witness after
+a navigation cancellation is confirmed. Later arm commands may evict the server's
+terminal receipt without losing that witness at client shutdown. A different
+goal, server restart or unconfirmed stop cannot use it to release ownership.

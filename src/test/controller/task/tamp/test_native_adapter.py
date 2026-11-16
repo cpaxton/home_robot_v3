@@ -502,6 +502,119 @@ def test_bounded_target_reserve_keeps_valid_margin_band_start_in_path(native):
     robot.close_gripper.assert_not_called()
 
 
+def test_checked_approach_plan_uses_real_shifted_base_without_commands(native, monkeypatch):
+    monkeypatch.setenv('EMET_SIM_NAV_TELEPORT', '0')
+    robot, data, context, _ = native
+    robot.move_base_to = Mock(return_value=True)
+    robot.cancel_navigation = Mock(return_value=True)
+    model = context['_native_tamp_adapter'].model
+    joint = model.body('object1').jntadr[0]
+    robot._state['native_tamp_snapshot']['qpos'][model.jnt_qposadr[joint]] = .025
+    adapter = NativeTableAdapter(robot, model=model, policy='bounded_approach')
+    before, ctrl = adapter.data.qpos.copy(), data.ctrl.copy()
+    result = adapter.plan(object_name='blue cube', receptacle_name='table')
+    assert result['status'] == 'ok', result
+    assert result['data']['base_motion'] == 'checked_unloaded_approach'
+    plan = adapter.plans[result['data']['plan_ref']]
+    assert plan.base_approach is not None
+    assert 0 < np.linalg.norm(np.subtract(plan.base_approach.goal[:2], plan.base_approach.start[:2])) <= .08+1e-9
+    assert adapter.planning_ik_calls <= 256
+    np.testing.assert_array_equal(adapter.data.qpos, before)
+    np.testing.assert_array_equal(data.ctrl, ctrl)
+    for command in (robot.move_base_to, robot.cancel_navigation, robot.arm_to, robot.open_gripper, robot.close_gripper):
+        command.assert_not_called()
+
+
+def test_place_target_rotates_measured_payload_center_offset(native):
+    _, _, context, _ = native
+    adapter = context['_native_tamp_adapter']
+    ex = adapter._executor('object1')
+    ee = adapter.data.body(ex.ee_body)
+    entries = placements_from_mujoco_model(adapter.model, adapter.data)
+    offset = ee.xmat.reshape(3, 3).T @ (np.array(entries['object1']['pos'])-ee.xpos)
+    c, s = np.cos(.2), np.sin(.2)
+    rotation = np.array([[c, -s, 0], [s, c, 0], [0, 0, 1]]) @ ee.xmat.reshape(3, 3)
+    goal, before = np.array([.02, -.65, .54]), adapter.data.qpos.copy()
+    targets = adapter._place_targets(ex, 'object1', goal, rotation)
+    np.testing.assert_allclose(targets[1][0]+rotation@offset, goal, atol=1e-12)
+    np.testing.assert_array_equal(adapter.data.qpos, before)
+
+
+@pytest.mark.parametrize('exhausted', [False, True])
+def test_loaded_placement_refresh_preserves_reference_and_shared_budget(native, monkeypatch, exhausted):
+    from emet.controller.task.tamp import native_placement
+    robot, _, context, call = native
+    adapter = context['_native_tamp_adapter']
+    plan = adapter.plans[make_plan(call)]
+    plan.placement_region = np.array([[-.3, -.95], [.3, -.4]])
+    ex = plan.executor
+    ex.payload_body = plan.object_body
+    ex.collision.set_payload(adapter.model, adapter.data, plan.object_body, ex.ee_body)
+    before, reference = adapter.data.qpos.copy(), ex.collision.payload_transform.copy()
+    attempts = []
+    def paths(owner, executor, targets):
+        assert owner.planning_ik_calls == plan.planning_ik_calls+3*len(attempts)
+        assert executor.collision.payload_body == plan.object_body
+        attempts.append(targets)
+        owner.planning_ik_calls += 3
+        owner.data.qpos[ex.qadr[0]] += .001
+        ex.collision.set_payload(owner.model, owner.data, None)
+        if exhausted:
+            raise ValueError('no_plan_within_budget')
+        return (None, 'pose_ik_failed') if len(attempts) == 1 else ([[], [], []], None)
+    monkeypatch.setattr(native_placement, 'placement_paths', paths)
+    result = native_placement.refine_loaded_placement(adapter, plan)
+    assert result.success is (not exhausted)
+    assert len(attempts) == (1 if exhausted else 2)
+    assert adapter.planning_ik_calls == plan.planning_ik_calls+3*len(attempts)
+    np.testing.assert_array_equal(adapter.data.qpos, before)
+    np.testing.assert_array_equal(ex.collision.payload_transform, reference)
+    assert ex.collision.payload_body == plan.object_body
+    if not exhausted:
+        assert np.all(plan.goal[:2] >= plan.placement_region[0])
+        assert np.all(plan.goal[:2] <= plan.placement_region[1])
+    for command in (robot.arm_to, robot.open_gripper, robot.close_gripper):
+        command.assert_not_called()
+
+
+def test_loaded_refinement_retains_valid_original_goal_when_sampler_has_no_proposals(native, monkeypatch):
+    from emet.controller.task.tamp import native_placement
+    _, _, context, call = native
+    adapter = context['_native_tamp_adapter']
+    plan = adapter.plans[make_plan(call)]
+    ex = plan.executor
+    ex.payload_body = plan.object_body
+    ex.collision.set_payload(adapter.model, adapter.data, plan.object_body, ex.ee_body)
+    goal = plan.goal.copy()
+    monkeypatch.setattr(native_placement, 'free_surface_centers', lambda *a, **k: SimpleNamespace(centers=[]))
+    planner = Mock(return_value=([[], [], []], None))
+    monkeypatch.setattr(native_placement, 'placement_paths', planner)
+    assert native_placement.refine_loaded_placement(adapter, plan).success
+    planner.assert_called_once()
+    np.testing.assert_array_equal(plan.goal, goal)
+
+
+@pytest.mark.parametrize('started', [False, True])
+def test_failed_base_approach_cannot_dispatch_grasp(native, monkeypatch, started):
+    from emet.controller.task.tamp.native_approach import ApproachResult, BaseApproach
+    robot, _, context, call = native
+    adapter = context['_native_tamp_adapter']
+    ref = make_plan(call)
+    plan = adapter.plans[ref]
+    plan.base_approach = BaseApproach((0., 0., 0.), (.04, 0., 0.))
+    plan.executor.grasp_only = Mock(side_effect=AssertionError('grasp after failed approach'))
+    monkeypatch.setattr('emet.controller.task.tamp.native_adapter.execute_approach',
+                        lambda *args: ApproachResult(False, 'base_approach_failed', started))
+    result = call('execute_pick_place_plan', plan_ref=ref)
+    assert result['code'] == 'base_approach_failed'
+    assert result['status'] == ('partial' if started else 'error')
+    assert result['data']['execution_started'] is started
+    assert result['data']['failed_stage'] == 'base_approach'
+    assert call('execute_pick_place_plan', plan_ref=ref)['code'] == 'unknown_plan'
+    plan.executor.grasp_only.assert_not_called()
+    robot.arm_to.assert_not_called()
+
+
 def test_policy_change_invalidates_cached_native_handles(native, monkeypatch):
     from emet.controller.task.tamp.native_adapter import adapter_for
     robot, _, context, _ = native

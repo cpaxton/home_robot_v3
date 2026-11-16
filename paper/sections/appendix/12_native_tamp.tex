@@ -336,3 +336,53 @@ four earlier development tasks through production tools. A single trial per
 cell does not establish held-out reliability; failures remain in the denominator.}
 \label{fig:tamp_qualification}
 \end{figure}
+
+\paragraph{Checked unloaded base approach.}
+The November~16 follow-up adds an explicit \texttt{bounded\_approach} policy.
+It searches the current base and short forward/reverse wheel-axis offsets
+(40/80~mm), checks sampled whole-robot sweeps, executes ordinary base control,
+and requires measured arrival and a confirmed quiet stop before fresh grasp
+planning. Sweep spacing is at most 5~mm / 0.025~rad with a sampled
+$\pm$10~mm XY / $\pm$0.05~rad tracking envelope; this is not a continuous or
+dynamics certificate. All alternatives share the existing IK/time budget.
+Measured loaded placement preserves the original region, grasp reference and
+unused planning budget, retaining valid nominal proposals alongside refreshed
+free-support candidates. A shared coordinate correction expresses payload-center
+offsets through the desired EE rotation. No live object/base pose writes or
+loaded base transport are introduced.
+
+The corrected three-task pilot passes 3/3 tasks and 7/7 transfers. The full
+original native population at \texttt{158fd427} then passes 8/8 tasks,
+18/18 transfers and 4/4 interface boundaries, with 4,605 audited commands and
+zero forbidden commands or infrastructure failures. The actual \texttt{run agent}
+repeat at \texttt{2e4dd8fc} passes 4/4 original development tasks,
+10/10 transfers and 8/8 independent object goals. It uses 16 remote Caliban
+model calls (116.1~s total inference wall time); all four result-contract checks
+pass, and the deliberately invalid handle produces one compliant stop boundary
+before a separately authorized task turn. Its 2,526 audited commands contain
+zero forbidden commands. A repaired startup-policy allowlist preceded this
+complete replay; all four earlier pre-command launch failures remain recorded.
+
+Figure~\ref{fig:tamp_base_approach} compares the corrected swap with its
+same-source stationary-profile trial. The latter stops after one transfer when
+cube rotation crosses the unchanged 0.1~rad retention bound; the approach profile
+completes all three transfers. This combines approach/candidate selection and
+loaded refinement, rather than isolating a locomotion-only treatment. These are
+single independently initialized development trials, not exact reset pairs or
+held-out reliability estimates. Historical native 4/8 and agent 3/4 cohorts
+remain unchanged. Explicit execution-failure recovery, observed grounding,
+exploration, household native adapters and hardware still require separate
+acceptance. Compact receipts, source/job hashes and failed attempts are in
+\path{docs/experiments/tamp_native_base_approach_20261116.json}; verbose raw
+artifacts are retained locally, not publicly archived.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/tamp_native_base_approach_20261116.pdf}
+\caption{Original-reference cube rotation during the lift and checked hold in
+separate same-source swap trials. The checked approach profile completes the
+three-transfer task; stationary execution stops when retention exceeds the
+unchanged bound. These are sparse simulator debug samples, ending before any
+loaded-payload rebinding; they do not measure force or establish replay fidelity.}
+\label{fig:tamp_base_approach}
+\end{figure}

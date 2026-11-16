@@ -9,7 +9,13 @@ from unittest.mock import Mock
 import numpy as np
 import pytest
 
-from emet.core.command_client import cancel_navigation, command_receipt, send_command, wait_navigation
+from emet.core.command_client import (
+    cancel_navigation,
+    close_command_session,
+    command_receipt,
+    send_command,
+    wait_navigation,
+)
 from emet.core.command_runtime import CommandRuntime
 from emet.core.command_tracker import CommandTracker
 
@@ -184,6 +190,46 @@ def test_busy_rejection_keeps_original_cancellation_target():
     assert client._last_navigation_command == original
     assert cancel_navigation(client)
     assert command_receipt(client, original)["status"] == "cancelled"
+
+
+def test_confirmed_navigation_stop_survives_receipt_eviction_at_shutdown(caplog):
+    robot = Robot()
+    robot.command_tracker = CommandTracker(capacity=8)
+    client = connection(robot)
+    action = send_command(client, {"xyt": [.04, 0, 0]})
+    assert cancel_navigation(client)
+    assert command_receipt(client, action)["result"]["stop_confirmed"] is True
+    for i in range(12):
+        send_command(client, {"say": str(i)})
+    assert command_receipt(client, action) is None
+    close_command_session(client)
+    assert "Control handoff not confirmed" not in caplog.text
+    assert robot.command_tracker._session is None
+
+
+def test_old_stop_witness_does_not_authorize_an_unconfirmed_new_goal(caplog):
+    robot = Robot()
+    client = connection(robot)
+    send_command(client, {"xyt": [.04, 0, 0]})
+    assert cancel_navigation(client)
+    second = send_command(client, {"xyt": [.08, 0, 0]})
+    robot.stopped = False
+    close_command_session(client)
+    assert "Control handoff not confirmed" in caplog.text
+    assert robot.command_tracker._session == second["command"]["client_session_id"]
+    assert robot._navigation_command is not None
+
+
+def test_stop_witness_does_not_authorize_a_restarted_server(caplog):
+    robot = Robot()
+    client = connection(robot)
+    send_command(client, {"xyt": [.04, 0, 0]})
+    assert cancel_navigation(client)
+    client._state = Robot().command_message({})
+    client.send_message = Mock()
+    close_command_session(client)
+    assert "boot changed" in caplog.text
+    client.send_message.assert_not_called()
 
 
 def test_failure_preserves_measured_error_and_frozen_goal():

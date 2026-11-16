@@ -399,3 +399,12 @@ and the [qualification gate](plans/2026-11-13_native_tamp_qualification.md).
 `scripts/eval_native_chat_session.py --native-policy bounded_release` forwards
 that ordinary configuration override to the actual `run agent` CLI. Hardware,
 observed grounding and exploration remain separately qualified capabilities.
+
+The experimental `--set agent.native_tamp_policy=bounded_approach` additionally
+permits checked short unloaded base moves before grasp in the native simulator.
+It shares the same public tools; discovery reports the changed motion scope.
+See the [approach contract](api/tamp_task_plans.md#experimental-checked-base-approach).
+The [November 16 replay](experiments/tamp_native_base_approach_20261116.md) completes
+all four original development tasks through the actual CLI with remote Caliban
+inference. Loaded base transport, held-out reliability, observed navigation and
+hardware execution remain unqualified.

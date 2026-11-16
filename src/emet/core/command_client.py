@@ -53,6 +53,13 @@ def command_receipt(client, action):
             latest = previous
     if latest is not None:
         client._command_receipt = latest
+        if "xyt" in action and (
+            latest["status"] in {"succeeded", "cancelled"}
+            or latest.get("result", {}).get("stop_confirmed")
+        ):
+            # Retain one exact, boot-bound stop witness when later arm commands
+            # evict this terminal receipt from the bounded server history.
+            client._confirmed_navigation_stop = identity.copy()
     return latest
 
 
@@ -159,7 +166,8 @@ def close_command_session(client):
         action = getattr(client, "_last_navigation_command", None)
         if action is not None:
             receipt = command_receipt(client, action)
-            if receipt is None or receipt["status"] not in TERMINAL:
+            confirmed = getattr(client, "_confirmed_navigation_stop", None) == action["command"]
+            if not confirmed and (receipt is None or receipt["status"] not in TERMINAL):
                 if not cancel_navigation(client, action):
                     raise RuntimeError("navigation stop was not confirmed")
         send_command(client, {"release_control": True}, timeout=2.0)

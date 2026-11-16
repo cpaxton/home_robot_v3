@@ -86,3 +86,21 @@ separate gates. No sensor or controller-training capability is inferred.
 
 Preserve #234's evidence and failed outcomes. Base approach is a separate
 cohesive feature; it must not be presented as already implemented in #234.
+
+## November 16 implementation and development replay
+
+Review: [PR #242](https://github.com/cpaxton/home_robot_v3/pull/242), stacked on #234.
+
+The follow-up implements this contract behind `bounded_approach`, including
+sampled full-robot sweep checks, measured arrival/stop, fresh grasp planning and
+loaded placement refinement inside the original region and unused budgets.
+Initial failures, an intermediate placement-candidate regression and the agent
+startup-policy mismatch remain recorded. The corrected pilot passes 3/3 tasks;
+the original full native population passes 8/8 tasks, 18/18 transfers and 4/4
+interface boundaries. The actual `run agent` cohort passes 4/4 tasks and 10/10
+transfers with the existing remote VLM. Historical scores are not rescored.
+
+See [the source-bound results](../experiments/tamp_native_base_approach_20261116.md).
+The next gates are fresh held-out layouts, explicit execution failures/recovery,
+then observed self-occupancy/contact admission and exploration. Successful
+development replays do not qualify those capabilities or hardware sensors.
