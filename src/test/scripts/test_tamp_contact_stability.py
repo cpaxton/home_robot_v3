@@ -233,3 +233,43 @@ def test_rejected_tool_cannot_pass_boundary_if_it_sent_a_command(runner, tmp_pat
 
     _, checks = runner.execute_case({"scenario": "invalid_then_task"}, None, call, tmp_path)
     assert not checks[0]["passed"] and not checks[0]["no_commands"]
+
+
+@pytest.mark.parametrize('scenario', ['stale_replan', 'between_transfers_refusal'])
+def test_recovery_requires_consumed_handle_and_fresh_discovery(runner, tmp_path, scenario):
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+
+    events, plans, attempts = [], [], []
+    def call(name, **kwargs):
+        events.append(name)
+        if name == 'plan_task':
+            plans.append('plan'+str(len(plans)))
+            return {'status': 'ok', 'data': {'plan_ref': plans[-1]}}
+        if name == 'execute_task_plan':
+            attempts.append(kwargs['plan_ref'])
+            if len(attempts) == 1:
+                return {'status': 'error' if scenario == 'stale_replan' else 'partial',
+                        'code': 'stale_task_plan' if scenario == 'stale_replan' else 'task_motion_budget_exhausted',
+                        'data': {'completed_steps': 1, 'execution_started': True, 'failed_phase': 'preflight'}}
+            if len(attempts) == 2:
+                return {'status': 'error', 'code': 'unknown_plan', 'data': {}}
+            return {'status': 'ok', 'code': 'ok', 'data': {'goal_verified': True}}
+        return {'status': 'ok', 'code': 'ok', 'data': {}}
+    robot = SimpleNamespace(head_to=Mock(), step=Mock())
+    result, checks = runner.execute_case({'scenario': scenario, 'instruction': 'move'}, robot, call, tmp_path)
+    assert result['data']['goal_verified']
+    assert all(c['passed'] for c in checks)
+    assert attempts == ['plan0', 'plan0', 'plan1']
+    assert events[-3:] == ['scene_tasks', 'plan_task', 'execute_task_plan']
+
+
+def test_unexpected_partial_failure_does_not_trigger_recovery(runner, tmp_path):
+    calls = []
+    def call(name, **kwargs):
+        calls.append(name)
+        return {'status': 'partial' if name == 'execute_task_plan' else 'ok',
+                'code': 'payload_not_retained', 'data': {'plan_ref': 'plan'}}
+    result, checks = runner.execute_case({'scenario': 'between_transfers_refusal', 'instruction': 'move'}, None, call, tmp_path)
+    assert result is None and checks[0]['passed'] is False
+    assert calls == ['scene_tasks', 'plan_task', 'execute_task_plan']

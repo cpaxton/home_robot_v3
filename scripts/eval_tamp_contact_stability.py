@@ -32,6 +32,7 @@ from emet.controller.task.tamp.native_policy import native_policy
 from emet.controller.task.tamp.native_transfer import NativeTableTransferProvider, validate_native_task_config
 from emet.controller.task.tamp.task_session import TaskSession
 from emet.eval.contact_stability import GRASP_POLICIES, ContactTrace, TracedNativeAdapter
+from emet.eval.native_recovery import RefuseAfterOneTransfer, replan_after_boundary
 from emet.eval.native_table_live import live_table_robot
 from emet.eval.native_table_scoring import goal_predicates, load_placement_regions
 from emet.motion.release import ReleaseLimits
@@ -108,6 +109,7 @@ def prepare(args, pilot, case, out):
                  'src/emet/simulation/stretch_mujoco/config.py', 'src/emet/motion/kinematics.py',
                  'src/emet/motion/grasp_alignment.py',
                  'src/emet/controller/task/tamp/native_approach.py', 'src/emet/controller/task/tamp/native_placement.py',
+                 'src/emet/eval/native_recovery.py',
                  'src/emet/controller/task/tamp/api.py', 'src/emet/controller/task/tamp/task_session.py',
                  'src/emet/motion/release.py', 'src/emet/controller/task/tamp/native_policy.py',
                  'src/emet/controller/task/tamp/native_transfer.py',
@@ -170,12 +172,24 @@ def execute_case(case, robot, call, out):
         else:
             plan = call('plan_task', instruction=case['instruction'], strategy='beam')
             if plan['status'] == 'ok':
-                if scenario == 'stale_plan':
+                if scenario in ('stale_plan', 'stale_replan'):
                     robot.head_to(.15, -.5, blocking=True)
                     robot.step(.5)
                     rejection('execute_task_plan', ['stale_task_plan'], plan_ref=plan['data']['plan_ref'])
+                    if scenario == 'stale_replan':
+                        execution = replan_after_boundary(call, rejection, checks, case['instruction'], plan['data']['plan_ref'])
                 else:
                     execution = call('execute_task_plan', plan_ref=plan['data']['plan_ref'])
+                    if scenario == 'between_transfers_refusal':
+                        data = execution['data']
+                        checks.append({'tool': 'execute_task_plan', 'code': execution['code'],
+                            'status': execution['status'], 'kind': 'partial_task_admission_refusal',
+                            'passed': execution['status'] == 'partial'
+                                and execution['code'] == 'task_motion_budget_exhausted'
+                                and data.get('execution_started') is True
+                                and data.get('completed_steps') == 1
+                                and data.get('failed_phase') == 'preflight'})
+                        execution = replan_after_boundary(call, rejection, checks, case['instruction'], plan['data']['plan_ref'])
                     if scenario == 'reuse_plan' and execution['status'] == 'ok':
                         rejection('execute_task_plan', ['unknown_plan'], plan_ref=plan['data']['plan_ref'])
     return execution, checks
@@ -203,6 +217,8 @@ def run(args, pilot, case, out, result):
                                           payload_binding=args.payload_binding,
                                           release_limits=effective_release_limits(args))
             provider = NativeTableTransferProvider(robot, case['task'], adapter=adapter)
+            if case.get('scenario') == 'between_transfers_refusal':
+                provider = RefuseAfterOneTransfer(provider, out / 'actuation.jsonl')
             session = TaskSession(provider)
             tools = {t.name: t for t in get_tools({'robot': robot, 'manip_mode': 'physical',
                      'tamp_inputs': 'privileged', '_native_tamp_adapter': adapter, 'tamp_task_session': session})}
@@ -218,6 +234,10 @@ def run(args, pilot, case, out, result):
                 return envelope
 
             execution, checks = execute_case(case, robot, call, out)
+            if isinstance(provider, RefuseAfterOneTransfer):
+                result['fault_injection'] = provider.records
+                checks.append({'kind': 'injected_refusal_no_dispatch',
+                    'passed': len(provider.records) == 1 and provider.records[0]['no_commands']})
             result['boundary_checks'] = checks
             result['expected_failure_verified'] = bool(checks) and all(c['passed'] for c in checks)
             stable = True
