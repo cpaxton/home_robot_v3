@@ -1,0 +1,225 @@
+{
+  "schema_version": 1,
+  "runtime_commit": "5a891c59d148ba70beba1510fd21174b2529c13d",
+  "base_commit": "6386e9d3af4261871bfe4270f0344b7acb5121c6",
+  "scope": "Development regression controls; privileged simulation. Separate cohorts, no pooling or observed/hardware qualification.",
+  "tests": [
+    {
+      "artifact": ".tamp-runs/stack-review-20261116/contracts.xml",
+      "sha256": "05425dbab42e82fcf044e733cd3236b6b06727ec2e105b965480e7477417dbfa",
+      "tests": 120,
+      "failures": 10,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "artifact": ".tamp-runs/stack-review-20261116/contracts-v2.xml",
+      "sha256": "650d951f236b5bb6e86300277322f1527f4db3f91e9c21301b5289997407732b",
+      "tests": 122,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "artifact": ".tamp-runs/stack-review-20261116/contracts-v3.xml",
+      "sha256": "423824959c1fe6a475421eeaf4f2bb8388419442b4e67395f5c72128d6d83a10",
+      "tests": 124,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "artifact": ".tamp-runs/stack-review-20261116/contracts-v4.xml",
+      "sha256": "e9922cdaf8b19a0ef3e14cbc661c4e8b3cb68f818a01965137a7c2399964c34b",
+      "tests": 124,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "artifact": ".tamp-runs/stack-review-20261116/adapters.xml",
+      "sha256": "93a3d3d211df0ef4a9222cb1a4ceac8545478dfe89bea8451d25e1b6a1858e18",
+      "tests": 210,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "artifact": ".tamp-runs/stack-review-20261116/adapters-v2.xml",
+      "sha256": "9da2b53bedcd1006e8b54a5b1fbb9131541ae5a8a7fdde2f9213ddbc48e126e5",
+      "tests": 214,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "artifact": ".tamp-runs/stack-review-20261116/motion.xml",
+      "sha256": "95f32b5c198dcf15a2ec050ed0d68852a9cbd7b0a97adf73250c3c202c177ff2",
+      "tests": 502,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "artifact": ".tamp-runs/stack-review-20261116/task.xml",
+      "sha256": "dbdf5048d511fff6523f7d42652f79ef953dc2c76f791d98272e4859888cd298",
+      "tests": 417,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "artifact": ".tamp-runs/stack-review-20261116/contracts-v5.xml",
+      "sha256": "2373ca19c56429b93079b9ede3f04ccee1b2c6ed1514fca87b5c4b9d2de9998d",
+      "tests": 163,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "artifact": ".tamp-runs/stack-review-20261116/verify-final.xml",
+      "sha256": "9519d4206352a6dda241af3cdc5c5a7062abab52eaa8b256e77677925b72ac08",
+      "tests": 92,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "artifact": ".tamp-runs/stack-review-20261116/task-v2.xml",
+      "sha256": "81155adf8968dbdf6ed056f5664ffd178b48daee779d50d99dd5f7683f906c48",
+      "tests": 417,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  ],
+  "native": [
+    {
+      "artifact": ".tamp-runs/stack-review-20261116/native-release-control",
+      "passed": false,
+      "case_id": "two-goal-control",
+      "policy": "bounded_release",
+      "audit_commands": 193,
+      "forbidden_commands": 0,
+      "recorded_git_head": "6386e9d3af4261871bfe4270f0344b7acb5121c6",
+      "recorded_dirty": true,
+      "frozen_source_files": 17,
+      "matching_final_source_files": 16,
+      "artifacts_sha256": {
+        "summary.json": "a6ea4f424c64295da749e877bdd23ca4401c50fd7497a7816f236bdf4a0eeee7",
+        "protocol.json": "740f7cabf6021cf7c43d3dea2fac2e9713feb2bef6ac48deea6e1b39924dfcbe",
+        "responses.jsonl": "9ce70ea58e64ad0ea966bb066b01aff8e26f2264875b4640d05a5048abe85641",
+        "adapter_events.json": "0a8d19bdc45e1f1888af8af2e805ee51afca5c8838e364b796d7d153b2db46b1",
+        "actuation.jsonl": "4dc6a9dfd0d1ff44560cf14da7e024264d68544456501361e4f1c5fa28cf60f5"
+      }
+    },
+    {
+      "artifact": ".tamp-runs/stack-review-20261116/native-approach-swap",
+      "passed": false,
+      "case_id": "swap-shift",
+      "policy": "bounded_approach",
+      "audit_commands": 221,
+      "forbidden_commands": 0,
+      "recorded_git_head": "6386e9d3af4261871bfe4270f0344b7acb5121c6",
+      "recorded_dirty": true,
+      "frozen_source_files": 17,
+      "matching_final_source_files": 16,
+      "artifacts_sha256": {
+        "summary.json": "6e7c54bd02d171541d3c74eee84dfdb6e27b3672e5981d8ea855c51173f83575",
+        "protocol.json": "8b0efd42ec77dac3e1f3a8e207f9174fbf0051770a1a0a20f78170821c18e37a",
+        "responses.jsonl": "9a00104b6f7ad11531cc0413264706e493b895f0ee4ef0a40a97a8952333d4c0",
+        "adapter_events.json": "9fa13b743e1606050bc1f1771d8d22be43979b0d0d73bf3e01e2a964ef4fa8ad",
+        "actuation.jsonl": "d82fddf0be1eebb278b3755098a19fa86e9619aa445cc88a59d4ed2061318b6e"
+      }
+    },
+    {
+      "artifact": ".tamp-runs/stack-review-20261116/native-release-control-v2",
+      "passed": true,
+      "case_id": "two-goal-control",
+      "policy": "bounded_release",
+      "audit_commands": 482,
+      "forbidden_commands": 0,
+      "recorded_git_head": "6386e9d3af4261871bfe4270f0344b7acb5121c6",
+      "recorded_dirty": true,
+      "frozen_source_files": 17,
+      "matching_final_source_files": 17,
+      "artifacts_sha256": {
+        "summary.json": "5753ff61584d932582e45d9d0bf7952e87752959d9a6bc678070727e85761bbc",
+        "protocol.json": "870c9a5bcaa34e1bd069b6eb73829dfd6a1bbc04e57e8b4aa786ed3e1b4e7c6c",
+        "responses.jsonl": "7c5b7f0715fc49e05db20e2da9ed0268a9ddc9adef7050cac328f59e0c9d4cfd",
+        "adapter_events.json": "348c25881c7d474c87d0b0d0381a8362445bd00dd8860d310bdf7f44b11c21a0",
+        "actuation.jsonl": "50035efd91629674c1c6add57fce5faeef89021420ed1c38f2eccf2a11bc8057"
+      }
+    },
+    {
+      "artifact": ".tamp-runs/stack-review-20261116/native-approach-swap-v2",
+      "passed": true,
+      "case_id": "swap-shift",
+      "policy": "bounded_approach",
+      "audit_commands": 787,
+      "forbidden_commands": 0,
+      "recorded_git_head": "6386e9d3af4261871bfe4270f0344b7acb5121c6",
+      "recorded_dirty": true,
+      "frozen_source_files": 17,
+      "matching_final_source_files": 17,
+      "artifacts_sha256": {
+        "summary.json": "323e575e5a862439a7068ea1f905bc27a78f680cb0cd1964bdd7ace09efa35ad",
+        "protocol.json": "495953d88bc02b55ced23de844b3259493825d7c0bb829c2226932b081e74789",
+        "responses.jsonl": "33f2f430e55fd9f4cc1062c45de09f7ceb676403292a6fb61f629465f0444b73",
+        "adapter_events.json": "54844d9c729a7846181a0adad9967d0086292d5c8de783d809ea5343ac83e567",
+        "actuation.jsonl": "3d64552232a79b4448cf0b32e5daeb255ecea69029af42656e65aaddf75c8720"
+      }
+    }
+  ],
+  "actual_agent": {
+    "artifact": ".tamp-runs/stack-review-20261116/actual-agent-contextual",
+    "recorded_git_head": "5a891c59d148ba70beba1510fd21174b2529c13d",
+    "recorded_dirty": false,
+    "passed": true,
+    "partial_contract_verified": true,
+    "stopped_before_authorization": true,
+    "recovery_trace": {
+      "verified": true,
+      "tools": [
+        "scene_tasks",
+        "plan_task",
+        "execute_task_plan"
+      ]
+    },
+    "task_completed": true,
+    "model_calls": 8,
+    "audit_commands": 514,
+    "forbidden_commands": 0,
+    "shutdown_warnings": 0,
+    "artifacts_sha256": {
+      "summary.json": "7c057ef64adfbcc9681f3cca2c250f1e17377100797e8e7549c873b7ea308bab",
+      "protocol.json": "e7580ea776c58ceacb0106433d85f3f5e2d51b61496cd18337dbdbf88bf01903",
+      "partial_boundary.json": "57fa01c05b56ce2161f987b3c665742940d0d566ce561d3cb272b0166652af94",
+      "fault.json": "a08166ea927919ba7c653ef1bdeeb2ed30941a6888f7df1e1c7c6313b4c5b443",
+      "actuation.jsonl": "b80d48df6b1fb86eeb17c9762e691f5927970da37f385c6c1bab9ed744df6e24"
+    }
+  },
+  "observed_integration": {
+    "branch": "fix/tamp-observed-admission",
+    "commit": "abf609b0",
+    "tests": 390,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "live_transfer_qualified": false
+  },
+  "disk_cleanup": {
+    "actions": [
+      "uv cache prune --offline",
+      "uv cache prune --ci --offline (temporary and shared caches)",
+      "remove SHA-256-identical duplicate CUDA .run.1 installer only"
+    ],
+    "removed_duplicate_bytes": 4336730777,
+    "installer_sha256": "9223c4af3aebe4a7bbed9abd9b163b03a1b34b855fbc2b4a0d1b706ac09a5a16",
+    "original_installer_preserved": true,
+    "models_environments_and_evidence_preserved": true,
+    "observed_free_space_before_gb": 1.7,
+    "observed_free_space_after_gb": 14,
+    "note": "Concurrent filesystem activity; free-space difference is not an exact attribution of reclaimed bytes."
+  }
+}
