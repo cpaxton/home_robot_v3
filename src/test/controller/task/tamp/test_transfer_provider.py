@@ -14,6 +14,20 @@ from emet.controller.task.tamp.task_session import TaskExecutionResult, TaskSess
 from emet.controller.task.tamp.transfer_provider import RegionTransferProvider, TransferObservation, TransferRegion
 
 
+@pytest.mark.parametrize('reason,expected', [
+    ('object_pose_ambiguous', 'object_pose_ambiguous'),
+    ('task_object_not_settled_on_support', 'task_object_not_settled_on_support'),
+    ('robot_material_identity_changed', 'robot_material_identity_changed'),
+    ('object_observation_stale', 'stale_observation'),
+    ('private model/path detail', 'observation_unavailable'),
+])
+def test_observation_failures_keep_only_public_actionable_codes(reason, expected):
+    from emet.controller.manipulation.native_inputs import ObservationUnavailable
+    from emet.controller.task.tamp.task_session import provider_failure_code
+
+    assert provider_failure_code(ObservationUnavailable(reason)) == expected
+
+
 def make_domain(*, lie=False):
     regions = tuple(TransferRegion(name, ((i*2., 0.), (i*2.+1., 1.)))
                     for i, name in enumerate(('left', 'right', 'buffer')))

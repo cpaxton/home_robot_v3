@@ -140,7 +140,8 @@ class ObservedWorkspace:
             attributed[values] = True
         missing = np.flatnonzero(occupied & ~attributed)
         owners['background'] = np.union1d(owners.get('background', []), missing).astype(int)
-        return ObservedOccupancyPartition(self, tuple((name, tuple(map(int, values))) for name, values in sorted(owners.items())))
+        return ObservedOccupancyPartition(self, tuple((name, tuple(map(int, values))) for name, values in sorted(owners.items())),
+                                          points, labels)
 
     def query_region(self, bounds):
         """Slices for all cells touching a closed query, or None outside the grid."""
@@ -174,6 +175,67 @@ class ObservedWorkspace:
 class ObservedOccupancyPartition:
     workspace: ObservedWorkspace
     owners: tuple[tuple[str, tuple[int, ...]], ...]
+    points_world: np.ndarray | None = None
+    point_labels: np.ndarray | None = None
+    qualified_refs: tuple[str, ...] = ()
+    self_material_profile: tuple[str, ...] | None = None
+    qualification_capture: object | None = None
+
+    def __post_init__(self):
+        if self.qualified_refs and (self.self_material_profile is None or self.qualification_capture is None):
+            raise ValueError('invalid_occupancy_provenance')
+        if self.points_world is None and self.point_labels is None:
+            return
+        points, labels = np.asarray(self.points_world, float), np.asarray(self.point_labels)
+        if (points.ndim != 2 or points.shape[1] != 3 or not np.isfinite(points).all()
+                or labels.shape != (len(points),) or labels.dtype.kind not in {'U', 'S'}):
+            raise ValueError('invalid_occupancy_provenance')
+        object.__setattr__(self, 'points_world', np.frombuffer(points.tobytes(), dtype=points.dtype).reshape(points.shape))
+        object.__setattr__(self, 'point_labels', np.frombuffer(labels.tobytes(), dtype=labels.dtype).reshape(labels.shape))
+
+    def qualify_robot_material(self, material, *, capture, now, point_error_m=0., robot_ref='robot'):
+        """Keep inconsistent self labels as background, before any exclusion.
+
+        A measured endpoint's entire error ball must fit captured inner material.
+        Labels alone, a shared voxel, and an outer model AABB are insufficient.
+        Missing point provenance cannot qualify exclusion of occupied cells.
+        """
+        from emet.controller.manipulation.native_inputs import ObservationUnavailable
+        from emet.motion.observed_admission import CapturedRobotMaterial
+
+        if (not isinstance(material, CapturedRobotMaterial) or material.capture != capture
+                or not np.isfinite(point_error_m) or point_error_m < 0 or robot_ref == 'background'
+                or (self.qualification_capture is not None and self.qualification_capture != capture)):
+            raise ValueError('invalid_self_material_qualification')
+        material.require(now=now, model_signature=material.model_signature, scene_epoch=material.scene_epoch)
+        if material.capture.calibration_id != capture.calibration_id:
+            raise ObservationUnavailable('capture_identity_mismatch')
+        owners = {ref: np.asarray(ids, int) for ref, ids in self.owners}
+        self_ids = owners.get(robot_ref, np.empty(0, int))
+        proved, invalid = np.empty(0, int), np.empty(0, int)
+        if self.points_world is not None:
+            points = self.points_world[self.point_labels == robot_ref]
+            indices = np.floor((points-self.workspace.origin)/self.workspace.resolution).astype(int)
+            ids = np.ravel_multi_index(indices.T, self.workspace.cells.shape)
+            qualified = np.zeros(len(points), bool)
+            for solid in material.inner_solids:
+                qualified |= solid.lower_distance(points) + point_error_m <= 0
+            proved, invalid = np.unique(ids[qualified]), np.unique(ids[~qualified])
+        # Every endpoint in a cell must be qualified, not just one matching point.
+        invalid = np.union1d(invalid, np.setdiff1d(self_ids, proved))
+        owners['background'] = np.union1d(owners.get('background', []), invalid).astype(int)
+        return ObservedOccupancyPartition(self.workspace,
+            tuple((ref, tuple(map(int, ids))) for ref, ids in sorted(owners.items())),
+            self.points_world, self.point_labels, tuple(sorted(set(self.qualified_refs) | {robot_ref})),
+            material.profile_identity, capture)
+
+    def unqualified_excluded_cells(self, excluded_refs):
+        """An unqualified foreground label cannot preserve historical free space."""
+        ids = [ids for ref, ids in self.owners if ref in set(excluded_refs) - set(self.qualified_refs)]
+        result = np.zeros(self.workspace.cells.size, bool)
+        for values in ids:
+            result[list(values)] = True
+        return result.reshape(self.workspace.cells.shape)
 
     def excluding(self, object_refs):
         """Remove only exclusive endpoints; the vacated cell becomes UNKNOWN.

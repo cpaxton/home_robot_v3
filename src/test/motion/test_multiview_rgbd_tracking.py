@@ -67,6 +67,20 @@ def setup(**kwargs):
     return track, clock
 
 
+def test_reachability_uses_maximum_elapsed_time_between_capture_intervals():
+    first = CaptureInterval('first', 10., 10.2, 10.21, 'clock')
+    reference, mask = view(first)
+    clock = [10.21]
+    track = MultiViewRgbdTracker(PrimitiveModel('cylinder', (.02, .04)),
+        reference_view='head', reference=reference, mask=mask, object_ref='opaque',
+        scene_epoch='scene', clock=lambda: clock[0], max_update_s=5., max_evaluations=12000)
+    current = CaptureInterval('second', 10.3, 10.6, 10.61, 'clock')
+    clock[0] = current.received_monotonic
+    result = track.update({'head': view(current, shift=(.12, 0, 0))[0]}, scene_epoch='scene')
+    # .12 m is within .25 m/s * .6 s, but outside the incorrect minimum gap.
+    np.testing.assert_allclose(result.fit.poses[:, :3, 3], [[.12, 0, 0]], atol=.001)
+
+
 def test_handoff_to_wrist_preserves_reference_and_cannot_invent_per_view_pose():
     track, clock = setup()
     reference = track.reference_id

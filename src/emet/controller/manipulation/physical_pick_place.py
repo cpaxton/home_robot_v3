@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
+from contextlib import nullcontext
 from dataclasses import dataclass, replace
 
 import mujoco
@@ -33,6 +34,7 @@ class PhysicalMotionResult:
 class PhysicalPickPlaceExecutor:
     # Maximum joint motion during the stricter endpoint stillness window.
     ENDPOINT_STILLNESS_TOLERANCE = 0.002
+    GRIPPER_TRACKING_TOLERANCE = 0.001
 
     execution_mode = "physical"
     release_refiner: Callable[[], PhysicalMotionResult] | None = None
@@ -64,6 +66,8 @@ class PhysicalPickPlaceExecutor:
         base_body: str | None = None,
         joint_limit_margins=None,
         gripper_open_configuration=(),
+        gripper_close_configuration=(),
+        command_gripper_joints=None,
         gripper_close_command=None,
         input_mode: str = "observed",
         object_pose_provider=None,
@@ -103,6 +107,8 @@ class PhysicalPickPlaceExecutor:
         self.base_body = base_body
         self.joint_limit_margins = dict(joint_limit_margins or {})
         self.gripper_open_configuration = dict(gripper_open_configuration)
+        self.gripper_close_configuration = dict(gripper_close_configuration)
+        self.command_gripper_joints = command_gripper_joints
         self.gripper_close_command = gripper_close_command
         self.grasp_paths: list = []
         self.place_paths: list = []
@@ -114,6 +120,11 @@ class PhysicalPickPlaceExecutor:
 
     def _motion_time(self):
         return float(self.data.time) if self.use_sim_time else time.monotonic()
+
+    def _collision_phase(self, phase):
+        if isinstance(self.collision, ObservedNativeCollisionChecker) and self.collision.target_contact is not None:
+            return self.collision.motion_phase(phase)
+        return nullcontext()
 
     def _settling_window(self, duration):
         """Physics duration in simulation, with an independent stalled-clock bound."""
@@ -241,6 +252,90 @@ class PhysicalPickPlaceExecutor:
         mujoco.mj_kinematics(self.model, self.data)
         return result.waypoints, None
 
+    def plan_gripper_close(self):
+        """Certify a finite motor target instead of the unbounded close preset.
+
+        The refiner supplies a target and an ordinary measured-motor command
+        mapping. Passive geometry still needs the checker's outer bounds. This
+        is a sampled path certificate, like arm planning, not force sensing.
+        """
+        if not self.gripper_close_configuration or not callable(self.command_gripper_joints):
+            return None, 'gripper_close_geometry_unavailable'
+        names = tuple(self.gripper_close_configuration)
+        addresses = joint_qpos_addrs(self.model, names)
+        before = self.data.qpos.copy()
+        goal = np.array(list(self.gripper_close_configuration.values()))
+        try:
+            with self._collision_phase('close'):
+                result = plan_arm_joint_path(self.model, self.data, joint_names=names,
+                    q_start=before[addresses], q_goal=goal, collision=self.collision,
+                    planner='linear', step_size=.001, goal_tolerance=.0001)
+        finally:
+            self.data.qpos[:] = before
+            mujoco.mj_kinematics(self.model, self.data)
+        if not result.success:
+            detail = f':{result.detail}' if result.detail else ''
+            return None, f'gripper_close_path_failed:{result.reason}{detail}'
+        self.data.qpos[addresses] = goal
+        mujoco.mj_kinematics(self.model, self.data)
+        return result.waypoints, None
+
+    def _close_bounded_gripper(self, timeout_s):
+        position = getattr(self.robot, 'get_gripper_position', None)
+        if not callable(position):
+            return PhysicalMotionResult(False, 'unsupported_gripper_feedback', 'grasp')
+        self.synchronize(self.data)
+        before = self.data.qpos.copy()
+        try:
+            path, error = self.plan_gripper_close()
+        finally:
+            self.data.qpos[:] = before
+            mujoco.mj_kinematics(self.model, self.data)
+        if error:
+            return PhysicalMotionResult(False, error, 'grasp')
+        names = tuple(self.gripper_close_configuration)
+        addresses = joint_qpos_addrs(self.model, names)
+        active = self._settling_window(timeout_s)
+        started = self._motion_time()
+        for target in path[1:]:
+            self.synchronize(self.data)
+            if not active():
+                return PhysicalMotionResult(False, 'gripper_settling_timeout', 'grasp')
+            measured_before = self.data.qpos.copy()
+            check = plan_arm_joint_path(self.model, self.data, joint_names=names,
+                q_start=self.data.qpos[addresses].copy(), q_goal=target, collision=self.collision,
+                planner='linear', step_size=.001, goal_tolerance=.0001)
+            # Planning modifies private data. Restore measured state before
+            # entering transport, even on a rejected segment.
+            self.synchronize(self.data)
+            if not check.success:
+                return PhysicalMotionResult(False, 'gripper_contact_collision', 'grasp')
+            if (not np.isfinite(self.data.qpos).all()
+                    or np.max(np.abs(self.data.qpos-measured_before)) > self.GRIPPER_TRACKING_TOLERANCE):
+                return PhysicalMotionResult(False, 'stale_gripper_plan', 'grasp')
+            if not active():
+                return PhysicalMotionResult(False, 'gripper_settling_timeout', 'grasp')
+            response = self.command_gripper_joints(np.asarray(target).copy())
+            if not isinstance(response, (bool, np.bool_)) or not response:
+                return PhysicalMotionResult(False, 'gripper_close_command_failed', 'grasp')
+            self.synchronize(self.data)
+            while True:
+                if self.collision.configuration_collides(self.model, self.data):
+                    return PhysicalMotionResult(False, 'gripper_contact_collision', 'grasp')
+                measured = self.data.qpos[addresses]
+                if not np.isfinite(measured).all():
+                    return PhysicalMotionResult(False, 'invalid_gripper_feedback', 'grasp')
+                if np.max(np.abs(measured-target)) <= self.GRIPPER_TRACKING_TOLERANCE:
+                    break
+                if not active():
+                    return PhysicalMotionResult(False, 'gripper_tracking_failed', 'grasp')
+                time.sleep(.01)
+                self.synchronize(self.data)
+        remaining = timeout_s-(self._motion_time()-started)
+        if remaining <= 0:
+            return PhysicalMotionResult(False, 'gripper_settling_timeout', 'grasp')
+        return self._wait_gripper_still(position, remaining, target_joints=self.gripper_close_configuration)
+
     def _object_pose(self, object_ref):
         # Native height checks need the geometry origin, not material yaw. The
         # typed checker validates the complete prior and retains shape symmetry.
@@ -289,6 +384,12 @@ class PhysicalPickPlaceExecutor:
         return retained
 
     def _close_gripper_until_still(self, timeout_s=10.0):
+        with self._collision_phase('close'):
+            if isinstance(self.collision, ObservedNativeCollisionChecker) and self.collision.target_contact is not None:
+                return self._close_bounded_gripper(timeout_s)
+            return self._close_gripper_until_still_in_phase(timeout_s)
+
+    def _close_gripper_until_still_in_phase(self, timeout_s):
         """A grasp stops short of the empty-jaw endpoint; verify motor settling.
 
         Settling is not pickup success. The subsequent measured lift/retention
@@ -297,6 +398,10 @@ class PhysicalPickPlaceExecutor:
         position = getattr(self.robot, "get_gripper_position", None)
         if not callable(position):
             return PhysicalMotionResult(False, "unsupported_gripper_feedback", "grasp")
+        if isinstance(self.collision, ObservedNativeCollisionChecker) and self.collision.target_contact is not None:
+            self.synchronize(self.data)
+            if self.collision.configuration_collides(self.model, self.data):
+                return PhysicalMotionResult(False, 'gripper_contact_collision', 'grasp')
         response = (self.gripper_close_command() if self.gripper_close_command is not None
                     else self.robot.close_gripper(blocking=False))
         if not isinstance(response, (bool, np.bool_)) or not response:
@@ -316,7 +421,7 @@ class PhysicalPickPlaceExecutor:
             return PhysicalMotionResult(False, "gripper_settling_timeout", "grasp")
         return self._wait_gripper_still(position, remaining)
 
-    def _wait_gripper_still(self, position, timeout_s, *, event_phase="gripper_settled"):
+    def _wait_gripper_still(self, position, timeout_s, *, event_phase="gripper_settled", target_joints=None):
         start_sim_time = float(self.data.time)
         try:
             previous = float(position())
@@ -324,9 +429,26 @@ class PhysicalPickPlaceExecutor:
             return PhysicalMotionResult(False, "invalid_gripper_feedback", "grasp")
         active = self._settling_window(timeout_s)
         stable_since = self._motion_time()
+        if target_joints is not None:
+            addresses = joint_qpos_addrs(self.model, tuple(target_joints))
+            target = np.array(list(target_joints.values()))
+            model_anchor = self.data.qpos[addresses].copy()
         while active():
             time.sleep(0.05)
             self.synchronize(self.data)
+            if (isinstance(self.collision, ObservedNativeCollisionChecker)
+                    and self.collision.target_contact is not None
+                    and self.collision.configuration_collides(self.model, self.data)):
+                return PhysicalMotionResult(False, 'gripper_contact_collision', 'grasp')
+            if target_joints is not None:
+                measured = self.data.qpos[addresses]
+                if not np.isfinite(measured).all():
+                    return PhysicalMotionResult(False, 'invalid_gripper_feedback', 'grasp')
+                if np.max(np.abs(measured-target)) > self.GRIPPER_TRACKING_TOLERANCE:
+                    return PhysicalMotionResult(False, 'gripper_tracking_failed', 'grasp')
+                if np.max(np.abs(measured-model_anchor)) > self.GRIPPER_TRACKING_TOLERANCE:
+                    stable_since = self._motion_time()
+                    model_anchor = measured.copy()
             try:
                 current = float(position())
             except (TypeError, ValueError):
@@ -355,16 +477,22 @@ class PhysicalPickPlaceExecutor:
                 addresses = joint_qpos_addrs(self.model, tuple(self.gripper_open_configuration))
                 self.data.qpos[addresses] = list(self.gripper_open_configuration.values())
             for phase, (point, rotation) in zip(phases, targets, strict=True):
-                if grasp and phase == "lift":
-                    self.collision.set_payload(self.model, self.data, object_body, self.ee_body)
-                elif not grasp and phase == "retreat":
-                    self.collision.set_payload(self.model, self.data, None)
-                    if self.gripper_open_configuration:
-                        _, error = self.plan_gripper_open()
-                        if error:
-                            return None, PhysicalMotionResult(False, error, "release")
-                options = {"ordered_groups": True} if phase == "pregrasp" and self.coupled_groups else {}
-                path, error = self.plan_pose(np.asarray(point), np.asarray(rotation), **options)
+                with self._collision_phase(phase):
+                    if grasp and phase == "lift":
+                        self.collision.set_payload(self.model, self.data, object_body, self.ee_body)
+                    elif not grasp and phase == "retreat":
+                        self.collision.set_payload(self.model, self.data, None)
+                        if self.gripper_open_configuration:
+                            with self._collision_phase('release'):
+                                _, error = self.plan_gripper_open()
+                            if error:
+                                return None, PhysicalMotionResult(False, error, "release")
+                    options = {"ordered_groups": True} if phase == "pregrasp" and self.coupled_groups else {}
+                    path, error = self.plan_pose(np.asarray(point), np.asarray(rotation), **options)
+                    if (error is None and grasp and phase == 'grasp'
+                            and isinstance(self.collision, ObservedNativeCollisionChecker)
+                            and self.collision.target_contact is not None):
+                        _, error = self.plan_gripper_close()
                 if error:
                     return None, PhysicalMotionResult(False, f"measured_pose_replan_failed:{error}", phase)
                 paths.append(path)
@@ -377,6 +505,10 @@ class PhysicalPickPlaceExecutor:
             mujoco.mj_kinematics(self.model, self.data)
 
     def _execute_path(self, phase, path):
+        with self._collision_phase(phase):
+            return self._execute_path_in_phase(phase, path)
+
+    def _execute_path_in_phase(self, phase, path):
         def joint_residual(target):
             delta = self.data.qpos[self.qadr] - target
             if not np.isfinite(delta).all():

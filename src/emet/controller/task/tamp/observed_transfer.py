@@ -10,10 +10,12 @@ from __future__ import annotations
 import numpy as np
 
 from emet.controller.manipulation.native_inputs import ObservationUnavailable
-from emet.controller.manipulation.observed_effects import evaluate_place, rotation_distance
+from emet.controller.manipulation.observed_effects import evaluate_place
+from emet.controller.manipulation.shape_pose import evidence_rotation_distance, shape_identity
 
+from .api import failure_code
 from .task_contracts import SceneBinding, fingerprint
-from .task_session import TaskExecutionResult
+from .task_session import TaskExecutionResult, provider_failure_code
 from .transfer_provider import RegionTransferProvider, TransferObservation
 
 
@@ -46,8 +48,9 @@ class ObservedRegionTransferProvider(RegionTransferProvider):
                 current = self.adapter._observe(task)
                 a, b = frames[-1].payload, current.frame.payload
                 if (a.reference_id != b.reference_id or a.revision != b.revision
+                        or shape_identity(a.pose) != shape_identity(b.pose)
                         or np.linalg.norm(a.pose.world_from_object[:3, 3] - b.pose.world_from_object[:3, 3]) > .002
-                        or rotation_distance(a.pose.world_from_object[:3, :3], b.pose.world_from_object[:3, :3]) > .01):
+                        or evidence_rotation_distance(a.pose, a.pose.world_from_object[:3, :3], b.pose.world_from_object[:3, :3]) > .01):
                     raise ObservationUnavailable('task_object_not_settled_on_support')
                 snapshots[role] = current
             revisions = {s.scene_revision for s in snapshots.values()}
@@ -65,7 +68,7 @@ class ObservedRegionTransferProvider(RegionTransferProvider):
                 snapshot.frame.require(now=now)
                 box = snapshot.frame.bounds()
                 boxes[role] = box
-                positions[role] = snapshot.frame.payload.pose.world_from_object.copy()
+                positions[role] = snapshot.frame.payload.pose
                 footprints.append((role, tuple(box[1, :2] - box[0, :2])))
                 contained, intersecting = [], []
                 for name, region in self.regions.items():
@@ -95,8 +98,9 @@ class ObservedRegionTransferProvider(RegionTransferProvider):
             reference = (next(iter(revisions)), positions)
             previous = self._reference
             if (previous is None or previous[0] != reference[0] or any(
-                    np.linalg.norm(previous[1][r][:3, 3] - p[:3, 3]) > .005
-                    or rotation_distance(previous[1][r][:3, :3], p[:3, :3]) > .02
+                    shape_identity(previous[1][r]) != shape_identity(p)
+                    or np.linalg.norm(previous[1][r].world_from_object[:3, 3] - p.world_from_object[:3, 3]) > .005
+                    or evidence_rotation_distance(p, previous[1][r].world_from_object[:3, :3], p.world_from_object[:3, :3]) > .02
                     for r, p in positions.items())):
                 self._reference = reference
                 self._revision += 1
@@ -106,11 +110,25 @@ class ObservedRegionTransferProvider(RegionTransferProvider):
 
     def _transfer(self, role, region):
         task = self.roles[role]
-        planned = self.adapter.plan(object_name=task.object_name, receptacle_name=task.receptacle_name,
-                                    placement_region=region.bounds)
-        if planned['status'] != 'ok':
-            return TaskExecutionResult(False, False, planned['code'] if planned['code'] != 'operation_failed'
-                                       else 'task_motion_planning_failed')
-        result = self.adapter.execute(planned['data']['plan_ref'])
-        return TaskExecutionResult(result['status'] == 'ok', result.get('data', {}).get('execution_started') is True,
-            result['code'] if result['code'] not in {'ok', 'operation_failed'} else 'task_execution_failed')
+        try:
+            planned = self.adapter.plan(object_name=task.object_name, receptacle_name=task.receptacle_name,
+                                        placement_region=region.bounds)
+            if (not isinstance(planned, dict) or planned.get('status') not in {'ok', 'error'}
+                    or not isinstance(planned.get('code'), str) or not isinstance(planned.get('data'), dict)):
+                raise ValueError('invalid_observed_refinement_result')
+            if planned['status'] != 'ok':
+                code = failure_code(planned['code'])
+                return TaskExecutionResult(False, False,
+                    code if code != 'operation_failed' else 'task_motion_planning_failed')
+            plan_ref = planned['data'].get('plan_ref')
+            if planned['code'] != 'ok' or not isinstance(plan_ref, str) or not plan_ref:
+                raise ValueError('invalid_observed_refinement_result')
+        except Exception as error:
+            # The refiner and its result validation are planning-only. Execution
+            # stays outside this boundary because it may have sent a command.
+            return TaskExecutionResult(False, False, provider_failure_code(error))
+        result = self.adapter.execute(plan_ref)
+        started = result.get('data', {}).get('execution_started')
+        code = failure_code(result.get('code', ''))
+        return TaskExecutionResult(result['status'] == 'ok', started if type(started) is bool else True,
+            code if code not in {'ok', 'operation_failed'} else 'task_execution_failed')

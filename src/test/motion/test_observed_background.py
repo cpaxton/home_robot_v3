@@ -12,7 +12,9 @@ from emet.controller.manipulation.native_inputs import ObservationUnavailable
 from emet.controller.manipulation.observed_collision import ObservedNativeCollisionChecker
 from emet.controller.manipulation.observed_effects import CaptureInterval
 from emet.motion.arm_rrt import plan_arm_joint_path
+from emet.motion.observed_admission import CapturedRobotMaterial
 from emet.motion.observed_background import ObservedBackground, StaticBackgroundAssumption
+from emet.motion.observed_solids import WorldSolid
 from emet.motion.observed_workspace import ObservedWorkspace
 
 
@@ -38,9 +40,16 @@ def stamp(name, t):
 def test_self_occlusion_preserves_only_real_historical_free_space_and_original_age():
     background = initial()
     current = partition([2, 1, 2, 0], [[0.05, 0.05, 0.05], [0.25, 0.05, 0.05]], ["robot", "robot"])
-    updated = background.update(
-        current, excluded_refs=("robot",), scene_epoch="scene", capture=stamp("next", 11.0), now=11.1
-    )
+    ticket = stamp('next', 11.)
+    solids = []
+    for center in ([.05, .05, .05], [.25, .05, .05]):
+        pose = np.eye(4)
+        pose[:3, 3] = center
+        solids.append(WorldSolid('box', (.02, .02, .02), pose))
+    material = CapturedRobotMaterial(ticket, 'fixture-model', 'fixture-calibration', 'scene',
+                                    tuple(solids), (0., 0.), 'measured-fixture')
+    updated = background.update(current, excluded_refs=('robot',), scene_epoch='scene',
+        capture=ticket, now=11.1, robot_material=material)
     np.testing.assert_array_equal(updated.workspace.cells[:, 0, 0], [1, 1, 0, 2])
     np.testing.assert_allclose(updated.observed_monotonic[[0, 1, 3], 0, 0], [10.0, 11.0, 10.0])
     box = [[0.01, 0.01, 0.01], [0.09, 0.09, 0.09]]
@@ -78,7 +87,7 @@ def test_stale_or_contradictory_background_cannot_be_published(change):
         initial().update(current, **args)
 
 
-def test_native_path_uses_previously_measured_free_space_without_freeing_unseen_space():
+def test_unqualified_self_mask_cannot_keep_cached_free_space_for_a_native_path():
     # A workspace scan before the robot entered supplies actual depth evidence.
     # It is not inferred from the robot's present AABB or from missing endpoints.
     xml = """<mujoco><worldbody><body name="robot" pos="0 0 .5">
@@ -146,10 +155,10 @@ def test_native_path_uses_previously_measured_free_space_without_freeing_unseen_
             step_size=0.01,
         )
 
-    assert plan(0.05).success
+    assert plan(0.05).reason == 'invalid_start'
     clock[0] = 12.1
     assert plan(0.05).reason == "invalid_start"  # Hidden scan evidence has expired.
     assumption = StaticBackgroundAssumption("static", 10.0, 20.0, "declared-static-scan")
     checker.scene = background.placement_scene(static_assumption=assumption, clock=lambda: clock[0])
-    assert plan(0.05).success
+    assert plan(0.05).reason == 'invalid_start'  # Static age does not qualify a self label.
     assert not plan(0.35).success  # Beyond the old camera frustum remains unknown.

@@ -10,7 +10,8 @@ an acknowledgement that the physical gripper holds the object.
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass
+from contextlib import contextmanager
+from dataclasses import dataclass, replace
 from typing import Protocol
 
 import mujoco
@@ -18,7 +19,11 @@ import numpy as np
 from scipy.spatial import ConvexHull, QhullError
 
 from emet.controller.manipulation.native_inputs import ObjectPoseEvidence, ObservationUnavailable
+from emet.controller.manipulation.native_scene import model_signature
 from emet.controller.manipulation.shape_pose import ShapePoseEvidence, evidence_rotation_distance, shape_identity
+from emet.motion.observed_admission import ObservedMaterialAdmission, RobotGeometryBound
+from emet.motion.observed_contact import CONTACT_PHASES, MOTION_PHASES, ObservedTargetContact
+from emet.motion.observed_solids import WorldSolid
 from emet.motion.placement_geometry import HeldObject, PlacementCollisionChecker, PlacementScene
 
 
@@ -37,6 +42,8 @@ class PayloadGeometryEvidence:
     vertices_reference: np.ndarray
     pose: ObjectPoseEvidence | ShapePoseEvidence
     construction: str
+    position_error_m: float = 0.0
+    rotation_error_rad: float = 0.0
 
     def __post_init__(self):
         # HeldObject validates finite positive extent; its EE naming is irrelevant
@@ -46,8 +53,16 @@ class PayloadGeometryEvidence:
             raise ValueError('invalid_payload_geometry_evidence')
         if (not self.object_ref or not self.reference_id or not self.revision
                 or not isinstance(self.pose, (ObjectPoseEvidence, ShapePoseEvidence))
-                or self.construction not in {'known_model_prior', 'multiview_bound'}):
+                or self.construction not in {'known_model_prior', 'multiview_bound'}
+                or not np.isfinite([self.position_error_m, self.rotation_error_rad]).all()
+                or self.position_error_m < 0 or not 0 <= self.rotation_error_rad <= np.pi):
             raise ValueError('invalid_payload_geometry_evidence')
+        # Shape records already carry their calibration bounds. Unique rigid
+        # poses receive the enclosing visual frame's bounds at the adapter seam.
+        object.__setattr__(self, 'position_error_m', max(self.position_error_m,
+            self.pose.position_error_m if isinstance(self.pose, ShapePoseEvidence) else 0.))
+        object.__setattr__(self, 'rotation_error_rad', max(self.rotation_error_rad,
+            self.pose.rotation_error_rad if isinstance(self.pose, ShapePoseEvidence) else 0.))
         vertices = np.frombuffer(vertices.tobytes(), dtype=vertices.dtype).reshape(-1, 3)
         if isinstance(self.pose, ShapePoseEvidence):
             if self.construction != 'known_model_prior':
@@ -87,8 +102,9 @@ class ObservedNativeCollisionChecker(PlacementCollisionChecker):
     A raw self-occluding depth map cannot satisfy this contract for the robot's
     starting volume: self surfaces are occupied and their interiors are unknown.
     Removing robot-labelled endpoints leaves unknown cells, not certified free
-    space. This checker does not implement a robot-interior/contact occupancy
-    policy; supplied synthetic free-space fixtures exercise only the adapter seam.
+    space. Optional captured-material admission proves only calibrated solids
+    and observed-free newly swept space. Contact policy and live source assembly
+    are separately required; synthetic free fixtures only exercise the seam.
     """
     geometry_source = 'observed_voxels'
     input_mode = 'observed'
@@ -96,7 +112,7 @@ class ObservedNativeCollisionChecker(PlacementCollisionChecker):
     def __init__(self, model, *, robot_body, ee_body, scene: PlacementScene,
                  payload_provider: ObservedPayloadProvider, scene_revision: str,
                  current_revision, received_monotonic: float, contact_bodies=(),
-                 margin_m=.005, max_age_s=2., clock=time.monotonic):
+                 margin_m=.005, max_age_s=2., clock=time.monotonic, admission=None, target_contact=None):
         if (scene.source != 'observed_voxels' or scene.workspace is None
                 or not callable(scene.known_free)):
             raise ValueError('observed_known_free_workspace_required')
@@ -115,6 +131,98 @@ class ObservedNativeCollisionChecker(PlacementCollisionChecker):
         self.payload_body = self.payload_parent = self.payload_transform = None
         self._attachment_evidence = None
         self.last_contacts = []
+        self._released_target = None
+        if admission is not None and not isinstance(admission, ObservedMaterialAdmission):
+            raise ValueError('invalid_observed_admission')
+        self.admission = admission
+        self.last_admission = None
+        self._signature = model_signature(model)
+        self.target_contact = None
+        self.phase = 'preflight'
+        self.set_target_contact(target_contact)
+
+    def set_target_contact(self, contact):
+        if contact is not None:
+            if not isinstance(contact, ObservedTargetContact):
+                raise ValueError('invalid_observed_target_contact')
+            contact.require(now=self.clock(), model_signature=self._signature)
+            if not contact.fingertip_geom_ids <= set(self.geom_ids):
+                raise ValueError('invalid_observed_fingertip_geoms')
+        self.target_contact = contact
+
+    @contextmanager
+    def motion_phase(self, phase):
+        if phase not in MOTION_PHASES:
+            raise ValueError('invalid_contact_phase')
+        previous, self.phase = self.phase, phase
+        try:
+            yield
+        finally:
+            self.phase = previous
+
+    def _robot_bound(self, model, data, gid):
+        nominal = WorldSolid.from_geom(model, data, gid,
+            convex_material_calibration_id='robot-model-collision-envelope')
+        if self.admission is None:
+            return replace(nominal, offset_m=np.sqrt(3)*self.margin), 0.
+        bound = self.admission.query_robot_geometry(model, data, gid)
+        material = self.admission.robot_material
+        if (not isinstance(bound, RobotGeometryBound) or bound.geom_id != gid
+                or bound.model_signature != self._signature or bound.calibration_id != material.calibration_id
+                or bound.configuration_profile_id != material.configuration_profile_id):
+            raise ObservationUnavailable('robot_collision_envelope_unknown')
+        reserve = np.sqrt(3)*self.margin + bound.displacement_bound_m
+        if bound.solid.offset_m < reserve or not bound.solid.contains_solid(replace(nominal, offset_m=reserve)):
+            raise ObservationUnavailable('robot_collision_envelope_unknown')
+        return bound.solid, bound.displacement_bound_m
+
+    def _target_robot_collides(self, model, data, gid, target=None):
+        contact = self.target_contact
+        solid, _ = self._robot_bound(model, data, gid)
+        if gid in contact.fingertip_geom_ids and self.phase in CONTACT_PHASES:
+            # Clearance padding is not physical penetration. Keep all declared
+            # configuration error, but remove only the ordinary planning margin.
+            solid = replace(solid, offset_m=solid.offset_m-np.sqrt(3)*self.margin)
+        return contact.collides(solid, geom_id=gid, phase=self.phase, target=target)
+
+    def _robot_scene_collides(self, model, data, gid, bounds):
+        # After release, check the fresh visual target as well as the retained
+        # release hypothesis. A rolling object must not disappear behind the
+        # frozen release box while the arm retreats.
+        if self.target_contact is not None and self.payload is None:
+            if self._target_robot_collides(model, data, gid):
+                return True
+        if self.admission is None:
+            return super()._robot_scene_collides(model, data, gid, bounds)
+        solid, _ = self._robot_bound(model, data, gid)
+        self.last_admission = self.admission.query(solid, now=self.clock(), allow_captured_robot=True)
+        return not self.last_admission.allowed
+
+    def _payload_robot_collides(self, model, data, gid, bounds, payload_bounds):
+        if self.target_contact is None:
+            return super()._payload_robot_collides(model, data, gid, bounds, payload_bounds)
+        if self.payload is None:
+            target = self._released_target
+            if target is None:
+                pose = np.eye(4)
+                pose[:3, 3] = payload_bounds.mean(0)
+                target = WorldSolid('box', tuple((payload_bounds[1]-payload_bounds[0])/2), pose)
+        else:
+            ee = data.body(self.ee_body)
+            pose = np.eye(4)
+            pose[:3, :3], pose[:3, 3] = ee.xmat.reshape(3, 3), ee.xpos
+            target = WorldSolid('convex', (), pose, vertices=self.payload.vertices_ee,
+                                material_calibration_id='observed-payload-envelope')
+        return self._target_robot_collides(model, data, gid, target)
+
+    def _payload_scene_collides(self, model, data, bounds):
+        if self.admission is None:
+            return super()._payload_scene_collides(model, data, bounds)
+        pose = np.eye(4)
+        pose[:3, 3] = bounds.mean(0)
+        solid = WorldSolid('box', tuple((bounds[1]-bounds[0])/2), pose)
+        self.last_admission = self.admission.query(solid, now=self.clock(), allow_captured_robot=True)
+        return not self.last_admission.allowed
 
     def _evidence(self, object_ref):
         evidence = self.provider.observe_payload(object_ref)
@@ -126,6 +234,8 @@ class ObservedNativeCollisionChecker(PlacementCollisionChecker):
                 or previous.reference_id != evidence.reference_id
                 or previous.revision != evidence.revision
                 or previous.construction != evidence.construction
+                or evidence.position_error_m > previous.position_error_m
+                or evidence.rotation_error_rad > previous.rotation_error_rad
                 or shape_identity(previous.pose) != shape_identity(evidence.pose)
                 or not np.array_equal(previous.vertices_reference, evidence.vertices_reference)):
             raise ObservationUnavailable('payload_geometry_changed')
@@ -144,10 +254,9 @@ class ObservedNativeCollisionChecker(PlacementCollisionChecker):
         rotation = inverse @ pose[:3, :3]
         distance = float(np.linalg.norm(position-self.payload_transform[:3, 3]))
         angle = evidence_rotation_distance(evidence.pose, self.payload_transform[:3, :3], rotation)
-        if isinstance(evidence.pose, ShapePoseEvidence):
-            before = self._attachment_evidence.pose
-            distance += before.position_error_m + evidence.pose.position_error_m
-            angle += before.rotation_error_rad + evidence.pose.rotation_error_rad
+        before = self._attachment_evidence
+        distance += before.position_error_m + evidence.position_error_m
+        angle += before.rotation_error_rad + evidence.rotation_error_rad
         return distance, angle
 
     def observe_object(self, object_ref):
@@ -172,6 +281,8 @@ class ObservedNativeCollisionChecker(PlacementCollisionChecker):
                 ee = self._probe.body(self.ee_body)
                 vertices = self.payload.world_vertices(ee.xpos, ee.xmat)
                 self.released_bounds = np.stack((vertices.min(0) - self.margin, vertices.max(0) + self.margin))
+                self._released_target = WorldSolid('convex', (), np.eye(4), vertices=vertices,
+                    material_calibration_id='observed-released-envelope')
             self.payload = None
             self.payload_body = self.payload_parent = self.payload_transform = None
             self._attachment_evidence = None
@@ -179,6 +290,10 @@ class ObservedNativeCollisionChecker(PlacementCollisionChecker):
         if parent != self.ee_body:
             raise ValueError('payload_parent_mismatch')
         evidence, world_from_reference = self._evidence(body)
+        if self.target_contact is not None and (body != self.target_contact.object_ref
+                or evidence.reference_id != self.target_contact.reference_id
+                or evidence.revision != self.target_contact.geometry_revision):
+            raise ObservationUnavailable('target_contact_identity_changed')
         mujoco.mj_copyData(self._probe, model, data)
         mujoco.mj_kinematics(model, self._probe)
         ee = self._probe.body(parent)
@@ -193,18 +308,20 @@ class ObservedNativeCollisionChecker(PlacementCollisionChecker):
         self.payload_transform = payload.body_pose_ee
         self._attachment_evidence = evidence
         self.released_bounds = None
+        self._released_target = None
 
     def capture_payload(self):
         return (self.payload_body, self.payload_parent, self.payload_transform,
                 self.payload, self._attachment_evidence,
-                None if self.released_bounds is None else self.released_bounds.copy())
+                None if self.released_bounds is None else self.released_bounds.copy(), self._released_target)
 
     def restore_payload(self, state):
         (self.payload_body, self.payload_parent, self.payload_transform,
-         self.payload, self._attachment_evidence, self.released_bounds) = state
+         self.payload, self._attachment_evidence, self.released_bounds, self._released_target) = state
 
     def configuration_collides(self, model, data):
         self.last_contacts = []
+        self.last_admission = None
         age = self.clock() - self.received_monotonic
         if not np.isfinite(age) or not 0 <= age <= self.max_age_s:
             self.last_reason = 'scene_observation_stale'
@@ -212,6 +329,15 @@ class ObservedNativeCollisionChecker(PlacementCollisionChecker):
         if self.current_revision() != self.scene_revision:
             self.last_reason = 'scene_revision_changed'
             return True
+        if self.target_contact is not None:
+            self.target_contact.require(now=self.clock(), model_signature=self._signature)
+            if self.target_contact.capture.received_monotonic != self.received_monotonic:
+                raise ObservationUnavailable('target_contact_identity_changed')
+        if self.admission is not None:
+            self.admission.require(now=self.clock(), model_signature=self._signature)
+            if (self.admission.scene_geometry_digest != self.scene.geometry_digest
+                    or self.admission.robot_material.capture.received_monotonic != self.received_monotonic):
+                raise ObservationUnavailable('robot_material_identity_changed')
         collides = super().configuration_collides(model, data)
         if self.current_revision() != self.scene_revision:
             self.last_reason = 'scene_revision_changed'

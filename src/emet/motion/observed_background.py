@@ -47,6 +47,7 @@ class ObservedBackground:
     scene_epoch: str
     capture_ids: frozenset[str]
     latest_capture: CaptureInterval
+    self_material_profile: tuple[str, ...] | None = None
 
     def __post_init__(self):
         stamps = np.asarray(self.observed_monotonic, float)
@@ -62,27 +63,51 @@ class ObservedBackground:
 
     @classmethod
     def from_capture(
-        cls, partition: ObservedOccupancyPartition, *, excluded_refs, scene_epoch, capture: CaptureInterval, now=None
+        cls, partition: ObservedOccupancyPartition, *, excluded_refs, scene_epoch, capture: CaptureInterval, now=None,
+        robot_material=None, point_error_m=0.
     ):
-        capture.require(now=time.monotonic() if now is None else now)
+        now = time.monotonic() if now is None else now
+        capture.require(now=now)
+        if robot_material is not None:
+            if robot_material.scene_epoch != scene_epoch:
+                raise ObservationUnavailable('background_epoch_or_capture_invalid')
+            partition = partition.qualify_robot_material(robot_material, capture=capture, now=now,
+                                                        point_error_m=point_error_m)
+        if partition.qualified_refs and (partition.qualification_capture != capture
+                or partition.self_material_profile[3] != scene_epoch):
+            raise ObservationUnavailable('background_epoch_or_capture_invalid')
         workspace = partition.excluding(excluded_refs)
         stamps = np.full(workspace.cells.shape, np.nan)
         stamps[workspace.cells != 0] = capture.earliest
-        return cls(workspace, stamps, scene_epoch, frozenset((capture.observation_id,)), capture)
+        return cls(workspace, stamps, scene_epoch, frozenset((capture.observation_id,)), capture,
+                   partition.self_material_profile)
 
-    def update(self, partition, *, excluded_refs, scene_epoch, capture: CaptureInterval, now=None):
+    def update(self, partition, *, excluded_refs, scene_epoch, capture: CaptureInterval, now=None,
+               robot_material=None, point_error_m=0.):
         """Fuse only an explicitly unchanged background; contradictions reject.
 
         Current self-only endpoints become unknown before fusion. Mixed owners
         retain environment occupancy, so self masking cannot erase an obstacle.
         The caller must discard this map and invalidate plans on scene changes.
         """
-        capture.require(now=time.monotonic() if now is None else now, after=self.latest_capture.latest)
+        now = time.monotonic() if now is None else now
+        capture.require(now=now, after=self.latest_capture.latest)
+        excluded_refs = tuple(excluded_refs)
+        if robot_material is not None:
+            if robot_material.scene_epoch != scene_epoch:
+                raise ObservationUnavailable('background_epoch_or_capture_invalid')
+            partition = partition.qualify_robot_material(robot_material, capture=capture, now=now,
+                                                        point_error_m=point_error_m)
+        if partition.qualified_refs and (partition.qualification_capture != capture
+                or partition.self_material_profile[3] != scene_epoch):
+            raise ObservationUnavailable('background_epoch_or_capture_invalid')
         if (
             scene_epoch != self.scene_epoch
             or capture.observation_id in self.capture_ids
             or capture.calibration_id != self.latest_capture.calibration_id
             or len(self.capture_ids) >= 4096
+            or (self.self_material_profile is not None and partition.self_material_profile is not None
+                and self.self_material_profile != partition.self_material_profile)
         ):
             raise ObservationUnavailable("background_epoch_or_capture_invalid")
         current = partition.excluding(excluded_refs)
@@ -97,6 +122,13 @@ class ObservedBackground:
         if np.any(contradiction):
             raise ObservationUnavailable("background_scene_changed")
         cells, stamps = old.cells.copy(), self.observed_monotonic.copy()
+        # An obstacle mislabelled as foreground must not disappear into a cached
+        # free cell. Only a capture-bound material proof can retain that cell's
+        # historical free evidence. Truly hidden cells keep their original age.
+        unqualified = partition.unqualified_excluded_cells(excluded_refs)
+        invalidated_free = unqualified & (current.cells == 0) & (old.cells == 1)
+        cells[invalidated_free] = 0
+        stamps[invalidated_free] = np.nan
         observed = current.cells != 0
         cells[observed], stamps[observed] = current.cells[observed], capture.earliest
         return ObservedBackground(
@@ -105,6 +137,7 @@ class ObservedBackground:
             self.scene_epoch,
             self.capture_ids | {capture.observation_id},
             capture,
+            partition.self_material_profile or self.self_material_profile,
         )
 
     @property

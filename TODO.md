@@ -5,6 +5,10 @@
       supplies evidence/adapter contracts only. Preserve unknown-space rejection
       and read-only default discovery; require an actual observed transfer before
       claiming live observed execution. Native privileged controls remain separate.
+      Active fixes: [observed admission repair](docs/plans/2026-11-16_observed_admission.md)
+      on `fix/tamp-observed-admission`; captured-material mechanics, fingertip
+      contact, finite checked closing and error/receipt repairs are implemented.
+      Local support contact, full live source and observed transfer remain open.
 
 - [ ] Profile failed-search cost without answer overrides or target-specific rules:
       final S0 seed 1 misses the receptacle in both arms but candidate takes

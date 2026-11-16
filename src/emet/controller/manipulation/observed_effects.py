@@ -147,9 +147,8 @@ class VisualEffectFrame:
             raise ObservationUnavailable('capture_motion_alignment_unknown')
         if self.position_error_m > .01 or self.rotation_error_rad > .05:
             raise ObservationUnavailable('object_pose_ambiguous')
-        if isinstance(self.payload.pose, ShapePoseEvidence) and (
-                self.position_error_m < self.payload.pose.position_error_m
-                or self.rotation_error_rad < self.payload.pose.rotation_error_rad):
+        if (self.position_error_m < self.payload.position_error_m
+                or self.rotation_error_rad < self.payload.rotation_error_rad):
             raise ObservationUnavailable('object_pose_ambiguous')
         return pose, b.world_from_ee
 

@@ -141,7 +141,9 @@ class MultiViewRgbdTracker(MovingRgbdTracker):
         if any(view.capture != capture for view in views.values()):
             raise ObservationUnavailable("multiview_capture_mismatch")
         capture.require(now=self.clock(), after=previous.capture.latest)
-        dt = capture.earliest - previous.capture.latest
+        # Either measurement may have occurred anywhere in its capture interval.
+        # Reachability needs the largest elapsed time, not the minimum gap.
+        dt = capture.latest - previous.capture.earliest
         if (
             not views
             or not 0 < dt <= self.gap

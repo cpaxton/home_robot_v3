@@ -478,6 +478,7 @@ def test_contact_closure_needs_settled_motor_and_advancing_feedback(monkeypatch,
 def test_custom_close_without_ack_cannot_be_accepted_as_grasp():
     from emet.controller.manipulation.physical_pick_place import PhysicalPickPlaceExecutor
     executor = object.__new__(PhysicalPickPlaceExecutor)
+    executor.collision = None
     executor.robot = SimpleNamespace(get_gripper_position=lambda: .2)
     executor.gripper_close_command = lambda: None
     result = executor._close_gripper_until_still()

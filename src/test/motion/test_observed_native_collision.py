@@ -5,6 +5,7 @@
 Synthetic observations test the seam, not a qualified perception/grasp pipeline.
 """
 import time
+from dataclasses import replace
 from types import SimpleNamespace
 
 import mujoco
@@ -59,6 +60,23 @@ def test_attachment_needs_no_scene_object_and_preserves_live_data():
         np.testing.assert_array_equal(actual, expected)
     with pytest.raises(ValueError):
         evidence.vertices_reference.setflags(write=True)
+
+
+def test_unique_pose_retention_includes_both_capture_error_bounds():
+    model, data, checker, provider, evidence, *_ = rig()
+    evidence = replace(evidence, position_error_m=.006, rotation_error_rad=.03)
+    provider.observe_payload = lambda _: evidence
+    attach(model, data, checker)
+    np.testing.assert_allclose(checker.payload_retention_residual(model, data, evidence.object_ref), [.012, .06])
+    moved = evidence.pose.world_from_object.copy()
+    moved[0, 3] += .015
+    current = replace(evidence, pose=replace(evidence.pose, world_from_object=moved))
+    provider.observe_payload = lambda _: current
+    distance, _ = checker.payload_retention_residual(model, data, evidence.object_ref)
+    assert distance == pytest.approx(.027)  # Exceeds the unchanged .02 m retention bound.
+    provider.observe_payload = lambda _: replace(current, position_error_m=.007)
+    with pytest.raises(ObservationUnavailable, match='payload_geometry_changed'):
+        checker.payload_retention_residual(model, data, evidence.object_ref)
 
 
 @pytest.mark.parametrize('kwargs,reason', [
