@@ -144,3 +144,28 @@ source: `src/emet/agent/loop.py::_dispatch_tool_calls`,
 This supplies specific next repairs with no new recovery architecture. The
 trial does not exhaust all poses/tools, establish global unreachability, prove
 a camera failure, or measure a model-performance advantage.
+
+## Follow-up repair: FIND feedback
+
+After the trials, FIND now uses its registered function once, returning a
+structured task outcome and the existing bounded navigation feedback. A missing
+find point sets `_last_exec_ok=False` while executor liveness remains true.
+Executor-mapped information tools also propagate `returns_info`, allowing the
+coordinator to continue within its existing round budget. No navigation safety,
+head behavior, model-answer policy or recovery strategy changed.
+
+The new cases first reproduced four failures on the trial source. After repair,
+95 focused tests pass across `test_dispatch_tool_calls.py`,
+`test_nav_tool_returns.py`, `test_chat_camera_history.py`,
+`test_agent_manip_tool_sequence.py`, `test_dynamem_sim_manip_gating.py`,
+`test_call_llm.py`, `test_tool_outcome.py`, `test_agent_prompt_and_tools.py` and
+`test_look_around_skip_sweep.py`. Ruff check/format and diff whitespace checks pass.
+The CHAT/HTTP cases exercise the real loop, tool registration and client request
+format with controlled executor outcomes and model transport; they are not a
+new live simulator success claim. Three manipulation assertions were updated
+to the already-existing rendered tool-result format; their old JSON expectation
+also fails with the previous dispatcher, independently of this repair.
+
+Next remains the measured-head simulation contract probe, followed by the
+bounded operator retry. The failed live trials above remain the recorded
+localization outcomes until that retry is actually run.

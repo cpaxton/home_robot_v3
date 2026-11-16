@@ -3,11 +3,15 @@
 Qualify the same harness across EQA and OVMM. Model correctness, geometry
 admission, motion safety and task completion are separate outcomes.
 
-Live operator qualification on 2026-11-16 exposed two additional gaps, not yet
-passing acceptance cases: measured head arrival through the rby1/Galaxea-proxy
-bridge, and failed executor-mapped FIND returning an actionable result to the
-coordinator instead of ending its turn with generic success. Preserve these
-as separate gates; process exit-zero does not pass either. See the
+Live operator qualification on 2026-11-16 exposed two additional gaps: measured
+head arrival through the rby1/Galaxea-proxy bridge, and failed FIND feedback to
+the coordinator. FIND now has passing controlled production CHAT/HTTP cases
+in `test_chat_camera_history.py::test_chat_find_result_reaches_next_model_request`,
+covering success and failure. Single execution and detailed navigation feedback
+are checked in `test_dispatch_tool_calls.py`; task failure independent of
+executor liveness is checked in `test_dynamem_sim_manip_gating.py`. Live retry
+and measured head acceptance remain pending. Keep these separate gates;
+process exit-zero does not pass them. See the
 [operator report](../experiments/independent_operator_trial_20261116.md) for
 exact actions, source pin, receipt paths and the proposed repair tests.
 

@@ -6,6 +6,8 @@ import json
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+import pytest
+
 from emet.agent import loop
 from emet.agent.tools import Tool
 from emet.llms.openai_client import OpenaiClient
@@ -27,6 +29,58 @@ def setup_chat_loop(monkeypatch):
     monkeypatch.setattr(loop, "print_embodied_model_report", lambda **kw: None)
     monkeypatch.setattr(loop, "get_llm_client", lambda *a, **kw: MagicMock())
     return robot
+
+
+@pytest.mark.parametrize("task_ok", [True, False])
+def test_chat_find_result_reaches_next_model_request(monkeypatch, task_ok):
+    """Production FIND registration must reach the next real CHAT/HTTP request."""
+    robot = setup_chat_loop(monkeypatch)
+    executor = loop.DynamemTaskExecutor()
+    executor.agent.planner = None
+    executor.agent._last_nav_plan = {
+        "outcome": "ok" if task_ok else "rejected_swept_footprint:unobserved_footprint",
+        "footprint": {"coverage": 0.75},
+    }
+
+    def execute(cmds):
+        assert cmds == [("find", "microwave")]
+        executor._last_exec_ok = task_ok
+        return True
+
+    executor.side_effect = execute
+    requests = []
+    replies = iter(
+        [
+            {"tool_calls": [{"name": "find_objects", "arguments": {"text": "microwave"}}], "message": ""},
+            {"tool_calls": [], "message": "Reporting the measured find result."},
+        ]
+    )
+
+    def create(**kwargs):
+        requests.append(kwargs["messages"][-1]["content"])
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content=json.dumps(next(replies)), tool_calls=None))]
+        )
+
+    client = OpenaiClient("sys", model="emet", base_url="http://127.0.0.1:9/v1")
+    client._openai = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+    monkeypatch.setattr(loop, "get_llm_client", lambda *a, **kw: client)
+    loop.run_agent_with_robot(
+        discord=False,
+        use_llm=True,
+        commands=["Find the microwave and report its measured location."],
+        device="cpu",
+        robot_client=robot,
+        max_tool_rounds=3,
+        thinking_status=False,
+    )
+    executor.assert_called_once_with([("find", "microwave")])
+    assert len(requests) == 2
+    assert ("[find_objects] ok" if task_ok else "[find_objects] failed") in requests[1]
+    assert '"coverage": 0.75' in requests[1]
+    assert "Do not call any more tools" not in requests[1]
+    if not task_ok:
+        assert "unobserved_footprint" in requests[1]
 
 
 def test_live_chat_session_preserves_earlier_user_turn_and_camera(monkeypatch):

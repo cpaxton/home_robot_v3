@@ -1042,15 +1042,16 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         )
 
     # -- find_objects --------------------------------------------------------
-    def find_objects(text: str) -> str:
+    def find_objects(text: str) -> dict:
         executor = context.get("executor")
         if executor is None:
-            return "Robot not connected."
-        ok = executor([("find", text)])
+            return {"ok": False, "status": "unavailable", "note": "Robot not connected."}
+        keep_going = executor([("find", text)])
+        task_ok = keep_going and bool(getattr(executor, "_last_exec_ok", True))
         agent = _agent_from_context(context)
         plan_line = format_last_nav_plan_summary(agent)
         outcome = (getattr(agent, "_last_nav_plan", None) or {}).get("outcome") if agent else None
-        head = format_nav_outcome_head(outcome, ok=ok, verb="Find")
+        head = format_nav_outcome_head(outcome, ok=task_ok, verb="Find")
         parts = [head]
         if text:
             parts.append(f"Query={text!r}.")
@@ -1069,7 +1070,12 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
                 "Do not immediately re-call find_objects; ask the user or use "
                 "navigation_diagnostics / send_map_snapshot / scan_environment first."
             )
-        return " ".join(parts)
+        return {
+            "ok": task_ok,
+            "status": outcome or ("ok" if task_ok else "failed"),
+            "note": " ".join(parts),
+            "navigation": navigation_feedback(agent),
+        }
 
     tools.append(
         Tool(
@@ -1086,7 +1092,6 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
                 "required": ["text"],
             },
             func=find_objects,
-            executor_commands=lambda args: [("find", args.get("text", ""))],
             returns_info=True,
         )
     )

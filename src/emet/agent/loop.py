@@ -281,6 +281,7 @@ def _dispatch_tool_calls(
             cmd_names = [c[0] for c in cmds]
             summary = f"Executor ran: {', '.join(cmd_names)} -> {'ok' if task_ok else 'failed'}"
             results.append(summary)
+            has_info = has_info or tool.returns_info
             if verbose_tools:
                 print(colored("[executor summary]", "magenta"), summary, flush=True)
             # Record pick/place outcomes into the attempt ledger when available.

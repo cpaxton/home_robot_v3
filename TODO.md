@@ -5,10 +5,13 @@
       follow-up both fail localization; preserve failures and separate loop
       completion from task success. Report and evidence paths:
       `docs/experiments/independent_operator_trial_20261116.md`.
-- [ ] Repair the observed CHAT FIND handoff: failed `_find` must set task failure,
+- [x] Repair the observed CHAT FIND handoff: failed `_find` must set task failure,
       executor-mapped information tools must deliver detailed receipts and permit
       model follow-up. Do not execute tools twice or equate executor liveness
-      with localization. Cover successful/failed FIND and analogous scan paths.
+      with localization. Successful/failed FIND now reach the next production
+      CHAT/HTTP request with detailed navigation feedback and execute once;
+      mapped information tools honor returns_info. The 95-test focused pack,
+      including existing scan checks, passes. Live task success remains unproven.
 - [ ] Qualify rby1/Galaxea-proxy measured gaze in the real simulation bridge:
       three distinct head requests stayed measured `[0,0]`. Trace actual physics
       controls, measured joints and camera pose before changing recovery policy.
