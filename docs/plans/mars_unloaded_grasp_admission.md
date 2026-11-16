@@ -1,8 +1,14 @@
 # Unloaded grasp-pose boundary and teacher admission
 
+This is the completed experiment's predeclared protocol. The boundary is now
+implemented; its [readout](../experiments/mars_unloaded_grasp_admission_20261116.md)
+has closed admission. Continue from the unloaded-prefix planning milestone in
+[Active work](../rl/ACTIVE_WORK.md), rather than implementing this boundary
+again or automatically rerunning the same failed population.
+
 Continue the [WBC plan](mars_wbc_next_steps.md) after
 [the task-stage diagnosis](../experiments/mars_task_arrival_20261115.md).
-The primitive environment currently stops at pregrasp. Extend it with an
+The primitive environment originally stopped at pregrasp. The extension adds an
 explicit `primitive="grasp_pose"` option that executes the real public-tool
 approach, pregrasp and grasp pose, unwinding the executor **before closure**.
 Default `pregrasp` behavior and all original tolerances remain unchanged.

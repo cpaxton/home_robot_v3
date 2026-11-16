@@ -106,6 +106,10 @@ merges, measured policy improvement and hardware readiness are separate decision
       exactly reproduces earlier C1 metrics, rollout hashes and final weights.
       [Complete report](docs/experiments/mars_reference_base_exploration_20261115.md).
       Keep default scale 1.0 and the retained production source; no promotion.
+- [x] **Consolidate controller threads and development.** Use the single
+      [active-work index](docs/rl/ACTIVE_WORK.md), canonical controller thread
+      and linear #239 → #240 → #241 stack. Preserve archived handoffs and old
+      evidence. No PPO or hardware launch is implied by consolidation.
 - [ ] **Resolve remaining coordination and quiet-hold failures.** Use the
       [ordered next-steps plan](docs/plans/mars_wbc_next_steps.md): isolate the
       low-level base feedback/oscillation first, validate current-velocity
@@ -139,8 +143,8 @@ merges, measured policy improvement and hardware readiness are separate decision
       now completes grasp pose and executor closure; lift planning rejects
       insufficient support reserve. Keep the original precision failures and
       all [twelve task diagnostics](docs/experiments/mars_task_arrival_20261115.md).
-- [ ] **Train actual grasp-pose and fixed-world-hand/base motion.** Extend the
-      pregrasp-only primitive boundary, obtain fresh stage-specific teacher
+- [ ] **Train actual grasp-pose and fixed-world-hand/base motion.** Resolve
+      unloaded-prefix planning admission, obtain fresh stage-specific teacher
       admission, and mix these reachable references with general tracking.
       The isolated [unloaded-grasp extension](docs/plans/mars_unloaded_grasp_admission.md)
       adds an explicit pre-closure boundary. The completed
