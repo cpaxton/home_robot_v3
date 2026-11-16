@@ -45,9 +45,14 @@ Strike through or move to a PR when done.
       tasks and 10/10 transfers. Preserve #234's failed swap and historical native
       4/8 / Caliban 3/4. These are separate development cohorts. Evidence:
       [base approach results](docs/experiments/tamp_native_base_approach_20261116.md).
-- [ ] Review and merge the opt-in stack in dependency order (#226, #231, #234,
-      #242, #243); repeat integration checks after retargeting. Observed task execution, exploration,
-      household native adapters and hardware remain separate gates.
+- [x] Complete independent reviews and integration gates for the opt-in stack
+      (#226, #231, #234, #242, #243, #244), landing in dependency order. Observed
+      task execution, exploration, household adapters and hardware remain separate gates.
+      [Current merge/review plan](docs/plans/2026-11-16_tamp_recovery_dialogue.md#review-and-merge-status-november-16):
+      first five foundations are merged; #244 completes the reviewed dialogue
+      layer. Updated-main checks pass, including shifted native/agent swaps and
+      the actual-agent partial stop/contextual retry pair. Review agents find no
+      production blocker; historical populations and failed attempts remain separate.
 - [x] Freeze new untouched layouts and native scripted recovery trials on
       `feat/tamp-prospective-evaluation`: 4/4 new native tasks and 4/4 actual-agent
       tasks, 10/10 transfers each; 2/2 scripted recovery tasks, 5/5 boundary checks;
@@ -57,10 +62,22 @@ Strike through or move to a PR when done.
       fresh one-transfer recovery. Preserve the initial discovery-filter failure.
       Review: [PR #243](https://github.com/cpaxton/home_robot_v3/pull/243).
       [Feedback/recovery results](docs/experiments/tamp_partial_agent_20261116.md).
+- [x] Finish bounded contextual recovery on `feat/tamp-recovery-dialogue`:
+      [PR #244](https://github.com/cpaxton/home_robot_v3/pull/244), integrated with landed #243.
+      [plan and Agentic GenTAMP baseline implications](docs/plans/2026-11-16_tamp_recovery_dialogue.md).
+      Freeze source, test a short retry through the actual CLI and repeat stop-only;
+      retain fresh discovery, consumed-plan and physical-effect checks.
+      Corrected source `ebbdb1d9`: stop-only passes; short retry completes only the
+      remaining transfer and both original goals hold; 485 tests pass. Preserve
+      the first invented-handle failure. [Results](docs/experiments/tamp_contextual_recovery_20261116.md).
+      Final updated-main replay: 230 integration tests pass; stop-only and short
+      contextual retry both pass their distinct gates, with 794 audited commands
+      and none forbidden. [Integration record](docs/experiments/pr244_main_integration_20261116.md).
 - [ ] Qualify observed task admission and exploration. The completed recovery
       fault is injected planning admission, not grasp loss, unknown dispatch or
-      held-object recovery. A bare "retry" dialogue and broad reliability remain
-      untested; the model also makes extra read-only checks after completion.
+      held-object recovery. Short retry now passes one familiar diagnostic;
+      broad reliability remains unqualified. The prior restated-goal trial also
+      makes extra read-only checks after completion.
 
 ## Shared evidence/navigation stack (#199 / #202)
 

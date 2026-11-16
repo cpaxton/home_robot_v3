@@ -18,6 +18,7 @@ from pathlib import Path
 import mujoco
 from eval_tamp_contact_stability import prepare_fixture
 
+from emet.agent.tool_outcome import ToolOutcome
 from emet.eval.native_chat_scoring import failure_boundaries
 from emet.eval.native_table_live import live_table_robot
 from emet.eval.native_table_scoring import goal_predicates
@@ -79,6 +80,47 @@ def validate_partial(receipt, predicates, objects):
         and all(p['supported'] and p['settled'] for p in predicates.values()))
 
 
+def recovery_request(case, style):
+    if style == 'contextual':
+        return 'Please retry the remaining work.'
+    return ('New request: inspect the current scene, rediscover and make a fresh task plan '
+        'for these original goals. Complete only remaining work admitted by fresh observations. '
+        'Do not reuse a consumed handle; stop again on failure. Final goals: '+case['instruction'])
+
+
+def recovery_trace(rows):
+    """Require fresh one-step admission in the separately authorized user turn."""
+    users = [i for i, row in enumerate(rows) if row.get('role') == 'user']
+    if len(users) != 2:
+        return {'verified': False, 'reason': 'expected_two_user_turns'}
+    previous_refs = set()
+    tools = []
+    for i, row in enumerate(rows):
+        if row.get('role') != 'tool':
+            continue
+        prefix, sep, body = row.get('content', '').partition('] ')
+        name = prefix.removeprefix('[')
+        if not sep:
+            continue
+        outcome = ToolOutcome.coerce(name, body)
+        if i < users[1] and name == 'plan_task':
+            previous_refs.add(outcome.payload.get('data', {}).get('plan_ref'))
+        if i > users[1]:
+            tools.append((name, outcome))
+    names = [name for name, _ in tools]
+    verified = (names[:3] == ['scene_tasks', 'plan_task', 'execute_task_plan']
+                and names.count('execute_task_plan') == 1
+                and all(name in {'scene_tasks', 'plan_task', 'execute_task_plan'} and outcome.ok
+                        for name, outcome in tools))
+    if verified:
+        plan = tools[1][1].payload['data']
+        executed = tools[2][1].payload['data']
+        verified = bool(plan.get('plan_ref') and plan['plan_ref'] not in previous_refs
+            and plan.get('steps') == 1 and executed.get('completed_steps') == 1
+            and executed.get('goal_verified') is True)
+    return {'verified': verified, 'tools': names}
+
+
 def run(args, out, result):
     batch = json.loads(args.case_file.read_text())
     case, = [c for c in batch['cases'] if c['case_id'] == args.case_id]
@@ -105,7 +147,7 @@ def run(args, out, result):
     source = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=REPO, text=True).strip()
     write(out/'protocol.json', {'source_sha': source,
         'source_dirty': bool(subprocess.check_output(['git', 'status', '--porcelain'], cwd=REPO, text=True)),
-        'case': case, 'recover': args.recover, 'cli': cli,
+        'case': case, 'recover': args.recover, 'recovery_style': args.recovery_style, 'cli': cli,
         'case_file_sha256': hashlib.sha256(args.case_file.read_bytes()).hexdigest(),
         'scope': __doc__, 'fault': 'One evaluator-only no-command admission refusal after a completed transfer',
         'recovery_authorization': 'New stdin user turn only after verified expected partial, forced feedback and quiet audit'})
@@ -135,9 +177,8 @@ def run(args, out, result):
                 if not (valid and quiet and stopped and len(faults) == 1 and faults[0]['no_commands']):
                     raise RuntimeError('partial_boundary_not_verified_no_recovery_authorized')
                 if args.recover:
-                    request = ('New request: inspect the current scene, rediscover and make a fresh task plan '
-                        'for these original goals. Complete only remaining work admitted by fresh observations. '
-                        'Do not reuse a consumed handle; stop again on failure. Final goals: '+case['instruction'])
+                    request = recovery_request(case, args.recovery_style)
+                    result['recovery_user_request'] = request
                     proc.stdin.write(request+'\n')
                     proc.stdin.flush()
                     # EOF after the request lets the real input loop finish naturally.
@@ -155,11 +196,13 @@ def run(args, out, result):
         final_goals = goal_predicates(robot, goals)
         boundaries = failure_boundaries(rows)
         audit = [json.loads(l) for l in (out/'actuation.jsonl').read_text().splitlines()]
-        recovered = bool(args.recover and stable and completions
+        recovery = recovery_trace(rows) if args.recover else None
+        recovered = bool(args.recover and recovery['verified'] and stable and completions
                          and completions[-1]['data']['completed_steps'] == 1)
         result.update(cli_exit_code=rc, task_completed=recovered,
             execution_receipts=receipts, final_predicates=final_goals,
             user_turns=sum(r['role'] == 'user' for r in rows), failure_boundaries=boundaries,
+            recovery_trace=recovery,
             llm_calls=sum(r.get('role') == 'assistant' and 'time_s' in r for r in rows),
             audit_commands=len(audit), forbidden_commands=sum(bool(r.get('forbidden')) for r in audit),
             shutdown_warnings=(out/'agent.log').read_text().count('Control handoff not confirmed'),
@@ -178,7 +221,11 @@ def main():
     parser.add_argument('--base-url', required=True)
     parser.add_argument('--remote-model', required=True)
     parser.add_argument('--recover', action='store_true')
+    parser.add_argument('--recovery-style', choices=('restated', 'contextual'), default='restated',
+                        help='Restate goals or test a short retry relying on bounded historical context')
     args = parser.parse_args()
+    if args.recovery_style != 'restated' and not args.recover:
+        parser.error('--recovery-style contextual requires --recover')
     args.output = args.output.resolve()
     if args.output.exists():
         parser.error('--output must be new')

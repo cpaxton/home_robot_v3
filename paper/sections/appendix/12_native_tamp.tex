@@ -455,5 +455,24 @@ Verbatim feedback, both source histories and hashes are in
 \path{docs/experiments/tamp_partial_agent_20261116.json}. Model-text accuracy is
 manually reviewed against the receipt and independent physical goals. The fault
 represents injected planning admission, not actual solver exhaustion, contact
-loss or sensor failure. Recovery from a bare ``retry'' without restated goals,
-unknown outcomes, held objects, observed inputs and hardware remains unqualified.
+loss or sensor failure. Those trials do not test a short retry without restated
+goals. Unknown outcomes, held objects, observed inputs and hardware remain
+unqualified.
+
+\paragraph{Contextual retry diagnostic.}
+A separate familiar-layout pair tests a new user turn saying only ``Please retry
+the remaining work.'' At \texttt{0e4e3959}, bounded historical task context
+preserves the goals, but the agent bundles discovery, planning and execution with
+an invented handle. Execution rejects it without moving the cube; this failure
+is retained. The correction serializes all-TAMP proposals around actual tool
+results and explicitly requires returned handles. At \texttt{ebbdb1d9}, stop-only
+correctly leaves the task incomplete, while contextual recovery uses fresh
+discovery, a new one-step beam plan and its returned handle to complete only the
+cube transfer. Independent checks verify both original goals with supported,
+settled objects. The corrected pair uses 12 remote model calls and 799 audited
+commands, with zero forbidden commands or shutdown warnings; all 485 affected
+tests pass without errors or skips. These are two-object development diagnostics,
+not held-out generalization or physical-failure recovery. The corrected live
+agent uses one call per round; repeated bundled proposals are covered separately
+by real-loop mocked tests. Both frozen histories, exact feedback and artifact
+hashes are in \path{docs/experiments/tamp_contextual_recovery_20261116.json}.

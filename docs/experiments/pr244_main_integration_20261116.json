@@ -1,0 +1,173 @@
+{
+  "schema_version": 1,
+  "pr": 244,
+  "scope": "Final updated-main privileged simulated Stretch actual-agent partial-feedback/contextual-retry integration, not a reliability benchmark",
+  "source_sha": "a7ee2ab4c6a649bfa879a1333d3656d27445cfa2",
+  "source_dirty": false,
+  "parent_main": "6d0750bdae217f561f248796b85244c71fc23e1b",
+  "resulting_main_integration": "40b0b6f0e46ff5e9e66149c7229d216de26f7677",
+  "runtime_scripts_configs_paper_unchanged_after_parent_squash": true,
+  "independent_review": "review_pr244: no production blocker;55focused tests pass; stale-ledger nit resolved",
+  "tests": {
+    "tests": "230",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0",
+    "time": "68.648"
+  },
+  "injected_fault": "One evaluator-only no-command admission refusal after a real verified transfer; not natural budget exhaustion",
+  "stop": {
+    "job": "20261116_123930_598901",
+    "passed": true,
+    "task_completed": false,
+    "partial_receipt": {
+      "schema_version": 1,
+      "tool": "execute_task_plan",
+      "status": "partial",
+      "code": "task_motion_budget_exhausted",
+      "message": "task motion budget exhausted",
+      "data": {
+        "execution_started": true,
+        "completed_steps": 1,
+        "planned_steps": 2,
+        "failed_step_1based": 2,
+        "failed_phase": "preflight",
+        "failed_step_execution_started": false,
+        "plan_consumed": true,
+        "goal_verified": false,
+        "completed_actions": [
+          {
+            "step_1based": 1,
+            "action": "transfer",
+            "object_name": "red cylinder",
+            "from_region": "cube goal",
+            "to_region": "cylinder goal"
+          }
+        ],
+        "failed_action": {
+          "step_1based": 2,
+          "action": "transfer",
+          "object_name": "blue cube",
+          "from_region": "outside",
+          "to_region": "cube goal"
+        },
+        "unverified_actions": [
+          {
+            "step_1based": 2,
+            "action": "transfer",
+            "object_name": "blue cube",
+            "from_region": "outside",
+            "to_region": "cube goal"
+          }
+        ]
+      },
+      "recovery": "inspect"
+    },
+    "audit_commands": 285,
+    "forbidden_commands": 0,
+    "llm_calls": 4,
+    "cli_exit_code": 0,
+    "shutdown_warnings": 0,
+    "failure_boundaries": [
+      {
+        "tool": "execute_task_plan",
+        "code": "task_motion_budget_exhausted",
+        "unexpected_tools": [],
+        "boundary_kind": "failure"
+      }
+    ]
+  },
+  "retry": {
+    "job": "20261116_123930_4f28d0",
+    "passed": true,
+    "task_completed": true,
+    "recovery_trace": {
+      "verified": true,
+      "tools": [
+        "scene_tasks",
+        "plan_task",
+        "execute_task_plan"
+      ]
+    },
+    "final_receipt": {
+      "schema_version": 1,
+      "tool": "execute_task_plan",
+      "status": "ok",
+      "code": "ok",
+      "message": "ok",
+      "data": {
+        "execution_started": true,
+        "completed_steps": 1,
+        "goal_verified": true,
+        "plan_consumed": true,
+        "completed_actions": [
+          {
+            "step_1based": 1,
+            "action": "transfer",
+            "object_name": "blue cube",
+            "from_region": "outside",
+            "to_region": "cube goal"
+          }
+        ],
+        "unverified_actions": []
+      },
+      "recovery": "none"
+    },
+    "all_final_goals_satisfied": true,
+    "audit_commands": 509,
+    "forbidden_commands": 0,
+    "llm_calls": 8,
+    "cli_exit_code": 0,
+    "shutdown_warnings": 0,
+    "failure_boundaries": [
+      {
+        "tool": "execute_task_plan",
+        "code": "task_motion_budget_exhausted",
+        "unexpected_tools": [],
+        "boundary_kind": "failure"
+      }
+    ]
+  },
+  "historical_results_unchanged": true,
+  "hardware_claim": false,
+  "observed_execution_claim": false,
+  "contact_or_unknown_outcome_recovery_claim": false,
+  "artifacts": [
+    {
+      "path": ".tamp-runs/native-stack-20261116/pr244/regression.xml",
+      "sha256": "78d441683bf5bc89d1aa7dd44e102d6d5d8c1aa8dced1f14f0362b2891db1551"
+    },
+    {
+      "path": ".tamp-runs/native-stack-20261116/pr244/stop/protocol.json",
+      "sha256": "378e09dd1feee30259ff0e940a0ed867779e69eb1973e4685bbb4a787d9f40c6"
+    },
+    {
+      "path": ".tamp-runs/native-stack-20261116/pr244/stop/summary.json",
+      "sha256": "1d533a9340f73d9ea506bbcd19d557b58ef2ba8c5f28bf18354695741c12a254"
+    },
+    {
+      "path": ".tamp-runs/native-stack-20261116/pr244/stop/actuation.jsonl",
+      "sha256": "84bdaa29e4efc573cfa14b60846b31a4ae6a1668095c3d4d37e7d8ad7b8dfa77"
+    },
+    {
+      "path": ".tamp-runs/native-stack-20261116/pr244/stop/fault.json",
+      "sha256": "a08166ea927919ba7c653ef1bdeeb2ed30941a6888f7df1e1c7c6313b4c5b443"
+    },
+    {
+      "path": ".tamp-runs/native-stack-20261116/pr244/retry/protocol.json",
+      "sha256": "d650bf7d6434a9c54d0a18fb7f03aed40e868d5d7b99ef58a966f7495e6b5f61"
+    },
+    {
+      "path": ".tamp-runs/native-stack-20261116/pr244/retry/summary.json",
+      "sha256": "def362d07863b8c56f60049a31bda9d360b67d5bdae1030cd9d00723c21b0493"
+    },
+    {
+      "path": ".tamp-runs/native-stack-20261116/pr244/retry/actuation.jsonl",
+      "sha256": "ab3b2597c583db3df66829f871f21476bc50993ca16075f212c5d0d95aa00282"
+    },
+    {
+      "path": ".tamp-runs/native-stack-20261116/pr244/retry/fault.json",
+      "sha256": "a08166ea927919ba7c653ef1bdeeb2ed30941a6888f7df1e1c7c6313b4c5b443"
+    }
+  ]
+}

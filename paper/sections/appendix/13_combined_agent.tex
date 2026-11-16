@@ -34,8 +34,8 @@ Primitive TAMP & \texttt{scene\_tasks}, \texttt{plan\_pick\_place},
 \texttt{execute\_pick\_place\_plan}, \texttt{pick\_place};
 input provenance and execution mode are checked independently. \\
 Multi-step TAMP & \texttt{plan\_task}, \texttt{execute\_task\_plan};
-exposed only with a bound provider, currently a privileged stationary Stretch
-transfer provider for the native diagnostics. \\
+exposed only with a bound provider, currently a privileged Stretch table-transfer
+provider with opt-in checked unloaded base approaches for native diagnostics. \\
 Articulation & \texttt{set\_receptacle\_state}; simulator-assisted joint setting,
 rejected by native physical execution. \\
 \bottomrule
@@ -69,6 +69,16 @@ malformed, uncertain and discovery-only outcomes stop further dispatch for that
 user turn. A new user turn permits inspection/replanning, not silent reuse of a
 consumed handle. The task prompt requests one tool call per round; the dispatcher
 also enforces stop boundaries within a precomputed batch.
+
+Across consecutive TAMP user turns, CHAT retains at most two text-only records
+of prior requests and public outcome summaries, without executable plan handles
+or images. Each record is limited to 8192 characters and dropped whole if too
+large; a non-TAMP turn clears the history. These are historical referents, not
+current scene evidence or renewed permission. New requests must authorize
+recovery and use fresh discovery/planning. For an all-TAMP batch, CHAT dispatches
+only the first proposal, logs later proposals as deferred and returns the actual
+result to the model; deferred proposals are not queued. Mixed capability batches
+retain their existing stop rules.
 
 \paragraph{Budget and inference conditions.}
 CHAT defaults to three tool rounds and exposes a range of 1--32; the native
