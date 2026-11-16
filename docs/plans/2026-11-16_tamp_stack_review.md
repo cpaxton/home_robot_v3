@@ -81,8 +81,8 @@ not a substitute for the recorded native and future observed execution gates.
 - Focused final review contracts: 163 passed; subsequent explicit-protocol and
   affected release/observed adapter checks: 92 passed, zero failures/errors/skips.
   These suites overlap. The full task/CHAT/VLM run initially had one outdated
-  protocol fixture (416/417 passed); the updated full rerun is
-  `20261116_162250_915b21`. Do not call that rerun passed before reading its XML.
+  protocol fixture (416/417 passed); the updated full rerun passes all 417 tests,
+  zero failures/errors/skips (`20261116_162250_915b21`).
 - Corrected live controls: bounded-release two-goal control passes both
   transfers (482 audited commands); bounded-approach shifted swap passes all
   three transfers (787 commands, one completed base approach). Zero forbidden
@@ -97,6 +97,20 @@ not a substitute for the recorded native and future observed execution gates.
 - Independent review agents inspected code without editing or running the live
   jobs. Their final raise-bound, numeric-input and height-chain findings have
   regression tests. Their reviews are not human approvals.
+- Actual `run agent` with remote Caliban on clean `5a891c59` passes the contextual
+  recovery diagnostic: named one-action progress, second-step preflight refusal
+  with no failed-step command, stopped before a separate retry request, then
+  fresh discovery/new one-step plan/one remaining transfer. Both original goals
+  satisfy independent physical scoring. Eight model calls, 514 audited commands,
+  zero forbidden commands or shutdown warnings; clean exit. The refusal is an
+  evaluator injection, not actual solver/contact-loss recovery.
+- Observed-branch integration of this correction passes 390 affected checks at
+  `abf609b0`; full observed transfer remains unqualified.
+
+[Compact evidence record](../experiments/tamp_stack_review_20261116.json).
+Native runners began before the runtime commit was made; all 17 frozen source
+hashes in each corrected control match `5a891c59`. The actual-agent run used that
+clean commit. Source, attempt and cohort distinctions remain explicit.
 
 Disk cleanup is separate from task metrics: prune regenerable package caches,
 then remove only the SHA-256-identical duplicate CUDA installer (`.run.1`),
