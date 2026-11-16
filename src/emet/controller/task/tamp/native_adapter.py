@@ -368,7 +368,8 @@ class NativeTableAdapter:
                             return response('plan_pick_place', data=self._data(
                                 **identity, plan_ref=ref, execution_scope=execution_scope,
                                 full_task_admitted=False,
-                                planned_ops=['pregrasp'] if execution_scope == "pregrasp" else ['pregrasp', 'grasp_pose'],
+                                planned_ops=[execution_scope],
+                                planned_stages=['pregrasp'] if execution_scope == "pregrasp" else ['pregrasp', 'grasp'],
                                 completed_ops=[], failed_stage=None, measurements=[],
                                 planning_rejections=dict(self.planning_rejections),
                                 planning_ik_calls=self.planning_ik_calls, max_ik_calls=self.max_planning_ik_calls,

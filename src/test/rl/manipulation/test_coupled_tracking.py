@@ -177,3 +177,19 @@ def test_existing_ppo_can_collect_and_update_from_coupled_observations(robot):
             assert not torch.equal(model.actor.gain.weight, before)
     finally:
         env.close()
+
+
+def test_teacher_cli_summary_serializes_numpy_predicates():
+    from emet.rl.manipulation.coupled_evaluation import readout_summary
+
+    report = {
+        "cases": [{"accepted": np.bool_(True), "teacher": {"tracking_success": np.bool_(True)}}, {"accepted": False}],
+        "ready_for_training": np.bool_(False),
+    }
+    summary = readout_summary(report)
+    assert json.loads(json.dumps(summary)) == {
+        "cases": 2,
+        "admitted": 1,
+        "teacher_successes": 1,
+        "ready_for_training": False,
+    }

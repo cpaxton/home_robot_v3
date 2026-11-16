@@ -66,7 +66,7 @@ def teacher_episode(env, case):
         and abs(base_delta[2]) <= e.config.base_heading_tolerance
     )
     return {
-        "tracking_success": bool(info.get("is_success")) and pose_ok,
+        "tracking_success": bool(info.get("is_success") and pose_ok),
         "post_stop_pose_in_contract": bool(pose_ok),
         "code": info.get("code"),
         "control_ticks": ticks,
@@ -125,6 +125,18 @@ def plot_report(report, output):
     figure.tight_layout()
     figure.savefig(output)
     plt.close(figure)
+
+
+def readout_summary(report):
+    """CLI summaries must serialize even if a physics predicate is a NumPy bool."""
+    return {
+        "cases": len(report["cases"]),
+        "admitted": int(sum(bool(r["accepted"]) for r in report["cases"])),
+        "teacher_successes": int(
+            sum(bool(r.get("teacher", {}).get("tracking_success", False)) for r in report["cases"])
+        ),
+        "ready_for_training": bool(report["ready_for_training"]),
+    }
 
 
 def export_distribution(robot, output, *, suite_path, teacher=False):
@@ -189,15 +201,5 @@ def export_distribution(robot, output, *, suite_path, teacher=False):
     )
     (output / "references.json").write_text(json.dumps(report, indent=2, default=json_value, allow_nan=False) + "\n")
     plot_report(report, output / "references.svg")
-    print(
-        json.dumps(
-            {
-                "cases": len(report["cases"]),
-                "admitted": sum(r["accepted"] for r in report["cases"]),
-                "teacher_successes": sum(r.get("teacher", {}).get("tracking_success", False) for r in report["cases"]),
-                "ready_for_training": report["ready_for_training"],
-            }
-        ),
-        flush=True,
-    )
+    print(json.dumps(readout_summary(report)), flush=True)
     return report
