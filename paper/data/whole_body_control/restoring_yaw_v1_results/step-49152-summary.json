@@ -1,0 +1,40 @@
+{
+  "complete": true,
+  "controller": "fc9f617310cda8b1bcf0468039fb4ed528530d874eed32d7203ddd44d26c1adc",
+  "population": "canonical",
+  "groups": {
+    "base/train": {
+      "cases": 5,
+      "admitted": 5,
+      "mastered": 2,
+      "tracking_and_settling_passed": 5,
+      "smoothness_passed": 2,
+      "failure_reasons": {
+        "smoothness/base_linear_jerk": 2,
+        "smoothness/joint_jerk": 2
+      },
+      "codes": {
+        "ok": 5
+      },
+      "all_pass": false
+    },
+    "base/validation": {
+      "cases": 5,
+      "admitted": 5,
+      "mastered": 2,
+      "tracking_and_settling_passed": 5,
+      "smoothness_passed": 2,
+      "failure_reasons": {
+        "smoothness/base_linear_jerk": 1,
+        "smoothness/base_yaw_jerk": 1,
+        "smoothness/joint_jerk": 1
+      },
+      "codes": {
+        "ok": 5
+      },
+      "all_pass": false
+    }
+  },
+  "all_pass": false,
+  "safety_promoted": false
+}

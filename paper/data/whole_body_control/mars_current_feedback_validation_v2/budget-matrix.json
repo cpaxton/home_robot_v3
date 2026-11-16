@@ -1,0 +1,2466 @@
+{
+  "archived_anchor_sha256": "47e01923eb5003cb1ab721d78594e025ac954c427b5f3a6ce78b1c7f835360f8",
+  "current_teacher_sha256": "3d18981ea2ea7a1e0a03394700165b832de46d02e9e7fd59b78acd1de5c8c27f",
+  "cases": [
+    {
+      "id": "train:base:hold",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.11992753998241473,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:base:forward",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 1.5555504690525161,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.4642730695648258
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 1.7609692978026752,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:base:reverse",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 1.8028771136018946,
+        "base_yaw_jerk": 1.1147586914480256,
+        "joint_jerk": 1.0
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 1.7671489402451073,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:base:yaw_left",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.5638151267881052,
+        "base_yaw_jerk": 7.025368196731662,
+        "joint_jerk": 1.0
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.6662786109589107,
+        "base_yaw_jerk": 2.4462235573771003,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:base:yaw_right",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 1.018755285371591,
+        "base_yaw_jerk": 7.124274734583713,
+        "joint_jerk": 1.0
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.6639240671980526,
+        "base_yaw_jerk": 2.949260243938351,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:pitch_up",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.25160846406494525,
+        "base_yaw_jerk": 0.6159266217468538,
+        "joint_jerk": 5.965099003636089
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:pitch_down",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.21533230116084298,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 4.510661868797503
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:roll_left",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.2006833807681151,
+        "base_yaw_jerk": 0.6097087979912768,
+        "joint_jerk": 6.033060846333153
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:roll_right",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.18706159161522246,
+        "base_yaw_jerk": 0.7105003033815906,
+        "joint_jerk": 5.707958294336426
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:coupled:forward_turn",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 2.1869642668423523,
+        "base_yaw_jerk": 3.432049216960789,
+        "joint_jerk": 7.918453720837
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 2.462315667899389,
+        "base_yaw_jerk": 6.259480224274823,
+        "joint_jerk": 6.25186874812502
+      }
+    },
+    {
+      "id": "train:coupled:reverse_turn",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 3.963520767908743,
+        "base_yaw_jerk": 14.352267219292935,
+        "joint_jerk": 9.371209541514455
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 3.654279191091539,
+        "base_yaw_jerk": 8.986151962329641,
+        "joint_jerk": 7.62878620958233
+      }
+    },
+    {
+      "id": "validation:base:hold",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.11662615106196551,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "validation:base:forward",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 2.352439009641179,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.3488898380872336
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 1.9295313872268396,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "validation:base:reverse",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 1.6515228716295947,
+        "base_yaw_jerk": 1.4485965940975334,
+        "joint_jerk": 1.0
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 1.9308711616773209,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "validation:base:yaw_left",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 1.0007583564290736,
+        "base_yaw_jerk": 7.800847047530757,
+        "joint_jerk": 1.0
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.6659623670024608,
+        "base_yaw_jerk": 6.827637455395566,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "validation:base:yaw_right",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 1.311698527296892,
+        "base_yaw_jerk": 8.60711669128482,
+        "joint_jerk": 1.0
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.6561660963755434,
+        "base_yaw_jerk": 8.282110964807561,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "validation:arm:pitch_up",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.27451888717960393,
+        "base_yaw_jerk": 0.6355467028874546,
+        "joint_jerk": 5.533068689002775
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "validation:arm:pitch_down",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.27862112108388276,
+        "base_yaw_jerk": 0.6945975126036685,
+        "joint_jerk": 5.905004041163825
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "validation:arm:roll_left",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.17349457995802808,
+        "base_yaw_jerk": 0.7722651523332964,
+        "joint_jerk": 6.014096285452808
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "validation:arm:roll_right",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.11339232541585703,
+        "base_yaw_jerk": 0.5909509803530286,
+        "joint_jerk": 4.6828668662005954
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "validation:coupled:forward_turn",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 2.5881810658381452,
+        "base_yaw_jerk": 4.136613785376795,
+        "joint_jerk": 9.422913671244327
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 2.8535986913118814,
+        "base_yaw_jerk": 3.9256967818828907,
+        "joint_jerk": 7.04688053941447
+      }
+    },
+    {
+      "id": "validation:coupled:reverse_turn",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 3.059471141391677,
+        "base_yaw_jerk": 8.808545488362753,
+        "joint_jerk": 10.452360770952215
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 3.166039680622215,
+        "base_yaw_jerk": 9.025591501933338,
+        "joint_jerk": 7.027114050350799
+      }
+    },
+    {
+      "id": "train:arm:shoulder_left",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.25211787175194394,
+        "base_yaw_jerk": 0.792393411625401,
+        "joint_jerk": 5.534685449953956
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:shoulder_right",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.2927836079659675,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 5.707617693149606
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:elbow_up",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.30948657865041035,
+        "base_yaw_jerk": 0.6354491207556265,
+        "joint_jerk": 6.278070798537735
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:elbow_down",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.21079663661926554,
+        "base_yaw_jerk": 0.7102486211621244,
+        "joint_jerk": 5.780288587334828
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:wrist_up",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.25150057322186964,
+        "base_yaw_jerk": 0.6632293959923148,
+        "joint_jerk": 5.858143204967475
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:wrist_down",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.2074370790860999,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 5.109880043492763
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:translate_down",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.277959990314682,
+        "base_yaw_jerk": 0.6419638737923966,
+        "joint_jerk": 5.760784134971341
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:translate_up",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.6206145653183388,
+        "base_yaw_jerk": 0.7065233294881222,
+        "joint_jerk": 7.164729532662259
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:near_straight_A_translate_up",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.3251312993879535,
+        "base_yaw_jerk": 0.6596299238048218,
+        "joint_jerk": 6.038658774383604
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:near_straight_A_translate_down",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.2846614143167307,
+        "base_yaw_jerk": 0.6819628849684747,
+        "joint_jerk": 6.163171474795596
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:near_straight_A_roll",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.2322371190227611,
+        "base_yaw_jerk": 0.6301959233957505,
+        "joint_jerk": 6.010420566122049
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:near_straight_A_shoulder",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.22355072024414163,
+        "base_yaw_jerk": 1.0169410303141222,
+        "joint_jerk": 5.786712098217427
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:near_straight_B_translate_up",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.24363764060900492,
+        "base_yaw_jerk": 0.6548647076277643,
+        "joint_jerk": 5.525177090844233
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:near_straight_B_translate_down",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.46481611975226717,
+        "base_yaw_jerk": 0.8081618017188221,
+        "joint_jerk": 7.679511696982869
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:near_straight_B_roll",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.19687004794648813,
+        "base_yaw_jerk": 0.6356675553614073,
+        "joint_jerk": 5.735578134512002
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:near_straight_B_shoulder",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.3104252795214108,
+        "base_yaw_jerk": 0.5896163322135117,
+        "joint_jerk": 5.63233281000578
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:tamp_translation_A_elbow_translate_positive",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.47612945745226276,
+        "base_yaw_jerk": 0.603868922611603,
+        "joint_jerk": 6.165344105379457
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:tamp_translation_A_elbow_translate_negative",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.9217577574133929,
+        "base_yaw_jerk": 0.6649258834251991,
+        "joint_jerk": 10.300494772649104
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:tamp_translation_A_shoulder_translate_positive",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.36610368497698387,
+        "base_yaw_jerk": 0.6953007458426488,
+        "joint_jerk": 10.69889965974811
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:tamp_translation_A_shoulder_translate_negative",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.5043769126353924,
+        "base_yaw_jerk": 0.7958937625549477,
+        "joint_jerk": 8.568434825654942
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:tamp_translation_B_elbow_translate_positive",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 1.0100733623261424,
+        "base_yaw_jerk": 0.6693113946071305,
+        "joint_jerk": 7.567656731674046
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:tamp_translation_B_elbow_translate_negative",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.43264954025063684,
+        "base_yaw_jerk": 0.7309806427235042,
+        "joint_jerk": 8.71825601155289
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:tamp_translation_B_shoulder_translate_positive",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.5953503132501284,
+        "base_yaw_jerk": 0.6030197114219142,
+        "joint_jerk": 8.35174158948955
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:tamp_translation_B_shoulder_translate_negative",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.3198162249153459,
+        "base_yaw_jerk": 0.8075234982824961,
+        "joint_jerk": 7.7197706834102515
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:supported_A_down_short",
+      "archived": {
+        "peak_force_N": 2.8810770836229596,
+        "base_linear_jerk": 0.4398994471176712,
+        "base_yaw_jerk": 0.8830438854975544,
+        "joint_jerk": 8.803112116045034
+      },
+      "current": {
+        "peak_force_N": 4.166990732503444,
+        "base_linear_jerk": 0.40604539290920255,
+        "base_yaw_jerk": 0.6346464125052722,
+        "joint_jerk": 2.2648030043217378
+      }
+    },
+    {
+      "id": "train:arm:supported_A_down",
+      "archived": {
+        "peak_force_N": 3.385479358616512,
+        "base_linear_jerk": 1.059351858649889,
+        "base_yaw_jerk": 1.4930510459137936,
+        "joint_jerk": 8.976145697221291
+      },
+      "current": {
+        "peak_force_N": 4.164324977185174,
+        "base_linear_jerk": 0.36217769217644585,
+        "base_yaw_jerk": 1.9412906710131588,
+        "joint_jerk": 7.791604364299049
+      }
+    },
+    {
+      "id": "train:arm:supported_A_up",
+      "archived": {
+        "peak_force_N": 2.751202031382052,
+        "base_linear_jerk": 0.16540788673301218,
+        "base_yaw_jerk": 0.5630995610152096,
+        "joint_jerk": 5.147025804800805
+      },
+      "current": {
+        "peak_force_N": 1.460088363099902,
+        "base_linear_jerk": 0.1167961337652293,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 3.365080877760575
+      }
+    },
+    {
+      "id": "train:arm:supported_B_down_short",
+      "archived": {
+        "peak_force_N": 2.604603015424453,
+        "base_linear_jerk": 0.5548108000324937,
+        "base_yaw_jerk": 0.9517374579292801,
+        "joint_jerk": 6.189997224327656
+      },
+      "current": {
+        "peak_force_N": 3.349581260398759,
+        "base_linear_jerk": 0.31827970652228776,
+        "base_yaw_jerk": 0.6581502579846028,
+        "joint_jerk": 1.3378585013958841
+      }
+    },
+    {
+      "id": "train:arm:supported_B_down",
+      "archived": {
+        "peak_force_N": 3.8612046197100494,
+        "base_linear_jerk": 0.5564765349951526,
+        "base_yaw_jerk": 1.52197631199023,
+        "joint_jerk": 9.468482810980124
+      },
+      "current": {
+        "peak_force_N": 7.543840377789866,
+        "base_linear_jerk": 0.4092817728321552,
+        "base_yaw_jerk": 1.4428346803028438,
+        "joint_jerk": 4.8499854563819405
+      }
+    },
+    {
+      "id": "train:arm:supported_B_up",
+      "archived": {
+        "peak_force_N": 2.909840535855442,
+        "base_linear_jerk": 0.21584172284127878,
+        "base_yaw_jerk": 0.6013332692223539,
+        "joint_jerk": 6.558293688015232
+      },
+      "current": {
+        "peak_force_N": 2.593235664408314,
+        "base_linear_jerk": 0.18585545277305385,
+        "base_yaw_jerk": 0.7624373837487315,
+        "joint_jerk": 4.717335999889859
+      }
+    },
+    {
+      "id": "train:base:hold@posture:forward",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:base:hold@posture:reverse",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:base:hold@posture:yaw_left",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.10890080694273097,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.2750070952601944
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:base:hold@posture:yaw_right",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.14530688517323498,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:base:forward@posture:hold",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 2.058794340817304,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.2757209416771
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 1.759793769650394,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:base:forward@posture:reverse",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 1.9842075321241883,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.2428818334907314
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 1.7603638345606312,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:base:forward@posture:yaw_left",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 1.6362660482445468,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.2688115717836477
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 1.760119683750478,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:base:forward@posture:yaw_right",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 1.8066372168466882,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.085653486657217
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 1.7596555582038116,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:base:reverse@posture:hold",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 1.6478917856914634,
+        "base_yaw_jerk": 0.9051105823778389,
+        "joint_jerk": 1.0
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 1.7683901432151095,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:base:reverse@posture:forward",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 2.2182707521896203,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.358538798354463
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 1.7680827200012734,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:base:reverse@posture:yaw_left",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 1.8016197497139346,
+        "base_yaw_jerk": 0.9768343264240984,
+        "joint_jerk": 1.0
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 1.7689881444773945,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:base:reverse@posture:yaw_right",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 1.6974618750780144,
+        "base_yaw_jerk": 0.917800953957903,
+        "joint_jerk": 1.0076147471060797
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 1.7678867050370985,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:base:yaw_left@posture:hold",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.6143988435259782,
+        "base_yaw_jerk": 7.320150856027359,
+        "joint_jerk": 1.0
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.6647707344718574,
+        "base_yaw_jerk": 2.4715716211618637,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:base:yaw_left@posture:hold@yaw:0.02",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.6143631615662555,
+        "base_yaw_jerk": 1.4720795488457754,
+        "joint_jerk": 1.0
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.6648189825601101,
+        "base_yaw_jerk": 1.462307465812593,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:base:yaw_left@posture:hold@yaw:0.06",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.6144454444080495,
+        "base_yaw_jerk": 9.374448460311365,
+        "joint_jerk": 1.0
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.6647469646456049,
+        "base_yaw_jerk": 8.389317829414072,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:base:yaw_left@posture:forward",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.7649110945539561,
+        "base_yaw_jerk": 2.60147560441161,
+        "joint_jerk": 1.0
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.6719135808387368,
+        "base_yaw_jerk": 2.423185245594775,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:base:yaw_left@posture:forward@yaw:0.02",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.5886483857463416,
+        "base_yaw_jerk": 1.4723320062149519,
+        "joint_jerk": 1.0
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.6719632059288427,
+        "base_yaw_jerk": 1.4614635040952408,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:base:yaw_left@posture:forward@yaw:0.06",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 1.1339108087370646,
+        "base_yaw_jerk": 7.515601689440099,
+        "joint_jerk": 1.0
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.6718888050742626,
+        "base_yaw_jerk": 7.185819845270043,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:base:yaw_left@posture:reverse",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.9414408388367214,
+        "base_yaw_jerk": 6.772780788719192,
+        "joint_jerk": 1.3451303841140922
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.668220781979772,
+        "base_yaw_jerk": 2.4341117906955674,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:base:yaw_left@posture:reverse@yaw:0.02",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.8757808253491223,
+        "base_yaw_jerk": 1.4720565439698887,
+        "joint_jerk": 1.0
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.668267000818235,
+        "base_yaw_jerk": 1.462048858196091,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:base:yaw_left@posture:reverse@yaw:0.06",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.8759989152906899,
+        "base_yaw_jerk": 8.908006497937782,
+        "joint_jerk": 1.0
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.7787926609886826,
+        "base_yaw_jerk": 7.24919471494119,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:base:yaw_left@posture:yaw_left@yaw:0.02",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.5558210997012681,
+        "base_yaw_jerk": 1.4710473232848118,
+        "joint_jerk": 1.0
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.6663268253231986,
+        "base_yaw_jerk": 1.4621895857390779,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:base:yaw_left@posture:yaw_left@yaw:0.06",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.6691747754640429,
+        "base_yaw_jerk": 9.354014847414643,
+        "joint_jerk": 1.0204917629109755
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.6662549589670875,
+        "base_yaw_jerk": 8.039199542491938,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:base:yaw_left@posture:yaw_right",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 1.0255411161523733,
+        "base_yaw_jerk": 7.835291379176962,
+        "joint_jerk": 1.0
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.6638367281228009,
+        "base_yaw_jerk": 2.527728524868919,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:base:yaw_left@posture:yaw_right@yaw:0.02",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.5788541113556407,
+        "base_yaw_jerk": 1.468993189949509,
+        "joint_jerk": 1.0
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.6638828065443846,
+        "base_yaw_jerk": 1.4625269836844237,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:base:yaw_left@posture:yaw_right@yaw:0.06",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.9920577803961094,
+        "base_yaw_jerk": 9.38275831137897,
+        "joint_jerk": 1.2582483183986046
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.6638151002080408,
+        "base_yaw_jerk": 8.50780500181579,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:base:yaw_right@posture:hold",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 1.1168212654657514,
+        "base_yaw_jerk": 7.4131037062318,
+        "joint_jerk": 1.0
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.664866640745571,
+        "base_yaw_jerk": 2.8918212174508517,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:base:yaw_right@posture:hold@yaw:0.02",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.6142782198473549,
+        "base_yaw_jerk": 1.644562552201405,
+        "joint_jerk": 1.1662035330841967
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.6648669282098402,
+        "base_yaw_jerk": 1.6207100783561732,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:base:yaw_right@posture:hold@yaw:0.06",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 1.2950990362691015,
+        "base_yaw_jerk": 9.273039249027489,
+        "joint_jerk": 1.0
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.6648908222569618,
+        "base_yaw_jerk": 8.906182408222953,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:base:yaw_right@posture:forward",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.7366480101300599,
+        "base_yaw_jerk": 7.016393674818335,
+        "joint_jerk": 1.050747648309321
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.6720135154339273,
+        "base_yaw_jerk": 2.7874208551972868,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:base:yaw_right@posture:forward@yaw:0.02",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.582788811174375,
+        "base_yaw_jerk": 1.6452776272371863,
+        "joint_jerk": 1.3277528494828308
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.6720131639131821,
+        "base_yaw_jerk": 1.6198437900266305,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:base:yaw_right@posture:forward@yaw:0.06",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.6244403274373502,
+        "base_yaw_jerk": 7.7555556185925765,
+        "joint_jerk": 1.2730465874441426
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.6720387076101453,
+        "base_yaw_jerk": 7.5595869793326775,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:base:yaw_right@posture:reverse",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 1.0527216605810166,
+        "base_yaw_jerk": 2.986649506925079,
+        "joint_jerk": 1.0
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.6683077519783,
+        "base_yaw_jerk": 2.8335481897981407,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:base:yaw_right@posture:reverse@yaw:0.02",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.8752040373681585,
+        "base_yaw_jerk": 1.448562512320721,
+        "joint_jerk": 1.0
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.6683104825120624,
+        "base_yaw_jerk": 1.6200986191816646,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:base:yaw_right@posture:reverse@yaw:0.06",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.8745270186371313,
+        "base_yaw_jerk": 7.911121908947063,
+        "joint_jerk": 1.3066534237328313
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.6683297011004621,
+        "base_yaw_jerk": 7.988789313512906,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:base:yaw_right@posture:yaw_left",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.8116811195287745,
+        "base_yaw_jerk": 6.812520580140796,
+        "joint_jerk": 1.0
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.6663740485592395,
+        "base_yaw_jerk": 2.840158602530618,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:base:yaw_right@posture:yaw_left@yaw:0.02",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.5410436996299637,
+        "base_yaw_jerk": 1.2717513417812367,
+        "joint_jerk": 1.165818295505556
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.6663745369287871,
+        "base_yaw_jerk": 1.6205437945552423,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:base:yaw_right@posture:yaw_left@yaw:0.06",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.7370974282855646,
+        "base_yaw_jerk": 9.141291724606843,
+        "joint_jerk": 1.0141043062080777
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.6663981116466333,
+        "base_yaw_jerk": 8.594477118107624,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:base:yaw_right@posture:yaw_right@yaw:0.02",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.5787806295449015,
+        "base_yaw_jerk": 2.3323950572482977,
+        "joint_jerk": 1.3007742789637722
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.6639264708425158,
+        "base_yaw_jerk": 1.6206809148920287,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:base:yaw_right@posture:yaw_right@yaw:0.06",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.9588378277472807,
+        "base_yaw_jerk": 9.267807929005874,
+        "joint_jerk": 1.115082529695791
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.6639461105408424,
+        "base_yaw_jerk": 8.853977355131326,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:pitch_up@amplitude:0.25",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.28513644740369287,
+        "base_yaw_jerk": 0.6256001865257224,
+        "joint_jerk": 5.764408800938288
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:pitch_up@amplitude:0.5",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.2853417773240779,
+        "base_yaw_jerk": 0.5991771952298984,
+        "joint_jerk": 5.666307656321107
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:pitch_down@amplitude:0.25",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.14061881816196847,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 5.448579373650597
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:pitch_down@amplitude:0.5",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.2366318889518766,
+        "base_yaw_jerk": 0.5668759444777673,
+        "joint_jerk": 5.889096050280063
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:roll_left@amplitude:0.25",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.2587088809188131,
+        "base_yaw_jerk": 0.6535228047455576,
+        "joint_jerk": 6.599446910235826
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:roll_left@amplitude:0.5",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 4.78821970867163
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:roll_right@amplitude:0.25",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.19105400028026523,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 4.253581597092292
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:roll_right@amplitude:0.5",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.18272292025742973,
+        "base_yaw_jerk": 0.6788632543066382,
+        "joint_jerk": 5.792105330506793
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:coupled:forward_turn@amplitude:0.25",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.7616119900077054,
+        "base_yaw_jerk": 0.8541604230074933,
+        "joint_jerk": 5.446944599713998
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.7068767272379639,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.5717508467291252
+      }
+    },
+    {
+      "id": "train:coupled:forward_turn@amplitude:0.5",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 1.2825013643091916,
+        "base_yaw_jerk": 1.9242727139958828,
+        "joint_jerk": 5.927537046738848
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 1.393363175505211,
+        "base_yaw_jerk": 0.6100049167420338,
+        "joint_jerk": 3.1512201718215653
+      }
+    },
+    {
+      "id": "train:coupled:reverse_turn@amplitude:0.25",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.7717637865426088,
+        "base_yaw_jerk": 0.611973283464128,
+        "joint_jerk": 5.602993102947053
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.7184385600779335,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.5753607795983546
+      }
+    },
+    {
+      "id": "train:coupled:reverse_turn@amplitude:0.5",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 1.3567707493387564,
+        "base_yaw_jerk": 2.250219694041479,
+        "joint_jerk": 5.591950113547891
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 1.2830917302579137,
+        "base_yaw_jerk": 0.909804911582348,
+        "joint_jerk": 3.0187264829882747
+      }
+    },
+    {
+      "id": "train:arm:shoulder_left@amplitude:0.25",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.25197199647328383,
+        "base_yaw_jerk": 0.7781474770032553,
+        "joint_jerk": 5.453703991982273
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:shoulder_left@amplitude:0.5",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.2520304022030691,
+        "base_yaw_jerk": 0.8116226448099361,
+        "joint_jerk": 5.189146431572428
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:shoulder_right@amplitude:0.25",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1732176569992344,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 4.374672024621294
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:shoulder_right@amplitude:0.5",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.28814554104661383,
+        "base_yaw_jerk": 0.6061984374515148,
+        "joint_jerk": 5.500679844093099
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:elbow_up@amplitude:0.25",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.2876825517162299,
+        "base_yaw_jerk": 0.5714311050477282,
+        "joint_jerk": 5.646552319390969
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:elbow_up@amplitude:0.5",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.2267012938637082,
+        "base_yaw_jerk": 0.623669693527811,
+        "joint_jerk": 6.023843961894382
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:elbow_down@amplitude:0.25",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.23574889639848082,
+        "base_yaw_jerk": 0.6879377834160355,
+        "joint_jerk": 6.103413225312101
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:elbow_down@amplitude:0.5",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.3183118662261979,
+        "base_yaw_jerk": 0.6701762598402844,
+        "joint_jerk": 5.963448608235527
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:wrist_up@amplitude:0.25",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.25183674727583044,
+        "base_yaw_jerk": 0.595952188990681,
+        "joint_jerk": 5.175578257562456
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:wrist_up@amplitude:0.5",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.2517247102267884,
+        "base_yaw_jerk": 0.625348611085633,
+        "joint_jerk": 5.391216421466503
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:wrist_down@amplitude:0.25",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.14061906081267947,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 5.223796025901924
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:wrist_down@amplitude:0.5",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.23028100666837362,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 4.379259046361693
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:translate_down@amplitude:0.25",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.19273169346979133,
+        "base_yaw_jerk": 0.556604965103809,
+        "joint_jerk": 5.389107924774054
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:translate_down@amplitude:0.5",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.27185424195653285,
+        "base_yaw_jerk": 0.5249817271269028,
+        "joint_jerk": 5.9242337336729385
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:translate_up@amplitude:0.25",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5292266580829864,
+        "joint_jerk": 4.432096984375856
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:translate_up@amplitude:0.5",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.2469743944773865,
+        "base_yaw_jerk": 0.7629537354147388,
+        "joint_jerk": 6.3149043285981605
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:near_straight_A_translate_up@amplitude:0.25",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 2.4014628262006026
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:near_straight_A_translate_up@amplitude:0.5",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.24565619235008934,
+        "base_yaw_jerk": 0.6752876559573205,
+        "joint_jerk": 6.979639239064534
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:near_straight_A_translate_down@amplitude:0.25",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.16748315661247937,
+        "base_yaw_jerk": 0.6307242176563668,
+        "joint_jerk": 6.015126177171382
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:near_straight_A_translate_down@amplitude:0.5",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.17990648294473088,
+        "base_yaw_jerk": 0.6246337437090148,
+        "joint_jerk": 6.1910350278469775
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:near_straight_A_roll@amplitude:0.25",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1992744126798311,
+        "base_yaw_jerk": 0.5784577039462694,
+        "joint_jerk": 5.211876565030169
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:near_straight_A_roll@amplitude:0.5",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.17039165092270156,
+        "base_yaw_jerk": 0.5892207407750486,
+        "joint_jerk": 5.80473285132504
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:near_straight_A_shoulder@amplitude:0.25",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.17828087500935014,
+        "base_yaw_jerk": 0.7319839579230475,
+        "joint_jerk": 5.810372943050085
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:near_straight_A_shoulder@amplitude:0.5",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.21604571082064317,
+        "base_yaw_jerk": 0.7718201147723438,
+        "joint_jerk": 5.579094882934674
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:near_straight_B_translate_up@amplitude:0.25",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.25559465822244615,
+        "base_yaw_jerk": 0.5863012180626912,
+        "joint_jerk": 5.069263132479241
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:near_straight_B_translate_up@amplitude:0.5",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.2439097319523768,
+        "base_yaw_jerk": 0.6785430675551205,
+        "joint_jerk": 5.706844247617711
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:near_straight_B_translate_down@amplitude:0.25",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.2656498135530919,
+        "base_yaw_jerk": 0.6333922787682628,
+        "joint_jerk": 6.150500733859977
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:near_straight_B_translate_down@amplitude:0.5",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.2828116516396326,
+        "base_yaw_jerk": 0.6563820169083874,
+        "joint_jerk": 5.832475910951269
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:near_straight_B_roll@amplitude:0.25",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.2014041038588113,
+        "base_yaw_jerk": 0.6696577110835034,
+        "joint_jerk": 6.456997970033097
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:near_straight_B_roll@amplitude:0.5",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.2872154699264961,
+        "base_yaw_jerk": 0.6825541207161567,
+        "joint_jerk": 5.890025301701888
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:near_straight_B_shoulder@amplitude:0.25",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1588955790336018,
+        "base_yaw_jerk": 0.6908958529152578,
+        "joint_jerk": 5.694208291804107
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:near_straight_B_shoulder@amplitude:0.5",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.22021937224654242,
+        "base_yaw_jerk": 0.6470261118725122,
+        "joint_jerk": 6.099992886953181
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:tamp_translation_A_elbow_translate_positive@amplitude:0.25",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.2484951271053433,
+        "base_yaw_jerk": 0.6056635572732451,
+        "joint_jerk": 5.936641869668977
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:tamp_translation_A_elbow_translate_positive@amplitude:0.5",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1990420939412098,
+        "base_yaw_jerk": 0.6150540922796434,
+        "joint_jerk": 6.036749315604476
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:tamp_translation_A_elbow_translate_negative@amplitude:0.25",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.3086518040998246,
+        "base_yaw_jerk": 0.6455846401417314,
+        "joint_jerk": 6.151486687629365
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:tamp_translation_A_elbow_translate_negative@amplitude:0.5",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.6423991041273868,
+        "base_yaw_jerk": 0.6577193832894064,
+        "joint_jerk": 8.006231551013986
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:tamp_translation_A_shoulder_translate_positive@amplitude:0.25",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.14711406106343028,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 4.726212065726257
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:tamp_translation_A_shoulder_translate_positive@amplitude:0.5",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.29442766228091766,
+        "base_yaw_jerk": 0.5583034835552041,
+        "joint_jerk": 6.1199033715161875
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:tamp_translation_A_shoulder_translate_negative@amplitude:0.25",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.22892127291611608,
+        "base_yaw_jerk": 0.6345912897630368,
+        "joint_jerk": 5.681183715577765
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:tamp_translation_A_shoulder_translate_negative@amplitude:0.5",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.21083585944281258,
+        "base_yaw_jerk": 0.6652220852166852,
+        "joint_jerk": 6.241235649236038
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:tamp_translation_B_elbow_translate_positive@amplitude:0.25",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.2531666492709144,
+        "base_yaw_jerk": 0.6637547865984182,
+        "joint_jerk": 5.9712557834930955
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:tamp_translation_B_elbow_translate_positive@amplitude:0.5",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.3336796433533995,
+        "base_yaw_jerk": 0.649329964892988,
+        "joint_jerk": 5.567835444898314
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:tamp_translation_B_elbow_translate_negative@amplitude:0.25",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.25715635958165467,
+        "base_yaw_jerk": 0.6735110201104089,
+        "joint_jerk": 5.881998852682093
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:tamp_translation_B_elbow_translate_negative@amplitude:0.5",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.2728788236584282,
+        "base_yaw_jerk": 0.6966692592943979,
+        "joint_jerk": 5.948635504540953
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:tamp_translation_B_shoulder_translate_positive@amplitude:0.25",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.2111304058109469,
+        "base_yaw_jerk": 0.6029838364957464,
+        "joint_jerk": 5.7322703699964785
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:tamp_translation_B_shoulder_translate_positive@amplitude:0.5",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.27809073254243516,
+        "base_yaw_jerk": 0.5968321619610923,
+        "joint_jerk": 5.696913404373245
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:tamp_translation_B_shoulder_translate_negative@amplitude:0.25",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.23470721711772247,
+        "base_yaw_jerk": 0.7341394328832682,
+        "joint_jerk": 6.302513786230852
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:tamp_translation_B_shoulder_translate_negative@amplitude:0.5",
+      "archived": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.25125100506847303,
+        "base_yaw_jerk": 0.7226785025758308,
+        "joint_jerk": 6.29592660921657
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:supported_A_down_short@amplitude:0.25",
+      "archived": {
+        "peak_force_N": 1.6974327514891883,
+        "base_linear_jerk": 0.3393162746141321,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 4.898792881201549
+      },
+      "current": {
+        "peak_force_N": 2.8699747632867196,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:supported_A_down_short@amplitude:0.5",
+      "archived": {
+        "peak_force_N": 2.3398574786192112,
+        "base_linear_jerk": 0.3543499392345509,
+        "base_yaw_jerk": 0.5164480827229749,
+        "joint_jerk": 4.827791550757586
+      },
+      "current": {
+        "peak_force_N": 3.527641705640543,
+        "base_linear_jerk": 0.22614476883577395,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:supported_A_down@amplitude:0.25",
+      "archived": {
+        "peak_force_N": 2.3398574786192112,
+        "base_linear_jerk": 0.3543499392345509,
+        "base_yaw_jerk": 0.5164480827229749,
+        "joint_jerk": 4.827791550757586
+      },
+      "current": {
+        "peak_force_N": 3.527641705640543,
+        "base_linear_jerk": 0.22614476883577395,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:supported_A_down@amplitude:0.5",
+      "archived": {
+        "peak_force_N": 2.8810770836229596,
+        "base_linear_jerk": 0.4398994471176712,
+        "base_yaw_jerk": 0.8830438854975544,
+        "joint_jerk": 8.803112116045034
+      },
+      "current": {
+        "peak_force_N": 4.166990732503444,
+        "base_linear_jerk": 0.40604539290920255,
+        "base_yaw_jerk": 0.6346464125052722,
+        "joint_jerk": 2.2648030043217378
+      }
+    },
+    {
+      "id": "train:arm:supported_A_up@amplitude:0.25",
+      "archived": {
+        "peak_force_N": 1.0539887734183941,
+        "base_linear_jerk": 0.23815138344227654,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 4.4746821643549515
+      },
+      "current": {
+        "peak_force_N": 1.0,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 2.809339764800865
+      }
+    },
+    {
+      "id": "train:arm:supported_A_up@amplitude:0.5",
+      "archived": {
+        "peak_force_N": 1.5838321674092934,
+        "base_linear_jerk": 0.18132108701247196,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 4.258218326773931
+      },
+      "current": {
+        "peak_force_N": 1.1463105879363864,
+        "base_linear_jerk": 0.1,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 3.040952443388213
+      }
+    },
+    {
+      "id": "train:arm:supported_B_down_short@amplitude:0.25",
+      "archived": {
+        "peak_force_N": 1.6681281468358766,
+        "base_linear_jerk": 0.3081515157512891,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 7.941639309739701
+      },
+      "current": {
+        "peak_force_N": 2.1801939670908026,
+        "base_linear_jerk": 0.13723214235368322,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:supported_B_down_short@amplitude:0.5",
+      "archived": {
+        "peak_force_N": 2.106396186422795,
+        "base_linear_jerk": 0.37720419695080953,
+        "base_yaw_jerk": 0.5181927161132559,
+        "joint_jerk": 5.137540639988167
+      },
+      "current": {
+        "peak_force_N": 2.6027588780765414,
+        "base_linear_jerk": 0.22072398041363855,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:supported_B_down@amplitude:0.25",
+      "archived": {
+        "peak_force_N": 2.106396186422795,
+        "base_linear_jerk": 0.37720419695080953,
+        "base_yaw_jerk": 0.5181927161132559,
+        "joint_jerk": 5.137540639988167
+      },
+      "current": {
+        "peak_force_N": 2.6027588780765414,
+        "base_linear_jerk": 0.22072398041363855,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 1.0
+      }
+    },
+    {
+      "id": "train:arm:supported_B_down@amplitude:0.5",
+      "archived": {
+        "peak_force_N": 2.604603015424453,
+        "base_linear_jerk": 0.5548108000324937,
+        "base_yaw_jerk": 0.9517374579292801,
+        "joint_jerk": 6.189997224327656
+      },
+      "current": {
+        "peak_force_N": 3.349581260398759,
+        "base_linear_jerk": 0.31827970652228776,
+        "base_yaw_jerk": 0.6581502579846028,
+        "joint_jerk": 1.3378585013958841
+      }
+    },
+    {
+      "id": "train:arm:supported_B_up@amplitude:0.25",
+      "archived": {
+        "peak_force_N": 1.1125831035763378,
+        "base_linear_jerk": 0.1311547762141638,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 3.9547242788759114
+      },
+      "current": {
+        "peak_force_N": 1.0571077907212025,
+        "base_linear_jerk": 0.3023543221400718,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 3.033804439372529
+      }
+    },
+    {
+      "id": "train:arm:supported_B_up@amplitude:0.5",
+      "archived": {
+        "peak_force_N": 1.2637838427305832,
+        "base_linear_jerk": 0.189570933312181,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 3.449841153619615
+      },
+      "current": {
+        "peak_force_N": 1.0553188422502588,
+        "base_linear_jerk": 0.30258477334684075,
+        "base_yaw_jerk": 0.5,
+        "joint_jerk": 3.415871627795518
+      }
+    }
+  ]
+}

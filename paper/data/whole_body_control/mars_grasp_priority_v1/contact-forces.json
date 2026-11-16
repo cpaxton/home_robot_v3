@@ -1,0 +1,1522 @@
+{
+  "complete": true,
+  "scope": "Summarize read-only contact measurements; no new physical inference or calibration.",
+  "hardware_used": false,
+  "qualification_eligible": false,
+  "implementation_revision": "e6401542",
+  "interpretation": "Physical traces reproduce all three baselines exactly. Records actual solved contact values; no new force/torque/friction values or production change. Raw force polarity is not assigned to a body. Cone utilization uses installed MuJoCo contact dimension4 and friction ordering tangent1,tangent2,spin; contacts below0.05N are omitted only from this descriptive ratio, never from actual safety/retention decisions. Normal sums are not a vertical support wrench or a minimum grip-force certificate. Full wrench feasibility and physical calibration remain open.",
+  "cases": [
+    {
+      "case_id": "left:20g:0",
+      "baseline_exact": true,
+      "success": false,
+      "failure": "retention_lost",
+      "stop_confirmed": true,
+      "measurement_samples": 456,
+      "first_fault": {
+        "time_s": 23.699999999997743,
+        "phase": "carry",
+        "failure": "retention_lost",
+        "geometric_contacts": 3,
+        "active_contacts_normal_at_least_0_05N": 2,
+        "active_normal_load_by_finger_N": {
+          "link61": 1.889864222850399,
+          "link62": 1.6971445701013037
+        },
+        "active_normal_load_sum_N": 3.5870087929517025,
+        "max_active_elliptic_cone_utilization": 0.5557299727183813,
+        "driver_position_rad": 0.3203596657233887,
+        "grip_target_rad": 0.0,
+        "minimum_signed_contact_distance_m": -0.0002741059307191959
+      },
+      "first_fault_raw_contacts": [
+        {
+          "geom_names": [
+            "link61_contact",
+            ""
+          ],
+          "body_names": [
+            "link61",
+            "object1"
+          ],
+          "distance_m": -0.0002741059307191959,
+          "position_world_m": [
+            0.3000094986812325,
+            -0.0317818298820242,
+            0.3200745831687066
+          ],
+          "contact_frame_rows": [
+            [
+              0.16258203100533894,
+              0.9866916709331863,
+              0.002574821402666929
+            ],
+            [
+              -0.0004186210807910946,
+              -0.002540563253758699,
+              0.999996685141878
+            ],
+            [
+              0.9866949416869276,
+              -0.16258256994349138,
+              -5.421010862427522e-20
+            ]
+          ],
+          "contact_dimension": 4,
+          "combined_friction": [
+            1.0,
+            1.0,
+            0.005,
+            0.0001,
+            0.0001
+          ],
+          "force_torque_contact_frame": [
+            1.889864222850399,
+            0.15008523779549504,
+            -0.2774423782487507,
+            -0.0005124848014669414,
+            0.0,
+            0.0
+          ],
+          "polarity": "Raw mj_contactForce convention; no body force sign assigned."
+        },
+        {
+          "geom_names": [
+            "link61_contact",
+            ""
+          ],
+          "body_names": [
+            "link61",
+            "object1"
+          ],
+          "distance_m": -7.747948965334219e-05,
+          "position_world_m": [
+            0.30230476602287365,
+            -0.03215811714028533,
+            0.28115811970881793
+          ],
+          "contact_frame_rows": [
+            [
+              0.16258203100533894,
+              0.9866916709331863,
+              0.002574821402666929
+            ],
+            [
+              -0.0004186210807910946,
+              -0.002540563253758699,
+              0.999996685141878
+            ],
+            [
+              0.9866949416869276,
+              -0.16258256994349138,
+              -5.421010862427522e-20
+            ]
+          ],
+          "contact_dimension": 4,
+          "combined_friction": [
+            1.0,
+            1.0,
+            0.005,
+            0.0001,
+            0.0001
+          ],
+          "force_torque_contact_frame": [
+            0.030442383296847904,
+            0.01279091046244948,
+            0.026834256131958868,
+            -3.2697064073634455e-05,
+            0.0,
+            0.0
+          ],
+          "polarity": "Raw mj_contactForce convention; no body force sign assigned."
+        },
+        {
+          "geom_names": [
+            "link62_contact",
+            ""
+          ],
+          "body_names": [
+            "link62",
+            "object1"
+          ],
+          "distance_m": -0.0001168310344798883,
+          "position_world_m": [
+            0.30056641976449827,
+            -0.015978379014403438,
+            0.32004812058779775
+          ],
+          "contact_frame_rows": [
+            [
+              0.4594231476304545,
+              -0.8875796909186339,
+              0.0336550693077308
+            ],
+            [
+              -0.015470681897277468,
+              0.02988848761214617,
+              0.9994335076981818
+            ],
+            [
+              -0.8880827829785684,
+              -0.4596835548255355,
+              1.734723475976807e-18
+            ]
+          ],
+          "contact_dimension": 4,
+          "combined_friction": [
+            1.0,
+            1.0,
+            0.005,
+            0.0001,
+            0.0001
+          ],
+          "force_torque_contact_frame": [
+            1.6971445701013037,
+            -0.029258524660948568,
+            0.9421198943039052,
+            0.00016535646948097506,
+            0.0,
+            0.0
+          ],
+          "polarity": "Raw mj_contactForce convention; no body force sign assigned."
+        }
+      ],
+      "last_carry_second_before_first_fault": [
+        {
+          "time_s": 22.699999999998298,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 2,
+          "active_contacts_normal_at_least_0_05N": 2,
+          "active_normal_load_by_finger_N": {
+            "link61": 1.9108697588357526,
+            "link62": 1.7516885693292013
+          },
+          "active_normal_load_sum_N": 3.6625583281649536,
+          "max_active_elliptic_cone_utilization": 0.4988081752061838,
+          "driver_position_rad": 0.32598122916673383,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -0.0002286476849100691
+        },
+        {
+          "time_s": 22.74999999999827,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 2,
+          "active_contacts_normal_at_least_0_05N": 2,
+          "active_normal_load_by_finger_N": {
+            "link61": 1.9105560436968188,
+            "link62": 1.7488074185427922
+          },
+          "active_normal_load_sum_N": 3.659363462239611,
+          "max_active_elliptic_cone_utilization": 0.4998808492621947,
+          "driver_position_rad": 0.32626149925188747,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -0.00023015419783356558
+        },
+        {
+          "time_s": 22.799999999998242,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 2,
+          "active_contacts_normal_at_least_0_05N": 2,
+          "active_normal_load_by_finger_N": {
+            "link61": 1.908796305384149,
+            "link62": 1.746257859001064
+          },
+          "active_normal_load_sum_N": 3.655054164385213,
+          "max_active_elliptic_cone_utilization": 0.5008150024573205,
+          "driver_position_rad": 0.3266274573767922,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -0.00023132389857068327
+        },
+        {
+          "time_s": 22.849999999998214,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 2,
+          "active_contacts_normal_at_least_0_05N": 2,
+          "active_normal_load_by_finger_N": {
+            "link61": 1.9109911898203409,
+            "link62": 1.7489695465145816
+          },
+          "active_normal_load_sum_N": 3.6599607363349227,
+          "max_active_elliptic_cone_utilization": 0.502218386629017,
+          "driver_position_rad": 0.3267124789974208,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -0.00023338713265909727
+        },
+        {
+          "time_s": 22.899999999998187,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 2,
+          "active_contacts_normal_at_least_0_05N": 2,
+          "active_normal_load_by_finger_N": {
+            "link61": 1.9095265622273419,
+            "link62": 1.7476638508306008
+          },
+          "active_normal_load_sum_N": 3.6571904130579425,
+          "max_active_elliptic_cone_utilization": 0.503198710387536,
+          "driver_position_rad": 0.3268898630790177,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -0.00023506261204268462
+        },
+        {
+          "time_s": 22.94999999999816,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 2,
+          "active_contacts_normal_at_least_0_05N": 2,
+          "active_normal_load_by_finger_N": {
+            "link61": 1.9104533061930833,
+            "link62": 1.7463162731226896
+          },
+          "active_normal_load_sum_N": 3.656769579315773,
+          "max_active_elliptic_cone_utilization": 0.5035135021034496,
+          "driver_position_rad": 0.32659389016424634,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -0.00023845804141826694
+        },
+        {
+          "time_s": 22.99999999999813,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 2,
+          "active_contacts_normal_at_least_0_05N": 2,
+          "active_normal_load_by_finger_N": {
+            "link61": 1.9118881802459156,
+            "link62": 1.7482886277185496
+          },
+          "active_normal_load_sum_N": 3.660176807964465,
+          "max_active_elliptic_cone_utilization": 0.5046309614009347,
+          "driver_position_rad": 0.3263975933916106,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -0.00024128708738089196
+        },
+        {
+          "time_s": 23.049999999998104,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 2,
+          "active_contacts_normal_at_least_0_05N": 2,
+          "active_normal_load_by_finger_N": {
+            "link61": 1.9135332678233203,
+            "link62": 1.7489524574768962
+          },
+          "active_normal_load_sum_N": 3.6624857253002165,
+          "max_active_elliptic_cone_utilization": 0.5053336608361174,
+          "driver_position_rad": 0.3261301445425959,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -0.00024474768693189637
+        },
+        {
+          "time_s": 23.099999999998076,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 2,
+          "active_contacts_normal_at_least_0_05N": 2,
+          "active_normal_load_by_finger_N": {
+            "link61": 1.915146833872486,
+            "link62": 1.7494799109979928
+          },
+          "active_normal_load_sum_N": 3.664626744870479,
+          "max_active_elliptic_cone_utilization": 0.5061930959088563,
+          "driver_position_rad": 0.3259892855284075,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -0.0002480662434286038
+        },
+        {
+          "time_s": 23.149999999998048,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 2,
+          "active_contacts_normal_at_least_0_05N": 2,
+          "active_normal_load_by_finger_N": {
+            "link61": 1.916529000446151,
+            "link62": 1.7498322636090855
+          },
+          "active_normal_load_sum_N": 3.6663612640552365,
+          "max_active_elliptic_cone_utilization": 0.5074244816106489,
+          "driver_position_rad": 0.3260378312841049,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -0.0002510221816208266
+        },
+        {
+          "time_s": 23.19999999999802,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 2,
+          "active_contacts_normal_at_least_0_05N": 2,
+          "active_normal_load_by_finger_N": {
+            "link61": 1.916152749546472,
+            "link62": 1.7469368916281165
+          },
+          "active_normal_load_sum_N": 3.6630896411745884,
+          "max_active_elliptic_cone_utilization": 0.5089307309553643,
+          "driver_position_rad": 0.3261646355952134,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -0.00025366795284246965
+        },
+        {
+          "time_s": 23.249999999997993,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 2,
+          "active_contacts_normal_at_least_0_05N": 2,
+          "active_normal_load_by_finger_N": {
+            "link61": 1.91608454883449,
+            "link62": 1.7450697845859975
+          },
+          "active_normal_load_sum_N": 3.6611543334204875,
+          "max_active_elliptic_cone_utilization": 0.5114907413814369,
+          "driver_position_rad": 0.32621171167344365,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -0.0002558580040498039
+        },
+        {
+          "time_s": 23.299999999997965,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 2,
+          "active_contacts_normal_at_least_0_05N": 2,
+          "active_normal_load_by_finger_N": {
+            "link61": 1.915764032790803,
+            "link62": 1.741027628367984
+          },
+          "active_normal_load_sum_N": 3.656791661158787,
+          "max_active_elliptic_cone_utilization": 0.5146589046423078,
+          "driver_position_rad": 0.326121146126066,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -0.00025819059099322495
+        },
+        {
+          "time_s": 23.349999999997937,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 2,
+          "active_contacts_normal_at_least_0_05N": 2,
+          "active_normal_load_by_finger_N": {
+            "link61": 1.9169742191585846,
+            "link62": 1.7400585503247776
+          },
+          "active_normal_load_sum_N": 3.6570327694833624,
+          "max_active_elliptic_cone_utilization": 0.5183653259570175,
+          "driver_position_rad": 0.3258967930117322,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -0.00026053226066221323
+        },
+        {
+          "time_s": 23.39999999999791,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 2,
+          "active_contacts_normal_at_least_0_05N": 2,
+          "active_normal_load_by_finger_N": {
+            "link61": 1.9157146984336455,
+            "link62": 1.7349206338650125
+          },
+          "active_normal_load_sum_N": 3.650635332298658,
+          "max_active_elliptic_cone_utilization": 0.5230589120745879,
+          "driver_position_rad": 0.32569641561257645,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -0.00026217556396357556
+        },
+        {
+          "time_s": 23.449999999997882,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 2,
+          "active_contacts_normal_at_least_0_05N": 2,
+          "active_normal_load_by_finger_N": {
+            "link61": 1.9165026524271096,
+            "link62": 1.7295613448991147
+          },
+          "active_normal_load_sum_N": 3.646063997326224,
+          "max_active_elliptic_cone_utilization": 0.527932184740587,
+          "driver_position_rad": 0.3250873762895671,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -0.0002650432589018598
+        },
+        {
+          "time_s": 23.499999999997854,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 2,
+          "active_contacts_normal_at_least_0_05N": 2,
+          "active_normal_load_by_finger_N": {
+            "link61": 1.9147864085709432,
+            "link62": 1.722683861435506
+          },
+          "active_normal_load_sum_N": 3.637470270006449,
+          "max_active_elliptic_cone_utilization": 0.5337039922323874,
+          "driver_position_rad": 0.32449449304395095,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -0.000266927400000632
+        },
+        {
+          "time_s": 23.549999999997826,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 2,
+          "active_contacts_normal_at_least_0_05N": 2,
+          "active_normal_load_by_finger_N": {
+            "link61": 1.916654421259214,
+            "link62": 1.7149221706338194
+          },
+          "active_normal_load_sum_N": 3.631576591893033,
+          "max_active_elliptic_cone_utilization": 0.5409288606365983,
+          "driver_position_rad": 0.32334048559936734,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -0.0002704197417398635
+        },
+        {
+          "time_s": 23.5999999999978,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 3,
+          "active_contacts_normal_at_least_0_05N": 3,
+          "active_normal_load_by_finger_N": {
+            "link61": 1.917338689603665,
+            "link62": 1.7106724293427067
+          },
+          "active_normal_load_sum_N": 3.6280111189463717,
+          "max_active_elliptic_cone_utilization": 0.9999999999999999,
+          "driver_position_rad": 0.3222958128807276,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -0.00026594850424707173
+        },
+        {
+          "time_s": 23.64999999999777,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 3,
+          "active_contacts_normal_at_least_0_05N": 2,
+          "active_normal_load_by_finger_N": {
+            "link61": 1.8802233504957286,
+            "link62": 1.7035887671210335
+          },
+          "active_normal_load_sum_N": 3.583812117616762,
+          "max_active_elliptic_cone_utilization": 0.5473891771233954,
+          "driver_position_rad": 0.3214886104508433,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -0.0002708061018062354
+        }
+      ],
+      "phases": {
+        "carry": {
+          "samples": 269,
+          "median_active_normal_load_sum_N": 3.6584633322677194,
+          "bilateral_active_contact_samples": 269
+        },
+        "close": {
+          "samples": 28,
+          "median_active_normal_load_sum_N": 3.54863426985327,
+          "bilateral_active_contact_samples": 27
+        },
+        "pregrasp": {
+          "samples": 140,
+          "median_active_normal_load_sum_N": 0.0,
+          "bilateral_active_contact_samples": 7
+        },
+        "reach": {
+          "samples": 15,
+          "median_active_normal_load_sum_N": 0,
+          "bilateral_active_contact_samples": 0
+        },
+        "release": {
+          "samples": 1,
+          "median_active_normal_load_sum_N": 0.06675876339269582,
+          "bilateral_active_contact_samples": 0
+        }
+      },
+      "artifact": {
+        "path": "logs/eval/mars-grasp-contact-probe-v1/left-20g-0.json.gz",
+        "sha256": "77acbe5241036ff6f7a13b4d1e7823436dee409bbdada846b4af5d3a3bcaff86",
+        "bytes": 5851073
+      }
+    },
+    {
+      "case_id": "left:50g:0",
+      "baseline_exact": true,
+      "success": false,
+      "failure": "retention_lost",
+      "stop_confirmed": true,
+      "measurement_samples": 313,
+      "first_fault": {
+        "time_s": 16.40000000000179,
+        "phase": "carry",
+        "failure": "retention_lost",
+        "geometric_contacts": 2,
+        "active_contacts_normal_at_least_0_05N": 2,
+        "active_normal_load_by_finger_N": {
+          "link61": 2.402119135949577,
+          "link62": 2.3813713581919616
+        },
+        "active_normal_load_sum_N": 4.783490494141539,
+        "max_active_elliptic_cone_utilization": 0.44841927318800534,
+        "driver_position_rad": 0.3601198890622912,
+        "grip_target_rad": 0.0,
+        "minimum_signed_contact_distance_m": -0.000161284672064005
+      },
+      "first_fault_raw_contacts": [
+        {
+          "geom_names": [
+            "link61_contact",
+            ""
+          ],
+          "body_names": [
+            "link61",
+            "object1"
+          ],
+          "distance_m": -0.000161284672064005,
+          "position_world_m": [
+            0.2757820929978636,
+            -0.06111176056125768,
+            0.31104698167044653
+          ],
+          "contact_frame_rows": [
+            [
+              0.3526647385227755,
+              0.9351877976314071,
+              0.032424764671174264
+            ],
+            [
+              -0.011441087117442607,
+              -0.030339197246336623,
+              0.9994741790741865
+            ],
+            [
+              0.9356797976488719,
+              -0.3528502745808291,
+              0.0
+            ]
+          ],
+          "contact_dimension": 4,
+          "combined_friction": [
+            1.0,
+            1.0,
+            0.005,
+            0.0001,
+            0.0001
+          ],
+          "force_torque_contact_frame": [
+            2.402119135949577,
+            0.17258314678294545,
+            -0.8646536339139828,
+            -0.0028588390092208816,
+            0.0,
+            0.0
+          ],
+          "polarity": "Raw mj_contactForce convention; no body force sign assigned."
+        },
+        {
+          "geom_names": [
+            "link62_contact",
+            ""
+          ],
+          "body_names": [
+            "link62",
+            "object1"
+          ],
+          "distance_m": -0.00015867153740528795,
+          "position_world_m": [
+            0.2759810454475016,
+            -0.045262566068531886,
+            0.3110377496306343
+          ],
+          "contact_frame_rows": [
+            [
+              0.352429354600136,
+              -0.9349905005688436,
+              0.039828555863289976
+            ],
+            [
+              -0.014047898848153436,
+              0.03726889319670307,
+              0.9992065282702294
+            ],
+            [
+              -0.935732978233686,
+              -0.3527092193945551,
+              0.0
+            ]
+          ],
+          "contact_dimension": 4,
+          "combined_friction": [
+            1.0,
+            1.0,
+            0.005,
+            0.0001,
+            0.0001
+          ],
+          "force_torque_contact_frame": [
+            2.3813713581919616,
+            0.161164387876309,
+            0.9231009955474494,
+            0.002560372158885178,
+            0.0,
+            0.0
+          ],
+          "polarity": "Raw mj_contactForce convention; no body force sign assigned."
+        }
+      ],
+      "last_carry_second_before_first_fault": [
+        {
+          "time_s": 15.400000000001812,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 4,
+          "active_contacts_normal_at_least_0_05N": 4,
+          "active_normal_load_by_finger_N": {
+            "link61": 1.967097763899618,
+            "link62": 1.93659126070744
+          },
+          "active_normal_load_sum_N": 3.903689024607058,
+          "max_active_elliptic_cone_utilization": 0.7450957552887766,
+          "driver_position_rad": 0.35045231030042706,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -7.552566938345243e-05
+        },
+        {
+          "time_s": 15.450000000001829,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 4,
+          "active_contacts_normal_at_least_0_05N": 4,
+          "active_normal_load_by_finger_N": {
+            "link61": 1.8598666770334722,
+            "link62": 1.835983596361872
+          },
+          "active_normal_load_sum_N": 3.695850273395344,
+          "max_active_elliptic_cone_utilization": 0.8946105655376843,
+          "driver_position_rad": 0.34972257793701295,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -7.089525109097424e-05
+        },
+        {
+          "time_s": 15.500000000001846,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 2,
+          "active_contacts_normal_at_least_0_05N": 2,
+          "active_normal_load_by_finger_N": {
+            "link61": 1.7424704589649795,
+            "link62": 1.7387781894639236
+          },
+          "active_normal_load_sum_N": 3.4812486484289034,
+          "max_active_elliptic_cone_utilization": 0.45139689174558073,
+          "driver_position_rad": 0.34922947307330415,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -6.205678742423701e-05
+        },
+        {
+          "time_s": 15.550000000001862,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 4,
+          "active_contacts_normal_at_least_0_05N": 4,
+          "active_normal_load_by_finger_N": {
+            "link61": 1.8825676514475287,
+            "link62": 1.8849869697305688
+          },
+          "active_normal_load_sum_N": 3.7675546211780975,
+          "max_active_elliptic_cone_utilization": 0.44841782463935526,
+          "driver_position_rad": 0.3495740361083226,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -7.484278444379707e-05
+        },
+        {
+          "time_s": 15.600000000001879,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 4,
+          "active_contacts_normal_at_least_0_05N": 4,
+          "active_normal_load_by_finger_N": {
+            "link61": 1.8578677895385887,
+            "link62": 1.8644293276320472
+          },
+          "active_normal_load_sum_N": 3.722297117170636,
+          "max_active_elliptic_cone_utilization": 0.41105224286348524,
+          "driver_position_rad": 0.34933690716775684,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -7.819233207247611e-05
+        },
+        {
+          "time_s": 15.650000000001896,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 4,
+          "active_contacts_normal_at_least_0_05N": 4,
+          "active_normal_load_by_finger_N": {
+            "link61": 1.8446400869897284,
+            "link62": 1.8432519175149218
+          },
+          "active_normal_load_sum_N": 3.68789200450465,
+          "max_active_elliptic_cone_utilization": 0.4962759013760895,
+          "driver_position_rad": 0.3490407549348815,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -8.453192729697061e-05
+        },
+        {
+          "time_s": 15.700000000001912,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 3,
+          "active_contacts_normal_at_least_0_05N": 3,
+          "active_normal_load_by_finger_N": {
+            "link61": 1.866759709156366,
+            "link62": 1.8541062519463904
+          },
+          "active_normal_load_sum_N": 3.7208659611027564,
+          "max_active_elliptic_cone_utilization": 0.9999999999999999,
+          "driver_position_rad": 0.3486134194673159,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -0.0001102672543553513
+        },
+        {
+          "time_s": 15.75000000000193,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 2,
+          "active_contacts_normal_at_least_0_05N": 2,
+          "active_normal_load_by_finger_N": {
+            "link61": 1.9917198775526512,
+            "link62": 1.9654308416941568
+          },
+          "active_normal_load_sum_N": 3.9571507192468083,
+          "max_active_elliptic_cone_utilization": 0.4593508268457034,
+          "driver_position_rad": 0.3473907921710864,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -0.00015226890759677058
+        },
+        {
+          "time_s": 15.800000000001946,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 2,
+          "active_contacts_normal_at_least_0_05N": 2,
+          "active_normal_load_by_finger_N": {
+            "link61": 2.018617176592673,
+            "link62": 1.994062017748421
+          },
+          "active_normal_load_sum_N": 4.012679194341094,
+          "max_active_elliptic_cone_utilization": 0.44526748720061815,
+          "driver_position_rad": 0.3482842179678185,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -0.0001549243327888288
+        },
+        {
+          "time_s": 15.850000000001963,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 2,
+          "active_contacts_normal_at_least_0_05N": 2,
+          "active_normal_load_by_finger_N": {
+            "link61": 2.105390021313946,
+            "link62": 2.082037513413891
+          },
+          "active_normal_load_sum_N": 4.187427534727837,
+          "max_active_elliptic_cone_utilization": 0.43304887084586774,
+          "driver_position_rad": 0.349795183235474,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -0.00015297207263528478
+        },
+        {
+          "time_s": 15.90000000000198,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 2,
+          "active_contacts_normal_at_least_0_05N": 2,
+          "active_normal_load_by_finger_N": {
+            "link61": 2.1904334825534315,
+            "link62": 2.168985482364405
+          },
+          "active_normal_load_sum_N": 4.359418964917836,
+          "max_active_elliptic_cone_utilization": 0.42958291077263494,
+          "driver_position_rad": 0.35120813389374517,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -0.00015866617204917963
+        },
+        {
+          "time_s": 15.950000000001996,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 2,
+          "active_contacts_normal_at_least_0_05N": 2,
+          "active_normal_load_by_finger_N": {
+            "link61": 2.2314484777136405,
+            "link62": 2.209346145077253
+          },
+          "active_normal_load_sum_N": 4.440794622790893,
+          "max_active_elliptic_cone_utilization": 0.43260517621157185,
+          "driver_position_rad": 0.35261815927315393,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -0.0001599206016225643
+        },
+        {
+          "time_s": 16.00000000000201,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 2,
+          "active_contacts_normal_at_least_0_05N": 2,
+          "active_normal_load_by_finger_N": {
+            "link61": 2.272521898027283,
+            "link62": 2.256532390734736
+          },
+          "active_normal_load_sum_N": 4.529054288762019,
+          "max_active_elliptic_cone_utilization": 0.4421327496254754,
+          "driver_position_rad": 0.3542684922943088,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -0.0001603533596692869
+        },
+        {
+          "time_s": 16.050000000001983,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 2,
+          "active_contacts_normal_at_least_0_05N": 2,
+          "active_normal_load_by_finger_N": {
+            "link61": 2.3212974066359306,
+            "link62": 2.3029802311341836
+          },
+          "active_normal_load_sum_N": 4.624277637770114,
+          "max_active_elliptic_cone_utilization": 0.44819747980737906,
+          "driver_position_rad": 0.3558421914438043,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -0.00016246169244358687
+        },
+        {
+          "time_s": 16.100000000001955,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 2,
+          "active_contacts_normal_at_least_0_05N": 2,
+          "active_normal_load_by_finger_N": {
+            "link61": 2.363291973216593,
+            "link62": 2.340538089187471
+          },
+          "active_normal_load_sum_N": 4.703830062404064,
+          "max_active_elliptic_cone_utilization": 0.44371185565564564,
+          "driver_position_rad": 0.3579479947580654,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -0.00016288848195652032
+        },
+        {
+          "time_s": 16.150000000001928,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 2,
+          "active_contacts_normal_at_least_0_05N": 2,
+          "active_normal_load_by_finger_N": {
+            "link61": 2.3697083812510416,
+            "link62": 2.3482237030516933
+          },
+          "active_normal_load_sum_N": 4.717932084302735,
+          "max_active_elliptic_cone_utilization": 0.4371648702098583,
+          "driver_position_rad": 0.35849963853359074,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -0.00016190105315512526
+        },
+        {
+          "time_s": 16.2000000000019,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 2,
+          "active_contacts_normal_at_least_0_05N": 2,
+          "active_normal_load_by_finger_N": {
+            "link61": 2.416060371532291,
+            "link62": 2.3967776434435746
+          },
+          "active_normal_load_sum_N": 4.812838014975865,
+          "max_active_elliptic_cone_utilization": 0.44918029991624847,
+          "driver_position_rad": 0.359851521692583,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -0.00016476974819970553
+        },
+        {
+          "time_s": 16.250000000001872,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 2,
+          "active_contacts_normal_at_least_0_05N": 2,
+          "active_normal_load_by_finger_N": {
+            "link61": 2.4234216283246983,
+            "link62": 2.4026476821978715
+          },
+          "active_normal_load_sum_N": 4.82606931052257,
+          "max_active_elliptic_cone_utilization": 0.4476852111629439,
+          "driver_position_rad": 0.36009230644457196,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -0.0001642896920208982
+        },
+        {
+          "time_s": 16.300000000001845,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 2,
+          "active_contacts_normal_at_least_0_05N": 2,
+          "active_normal_load_by_finger_N": {
+            "link61": 2.4148951920154635,
+            "link62": 2.392749631362099
+          },
+          "active_normal_load_sum_N": 4.807644823377562,
+          "max_active_elliptic_cone_utilization": 0.44485293503315537,
+          "driver_position_rad": 0.3599690797506871,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -0.0001637378834980741
+        },
+        {
+          "time_s": 16.350000000001817,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 2,
+          "active_contacts_normal_at_least_0_05N": 2,
+          "active_normal_load_by_finger_N": {
+            "link61": 2.4097118478510753,
+            "link62": 2.3822858718997257
+          },
+          "active_normal_load_sum_N": 4.7919977197508015,
+          "max_active_elliptic_cone_utilization": 0.4416269171094733,
+          "driver_position_rad": 0.35982560223692006,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -0.00016359469802741295
+        }
+      ],
+      "phases": {
+        "carry": {
+          "samples": 79,
+          "median_active_normal_load_sum_N": 3.764562944047698,
+          "bilateral_active_contact_samples": 79
+        },
+        "close": {
+          "samples": 26,
+          "median_active_normal_load_sum_N": 3.769077580679563,
+          "bilateral_active_contact_samples": 26
+        },
+        "pregrasp": {
+          "samples": 186,
+          "median_active_normal_load_sum_N": 0.2718068318638631,
+          "bilateral_active_contact_samples": 106
+        },
+        "reach": {
+          "samples": 15,
+          "median_active_normal_load_sum_N": 0.2384886829760997,
+          "bilateral_active_contact_samples": 9
+        },
+        "release": {
+          "samples": 1,
+          "median_active_normal_load_sum_N": 0.3743059331295233,
+          "bilateral_active_contact_samples": 1
+        }
+      },
+      "artifact": {
+        "path": "logs/eval/mars-grasp-contact-probe-v1/left-50g-0.json.gz",
+        "sha256": "bf978e72a9319ba7e7c7d3250b9425e74f2f8e721bf0d94450f916f8c2c33741",
+        "bytes": 3962130
+      }
+    },
+    {
+      "case_id": "left:100g:0",
+      "baseline_exact": true,
+      "success": false,
+      "failure": "retention_lost",
+      "stop_confirmed": true,
+      "measurement_samples": 348,
+      "first_fault": {
+        "time_s": 18.250000000000764,
+        "phase": "carry",
+        "failure": "retention_lost",
+        "geometric_contacts": 2,
+        "active_contacts_normal_at_least_0_05N": 2,
+        "active_normal_load_by_finger_N": {
+          "link61": 1.180293166693397,
+          "link62": 1.1524179388818803
+        },
+        "active_normal_load_sum_N": 2.332711105575277,
+        "max_active_elliptic_cone_utilization": 1.0,
+        "driver_position_rad": 0.20668369419783097,
+        "grip_target_rad": 0.0,
+        "minimum_signed_contact_distance_m": -5.988563713509073e-05
+      },
+      "first_fault_raw_contacts": [
+        {
+          "geom_names": [
+            "link61_contact",
+            ""
+          ],
+          "body_names": [
+            "link61",
+            "object1"
+          ],
+          "distance_m": -4.044050097685535e-06,
+          "position_world_m": [
+            0.2914257054245797,
+            -0.06597237139393546,
+            0.2807183991488356
+          ],
+          "contact_frame_rows": [
+            [
+              0.2330498744379621,
+              0.9722645224234278,
+              -0.019734600608933745
+            ],
+            [
+              0.004600042034672163,
+              0.01919098940840147,
+              0.999805253806363
+            ],
+            [
+              0.9724539041197425,
+              -0.23309526885432627,
+              0.0
+            ]
+          ],
+          "contact_dimension": 4,
+          "combined_friction": [
+            1.0,
+            1.0,
+            0.005,
+            0.0001,
+            0.0001
+          ],
+          "force_torque_contact_frame": [
+            1.180293166693397,
+            0.5356810810963344,
+            -0.23886478475195733,
+            -0.005121233624098763,
+            0.0,
+            0.0
+          ],
+          "polarity": "Raw mj_contactForce convention; no body force sign assigned."
+        },
+        {
+          "geom_names": [
+            "link62_contact",
+            ""
+          ],
+          "body_names": [
+            "link62",
+            "object1"
+          ],
+          "distance_m": -5.988563713509073e-05,
+          "position_world_m": [
+            0.29192546564198885,
+            -0.05001141136845735,
+            0.28068087441229683
+          ],
+          "contact_frame_rows": [
+            [
+              0.17751619600656499,
+              -0.9838690944644937,
+              -0.022127022234732792
+            ],
+            [
+              0.003928866730436124,
+              -0.021775424661549813,
+              0.9997551674720285
+            ],
+            [
+              -0.9841100366125598,
+              -0.17755966838904247,
+              0.0
+            ]
+          ],
+          "contact_dimension": 4,
+          "combined_friction": [
+            1.0,
+            1.0,
+            0.005,
+            0.0001,
+            0.0001
+          ],
+          "force_torque_contact_frame": [
+            1.1524179388818803,
+            0.5009489687600699,
+            0.2681179770482445,
+            0.005013057916428207,
+            0.0,
+            0.0
+          ],
+          "polarity": "Raw mj_contactForce convention; no body force sign assigned."
+        }
+      ],
+      "last_carry_second_before_first_fault": [
+        {
+          "time_s": 17.250000000001318,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 2,
+          "active_contacts_normal_at_least_0_05N": 2,
+          "active_normal_load_by_finger_N": {
+            "link61": 1.18449720161627,
+            "link62": 1.2271729997809107
+          },
+          "active_normal_load_sum_N": 2.4116702013971807,
+          "max_active_elliptic_cone_utilization": 0.8966081160890745,
+          "driver_position_rad": 0.21343899932213425,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -3.757881591583583e-05
+        },
+        {
+          "time_s": 17.30000000000129,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 2,
+          "active_contacts_normal_at_least_0_05N": 2,
+          "active_normal_load_by_finger_N": {
+            "link61": 1.2129231989816682,
+            "link62": 1.2041298452223788
+          },
+          "active_normal_load_sum_N": 2.4170530442040468,
+          "max_active_elliptic_cone_utilization": 0.9077432433011566,
+          "driver_position_rad": 0.2134427245635485,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -3.703998391384723e-05
+        },
+        {
+          "time_s": 17.350000000001263,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 2,
+          "active_contacts_normal_at_least_0_05N": 2,
+          "active_normal_load_by_finger_N": {
+            "link61": 1.184181663607851,
+            "link62": 1.2274353271978953
+          },
+          "active_normal_load_sum_N": 2.4116169908057463,
+          "max_active_elliptic_cone_utilization": 0.8967244427487966,
+          "driver_position_rad": 0.21342778672539578,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -3.7627272436935076e-05
+        },
+        {
+          "time_s": 17.400000000001235,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 2,
+          "active_contacts_normal_at_least_0_05N": 2,
+          "active_normal_load_by_finger_N": {
+            "link61": 1.2125726801360677,
+            "link62": 1.2043879733091003
+          },
+          "active_normal_load_sum_N": 2.4169606534451678,
+          "max_active_elliptic_cone_utilization": 0.907847761442186,
+          "driver_position_rad": 0.21343150012303896,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -3.698564075286855e-05
+        },
+        {
+          "time_s": 17.450000000001207,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 2,
+          "active_contacts_normal_at_least_0_05N": 2,
+          "active_normal_load_by_finger_N": {
+            "link61": 1.1838637840233335,
+            "link62": 1.2277002311342695
+          },
+          "active_normal_load_sum_N": 2.411564015157603,
+          "max_active_elliptic_cone_utilization": 0.8968419667108445,
+          "driver_position_rad": 0.21341659256779394,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -3.767636402089361e-05
+        },
+        {
+          "time_s": 17.50000000000118,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 2,
+          "active_contacts_normal_at_least_0_05N": 2,
+          "active_normal_load_by_finger_N": {
+            "link61": 1.2122207221980823,
+            "link62": 1.2046477528680857
+          },
+          "active_normal_load_sum_N": 2.4168684750661678,
+          "max_active_elliptic_cone_utilization": 0.9079535218960262,
+          "driver_position_rad": 0.2134202905343521,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -3.693127502120804e-05
+        },
+        {
+          "time_s": 17.550000000001152,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 2,
+          "active_contacts_normal_at_least_0_05N": 2,
+          "active_normal_load_by_finger_N": {
+            "link61": 1.1835463417619585,
+            "link62": 1.2279650658207735
+          },
+          "active_normal_load_sum_N": 2.411511407582732,
+          "max_active_elliptic_cone_utilization": 0.8969594009103137,
+          "driver_position_rad": 0.21340540856943827,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -3.7725552015561275e-05
+        },
+        {
+          "time_s": 17.600000000001124,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 2,
+          "active_contacts_normal_at_least_0_05N": 2,
+          "active_normal_load_by_finger_N": {
+            "link61": 1.2118681337571653,
+            "link62": 1.2049084491920288
+          },
+          "active_normal_load_sum_N": 2.4167765829491943,
+          "max_active_elliptic_cone_utilization": 0.9080597049189093,
+          "driver_position_rad": 0.21340908866288827,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -3.6876797293213917e-05
+        },
+        {
+          "time_s": 17.650000000001096,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 2,
+          "active_contacts_normal_at_least_0_05N": 2,
+          "active_normal_load_by_finger_N": {
+            "link61": 1.1826666013652412,
+            "link62": 1.225761383066583
+          },
+          "active_normal_load_sum_N": 2.408427984431824,
+          "max_active_elliptic_cone_utilization": 0.8986482027790925,
+          "driver_position_rad": 0.21329312157189192,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -3.749770780725011e-05
+        },
+        {
+          "time_s": 17.70000000000107,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 2,
+          "active_contacts_normal_at_least_0_05N": 2,
+          "active_normal_load_by_finger_N": {
+            "link61": 1.209191581028492,
+            "link62": 1.206350769718249
+          },
+          "active_normal_load_sum_N": 2.415542350746741,
+          "max_active_elliptic_cone_utilization": 0.891767994966725,
+          "driver_position_rad": 0.21330954104539146,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -3.533357681738415e-05
+        },
+        {
+          "time_s": 17.75000000000104,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 2,
+          "active_contacts_normal_at_least_0_05N": 2,
+          "active_normal_load_by_finger_N": {
+            "link61": 1.1825838297301248,
+            "link62": 1.225684450285
+          },
+          "active_normal_load_sum_N": 2.4082682800151245,
+          "max_active_elliptic_cone_utilization": 0.8999329661485491,
+          "driver_position_rad": 0.21324658382608697,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -3.761067394586597e-05
+        },
+        {
+          "time_s": 17.800000000001013,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 2,
+          "active_contacts_normal_at_least_0_05N": 2,
+          "active_normal_load_by_finger_N": {
+            "link61": 1.2100684681710134,
+            "link62": 1.2040569015988543
+          },
+          "active_normal_load_sum_N": 2.4141253697698675,
+          "max_active_elliptic_cone_utilization": 0.9022787841946154,
+          "driver_position_rad": 0.21331427405039374,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -3.600763612720451e-05
+        },
+        {
+          "time_s": 17.850000000000986,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 2,
+          "active_contacts_normal_at_least_0_05N": 2,
+          "active_normal_load_by_finger_N": {
+            "link61": 1.1830867658182458,
+            "link62": 1.226300567639144
+          },
+          "active_normal_load_sum_N": 2.40938733345739,
+          "max_active_elliptic_cone_utilization": 0.8924537265158866,
+          "driver_position_rad": 0.21326195511742255,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -3.806689776664134e-05
+        },
+        {
+          "time_s": 17.900000000000958,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 2,
+          "active_contacts_normal_at_least_0_05N": 2,
+          "active_normal_load_by_finger_N": {
+            "link61": 1.2004741496746312,
+            "link62": 1.207956127880434
+          },
+          "active_normal_load_sum_N": 2.4084302775550652,
+          "max_active_elliptic_cone_utilization": 0.9140687113297246,
+          "driver_position_rad": 0.21332837850134925,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -3.539697902475796e-05
+        },
+        {
+          "time_s": 17.95000000000093,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 2,
+          "active_contacts_normal_at_least_0_05N": 2,
+          "active_normal_load_by_finger_N": {
+            "link61": 1.205721647082956,
+            "link62": 1.2064821235391172
+          },
+          "active_normal_load_sum_N": 2.412203770622073,
+          "max_active_elliptic_cone_utilization": 0.9014755114408453,
+          "driver_position_rad": 0.21328486743809977,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -3.819075506393524e-05
+        },
+        {
+          "time_s": 18.000000000000902,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 2,
+          "active_contacts_normal_at_least_0_05N": 2,
+          "active_normal_load_by_finger_N": {
+            "link61": 1.24405211570174,
+            "link62": 1.2810656475504907
+          },
+          "active_normal_load_sum_N": 2.5251177632522306,
+          "max_active_elliptic_cone_utilization": 0.8744524443533404,
+          "driver_position_rad": 0.21153610372625642,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -5.741467584927412e-05
+        },
+        {
+          "time_s": 18.050000000000875,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 2,
+          "active_contacts_normal_at_least_0_05N": 2,
+          "active_normal_load_by_finger_N": {
+            "link61": 1.2388095214188177,
+            "link62": 1.2422702882803052
+          },
+          "active_normal_load_sum_N": 2.481079809699123,
+          "max_active_elliptic_cone_utilization": 0.911780667240336,
+          "driver_position_rad": 0.2105556356212229,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -4.996603972453714e-05
+        },
+        {
+          "time_s": 18.100000000000847,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 2,
+          "active_contacts_normal_at_least_0_05N": 2,
+          "active_normal_load_by_finger_N": {
+            "link61": 1.2200259367377235,
+            "link62": 1.2198180033674466
+          },
+          "active_normal_load_sum_N": 2.4398439401051704,
+          "max_active_elliptic_cone_utilization": 0.946068783155074,
+          "driver_position_rad": 0.20957106964623837,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -4.724675539960088e-05
+        },
+        {
+          "time_s": 18.15000000000082,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 2,
+          "active_contacts_normal_at_least_0_05N": 2,
+          "active_normal_load_by_finger_N": {
+            "link61": 1.2254779981901471,
+            "link62": 1.21696835639156
+          },
+          "active_normal_load_sum_N": 2.4424463545817074,
+          "max_active_elliptic_cone_utilization": 0.9815803631656039,
+          "driver_position_rad": 0.20798102324167303,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -5.587893517952162e-05
+        },
+        {
+          "time_s": 18.20000000000079,
+          "phase": "carry",
+          "failure": null,
+          "geometric_contacts": 2,
+          "active_contacts_normal_at_least_0_05N": 2,
+          "active_normal_load_by_finger_N": {
+            "link61": 1.1889716648926385,
+            "link62": 1.1778305439062238
+          },
+          "active_normal_load_sum_N": 2.3668022087988625,
+          "max_active_elliptic_cone_utilization": 1.0,
+          "driver_position_rad": 0.20731405070872766,
+          "grip_target_rad": 0.0,
+          "minimum_signed_contact_distance_m": -6.552565529883167e-05
+        }
+      ],
+      "phases": {
+        "carry": {
+          "samples": 160,
+          "median_active_normal_load_sum_N": 2.78206821370196,
+          "bilateral_active_contact_samples": 160
+        },
+        "close": {
+          "samples": 27,
+          "median_active_normal_load_sum_N": 3.6456866951208142,
+          "bilateral_active_contact_samples": 27
+        },
+        "pregrasp": {
+          "samples": 141,
+          "median_active_normal_load_sum_N": 0.1504972237074476,
+          "bilateral_active_contact_samples": 42
+        },
+        "reach": {
+          "samples": 15,
+          "median_active_normal_load_sum_N": 0.24496109445898517,
+          "bilateral_active_contact_samples": 15
+        },
+        "release": {
+          "samples": 1,
+          "median_active_normal_load_sum_N": 0.2707547378864506,
+          "bilateral_active_contact_samples": 1
+        }
+      },
+      "artifact": {
+        "path": "logs/eval/mars-grasp-contact-probe-v1/left-100g-0.json.gz",
+        "sha256": "a4e3a67eaba4fd861520e28c95c297d1d3d9d8b9925a15672fcdd35c8a32da7c",
+        "bytes": 4393957
+      }
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "logs/eval/mars-grasp-contact-probe-v1/summary.json",
+      "bytes": 1136,
+      "sha256": "357f377540b8080a0315e3ed3f2e18e12eeb4f5c894bdee741480b34389fb424"
+    },
+    {
+      "path": "logs/recovery/hand-accuracy-v1/grasp-contact-probe.py",
+      "bytes": 5286,
+      "sha256": "036d21555008cc33bbff05162cc1dd33bd1cb75af4420d43d6b48b9de396aa47"
+    },
+    {
+      "path": "logs/recovery/hand-accuracy-v1/contact-force-summary.py",
+      "bytes": 3765,
+      "sha256": "3f42b1db1a2169a8f868572b55d199a60e85cbb4a6ccd852c01151af2c6c104b"
+    },
+    {
+      "path": ".venv/lib/python3.10/site-packages/mujoco/include/mujoco/mjdata.h",
+      "bytes": 29553,
+      "sha256": "ee5e1515e286f7ab2105f14a632916c7b1a3a3fa3b109e2b9cb609490b01cbb9"
+    }
+  ]
+}

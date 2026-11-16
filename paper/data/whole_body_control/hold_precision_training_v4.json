@@ -1,0 +1,69 @@
+{
+  "new_ppo_steps": 8192,
+  "this_iteration_ppo_steps_including_v3": 25600,
+  "candidate": "logs/manipulation/hold-fixed-contract-feedback-v8/seed-64/step-8192",
+  "weights_sha256": "68cf2f5d8f9f9b2ef7acb6c040564dbf9eb3c596145fdbed753452ce0114682e",
+  "validation": {
+    "validation": {
+      "episodes": 5,
+      "success_by_category": {
+        "carry": 1.0,
+        "disturbance": 0.0,
+        "place": 0.0,
+        "pregrasp": 0.0,
+        "reach": 0.0
+      }
+    },
+    "teacher-validation": {
+      "episodes": 5,
+      "success_by_category": {
+        "carry": 1.0,
+        "disturbance": 0.0,
+        "place": 0.0,
+        "pregrasp": 0.0,
+        "reach": 1.0
+      }
+    },
+    "curriculum-validation": {
+      "episodes": 5,
+      "success_by_category": {
+        "carry": 0.0,
+        "disturbance": 1.0,
+        "place": 0.0,
+        "pregrasp": 0.0,
+        "reach": 0.0
+      }
+    }
+  },
+  "paired_comparison": {
+    "eligible": false,
+    "reasons": [
+      "innate_mars:reach:200000: lost teacher success",
+      "innate_mars:pregrasp:210000: unsafe_contact not false",
+      "innate_mars:disturbance:240000: retention_lost not false",
+      "carry: joint_error_mean worse or unsupported",
+      "carry: ee_position_error_p95 worse or unsupported",
+      "carry: ee_orientation_error_p95 worse or unsupported",
+      "reach: lower success",
+      "reach: ee_position_error_p95 worse or unsupported",
+      "reach: ee_orientation_error_p95 worse or unsupported",
+      "disturbance: ee_orientation_error_p95 worse or unsupported",
+      "place: ee_position_error_p95 worse or unsupported",
+      "place: base_contract_violation_p95 worse or unsupported",
+      "pregrasp: joint_error_mean worse or unsupported",
+      "pregrasp: ee_position_error_p95 worse or unsupported",
+      "pregrasp: ee_orientation_error_p95 worse or unsupported",
+      "pregrasp: peak_contact_force_p95 worse or unsupported",
+      "pregrasp: peak_contact_force_max worse or unsupported",
+      "pregrasp: peak_measured_jerk_p95 worse or unsupported",
+      "pregrasp: peak_measured_jerk_max worse or unsupported"
+    ],
+    "paired_success_count": 1,
+    "teacher_paired_time": 1.8500000000006178,
+    "policy_paired_time": 2.300000000000768
+  },
+  "source_note": "Original training sources retained. UI binding and evidence-writer corrections happen after training; required inference/control sources match.",
+  "full_report_archive": "paper/data/whole_body_control/hold_precision_training_v4.json.gz",
+  "uncompressed_sha256": "df9c96204e8f0c3138ae250499efbfa676eae256a6ad726e6ddacf6ab8bfdad1",
+  "safety_promoted": false
+}

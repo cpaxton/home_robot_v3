@@ -63,6 +63,23 @@ Dynagraph's graph merge and staleness target \emph{discrete object nodes for EQA
 \textbf{$\delta$-mem}~\citep{lei2026deltamem} compresses history into a low-rank attention state during inference.
 These works motivate \emph{incremental} and \emph{bounded} memory but do not address embodied 3D exploration; we cite them for the forgetting/update narrative only.
 
+\subsection{Whole-body control and learned dynamics}
+
+Unified control is relevant when manipulation and base motion must be
+coordinated beneath a task planner. Deep Whole-Body Control~\citep{fu2023deepwholebody}
+learns joint locomotion/manipulation with online adaptation and advantage
+mixing. WHOLE-MoMa~\citep{jauhri2026wholemoma} instead reuses randomized
+classical-controller data through offline reinforcement learning and
+action-chunked policies for articulated-object mobile manipulation.
+SuperMimic~\citep{liao2026supermimic} learns shared differentiable dynamics and
+improves a humanoid motion tracker through short imagined rollouts; its reported
+scope leaves terrain and object interaction open.
+These suggest complementary coordination, data-reuse and training-efficiency
+directions. Our simulator controller experiments (Appendix~\ref{app:whole_body_control})
+preserve a sensor/goal-conditioned actor and independent executor checks.
+They do not implement these complete methods or establish comparable task
+performance, transfer or compute efficiency.
+
 \subsection{Benchmarks}
 
 We target \textbf{HM-EQA} and \textbf{OpenEQA}-style evaluation via a Habitat harness (GraphEQA parity) and complementary \textbf{Robocasa} / \textbf{MolmoSpaces}~\citep{molmospaces2026} episodes in MuJoCo with multi-robot support in \texttt{emet}.

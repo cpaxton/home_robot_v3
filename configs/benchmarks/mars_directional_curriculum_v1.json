@@ -1,0 +1,439 @@
+{
+  "format": "mars-directional-curriculum-v1",
+  "scope": "Prepared, not admitted or trained: fixed directional coverage comparison and fresh reset/combination audit; no hardware or qualification claim.",
+  "parent_suite": "configs/benchmarks/mars_tracking_mastery_supported_v1.json",
+  "parent_suite_file_sha256": "16b5252f7007ec82d87b68c311e003b37c68d336bfa88cb8e929dbc422feb083",
+  "control_spec": "configs/benchmarks/mars_whole_body_basic_learning_v1.json",
+  "control_spec_file_sha256": "92373854f3ba56f066384ec2ae77cb459107246190705d240514c3cfb313b5a0",
+  "config_overrides": {
+    "wheel_feedback_current_velocity": true
+  },
+  "training_stage_weights": {
+    "base": 0.3,
+    "arm": 0.5,
+    "coupled": 0.2
+  },
+  "train_case_ids": [
+    "train:base:hold",
+    "train:base:forward",
+    "train:base:reverse",
+    "train:base:yaw_left",
+    "train:base:yaw_right",
+    "train:arm:shoulder_left",
+    "train:arm:shoulder_right",
+    "train:arm:pitch_up",
+    "train:arm:pitch_down",
+    "train:arm:elbow_up",
+    "train:arm:elbow_down",
+    "train:arm:wrist_up",
+    "train:arm:wrist_down",
+    "train:arm:roll_left",
+    "train:arm:roll_right",
+    "train:coupled:forward_turn",
+    "train:coupled:reverse_turn"
+  ],
+  "evaluation_case_ids": [
+    "train:base:hold",
+    "train:base:forward",
+    "train:arm:pitch_up",
+    "train:arm:pitch_down",
+    "train:arm:roll_left",
+    "train:arm:roll_right",
+    "train:arm:pitch_up@amplitude:0.25",
+    "train:arm:pitch_up@amplitude:0.5",
+    "train:arm:pitch_down@amplitude:0.25",
+    "train:arm:pitch_down@amplitude:0.5",
+    "train:arm:supported_A_up@amplitude:0.25",
+    "train:arm:supported_A_up"
+  ],
+  "audit_cases": [
+    {
+      "id": "audit:base:combined_0",
+      "split": "validation",
+      "stage": "base",
+      "reset_seed": 34820000,
+      "travel_m": 0.018,
+      "turn_rad": 0.018,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "audit:base:combined_1",
+      "split": "validation",
+      "stage": "base",
+      "reset_seed": 34820001,
+      "travel_m": 0.018,
+      "turn_rad": -0.018,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "audit:base:combined_2",
+      "split": "validation",
+      "stage": "base",
+      "reset_seed": 34820002,
+      "travel_m": -0.018,
+      "turn_rad": 0.018,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "audit:base:combined_3",
+      "split": "validation",
+      "stage": "base",
+      "reset_seed": 34820003,
+      "travel_m": -0.018,
+      "turn_rad": -0.018,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "audit:base:combined_4",
+      "split": "validation",
+      "stage": "base",
+      "reset_seed": 34820004,
+      "travel_m": 0.026,
+      "turn_rad": 0.035,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "audit:base:combined_5",
+      "split": "validation",
+      "stage": "base",
+      "reset_seed": 34820005,
+      "travel_m": 0.026,
+      "turn_rad": -0.035,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "audit:base:combined_6",
+      "split": "validation",
+      "stage": "base",
+      "reset_seed": 34820006,
+      "travel_m": -0.026,
+      "turn_rad": 0.035,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "audit:base:combined_7",
+      "split": "validation",
+      "stage": "base",
+      "reset_seed": 34820007,
+      "travel_m": -0.026,
+      "turn_rad": -0.035,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "audit:arm:combined_0",
+      "split": "validation",
+      "stage": "arm",
+      "reset_seed": 34820008,
+      "travel_m": 0,
+      "turn_rad": 0,
+      "arm_delta": [
+        0.02,
+        -0.015,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "audit:arm:combined_1",
+      "split": "validation",
+      "stage": "arm",
+      "reset_seed": 34820009,
+      "travel_m": 0,
+      "turn_rad": 0,
+      "arm_delta": [
+        -0.02,
+        0.015,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "audit:arm:combined_2",
+      "split": "validation",
+      "stage": "arm",
+      "reset_seed": 34820010,
+      "travel_m": 0,
+      "turn_rad": 0,
+      "arm_delta": [
+        0,
+        -0.02,
+        0.03,
+        -0.015,
+        0
+      ]
+    },
+    {
+      "id": "audit:arm:combined_3",
+      "split": "validation",
+      "stage": "arm",
+      "reset_seed": 34820011,
+      "travel_m": 0,
+      "turn_rad": 0,
+      "arm_delta": [
+        0,
+        0.02,
+        -0.03,
+        0.015,
+        0
+      ]
+    },
+    {
+      "id": "audit:arm:combined_4",
+      "split": "validation",
+      "stage": "arm",
+      "reset_seed": 34820012,
+      "travel_m": 0,
+      "turn_rad": 0,
+      "arm_delta": [
+        0,
+        0,
+        0.025,
+        -0.02,
+        0.02
+      ],
+      "arm_start": [
+        0,
+        -0.38,
+        -0.04,
+        0.42,
+        0
+      ]
+    },
+    {
+      "id": "audit:arm:combined_5",
+      "split": "validation",
+      "stage": "arm",
+      "reset_seed": 34820013,
+      "travel_m": 0,
+      "turn_rad": 0,
+      "arm_delta": [
+        0,
+        0,
+        -0.025,
+        0.02,
+        -0.02
+      ],
+      "arm_start": [
+        0.03,
+        -0.42,
+        0.04,
+        0.38,
+        -0.03
+      ]
+    },
+    {
+      "id": "audit:arm:combined_6",
+      "split": "validation",
+      "stage": "arm",
+      "reset_seed": 34820014,
+      "travel_m": 0,
+      "turn_rad": 0,
+      "arm_delta": [
+        0.015,
+        0,
+        0,
+        0.02,
+        -0.02
+      ],
+      "arm_start": [
+        0,
+        -0.38,
+        -0.04,
+        0.42,
+        0
+      ]
+    },
+    {
+      "id": "audit:arm:combined_7",
+      "split": "validation",
+      "stage": "arm",
+      "reset_seed": 34820015,
+      "travel_m": 0,
+      "turn_rad": 0,
+      "arm_delta": [
+        -0.015,
+        0,
+        0,
+        -0.02,
+        0.02
+      ],
+      "arm_start": [
+        0.03,
+        -0.42,
+        0.04,
+        0.38,
+        -0.03
+      ]
+    },
+    {
+      "id": "audit:coupled:combined_0",
+      "split": "validation",
+      "stage": "coupled",
+      "reset_seed": 34820016,
+      "travel_m": 0.011,
+      "turn_rad": 0.021,
+      "arm_delta": [
+        0.02,
+        -0.015,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "audit:coupled:combined_1",
+      "split": "validation",
+      "stage": "coupled",
+      "reset_seed": 34820017,
+      "travel_m": -0.011,
+      "turn_rad": 0.021,
+      "arm_delta": [
+        -0.02,
+        0.015,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "audit:coupled:combined_2",
+      "split": "validation",
+      "stage": "coupled",
+      "reset_seed": 34820018,
+      "travel_m": 0.011,
+      "turn_rad": -0.021,
+      "arm_delta": [
+        0,
+        -0.02,
+        0.03,
+        -0.015,
+        0
+      ]
+    },
+    {
+      "id": "audit:coupled:combined_3",
+      "split": "validation",
+      "stage": "coupled",
+      "reset_seed": 34820019,
+      "travel_m": -0.011,
+      "turn_rad": -0.021,
+      "arm_delta": [
+        0,
+        0.02,
+        -0.03,
+        0.015,
+        0
+      ]
+    },
+    {
+      "id": "audit:coupled:combined_4",
+      "split": "validation",
+      "stage": "coupled",
+      "reset_seed": 34820020,
+      "travel_m": 0.011,
+      "turn_rad": 0.021,
+      "arm_delta": [
+        0,
+        0,
+        0.025,
+        -0.02,
+        0.02
+      ]
+    },
+    {
+      "id": "audit:coupled:combined_5",
+      "split": "validation",
+      "stage": "coupled",
+      "reset_seed": 34820021,
+      "travel_m": -0.011,
+      "turn_rad": 0.021,
+      "arm_delta": [
+        0,
+        0,
+        -0.025,
+        0.02,
+        -0.02
+      ]
+    },
+    {
+      "id": "audit:coupled:combined_6",
+      "split": "validation",
+      "stage": "coupled",
+      "reset_seed": 34820022,
+      "travel_m": 0.011,
+      "turn_rad": -0.021,
+      "arm_delta": [
+        0.015,
+        0,
+        0,
+        0.02,
+        -0.02
+      ]
+    },
+    {
+      "id": "audit:coupled:combined_7",
+      "split": "validation",
+      "stage": "coupled",
+      "reset_seed": 34820023,
+      "travel_m": -0.011,
+      "turn_rad": -0.021,
+      "arm_delta": [
+        -0.015,
+        0,
+        0,
+        -0.02,
+        0.02
+      ]
+    }
+  ]
+}

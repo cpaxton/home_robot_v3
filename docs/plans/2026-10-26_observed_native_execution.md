@@ -4,6 +4,10 @@ Status: attachment, reference tracking, visual-effect checks and the explicitly
 injected native/task adapter are implemented and pass synthetic integration tests.
 The default RGBD provider remains read-only pending live source assembly and
 sensor/geometry qualification.
+The independently reviewable foundation is PR #226. Its unresolved live
+self-occupancy/contact admission gate is tracked explicitly in
+[issue #245](https://github.com/cpaxton/home_robot_v3/issues/245); keep the raw-depth
+`invalid_start` regression and default read-only discovery when landing that PR.
 October 29: synchronized simulator images/motors and motor-only rigid EE FK pass
 live development checks. Full observed transfers remain unqualified: symmetry,
 unmeasured gripper geometry and contact/occupancy integration are the next gates.
@@ -448,3 +452,11 @@ camera/encoder uncertainty, then run the stationary public-tool transfer. The
 default source remains read-only and full observed task acceptance remains open.
 Keep this separate from the privileged control, diagnostic candidates and any RL
 training work. [Attempts, protocols and video](../experiments/observed_handoff_20261030.md).
+
+November 16: current-main integration passes 1,022 affected tests, with no
+failures/errors/skips. The fresh native control still completes, while head/wrist
+association stops after 1/81 captures when a longer first capture gap admits two
+foreign pixels into the full-union fit. Original-clock replay preserves both the
+old 81/81 and new 1/81 outcomes; no profile or freshness threshold is loosened.
+Treat capture-cadence/association robustness separately from robot self-occupancy
+in issue #245. [Integration evidence](../experiments/pr226_main_integration_20261116.md).
