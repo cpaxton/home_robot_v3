@@ -411,7 +411,7 @@ class ManipulationConfig:
 class ManipulationEnv(gym.Env):
     metadata = {"render_modes": []}
 
-    def __init__(self, config=None):
+    def __init__(self, config=None, *, mesh_storage="inline"):
         self.config = config if isinstance(config, ManipulationConfig) else ManipulationConfig(**(config or {}))
         self.profile = PROFILES[self.config.robot]
         self.reach_hold_trial = self.fixed_base_trial = False
@@ -431,6 +431,7 @@ class ManipulationEnv(gym.Env):
             two_supports=self.config.two_supports,
             contact_cone=self.config.contact_cone,
             contact_impratio=self.config.contact_impratio,
+            mesh_storage=mesh_storage,
         )
         self.data = mujoco.MjData(self.model)
         mujoco.mj_forward(self.model, self.data)

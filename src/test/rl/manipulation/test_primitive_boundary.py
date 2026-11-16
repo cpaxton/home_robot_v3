@@ -41,6 +41,12 @@ def test_default_boundary_remains_pregrasp():
     env.close()
 
 
+@pytest.mark.parametrize("gain", [True, -0.1, 3, float("nan"), "0"])
+def test_invalid_feedback_gain_rejected_before_spawning(gain):
+    with pytest.raises(ValueError, match="wheel feedback gain"):
+        TampPrimitiveEnv([{"id": "stub"}], wheel_feedback_gain=gain)
+
+
 def test_rollout_propagates_boundary_and_keeps_early_failure(monkeypatch):
     from emet.rl.manipulation import tamp_primitive_env
     from emet.rl.manipulation.whole_body_training import primitive_rollout
@@ -66,12 +72,14 @@ def test_rollout_propagates_boundary_and_keeps_early_failure(monkeypatch):
 
 
 @pytest.mark.sim
-def test_native_grasp_pose_stops_before_closure_and_preserves_tick_credit():
+@pytest.mark.parametrize("gain", [0.0, 0.5])
+def test_native_grasp_pose_stops_before_closure_and_preserves_tick_credit(gain):
     from emet.rl.manipulation.whole_body_training import load_development
 
     suite, _ = load_development()
     env = TampPrimitiveEnv(
-        suite["train_cases"][1:2], oracle=True, primitive="grasp_pose", wheel_feedback_current_velocity=True
+        suite["train_cases"][1:2], oracle=True, primitive="grasp_pose", wheel_feedback_current_velocity=True,
+        wheel_feedback_gain=gain,
     )
     try:
         _, info = env.reset()
@@ -88,6 +96,7 @@ def test_native_grasp_pose_stops_before_closure_and_preserves_tick_credit():
         assert info["terminal_pose"]["position_error_m"] <= 0.003
         assert info["terminal_pose"]["orientation_error_rad"] <= 0.02
         assert info["stop_confirmed"] and not info["full_pick_place_success"]
+        assert info["wheel_feedback_gain"] == gain
         commands = info["commands"]
         assert any(c.get("phase") == "grasp" for c in commands)
         assert not any(c.get("gripper") == "close" or c.get("phase") == "lift" for c in commands)

@@ -12,8 +12,11 @@ from emet.robots.innate_mars.chassis import add_physical_chassis
 
 
 def build_manipulation_model(
-    robot, *, diagnostics=False, payload_asset_set="training", contact_cone="pyramidal", contact_impratio=1.0, two_supports=False
+    robot, *, diagnostics=False, payload_asset_set="training", contact_cone="pyramidal", contact_impratio=1.0, two_supports=False,
+    mesh_storage="inline",
 ):
+    if mesh_storage not in {"inline", "binary"}:
+        raise ValueError("mesh storage must be inline or binary")
     if type(two_supports) is not bool or (two_supports and robot != "innate_mars"):
         raise ValueError("two-support fixtures require Mars")
     if not np.isfinite(contact_impratio) or not 1 <= contact_impratio <= 10:
@@ -92,7 +95,13 @@ def build_manipulation_model(
     size.set("nconmax", "256")
     size.set("njmax", "512")
     xml = ET.tostring(root, encoding="unicode")
-    model = mujoco.MjModel.from_xml_string(xml)
+    if mesh_storage == "binary":
+        from emet.rl.manipulation.mesh_storage import binary_mesh_assets
+
+        compiled_xml, assets = binary_mesh_assets(xml)
+        model = mujoco.MjModel.from_xml_string(compiled_xml, assets)
+    else:
+        model = mujoco.MjModel.from_xml_string(xml)
     model.opt.disableflags |= int(mujoco.mjtDisableBit.mjDSBL_SENSOR)
     # Absolute asset lookup paths are not part of the portable model identity.
     compiler = root.find("compiler")

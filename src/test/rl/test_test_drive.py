@@ -535,3 +535,35 @@ def test_initial_navigation_reference_requires_all_six_base_velocities_to_be_qui
         assert c.task_trajectory is None
     finally:
         sim.close()
+
+
+def test_live_viewer_goal_command_resumes_paused_simulation_without_run_button():
+    import time
+    from emet.rl.test_drive import TestDrive
+
+    app = TestDrive([], "mars-arm")
+    def wait_for(predicate):
+        deadline = time.monotonic() + 20
+        while time.monotonic() < deadline:
+            with app.lock:
+                state = dict(app.snapshot)
+            assert state.get("status") != "error", state
+            if predicate(state):
+                return state
+            time.sleep(0.02)
+        raise AssertionError(f"viewer command did not complete: {state}")
+    try:
+        wait_for(lambda state: state.get("status") == "running")
+        app.commands.put({"op": "target_mode", "mode": 1})
+        wait_for(lambda state: state.get("control_mode") == 1)
+        app.commands.put({"op": "pause"})
+        paused = wait_for(lambda state: state.get("status") == "paused")
+        target = np.array(paused["current"]) + [0.02, 0, 0]
+        app.commands.put({"op": "goal", "values": target.tolist()})
+        resumed = wait_for(lambda state: state.get("status") == "running" and state.get("metrics", {}).get("time", 0) > paused["metrics"]["time"])
+        np.testing.assert_allclose(resumed["goal"], target)
+        assert app.frame and resumed["simulation_only"]
+    finally:
+        app.closed.set()
+        app.thread.join(timeout=10)
+        assert not app.thread.is_alive()

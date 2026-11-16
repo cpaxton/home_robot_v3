@@ -183,7 +183,8 @@ class Simulation:
             self.env = ManipulationEnv(
                 ManipulationConfig(
                     robot="innate_mars" if mode == "mars-arm" else "stretch", scenario=scenario, horizon=30
-                )
+                ),
+                mesh_storage="binary",
             )
         elif mode == "mars-base":
             from emet.rl.base import MarsBaseEnv
@@ -835,11 +836,11 @@ class TestDrive:
                         elif op == "goal":
                             reset_if_finished()
                             sim.goal(command["values"])
+                            running = True
                         elif op == "base_edits":
                             reset_if_finished()
                             sim.update_base_goals(command["edits"])
                             running, repeat = True, False
-                            running = True
                         elif op == "nudge":
                             reset_if_finished()
                             sim.nudge_goal(command["translation"], command.get("rotation_z", 0.0))
