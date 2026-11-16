@@ -40,7 +40,12 @@ def test_actual_model_final_tool_pack_describes_capabilities_without_legacy_rout
     assert "no required INVESTIGATE/EXPLORE sequence" in prompt
     assert "must investigate unused voxel detections" not in prompt
     assert "recall_image" in prompt
+    assert "navigate_to_obs" not in {tool.name for tool in tools}
+    assert "investigate" in {tool.name for tool in tools}
     assert "Movement validation and target verification are separate" in prompt
+    from emet.memory.graph_eqa.agentic.executor_init import TOOL_HANDLERS
+
+    assert TOOL_HANDLERS["navigate_to_obs"] is TOOL_HANDLERS["investigate"]
 
 
 @pytest.mark.parametrize("grounded_obs_id", [None, 0, 7])
@@ -72,9 +77,9 @@ def test_find_state_reports_selected_geometry_independently_of_visual_and_motion
         assert f'"status": "admitted", "object_obs_id": {grounded_obs_id}' in text
     assert "not a claim of current visibility, reachability or manipulation readiness" in text
     expected = "confirmed" if visually_verified else "unconfirmed"
-    assert f"Grounded-object handoff visual verification: {expected}" in text
-    assert "requires both admitted geometry and visual verification" in text
-    assert "Retained geometry alone does not satisfy that handoff" in text
+    assert f"Current visual verification: {expected}" in text
+    assert "does not require the object to remain in the current camera view" in text
+    assert "Physical action still requires fresh grounding and motion validation" in text
 
 
 @pytest.mark.parametrize(

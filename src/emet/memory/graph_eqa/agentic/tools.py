@@ -335,6 +335,9 @@ def build_agentic_eqa_tools(executor: AgenticEQAExecutor) -> list[Tool]:
     """EQA_EPISODE tool pack. Schemas/names come from :mod:`emet.agent.skills`; funcs dispatch via ``handle_tool``."""
     submode = getattr(executor, "mode", "answer")
     tools = build_skill_pack(AgentMode.EQA_EPISODE, executor, eqa_submode=submode)
+    if getattr(executor, "decision_policy", "legacy") == "model_final":
+        # Keep the compatibility handler, but advertise one navigation operation.
+        tools = [tool for tool in tools if tool.name != "navigate_to_obs"]
     if str(getattr(executor, "decision_policy", "legacy") or "legacy") == "grounded_v2":
         for tool in tools:
             if tool.name == "explore_frontier":
@@ -423,14 +426,14 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
         )
         text += "\nSelected object geometry for this query: " + json.dumps(geometry)
         text += " Retained geometry is not a claim of current visibility, reachability or manipulation readiness."
-        text += "\nGrounded-object handoff visual verification: " + (
+        text += "\nCurrent visual verification: " + (
             "confirmed" if getattr(executor, "_verified", False) else "unconfirmed"
         )
         text += (
             "\nCompletion requirement: localize the requested object. Visual presence alone is not success; "
-            "the existing grounded-object handoff requires both admitted geometry and visual verification. "
-            "Retained geometry alone does not satisfy that handoff while verification is unconfirmed. "
-            "If either is missing, the available sensing and movement tools can obtain another target view. "
+            "an independently admitted, non-invalidated object location is required. "
+            "A retained last-observed location does not require the object to remain in the current camera view. "
+            "Physical action still requires fresh grounding and motion validation. "
             "A camera/viewpoint position is not an object position."
         )
     agent = getattr(executor, "agent", None)
@@ -588,7 +591,7 @@ def _build_state_message(executor: AgenticEQAExecutor) -> str:
             mem_fn = getattr(gm, "_relevant_memory_summary", None)
             if callable(mem_fn) and bool(getattr(gm, "memory_summary_enabled", False)):
                 try:
-                    mem = mem_fn()
+                    mem = mem_fn(for_localization=getattr(executor, "_require_grounded_object", False))
                 except Exception:
                     mem = None
                 if mem:

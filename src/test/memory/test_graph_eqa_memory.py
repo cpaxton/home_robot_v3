@@ -241,6 +241,14 @@ def test_relevant_memory_summary_surfaces_observed_objects():
     assert "2 graph node(s)" not in present_line.split("nearest:")[0]
     assert "sofa: LOOK" in summary
 
+    find_summary = mem._relevant_memory_summary(for_localization=True)
+    assert find_summary.startswith("SEARCH_MEMORY")
+    assert "[graph obs 1]" in find_summary
+    assert "red: LOOK" in find_summary
+    assert "MCQ" not in find_summary
+    assert "count" not in find_summary
+    assert "CONFIRMED_MEMORY" in mem._relevant_memory_summary()
+
     mem._relevant_objects = ["unicorn"]
     missing = mem._relevant_memory_summary()
     assert "unicorn: not observed during exploration" in missing
