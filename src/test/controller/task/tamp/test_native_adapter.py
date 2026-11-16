@@ -480,6 +480,50 @@ def test_bounded_target_reserve_keeps_valid_margin_band_start_in_path(native):
     robot.close_gripper.assert_not_called()
 
 
+def test_checked_approach_plan_uses_real_shifted_base_without_commands(native, monkeypatch):
+    monkeypatch.setenv('EMET_SIM_NAV_TELEPORT', '0')
+    robot, data, context, _ = native
+    robot.move_base_to = Mock(return_value=True)
+    robot.cancel_navigation = Mock(return_value=True)
+    model = context['_native_tamp_adapter'].model
+    joint = model.body('object1').jntadr[0]
+    robot._state['native_tamp_snapshot']['qpos'][model.jnt_qposadr[joint]] = .025
+    adapter = NativeTableAdapter(robot, model=model, policy='bounded_approach')
+    before, ctrl = adapter.data.qpos.copy(), data.ctrl.copy()
+    result = adapter.plan(object_name='blue cube', receptacle_name='table')
+    assert result['status'] == 'ok', result
+    assert result['data']['base_motion'] == 'checked_unloaded_approach'
+    plan = adapter.plans[result['data']['plan_ref']]
+    assert plan.base_approach is not None
+    assert 0 < np.linalg.norm(np.subtract(plan.base_approach.goal[:2], plan.base_approach.start[:2])) <= .08+1e-9
+    assert adapter.planning_ik_calls <= 256
+    np.testing.assert_array_equal(adapter.data.qpos, before)
+    np.testing.assert_array_equal(data.ctrl, ctrl)
+    for command in (robot.move_base_to, robot.cancel_navigation, robot.arm_to, robot.open_gripper, robot.close_gripper):
+        command.assert_not_called()
+
+
+@pytest.mark.parametrize('started', [False, True])
+def test_failed_base_approach_cannot_dispatch_grasp(native, monkeypatch, started):
+    from emet.controller.task.tamp.native_approach import ApproachResult, BaseApproach
+    robot, _, context, call = native
+    adapter = context['_native_tamp_adapter']
+    ref = make_plan(call)
+    plan = adapter.plans[ref]
+    plan.base_approach = BaseApproach((0., 0., 0.), (.04, 0., 0.))
+    plan.executor.grasp_only = Mock(side_effect=AssertionError('grasp after failed approach'))
+    monkeypatch.setattr('emet.controller.task.tamp.native_adapter.execute_approach',
+                        lambda *args: ApproachResult(False, 'base_approach_failed', started))
+    result = call('execute_pick_place_plan', plan_ref=ref)
+    assert result['code'] == 'base_approach_failed'
+    assert result['status'] == ('partial' if started else 'error')
+    assert result['data']['execution_started'] is started
+    assert result['data']['failed_stage'] == 'base_approach'
+    assert call('execute_pick_place_plan', plan_ref=ref)['code'] == 'unknown_plan'
+    plan.executor.grasp_only.assert_not_called()
+    robot.arm_to.assert_not_called()
+
+
 def test_policy_change_invalidates_cached_native_handles(native):
     from emet.controller.task.tamp.native_adapter import adapter_for
     robot, _, context, _ = native

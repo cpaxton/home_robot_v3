@@ -15,7 +15,7 @@ from emet.motion.release import ReleaseLimits
 from .api import VerificationFailure
 
 FINE_GRASP_YAWS = (0.0, -0.175, 0.175, -0.35, 0.35, -0.7, 0.7, -1.57, 1.57)
-NATIVE_POLICIES = ("legacy", "bounded_release")
+NATIVE_POLICIES = ("legacy", "bounded_release", "bounded_approach")
 
 
 def require_native_policy(name):
@@ -34,6 +34,7 @@ class NativePolicy:
     gripper_close_loose: bool = False
     gripper_contact_hold_fraction: float = 0.0
     prefer_face_aligned_grasps: bool = False
+    checked_base_approach: bool = False
 
 
 def native_policy(name):
@@ -49,6 +50,7 @@ def native_policy(name):
             arm_extension_margin_m=0.0005,
             gripper_contact_hold_fraction=0.5,
             prefer_face_aligned_grasps=True,
+            checked_base_approach=name == 'bounded_approach',
         )
     )
 

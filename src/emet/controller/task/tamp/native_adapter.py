@@ -1,6 +1,6 @@
 # Copyright (c) Chris Paxton 2026
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
-"""Stationary Stretch native-debug adapter for the public JSON TAMP tools.
+"""Stretch native-debug adapter for the public JSON TAMP tools.
 
 Only the packaged table model is admitted. Motion uses normal client controllers;
 GT snapshots are explicit debug inputs. Observed discovery/execution is separate.
@@ -20,6 +20,12 @@ from emet.controller.manipulation.native_inputs import ObservationUnavailable
 from emet.controller.manipulation.native_scene import model_signature, read_snapshot
 from emet.controller.manipulation.physical_pick_place import PhysicalMotionResult, PhysicalPickPlaceExecutor
 from emet.controller.task.tamp.api import VerificationFailure, failure_code, response
+from emet.controller.task.tamp.native_approach import (
+    BaseApproach,
+    approach_available,
+    execute_approach,
+    planning_starts,
+)
 from emet.controller.task.tamp.native_policy import (
     FINE_GRASP_YAWS,
     bind_loaded_payload,
@@ -45,6 +51,7 @@ class NativePlan:
     placement_region: np.ndarray | None = None
     object_name: str = ""
     receptacle_name: str = ""
+    base_approach: BaseApproach | None = None
 
 
 class NativeTableAdapter:
@@ -59,6 +66,8 @@ class NativeTableAdapter:
     gripper_close_loose = False
     gripper_contact_hold_fraction = 0.0
     prefer_face_aligned_grasps = False
+    checked_base_approach = False
+    _planning_deadline = None
 
     def __init__(self, robot, *, model=None, policy='legacy'):
         selected = native_policy(policy)
@@ -68,7 +77,9 @@ class NativeTableAdapter:
         self.gripper_close_loose = selected.gripper_close_loose
         self.gripper_contact_hold_fraction = selected.gripper_contact_hold_fraction
         self.prefer_face_aligned_grasps = selected.prefer_face_aligned_grasps
-        if policy == 'bounded_release':
+        self.checked_base_approach = selected.checked_base_approach
+        self._planning_deadline = None
+        if policy != 'legacy':
             self.grasp_yaw_offsets = FINE_GRASP_YAWS
         if model is None:
             from emet.simulation.mujoco_server_stretch import default_scene_xml_path
@@ -101,8 +112,8 @@ class NativeTableAdapter:
 
     def _data(self, **extra):
         return {'mode': 'physical', 'inputs': 'privileged', 'native_motion_policy': self.policy, 'geometry_source': 'simulator_ground_truth',
-                'assistance': [], 'base_motion': 'stationary',
-                'collision_scope': 'sampled_arm_and_payload', **extra}
+                'assistance': [], 'base_motion': 'checked_unloaded_approach' if self.checked_base_approach else 'stationary',
+                'collision_scope': 'sampled_base_sweep_arm_and_payload' if self.checked_base_approach else 'sampled_arm_and_payload', **extra}
 
     def _record_rejection(self, phase, reason, executor):
         code = failure_code(reason)
@@ -286,12 +297,13 @@ class NativeTableAdapter:
 
     def _plan_candidate_pose(self, executor, target, rotation, *, ordered_groups=False):
         # One shared budget spans grasp alternatives and downstream placement.
-        if self.planning_ik_calls >= self.max_planning_ik_calls:
+        if (self.planning_ik_calls >= self.max_planning_ik_calls
+                or self._planning_deadline is not None and time.monotonic() >= self._planning_deadline):
             raise ValueError('no_plan_within_budget')
         self.planning_ik_calls += 1
         return executor.plan_pose(target, rotation, ordered_groups=ordered_groups)
 
-    def _grasp_candidates(self, executor, before, point, frames, pinch_offset, obj, *, approach_offset=(0., .08, .04)):
+    def _grasp_candidates(self, executor, before, point, frames, pinch_offset, obj, *, approach_offset=(0., .08, .04), aligned_only=False):
         candidates = []
         for frame, grasp_height in frames:
             for yaw in self.grasp_yaw_offsets:
@@ -302,7 +314,7 @@ class NativeTableAdapter:
             self.data.qpos[:] = before
             mujoco.mj_kinematics(self.model, self.data)
             candidates = face_aligned_grasp_order(self.model, self.data, obj,
-                closing_axis=self._pinch_geometry()[1], candidates=candidates)
+                closing_axis=self._pinch_geometry()[1], candidates=candidates, best_only=aligned_only)
         for rotation, grasp_height in candidates:
             self.data.qpos[:] = before
             executor.collision.set_payload(self.model, self.data, None)
@@ -326,21 +338,25 @@ class NativeTableAdapter:
             if len(paths) == 3:
                 yield rotation, paths
 
-    def _grasp_options(self, executor, before, point, frames, pinch_offset, obj):
+    def _grasp_options(self, executor, before, point, frames, pinch_offset, obj, *, aligned_only=False):
         # Preserve every existing candidate and the common IK budget before
         # trying a collision-checked vertical approach. No grasp is executed here.
-        yield from self._grasp_candidates(executor, before, point, frames, pinch_offset, obj)
+        options = {'aligned_only': True} if aligned_only else {}
+        yield from self._grasp_candidates(executor, before, point, frames, pinch_offset, obj, **options)
         if self.pregrasp_fallback_offset_m is not None:
             yield from self._grasp_candidates(executor, before, point, frames, pinch_offset, obj,
-                                             approach_offset=self.pregrasp_fallback_offset_m)
+                                             approach_offset=self.pregrasp_fallback_offset_m, **options)
 
     def plan(self, task_ref='', object_name='', receptacle_name='', placement_region=None):
         with self.lock:
+            if self.checked_base_approach and not approach_available(self.robot):
+                return self._failure('plan_pick_place', 'base_approach_unavailable')
             if self.gripper_contact_hold_fraction and not all(callable(getattr(self.robot, name, None))
                     for name in ('gripper_to', 'get_gripper_position')):
                 return self._failure('plan_pick_place', 'native_execution_unavailable')
             self.planning_rejections = {}
             self.planning_ik_calls = 0
+            self._planning_deadline = time.monotonic()+120. if self.checked_base_approach else None
             try:
                 region = None
                 if placement_region is not None:
@@ -378,6 +394,7 @@ class NativeTableAdapter:
                 placements = placements_from_mujoco_model(self.model, self.data)
                 point = np.asarray(placements[obj]['pos'])
                 rotation = self.data.body(executor.ee_body).xmat.reshape(3, 3).copy()
+                measured_rotation = rotation.copy()
                 surfaces = np.asarray(placements[support]['support_surfaces']).copy()
                 if region is not None:
                     surfaces[:, 0, :2] = np.maximum(surfaces[:, 0, :2], region[0])
@@ -387,90 +404,97 @@ class NativeTableAdapter:
                         return self._failure('plan_pick_place', 'placement_region_unavailable')
                 before = self.data.qpos.copy()
                 try:
-                    # The navigation wrist frame is not necessarily a valid grasp frame.
-                    # Search bounded wrist yaw alternatives around measured and home frames.
-                    home = mujoco.MjData(self.model)
-                    mujoco.mj_copyData(home, self.model, self.data)
-                    for name in ('wrist_yaw', 'wrist_pitch', 'wrist_roll'):
-                        home.qpos[self.model.joint('joint_'+name).qposadr[0]] = self.model.key_ctrl[0, self.model.actuator(name).id]
-                    mujoco.mj_kinematics(self.model, home)
-                    pinch_offset = self._pinch_center_offset()
-                    home_rotation = home.body(executor.ee_body).xmat.reshape(3, 3).copy()
-                    # Prefer a steeper pinch before shallow approaches: angled,
-                    # compliant pads can roll a payload during a shallow lift.
-                    # Keep the same alternatives for every object; feasibility
-                    # and measured contact execution still decide acceptance.
-                    frames = []
-                    height = float(np.diff(np.asarray(placements[obj]['bounds'])[:, 2])[0])
-                    for pitch in (np.pi / 4, np.pi / 12, np.pi / 3):
-                        c, sn = np.cos(pitch), np.sin(pitch)
-                        frame = home_rotation @ np.array([[c, sn, 0], [-sn, c, 0], [0, 0, 1]])
-                        for fraction in ((0.,) if pitch == np.pi / 12 else (0., .25, .4)):
-                            frames.append((frame, fraction * height))
-                    frames.extend([(home_rotation, 0.), (rotation, 0.)])
-                    for rotation, paths in self._grasp_options(executor, before, point, frames, pinch_offset, obj):
-                        executor.grasp_paths = paths
-                        lifted = self.data.qpos.copy()
-                        # Reuse the placement stack's obstacle-subtracted support search.
-                        from emet.motion.placement_geometry import HeldObject, PlacementScene
-                        from emet.motion.placement_surfaces import free_surface_centers
-                        lifted_placements = placements_from_mujoco_model(self.model, self.data)
-                        robot_ids = body_subtree(self.model, 'base_link')
-                        scene_entries = {name: entry for name, entry in lifted_placements.items()
-                                         if self.model.body(name).id not in robot_ids}
-                        scene = PlacementScene.from_placements(scene_entries, held_object=obj)
-                        ee = self.data.body(executor.ee_body)
-                        payload = HeldObject.from_world_bounds(lifted_placements[obj]['bounds'],
-                            ee_position=ee.xpos, ee_rotation=ee.xmat.reshape(3, 3))
-                        # Stationary reach is local: include clipped subpatches near the
-                        # grasp, rather than only centers across the whole tabletop.
-                        patches = list(surfaces)
-                        for radius in (.08, .16, .32):
-                            for surface in surfaces:
-                                patch = surface.copy()
-                                patch[0, :2] = np.maximum(patch[0, :2], point[:2]-radius)
-                                patch[1, :2] = np.minimum(patch[1, :2], point[:2]+radius)
-                                if np.all(patch[0, :2] < patch[1, :2]):
-                                    patches.append(patch)
-                        centers = free_surface_centers(patches, scene=scene, payload=payload,
-                            ee_rotation=rotation, max_centers=64).centers
-                        if not centers:
-                            self._record_rejection('surface', 'no_collision_free_placement', executor)
-                        centers.sort(key=lambda center: float(np.linalg.norm(center[:2]-point[:2])))
-                        for goal in centers:
-                            if region is None and np.linalg.norm(goal[:2]-point[:2]) < .04:
-                                continue
-                            self.data.qpos[:] = lifted
-                            mujoco.mj_kinematics(self.model, self.data)
-                            executor.place_targets = self._place_targets(executor, obj, goal, rotation)
-                            # Pure planning: never call the measured-state replan here, which would reset the hypothetical lift.
-                            candidates = []
-                            for i, (target, rot) in enumerate(executor.place_targets):
-                                if i == 2:
-                                    executor.collision.set_payload(self.model, self.data, None)
-                                    _, error = executor.plan_gripper_open()
+                    searches = (planning_starts(self.model, self.data, deadline=self._planning_deadline,
+                                               event=lambda **row: self.events.append(row))
+                                if self.checked_base_approach else [(None, before, False)])
+                    for approach, search_start, aligned_only in searches:
+                        self.data.qpos[:] = search_start
+                        mujoco.mj_kinematics(self.model, self.data)
+                        # The navigation wrist frame is not necessarily a valid grasp frame.
+                        # Search bounded wrist yaw alternatives around measured and home frames.
+                        home = mujoco.MjData(self.model)
+                        mujoco.mj_copyData(home, self.model, self.data)
+                        for name in ('wrist_yaw', 'wrist_pitch', 'wrist_roll'):
+                            home.qpos[self.model.joint('joint_'+name).qposadr[0]] = self.model.key_ctrl[0, self.model.actuator(name).id]
+                        mujoco.mj_kinematics(self.model, home)
+                        pinch_offset = self._pinch_center_offset()
+                        home_rotation = home.body(executor.ee_body).xmat.reshape(3, 3).copy()
+                        # Prefer a steeper pinch before shallow approaches: angled,
+                        # compliant pads can roll a payload during a shallow lift.
+                        # Keep the same alternatives for every object; feasibility
+                        # and measured contact execution still decide acceptance.
+                        frames = []
+                        height = float(np.diff(np.asarray(placements[obj]['bounds'])[:, 2])[0])
+                        for pitch in (np.pi / 4, np.pi / 12, np.pi / 3):
+                            c, sn = np.cos(pitch), np.sin(pitch)
+                            frame = home_rotation @ np.array([[c, sn, 0], [-sn, c, 0], [0, 0, 1]])
+                            for fraction in ((0.,) if pitch == np.pi / 12 else (0., .25, .4)):
+                                frames.append((frame, fraction * height))
+                        frames.extend([(home_rotation, 0.), (measured_rotation, 0.)])
+                        for rotation, paths in self._grasp_options(executor, search_start, point, frames, pinch_offset, obj, aligned_only=aligned_only):
+                            executor.grasp_paths = paths
+                            lifted = self.data.qpos.copy()
+                            # Reuse the placement stack's obstacle-subtracted support search.
+                            from emet.motion.placement_geometry import HeldObject, PlacementScene
+                            from emet.motion.placement_surfaces import free_surface_centers
+                            lifted_placements = placements_from_mujoco_model(self.model, self.data)
+                            robot_ids = body_subtree(self.model, 'base_link')
+                            scene_entries = {name: entry for name, entry in lifted_placements.items()
+                                             if self.model.body(name).id not in robot_ids}
+                            scene = PlacementScene.from_placements(scene_entries, held_object=obj)
+                            ee = self.data.body(executor.ee_body)
+                            payload = HeldObject.from_world_bounds(lifted_placements[obj]['bounds'],
+                                ee_position=ee.xpos, ee_rotation=ee.xmat.reshape(3, 3))
+                            # Stationary reach is local: include clipped subpatches near the
+                            # grasp, rather than only centers across the whole tabletop.
+                            patches = list(surfaces)
+                            for radius in (.08, .16, .32):
+                                for surface in surfaces:
+                                    patch = surface.copy()
+                                    patch[0, :2] = np.maximum(patch[0, :2], point[:2]-radius)
+                                    patch[1, :2] = np.minimum(patch[1, :2], point[:2]+radius)
+                                    if np.all(patch[0, :2] < patch[1, :2]):
+                                        patches.append(patch)
+                            centers = free_surface_centers(patches, scene=scene, payload=payload,
+                                ee_rotation=rotation, max_centers=64).centers
+                            if not centers:
+                                self._record_rejection('surface', 'no_collision_free_placement', executor)
+                            centers.sort(key=lambda center: float(np.linalg.norm(center[:2]-point[:2])))
+                            for goal in centers:
+                                if region is None and np.linalg.norm(goal[:2]-point[:2]) < .04:
+                                    continue
+                                self.data.qpos[:] = lifted
+                                mujoco.mj_kinematics(self.model, self.data)
+                                executor.place_targets = self._place_targets(executor, obj, goal, rotation)
+                                # Pure planning: never call the measured-state replan here, which would reset the hypothetical lift.
+                                candidates = []
+                                for i, (target, rot) in enumerate(executor.place_targets):
+                                    if i == 2:
+                                        executor.collision.set_payload(self.model, self.data, None)
+                                        _, error = executor.plan_gripper_open()
+                                        if error:
+                                            self._record_rejection('release_open', error, executor)
+                                            break
+                                    path, error = self._plan_candidate_pose(executor, target, rot)
                                     if error:
-                                        self._record_rejection('release_open', error, executor)
+                                        self._record_rejection(('preplace', 'place', 'retreat')[i], error, executor)
                                         break
-                                path, error = self._plan_candidate_pose(executor, target, rot)
-                                if error:
-                                    self._record_rejection(('preplace', 'place', 'retreat')[i], error, executor)
-                                    break
-                                candidates.append(path)
-                            if len(candidates) == 3:
-                                executor.place_paths = candidates
-                                ref = f'plan:{self.namespace}:{uuid.uuid4().hex}'
-                                self.plans[ref] = NativePlan(obj, support, initial, goal, rotation, executor, self.boot, region, **identity)
-                                return response('plan_pick_place', data=self._data(**identity, plan_ref=ref,
-                                    planned_ops=['grasp', 'place'], completed_ops=[], failed_stage=None, measurements=[],
-                                    planning_rejections=dict(self.planning_rejections),
-                                    planning_ik_calls=self.planning_ik_calls, max_ik_calls=self.max_planning_ik_calls,
-                                    placement_region=None if region is None else region.tolist(),
-                                    placement_goal={'frame': 'world', 'object_center': goal.tolist()}))
-                            executor.collision.set_payload(self.model, self.data, None)
-                            self.data.qpos[:] = lifted
-                            mujoco.mj_kinematics(self.model, self.data)
-                            executor.collision.set_payload(self.model, self.data, obj, executor.ee_body)
+                                    candidates.append(path)
+                                if len(candidates) == 3:
+                                    executor.place_paths = candidates
+                                    ref = f'plan:{self.namespace}:{uuid.uuid4().hex}'
+                                    self.plans[ref] = NativePlan(obj, support, initial, goal, rotation, executor, self.boot, region, base_approach=approach, **identity)
+                                    return response('plan_pick_place', data=self._data(**identity, plan_ref=ref,
+                                        approach_required=approach is not None,
+                                        planned_ops=['grasp', 'place'], completed_ops=[], failed_stage=None, measurements=[],
+                                        planning_rejections=dict(self.planning_rejections),
+                                        planning_ik_calls=self.planning_ik_calls, max_ik_calls=self.max_planning_ik_calls,
+                                        placement_region=None if region is None else region.tolist(),
+                                        placement_goal={'frame': 'world', 'object_center': goal.tolist()}))
+                                executor.collision.set_payload(self.model, self.data, None)
+                                self.data.qpos[:] = lifted
+                                mujoco.mj_kinematics(self.model, self.data)
+                                executor.collision.set_payload(self.model, self.data, obj, executor.ee_body)
                     return self._failure('plan_pick_place', 'no_plan_within_budget')
                 finally:
                     self.data.qpos[:] = before
@@ -560,6 +584,12 @@ class NativeTableAdapter:
                 if plan.boot != self.boot or np.max(np.abs(self.data.qpos-plan.initial)) > .01:
                     return fail('scene_changed_replan')
                 ex = plan.executor
+                if plan.base_approach is not None:
+                    phase = 'base_approach'
+                    approach = execute_approach(self.robot, ex, plan.base_approach)
+                    started = approach.execution_started
+                    if not approach.success:
+                        return fail(approach.reason, started=started, phase=phase)
                 started = True
                 phase = 'grasp'
                 result = ex.grasp_only('', object_gt_body=plan.object_body)

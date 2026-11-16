@@ -165,6 +165,8 @@ def test_legacy_mapping_agent_block_is_not_chat_section():
 def test_native_policy_override_uses_chat_section_and_rejects_unknown():
     cfg = load_config('dynav_config.yaml', overrides=['agent.native_tamp_policy=bounded_release'])
     assert cfg.agent_section().native_tamp_policy == 'bounded_release'
+    approach = load_config('dynav_config.yaml', overrides=['agent.native_tamp_policy=bounded_approach'])
+    assert approach.agent_section().native_tamp_policy == 'bounded_approach'
     assert cfg.mapping_dict.get('agent', {}).get('realtime') is not None
     with pytest.raises(DecodingError, match='legacy, bounded_release'):
         load_config('dynav_config.yaml', overrides=['agent.native_tamp_policy=typo']).agent_section()

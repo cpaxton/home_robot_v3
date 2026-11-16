@@ -3,7 +3,7 @@
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 """Run the actual run-agent CLI against live physics; score outside the agent.
 
-Explicit privileged stationary Stretch diagnostic, no images or local GPU.
+Explicit privileged Stretch diagnostic, no images or local GPU.
 Use emet jobs; task success and failure-boundary checks are reported separately.
 """
 import argparse
@@ -32,7 +32,7 @@ def main():
     parser.add_argument('--placement-regions', type=Path, required=True)
     parser.add_argument('--native-task-config', type=Path)
     parser.add_argument('--task-instruction')
-    parser.add_argument('--native-policy', choices=('legacy', 'bounded_release'), default='legacy')
+    parser.add_argument('--native-policy', choices=('legacy', 'bounded_release', 'bounded_approach'), default='legacy')
     parser.add_argument('--reject-first', action='store_true', help='Request one invalid-plan call, then a separate authorized task turn')
     args = parser.parse_args()
     if bool(args.native_task_config) != bool(args.task_instruction):
@@ -65,7 +65,7 @@ def main():
         except (OSError, ValueError, TypeError, KeyError) as exc:
             parser.error(str(exc))
         instruction = (
-            'These are privileged stationary simulator inputs. Discover task roles with scene_tasks, '
+            'These are privileged simulator inputs. The selected native policy determines base motion. Discover task roles with scene_tasks, '
             'then use plan_task and execute_task_plan for the complete final goals below. '
             'Use one tool call per round. Do not stop at a plan. The planner selects ordering; '
             'do not manually script transfers. Stop on failure, partial or unknown execution. '
@@ -94,7 +94,9 @@ def main():
                     'cli': cli, 'goals': goals, 'initial_predicates': initial,
                     'native_task_config': None if args.native_task_config is None else json.loads(args.native_task_config.read_text()),
                     'task_instruction': args.task_instruction,
-                    'scope': 'actual run-agent CLI; live physics; privileged stationary Stretch; no cameras',
+                    'scope': 'actual run-agent CLI; live physics; privileged Stretch; no cameras',
+                    'native_policy': args.native_policy,
+                    'base_motion': 'checked_unloaded_approach' if args.native_policy == 'bounded_approach' else 'stationary',
                     'cpu_affinity': sorted(os.sched_getaffinity(0)), 'sim_config': args.live_sim.read_text()}
         (out / 'protocol.json').write_text(json.dumps(protocol, indent=2))
         with (out / 'agent.log').open('w') as log:

@@ -1,6 +1,6 @@
 # Copyright (c) Chris Paxton 2026
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
-"""Privileged stationary Stretch grounding and bounded native motion refinement."""
+"""Privileged Stretch grounding and bounded native motion refinement."""
 from __future__ import annotations
 
 import json
@@ -78,7 +78,8 @@ class NativeTableTransferProvider(RegionTransferProvider):
         super().__init__(regions, observe=self._observe_native, transfer=self._transfer_native, input_mode='privileged')
 
     def describe(self):
-        return {**super().describe(), 'native_motion_policy': getattr(self.adapter, 'policy', 'legacy')}
+        return {**super().describe(), 'native_motion_policy': getattr(self.adapter, 'policy', 'legacy'),
+                'base_motion': 'checked_unloaded_approach' if getattr(self.adapter, 'checked_base_approach', False) else 'stationary'}
 
     def _observe_native(self):
         with self.adapter.lock:

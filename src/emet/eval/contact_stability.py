@@ -30,7 +30,7 @@ class ContactTrace:
     phases = frozenset(('grasp_complete', 'gripper_settled', 'lift', 'lift_complete',
                         'payload_retention', 'preplace_complete', 'place_complete', 'release',
                         'loaded_grasp_check', 'loaded_grasp_binding', 'native_verification',
-                        'gripper_motor_settled', 'gripper_hold_target'))
+                        'gripper_motor_settled', 'gripper_hold_target', 'base_approach', 'base_approach_complete'))
 
     def __init__(self, model, path: Path):
         self.model, self.scratch = model, mujoco.MjData(model)

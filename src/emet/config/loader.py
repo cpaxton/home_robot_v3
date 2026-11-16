@@ -322,7 +322,7 @@ class AgentSectionConfig:
     manip_mode: str = "teleport"
     # Native execution inputs; privileged is simulator-only and always explicit.
     tamp_inputs: str = "observed"
-    native_tamp_policy: Literal["legacy", "bounded_release"] = "legacy"
+    native_tamp_policy: Literal["legacy", "bounded_release", "bounded_approach"] = "legacy"
     # Arm collision filter for kinematic mode: none | voxel (agent map).
     manip_collision: str = "none"
     # Joint-space path between IK start/goal: rrt_connect | rrt | linear.

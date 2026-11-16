@@ -14,7 +14,7 @@ import numpy as np
 from emet.motion.mujoco_collision import body_subtree
 
 
-def face_aligned_grasp_order(model, data, object_body, *, closing_axis, candidates):
+def face_aligned_grasp_order(model, data, object_body, *, closing_axis, candidates, best_only=False):
     """Prefer jaw directions normal to a single collision box's world faces.
 
     Keep the exact candidate population and stable prior order within equal
@@ -35,5 +35,9 @@ def face_aligned_grasp_order(model, data, object_body, *, closing_axis, candidat
     # Preserve the prior pitch/height preference among nearly aligned poses.
     # Numerical/settling differences near cosine 1 must not promote a fallback
     # frame over a preferred pinch. This is ranking resolution, not admission.
-    return sorted(candidates, key=lambda candidate:
-                  -round(float(np.max(np.abs(normals.T @ candidate[0] @ axis))), 3))
+    def cost(candidate):
+        return -round(float(np.max(np.abs(normals.T @ candidate[0] @ axis))), 3)
+    ordered = sorted(candidates, key=cost)
+    if best_only and ordered:
+        return [candidate for candidate in ordered if cost(candidate) == cost(ordered[0])]
+    return ordered

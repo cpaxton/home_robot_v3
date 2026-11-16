@@ -3,7 +3,7 @@
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 """Compare grasp-search policies through live native task tools, without an LLM.
 
-Privileged stationary Stretch diagnostic. Native actuation, no cameras or GPU.
+Privileged Stretch diagnostic. Native actuation, no cameras or GPU.
 Launch via emet jobs. Original agent outcomes are never rescored by this runner.
 """
 from __future__ import annotations
@@ -107,6 +107,7 @@ def prepare(args, pilot, case, out):
     for name in ('scripts/eval_tamp_contact_stability.py', 'src/emet/eval/contact_stability.py',
                  'src/emet/simulation/stretch_mujoco/config.py', 'src/emet/motion/kinematics.py',
                  'src/emet/motion/grasp_alignment.py',
+                 'src/emet/controller/task/tamp/native_approach.py',
                  'src/emet/controller/task/tamp/api.py', 'src/emet/controller/task/tamp/task_session.py',
                  'src/emet/motion/release.py', 'src/emet/controller/task/tamp/native_policy.py',
                  'src/emet/controller/task/tamp/native_transfer.py',
@@ -138,6 +139,7 @@ def prepare(args, pilot, case, out):
                 'model_signature': model_signature(model), 'mujoco_version': mujoco.__version__,
                 'initial_x_shift_m': case['initial_x_shift_m'], 'startup_settle_sim_s': args.startup_settle,
                 'execution': 'simulation_live_async', 'inputs': 'privileged', 'agent_score': False,
+                'base_motion': 'checked_unloaded_approach' if policy_config and policy_config.get('checked_base_approach') else 'stationary',
                 'collision_and_retention_thresholds_changed': False, 'recording_changes_timing': True,
                 'initial_state_certificate': False, 'hardware_trials': False}
     write_json(out / 'protocol.json', protocol)
@@ -245,7 +247,7 @@ def main():
     parser.add_argument('--case-file', type=Path, default=REPO / 'configs/eval/tamp_stretch_realism_pilot.json')
     parser.add_argument('--case-id', required=True)
     parser.add_argument('--policy', choices=tuple(GRASP_POLICIES), default='baseline')
-    parser.add_argument('--native-policy', choices=('legacy', 'bounded_release'), help='Shared production profile; only the explicitly recorded gripper-preset ablation can override it')
+    parser.add_argument('--native-policy', choices=('legacy', 'bounded_release', 'bounded_approach'), help='Shared production profile; only the explicitly recorded gripper-preset ablation can override it')
     parser.add_argument('--gripper-close-preset', choices=('default', 'loose'),
                         help='Diagnostic ablation only; absent uses the production profile unchanged')
     parser.add_argument('--payload-binding', choices=('preserve', 'verified_lift_keep', 'verified_lift'), default='preserve',
@@ -270,7 +272,7 @@ def main():
                 args.max_release_drop, args.release_clearance) != ('baseline', 'preserve', 'legacy', .04, .04, .003):
             parser.error('--native-policy cannot be combined with diagnostic overrides')
         selected = native_policy(args.native_policy)
-        args.policy = 'fine_yaw' if args.native_policy == 'bounded_release' else 'baseline'
+        args.policy = 'fine_yaw' if args.native_policy in ('bounded_release', 'bounded_approach') else 'baseline'
         args.payload_binding = selected.payload_binding
         args.release_policy = 'bounded' if selected.release_limits else 'legacy'
     pilot = json.loads(args.case_file.read_text())
