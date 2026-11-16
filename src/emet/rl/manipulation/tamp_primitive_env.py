@@ -1,4 +1,4 @@
-"""Step actual public-tool TAMP pregrasp execution in a single-owner child process.
+"""Step public-tool TAMP through an explicit unloaded pose boundary.
 
 The planner/executor owns task logic, closure and stop confirmation. The actor
 gets only copied proprioception, targets and reference twist. Planning failures
@@ -26,11 +26,28 @@ class _Closed(BaseException):
     pass
 
 
-def _worker(connection, case, oracle, arm_reference, initial_settle_s, wheel_feedback_current_velocity, trace_path):
+PRIMITIVE_PHASE = {"pregrasp": "pregrasp", "grasp_pose": "grasp"}
+
+
+def _bounded_path(execute, primitive):
+    """Unwind the executor before its closure, including on a failed endpoint."""
+    phase_boundary = PRIMITIVE_PHASE[primitive]
+
+    def bounded(phase, path):
+        result = execute(phase, path)
+        if phase == phase_boundary:
+            raise _Boundary(result)
+        return result
+
+    return bounded
+
+
+def _worker(connection, case, oracle, arm_reference, initial_settle_s, wheel_feedback_current_velocity, trace_path, primitive):
     import hashlib
     import json
 
     from emet.agent.tools import get_tools
+    from emet.controller.task.tamp.mars_pose_executor import pose_error
     from emet.controller.task.tamp.mars_sim_robot import MarsSimRobot
     from emet.controller.task.tamp.native_adapter import adapter_for
     from emet.eval.mars_tamp_control import fixture
@@ -86,7 +103,7 @@ def _worker(connection, case, oracle, arm_reference, initial_settle_s, wheel_fee
                     "reward_terms": self.meter.last_terms.copy(),
                     "elapsed_control_ticks": max(1, self.ticks),
                     "reward_group_ticks": np.asarray(self.tick_rewards, dtype=np.float32).reshape(-1, 3),
-                    "primitive": "pregrasp",
+                    "primitive": primitive,
                     "simulation_only": True,
                     "actor_action_applied": self.pending,
                 }
@@ -180,13 +197,8 @@ def _worker(connection, case, oracle, arm_reference, initial_settle_s, wheel_fee
 
         adapter._approach = record_approach
 
-        def primitive(phase, path):
-            result = original(phase, path)
-            if phase == "pregrasp":
-                raise _Boundary(result)
-            return result
-
-        plan.executor._execute_path = primitive
+        plan.executor._execute_path = _bounded_path(original, primitive)
+        boundary_reached = False
         success, reason, executor_result = False, "primitive_not_reached", None
         with robot.stepped_clock():
             try:
@@ -194,12 +206,36 @@ def _worker(connection, case, oracle, arm_reference, initial_settle_s, wheel_fee
                 executor_result = result
                 reason = approach_failure or robot.failure or result.get("code", reason)
             except _Boundary as boundary:
+                boundary_reached = True
                 success, reason = bool(boundary.result.success), boundary.result.message
                 if success:
                     success = robot._verify_quiet_hold(2.0, 3.5)
-                    reason = "pregrasp_complete" if success else "terminal_motion_unsettled"
+                    reason = primitive + "_complete" if success else "terminal_motion_unsettled"
         robot.stop_and_confirm("training_primitive_complete" if success else reason)
         success &= robot.stop_confirmed is True
+        # Quiet velocity alone cannot certify arrival after the extra hold/stop.
+        # Preserve the historical pregrasp outcome, but independently report its
+        # residual too. The new grasp-pose boundary requires both pose and open
+        # jaws at the final measured state, before awarding completion credit.
+        terminal_pose, terminal_pose_in_contract = None, False
+        gripper_open = bool(env.control.gripper_is_open())
+        if boundary_reached:
+            index = 0 if primitive == "pregrasp" else 1
+            position, rotation = plan.executor.grasp_targets[index]
+            target = np.r_[position, np.asarray(rotation)[:, :2].ravel()]
+            distance, angle = pose_error(env.control.ee_pose(), target)
+            terminal_pose_in_contract = bool(
+                distance <= plan.executor.position_tolerance_m and angle <= plan.executor.orientation_tolerance_rad
+            )
+            terminal_pose = {
+                "position_error_m": distance if np.isfinite(distance) else None,
+                "orientation_error_rad": angle if np.isfinite(angle) else None,
+                "position_tolerance_m": plan.executor.position_tolerance_m,
+                "orientation_tolerance_rad": plan.executor.orientation_tolerance_rad,
+            }
+        if primitive == "grasp_pose" and success and not (terminal_pose_in_contract and gripper_open):
+            success = False
+            reason = "terminal_pose_outside_contract" if not terminal_pose_in_contract else "terminal_gripper_not_open"
         bonus = 2.0 if success else -10.0
         bridge.reward[0] += bonus
         if not bridge.tick_rewards:
@@ -211,6 +247,11 @@ def _worker(connection, case, oracle, arm_reference, initial_settle_s, wheel_fee
         bridge.tick_rewards[-1][0] += bonus
         info = {
             "case_id": case["id"],
+            "primitive": primitive,
+            "boundary_reached": boundary_reached,
+            "terminal_pose": terminal_pose,
+            "terminal_pose_in_contract": terminal_pose_in_contract,
+            "gripper_open": gripper_open,
             "primitive_success": bool(success),
             "code": reason,
             "stop_confirmed": robot.stop_confirmed,
@@ -248,6 +289,8 @@ def _worker(connection, case, oracle, arm_reference, initial_settle_s, wheel_fee
                 k: info[k]
                 for k in (
                     "code",
+                    "primitive",
+                    "boundary_reached",
                     "primitive_success",
                     "stop_confirmed",
                     "executor_result",
@@ -281,6 +324,7 @@ def _worker(connection, case, oracle, arm_reference, initial_settle_s, wheel_fee
                         "format": "mars-tamp-primitive-trace-v1",
                         "case": case,
                         "oracle": bool(oracle),
+                        "primitive": primitive,
                         "initial_settle_s": initial_settle_s,
                         "wheel_feedback_current_velocity": wheel_feedback_current_velocity,
                         "outcome": outcome,
@@ -307,7 +351,11 @@ class TampPrimitiveEnv(gym.Env):
         initial_settle_s=0.0,
         wheel_feedback_current_velocity=False,
         trace_dir=None,
+        primitive="pregrasp",
     ):
+        if type(primitive) is not str or primitive not in PRIMITIVE_PHASE:
+            raise ValueError("primitive must be pregrasp or grasp_pose; loaded stages are not supported")
+        self.primitive = primitive
         if not cases or arm_reference not in {"s_curve", "jerk_limited"} or not np.isfinite(timeout) or timeout <= 0:
             raise ValueError("nonempty cases and a bounded simulator training configuration required")
         if not np.isfinite(initial_settle_s) or not 0 <= initial_settle_s <= 2.0:
@@ -369,6 +417,7 @@ class TampPrimitiveEnv(gym.Env):
                 self.initial_settle_s,
                 self.wheel_feedback_current_velocity,
                 self.trace_path,
+                self.primitive,
             ),
             daemon=True,
         )
