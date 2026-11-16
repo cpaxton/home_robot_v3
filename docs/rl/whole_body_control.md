@@ -35,6 +35,14 @@ Geometry used to construct or admit a reference is not automatically an actor
 input. See the [mastery contract](../plans/mars_tracking_mastery.md) and
 [public-tool integration](../plans/mars_controller_integration.md).
 
+Define training primitive boundaries in the executor/harness, while keeping
+the actor's pose-tracking interface consistent across stages. An unloaded
+grasp-pose boundary ends before closure, with measured arrival and stopping;
+closure, support-reserved lift and loaded retention require their own evidence.
+Stage-specific teacher admission must cover the requested motion. The
+[unloaded-prefix readout](../experiments/mars_unloaded_grasp_admission_20261116.md)
+shows why execution boundaries and planning admission both need explicit scope.
+
 ## Use the teacher to expose gaps and establish comparisons
 
 The analytic task-pose teacher provides a reproducible comparator and a check

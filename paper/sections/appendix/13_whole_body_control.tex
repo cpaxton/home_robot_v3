@@ -738,3 +738,16 @@ planning and grasp-wrench validation, with unchanged physical limits. Complete
 provenance and stage metrics are in \texttt{mars\_task\_arrival\_v1/results.json}.
 The corresponding runtime passes 1,330/1,330 fresh source-bound software
 regressions; those checks do not establish successful loaded control.
+
+A subsequent unloaded-stage extension stops public-tool execution after the
+grasp pose, before closure. Twelve fixed teacher attempts give 5/6 pregrasp and
+5/6 grasp-pose completions, with all stops confirmed and no close or loaded
+motion commands. The five successful grasp endpoints remain within the original
+3\,mm/0.02\,rad contract after quiet hold and stopping. All six default pregrasp
+readouts reproduce fourteen archived physical/outcome fields exactly; paired
+traces match up to the first grasp command. The remaining case is rejected by
+prospective loaded-lift planning before either selected boundary. Thus execution
+stage separation alone does not establish independently admitted unloaded
+references; both full-cohort stage readouts remain closed, with no PPO update.
+Compact outcomes and parity hashes are in
+\texttt{mars\_unloaded\_grasp\_admission\_v1/results.json}.
