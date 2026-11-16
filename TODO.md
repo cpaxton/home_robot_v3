@@ -40,8 +40,11 @@ Strike through or move to a PR when done.
       4/8 / Caliban 3/4. These are separate development cohorts. Evidence:
       [base approach results](docs/experiments/tamp_native_base_approach_20261116.md).
 - [ ] Review and merge the opt-in stack in dependency order (#226, #231, #234,
-      #242, #243); repeat integration checks after retargeting. Observed task execution, exploration,
+      #242, #243, #244); repeat integration checks after retargeting. Observed task execution, exploration,
       household native adapters and hardware remain separate gates.
+      [Current merge/review plan](docs/plans/2026-11-16_tamp_recovery_dialogue.md#review-and-merge-status-november-16):
+      #226 is draft and conflicts with main; #243 self-review passes 199 exact-head
+      targeted tests, with no production blocker. Independent sign-off remains.
 - [x] Freeze new untouched layouts and native scripted recovery trials on
       `feat/tamp-prospective-evaluation`: 4/4 new native tasks and 4/4 actual-agent
       tasks, 10/10 transfers each; 2/2 scripted recovery tasks, 5/5 boundary checks;
@@ -52,6 +55,7 @@ Strike through or move to a PR when done.
       Review: [PR #243](https://github.com/cpaxton/home_robot_v3/pull/243).
       [Feedback/recovery results](docs/experiments/tamp_partial_agent_20261116.md).
 - [x] Finish bounded contextual recovery on `feat/tamp-recovery-dialogue`:
+      [PR #244](https://github.com/cpaxton/home_robot_v3/pull/244), stacked on #243.
       [plan and Agentic GenTAMP baseline implications](docs/plans/2026-11-16_tamp_recovery_dialogue.md).
       Freeze source, test a short retry through the actual CLI and repeat stop-only;
       retain fresh discovery, consumed-plan and physical-effect checks.
