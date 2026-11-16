@@ -133,8 +133,14 @@ def test_bounded_release_protocol_and_constructor_wiring(runner, monkeypatch, tm
         "tracking_reserve": "positive_command_fk_minus_measured_ee_z",
         "height_joint": "joint_lift",
         "open_settle_timeout_s": 3.0,
+        "descent_step_m": 0.002,
+        "height_axis_min_z": 0.99,
+        "target_epsilon_m": 1e-6,
+        "stable_interval_s": 0.1,
+        "poll_interval_s": 0.05,
     }
     assert "src/emet/motion/release.py" in protocol["source_sha256"]
+    assert "src/emet/controller/manipulation/native_scene.py" in protocol["source_sha256"]
 
 
 @pytest.mark.parametrize("lift_complete", (False, True))

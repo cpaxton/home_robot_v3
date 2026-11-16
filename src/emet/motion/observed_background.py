@@ -129,6 +129,10 @@ class ObservedBackground:
         invalidated_free = unqualified & (current.cells == 0) & (old.cells == 1)
         cells[invalidated_free] = 0
         stamps[invalidated_free] = np.nan
+        # Occluded cells retain their ORIGINAL acquisition age, never the new
+        # foreground timestamp. known_free expires them after 2 s unless the
+        # caller declares a bounded static-scene assumption. This fusion is not
+        # robot ownership/contact admission; that remains the separate #245 gate.
         observed = current.cells != 0
         cells[observed], stamps[observed] = current.cells[observed], capture.earliest
         return ObservedBackground(

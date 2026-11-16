@@ -40,7 +40,7 @@ Benchmark support and remaining qualification gates:
 
 ## Privileged native Stretch integration
 
-`run agent --native-task-config FILE` opts into stationary region-transfer
+`run agent --native-task-config FILE` opts into region-transfer
 planning. It requires online LLM CHAT, `--state-only-sim`, physical manipulation
 mode and privileged inputs. [Example configuration](../../configs/eval/native_stretch_transfer_debug.json)
 declares public roles, private body bindings, one support and disjoint XY regions.
@@ -254,11 +254,17 @@ this explicit opt-in. A shared placement-frame correction described below also
 applies to the other profiles. The same option is accepted by the native
 evaluators and actual `run agent` configuration through shared policy validation.
 
-The planner tries the current base and short forward/reverse alternatives at
-40/80 mm along the measured drive axis, preferring the best box-face alignment
-across those alternatives before stationary fallback grasps. All alternatives
+The planner first tries aligned grasps at the current base, then checked short
+forward/reverse alternatives at 40/80 mm along the measured drive axis, then
+general stationary fallback grasps. It selects a feasible plan in that order;
+it does not globally score the best alignment across bases. All alternatives
 share 256 IK calls and a 120-second planning deadline. The complete grasp,
 placement and retreat must plan before an approach handle is stored.
+
+Bounded grasp search reserves 25% of remaining IK calls for its vertical
+pregrasp strategy, including downstream placement costs in the primary
+allocation. The global cap and deadline never reset. This changes bounded
+search scheduling; historical cohorts retain their original source versions.
 
 Base sweeps include the whole robot at its measured arm posture and forbid
 finger/object contact during transit. Samples are spaced at most 5 mm and

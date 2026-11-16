@@ -292,9 +292,10 @@ def evaluate_place(reference, frames, *, support_bounds, after, now=None):
 
 class ObservedVisualVerifier:
     """Execution consumer of live frames and bounded stop-and-observe batches."""
-    def __init__(self, *, object_ref, support_bounds, observe, collect, clock=time.monotonic):
+    def __init__(self, *, object_ref, support_bounds, observe, collect, clock=time.monotonic, observe_after=None):
         self.object_ref, self.support_bounds = object_ref, bounds_array(support_bounds)
         self.observe, self.collect, self.clock = observe, collect, clock
+        self.observe_after = observe_after
         self.reference = self.lift_reference = None
         self.results = []
 
@@ -305,7 +306,8 @@ class ObservedVisualVerifier:
     def begin_grasp(self, *, after):
         self.reference = self.lift_reference = None
         try:
-            frame = self.observe(self.object_ref)
+            frame = (self.observe_after(self.object_ref, after=after) if self.observe_after is not None
+                     else self.observe(self.object_ref))
             if frame is None:
                 raise ObservationUnavailable('object_state_unknown')
             frame.require(now=self.clock(), after=after)

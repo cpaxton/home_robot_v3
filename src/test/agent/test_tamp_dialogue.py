@@ -23,6 +23,16 @@ def line(value):
     return '['+value['tool']+'] '+json.dumps(value)
 
 
+def test_null_progress_survives_and_only_dispatched_non_tamp_clears_context():
+    context = TampDialogueContext()
+    done = response('execute_task_plan', data={'failed_step_execution_started': None, 'failed_step_1based': None})
+    context.record_turn('Move α', [line(done), '[dispatch] batch_stopped'])
+    prompt = context.prompt('Explain')
+    assert 'Move α' in prompt and '"failed_step_execution_started": null' in prompt
+    context.record_turn('Mixed', [line(done), '[describe_scene] room'])
+    assert context.prompt('Next') == 'Next'
+
+
 def test_context_preserves_named_partial_progress_but_no_handles_or_sensor_data():
     context = TampDialogueContext()
     request = 'Move alpha left and beta right; leave gamma alone'

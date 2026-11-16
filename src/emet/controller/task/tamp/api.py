@@ -27,7 +27,7 @@ class VerificationFailure:
             "bilateral_contact_unverified", "support_contact_persists", "unexpected_contact",
             "relative_pose_unstable", "settling_timeout", "effect_unverified",
             "support_contact_unverified", "fingertip_contact_persists", "object_not_settled",
-            "placement_region_unverified",
+            "placement_region_unverified", "placement_xy_unverified", "placement_height_unverified",
         }:
             raise ValueError("invalid_verification_failure")
 
@@ -63,11 +63,13 @@ TASK_FAILURE_CODES = frozenset({
     "unsupported_task_instruction", "conflicting_task_goals",
     "observation_unavailable", "tracking_timeout", "verification_failed",
     "visual_verification_unavailable", "visual_effect_unknown", "visual_lift_not_verified",
+    "payload_identity_mismatch", "invalid_gripper_closing_axis",
+    "release_raise_limit",
     "visual_placement_not_verified", "scene_observation_stale", "scene_revision_changed",
     "payload_geometry_unknown", "payload_geometry_changed", "capture_motion_alignment_unknown", "robot_feedback_unqualified",
     "object_pose_ambiguous", "object_observation_stale",
     "capture_identity_mismatch", "capture_clock_changed", "capture_replayed",
-    "visual_evidence_incomplete", "payload_identity_mismatch", "gripper_geometry_unknown", "support_geometry_unknown",
+    "visual_evidence_incomplete", "gripper_geometry_unknown", "support_geometry_unknown",
     "robot_material_identity_changed", "robot_material_geometry_unavailable", "robot_collision_envelope_unknown",
     "target_contact_identity_changed", "gripper_contact_collision",
     "gripper_close_geometry_unavailable", "stale_gripper_plan",

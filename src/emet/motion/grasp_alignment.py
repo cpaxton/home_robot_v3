@@ -33,8 +33,10 @@ def face_aligned_grasp_order(model, data, object_body, *, closing_axis, candidat
     axis = axis / np.linalg.norm(axis)
     normals = data.geom_xmat[geoms[0]].reshape(3, 3)
     # Preserve the prior pitch/height preference among nearly aligned poses.
-    # Numerical/settling differences near cosine 1 must not promote a fallback
-    # frame over a preferred pinch. This is ranking resolution, not admission.
+    # Quantize cosine scores to three decimals (Python half-to-even rounding).
+    # Stable order applies within each bin, not across an epsilon neighbourhood;
+    # even a small difference crossing a bin boundary can change preference.
+    # This is ranking resolution only, never collision/contact admission.
     def cost(candidate):
         return -round(float(np.max(np.abs(normals.T @ candidate[0] @ axis))), 3)
     ordered = sorted(candidates, key=cost)

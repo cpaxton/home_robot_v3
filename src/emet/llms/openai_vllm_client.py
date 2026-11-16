@@ -7,7 +7,10 @@
 from __future__ import annotations
 
 import base64
+import threading
 import time
+from contextlib import contextmanager
+from functools import wraps
 from io import BytesIO
 from typing import Any
 
@@ -18,6 +21,14 @@ from PIL import Image
 from emet.llms.base import AbstractPromptBuilder, AbstractVLLMClient
 from emet.llms.openai_client import resolve_openai_api_key, resolve_openai_base_url
 from emet.llms.vl_image import downsample_rgb_hwc
+
+
+def _serialized(method):
+    @wraps(method)
+    def call(self, *args, **kwargs):
+        with self._conversation_lock:
+            return method(self, *args, **kwargs)
+    return call
 
 
 def parse_openai_endpoint_spec(spec: str) -> tuple[str, str | None]:
@@ -47,7 +58,8 @@ class OpenaiVLLMClient(AbstractVLLMClient):
     including prior encoded images; no turns or images are silently evicted.
     ``generate_messages`` temporarily installs an explicit dialogue and restores
     the caller's history afterward, including on failure. Shared-client calls and
-    history edits must be serialized. ``last_call_metrics`` describes the latest
+    history API operations are serialized by one reentrant instance lock.
+    ``last_call_metrics`` describes the latest
     request on this instance, not a concurrent per-request tracing interface.
     """
 
@@ -65,6 +77,7 @@ class OpenaiVLLMClient(AbstractVLLMClient):
         device: str = "remote",
         **_kwargs: Any,
     ) -> None:
+        self._conversation_lock = threading.RLock()
         super().__init__(prompt if prompt is not None else "", None)
         self.model = model
         self.base_url = resolve_openai_base_url(base_url)
@@ -78,6 +91,36 @@ class OpenaiVLLMClient(AbstractVLLMClient):
         self.device = device
         self._openai = OpenAI(api_key=self.api_key, base_url=self.base_url)
         self.last_call_metrics: dict[str, float | int | bool] | None = None
+
+    @_serialized
+    def reset(self):
+        return super().reset()
+
+    @_serialized
+    def add_history(self, message):
+        return super().add_history(message)
+
+    @_serialized
+    def get_history(self):
+        return super().get_history()
+
+    @_serialized
+    def is_first_message(self):
+        return super().is_first_message()
+
+    @property
+    @_serialized
+    def steps(self):
+        return super().steps
+
+    @_serialized
+    def get_history_as_str(self):
+        return super().get_history_as_str()
+
+    @contextmanager
+    def preserve_conversation(self):
+        with self._conversation_lock, super().preserve_conversation():
+            yield
 
     @property
     def canonical_model_key(self) -> str:
@@ -129,6 +172,7 @@ class OpenaiVLLMClient(AbstractVLLMClient):
             raise ValueError("OpenaiVLLMClient: empty user content")
         return blocks
 
+    @_serialized
     def generate_multimodal(
         self,
         user_content: str | list[Any],

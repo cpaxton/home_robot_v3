@@ -77,7 +77,14 @@ the development producer uses one frozen simulator snapshot.
 ## Provider assembly
 
 `ObservedNativeAdapter(robot, source=..., refine=..., tasks=...)` is deliberately
-explicit. `source.input_mode` must be `observed` and it provides:
+explicit. `source.input_mode` must be `observed`.
+
+Configure `robot_name="stretch"` explicitly for that calibrated robot when
+using a named selector. Both primitive and task discovery normalize case and
+whitespace. An unspecified identity accepts an omitted selector but cannot
+claim to match a named robot merely from a profile string.
+
+The source provides:
 
 | Method | Contract |
 | --- | --- |
@@ -137,6 +144,14 @@ current-capture uncertainty both contribute to retention. Planning-only failures
 return no-actuation receipts, while missing dispatch feedback after execution
 remains possible progress. Public ambiguity/calibration errors are finite codes;
 private provider exception details remain hidden.
+
+
+The initial grasp reference now requests a genuinely post-motion frame through
+`source.collect(..., after=barrier)`, just as lift/place verification does.
+`snapshot()` may still return the latest cached fresh frame; it need not block
+for a new acquisition. Empty collection, an acquisition before the barrier
+(even with a new ID), changed clock/geometry, and incomplete visual evidence
+remain failures. Acquisition timestamps are never renewed at receipt time.
 
 `refine(task, snapshot, placement_region=...)` is planning-only and returns a
 robot-specific `PhysicalPickPlaceExecutor` with a robot-only calibrated model,

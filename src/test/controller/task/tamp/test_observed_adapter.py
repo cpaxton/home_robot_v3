@@ -22,6 +22,7 @@ from emet.controller.manipulation.observed_effects import CaptureInterval, Robot
 from emet.controller.manipulation.physical_pick_place import PhysicalPickPlaceExecutor
 from emet.controller.manipulation.shape_pose import ShapePoseEvidence
 from emet.controller.task.tamp.observed_adapter import ObservedNativeAdapter, ObservedNativeSnapshot, ObservedNativeTask
+from emet.controller.task.tamp.transfer_provider import TransferRegion
 from emet.motion.observed_contact import ObservedTargetContact
 from emet.motion.placement_geometry import PlacementScene, box_corners
 
@@ -221,6 +222,25 @@ def test_bounded_gripper_transport_timeout_is_possible_dispatch_and_consumes_pla
     assert system.calls == [] and 'private' not in json.dumps(result)
     assert executor.command_gripper_joints is transport
     assert system.adapter.execute(planned['data']['plan_ref'])['code'] == 'unknown_plan'
+
+
+@pytest.mark.parametrize('selector,accepted', [('stretch', True), (' Stretch ', True), ('   ', True), ('other', False)])
+def test_configured_observed_robot_selector_matches_primitive_and_task_discovery(system, selector, accepted):
+    old = system.adapter
+    adapter = ObservedNativeAdapter(old.robot, source=old.source, refine=old.refine,
+        tasks=tuple(old.tasks.values()), clock=old.clock, robot_name='Stretch')
+    primitive = adapter.discover(robot=selector)
+    assert (primitive['status'] == 'ok') is accepted
+    session = adapter.bind_regions((TransferRegion('left', ((-.3, -.08), (-.1, .08))),),
+        robot_profile_id='calibrated', reset_id='reset')
+    assert (session.discover(robot=selector)['status'] == 'ok') is accepted
+    assert system.calls == []
+
+
+def test_unconfigured_observed_robot_identity_is_not_invented_from_a_profile(system):
+    session = system.adapter.bind_regions((TransferRegion('left', ((-.3, -.08), (-.1, .08))),),
+        robot_profile_id='stretch-like-name-is-not-identity', reset_id='reset')
+    assert session.discover(robot='stretch')['code'] == 'task_filter_unsupported'
 
 
 def test_registered_tools_plan_and_execute_with_visual_effects_and_no_simulator(system):

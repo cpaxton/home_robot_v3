@@ -6,6 +6,14 @@ Keep physical hardware disabled and native privileged controls separate. A
 robot-only model, RGBD, encoders and declared calibration/geometry priors are
 permitted runtime inputs; simulator object/contact state is evaluator-only.
 
+Integrated the consolidated merged-stack corrections from
+[PR #246](https://github.com/cpaxton/home_robot_v3/pull/246), runtime `5a891c59`,
+after the `3b1fd9ad` observed checkpoint. Conflicts retain both the qualified
+background/contact policies and the post-barrier observation/robot-selector
+fixes. The combined admission/contact/release/API/provider regression batch
+passes 390 tests, zero failures/errors/skips (`20261116_162854_3643a6`). This
+does not complete any live observed-transfer gate below.
+
 Implemented so far:
 
 - Maximum elapsed capture-interval time for bounded mask reachability. This is
