@@ -1,7 +1,7 @@
 # Mars WBC: stabilize the base, define smoothness, then train
 
-Implementation is consolidated into the canonical thread and #239 → #240 →
-#241 development stack. [Active work](../rl/ACTIVE_WORK.md) owns current
+Implementation is consolidated into the canonical thread and #241 development
+branch. Parents #239 and #240 are merged into main and incorporated locally. [Active work](../rl/ACTIVE_WORK.md) owns current
 ownership, receipts and launch status; this page owns the technical sequence.
 The unloaded-prefix scope and coupled v1 teacher readouts are complete. Current
 work isolates base hunting, coarse base acceptance and phase/reset coverage; see

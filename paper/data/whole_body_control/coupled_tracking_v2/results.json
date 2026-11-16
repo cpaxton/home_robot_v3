@@ -4816,6 +4816,19 @@
     "regressions": "20261116_103052_6add36"
   },
   "software": {
-    "status": "running"
+    "tests": 1433,
+    "status": "done",
+    "receipt_sha256": "6be5800b321307196385a9eebc8348b02e05825dbff36b9ccf2301dd6fc7a7cb",
+    "xml_sha256": "ad53e5f47e9dc8dd42c9519a44111bdc037a88cfe179e3887f6113f197e6bfc6",
+    "seconds": 913.3787951469421,
+    "verified_against_current_branch": true
+  },
+  "paper_build": {
+    "job": "20261116_104022_0edea5",
+    "status": "done",
+    "pages": 59,
+    "appendix_sha256": "dfc9823f1839d14b33295cfcda832057de174b73acfc7a7f2f8aad174f67637d",
+    "pdf_sha256": "e8a139beb176e7913956a639acc0f7e20cc481523b9151bb999055c456f2b8dd",
+    "log_sha256": "b54c91d933150f2e87289827da883ac3b18813748ba6f4639b2eac379a555a8e"
   }
 }

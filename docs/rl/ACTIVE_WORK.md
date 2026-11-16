@@ -25,19 +25,20 @@ checkout. Those edits, historical worktrees, actor weights, raw logs and source
 archives are preserved. Do not reset, clean or stage the root checkout to make
 the controller branches look clean.
 
-## Linear review stack
+## Review stack after parent merges
 
 | Order | PR / branch | Scope |
 | --- | --- | --- |
-| 1 | [#239](https://github.com/cpaxton/home_robot_v3/pull/239), `feat/wbc-jerk-measurements` → `main` | Current-COM feedback, bounded nonfault hold reacquisition, task diagnostics and semantic failure reporting. Ready for review. |
-| 2 | [#240](https://github.com/cpaxton/home_robot_v3/pull/240), `feat/wbc-directional-curriculum` → #239 | Seventeen prepared direction cases, twenty-four audit cases and strict loader. Ready for review; not admitted or trained. |
-| 3 | [#241](https://github.com/cpaxton/home_robot_v3/pull/241), `feat/wbc-grasp-primitive` → #240 | Unloaded grasp-pose execution boundary, teacher admission, and this consolidated development line. Draft while learned-policy stability and task progression remain incomplete. |
+| 1 | [#239](https://github.com/cpaxton/home_robot_v3/pull/239), `feat/wbc-jerk-measurements` → `main` | Current-COM feedback, bounded nonfault hold reacquisition, task diagnostics and semantic failure reporting. Merged to main. |
+| 2 | [#240](https://github.com/cpaxton/home_robot_v3/pull/240), `feat/wbc-directional-curriculum` → main | Seventeen prepared direction cases, twenty-four audit cases and strict loader. Merged to main; that separate suite remains untrained. |
+| 3 | [#241](https://github.com/cpaxton/home_robot_v3/pull/241), `feat/wbc-grasp-primitive` → main | Unloaded grasp-pose execution boundary, teacher admission, and this consolidated development line. Draft while learned-policy stability and task progression remain incomplete. |
 
-#241 includes both parent branches; use it for the next controller change.
-Keep each PR's diff scoped to its parent. When a parent is squash-merged,
+#239 and #240 were squash-merged on 2026-11-16. #241 now targets main, which
+is merged into the canonical branch with an unchanged controller source tree.
+Use #241 for the next controller change. Keep its diff scoped to current main. When a parent is squash-merged,
 restack descendants semantically and verify that already-merged guards/tests
 are preserved. Do not resolve a stack conflict by reverting the parent's newer
-files. No PR is merged or actor promoted by this consolidation.
+files. Parent merges do not promote an actor or qualify hardware.
 
 ## Current state and evidence
 
@@ -54,7 +55,7 @@ pick-and-place or hardware controller is qualified.
 | Teacher-action bootstrap | 1,024 supervised updates, train labels only. Actor-only TAMP grasp-pose 5/6; raw general 0/10 with settling/self-contact failures. |
 | Fixed-weight base-rate ablation | Full-horizon general 9/10 versus raw 0/10; arm rate feedback retained. Base-only becomes worse; not a promoted replacement. |
 | Explicit completion-hold diagnostic | 10/10 using existing executor hold/reacquisition. Keep separate from raw actor stability. |
-| Current runtime `57e8e73b` | New v2 coarse base acceptance, unchanged hand precision, serialized opt-in base feedback mode. Physical readouts: teacher Mars 8/10, Stretch 9/10; fixed-weight Mars actor v1 9/10, v2 5/10, original TAMP grasp-pose 6/6. Fresh full regressions running; old receipts do not qualify this source. |
+| Current runtime `57e8e73b` | New v2 coarse base acceptance, unchanged hand precision, serialized opt-in base feedback mode. Physical readouts: teacher Mars 8/10, Stretch 9/10; fixed-weight Mars actor v1 9/10, v2 5/10, original TAMP grasp-pose 6/6. Fresh current-source regressions pass 1,433/1,433 in 913.38 s; paper builds (59 pages). Old receipts do not qualify this source. |
 
 The preceding [unloaded-stage report](../experiments/mars_unloaded_grasp_admission_20261116.md)
 remains historical 5/6 at both boundaries, under full-task planning scope.

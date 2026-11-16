@@ -138,8 +138,10 @@ an unsupported TAMP keyword before any TAMP decision. A completion attempt
 lacks a multiprocessing main guard and also executes zero actor decisions.
 Both setup failures remain archived; a guarded continuation executes only the
 six missing TAMP cases, preserving the original twenty general results.
-Fresh full regressions are still running. No new training, budget extension,
-hardware motion or promotion follows.
+Fresh source-bound regressions pass **1,433 tests**, zero failures/errors/skips,
+in **913.38 s**; the receipt verifies against the current branch after its
+source-preserving main merge. The updated paper builds successfully (59 pages).
+No new training, budget extension, hardware motion or promotion follows.
 
 The [SuperMimic research handoff](../plans/supermimic_controller_training.md)
 recommends physically valid phase/reset coverage before a separate dynamics-

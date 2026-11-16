@@ -22,3 +22,7 @@ source archive, XML/receipt, actor weights and W&B files remain ignored.
 These small deterministic cohorts, including reused case/seed identities, do
 not establish statistical reliability, contact robustness, loaded retention,
 complete task execution or hardware readiness. No actor is promoted.
+
+Fresh current-source regressions pass 1,433/1,433 (zero failures/errors/skips),
+with verified receipt/XML hashes. The control appendix builds successfully
+(59-page paper); source and output hashes are recorded.
