@@ -1,0 +1,14 @@
+"""Log fixed-final simulator evaluation to offline W&B; never uploads or trains."""
+import json
+from pathlib import Path
+import wandb
+root=Path.cwd();native=root/'logs/eval/base-goal-reference-native-v1';report=json.loads((native/'run.json').read_text());assert report['complete']
+run=wandb.init(project='emet-control',name='mars-base-goal-reference-v1-evaluation',mode='offline',dir=str(root/'logs'),config={'runtime_revision':report['runtime_revision'],'source_state_digest':report['source_state_digest'],'weights_sha256':report['candidate_weights_sha256'],'heading_gain_scale':2.0,'reference_tracking':True,'new_training_steps':0,'hardware_used':False,'qualification':False})
+values={}
+for cohort,data in report['summary'].items():
+ for name,value in data.items():values[f'evaluation/{cohort}/{name}']=value
+ values[f'evaluation/{cohort}/success_rate']=data['successes']/data['attempts']
+rows=json.loads((native/'compiled-goals.json').read_text());columns=['id','cohort','success','code','xy_error_m','heading_error_rad','yaw_jerk_rad_s3','linear_jerk_m_s3','wheel_lift','unsafe_contact','stop_confirmed'];table=wandb.Table(columns=columns)
+for c in rows:
+ m=c.get('metrics',{});table.add_data(c['id'],c['cohort'],c['success'],c['code'],c.get('endpoint_xy_error_m'),c.get('endpoint_heading_error_rad'),m.get('peak_base_yaw_jerk_rad_s3'),m.get('peak_base_linear_jerk_m_s3'),m.get('wheel_lift'),m.get('unsafe_contact'),c.get('stop_confirmed'))
+run.log(values|{'compiled_endpoint_cases':table});identity={'id':run.id,'name':run.name,'mode':'offline','directory':run.dir,'new_training_steps':0};run.finish();(native/'wandb-evaluation.json').write_text(json.dumps(identity,indent=2)+'\n');print(json.dumps(identity))

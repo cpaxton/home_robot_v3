@@ -819,3 +819,24 @@ reject unsupported feedback semantics. Complete cases and source provenance
 are in \texttt{base\_direction\_bootstrap\_v1/} and
 \texttt{base\_navigation\_feedback\_v1/}. No loaded-task or hardware qualification
 follows from this development result.
+
+\paragraph{Feasible base endpoint references.}
+A lateral endpoint is not an executable sideways differential-drive reference.
+We therefore test continuous axle-aware turn--drive--turn references, using
+forward/reverse selection, wrapped final turns and rest-to-rest jerk-limited
+S-curves under the robot-profile speed and acceleration limits. The explicit
+experimental reference jerk bound is not a hardware damage rating. A reference
+alone remains at 2/8 development endpoint completions; explicit announced-twist
+feedforward reaches 4/8. Keeping the coarse XY region active during motion
+reaches 6/8, and a development-calibrated two-times heading correction reaches
+8/8 under unchanged 25-second, 5\,cm, 5-degree and measured-hold contracts.
+A separate sixteen-endpoint audit completes 16/16, with worst final error
+25.01\,mm / 0.05051\,rad and worst recorded hold drift 0.209\,mm. Measured
+yaw jerk nevertheless reaches 70.51\,rad/s$^3$ during a turn; reference C2
+bounds do not certify measured smoothness or hardware safety.
+All variants use unchanged learned parameter tensors; this is a control
+formulation/calibration result, not a PPO learning gain. Active-hand mappings
+are preserved. These rest-to-rest experiments do not establish moving-start
+retarget continuity, force/jerk qualification, loaded manipulation or hardware
+readiness. Complete producer-separated cases are retained in
+\texttt{base\_goal\_reference\_v1/}.

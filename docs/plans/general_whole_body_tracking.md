@@ -125,6 +125,30 @@ The general hand contract stays 3 mm / 0.02 rad, while ordinary base goals retai
 their declared region. Fixed-base manipulation still obeys the 1 cm / 0.02 rad
 safety boundary. Benign contact is allowed within existing force/support limits.
 
+## Base endpoint references
+
+`BaseGoalReference` compiles base-only endpoint tests into continuous, axle-aware
+forward/reverse turn–drive–turn S-curves for Mars and Stretch. Native profile
+speed/acceleration and an explicit experimental reference jerk bound apply;
+scratch geometry, initial measured motion and dynamic execution remain separate
+checks. Its custom record must not be silently decoded as a sampled linear
+`task_pose_trajectory_v1` wire schedule.
+
+The opt-in `BaseNavigationFeedback(reference_tracking=True, heading_gain_scale=2)`
+keeps the inner XY region active through motion and uses the announced twist's
+known physical-unit mapping as feedforward. The heading multiplier is explicit
+development calibration. Learned pose gains remain trainable; active-hand and
+partial-base mappings remain unchanged. The nested v2 navigation contract makes
+older v3 actor runtimes reject unsupported semantics. Legacy defaults are kept.
+
+These are rest-to-rest reference tests. Before integrating interactive goal
+dragging, implement and validate moving-start braking/replans that match the
+previous reference velocity/acceleration, preserve physics/history/faults, and
+remain inside the native derivative and geometry bounds. Do not restart a
+zero-velocity reference while the robot is moving. Keep the
+[endpoint diagnostic](../experiments/base_goal_reference_20261116.md) distinct
+from raw static-goal convergence, loaded carry and hardware qualification.
+
 ## Next gate: expand the distribution after updates are reliable
 
 Within the tracking share, explicitly cover near-constant-orientation Cartesian

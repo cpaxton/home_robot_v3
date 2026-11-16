@@ -55,6 +55,17 @@ The earlier 4,096-decision pilot and both 1,024-update imitation diagnostics are
 complete. Static lateral endpoint convergence and broader coupled coverage remain gaps. No full
 pick-and-place or hardware controller is qualified.
 
+Current follow-up source **`0a682deb`** adds a continuous rest-to-rest base
+endpoint compiler and opt-in reference feedforward/XY-region/heading calibration.
+Its complete native readout preserves **24/24 base paths, 10/10 small general,
+6/10 larger general, 6/6 unloaded TAMP and 4/4 moving handoffs**. Raw static goals
+remain **2/8**; compiled development endpoints pass **8/8** and fresh compiled
+audits **16/16**. Fresh source-bound regressions pass **1,480/1,480**, with a
+verified canonical receipt; the paper builds (59 pages), and evaluation is
+logged to offline W&B `ybaxsdnt`. Measured jerk and moving-start retarget continuity
+remain explicit gaps. No UI/service default or checkpoint is promoted. See the
+[endpoint report](../experiments/base_goal_reference_20261116.md).
+
 | Evidence | Scope / result |
 | --- | --- |
 | [Current complete readout](../experiments/coupled_tracking_20261116.md) | Explicit unloaded-prefix teacher 6/6 at pregrasp and 6/6 at open-jaw grasp-pose; Mars and Stretch coupled v1 teachers each 10/10. |
@@ -65,7 +76,7 @@ pick-and-place or hardware controller is qualified.
 | Explicit completion-hold diagnostic | 10/10 using existing executor hold/reacquisition. Keep separate from raw actor stability. |
 | Pre-navigation runtime `57e8e73b` | New v2 coarse base acceptance, unchanged hand precision, serialized opt-in base feedback mode. Physical readouts: teacher Mars 8/10, Stretch 9/10; fixed-weight Mars actor v1 9/10, v2 5/10, original TAMP grasp-pose 6/6. Fresh current-source regressions pass 1,433/1,433 in 913.38 s; paper builds (59 pages). Old receipts do not qualify this source. |
 
-Current opt-in runtime **`823b3d1d`**: base trajectories **24/24**, small general
+Retained baseline runtime **`823b3d1d`**: base trajectories **24/24**, small general
 **10/10**, larger general **6/10**, TAMP grasp-pose **6/6**, moving handoffs
 **4/4**, and static endpoint goals **2/8**. Fresh source-bound tests are
 **1,451/1,451**; v3 loader compatibility and paper build pass.
@@ -96,7 +107,10 @@ grasp. Open-jaw pose operations do not establish loaded retention.
 2. **Fix base-only stability and final approach.** The learned base's direct
    rate path causes substantial hunting; disabling it helps nine hand/coupled
    cases but harms base-only. Retain native servo limits and reactive arm
-   compensation. Diagnose that remaining mode before general replacement.
+   compensation. The opt-in signed/reference-tracking modes now pass the
+   existing paths and rest-to-rest endpoint audit. Next validate boundary-matched
+   moving-goal replans and diagnose measured jerk at turn transitions, while
+   retaining the larger coupled hand misses and contact stops as failures.
 3. **Improve training exposure, then run a bounded comparison.** Preserve outer
    50/50 general/task physical ticks, train/audit separation and fixed-final
    evaluation. Use the [SuperMimic handoff](../plans/supermimic_controller_training.md)

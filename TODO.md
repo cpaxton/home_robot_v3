@@ -181,9 +181,15 @@ merges, measured policy improvement and hardware readiness are separate decision
       fresh v3-source verification passes 1,451 tests and all 62 native readouts are recorded (including failures). See the
       [direction/formulation report](docs/experiments/base_direction_bootstrap_20261116.md).
 - [ ] **Support static lateral base goals with feasible local references.**
-      Current point-goal checks are 2/8: position enters the 5 cm region, but
-      final heading does not converge. Preserve those failures and mode-switch
-      checks; do not call timed-path tracking universal endpoint navigation.
+      Preserve raw point-goal 2/8 as the baseline. A continuous axle-aware
+      rest-to-rest compiler, exact announced-twist feedforward, continuous XY
+      region and explicit base-only heading calibration reach 8/8 development
+      endpoints, 16/16 fresh endpoint audits and 1,480 source-bound tests. Keep
+      measured jerk and all failed reference/governor ablations visible. Still
+      need boundary-matched moving replans
+      before wiring continuous UI dragging. Do not call timed-path tracking
+      universal endpoint navigation. See the
+      [endpoint report](docs/experiments/base_goal_reference_20261116.md).
 - [ ] **Bind future actor exports to their actual training plants.** General
       and TAMP currently use different contact solver settings. Use explicit
       per-plant export/admission evidence or align the configurations before
