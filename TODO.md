@@ -12,10 +12,23 @@
       CHAT/HTTP request with detailed navigation feedback and execute once;
       mapped information tools honor returns_info. The 95-test focused pack,
       including existing scan checks, passes. Live task success remains unproven.
-- [ ] Qualify rby1/Galaxea-proxy measured gaze in the real simulation bridge:
-      three distinct head requests stayed measured `[0,0]`. Trace actual physics
-      controls, measured joints and camera pose before changing recovery policy.
-      Then rerun the bounded operator task and small paired EQA/OVMM gates.
+- [x] Qualify rby1/Galaxea-proxy measured gaze in the real simulation bridge:
+      the earlier physics worker had died on the physical guard's rejected legacy
+      pose hold while publication remained alive. Physical mode now skips that
+      hold; fatal physics stops publication. All four live head configurations
+      pass unchanged tolerance, with advancing simulation time and an upright
+      base; 76 focused CPU tests pass. Mark earlier r2/r3 trials infrastructure-
+      invalid. Informed r4 retry sees the microwave and recovers floor coverage,
+      but obtains no admitted object position. See the operator report.
+- [x] Route CHAT face_toward through the existing world-frame conversion and
+      validated rotation handler; preserve measured success/rejection instead of
+      reporting legacy executor liveness as turn success. CPU acceptance passes;
+      no live retry of this additional repair yet.
+- [ ] Make current-view object grounding callable by the CHAT coordinator using
+      existing RGB-D admission, without requiring a frontier approach first.
+      Keep unverified search references distinct from object geometry; preserve
+      fresh manipulation authorization. Then retry the bounded operator case
+      and small paired EQA/OVMM gates. No broad sweep yet.
 - [ ] Expose floor-support coverage alongside obstacle clearance; targeted floor
       inspection should consider reachable visible unknown cells rather than
       stopping on the first behind-camera candidate. Preserve drop/step safety.

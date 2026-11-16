@@ -189,4 +189,97 @@ pose-hold actions. Headless physics failure clears server running state and is
 re-raised on the main server thread. A small MuJoCo control verifies time,
 measured joint and optical-pose change without pinning; separate tests cover
 legacy-mode compatibility, fatal physics failure and step-limit shutdown.
-Furnished-scene head qualification remains necessary after this repair.
+Furnished-scene head qualification is recorded below.
+
+## Repaired head contract: live Molmo probe
+
+Source `01b9a39a812c27ef2e5601f6106c5e4f6e303706`; job
+`20261116_162519_d93809`; artifacts:
+`/home/cpaxton/runs/emet/sim-head-contract-20261116-r1/`.
+The archived `runner.py` sends head commands only through the normal benchmark
+server/client, on the same scene and proxy robot. It uses no perception model.
+Before actuation, image simulation time advances from 2.392 to 2.590 seconds.
+
+| Requested pan, tilt (rad) | Measured pan, tilt | Within existing 0.12 rad tolerance |
+| --- | --- | --- |
+| -0.3, -0.4 | -0.241, -0.310 | Yes |
+| -1, -1 | -0.915, -0.922 | Yes |
+| 1, -0.7 | 0.906, -0.716 | Yes |
+| 0, -1 | 0.098, -0.961 | Yes |
+
+Applied torso targets match each request; optical poses and image hashes change.
+Image simulation time reaches 6.700 seconds. Base-up dot world-Z remains above
+0.999999 during these observations. Six audited commands are accepted, with no
+forbidden actuation. The process finishes successfully. Parent visual inspection
+of `pose_1.png` confirms revealed floor/kitchen furniture; `pose_2.png` still
+faces a nearby surface. Confirmed gaze movement does not guarantee task
+usefulness for every requested angle.
+
+The focused physical-motion/head pack passes 76 CPU tests, including the new
+real MuJoCo dynamics control and preservation of the direct pose-hold guard.
+No head tolerance was widened. This qualifies this simulator/proxy combination,
+not all robot adapters or real hardware.
+
+## Informed operator retry r4
+
+Source remains `01b9a39a`; job `20261116_162850_28730f`; artifacts:
+`/home/cpaxton/runs/emet/external-coordinator-trial-20261116-r4/`.
+Source stayed unchanged throughout the trial. This is the same informed actor,
+not a fresh blind comparison. The runner checks advancing image simulation time
+and base uprightness before handing control to it. Exact prompts, pixels,
+responses, physical audit and the runner remain archived as before.
+
+The operator used 12 responses, four base-tool requests and two head/floor
+requests, with no manipulation. Base-tool requests are macro calls, not a count
+of every underlying primitive; the actuation audit has 103 accepted commands
+and zero forbidden entries. Public session end reports no error. Task outcomes:
+
+| Gate | Observed result |
+| --- | --- |
+| Initial stationary floor inspection | Measured head arrival and fresh RGB-D; 77 additional observed cells. |
+| Scan | Completes and returns a new kitchen view. |
+| Failed FIND feedback | Footprint rejection and geometry details reach the next coordinator round. |
+| Targeted floor recovery | Six unknown footprint cells become zero; checked footprint becomes valid, with route replanning still required. |
+| Replanned FIND | Base advances about 0.6 m; later returns an occupied-footprint rejection (full coverage; reported clearance 0.28 m versus 0.33 m required). No safety bypass. |
+| Visual identification | Actor and parent identify the silver microwave above the stove in `public/request_0005/message_009_image_01.png`. |
+| Object geometry | **No admitted microwave 3D position.** Scene/memory queries give unrelated low-confidence frontier/viewpoint coordinates, which the actor rejects. |
+
+The control/recovery contracts improved concretely; end-to-end localization
+still fails. Reported occupied cells were not independently validated against
+simulator ground truth, so this does not establish an optimal clearance threshold
+or that no collision-free route exists.
+
+`face_toward` also exposes a legacy path: it uses raw local base pose with a
+world voxel target and reports a turn from executor liveness. The trial's voxel
+search reference is unresolved, and the resulting image faces the fridge area.
+The frame mismatch is a source-confirmed bug, but the weak target reference also
+prevents attributing the wrong view solely to that mismatch.
+
+After r4, facing now converts the base into the target's planning frame and
+reuses the existing validated `rotate_base` handler. It forwards measured
+success/rejection instead of executing the legacy command or treating an
+unresolved location as object identity. Four regression combinations cover
+translated/rotated origins, cached controller transforms, and rejected versus
+successful turns; the 72-test focused CHAT/motion suite passes. No live trial
+has yet been rerun with this additional facing repair.
+
+The next task-level repair should make current-view object grounding reachable
+from the coordinating CHAT path using existing RGB-D admission machinery.
+`prepare_query_target` already supports current-view grounding, while query-mode
+navigation first relies on a grounded target or a retrieved search candidate;
+the public CHAT toolset has no standalone current-view grounding call. A visible
+object should not require completing a frontier search to request its geometry.
+Keep this separate from clearance validation and fresh manipulation authorization.
+Then repeat this bounded case and small paired EQA/OVMM gates, without a broad
+sweep or interpreting the infrastructure-invalid trials as model accuracy.
+
+## Disk cleanup during qualification
+
+Lossless compression of 6,970 inactive October 29 baseline debug arrays recovered
+2.811 GiB. Each gzip archive was decompressed and SHA256-checked before removing
+its raw copy; an interrupted temporary archive was removed with its original
+retained. Models, environments, source changes and evidence content were preserved.
+Manifest: `/home/cpaxton/src/home_robot_v3/logs/.compressed-debug-20261116.jsonl`;
+summary alongside it. Restore a raw array with `gzip -dk path/to/array.npy.gz`.
+Package-cache pruning also ran. Other cleanup happened on the shared host; the
+whole change in free disk space is not attributed to this session.

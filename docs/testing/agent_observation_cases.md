@@ -10,7 +10,11 @@ in `test_chat_camera_history.py::test_chat_find_result_reaches_next_model_reques
 covering success and failure. Single execution and detailed navigation feedback
 are checked in `test_dispatch_tool_calls.py`; task failure independent of
 executor liveness is checked in `test_dynamem_sim_manip_gating.py`. Live retry
-and measured head acceptance remain pending. Keep these separate gates;
+now confirms head/floor recovery but still lacks admitted target geometry. A
+separate furnished-scene probe confirms all four requested head configurations;
+the earlier runs had dead physics despite live publication. The fast progress
+gate is `src/test/motion/test_sim_physics_progress.py` (CPU MuJoCo, no renderer
+or model). Keep these separate gates;
 process exit-zero does not pass them. See the
 [operator report](../experiments/independent_operator_trial_20261116.md) for
 exact actions, source pin, receipt paths and the proposed repair tests.
