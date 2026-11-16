@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "purpose": "Final stacked integration gate for named partial execution and bounded contextual retry; familiar privileged simulated Stretch diagnostics",
+  "pr": 244,
+  "parent_runtime_source": "2bb806b3fcc0c8e61873baeafd1a8e685af0d414",
+  "case_file": "configs/eval/tamp_stretch_realism_pilot.json",
+  "case_id": "two-goal-control",
+  "native_policy": "bounded_approach",
+  "model": "Qwen/Qwen3-VL-8B-Instruct",
+  "base_url": "http://192.168.1.55:8000/v1",
+  "sampling": "server default",
+  "stop_control": {
+    "port_offset": 3490,
+    "cpu_set": "0-7",
+    "recover": false
+  },
+  "contextual_retry": {
+    "port_offset": 3500,
+    "cpu_set": "8-13",
+    "recover": true,
+    "recovery_style": "contextual",
+    "new_user_request": "Please retry the remaining work."
+  },
+  "maximum_concurrent_simulators": 2,
+  "local_gpu": false,
+  "fault": "Evaluator-only no-command admission refusal after one real verified transfer",
+  "acceptance": [
+    "named verified completed action and failed/unverified remaining action",
+    "overall progress true but failed-step execution_started false; stop dispatch",
+    "stop-only deliberately leaves task incomplete",
+    "separately authorized retry requires fresh discovery, a new one-step plan, actual handle and only one remaining transfer",
+    "independent settled final goals and zero forbidden commands",
+    "preserve historical failure and success records; no hardware/observed/held-object recovery qualification"
+  ]
+}

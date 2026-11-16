@@ -1,0 +1,152 @@
+{
+  "format": "mars-c1-incomplete-attempt-v1",
+  "date": "2026-11-14",
+  "implementation_revision": "e0d8df022a6f3cff91c2a8b8acbbb82a5b37a300",
+  "job_id": "20261114_092650_d2cc46",
+  "status": "incomplete_settings_comparison_failure",
+  "paired_conclusion_available": false,
+  "software_tests": 1187,
+  "control_training_decisions": 4096,
+  "control_physical_ticks": 4096,
+  "control_ppo_updates": 16,
+  "candidate_ppo_updates": 0,
+  "candidate_preupdate_rollout_ticks": 256,
+  "all_initial_and_first_rollout_keys_equal": true,
+  "serialized_ppo_settings_equal_except_mode": true,
+  "failure": "paired PPO settings differ beyond normalization scheme",
+  "diagnosis": "serialized advantage_weights list compares unequal to in-memory tuple",
+  "first_rollout": {
+    "arrays_sha256": "d601aab63a29e574cc9ab0749fcfe6dfe963928e69a630a3c68a887e4f8d3a6c",
+    "observations_sha256": "cc2252e36a56fb2f688123572f0bb578542a9a5ffc6539edea04aa2aeb8e351d",
+    "actions_sha256": "33cc6de363fa33a08fd4eacbe3bfb0a333b6fe964f6a6a99a3242cc103f1e03e",
+    "rewards_sha256": "e564fdc987801238a4f28cccaf6930f9f9516652262a03dd6466b770143f5a21",
+    "raw_gae_sha256": "12c258a108a87a7578747733291c4dc9bdfc643c289e4ff2288d9eff4f7519a0"
+  },
+  "evaluations": {
+    "per_head/initial": {
+      "base/train": {
+        "cases": 2,
+        "admitted": 2,
+        "mastered": 1,
+        "tracking_and_settling_passed": 1,
+        "smoothness_passed": 2,
+        "failure_reasons": {
+          "mastery_tracking_envelope": 1,
+          "terminal_hold": 1
+        },
+        "codes": {
+          "ok": 1,
+          "mastery_tracking_envelope": 1
+        },
+        "all_pass": false
+      },
+      "arm/train": {
+        "cases": 10,
+        "admitted": 10,
+        "mastered": 1,
+        "tracking_and_settling_passed": 1,
+        "smoothness_passed": 10,
+        "failure_reasons": {
+          "mastery_tracking_envelope": 2,
+          "terminal_hold": 9,
+          "tracking_timeout": 7
+        },
+        "codes": {
+          "mastery_tracking_envelope": 2,
+          "tracking_timeout": 7,
+          "ok": 1
+        },
+        "all_pass": false
+      }
+    },
+    "per_head/final": {
+      "base/train": {
+        "cases": 2,
+        "admitted": 2,
+        "mastered": 0,
+        "tracking_and_settling_passed": 1,
+        "smoothness_passed": 1,
+        "failure_reasons": {
+          "smoothness/base_linear_jerk": 1,
+          "mastery_tracking_envelope": 1,
+          "terminal_hold": 1
+        },
+        "codes": {
+          "ok": 1,
+          "mastery_tracking_envelope": 1
+        },
+        "all_pass": false
+      },
+      "arm/train": {
+        "cases": 10,
+        "admitted": 10,
+        "mastered": 0,
+        "tracking_and_settling_passed": 0,
+        "smoothness_passed": 1,
+        "failure_reasons": {
+          "mastery_tracking_envelope": 8,
+          "terminal_hold": 10,
+          "smoothness/base_linear_jerk": 9,
+          "smoothness/base_yaw_jerk": 3,
+          "fixed_base_contract_violation": 2,
+          "hold_drift": 1,
+          "smoothness/peak_force_N": 1
+        },
+        "codes": {
+          "mastery_tracking_envelope": 8,
+          "fixed_base_contract_violation": 2
+        },
+        "all_pass": false
+      }
+    },
+    "shared/initial": {
+      "base/train": {
+        "cases": 2,
+        "admitted": 2,
+        "mastered": 1,
+        "tracking_and_settling_passed": 1,
+        "smoothness_passed": 2,
+        "failure_reasons": {
+          "mastery_tracking_envelope": 1,
+          "terminal_hold": 1
+        },
+        "codes": {
+          "ok": 1,
+          "mastery_tracking_envelope": 1
+        },
+        "all_pass": false
+      },
+      "arm/train": {
+        "cases": 10,
+        "admitted": 10,
+        "mastered": 1,
+        "tracking_and_settling_passed": 1,
+        "smoothness_passed": 10,
+        "failure_reasons": {
+          "mastery_tracking_envelope": 2,
+          "terminal_hold": 9,
+          "tracking_timeout": 7
+        },
+        "codes": {
+          "mastery_tracking_envelope": 2,
+          "tracking_timeout": 7,
+          "ok": 1
+        },
+        "all_pass": false
+      }
+    }
+  },
+  "artifact_sha256": {
+    "supervisor.json": "72b5a3c7228808da36c344ad8116d9c645bfa59f2a41fc3ffc86cd7659044265",
+    "checks/full.receipt.json": "b88de79885376913c747fb1ae12aea35ba190c4106ca632e10ec4ee0d1ed8b3b",
+    "checks/full.xml": "56531f1d062f9328600d1d5321cbef5a9e565b5061d47ade85946cb501ffc855",
+    "per_head/run.json": "571521ac3b2d33f5c7e067f2f2b73d3ddeae5a791b7903d4d448269847b5b8b5",
+    "per_head/summary.json": "9b5911641885ebf74eec681b264f97dfb8754967ba8accc633d1a477bf6cc560",
+    "per_head/updates.jsonl": "0f0c02baea81e4b95b4755102cc82a551a161e2688c8ba88bade67b4b5d7cc6e",
+    "shared/run.json": "dcfc2e62cf2bf7ed5af988154a38c2a71a721eefa5656bfa27f0aca08a1bd5b0",
+    "shared.log": "ea9121748b9637bff4b41439a152143beb0144c54a18c40aa651e5058ecdc619"
+  },
+  "hardware_used": false,
+  "safety_promoted": false,
+  "automatic_retry": false
+}

@@ -1,0 +1,212 @@
+{
+  "scope": "Twelve fixed, unfiltered new-seed supported open-jaw contact cases, generated before supported-fixture training. Not loaded retention or hardware qualification.",
+  "base_suite_path": "configs/benchmarks/mars_tracking_mastery_supported_v1.json",
+  "base_suite_sha256": "16b5252f7007ec82d87b68c311e003b37c68d336bfa88cb8e929dbc422feb083",
+  "generation_seed": 34420000,
+  "cases": [
+    {
+      "id": "validation:arm:fresh_supported_0",
+      "split": "validation",
+      "stage": "arm",
+      "reset_seed": 34420000,
+      "travel_m": 0,
+      "turn_rad": 0,
+      "arm_delta": [
+        0.0,
+        -0.026214950495553665,
+        0.08519858911054941,
+        -0.05898363861499574,
+        0.0
+      ],
+      "minimum_duration_s": 2.5,
+      "supported_fixture": true
+    },
+    {
+      "id": "validation:arm:fresh_supported_1",
+      "split": "validation",
+      "stage": "arm",
+      "reset_seed": 34420001,
+      "travel_m": 0,
+      "turn_rad": 0,
+      "arm_delta": [
+        0.0,
+        -0.028346664925960496,
+        0.09212666100937161,
+        -0.06377999608341112,
+        0.0
+      ],
+      "minimum_duration_s": 2.5,
+      "supported_fixture": true
+    },
+    {
+      "id": "validation:arm:fresh_supported_2",
+      "split": "validation",
+      "stage": "arm",
+      "reset_seed": 34420002,
+      "travel_m": 0,
+      "turn_rad": 0,
+      "arm_delta": [
+        0.0,
+        0.017711905899882016,
+        -0.057563694174616556,
+        0.03985178827473453,
+        0.0
+      ],
+      "minimum_duration_s": 2.5,
+      "supported_fixture": true
+    },
+    {
+      "id": "validation:arm:fresh_supported_3",
+      "split": "validation",
+      "stage": "arm",
+      "reset_seed": 34420003,
+      "travel_m": 0,
+      "turn_rad": 0,
+      "arm_delta": [
+        0.0,
+        -0.03339558921330304,
+        0.10853566494323488,
+        -0.07514007572993184,
+        0.0
+      ],
+      "minimum_duration_s": 2.5,
+      "supported_fixture": true
+    },
+    {
+      "id": "validation:arm:fresh_supported_4",
+      "split": "validation",
+      "stage": "arm",
+      "reset_seed": 34420004,
+      "travel_m": 0,
+      "turn_rad": 0,
+      "arm_delta": [
+        0.0,
+        -0.02478608755793351,
+        0.08055478456328391,
+        -0.05576869700535039,
+        0.0
+      ],
+      "minimum_duration_s": 2.5,
+      "supported_fixture": true
+    },
+    {
+      "id": "validation:arm:fresh_supported_5",
+      "split": "validation",
+      "stage": "arm",
+      "reset_seed": 34420005,
+      "travel_m": 0,
+      "turn_rad": 0,
+      "arm_delta": [
+        0.0,
+        0.017650638759738758,
+        -0.05736457596915096,
+        0.0397139372094122,
+        0.0
+      ],
+      "minimum_duration_s": 2.5,
+      "supported_fixture": true
+    },
+    {
+      "id": "validation:arm:fresh_supported_6",
+      "split": "validation",
+      "stage": "arm",
+      "reset_seed": 34420006,
+      "travel_m": 0,
+      "turn_rad": 0,
+      "arm_delta": [
+        0.0,
+        -0.02375634389144283,
+        0.0772081176471892,
+        -0.05345177375574636,
+        0.0
+      ],
+      "minimum_duration_s": 2.5,
+      "supported_fixture": true
+    },
+    {
+      "id": "validation:arm:fresh_supported_7",
+      "split": "validation",
+      "stage": "arm",
+      "reset_seed": 34420007,
+      "travel_m": 0,
+      "turn_rad": 0,
+      "arm_delta": [
+        0.0,
+        -0.02304573978328805,
+        0.07489865429568617,
+        -0.05185291451239811,
+        0.0
+      ],
+      "minimum_duration_s": 2.5,
+      "supported_fixture": true
+    },
+    {
+      "id": "validation:arm:fresh_supported_8",
+      "split": "validation",
+      "stage": "arm",
+      "reset_seed": 34420008,
+      "travel_m": 0,
+      "turn_rad": 0,
+      "arm_delta": [
+        0.0,
+        0.02032402260193362,
+        -0.06605307345628428,
+        0.045729050854350646,
+        0.0
+      ],
+      "minimum_duration_s": 2.5,
+      "supported_fixture": true
+    },
+    {
+      "id": "validation:arm:fresh_supported_9",
+      "split": "validation",
+      "stage": "arm",
+      "reset_seed": 34420009,
+      "travel_m": 0,
+      "turn_rad": 0,
+      "arm_delta": [
+        0.0,
+        -0.023907111561975874,
+        0.07769811257642159,
+        -0.05379100101444571,
+        0.0
+      ],
+      "minimum_duration_s": 2.5,
+      "supported_fixture": true
+    },
+    {
+      "id": "validation:arm:fresh_supported_10",
+      "split": "validation",
+      "stage": "arm",
+      "reset_seed": 34420010,
+      "travel_m": 0,
+      "turn_rad": 0,
+      "arm_delta": [
+        0.0,
+        -0.02526177286198707,
+        0.08210076180145798,
+        -0.056838988939470904,
+        0.0
+      ],
+      "minimum_duration_s": 2.5,
+      "supported_fixture": true
+    },
+    {
+      "id": "validation:arm:fresh_supported_11",
+      "split": "validation",
+      "stage": "arm",
+      "reset_seed": 34420011,
+      "travel_m": 0,
+      "turn_rad": 0,
+      "arm_delta": [
+        0.0,
+        0.013146873308165575,
+        -0.04272733825153812,
+        0.02958046494337254,
+        0.0
+      ],
+      "minimum_duration_s": 2.5,
+      "supported_fixture": true
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "version": "mars-tamp-policy-development-v1",
+  "scope": "Selected development comparisons, not held-out qualification. Cases retain all frozen public TAMP goals and thresholds.",
+  "canonical_suite": "configs/benchmarks/mars_public_tamp_whole_body_v2.json",
+  "cases": ["left:20g:0", "left:50g:0", "right:20g:0"],
+  "program": {
+    "id": "delivery_return",
+    "instruction": "Deliver the blue payload to the destination support, release it, regrasp it and return it to the source support.",
+    "stages": [
+      {"object": "blue", "support": "destination"},
+      {"object": "blue", "support": "source"}
+    ]
+  },
+  "checkpoint": "logs/manipulation/tracking-retention-v3-gripper-head/seed-46/step-10240",
+  "training_evidence": "paper/data/whole_body_control/retention_training_gripper_v3.json",
+  "controller_order": ["reference_teacher", "checkpoint_policy"],
+  "safety_promoted": false
+}

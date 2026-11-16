@@ -1,0 +1,129 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="940" height="410" viewBox="0 0 940 410">
+<rect width="100%" height="100%" fill="white"/>
+<g font-family="sans-serif" font-size="13" fill="#222">
+<text x="74" y="24" font-size="18">Hand path coverage: training and actual TAMP pregrasp</text>
+<path d="M74.0 45v285" stroke="#ddd"/>
+<text x="74.0" y="352" text-anchor="middle">0</text>
+<path d="M188.28571428571428 45v285" stroke="#ddd"/>
+<text x="188.28571428571428" y="352" text-anchor="middle">5</text>
+<path d="M302.57142857142856 45v285" stroke="#ddd"/>
+<text x="302.57142857142856" y="352" text-anchor="middle">10</text>
+<path d="M416.85714285714283 45v285" stroke="#ddd"/>
+<text x="416.85714285714283" y="352" text-anchor="middle">15</text>
+<path d="M531.1428571428571 45v285" stroke="#ddd"/>
+<text x="531.1428571428571" y="352" text-anchor="middle">20</text>
+<path d="M645.4285714285714 45v285" stroke="#ddd"/>
+<text x="645.4285714285714" y="352" text-anchor="middle">25</text>
+<path d="M759.7142857142857 45v285" stroke="#ddd"/>
+<text x="759.7142857142857" y="352" text-anchor="middle">30</text>
+<path d="M874.0 45v285" stroke="#ddd"/>
+<text x="874.0" y="352" text-anchor="middle">35</text>
+<path d="M74 330.0h800" stroke="#ddd"/>
+<text x="62" y="334.0" text-anchor="end">0</text>
+<path d="M74 289.2857142857143h800" stroke="#ddd"/>
+<text x="62" y="293.2857142857143" text-anchor="end">20</text>
+<path d="M74 248.57142857142856h800" stroke="#ddd"/>
+<text x="62" y="252.57142857142856" text-anchor="end">40</text>
+<path d="M74 207.85714285714286h800" stroke="#ddd"/>
+<text x="62" y="211.85714285714286" text-anchor="end">60</text>
+<path d="M74 167.14285714285714h800" stroke="#ddd"/>
+<text x="62" y="171.14285714285714" text-anchor="end">80</text>
+<path d="M74 126.42857142857142h800" stroke="#ddd"/>
+<text x="62" y="130.42857142857142" text-anchor="end">100</text>
+<path d="M74 85.71428571428572h800" stroke="#ddd"/>
+<text x="62" y="89.71428571428572" text-anchor="end">120</text>
+<path d="M74 45.0h800" stroke="#ddd"/>
+<text x="62" y="49.0" text-anchor="end">140</text>
+<circle cx="445.59" cy="207.86" r="3.4" fill="#718096" opacity=".75"><title>train:arm:pitch_up: 16.26 mm, 60.00 mrad</title></circle>
+<circle cx="445.90" cy="207.86" r="3.4" fill="#718096" opacity=".75"><title>train:arm:pitch_down: 16.27 mm, 60.00 mrad</title></circle>
+<circle cx="74.00" cy="167.14" r="3.4" fill="#718096" opacity=".75"><title>train:arm:roll_left: 0.00 mm, 80.00 mrad</title></circle>
+<circle cx="74.00" cy="167.14" r="3.4" fill="#718096" opacity=".75"><title>train:arm:roll_right: 0.00 mm, 80.00 mrad</title></circle>
+<circle cx="479.87" cy="167.14" r="3.4" fill="#718096" opacity=".75"><title>train:arm:shoulder_left: 17.76 mm, 80.00 mrad</title></circle>
+<circle cx="468.87" cy="167.14" r="3.4" fill="#718096" opacity=".75"><title>train:arm:shoulder_right: 17.28 mm, 80.00 mrad</title></circle>
+<circle cx="748.56" cy="85.71" r="3.4" fill="#718096" opacity=".75"><title>train:arm:elbow_up: 29.51 mm, 120.00 mrad</title></circle>
+<circle cx="752.11" cy="85.71" r="3.4" fill="#718096" opacity=".75"><title>train:arm:elbow_down: 29.67 mm, 120.00 mrad</title></circle>
+<circle cx="327.24" cy="126.43" r="3.4" fill="#718096" opacity=".75"><title>train:arm:wrist_up: 11.08 mm, 100.00 mrad</title></circle>
+<circle cx="327.24" cy="126.43" r="3.4" fill="#718096" opacity=".75"><title>train:arm:wrist_down: 11.08 mm, 100.00 mrad</title></circle>
+<circle cx="346.94" cy="330.00" r="3.4" fill="#718096" opacity=".75"><title>train:arm:translate_down: 11.94 mm, 0.00 mrad</title></circle>
+<circle cx="333.86" cy="330.00" r="3.4" fill="#718096" opacity=".75"><title>train:arm:translate_up: 11.37 mm, 0.00 mrad</title></circle>
+<circle cx="310.69" cy="330.00" r="3.4" fill="#718096" opacity=".75"><title>train:arm:near_straight_A_translate_up: 10.36 mm, 0.00 mrad</title></circle>
+<circle cx="324.16" cy="330.00" r="3.4" fill="#718096" opacity=".75"><title>train:arm:near_straight_A_translate_down: 10.94 mm, 0.00 mrad</title></circle>
+<circle cx="74.00" cy="167.14" r="3.4" fill="#718096" opacity=".75"><title>train:arm:near_straight_A_roll: 0.00 mm, 80.00 mrad</title></circle>
+<circle cx="469.04" cy="167.14" r="3.4" fill="#718096" opacity=".75"><title>train:arm:near_straight_A_shoulder: 17.28 mm, 80.00 mrad</title></circle>
+<circle cx="319.70" cy="330.00" r="3.4" fill="#718096" opacity=".75"><title>train:arm:near_straight_B_translate_up: 10.75 mm, 0.00 mrad</title></circle>
+<circle cx="332.98" cy="330.00" r="3.4" fill="#718096" opacity=".75"><title>train:arm:near_straight_B_translate_down: 11.33 mm, 0.00 mrad</title></circle>
+<circle cx="74.00" cy="167.14" r="3.4" fill="#718096" opacity=".75"><title>train:arm:near_straight_B_roll: 0.00 mm, 80.00 mrad</title></circle>
+<circle cx="464.25" cy="167.14" r="3.4" fill="#718096" opacity=".75"><title>train:arm:near_straight_B_shoulder: 17.07 mm, 80.00 mrad</title></circle>
+<circle cx="166.91" cy="299.46" r="3.4" fill="#718096" opacity=".75"><title>train:arm:pitch_up@amplitude:0.25: 4.06 mm, 15.00 mrad</title></circle>
+<circle cx="259.81" cy="268.93" r="3.4" fill="#718096" opacity=".75"><title>train:arm:pitch_up@amplitude:0.5: 8.13 mm, 30.00 mrad</title></circle>
+<circle cx="166.99" cy="299.46" r="3.4" fill="#718096" opacity=".75"><title>train:arm:pitch_down@amplitude:0.25: 4.07 mm, 15.00 mrad</title></circle>
+<circle cx="259.97" cy="268.93" r="3.4" fill="#718096" opacity=".75"><title>train:arm:pitch_down@amplitude:0.5: 8.14 mm, 30.00 mrad</title></circle>
+<circle cx="74.00" cy="289.29" r="3.4" fill="#718096" opacity=".75"><title>train:arm:roll_left@amplitude:0.25: 0.00 mm, 20.00 mrad</title></circle>
+<circle cx="74.00" cy="248.57" r="3.4" fill="#718096" opacity=".75"><title>train:arm:roll_left@amplitude:0.5: 0.00 mm, 40.00 mrad</title></circle>
+<circle cx="74.00" cy="289.29" r="3.4" fill="#718096" opacity=".75"><title>train:arm:roll_right@amplitude:0.25: 0.00 mm, 20.00 mrad</title></circle>
+<circle cx="74.00" cy="248.57" r="3.4" fill="#718096" opacity=".75"><title>train:arm:roll_right@amplitude:0.5: 0.00 mm, 40.00 mrad</title></circle>
+<circle cx="175.49" cy="289.29" r="3.4" fill="#718096" opacity=".75"><title>train:arm:shoulder_left@amplitude:0.25: 4.44 mm, 20.00 mrad</title></circle>
+<circle cx="276.97" cy="248.57" r="3.4" fill="#718096" opacity=".75"><title>train:arm:shoulder_left@amplitude:0.5: 8.88 mm, 40.00 mrad</title></circle>
+<circle cx="172.74" cy="289.29" r="3.4" fill="#718096" opacity=".75"><title>train:arm:shoulder_right@amplitude:0.25: 4.32 mm, 20.00 mrad</title></circle>
+<circle cx="271.48" cy="248.57" r="3.4" fill="#718096" opacity=".75"><title>train:arm:shoulder_right@amplitude:0.5: 8.64 mm, 40.00 mrad</title></circle>
+<circle cx="242.73" cy="268.93" r="3.4" fill="#718096" opacity=".75"><title>train:arm:elbow_up@amplitude:0.25: 7.38 mm, 30.00 mrad</title></circle>
+<circle cx="411.43" cy="207.86" r="3.4" fill="#718096" opacity=".75"><title>train:arm:elbow_up@amplitude:0.5: 14.76 mm, 60.00 mrad</title></circle>
+<circle cx="243.62" cy="268.93" r="3.4" fill="#718096" opacity=".75"><title>train:arm:elbow_down@amplitude:0.25: 7.42 mm, 30.00 mrad</title></circle>
+<circle cx="413.21" cy="207.86" r="3.4" fill="#718096" opacity=".75"><title>train:arm:elbow_down@amplitude:0.5: 14.84 mm, 60.00 mrad</title></circle>
+<circle cx="137.33" cy="279.11" r="3.4" fill="#718096" opacity=".75"><title>train:arm:wrist_up@amplitude:0.25: 2.77 mm, 25.00 mrad</title></circle>
+<circle cx="200.66" cy="228.21" r="3.4" fill="#718096" opacity=".75"><title>train:arm:wrist_up@amplitude:0.5: 5.54 mm, 50.00 mrad</title></circle>
+<circle cx="137.33" cy="279.11" r="3.4" fill="#718096" opacity=".75"><title>train:arm:wrist_down@amplitude:0.25: 2.77 mm, 25.00 mrad</title></circle>
+<circle cx="200.66" cy="228.21" r="3.4" fill="#718096" opacity=".75"><title>train:arm:wrist_down@amplitude:0.5: 5.54 mm, 50.00 mrad</title></circle>
+<circle cx="141.06" cy="330.00" r="3.4" fill="#718096" opacity=".75"><title>train:arm:translate_down@amplitude:0.25: 2.93 mm, 0.00 mrad</title></circle>
+<circle cx="208.91" cy="330.00" r="3.4" fill="#718096" opacity=".75"><title>train:arm:translate_down@amplitude:0.5: 5.90 mm, 0.00 mrad</title></circle>
+<circle cx="140.20" cy="330.00" r="3.4" fill="#718096" opacity=".75"><title>train:arm:translate_up@amplitude:0.25: 2.90 mm, 0.00 mrad</title></circle>
+<circle cx="205.58" cy="330.00" r="3.4" fill="#718096" opacity=".75"><title>train:arm:translate_up@amplitude:0.5: 5.76 mm, 0.00 mrad</title></circle>
+<circle cx="134.46" cy="330.00" r="3.4" fill="#718096" opacity=".75"><title>train:arm:near_straight_A_translate_up@amplitude:0.25: 2.64 mm, 0.00 mrad</title></circle>
+<circle cx="194.06" cy="330.00" r="3.4" fill="#718096" opacity=".75"><title>train:arm:near_straight_A_translate_up@amplitude:0.5: 5.25 mm, 0.00 mrad</title></circle>
+<circle cx="135.30" cy="330.00" r="3.4" fill="#718096" opacity=".75"><title>train:arm:near_straight_A_translate_down@amplitude:0.25: 2.68 mm, 0.00 mrad</title></circle>
+<circle cx="197.43" cy="330.00" r="3.4" fill="#718096" opacity=".75"><title>train:arm:near_straight_A_translate_down@amplitude:0.5: 5.40 mm, 0.00 mrad</title></circle>
+<circle cx="74.00" cy="289.29" r="3.4" fill="#718096" opacity=".75"><title>train:arm:near_straight_A_roll@amplitude:0.25: 0.00 mm, 20.00 mrad</title></circle>
+<circle cx="74.00" cy="248.57" r="3.4" fill="#718096" opacity=".75"><title>train:arm:near_straight_A_roll@amplitude:0.5: 0.00 mm, 40.00 mrad</title></circle>
+<circle cx="172.78" cy="289.29" r="3.4" fill="#718096" opacity=".75"><title>train:arm:near_straight_A_shoulder@amplitude:0.25: 4.32 mm, 20.00 mrad</title></circle>
+<circle cx="271.56" cy="248.57" r="3.4" fill="#718096" opacity=".75"><title>train:arm:near_straight_A_shoulder@amplitude:0.5: 8.64 mm, 40.00 mrad</title></circle>
+<circle cx="136.69" cy="330.00" r="3.4" fill="#718096" opacity=".75"><title>train:arm:near_straight_B_translate_up@amplitude:0.25: 2.74 mm, 0.00 mrad</title></circle>
+<circle cx="198.55" cy="330.00" r="3.4" fill="#718096" opacity=".75"><title>train:arm:near_straight_B_translate_up@amplitude:0.5: 5.45 mm, 0.00 mrad</title></circle>
+<circle cx="137.52" cy="330.00" r="3.4" fill="#718096" opacity=".75"><title>train:arm:near_straight_B_translate_down@amplitude:0.25: 2.78 mm, 0.00 mrad</title></circle>
+<circle cx="201.87" cy="330.00" r="3.4" fill="#718096" opacity=".75"><title>train:arm:near_straight_B_translate_down@amplitude:0.5: 5.59 mm, 0.00 mrad</title></circle>
+<circle cx="74.00" cy="289.29" r="3.4" fill="#718096" opacity=".75"><title>train:arm:near_straight_B_roll@amplitude:0.25: 0.00 mm, 20.00 mrad</title></circle>
+<circle cx="74.00" cy="248.57" r="3.4" fill="#718096" opacity=".75"><title>train:arm:near_straight_B_roll@amplitude:0.5: 0.00 mm, 40.00 mrad</title></circle>
+<circle cx="171.59" cy="289.29" r="3.4" fill="#718096" opacity=".75"><title>train:arm:near_straight_B_shoulder@amplitude:0.25: 4.27 mm, 20.00 mrad</title></circle>
+<circle cx="269.16" cy="248.57" r="3.4" fill="#718096" opacity=".75"><title>train:arm:near_straight_B_shoulder@amplitude:0.5: 8.54 mm, 40.00 mrad</title></circle>
+<circle cx="632.06" cy="327.89" r="5" fill="#c53030" opacity=".75"><title>left:20g:0: 24.42 mm, 1.04 mrad</title></circle>
+<circle cx="636.94" cy="326.65" r="5" fill="#c53030" opacity=".75"><title>left:50g:0: 24.63 mm, 1.64 mrad</title></circle>
+<circle cx="632.06" cy="327.89" r="5" fill="#c53030" opacity=".75"><title>right:20g:0: 24.42 mm, 1.04 mrad</title></circle>
+<circle cx="538.36" cy="330.00" r="3.4" fill="#087f8c" opacity=".75"><title>train:arm:tamp_translation_A_elbow_translate_positive: 20.32 mm, 0.00 mrad</title></circle>
+<circle cx="509.95" cy="330.00" r="3.4" fill="#087f8c" opacity=".75"><title>train:arm:tamp_translation_A_elbow_translate_negative: 19.07 mm, 0.00 mrad</title></circle>
+<circle cx="652.64" cy="330.00" r="3.4" fill="#087f8c" opacity=".75"><title>train:arm:tamp_translation_A_shoulder_translate_positive: 25.32 mm, 0.00 mrad</title></circle>
+<circle cx="652.64" cy="330.00" r="3.4" fill="#087f8c" opacity=".75"><title>train:arm:tamp_translation_A_shoulder_translate_negative: 25.32 mm, 0.00 mrad</title></circle>
+<circle cx="549.63" cy="330.00" r="3.4" fill="#087f8c" opacity=".75"><title>train:arm:tamp_translation_B_elbow_translate_positive: 20.81 mm, 0.00 mrad</title></circle>
+<circle cx="521.32" cy="330.00" r="3.4" fill="#087f8c" opacity=".75"><title>train:arm:tamp_translation_B_elbow_translate_negative: 19.57 mm, 0.00 mrad</title></circle>
+<circle cx="635.18" cy="330.00" r="3.4" fill="#087f8c" opacity=".75"><title>train:arm:tamp_translation_B_shoulder_translate_positive: 24.55 mm, 0.00 mrad</title></circle>
+<circle cx="635.18" cy="330.00" r="3.4" fill="#087f8c" opacity=".75"><title>train:arm:tamp_translation_B_shoulder_translate_negative: 24.55 mm, 0.00 mrad</title></circle>
+<circle cx="187.53" cy="330.00" r="3.4" fill="#087f8c" opacity=".75"><title>train:arm:tamp_translation_A_elbow_translate_positive@amplitude:0.25: 4.97 mm, 0.00 mrad</title></circle>
+<circle cx="302.79" cy="330.00" r="3.4" fill="#087f8c" opacity=".75"><title>train:arm:tamp_translation_A_elbow_translate_positive@amplitude:0.5: 10.01 mm, 0.00 mrad</title></circle>
+<circle cx="185.75" cy="330.00" r="3.4" fill="#087f8c" opacity=".75"><title>train:arm:tamp_translation_A_elbow_translate_negative@amplitude:0.25: 4.89 mm, 0.00 mrad</title></circle>
+<circle cx="295.68" cy="330.00" r="3.4" fill="#087f8c" opacity=".75"><title>train:arm:tamp_translation_A_elbow_translate_negative@amplitude:0.5: 9.70 mm, 0.00 mrad</title></circle>
+<circle cx="218.74" cy="330.00" r="3.4" fill="#087f8c" opacity=".75"><title>train:arm:tamp_translation_A_shoulder_translate_positive@amplitude:0.25: 6.33 mm, 0.00 mrad</title></circle>
+<circle cx="363.45" cy="330.00" r="3.4" fill="#087f8c" opacity=".75"><title>train:arm:tamp_translation_A_shoulder_translate_positive@amplitude:0.5: 12.66 mm, 0.00 mrad</title></circle>
+<circle cx="218.74" cy="330.00" r="3.4" fill="#087f8c" opacity=".75"><title>train:arm:tamp_translation_A_shoulder_translate_negative@amplitude:0.25: 6.33 mm, 0.00 mrad</title></circle>
+<circle cx="363.45" cy="330.00" r="3.4" fill="#087f8c" opacity=".75"><title>train:arm:tamp_translation_A_shoulder_translate_negative@amplitude:0.5: 12.66 mm, 0.00 mrad</title></circle>
+<circle cx="190.37" cy="330.00" r="3.4" fill="#087f8c" opacity=".75"><title>train:arm:tamp_translation_B_elbow_translate_positive@amplitude:0.25: 5.09 mm, 0.00 mrad</title></circle>
+<circle cx="308.46" cy="330.00" r="3.4" fill="#087f8c" opacity=".75"><title>train:arm:tamp_translation_B_elbow_translate_positive@amplitude:0.5: 10.26 mm, 0.00 mrad</title></circle>
+<circle cx="188.59" cy="330.00" r="3.4" fill="#087f8c" opacity=".75"><title>train:arm:tamp_translation_B_elbow_translate_negative@amplitude:0.25: 5.01 mm, 0.00 mrad</title></circle>
+<circle cx="301.37" cy="330.00" r="3.4" fill="#087f8c" opacity=".75"><title>train:arm:tamp_translation_B_elbow_translate_negative@amplitude:0.5: 9.95 mm, 0.00 mrad</title></circle>
+<circle cx="214.37" cy="330.00" r="3.4" fill="#087f8c" opacity=".75"><title>train:arm:tamp_translation_B_shoulder_translate_positive@amplitude:0.25: 6.14 mm, 0.00 mrad</title></circle>
+<circle cx="354.72" cy="330.00" r="3.4" fill="#087f8c" opacity=".75"><title>train:arm:tamp_translation_B_shoulder_translate_positive@amplitude:0.5: 12.28 mm, 0.00 mrad</title></circle>
+<circle cx="214.37" cy="330.00" r="3.4" fill="#087f8c" opacity=".75"><title>train:arm:tamp_translation_B_shoulder_translate_negative@amplitude:0.25: 6.14 mm, 0.00 mrad</title></circle>
+<circle cx="354.72" cy="330.00" r="3.4" fill="#087f8c" opacity=".75"><title>train:arm:tamp_translation_B_shoulder_translate_negative@amplitude:0.5: 12.28 mm, 0.00 mrad</title></circle>
+<text x="474" y="377" text-anchor="middle">Maximum position excursion from reset (mm)</text>
+<text transform="translate(18 190) rotate(-90)" text-anchor="middle">Orientation excursion (mrad)</text>
+<text x="100" y="404" fill="#718096">Existing training (60)</text>
+<text x="360" y="404" fill="#c53030">Actual TAMP pregrasp (3)</text>
+<text x="650" y="404" fill="#087f8c">New geometry preview (24)</text>
+</g></svg>

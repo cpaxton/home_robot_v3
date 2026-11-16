@@ -59,16 +59,18 @@ or paper-to-paper numerical comparison is claimed in this change.
 
 ## Review and merge status (November 16)
 
-Dependency order is #226 → #231 → #234 → #242 → #243 → #244. None is merged.
+Dependency order is #226 → #231 → #234 → #242 → #243 → #244. The first
+three foundations are merged. Remaining children receive integration checks
+against the resulting main before landing.
 
 | PR | Scope | Work before landing |
 | --- | --- | --- |
-| [#226](https://github.com/cpaxton/home_robot_v3/pull/226) | Observed evidence/adapter foundation | Draft; GitHub reports conflicts with main. Resolve integration and obtain scope/review agreement on the open self-occupancy admission concern. Default observed discovery stays read-only; no observed task success is claimed. |
-| [#231](https://github.com/cpaxton/home_robot_v3/pull/231) | Shared bounded native release policy | Foundation review and integration checks after #226; keep its historical failed tasks and config-test results. |
-| [#234](https://github.com/cpaxton/home_robot_v3/pull/234) | Native IK reserve, grasp ordering and retention diagnostics | Current-head review must cover additions beyond the original margin-only review. |
-| [#242](https://github.com/cpaxton/home_robot_v3/pull/242) | Checked unloaded approach and loaded placement refresh | Posted review finds no incremental code blocker. Stabilize the reported two-second snapshot fixture flake before claiming a clean expanded integration suite; preserve the production freshness guard. |
-| [#243](https://github.com/cpaxton/home_robot_v3/pull/243) | Named partial receipts, prospective trials and restated-goal recovery | Author self-review at `117ed129`: no production blocker; 199 exact-head targeted tests pass, no errors/skips; Ruff and whitespace clean. 26 artifact hashes and six parent motion/command hashes verified. Independent approval and parent integration remain. |
-| [#244](https://github.com/cpaxton/home_robot_v3/pull/244) | Contextual retry, serial TAMP proposals and prior work | Ready for review; corrected live pair and 485 affected tests pass on `ebbdb1d9`. |
+| [#226](https://github.com/cpaxton/home_robot_v3/pull/226) | Observed evidence/adapter foundation | Merged as `fb9f9bf1`; foundation scope only. Default observed discovery stays read-only. Open self-occupancy/tracking limitations are tracked in #245; no observed task success is claimed. |
+| [#231](https://github.com/cpaxton/home_robot_v3/pull/231) | Shared bounded native release policy | Merged as `e9478d3d`. Current-main integration: 1,103 tests and native/actual-agent two-goal smokes pass. Independent review agent: no blocker, 30 focused tests pass. Historical failed cohorts remain unchanged. |
+| [#234](https://github.com/cpaxton/home_robot_v3/pull/234) | Native IK reserve, grasp ordering and retention diagnostics | Merged as `db35f08b`. 467 integration tests and native 2/2 control pass; independent review agent passed 19 focused tests. Review includes closing, ordering and verification additions. Integrating landed #231 preserved the complete tested tree. |
+| [#242](https://github.com/cpaxton/home_robot_v3/pull/242) | Checked unloaded approach and loaded placement refresh | Original and updated-parent integration reviews find no blocker. Integration tests and shifted-swap native/actual-agent smokes are the gate. Parent fixture fix reuses the loaded model; production freshness guards remain unchanged. |
+| [#243](https://github.com/cpaxton/home_robot_v3/pull/243) | Named partial receipts, prospective trials and restated-goal recovery | Author and independent-agent reviews find no production blocker. 199 exact-head targeted tests pass; original recovery sequence was manually verified. Parent integration remains required. |
+| [#244](https://github.com/cpaxton/home_robot_v3/pull/244) | Contextual retry, serial TAMP proposals and prior work | Independent review agent: no production blocker; 55 focused tests pass. This ledger update resolves its documentation nit. Parent integration remains required; historical corrected live pair and 485 tests remain separate evidence. |
 
 The [#243 self-review](https://github.com/cpaxton/home_robot_v3/pull/243#pullrequestreview-5922413427)
 is author review, not independent approval. It notes that #243's original recovery
@@ -78,12 +80,12 @@ statuses or Actions check runs exist on #243's head; local validation is not
 described as hosted CI. The new 199-test review run does not replace or rerun its
 previous 468-test/live cohorts.
 
-Resolve #226 against current main first, preserving independently landed state
-and controller fixes. Keep its foundation-only scope explicit while observed
-execution remains gated, and settle the review concern before promotion. Then
-merge in dependency order and retest each integrated child. Preserve stack
-ancestry with merge commits, or explicitly rebase children if squashing parents;
-blind retargeting after a squash can reintroduce their commits. Repeat affected
+Preserve independently landed state and controller fixes, and keep #226's
+foundation-only scope explicit while observed execution remains gated. Merge
+remaining children in dependency order and retest integrated changes. Main uses
+squash merges; integrate resulting main into each child and inspect its diff
+before landing. When resolving duplicate ancestry, verify the complete tested
+tree remains identical rather than assuming a clean retarget is sufficient. Repeat affected
 API/provider/command/CHAT tests and a native plus actual-agent smoke after main
 integration. Qualification still stops at privileged simulated tabletop tasks;
 observed admission/exploration and household/more-object generalization are next.

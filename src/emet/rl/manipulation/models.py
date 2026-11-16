@@ -12,8 +12,10 @@ from emet.robots.innate_mars.chassis import add_physical_chassis
 
 
 def build_manipulation_model(
-    robot, *, diagnostics=False, payload_asset_set="training", contact_cone="pyramidal", contact_impratio=1.0
+    robot, *, diagnostics=False, payload_asset_set="training", contact_cone="pyramidal", contact_impratio=1.0, two_supports=False
 ):
+    if type(two_supports) is not bool or (two_supports and robot != "innate_mars"):
+        raise ValueError("two-support fixtures require Mars")
     if not np.isfinite(contact_impratio) or not 1 <= contact_impratio <= 10:
         raise ValueError("contact impedance ratio must be in [1, 10]")
     if contact_impratio != 1 and contact_cone != "elliptic":
@@ -44,6 +46,9 @@ def build_manipulation_model(
         ET.SubElement(world, "geom", name="floor", type="plane", size="2 2 0.1")
         table = ET.SubElement(world, "body", name="table", pos="0.3 0 0.1")
         ET.SubElement(table, "geom", type="box", size="0.15 0.15 0.1")
+        if two_supports:
+            destination = ET.SubElement(world, "body", name="destination", pos="5 5 0.1")
+            ET.SubElement(destination, "geom", name="destination_surface", type="box", size="0.04 0.04 0.1")
         for index, shape in enumerate(("box", "cylinder"), 1):
             body = ET.SubElement(world, "body", name=f"object{index}", pos=f"{index} 0 0.3")
             ET.SubElement(body, "freejoint")

@@ -1,0 +1,220 @@
+{
+  "complete": true,
+  "checkpoint": "logs/manipulation/mars-failure-replay-v25/tracking_replay/seed-87/last",
+  "cases": [
+    {
+      "seed": 33000009,
+      "child": 0,
+      "partition": "validation",
+      "success": false,
+      "code": "fixed_base_contract_violation",
+      "ee_position_error": 0.024095755267779212,
+      "ee_orientation_error": 0.04938739081449213,
+      "wheel_lift": false,
+      "retention_lost": false
+    },
+    {
+      "seed": 33000009,
+      "child": 1,
+      "partition": "validation",
+      "success": false,
+      "code": "fixed_base_contract_violation",
+      "ee_position_error": 0.024232706016497397,
+      "ee_orientation_error": 0.04974556108817202,
+      "wheel_lift": false,
+      "retention_lost": false
+    },
+    {
+      "seed": 33000011,
+      "child": 0,
+      "partition": "validation",
+      "success": false,
+      "code": "fixed_base_contract_violation",
+      "ee_position_error": 0.023429755280909674,
+      "ee_orientation_error": 0.06922386839173714,
+      "wheel_lift": false,
+      "retention_lost": false
+    },
+    {
+      "seed": 33000011,
+      "child": 1,
+      "partition": "validation",
+      "success": false,
+      "code": "fixed_base_contract_violation",
+      "ee_position_error": 0.02369635413804118,
+      "ee_orientation_error": 0.06787726622475639,
+      "wheel_lift": false,
+      "retention_lost": false
+    },
+    {
+      "seed": 33000019,
+      "child": 0,
+      "partition": "validation",
+      "success": false,
+      "code": "fixed_base_contract_violation",
+      "ee_position_error": 0.023100658919568605,
+      "ee_orientation_error": 0.0738026655084508,
+      "wheel_lift": false,
+      "retention_lost": false
+    },
+    {
+      "seed": 33000019,
+      "child": 1,
+      "partition": "validation",
+      "success": false,
+      "code": "fixed_base_contract_violation",
+      "ee_position_error": 0.022950924011232804,
+      "ee_orientation_error": 0.07525295321569142,
+      "wheel_lift": false,
+      "retention_lost": false
+    },
+    {
+      "seed": 33000000,
+      "child": 0,
+      "partition": "train",
+      "success": false,
+      "code": "fixed_base_contract_violation",
+      "ee_position_error": 0.02585272662732933,
+      "ee_orientation_error": 0.0693881093191857,
+      "wheel_lift": false,
+      "retention_lost": false
+    },
+    {
+      "seed": 33000000,
+      "child": 1,
+      "partition": "train",
+      "success": false,
+      "code": "fixed_base_contract_violation",
+      "ee_position_error": 0.024818361512992694,
+      "ee_orientation_error": 0.07186547461632488,
+      "wheel_lift": false,
+      "retention_lost": false
+    },
+    {
+      "seed": 33000001,
+      "child": 0,
+      "partition": "train",
+      "success": false,
+      "code": "fixed_base_contract_violation",
+      "ee_position_error": 0.024763152531009105,
+      "ee_orientation_error": 0.06130257161473083,
+      "wheel_lift": false,
+      "retention_lost": false
+    },
+    {
+      "seed": 33000001,
+      "child": 1,
+      "partition": "train",
+      "success": false,
+      "code": "fixed_base_contract_violation",
+      "ee_position_error": 0.025363931456777743,
+      "ee_orientation_error": 0.06171119141333537,
+      "wheel_lift": false,
+      "retention_lost": false
+    },
+    {
+      "seed": 33000003,
+      "child": 0,
+      "partition": "train",
+      "success": false,
+      "code": "fixed_base_contract_violation",
+      "ee_position_error": 0.023714480319454494,
+      "ee_orientation_error": 0.051264470003934956,
+      "wheel_lift": false,
+      "retention_lost": false
+    },
+    {
+      "seed": 33000003,
+      "child": 1,
+      "partition": "train",
+      "success": false,
+      "code": "fixed_base_contract_violation",
+      "ee_position_error": 0.02382897393890181,
+      "ee_orientation_error": 0.05078047129259331,
+      "wheel_lift": false,
+      "retention_lost": false
+    }
+  ],
+  "programs": [
+    {
+      "case_id": "left:20g:0",
+      "reference_profile": "legacy",
+      "success": false,
+      "robot_failure": "cartesian_path_tracking_envelope",
+      "failure_at": {
+        "stage": 0,
+        "tool": "execute_pick_place_plan",
+        "code": "tracking_timeout",
+        "category": "execution_or_verification"
+      },
+      "stop_confirmed": true
+    },
+    {
+      "case_id": "left:50g:0",
+      "reference_profile": "legacy",
+      "success": false,
+      "robot_failure": "cartesian_path_tracking_envelope",
+      "failure_at": {
+        "stage": 0,
+        "tool": "execute_pick_place_plan",
+        "code": "tracking_timeout",
+        "category": "execution_or_verification"
+      },
+      "stop_confirmed": true
+    },
+    {
+      "case_id": "right:20g:0",
+      "reference_profile": "legacy",
+      "success": false,
+      "robot_failure": "cartesian_path_tracking_envelope",
+      "failure_at": {
+        "stage": 0,
+        "tool": "execute_pick_place_plan",
+        "code": "tracking_timeout",
+        "category": "execution_or_verification"
+      },
+      "stop_confirmed": true
+    },
+    {
+      "case_id": "left:20g:0",
+      "reference_profile": "jerk_limited",
+      "success": false,
+      "robot_failure": "cartesian_path_tracking_envelope",
+      "failure_at": {
+        "stage": 0,
+        "tool": "execute_pick_place_plan",
+        "code": "tracking_timeout",
+        "category": "execution_or_verification"
+      },
+      "stop_confirmed": true
+    },
+    {
+      "case_id": "left:50g:0",
+      "reference_profile": "jerk_limited",
+      "success": false,
+      "robot_failure": "cartesian_path_tracking_envelope",
+      "failure_at": {
+        "stage": 0,
+        "tool": "execute_pick_place_plan",
+        "code": "tracking_timeout",
+        "category": "execution_or_verification"
+      },
+      "stop_confirmed": true
+    },
+    {
+      "case_id": "right:20g:0",
+      "reference_profile": "jerk_limited",
+      "success": false,
+      "robot_failure": "cartesian_path_tracking_envelope",
+      "failure_at": {
+        "stage": 0,
+        "tool": "execute_pick_place_plan",
+        "code": "tracking_timeout",
+        "category": "execution_or_verification"
+      },
+      "stop_confirmed": true
+    }
+  ],
+  "safety_promoted": false,
+  "uncompressed_sha256": "534ba52bac39a1bd19a9ec54149514941b25a93e24d34e6c1f1d225159e7fd14"
+}

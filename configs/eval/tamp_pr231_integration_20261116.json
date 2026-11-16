@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "purpose": "Per-PR merge integration smoke; familiar privileged simulated Stretch control, not a new benchmark or observed/hardware acceptance",
+  "pr": 231,
+  "original_head": "935a0c7c47ecf9a63f8c4dcf33793c1f1819f8f5",
+  "parent_main": "fb9f9bf1fe57c05205006fcdc3fcfcb1c23d1c9d",
+  "runtime_policy": "bounded_release",
+  "case_file": "configs/eval/tamp_stretch_realism_pilot.json",
+  "case_id": "two-goal-control",
+  "acceptance": [
+    "successful execution receipt and independently settled final goals",
+    "no forbidden actuation commands",
+    "invalid-handle request rejected before a separate actual-agent task request",
+    "preserve all failures; do not rescore historical 4/8 or 3/4 results"
+  ],
+  "native": {
+    "port_offset": 3440,
+    "cpu_set": "0-7"
+  },
+  "actual_agent": {
+    "port_offset": 3450,
+    "cpu_set": "8-13",
+    "base_url": "http://192.168.1.55:8000/v1",
+    "remote_model": "Qwen/Qwen3-VL-8B-Instruct",
+    "reject_first": true
+  },
+  "maximum_simulator_bridges": 2,
+  "local_gpu": false
+}

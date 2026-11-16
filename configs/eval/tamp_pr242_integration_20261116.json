@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "purpose": "PR #242 integration gate on landed native foundations; familiar privileged simulated Stretch shifted swap, not a new benchmark",
+  "pr": 242,
+  "original_head": "855348a2e0259a0e0888bb1fd823be16be0092b8",
+  "parent_reviewed_head": "a1273edc462f337f52858ecaafa624c9a4683ec7",
+  "parent_main": "db35f08bb5caa698539c25b6a4f014f26728b56b",
+  "native_policy": "bounded_approach",
+  "case_file": "configs/eval/tamp_native_qualification_20261113.json",
+  "case_id": "swap-right25",
+  "declared_transfers": 3,
+  "native": {
+    "port_offset": 3470,
+    "cpu_set": "0-7"
+  },
+  "actual_agent": {
+    "port_offset": 3480,
+    "cpu_set": "8-13",
+    "base_url": "http://192.168.1.55:8000/v1",
+    "model": "Qwen/Qwen3-VL-8B-Instruct",
+    "reject_first": true,
+    "sampling": "server default"
+  },
+  "maximum_concurrent_simulators": 2,
+  "local_gpu": false,
+  "acceptance": [
+    "successful execution receipt and independently settled full goals",
+    "all three transfers, checked base control where selected, no live pose writes",
+    "zero forbidden audited commands",
+    "invalid-handle failure stops before a separate authorized agent request",
+    "preserve all failures and historical cohorts; no reliability inference"
+  ]
+}

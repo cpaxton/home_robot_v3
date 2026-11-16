@@ -69,6 +69,30 @@ def test_wheel_actuators_drive_chassis_through_ground_contact(chassis):
     assert np.isfinite(data.qpos).all()
 
 
+def test_feedback_cannot_bypass_final_actuator_acceleration_limit(chassis):
+    model, data, control, monitor = chassis
+    control.base_command[:] = [0.1, 0.4]
+    control.set_physical_wheel_slew(True)
+    control.set_base_bias_compensation(True)
+    previous = control.applied_base_velocity.copy()
+    limits = np.array([MARS.base_acceleration, MARS.base_yaw_acceleration]) * model.opt.timestep
+    for _ in range(100):
+        mujoco.mj_step(model, data)
+        control.apply()
+        actual = control.applied_base_velocity.copy()
+        assert np.all(abs(actual - previous) <= limits + 1e-10)
+        # Repeated observe/apply calls at one physics instant cannot integrate
+        # another ramp step or command a faster motor target.
+        commands = data.ctrl[control.wheel_act].copy()
+        control.apply()
+        np.testing.assert_array_equal(data.ctrl[control.wheel_act], commands)
+        previous = actual
+    assert np.linalg.norm(previous) > 0
+    control.stop()
+    np.testing.assert_array_equal(control.applied_base_velocity, 0)
+    np.testing.assert_array_equal(data.ctrl[control.wheel_act], 0)
+
+
 def test_hand_load_can_physically_unload_and_lift_caster(chassis):
     model, data, control, monitor = chassis
     monitor.update(data)

@@ -1,0 +1,35 @@
+{
+  "format": "mars-c1-zero-base-diagnostic-v1",
+  "scope": "All12predeclaredC1cases; in-memory command intervention; no qualification/export",
+  "created_unix": 1794724930.1498961,
+  "runtime": "/tmp/mars-c1-recovery-afeef3d0",
+  "implementation_revision": "afeef3d0b2c24492f492c00efceddde21d420ce5",
+  "regression_receipt": "/tmp/mars-c1-recovery-afeef3d0/logs/manipulation/mars-whole-body-advantage-recovery-v1/full.receipt.json",
+  "initial_actor": "/tmp/mars-c1-recovery-afeef3d0/logs/manipulation/mars-whole-body-advantage-recovery-v1/shared/initial/actor",
+  "final_actor": "/tmp/mars-c1-recovery-afeef3d0/logs/manipulation/mars-whole-body-advantage-recovery-v1/shared/last/actor",
+  "initial_report": "/tmp/mars-c1-recovery-afeef3d0/logs/manipulation/mars-whole-body-advantage-recovery-v1/shared/initial-evaluation.json.gz",
+  "final_report": "/tmp/mars-c1-recovery-afeef3d0/logs/manipulation/mars-whole-body-advantage-recovery-v1/shared/final-evaluation.json.gz",
+  "teacher_report": "/tmp/mars-c1-recovery-afeef3d0/logs/eval/mars-whole-body-advantage-recovery-preflight-v1/general-teacher.json.gz",
+  "basic_cases": "/tmp/mars-c1-recovery-afeef3d0/configs/benchmarks/mars_whole_body_basic_learning_v1.json",
+  "basic_cases_sha256": "92373854f3ba56f066384ec2ae77cb459107246190705d240514c3cfb313b5a0",
+  "modes": [
+    "initial",
+    "final",
+    "final_arm_initial_zero_base"
+  ],
+  "expected_cases_per_mode": 12,
+  "max_rollouts": 36,
+  "max_runtime_seconds": 300,
+  "ppo_steps": 0,
+  "actor_exported": false,
+  "hardware_used": false,
+  "safety_promoted": false,
+  "interpretation_requires_exact_unchanged_replay": true,
+  "initial_base_function": "identically zero actor commands, not retained e7 learned base",
+  "resources": {
+    "cpu": 15,
+    "threads": 1,
+    "cuda_visible_devices": "",
+    "rendering": "disable"
+  }
+}

@@ -1,0 +1,78 @@
+# Copyright (c) Chris Paxton 2026
+# Licensed under the Apache License, Version 2.0.
+"""Compare unsigned-speed and signed-displacement jerk; no physics or policy calls."""
+import gzip
+import hashlib
+import json
+import math
+from pathlib import Path
+
+OUT = Path(__file__).resolve().parent
+
+
+def derivatives(positions, dt, *, discard_reset=False):
+    v = [[(b[k]-a[k])/dt for k in (0,1)] for a,b in zip(positions,positions[1:])]
+    speed = [math.hypot(*x) for x in v]
+    # Native gate starts derivative history at zero. For synthetic controls,
+    # discard those two initialization differences to test the reversal itself.
+    vv = [[0.,0.],*v]
+    aa = [[(b[k]-a[k])/dt for k in (0,1)] for a,b in zip(vv,vv[1:])]
+    aa = [[0.,0.],*aa]
+    jerk_vector = [[(b[k]-a[k])/dt for k in (0,1)] for a,b in zip(aa,aa[1:])]
+    ss = [0.,*speed]
+    a = [(b-a)/dt for a,b in zip(ss,ss[1:])]
+    a = [0.,*a]
+    jerk_speed = [(b-a)/dt for a,b in zip(a,a[1:])]
+    start = 2 if discard_reset else 0
+    signed = [math.hypot(*x) for x in jerk_vector]
+    unsigned = [abs(x) for x in jerk_speed]
+    si = max(range(start,len(signed)),key=signed.__getitem__)
+    ui = max(range(start,len(unsigned)),key=unsigned.__getitem__)
+    return {'signed_vector_peak':signed[si], 'unsigned_speed_peak':unsigned[ui],
+            'signed_peak_step':si+1,'unsigned_peak_step':ui+1,
+            'signed_at_unsigned_peak':signed[ui],
+            'speed_near_unsigned_peak':speed[max(0,ui-2):ui+2]}
+
+
+synthetic = []
+for dt in (.1,.05,.025):
+    for name, x in (
+        ('constant_acceleration_reversal', lambda t:.05*t*t),
+        ('constant_acceleration_without_reversal', lambda t:.2*t+.05*t*t),
+        ('constant_signed_velocity', lambda t:.1*t),
+    ):
+        times = [-1.+i*dt for i in range(round(2/dt)+1)]
+        values = derivatives([[x(t),0.] for t in times],dt,discard_reset=True)
+        if name=='constant_acceleration_reversal':
+            assert values['signed_vector_peak']<1e-9 and abs(values['unsigned_speed_peak']-.1/dt)<1e-9
+        else:
+            assert max(values['signed_vector_peak'],values['unsigned_speed_peak'])<1e-9
+        synthetic.append({'case':name,'dt':dt,'initialization':'exclude first two derivative warmup samples',**values})
+
+rows=[]
+for mode in ('control','candidate'):
+    for label in ('initial','final'):
+        p=OUT/mode/(label+'-evaluation.json.gz')
+        d=json.loads(gzip.decompress(p.read_bytes()))
+        for case in d['cases']:
+            poses=[case['admission']['reference']['base'][0],*[r['base'] for r in case['trace']]]
+            result=derivatives(poses,.05)
+            delta=abs(result['unsigned_speed_peak']-case['metrics']['base_linear_jerk'])
+            assert delta<1e-10
+            rows.append({'mode':mode,'evaluation':label,'id':case['id'],
+                         'gate_replay_error':delta,**result})
+result={'format':'mars-signed-unsigned-jerk-audit-v1',
+        'scope':'read-only diagnostic; unchanged qualification gates and outcomes',
+        'script_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+        'synthetic':synthetic,'recorded_cases':rows,
+        'reference_point':'base body-frame origin in world XY for both pose and mj_jacBody; not axle or inertial COM',
+        'reset_difference':'native acceptance seeds velocity/acceleration zero; RewardMeter seeds Jacobian velocity from qvel and acceleration zero',
+        'sampling_difference':'pose differences are interval-average velocities; RewardMeter uses instantaneous Jacobian velocities',
+        'limitation':'saved poses can compare signed/unsigned displacement formulas but cannot reconstruct exact instantaneous-velocity reward proxy'}
+(OUT/'signed-jerk-audit.json').write_text(json.dumps(result,indent=2)+'\n')
+print('Synthetic reversal controls and all48 unsigned gate replays pass.')
+for row in synthetic:
+    if row['case']=='constant_acceleration_reversal':print(row)
+for row in rows:
+    if row['mode']=='candidate' and row['evaluation']=='final' and ':arm:' in row['id']:
+        print(row['id'],'unsigned',row['unsigned_speed_peak'],'signed',row['signed_vector_peak'])

@@ -103,8 +103,14 @@ def test_observed_mode_never_reads_privileged_metadata(native):
     robot.get_emet_session.assert_not_called()
 
 
-def test_native_model_mismatch_rejects_before_actuation(native):
-    robot, _, _, call = native
+def test_native_model_mismatch_rejects_before_actuation(native, monkeypatch):
+    robot, _, context, call = native
+    model = context['_native_tamp_adapter'].model
+    # This test isolates model binding. Reuse the loaded fixture model when the
+    # mismatch invalidates the cache; cold mesh loading can outlast the two-second
+    # snapshot lifetime and mask the intended rejection as stale_observation.
+    monkeypatch.setattr('emet.controller.task.tamp.native_adapter.NativeTableAdapter',
+                        lambda client, **kwargs: NativeTableAdapter(client, model=model, **kwargs))
     robot._state['native_tamp_snapshot']['model_signature'] = 'different-physics-model'
     assert call('scene_tasks')['code'] == 'native_model_mismatch'
     robot.arm_to.assert_not_called()
@@ -338,6 +344,22 @@ def test_partial_progress_reports_execution_started_even_before_next_stage():
     assert result['data']['execution_started'] is True
     assert result['data']['completed_ops'] == ['grasp']
     assert result['recovery'] == 'inspect'
+
+
+@pytest.mark.parametrize('reason', ['arm_static_support_margin', 'measured_pose_replan_failed:arm_path_static_support_margin'])
+def test_measured_support_rejection_is_actionable_without_private_planner_text(reason):
+    adapter = object.__new__(NativeTableAdapter)
+    result = adapter._failure('execute_pick_place_plan', reason, phase='lift', started=True)
+    assert result['status'] == 'partial'
+    assert result['code'] == 'planning_failed'
+    assert result['data']['failed_stage'] == 'lift'
+    assert result['data']['motion_rejection'] == 'static_support_margin'
+    assert result['data']['completed_ops'] == []
+    assert result['recovery'] == 'inspect'
+    unknown = adapter._failure('execute_pick_place_plan', 'private_body_name:some_unknown_failure', phase='lift')
+    assert unknown['code'] == 'operation_failed'
+    assert 'motion_rejection' not in unknown['data']
+    assert 'private_body_name' not in json.dumps(unknown)
 
 
 def native_transfer_config(native):
@@ -593,10 +615,14 @@ def test_failed_base_approach_cannot_dispatch_grasp(native, monkeypatch, started
     robot.arm_to.assert_not_called()
 
 
-def test_policy_change_invalidates_cached_native_handles(native):
+def test_policy_change_invalidates_cached_native_handles(native, monkeypatch):
     from emet.controller.task.tamp.native_adapter import adapter_for
     robot, _, context, _ = native
     old = context['_native_tamp_adapter']
+    # Exercise cache/policy identity without aging the measured fixture during
+    # an unrelated cold mesh reload. Production freshness checks stay active.
+    monkeypatch.setattr('emet.controller.task.tamp.native_adapter.NativeTableAdapter',
+                        lambda client, **kwargs: NativeTableAdapter(client, model=old.model, **kwargs))
     old.plans['old'] = object()
     context['native_tamp_policy'] = 'bounded_release'
     current = adapter_for(context, robot)

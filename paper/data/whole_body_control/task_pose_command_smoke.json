@@ -1,0 +1,46 @@
+{
+  "scope": "GT TAMP arm planner component cases; not end-to-end task success",
+  "execution_interface": "simulator loopback shared command protocol",
+  "controller": "measured_jacobian_task_pose_teacher_v1",
+  "robot": "innate_mars",
+  "control_sources_sha256": "2c3267aff9fd82d9521130896741bd862735a70013514c39f22bd33bf14455bd",
+  "cases": 4,
+  "initialization_failures": 0,
+  "planning_failures": 0,
+  "execution_successes": 4,
+  "outcomes": [
+    {
+      "seed": 610000,
+      "scenario": "reach",
+      "execution_verified": true,
+      "controller_failure": null,
+      "stop_confirmed": true
+    },
+    {
+      "seed": 610001,
+      "scenario": "reach",
+      "execution_verified": true,
+      "controller_failure": null,
+      "stop_confirmed": true
+    },
+    {
+      "seed": 620000,
+      "scenario": "carry",
+      "execution_verified": true,
+      "controller_failure": null,
+      "stop_confirmed": true
+    },
+    {
+      "seed": 620001,
+      "scenario": "carry",
+      "execution_verified": true,
+      "controller_failure": null,
+      "stop_confirmed": true
+    }
+  ],
+  "full_report": "paper/data/whole_body_control/task_pose_command_smoke.json.gz",
+  "uncompressed_sha256": "5853e7713191f6e4ac9c5f3cb55fad4c738cf360f2dccb4baf430c5f66dc4ded",
+  "public_tool_acceptance": false,
+  "hardware_qualified": false,
+  "source_binding": "verified unchanged before and after all four component replays"
+}

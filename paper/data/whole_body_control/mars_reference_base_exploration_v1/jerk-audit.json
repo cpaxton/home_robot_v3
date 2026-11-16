@@ -1,0 +1,1065 @@
+{
+  "format": "mars-reference-base-exploration-jerk-replay-v1",
+  "cases": 48,
+  "method": "constant50ms; unsigned planar displacement speed and wrapped heading rate; initial reference base pose, zero derivative state",
+  "maximum_absolute_error": 2.220446049250313e-16,
+  "rows": [
+    {
+      "mode": "control",
+      "evaluation": "initial",
+      "id": "train:base:hold",
+      "recorded": [
+        0.09594203198593179,
+        0.08064756855599015
+      ],
+      "replayed": [
+        0.0959420319859318,
+        0.08064756855599015
+      ],
+      "max_abs_delta": 1.3877787807814457e-17,
+      "peak_time_s": [
+        0.30000000000000027,
+        0.4500000000000004
+      ],
+      "peak_code": [
+        "running",
+        "running"
+      ]
+    },
+    {
+      "mode": "control",
+      "evaluation": "initial",
+      "id": "train:base:forward",
+      "recorded": [
+        0.05678847797319973,
+        0.09071399509747238
+      ],
+      "replayed": [
+        0.05678847797319973,
+        0.09071399509747238
+      ],
+      "max_abs_delta": 0.0,
+      "peak_time_s": [
+        0.10000000000000009,
+        0.2500000000000002
+      ],
+      "peak_code": [
+        "running",
+        "running"
+      ]
+    },
+    {
+      "mode": "control",
+      "evaluation": "initial",
+      "id": "train:arm:pitch_up",
+      "recorded": [
+        0.09502667298518001,
+        0.10017276595466337
+      ],
+      "replayed": [
+        0.09502667298518001,
+        0.10017276595466337
+      ],
+      "max_abs_delta": 0.0,
+      "peak_time_s": [
+        0.050000000000000044,
+        0.10000000000000009
+      ],
+      "peak_code": [
+        "running",
+        "running"
+      ]
+    },
+    {
+      "mode": "control",
+      "evaluation": "initial",
+      "id": "train:arm:pitch_down",
+      "recorded": [
+        0.13038217167142208,
+        0.05940959439286462
+      ],
+      "replayed": [
+        0.1303821716714221,
+        0.05940959439286462
+      ],
+      "max_abs_delta": 2.7755575615628914e-17,
+      "peak_time_s": [
+        0.10000000000000009,
+        0.050000000000000044
+      ],
+      "peak_code": [
+        "running",
+        "running"
+      ]
+    },
+    {
+      "mode": "control",
+      "evaluation": "initial",
+      "id": "train:arm:roll_left",
+      "recorded": [
+        0.11835669087690713,
+        0.06613294658948735
+      ],
+      "replayed": [
+        0.11835669087690716,
+        0.06613294658948735
+      ],
+      "max_abs_delta": 2.7755575615628914e-17,
+      "peak_time_s": [
+        0.40000000000000036,
+        0.10000000000000009
+      ],
+      "peak_code": [
+        "running",
+        "running"
+      ]
+    },
+    {
+      "mode": "control",
+      "evaluation": "initial",
+      "id": "train:arm:roll_right",
+      "recorded": [
+        0.09573235871715598,
+        0.04328056356048618
+      ],
+      "replayed": [
+        0.09573235871715596,
+        0.04328056356048618
+      ],
+      "max_abs_delta": 1.3877787807814457e-17,
+      "peak_time_s": [
+        0.20000000000000018,
+        0.40000000000000036
+      ],
+      "peak_code": [
+        "running",
+        "running"
+      ]
+    },
+    {
+      "mode": "control",
+      "evaluation": "initial",
+      "id": "train:arm:pitch_up@amplitude:0.25",
+      "recorded": [
+        0.09502667298518001,
+        0.10018632566296747
+      ],
+      "replayed": [
+        0.09502667298518001,
+        0.10018632566296747
+      ],
+      "max_abs_delta": 0.0,
+      "peak_time_s": [
+        0.050000000000000044,
+        0.10000000000000009
+      ],
+      "peak_code": [
+        "running",
+        "running"
+      ]
+    },
+    {
+      "mode": "control",
+      "evaluation": "initial",
+      "id": "train:arm:pitch_up@amplitude:0.5",
+      "recorded": [
+        0.09502667298518001,
+        0.10017276595466337
+      ],
+      "replayed": [
+        0.09502667298518001,
+        0.10017276595466337
+      ],
+      "max_abs_delta": 0.0,
+      "peak_time_s": [
+        0.050000000000000044,
+        0.10000000000000009
+      ],
+      "peak_code": [
+        "running",
+        "running"
+      ]
+    },
+    {
+      "mode": "control",
+      "evaluation": "initial",
+      "id": "train:arm:pitch_down@amplitude:0.25",
+      "recorded": [
+        0.13042536651689676,
+        0.05940959439286462
+      ],
+      "replayed": [
+        0.13042536651689676,
+        0.05940959439286462
+      ],
+      "max_abs_delta": 0.0,
+      "peak_time_s": [
+        0.10000000000000009,
+        0.050000000000000044
+      ],
+      "peak_code": [
+        "running",
+        "running"
+      ]
+    },
+    {
+      "mode": "control",
+      "evaluation": "initial",
+      "id": "train:arm:pitch_down@amplitude:0.5",
+      "recorded": [
+        0.13038217167142208,
+        0.05940959439286462
+      ],
+      "replayed": [
+        0.1303821716714221,
+        0.05940959439286462
+      ],
+      "max_abs_delta": 2.7755575615628914e-17,
+      "peak_time_s": [
+        0.10000000000000009,
+        0.050000000000000044
+      ],
+      "peak_code": [
+        "running",
+        "running"
+      ]
+    },
+    {
+      "mode": "control",
+      "evaluation": "initial",
+      "id": "train:arm:supported_A_up@amplitude:0.25",
+      "recorded": [
+        0.14662681311435402,
+        0.05893428175810801
+      ],
+      "replayed": [
+        0.14662681311435402,
+        0.05893428175810801
+      ],
+      "max_abs_delta": 0.0,
+      "peak_time_s": [
+        0.10000000000000009,
+        0.10000000000000009
+      ],
+      "peak_code": [
+        "running",
+        "running"
+      ]
+    },
+    {
+      "mode": "control",
+      "evaluation": "initial",
+      "id": "train:arm:supported_A_up",
+      "recorded": [
+        0.14662681311435402,
+        0.05893428175810801
+      ],
+      "replayed": [
+        0.14662681311435402,
+        0.05893428175810801
+      ],
+      "max_abs_delta": 0.0,
+      "peak_time_s": [
+        0.10000000000000009,
+        0.10000000000000009
+      ],
+      "peak_code": [
+        "running",
+        "running"
+      ]
+    },
+    {
+      "mode": "control",
+      "evaluation": "final",
+      "id": "train:base:hold",
+      "recorded": [
+        0.10634119368229195,
+        0.08032102885437847
+      ],
+      "replayed": [
+        0.10634119368229195,
+        0.08032102885437847
+      ],
+      "max_abs_delta": 0.0,
+      "peak_time_s": [
+        0.15000000000000013,
+        0.10000000000000009
+      ],
+      "peak_code": [
+        "running",
+        "running"
+      ]
+    },
+    {
+      "mode": "control",
+      "evaluation": "final",
+      "id": "train:base:forward",
+      "recorded": [
+        0.3136605503232187,
+        0.15968271580169227
+      ],
+      "replayed": [
+        0.31366055032321877,
+        0.15968271580169227
+      ],
+      "max_abs_delta": 5.551115123125783e-17,
+      "peak_time_s": [
+        1.949999999999896,
+        1.3999999999999566
+      ],
+      "peak_code": [
+        "mastery_tracking_envelope",
+        "running"
+      ]
+    },
+    {
+      "mode": "control",
+      "evaluation": "final",
+      "id": "train:arm:pitch_up",
+      "recorded": [
+        1.0566209649575418,
+        1.2423660027656747
+      ],
+      "replayed": [
+        1.0566209649575418,
+        1.2423660027656747
+      ],
+      "max_abs_delta": 0.0,
+      "peak_time_s": [
+        1.54999999999994,
+        1.4999999999999456
+      ],
+      "peak_code": [
+        "running",
+        "running"
+      ]
+    },
+    {
+      "mode": "control",
+      "evaluation": "final",
+      "id": "train:arm:pitch_down",
+      "recorded": [
+        0.2570471510625062,
+        0.12306379598775452
+      ],
+      "replayed": [
+        0.2570471510625064,
+        0.12306379598775452
+      ],
+      "max_abs_delta": 2.220446049250313e-16,
+      "peak_time_s": [
+        0.9500000000000008,
+        1.649999999999929
+      ],
+      "peak_code": [
+        "running",
+        "running"
+      ]
+    },
+    {
+      "mode": "control",
+      "evaluation": "final",
+      "id": "train:arm:roll_left",
+      "recorded": [
+        0.4779392021325916,
+        1.0008995293623861
+      ],
+      "replayed": [
+        0.4779392021325916,
+        1.0008995293623861
+      ],
+      "max_abs_delta": 0.0,
+      "peak_time_s": [
+        6.449999999999401,
+        10.80000000000061
+      ],
+      "peak_code": [
+        "running",
+        "running"
+      ]
+    },
+    {
+      "mode": "control",
+      "evaluation": "final",
+      "id": "train:arm:roll_right",
+      "recorded": [
+        0.2296163010646383,
+        0.14356192399614734
+      ],
+      "replayed": [
+        0.22961630106463826,
+        0.14356192399614734
+      ],
+      "max_abs_delta": 2.7755575615628914e-17,
+      "peak_time_s": [
+        5.199999999999538,
+        0.10000000000000009
+      ],
+      "peak_code": [
+        "running",
+        "running"
+      ]
+    },
+    {
+      "mode": "control",
+      "evaluation": "final",
+      "id": "train:arm:pitch_up@amplitude:0.25",
+      "recorded": [
+        0.43886121098819,
+        0.7043011919230374
+      ],
+      "replayed": [
+        0.43886121098819,
+        0.7043011919230374
+      ],
+      "max_abs_delta": 0.0,
+      "peak_time_s": [
+        2.4999999999998357,
+        12.00000000000101
+      ],
+      "peak_code": [
+        "running",
+        "tracking_timeout"
+      ]
+    },
+    {
+      "mode": "control",
+      "evaluation": "final",
+      "id": "train:arm:pitch_up@amplitude:0.5",
+      "recorded": [
+        0.3764775892198314,
+        0.5956642037895363
+      ],
+      "replayed": [
+        0.37647758921983143,
+        0.5956642037895363
+      ],
+      "max_abs_delta": 5.551115123125783e-17,
+      "peak_time_s": [
+        4.599999999999604,
+        5.049999999999555
+      ],
+      "peak_code": [
+        "running",
+        "running"
+      ]
+    },
+    {
+      "mode": "control",
+      "evaluation": "final",
+      "id": "train:arm:pitch_down@amplitude:0.25",
+      "recorded": [
+        0.4292203237635601,
+        0.1740361547747716
+      ],
+      "replayed": [
+        0.4292203237635601,
+        0.1740361547747716
+      ],
+      "max_abs_delta": 0.0,
+      "peak_time_s": [
+        0.9000000000000008,
+        4.349999999999632
+      ],
+      "peak_code": [
+        "running",
+        "running"
+      ]
+    },
+    {
+      "mode": "control",
+      "evaluation": "final",
+      "id": "train:arm:pitch_down@amplitude:0.5",
+      "recorded": [
+        0.31718796002900496,
+        0.11420860789482234
+      ],
+      "replayed": [
+        0.31718796002900496,
+        0.11420860789482234
+      ],
+      "max_abs_delta": 0.0,
+      "peak_time_s": [
+        1.3999999999999566,
+        2.4999999999998357
+      ],
+      "peak_code": [
+        "running",
+        "running"
+      ]
+    },
+    {
+      "mode": "control",
+      "evaluation": "final",
+      "id": "train:arm:supported_A_up@amplitude:0.25",
+      "recorded": [
+        0.15733760139053157,
+        0.10316553550586911
+      ],
+      "replayed": [
+        0.15733760139053157,
+        0.10316553550586911
+      ],
+      "max_abs_delta": 0.0,
+      "peak_time_s": [
+        8.649999999999892,
+        2.0499999999998852
+      ],
+      "peak_code": [
+        "ok",
+        "running"
+      ]
+    },
+    {
+      "mode": "control",
+      "evaluation": "final",
+      "id": "train:arm:supported_A_up",
+      "recorded": [
+        0.19738109176478355,
+        0.23966827549615644
+      ],
+      "replayed": [
+        0.19738109176478355,
+        0.23966827549615644
+      ],
+      "max_abs_delta": 0.0,
+      "peak_time_s": [
+        9.100000000000042,
+        1.3499999999999621
+      ],
+      "peak_code": [
+        "running",
+        "running"
+      ]
+    },
+    {
+      "mode": "candidate",
+      "evaluation": "initial",
+      "id": "train:base:hold",
+      "recorded": [
+        0.09594203198593179,
+        0.08064756855599015
+      ],
+      "replayed": [
+        0.0959420319859318,
+        0.08064756855599015
+      ],
+      "max_abs_delta": 1.3877787807814457e-17,
+      "peak_time_s": [
+        0.30000000000000027,
+        0.4500000000000004
+      ],
+      "peak_code": [
+        "running",
+        "running"
+      ]
+    },
+    {
+      "mode": "candidate",
+      "evaluation": "initial",
+      "id": "train:base:forward",
+      "recorded": [
+        0.05678847797319973,
+        0.09071399509747238
+      ],
+      "replayed": [
+        0.05678847797319973,
+        0.09071399509747238
+      ],
+      "max_abs_delta": 0.0,
+      "peak_time_s": [
+        0.10000000000000009,
+        0.2500000000000002
+      ],
+      "peak_code": [
+        "running",
+        "running"
+      ]
+    },
+    {
+      "mode": "candidate",
+      "evaluation": "initial",
+      "id": "train:arm:pitch_up",
+      "recorded": [
+        0.09502667298518001,
+        0.10017276595466337
+      ],
+      "replayed": [
+        0.09502667298518001,
+        0.10017276595466337
+      ],
+      "max_abs_delta": 0.0,
+      "peak_time_s": [
+        0.050000000000000044,
+        0.10000000000000009
+      ],
+      "peak_code": [
+        "running",
+        "running"
+      ]
+    },
+    {
+      "mode": "candidate",
+      "evaluation": "initial",
+      "id": "train:arm:pitch_down",
+      "recorded": [
+        0.13038217167142208,
+        0.05940959439286462
+      ],
+      "replayed": [
+        0.1303821716714221,
+        0.05940959439286462
+      ],
+      "max_abs_delta": 2.7755575615628914e-17,
+      "peak_time_s": [
+        0.10000000000000009,
+        0.050000000000000044
+      ],
+      "peak_code": [
+        "running",
+        "running"
+      ]
+    },
+    {
+      "mode": "candidate",
+      "evaluation": "initial",
+      "id": "train:arm:roll_left",
+      "recorded": [
+        0.11835669087690713,
+        0.06613294658948735
+      ],
+      "replayed": [
+        0.11835669087690716,
+        0.06613294658948735
+      ],
+      "max_abs_delta": 2.7755575615628914e-17,
+      "peak_time_s": [
+        0.40000000000000036,
+        0.10000000000000009
+      ],
+      "peak_code": [
+        "running",
+        "running"
+      ]
+    },
+    {
+      "mode": "candidate",
+      "evaluation": "initial",
+      "id": "train:arm:roll_right",
+      "recorded": [
+        0.09573235871715598,
+        0.04328056356048618
+      ],
+      "replayed": [
+        0.09573235871715596,
+        0.04328056356048618
+      ],
+      "max_abs_delta": 1.3877787807814457e-17,
+      "peak_time_s": [
+        0.20000000000000018,
+        0.40000000000000036
+      ],
+      "peak_code": [
+        "running",
+        "running"
+      ]
+    },
+    {
+      "mode": "candidate",
+      "evaluation": "initial",
+      "id": "train:arm:pitch_up@amplitude:0.25",
+      "recorded": [
+        0.09502667298518001,
+        0.10018632566296747
+      ],
+      "replayed": [
+        0.09502667298518001,
+        0.10018632566296747
+      ],
+      "max_abs_delta": 0.0,
+      "peak_time_s": [
+        0.050000000000000044,
+        0.10000000000000009
+      ],
+      "peak_code": [
+        "running",
+        "running"
+      ]
+    },
+    {
+      "mode": "candidate",
+      "evaluation": "initial",
+      "id": "train:arm:pitch_up@amplitude:0.5",
+      "recorded": [
+        0.09502667298518001,
+        0.10017276595466337
+      ],
+      "replayed": [
+        0.09502667298518001,
+        0.10017276595466337
+      ],
+      "max_abs_delta": 0.0,
+      "peak_time_s": [
+        0.050000000000000044,
+        0.10000000000000009
+      ],
+      "peak_code": [
+        "running",
+        "running"
+      ]
+    },
+    {
+      "mode": "candidate",
+      "evaluation": "initial",
+      "id": "train:arm:pitch_down@amplitude:0.25",
+      "recorded": [
+        0.13042536651689676,
+        0.05940959439286462
+      ],
+      "replayed": [
+        0.13042536651689676,
+        0.05940959439286462
+      ],
+      "max_abs_delta": 0.0,
+      "peak_time_s": [
+        0.10000000000000009,
+        0.050000000000000044
+      ],
+      "peak_code": [
+        "running",
+        "running"
+      ]
+    },
+    {
+      "mode": "candidate",
+      "evaluation": "initial",
+      "id": "train:arm:pitch_down@amplitude:0.5",
+      "recorded": [
+        0.13038217167142208,
+        0.05940959439286462
+      ],
+      "replayed": [
+        0.1303821716714221,
+        0.05940959439286462
+      ],
+      "max_abs_delta": 2.7755575615628914e-17,
+      "peak_time_s": [
+        0.10000000000000009,
+        0.050000000000000044
+      ],
+      "peak_code": [
+        "running",
+        "running"
+      ]
+    },
+    {
+      "mode": "candidate",
+      "evaluation": "initial",
+      "id": "train:arm:supported_A_up@amplitude:0.25",
+      "recorded": [
+        0.14662681311435402,
+        0.05893428175810801
+      ],
+      "replayed": [
+        0.14662681311435402,
+        0.05893428175810801
+      ],
+      "max_abs_delta": 0.0,
+      "peak_time_s": [
+        0.10000000000000009,
+        0.10000000000000009
+      ],
+      "peak_code": [
+        "running",
+        "running"
+      ]
+    },
+    {
+      "mode": "candidate",
+      "evaluation": "initial",
+      "id": "train:arm:supported_A_up",
+      "recorded": [
+        0.14662681311435402,
+        0.05893428175810801
+      ],
+      "replayed": [
+        0.14662681311435402,
+        0.05893428175810801
+      ],
+      "max_abs_delta": 0.0,
+      "peak_time_s": [
+        0.10000000000000009,
+        0.10000000000000009
+      ],
+      "peak_code": [
+        "running",
+        "running"
+      ]
+    },
+    {
+      "mode": "candidate",
+      "evaluation": "final",
+      "id": "train:base:hold",
+      "recorded": [
+        0.0933084979085166,
+        0.1491901037893664
+      ],
+      "replayed": [
+        0.0933084979085166,
+        0.1491901037893664
+      ],
+      "max_abs_delta": 0.0,
+      "peak_time_s": [
+        0.15000000000000013,
+        0.5000000000000004
+      ],
+      "peak_code": [
+        "running",
+        "running"
+      ]
+    },
+    {
+      "mode": "candidate",
+      "evaluation": "final",
+      "id": "train:base:forward",
+      "recorded": [
+        0.2088889425310613,
+        0.24239738918435325
+      ],
+      "replayed": [
+        0.2088889425310613,
+        0.24239738918435325
+      ],
+      "max_abs_delta": 0.0,
+      "peak_time_s": [
+        1.649999999999929,
+        1.6999999999999236
+      ],
+      "peak_code": [
+        "running",
+        "running"
+      ]
+    },
+    {
+      "mode": "candidate",
+      "evaluation": "final",
+      "id": "train:arm:pitch_up",
+      "recorded": [
+        0.6604801212840598,
+        0.2773749424061431
+      ],
+      "replayed": [
+        0.6604801212840598,
+        0.2773749424061431
+      ],
+      "max_abs_delta": 0.0,
+      "peak_time_s": [
+        1.749999999999918,
+        11.85000000000096
+      ],
+      "peak_code": [
+        "running",
+        "ok"
+      ]
+    },
+    {
+      "mode": "candidate",
+      "evaluation": "final",
+      "id": "train:arm:pitch_down",
+      "recorded": [
+        0.5393002767323953,
+        0.3824202464136235
+      ],
+      "replayed": [
+        0.5393002767323953,
+        0.3824202464136235
+      ],
+      "max_abs_delta": 0.0,
+      "peak_time_s": [
+        1.949999999999896,
+        10.850000000000627
+      ],
+      "peak_code": [
+        "running",
+        "ok"
+      ]
+    },
+    {
+      "mode": "candidate",
+      "evaluation": "final",
+      "id": "train:arm:roll_left",
+      "recorded": [
+        0.35496595640298056,
+        0.6041166401168918
+      ],
+      "replayed": [
+        0.35496595640298056,
+        0.6041166401168918
+      ],
+      "max_abs_delta": 0.0,
+      "peak_time_s": [
+        5.399999999999516,
+        12.00000000000101
+      ],
+      "peak_code": [
+        "running",
+        "tracking_timeout"
+      ]
+    },
+    {
+      "mode": "candidate",
+      "evaluation": "final",
+      "id": "train:arm:roll_right",
+      "recorded": [
+        0.35460788553316314,
+        0.34917212457563634
+      ],
+      "replayed": [
+        0.35460788553316314,
+        0.34917212457563634
+      ],
+      "max_abs_delta": 0.0,
+      "peak_time_s": [
+        1.2499999999999731,
+        5.899999999999461
+      ],
+      "peak_code": [
+        "running",
+        "running"
+      ]
+    },
+    {
+      "mode": "candidate",
+      "evaluation": "final",
+      "id": "train:arm:pitch_up@amplitude:0.25",
+      "recorded": [
+        0.3316813216036894,
+        0.24845596295359346
+      ],
+      "replayed": [
+        0.3316813216036894,
+        0.24845596295359346
+      ],
+      "max_abs_delta": 0.0,
+      "peak_time_s": [
+        2.949999999999786,
+        0.9000000000000008
+      ],
+      "peak_code": [
+        "running",
+        "running"
+      ]
+    },
+    {
+      "mode": "candidate",
+      "evaluation": "final",
+      "id": "train:arm:pitch_up@amplitude:0.5",
+      "recorded": [
+        0.3505099689432876,
+        0.25873145523917784
+      ],
+      "replayed": [
+        0.3505099689432876,
+        0.25873145523917784
+      ],
+      "max_abs_delta": 0.0,
+      "peak_time_s": [
+        3.0999999999997696,
+        10.550000000000527
+      ],
+      "peak_code": [
+        "running",
+        "ok"
+      ]
+    },
+    {
+      "mode": "candidate",
+      "evaluation": "final",
+      "id": "train:arm:pitch_down@amplitude:0.25",
+      "recorded": [
+        0.34555199427343736,
+        0.24587427307088197
+      ],
+      "replayed": [
+        0.34555199427343736,
+        0.24587427307088197
+      ],
+      "max_abs_delta": 0.0,
+      "peak_time_s": [
+        2.1499999999998742,
+        4.54999999999961
+      ],
+      "peak_code": [
+        "running",
+        "running"
+      ]
+    },
+    {
+      "mode": "candidate",
+      "evaluation": "final",
+      "id": "train:arm:pitch_down@amplitude:0.5",
+      "recorded": [
+        0.4093221250353941,
+        0.2833581389923888
+      ],
+      "replayed": [
+        0.4093221250353941,
+        0.2833581389923888
+      ],
+      "max_abs_delta": 0.0,
+      "peak_time_s": [
+        2.749999999999808,
+        11.750000000000927
+      ],
+      "peak_code": [
+        "running",
+        "ok"
+      ]
+    },
+    {
+      "mode": "candidate",
+      "evaluation": "final",
+      "id": "train:arm:supported_A_up@amplitude:0.25",
+      "recorded": [
+        0.14764028741497584,
+        0.29606123937699047
+      ],
+      "replayed": [
+        0.14764028741497584,
+        0.29606123937699047
+      ],
+      "max_abs_delta": 0.0,
+      "peak_time_s": [
+        0.10000000000000009,
+        9.100000000000042
+      ],
+      "peak_code": [
+        "running",
+        "ok"
+      ]
+    },
+    {
+      "mode": "candidate",
+      "evaluation": "final",
+      "id": "train:arm:supported_A_up",
+      "recorded": [
+        0.22754381054330441,
+        0.4362471254693995
+      ],
+      "replayed": [
+        0.22754381054330447,
+        0.4362471254693995
+      ],
+      "max_abs_delta": 5.551115123125783e-17,
+      "peak_time_s": [
+        9.75000000000026,
+        9.90000000000031
+      ],
+      "peak_code": [
+        "running",
+        "running"
+      ]
+    }
+  ],
+  "script_sha256": "b2ec2c6175a753c6334cafe7dd8cc4381aee242b13a9241a69383eb2ea0ae453"
+}

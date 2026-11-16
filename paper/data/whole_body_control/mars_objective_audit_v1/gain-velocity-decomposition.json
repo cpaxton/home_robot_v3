@@ -1,0 +1,84 @@
+{
+  "complete": true,
+  "scope": "Frozen-input direct velocity-gain decomposition; not closed-loop stability proof.",
+  "hardware_used": false,
+  "qualification_eligible": false,
+  "samples": 56,
+  "input_sha256": "e5bc1cfe4889f712b678adddd66e01f2895d90b4cc68ee7a5390dd34871bcae9",
+  "script_sha256": "3c89c5ddaa416f97083e45578bd1c3660a31ca9a1ba260b11b7649781976ace5",
+  "interpretation": "Gain coefficients before division bysqrt35, tanh and conversion from normalized input/output units. Decomposes bias versus linear context contribution, not total input derivative: context also depends on measured velocities. Current/future pose and all other velocity channels remain present. No controller modification or stability claim.",
+  "results": {
+    "source": {
+      "weights_sha256": "e7b425699510cc635485bdd8f59a5b25692fb165faf248aaecbc2707c0dbb883",
+      "direct_gain_fields": {
+        "forward_from_world_vx": {
+          "gain_bias": 0.007027324754744768,
+          "median_context_contribution": -0.045934006571769714,
+          "median_total_direct_gain": -0.038906682282686234
+        },
+        "forward_from_world_vy": {
+          "gain_bias": -0.0003118552849628031,
+          "median_context_contribution": -0.028501538559794426,
+          "median_total_direct_gain": -0.028813393786549568
+        },
+        "yaw_from_yaw_rate": {
+          "gain_bias": -0.0022885333746671677,
+          "median_context_contribution": -0.01039765402674675,
+          "median_total_direct_gain": -0.012686187401413918
+        }
+      }
+    },
+    "context_final": {
+      "weights_sha256": "54bbed85f2e1a3188e13b947faaa14d8557135fb7218e52dc00bc4cd72b8317d",
+      "direct_gain_fields": {
+        "forward_from_world_vx": {
+          "gain_bias": -0.00024605431826785207,
+          "median_context_contribution": -0.02857990190386772,
+          "median_total_direct_gain": -0.028825953602790833
+        },
+        "forward_from_world_vy": {
+          "gain_bias": 0.11442932486534119,
+          "median_context_contribution": -0.02377859503030777,
+          "median_total_direct_gain": 0.09065072983503342
+        },
+        "yaw_from_yaw_rate": {
+          "gain_bias": 0.5653043389320374,
+          "median_context_contribution": 0.05228516459465027,
+          "median_total_direct_gain": 0.6175894737243652
+        }
+      }
+    },
+    "translation_final": {
+      "weights_sha256": "07316b176a3d440b8e5d73db299f497738b1a80b323a48f58c94394cdf1b8652",
+      "direct_gain_fields": {
+        "forward_from_world_vx": {
+          "gain_bias": 0.16295304894447327,
+          "median_context_contribution": -0.028271131217479706,
+          "median_total_direct_gain": 0.13468191027641296
+        },
+        "forward_from_world_vy": {
+          "gain_bias": -0.004165869206190109,
+          "median_context_contribution": -0.026655808091163635,
+          "median_total_direct_gain": -0.030821677297353745
+        },
+        "yaw_from_yaw_rate": {
+          "gain_bias": 0.5279896259307861,
+          "median_context_contribution": 0.0458047091960907,
+          "median_total_direct_gain": 0.5737943649291992
+        }
+      }
+    }
+  },
+  "artifacts": [
+    {
+      "path": "logs/recovery/hand-accuracy-v1/gain-velocity-decomposition.json",
+      "bytes": 3133,
+      "sha256": "3a736983217b5bc0a1069b5e25fd32c8ad7b36dc24e6e8bf6c08ce9ffa1f1f39"
+    },
+    {
+      "path": "logs/recovery/hand-accuracy-v1/gain-velocity-decomposition.py",
+      "bytes": 2531,
+      "sha256": "3c89c5ddaa416f97083e45578bd1c3660a31ca9a1ba260b11b7649781976ace5"
+    }
+  ]
+}

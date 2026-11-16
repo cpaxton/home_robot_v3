@@ -1,0 +1,33 @@
+{
+  "format": "mars-reference-base-exploration-v1",
+  "authorization": "User2026-11-15continuewithnewPR",
+  "runtime": "/tmp/mars-base-exploration-3ac722e1",
+  "implementation_revision": "3ac722e1096dc901d68192b803dc9596471c46c7",
+  "regression_job": "20261115_101800_b63738",
+  "teacher_job": "20261115_101800_2b8ed4",
+  "suite": "configs/benchmarks/mars_whole_body_v2_development.json",
+  "basic_cases": "configs/benchmarks/mars_whole_body_basic_learning_v1.json",
+  "steps_per_run": 4096,
+  "total_steps": 8192,
+  "seed": 90,
+  "scales": {
+    "control": 1.0,
+    "candidate": 0.1
+  },
+  "advantage_normalization": "shared",
+  "gate_wait_timeout_seconds": 5400,
+  "active_timeout_seconds": 3600,
+  "resources": {
+    "training_cpu": 14,
+    "check_cpu": 15,
+    "threads": 1,
+    "cuda_visible_devices": "",
+    "rendering": "disable"
+  },
+  "automatic_retries": false,
+  "automatic_extensions": false,
+  "hardware_used": false,
+  "safety_promoted": false,
+  "supervisor_sha256": "858ac15367d7a7c6db5946a71241513c151d0cc28a5d32772001d7519defa527",
+  "prepared_unix": 1794755994.7546768
+}

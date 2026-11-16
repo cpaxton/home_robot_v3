@@ -144,7 +144,17 @@ acceptance remain separate (Figure~\ref{fig:observed_moving_geometry}).
 In a subsequent development repeat, synchronized head/wrist views preserve one
 geometry track for all 81 captures through native contact pick/place, release
 and retreat (maximum center error 1.251\,mm against independent simulator truth).
-The head reference hands off to the wrist without reinitialization. Explicit
+On the November~16 main-integration repeat, native control again completes but
+tracking accepts only 1/81 captures. Identical initial image/depth/calibration
+arrays and original-clock replay isolate capture-gap sensitivity: the first gap
+grows from 0.884 to 1.342\,s, expanding the unchanged motion envelope enough to
+admit two inconsistent same-colour pixels. Whole-fragment fitting rejects and
+loss stays latched. The old recording still replays at 81/81; neither number is
+replaced or pooled. This limits the historical result to its recorded timing,
+without qualifying robust live association. Sources, failures and regression
+counts are in \path{docs/experiments/pr226_main_integration_20261116.json}.
+In the successful October recording, the head reference hands off to the wrist
+without reinitialization. Explicit
 complete-prior fragment union and neutral-highlight colour handling preserve
 measured cap/side geometry; incompatible or unobservable geometry still rejects.
 These are correlated captures from one ideal rendered fixture with operator

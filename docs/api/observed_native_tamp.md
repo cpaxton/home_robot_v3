@@ -1,5 +1,11 @@
 # Observed native TAMP integration
 
+This is the contract/diagnostic foundation in
+[PR #226](https://github.com/cpaxton/home_robot_v3/pull/226). Live self-occupancy
+and phase-specific contact admission remain tracked in
+[issue #245](https://github.com/cpaxton/home_robot_v3/issues/245). Merging the
+foundation does not qualify or automatically enable a live observed executor.
+
 The production CHAT tools can now use an explicitly injected
 `ObservedNativeAdapter`. It shares `scene_tasks`, `plan_pick_place`,
 `execute_pick_place_plan`, `pick_place`, and optionally `plan_task` /
