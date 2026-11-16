@@ -88,10 +88,11 @@ The camera-turn handoff case is covered independently by deterministic contract
 tests; retain it as a regression rather than spending model calls to validate
 the same adapter rule again.
 
-`scripts/replay_vlm_context.py` currently prepares/audits packets without model
-calls. The next tooling increment is a small opt-in generation mode on that
-existing replay path, using the existing message client and raw response capture.
-Do not add a second conversation implementation or replay executor. Freeze the
+`scripts/replay_vlm_context.py` prepares/audits packets without model calls by
+default. Its opt-in `--vl-endpoint URL#MODEL` mode now makes one bounded call on
+the exact recorded packet, using the existing message client, with wire-body,
+raw-response, usage and failure capture. It executes no tools and makes no scoring
+calls. It does not introduce a second conversation implementation. Freeze the
 prepared packet once and send the same packet to every model; do not separately
 regenerate random image/message IDs for each backend.
 
@@ -172,3 +173,28 @@ Scale to the 12-question pilot and broader benchmark battery only after these
 cases are understood. Report paired outcomes and denominators; repeated trials
 of one scene are not independent environments. Paper claims should distinguish
 better tools, better model inference and improved end-to-end task success.
+
+## First scheduled cohort
+
+The first four cases use three exact prepared requests from
+`simplified-find-20261116-r1` (microwave calls 1, 10 and 5: task switch, rejected
+geometry and rejected motion), plus the qualified `cap-dev-01` recorded recall
+fixture from `capability-dev-render-colors-20261028`. The latter has 2,760 target
+pixels in the earlier frame and zero in the later frame; it tests historical
+evidence without another simulator rollout. Fixture qualifications and review
+notes stay outside model messages.
+
+Preparation freezes both PNGs/text and image IDs once. Every backend receives
+the same serialized messages; transport hashes verify this after inference.
+Budget: four calls per backend, 512 output tokens and 240 seconds per call,
+zero retries. Failed/truncated calls remain failed rows. A timeout stops that
+phase from submitting more work into a potentially still-running model;
+unattempted cases remain explicit rows. This is development triage, not benchmark
+accuracy, and the controlled recall fixture is not a natural-environment episode.
+
+Local Qwen runs under the existing exclusive GPU lease on safe CPU cores. The
+Caliban phase waits for the local supervisor to exit and then runs without the
+local GPU lock, allowing other local GPU work to resume. No live agent, physical
+tool or simulation is scheduled by this cohort. The durable protocol, frozen
+inputs, runner, test report, model metadata, wire requests and results live under
+`~/runs/emet/frozen-model-triage-20261116-r1/`; job IDs are recorded there at launch.
