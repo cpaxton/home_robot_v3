@@ -109,6 +109,63 @@ def test_explicit_model_authority_is_written_to_room_config_and_manifest(tmp_pat
     assert json.loads((output / "manifest.json").read_text())["decision_policy"] == "model_final"
 
 
+@pytest.mark.parametrize("endpoint", [None, "http://inference.example:8000/v1#test-vlm"])
+def test_model_endpoint_is_explicit_config_and_provenance_not_ambient_environment(tmp_path, monkeypatch, endpoint):
+    import json
+
+    from omegaconf import OmegaConf
+
+    root = Path(__file__).resolve().parents[3]
+    with patch.object(sys, "path", [str(root / "scripts"), *sys.path]):
+        run = runpy.run_path(str(root / "scripts/run_shared_room_pairs.py"))["run"]
+    monkeypatch.setitem(run.__globals__, "git", lambda root, *args: "frozen" if args[0] == "rev-parse" else "")
+    monkeypatch.setenv("EMET_VL_ENDPOINT", "http://wrong.example/v1#wrong-model")
+
+    def stop_before_sim(*args, **kwargs):
+        assert "EMET_VL_ENDPOINT" not in kwargs["env"]
+        raise RuntimeError("test stops before simulation")
+
+    monkeypatch.setattr(run.__globals__["subprocess"], "run", stop_before_sim)
+    output = tmp_path / "out"
+    args = SimpleNamespace(
+        main=root,
+        candidate=root,
+        output=output,
+        arms=["candidate"],
+        grounding_backend="yoloe",
+        decision_policy="model_final",
+        episodes=["fixture"],
+        seed=0,
+        scan_steps=4,
+        vl_endpoint=endpoint,
+    )
+    with pytest.raises(RuntimeError, match="test stops"):
+        run(args)
+    eqa = OmegaConf.load(output / "fixture-candidate/config.yaml").mapping.eqa
+    manifest = json.loads((output / "manifest.json").read_text())
+    if endpoint:
+        assert eqa.vl_endpoint == "openai@" + endpoint
+        assert "vl_quantization" not in eqa
+        assert manifest["model"]["id"] == "test-vlm"
+        assert manifest["model"]["quantization"] == "unverified"
+    else:
+        assert "vl_endpoint" not in eqa
+        assert eqa.vl_quantization == manifest["model"]["quantization"] == "int4"
+    assert manifest["model"]["transport"] == ("remote" if endpoint else "local")
+
+
+@pytest.mark.parametrize(
+    "endpoint",
+    ["http://host/v1", "file:///tmp/model#name", "https://user:secret@host/v1#name", "http://host/v1?key=secret#name"],
+)
+def test_invalid_model_endpoint_fails_before_freezing_or_writing_artifacts(tmp_path, endpoint):
+    root = Path(__file__).resolve().parents[3]
+    with patch.object(sys, "path", [str(root / "scripts"), *sys.path]):
+        run = runpy.run_path(str(root / "scripts/run_shared_room_pairs.py"))["run"]
+    with pytest.raises(ValueError, match="endpoint with #MODEL"):
+        run(SimpleNamespace(vl_endpoint=endpoint))
+
+
 def test_untracked_selected_source_aborts_before_manifest_or_launch(tmp_path, monkeypatch):
     root = Path(__file__).resolve().parents[3]
     with patch.object(sys, "path", [str(root / "scripts"), *sys.path]):

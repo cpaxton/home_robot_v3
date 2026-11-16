@@ -51,6 +51,27 @@ def grounding_assets(roots, arms, backend):
 
 
 def run(args):
+    endpoint = getattr(args, "vl_endpoint", None)
+    remote_model = None
+    if endpoint:
+        from urllib.parse import urlsplit
+
+        from emet.llms.openai_vllm_client import parse_openai_endpoint_spec
+
+        base_url, remote_model = parse_openai_endpoint_spec(endpoint)
+        parsed = urlsplit(base_url)
+        if (
+            parsed.scheme not in {"http", "https"}
+            or not parsed.hostname
+            or not remote_model
+            or parsed.username
+            or parsed.password
+            or parsed.query
+        ):
+            raise ValueError(
+                "Use an HTTP(S) endpoint with #MODEL and no URL credentials/query; API keys belong in the environment"
+            )
+        endpoint = f"openai@{base_url}#{remote_model}"
     candidate_policy = getattr(args, "candidate_decision_policy", None)
     shared_episodes = getattr(args, "episodes_file", None)
     floor_reference = getattr(args, "floor_reference_z", None)
@@ -85,7 +106,14 @@ def run(args):
         "validator_sha256": hashlib.sha256(
             Path(__file__).with_name("check_acceptance_metrics.py").read_bytes()
         ).hexdigest(),
-        "scope": "find only, physical navigation, local Qwen3-VL int4; not manipulation acceptance",
+        "scope": "find only, physical navigation; not manipulation acceptance",
+        "vl_endpoint": endpoint,
+        "model": {
+            "id": remote_model or "Qwen/Qwen3-VL-8B-Instruct",
+            "transport": "remote" if endpoint else "local",
+            "quantization": "unverified" if endpoint else "int4",
+            "server_decoding": "unverified" if endpoint else "checkpoint defaults",
+        },
     }
     (args.output / "manifest.json").write_text(json.dumps(manifest, indent=2))
     all_complete, all_success = True, True
@@ -114,7 +142,11 @@ def run(args):
                 )
                 + "  eqa:\n    agentic_verify: true\n    collect_agentic_trace: true\n"
                 + f"    agentic_decision_policy: {candidate_policy if arm == 'candidate' and candidate_policy else getattr(args, 'decision_policy', 'legacy')}\n"
-                + "    vl_family: qwen3_vl\n    vl_hf_model_id: Qwen/Qwen3-VL-8B-Instruct\n    vl_quantization: int4\n"
+                + (
+                    f"    vl_endpoint: {json.dumps(endpoint)}\n"
+                    if endpoint
+                    else "    vl_family: qwen3_vl\n    vl_hf_model_id: Qwen/Qwen3-VL-8B-Instruct\n    vl_quantization: int4\n"
+                )
                 + (
                     f"  floor_evidence:\n    enabled: true\n    reference_z_m: {floor_reference}\n"
                     if floor_reference is not None
@@ -235,6 +267,10 @@ if __name__ == "__main__":
     parser.add_argument("--candidate", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument(
+        "--vl-endpoint",
+        help="Explicit OpenAI-compatible URL#MODEL for both arms; precision and decoding must be verified separately.",
+    )
     parser.add_argument("--episodes-file", type=Path, help="Same frozen task registry for both arms.")
     parser.add_argument("--scan-steps", type=int, choices=(4, 8), default=4)
     parser.add_argument(

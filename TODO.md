@@ -7,6 +7,14 @@
       Caliban HTTP is healthy; live dtype/revision remain unverified and the
       current paired driver deliberately strips endpoint overrides.
       Audit: `docs/experiments/agent_complexity_review_20261116.md`.
+      First slice now separates find coordinates from present-view verification,
+      preserves invalidation and fresh manipulation checks, removes the advertised
+      navigate alias in model-final, and trims find-only memory instructions.
+      The serial room driver now supports explicit remote model endpoints with
+      unverified precision/decoding labeled honestly. CPU gate: 386 pass, two
+      simulator opt-ins skip; live qualification and fixed-packet model calls
+      remain separate. Staged test plan and budgets:
+      `docs/plans/2026-11-16_harness_simplification_and_model_eval.md`.
 
 - [x] Connect the sensor-only active GraphEQA baseline. Supplied-model inference,
       learned native graph and observed-space navigation run together; a real
