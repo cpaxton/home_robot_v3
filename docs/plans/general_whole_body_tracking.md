@@ -220,3 +220,9 @@ cannot upgrade unloaded admission into closure/lift/placement. Prefix training
 and the new coupled general share must be admitted separately before the next
 50/50 physical-tick training run. No loaded grasp or additional robot is
 qualified by these interfaces.
+
+The partial-mask teacher also retains coupled base/arm authority. Active base
+components enter the resolved-rate objective alongside the precise hand pose;
+inactive coordinates do not become hidden targets. This matters for Stretch: an
+XY-constrained, yaw-free target can require yaw motion to close the hand error.
+The fully constrained-base teacher path remains unchanged.

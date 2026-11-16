@@ -85,7 +85,8 @@ def test_old_pregrasp_readiness_cannot_admit_a_grasp_pose_row():
 
 
 @pytest.mark.parametrize("source_drift", [False, True])
-def test_bounded_runner_retains_failures_and_rejects_source_drift(tmp_path, monkeypatch, source_drift):
+@pytest.mark.parametrize("planning_scope", ["full_task", "unloaded_prefix"])
+def test_bounded_runner_retains_failures_and_rejects_source_drift(tmp_path, monkeypatch, source_drift, planning_scope):
     import json
     import runpy
     from pathlib import Path
@@ -99,7 +100,8 @@ def test_bounded_runner_retains_failures_and_rejects_source_drift(tmp_path, monk
     )
     calls = []
 
-    def rollout(actual, *, primitive, wheel_feedback_current_velocity, trace_dir):
+    def rollout(actual, *, primitive, wheel_feedback_current_velocity, trace_dir, **kwargs):
+        assert kwargs == {"planning_scope": planning_scope}
         assert actual == cases and wheel_feedback_current_velocity is True
         assert trace_dir.name == primitive
         calls.append(primitive)
@@ -114,11 +116,12 @@ def test_bounded_runner_retains_failures_and_rejects_source_drift(tmp_path, monk
     output = tmp_path / "new-admission"
     if source_drift:
         with pytest.raises(RuntimeError, match="source changed"):
-            run(output)
+            run(output, planning_scope=planning_scope)
     else:
-        run(output)
+        run(output, planning_scope=planning_scope)
     report = json.loads((output / "results.json").read_text())
     assert report["complete"] is not source_drift
+    assert report["planning_scope"] == planning_scope
     assert report["new_ppo_steps"] == 0 and not report["ready_for_training"]
     assert calls == ["pregrasp", "grasp_pose"]
     for primitive in calls:
@@ -126,4 +129,4 @@ def test_bounded_runner_retains_failures_and_rejects_source_drift(tmp_path, monk
         assert stage["attempts"] == 6 and stage["successes"] == 5 and not stage["stage_teacher_ready"]
         assert stage["rows"][2]["code"] == "object_changed_replan"
     with pytest.raises(FileExistsError):
-        run(output)
+        run(output, planning_scope=planning_scope)

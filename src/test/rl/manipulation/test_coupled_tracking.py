@@ -193,3 +193,21 @@ def test_teacher_cli_summary_serializes_numpy_predicates():
         "teacher_successes": 1,
         "ready_for_training": False,
     }
+
+
+@pytest.mark.sim
+@pytest.mark.parametrize("robot", ["stretch", "innate_mars"])
+def test_partial_base_goals_retain_coupled_authority_to_close_hand_error(robot):
+    from emet.rl.manipulation.coupled_evaluation import teacher_episode
+
+    case = load_suite()["robots"][robot][4]
+    env = CoupledTrackingEnv(robot, [case])
+    try:
+        env.reset()
+        result = teacher_episode(env, case)
+        assert result["tracking_success"] and result["post_stop_pose_in_contract"]
+        assert result["stop_confirmed"] and not any(result["safety_flags"].values())
+        assert result["final_metrics"]["ee_position_error"] < 0.003
+        assert result["final_metrics"]["ee_orientation_error"] < 0.02
+    finally:
+        env.close()
