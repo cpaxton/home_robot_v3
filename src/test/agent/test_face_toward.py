@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import math
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -79,3 +80,55 @@ def test_resolve_object_xy_uses_voxel_pin():
     assert xy2 is not None
     assert abs(xy2[0] - 0.08) < 1e-6
     assert agent.voxel_map.n_live == 1
+
+
+@pytest.mark.parametrize("blocked", [True, False])
+@pytest.mark.parametrize("controller_transform", [True, False])
+def test_face_uses_world_pose_and_canonical_rotation(monkeypatch, blocked, controller_transform):
+    from emet.agent.loop import _dispatch_tool_calls
+    from emet.agent.tools import get_tools
+    from emet.controller.dynamem import relative_motion
+    from emet.utils.geometry import nav_xyt_to_world_xyt
+
+    session = {"navigation_origin_xyt": [10, 20, math.pi / 2]}
+    robot = SimpleNamespace(get_base_pose=lambda: np.zeros(3), get_emet_session=lambda: session)
+    agent = SimpleNamespace(planner=None)
+    if controller_transform:
+        agent._planning_base_xyt = lambda pose: nav_xyt_to_world_xyt(pose, session)
+        robot.get_emet_session = lambda: pytest.fail("must use controller's cached pose transform")
+
+    def executor(cmds):
+        pytest.fail("face_toward must not bypass validated rotation via the legacy executor")
+
+    executor.agent = agent
+    monkeypatch.setattr("emet.agent.face_toward.resolve_object_xy", lambda agent, label: (np.array([11, 20]), "voxel"))
+    monkeypatch.setattr(relative_motion, "supports_relative_motion", lambda agent: True)
+    calls = []
+
+    def rotate(owner, name, degrees):
+        assert owner is agent and name == "rotate_base"
+        calls.append(degrees)
+        return {
+            "schema_version": 1,
+            "tool": "rotate_base",
+            "status": "error" if blocked else "ok",
+            "code": "motion_rejected" if blocked else "ok",
+            "message": "checked rotation",
+            "data": {"execution_started": not blocked},
+        }
+
+    monkeypatch.setattr(relative_motion, "execute_relative_motion", rotate)
+    context = {"robot": robot, "executor": executor}
+    tools = {tool.name: tool for tool in get_tools(context)}
+    ok, results, has_info = _dispatch_tool_calls(
+        [{"name": "face_toward", "arguments": {"object_label": "microwave"}}], tools, executor
+    )
+    assert ok and has_info
+    assert calls == pytest.approx([-90])
+    if blocked:
+        assert results[0].startswith("[face_toward] failed status=motion_rejected")
+        assert "Measured turn reached" not in results[0]
+        assert "last_rotate_degrees" not in context
+    else:
+        assert results[0].startswith("[face_toward] ok status=ok")
+        assert context["last_rotate_degrees"] == pytest.approx(-90)

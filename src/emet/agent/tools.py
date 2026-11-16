@@ -1310,11 +1310,13 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         )
     )
 
-    def face_toward(object_label: str) -> str:
+    def face_toward(object_label: str) -> str | dict:
         """Yaw in place to face a scene-graph / voxel object (no XY drive)."""
         import math
 
         from emet.agent.face_toward import resolve_object_xy, yaw_to_face_xy
+        from emet.agent.tool_outcome import ToolOutcome
+        from emet.utils.geometry import nav_xyt_to_world_xyt
 
         executor = context.get("executor")
         robot = context.get("robot")
@@ -1332,25 +1334,33 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
             )
         try:
             pose = np.asarray(robot.get_base_pose(), dtype=np.float64).reshape(-1)
+            planning_pose = getattr(agent, "_planning_base_xyt", None)
+            if callable(planning_pose):
+                pose = np.asarray(planning_pose(pose), dtype=np.float64).reshape(-1)
+            else:
+                session_reader = getattr(robot, "get_emet_session", None)
+                pose = nav_xyt_to_world_xyt(pose, session_reader() if callable(session_reader) else None)
         except Exception as e:
-            return f"Could not read base pose: {e}"
-        if pose.size < 3:
-            return "Base pose incomplete."
+            return {"ok": False, "status": "base_pose_unavailable", "note": str(e)}
+        if pose.size < 3 or not np.isfinite(pose[:3]).all():
+            return {"ok": False, "status": "base_pose_unavailable", "note": "Base pose incomplete or nonfinite."}
         delta_rad, _bearing = yaw_to_face_xy(pose[:3], xy)
         deg = float(math.degrees(delta_rad))
         if abs(deg) < 3.0:
-            msg = f"Already roughly facing {label!r} ({source})."
-        else:
-            deg = float(np.clip(deg, -180.0, 180.0))
-            ok = executor([("rotate_base", str(deg))])
-            if not ok:
-                return f"Tried to face {label!r} ({source}) but rotate failed."
-            context["last_rotate_degrees"] = deg
-            msg = f"Turned about {deg:+.0f}° to face {label!r} ({source})."
+            msg = f"Already roughly facing the search location for {label!r} ({source})."
+            hint = format_close_map_hint(close_map_from_agent(agent), float(xy[0]), float(xy[1]), is_chat=True)
+            return f"{msg} {hint}".strip()
+        deg = float(np.clip(deg, -180.0, 180.0))
+        turn = ToolOutcome.coerce("rotate_base", rotate_base(deg))
+        msg = (
+            f"Measured turn reached {deg:+.0f}° toward the search location for {label!r} ({source})."
+            if turn.ok
+            else f"Turn toward the search location for {label!r} ({source}) did not complete."
+        )
         hint = format_close_map_hint(close_map_from_agent(agent), float(xy[0]), float(xy[1]), is_chat=True)
         if hint:
             msg = f"{msg} {hint}"
-        return msg
+        return {"ok": turn.ok, "status": turn.status, "note": msg, "navigation": turn.to_dict()}
 
     tools.append(
         Tool(
