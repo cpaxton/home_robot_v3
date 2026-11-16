@@ -550,10 +550,11 @@ def test_exported_v2_actor_loads_through_source_bound_tamp_backend(tmp_path):
 
 @pytest.mark.parametrize("robot", ["innate_mars", "stretch"])
 @pytest.mark.parametrize("mode", ["active_hand", "partial_base"])
-def test_navigation_structure_preserves_coupled_and_partial_mask_actions(robot, mode):
+@pytest.mark.parametrize("config", [BaseNavigationFeedback(), BaseNavigationFeedback(reference_tracking=True, heading_gain_scale=2)])
+def test_navigation_structure_preserves_coupled_and_partial_mask_actions(robot, mode, config):
     torch.manual_seed(82)
     original = WholeBodyActor(robot, base_rate_feedback=False)
-    structured = WholeBodyActor(robot, base_rate_feedback=False, base_navigation_feedback=BaseNavigationFeedback())
+    structured = WholeBodyActor(robot, base_rate_feedback=False, base_navigation_feedback=config)
     with torch.no_grad():
         original.gain.weight.normal_(0, 0.1)
         original.gain.bias.normal_(0, 0.2)
@@ -634,7 +635,8 @@ def test_navigation_contract_rejects_invalid_units(xy, yaw):
         BaseNavigationFeedback(xy, yaw)
 
 
-def test_navigation_bundle_pins_contract_and_rejects_incompatible_declared_tolerance(tmp_path):
+@pytest.mark.parametrize("config", [BaseNavigationFeedback(), BaseNavigationFeedback(reference_tracking=True, heading_gain_scale=2)])
+def test_navigation_bundle_pins_contract_and_rejects_incompatible_declared_tolerance(tmp_path, config):
     cfg = replace(
         ManipulationConfig(),
         retention_context=True,
@@ -643,7 +645,7 @@ def test_navigation_bundle_pins_contract_and_rejects_incompatible_declared_toler
         base_xy_tolerance=0.05,
         base_heading_tolerance=np.deg2rad(5),
     )
-    actor = WholeBodyActor(base_rate_feedback=False, base_navigation_feedback=BaseNavigationFeedback())
+    actor = WholeBodyActor(base_rate_feedback=False, base_navigation_feedback=config)
     destination = tmp_path / "actor"
     export_actor(actor, destination, cfg, "test-model", steps=0)
     bundle = WholeBodyBundle(destination)
@@ -661,6 +663,71 @@ def test_navigation_bundle_pins_contract_and_rejects_incompatible_declared_toler
         WholeBodyBundle(destination)
     with pytest.raises(ValueError, match="inner hold region"):
         export_actor(actor, tmp_path / "incompatible", replace(cfg, base_xy_tolerance=0.005), "test-model", steps=0)
+
+
+@pytest.mark.parametrize("robot", ["innate_mars", "stretch"])
+def test_reference_tracking_feedforward_uses_body_units_without_learned_rescaling(robot):
+    actor = WholeBodyActor(robot, base_navigation_feedback=BaseNavigationFeedback(reference_tracking=True))
+    obs = navigation_observation(actor)
+    obs["history"][..., actor.encoder.fields["base_pose"]][..., 2] = np.pi / 2
+    p = actor.encoder.profile
+    obs["motion"][0, :3] = torch.tensor([0, 0.5 * p.base_speed, -0.2 * p.base_yaw_speed])
+    with torch.no_grad():
+        gain = actor.gain.bias.reshape(-1, actor.feedback_width)
+        gain[:2, -9:] = 100  # would double-count the known velocity mapping
+    torch.testing.assert_close(actor(obs)[0, :2], torch.tensor([0.5, -0.2]))
+    obs["motion"][0, :3] *= 10
+    torch.testing.assert_close(actor(obs)[0, :2], torch.tensor([1.0, -1.0]))
+    obs["history"][..., actor.encoder.fields["hand_mask"]] = 1
+    # The opt-in mapping is absent when the hand is active (the legacy map is
+    # allowed to use its learned motion gains instead).
+    actor.base_navigation_feedback = None
+    expected = actor(obs)
+    actor.base_navigation_feedback = BaseNavigationFeedback(reference_tracking=True)
+    torch.testing.assert_close(actor(obs), expected, rtol=0, atol=0)
+
+
+def test_reference_tracking_does_not_chase_inner_xy_error_during_a_turn():
+    actor = WholeBodyActor(base_navigation_feedback=BaseNavigationFeedback(reference_tracking=True))
+    obs = navigation_observation(actor)
+    with torch.no_grad():
+        gain = actor.gain.bias.reshape(-1, actor.feedback_width)
+        gain[0, 0] = gain[0, 12] = gain[1, 1] = gain[1, 13] = 20
+    obs["preview"][..., actor.encoder.preview_fields["base_error"]] = torch.tensor([0.01, 0.01, 0.0])
+    obs["motion"][0, 2] = 0.1
+    torch.testing.assert_close(actor(obs)[0, :2], torch.tensor([0.0, 0.2]))
+    obs["preview"][..., actor.encoder.preview_fields["base_error"]] = torch.tensor([0.1, 0.0, 0.0])
+    assert actor(obs)[0, 0] > 0
+
+
+def test_heading_gain_calibration_is_explicit_and_does_not_change_other_rows():
+    actor = WholeBodyActor(base_navigation_feedback=BaseNavigationFeedback())
+    obs = navigation_observation(actor)
+    obs["preview"][..., actor.encoder.preview_fields["base_error"]] = torch.tensor([0.0, 0.0, 0.2])
+    with torch.no_grad():
+        actor.gain.bias.reshape(-1, actor.feedback_width)[1, 2] = 1
+    expected = actor(obs)
+    actor.base_navigation_feedback = BaseNavigationFeedback(heading_gain_scale=2)
+    torch.testing.assert_close(torch.atanh(actor(obs)[0, 1]), 2 * torch.atanh(expected[0, 1]))
+    torch.testing.assert_close(actor(obs)[0, 2:], expected[0, 2:], rtol=0, atol=0)
+
+
+@pytest.mark.parametrize("kwargs", [{"reference_tracking": 1}, {"heading_gain_scale": True}, {"heading_gain_scale": 0}, {"heading_gain_scale": float("nan")}])
+def test_reference_tracking_rejects_invalid_configuration(kwargs):
+    with pytest.raises(ValueError):
+        BaseNavigationFeedback(**kwargs)
+
+
+def test_reference_tracking_contract_is_versioned_and_fail_closed():
+    legacy = BaseNavigationFeedback().record()
+    assert legacy["format"] == "signed_base_navigation_v1" and len(legacy) == 3
+    config = BaseNavigationFeedback(reference_tracking=True, heading_gain_scale=2)
+    record = config.record()
+    assert record["format"] == "signed_base_navigation_v2"
+    assert BaseNavigationFeedback.from_record(record) == config
+    for broken in ({**record, "format": "signed_base_navigation_v1"}, {k: v for k, v in record.items() if k != "heading_gain_scale"}, {**record, "unknown": True}):
+        with pytest.raises(ValueError, match="feedback contract"):
+            BaseNavigationFeedback.from_record(broken)
 
 
 @pytest.mark.parametrize("navigation", [None, BaseNavigationFeedback()])

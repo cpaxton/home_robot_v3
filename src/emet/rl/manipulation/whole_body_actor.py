@@ -143,6 +143,13 @@ class WholeBodyActor(nn.Module):
             ],
             dim=-1,
         )
+        if self.base_navigation_feedback is not None and self.base_navigation_feedback.reference_tracking:
+            # Direct unit conversion of the announced reference twist. This is
+            # base-only: coupled hand control retains its original learned map.
+            # There is no teacher action or temporal output filter here; native
+            # wheel speed/slew/stop guards still own actuator commands.
+            base = (mean[:, :2] + motion[:, [0, 2]]).clamp(-1, 1)
+            mean = torch.cat([torch.where(eligible[:, None], base, mean[:, :2]), mean[:, 2:]], dim=-1)
         return mean * self.action_mask(obs)
 
 
