@@ -1,5 +1,10 @@
 # Stretch head/wrist handoff during native contact transfer — October 30
 
+Later evidence: the [November 16 main-integration repeat](pr226_main_integration_20261116.md)
+completes native control but tracks only 1/81 captures. Original-clock replay
+reproduces both outcomes and exposes first-capture-gap sensitivity. The 81/81
+result below is historical development evidence, not robust live acceptance.
+
 The final development repeat completes native contact pick/place and retains one
 RGBD track for **81/81 captures**, through approach, lift, placement, release and
 retreat. This fixes the earlier head-only visibility failure for this fixture.

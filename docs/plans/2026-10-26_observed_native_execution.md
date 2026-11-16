@@ -452,3 +452,11 @@ camera/encoder uncertainty, then run the stationary public-tool transfer. The
 default source remains read-only and full observed task acceptance remains open.
 Keep this separate from the privileged control, diagnostic candidates and any RL
 training work. [Attempts, protocols and video](../experiments/observed_handoff_20261030.md).
+
+November 16: current-main integration passes 1,022 affected tests, with no
+failures/errors/skips. The fresh native control still completes, while head/wrist
+association stops after 1/81 captures when a longer first capture gap admits two
+foreign pixels into the full-union fit. Original-clock replay preserves both the
+old 81/81 and new 1/81 outcomes; no profile or freshness threshold is loosened.
+Treat capture-cadence/association robustness separately from robot self-occupancy
+in issue #245. [Integration evidence](../experiments/pr226_main_integration_20261116.md).
