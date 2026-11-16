@@ -14,6 +14,33 @@ from torch import nn
 from emet.rl.manipulation.profiles import PROFILES
 
 
+def load_control_policy(directory, *, robot=None, fingerprint=None):
+    """Load a sensor-only controller; legacy PPO training remains explicitly v1."""
+    manifest = json.loads((Path(directory) / "manifest.json").read_text())
+    if manifest.get("format") == "emet-whole-body-v2":
+        from emet.rl.manipulation.whole_body_bundle import WholeBodyBundle
+
+        return WholeBodyBundle(directory, robot=robot, fingerprint=fingerprint)
+    return ManipulationPolicy(directory, robot=robot, fingerprint=fingerprint)
+
+
+def validate_critic_reward_scale(scale: float) -> float:
+    """Validate critic reward units without changing actor action semantics."""
+    if (
+        isinstance(scale, (bool, np.bool_))
+        or not isinstance(scale, (int, float, np.integer, np.floating))
+        or not np.isfinite(scale)
+        or scale <= 0
+    ):
+        raise ValueError("positive finite critic reward scale required")
+    return float(scale)
+
+
+def value_reward_scale(manifest):
+    """Read critic units, retaining native-unit compatibility for old bundles."""
+    return validate_critic_reward_scale(manifest.get("critic_reward_scale", 1.0))
+
+
 class ManipulationMLPFeatures(BaseFeaturesExtractor):
     """A small fixed history for a plain feed-forward controller."""
 
@@ -55,7 +82,8 @@ class ManipulationHistoryFeatures(BaseFeaturesExtractor):
         return torch.cat([features, obs["preview"].flatten(start_dim=1)], dim=1) if self.has_preview else features
 
 
-def export(model, normalizer, directory, env_config, fingerprint, *, steps):
+def export(model, normalizer, directory, env_config, fingerprint, *, steps, held_estimator=None):
+    critic_scale = validate_critic_reward_scale(getattr(model.policy, "critic_reward_scale", 1.0))
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=True)
     model.save(directory / "policy.zip")
@@ -66,6 +94,7 @@ def export(model, normalizer, directory, env_config, fingerprint, *, steps):
         "contract": PROFILES[env_config.robot].contract(env_config.action_mode),
         "fingerprint": fingerprint,
         "steps": steps,
+        "critic_reward_scale": critic_scale,
         "mean": stats.mean.tolist(),
         "var": stats.var.tolist(),
         "count": float(stats.count),
@@ -76,7 +105,13 @@ def export(model, normalizer, directory, env_config, fingerprint, *, steps):
         "actor_ground_truth_inputs": False,
         "environment": asdict(env_config),
         "training_reward": (
-            "goal_gated_tracking_v8"
+            "precision_raw_command_motion_v11"
+            if env_config.command_smoothness_weight
+            else "precision_base_continuous_quiet_jerk_v10"
+            if env_config.precision_tracking_reward
+            else "current_goal_hand_gated_base_tracking_v9"
+            if env_config.hand_gated_base_reward
+            else "goal_gated_tracking_v8"
             if env_config.goal_gated_settling
             else "differential_base_tracking_v7"
             if env_config.differential_base_reward
@@ -98,6 +133,14 @@ def export(model, normalizer, directory, env_config, fingerprint, *, steps):
         from emet.rl.manipulation.tracking import preview_contract
 
         manifest["preview_contract"] = preview_contract()
+    if env_config.retention_context:
+        from emet.rl.manipulation.retention_training import GRASP_CONTEXT_CONTRACT
+
+        manifest["grasp_context_contract"] = GRASP_CONTEXT_CONTRACT
+    if held_estimator is not None:
+        if not env_config.retention_context:
+            raise ValueError("held-object estimator requires retention context")
+        manifest["held_object_manifest_sha256"] = held_estimator.save(directory)
     (directory / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
 
 
@@ -109,6 +152,12 @@ class ManipulationPolicy:
         if m.get("format") != "emet-manipulation-v1" or m.get("robot") not in PROFILES:
             raise ValueError("not a supported manipulation policy")
         self.robot = m["robot"]
+        self.critic_reward_scale = value_reward_scale(m)
+        from emet.rl.manipulation.retention_training import GRASP_CONTEXT_CONTRACT
+
+        context = m.get("environment", {}).get("retention_context", False)
+        if m.get("grasp_context_contract") != (GRASP_CONTEXT_CONTRACT if context else None):
+            raise ValueError("grasp context contract mismatch")
         self.action_mode = m.get("action_mode", "residual")
         if self.action_mode not in {"residual", "direct_velocity"}:
             raise ValueError("unsupported policy action semantics")
@@ -142,6 +191,20 @@ class ManipulationPolicy:
                 raise ValueError("preview contract mismatch")
 
         self.model = PPO.load(directory / "policy.zip", device="cpu")
+        if m.get("environment", {}).get("feedback_policy", False):
+            from emet.rl.manipulation.feedback_policy import GoalFeedbackFeatures
+
+            features = self.model.policy.features_extractor
+            if not isinstance(features, GoalFeedbackFeatures) or (
+                features.orientation_error != m["environment"].get("feedback_orientation_error", "rotation6")
+                or features.reference_velocity != m["environment"].get("feedback_reference_velocity", False)
+            ):
+                raise ValueError("feedback feature options metadata mismatch")
+        restoring = m.get("environment", {}).get("restoring_yaw_feedback", False)
+        if restoring != getattr(self.model.policy, "restoring_yaw_feedback", False) or (
+            restoring and self.model.policy.turn_xy_tolerance != m["environment"]["base_xy_tolerance"]
+        ):
+            raise ValueError("restoring yaw architecture metadata mismatch")
         if (
             self.model.action_space.shape != (PROFILES[self.robot].action_size,)
             or set(self.model.observation_space.spaces) != set(self.normalization)
@@ -150,8 +213,28 @@ class ManipulationPolicy:
             )
         ):
             raise ValueError("manipulation policy layout mismatch")
+        self.held_estimator = None
+        if "held_object_manifest_sha256" in m:
+            from emet.rl.manipulation.held_object import HeldObjectEstimator
 
-    def __call__(self, observation):
+            if (
+                not context
+                or hashlib.sha256((directory / "held_object.json").read_bytes()).hexdigest()
+                != m["held_object_manifest_sha256"]
+            ):
+                raise ValueError("held-object manifest mismatch")
+            self.held_estimator = HeldObjectEstimator.load(directory)
+            if self.held_estimator.robot != self.robot or self.held_estimator.history_shape != self.mean.shape:
+                raise ValueError("held-object policy layout mismatch")
+
+    def estimate_held_object(self, observation):
+        """Advisory diagnostic only; does not change actor actions or release."""
+        if self.held_estimator is None:
+            return {"available": False, "calibrated": False, "advisory_only": True, "probability": None}
+        return self.held_estimator.estimate(observation["history"])
+
+    def normalized_observation(self, observation):
+        """The exact deployed preprocessing, also used by diagnostic probes."""
         if set(observation) != set(self.normalization):
             raise ValueError("unexpected actor inputs")
         normalized = {}
@@ -162,4 +245,7 @@ class ManipulationPolicy:
             normalized[key] = np.clip(
                 (values - mean) / np.sqrt(var + self.manifest["epsilon"]), -self.manifest["clip"], self.manifest["clip"]
             ).astype(np.float32)
-        return self.model.predict(normalized, deterministic=True)[0]
+        return normalized
+
+    def __call__(self, observation):
+        return self.model.predict(self.normalized_observation(observation), deterministic=True)[0]

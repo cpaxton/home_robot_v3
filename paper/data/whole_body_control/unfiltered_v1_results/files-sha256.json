@@ -1,0 +1,19 @@
+{
+  "learning-curves.svg": "e8a8fde59d5a49ddf16091f86caa519b46e0be0039c876a232cd26c0c9f3b638",
+  "final-evaluation.json.gz": "27066af1737c9fde1adc6332c2190bb9208f15f6f8f98f68f92f1ac353fecc77",
+  "posture-probe-summary.json": "b25a653875b8fae6a606e7fa71618139292c920bd7f4a5f32249a332545c1f18",
+  "checkpoint-cases.json.gz": "1a4a9de4a6027aa5c35c43be3156a0861194d307805de3b3f4231f719cae269c",
+  "plot_results.py": "5562d7de8db3936f56a5b218935bc5d2bba5c24730e8e8caa82819671fc7a0b7",
+  "common-smoothness-reference.json": "279bd049336397ab9d74f9ab4f4574f5d3dc422137d2e4e091b5220cc84961a1",
+  "complete.json": "c8cb66d586db933d9f1c04f746ae75e4da8ec1fef2af83747cd3d6bcee769a6f",
+  "final-manifest.json": "62535795d45133599bb85c8970b81444916125529e2aa25c97f9af9520ef44d9",
+  "final-summary.json": "3af2d835f4e4b197a80abc2769a1688c84ee66d277be1313d6c1cb2f6dcd939b",
+  "posture-probe-teacher.json.gz": "3dd651c24e71a938679bdacb30a31e6b59d2df09c1e6ad6c337f98458712628f",
+  "posture_probe.py": "8dc78a349860d48ca0fd28ab9c6f4f826f84b629085c56138f6323c162f386c0",
+  "metrics.jsonl.gz": "3a69c8cda9c755bfbf8f721284e60f1488aaffaaac65be419a18a11884fcfd04",
+  "results.json": "cdf50adbb8a73a4f0510f7aca28e785c49153405b8c3e2f320c1f3e34c5fb37f",
+  "posture-probe-policy.json.gz": "92b0f5940e76672129dc2ce65d15cd64d743dab01fd4cb1a27073af60852eb29",
+  "archive_results.py": "f7bd0900a94fb8c0f9d2c373ecb8c30b2072367d57715098caac60f08d7a1c51",
+  "run.json": "eead695e2c35c1d2791cff2424ffa791fe8c89b83d63714e6d5f946a6a660274",
+  "updates.jsonl.gz": "b9e09228fdf408720320c5d7872d81bd4a43536b6fbfc7ee49c85e0da41037e3"
+}

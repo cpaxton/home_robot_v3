@@ -136,6 +136,36 @@ def test_complete_prior_union_never_selects_a_subset_to_hide_foreign_geometry(fo
     assert track.latest is None
 
 
+@pytest.mark.parametrize('gap, admits_foreign', [(0.884, False), (1.342, True)])
+def test_longer_capture_gap_cannot_hide_newly_reachable_foreign_pixels(gap, admits_foreign):
+    clock = [10.01]
+    first = CaptureInterval('first', 10., 10.001, 10.01, 'clock')
+    measured, object_mask = view(first)
+    rgb, depth, world = (a.copy() for a in (measured.rgb, measured.depth, measured.world))
+    # The image is unchanged between captures. A larger elapsed-time motion
+    # envelope admits two same-colour background pixels outside the seed mask.
+    rgb[20, 20:22], depth[20, 20:22] = [200, 40, 40], 1.
+    world[20, 20:22] = [[.30, 0, .04], [.301, .003, .04]]
+    reference = SynchronizedRgbdView(rgb, depth, world, first)
+    track = MultiViewRgbdTracker(PrimitiveModel('cylinder', (.02, .04)),
+        reference_view='head', reference=reference, mask=object_mask,
+        object_ref='opaque', scene_epoch='scene', clock=lambda: clock[0],
+        component_policy='complete_prior_union', max_update_s=5., max_evaluations=12000)
+    start = first.latest + gap
+    capture = CaptureInterval('second', start, start+.001, start+.01, 'clock')
+    clock[0] = capture.received_monotonic
+    current = replace(reference, capture=capture)
+    if admits_foreign:
+        with pytest.raises(ObservationUnavailable):
+            track.update({'head': current}, scene_epoch='scene')
+        assert track.latest is None
+        with pytest.raises(ObservationUnavailable, match='lost_reinitialize'):
+            track.update({'head': current}, scene_epoch='scene')
+    else:
+        result = track.update({'head': current}, scene_epoch='scene')
+        np.testing.assert_array_equal(dict(result.masks)['head'], object_mask)
+
+
 @pytest.mark.parametrize("appearance_model", ["chromaticity", "neutral_specular"])
 def test_neutral_highlight_can_preserve_cap_without_loosening_geometry_checks(appearance_model):
     track, clock = setup(appearance_model=appearance_model)

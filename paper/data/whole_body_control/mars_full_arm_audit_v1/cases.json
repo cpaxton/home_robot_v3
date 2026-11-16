@@ -1,0 +1,190 @@
+{
+  "format": "mars-fresh-arm-audit-v1",
+  "scope": "Twelve preregistered extra nearby arm paths and reset seeds; diagnostic audit only, absent from training and frozen canonical qualification. Keep every failed admission/execution.",
+  "base_suite_path": "configs/benchmarks/mars_tracking_mastery_full_arm_v1.json",
+  "base_suite_sha256": "5c7206dd89af4d227d7a22e4f1bc26e0fbbcdd6ea3282fc94bf8855e9f2fdeda",
+  "cases": [
+    {
+      "id": "validation:arm:fresh_shoulder_left",
+      "split": "validation",
+      "stage": "arm",
+      "reset_seed": 34200000,
+      "travel_m": 0,
+      "turn_rad": 0,
+      "arm_delta": [
+        0.092,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "validation:arm:fresh_shoulder_right",
+      "split": "validation",
+      "stage": "arm",
+      "reset_seed": 34200001,
+      "travel_m": 0,
+      "turn_rad": 0,
+      "arm_delta": [
+        -0.092,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "validation:arm:fresh_elbow_up",
+      "split": "validation",
+      "stage": "arm",
+      "reset_seed": 34200002,
+      "travel_m": 0,
+      "turn_rad": 0,
+      "arm_delta": [
+        0.0,
+        0.0,
+        0.13799999999999998,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "validation:arm:fresh_elbow_down",
+      "split": "validation",
+      "stage": "arm",
+      "reset_seed": 34200003,
+      "travel_m": 0,
+      "turn_rad": 0,
+      "arm_delta": [
+        0.0,
+        0.0,
+        -0.13799999999999998,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "validation:arm:fresh_wrist_up",
+      "split": "validation",
+      "stage": "arm",
+      "reset_seed": 34200004,
+      "travel_m": 0,
+      "turn_rad": 0,
+      "arm_delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.11499999999999999,
+        0.0
+      ]
+    },
+    {
+      "id": "validation:arm:fresh_wrist_down",
+      "split": "validation",
+      "stage": "arm",
+      "reset_seed": 34200005,
+      "travel_m": 0,
+      "turn_rad": 0,
+      "arm_delta": [
+        0.0,
+        0.0,
+        0.0,
+        -0.11499999999999999,
+        0.0
+      ]
+    },
+    {
+      "id": "validation:arm:fresh_translate_down",
+      "split": "validation",
+      "stage": "arm",
+      "reset_seed": 34200006,
+      "travel_m": 0,
+      "turn_rad": 0,
+      "arm_delta": [
+        0.0,
+        -0.046,
+        0.13799999999999998,
+        -0.092,
+        0.0
+      ]
+    },
+    {
+      "id": "validation:arm:fresh_translate_up",
+      "split": "validation",
+      "stage": "arm",
+      "reset_seed": 34200007,
+      "travel_m": 0,
+      "turn_rad": 0,
+      "arm_delta": [
+        0.0,
+        0.046,
+        -0.13799999999999998,
+        0.092,
+        0.0
+      ]
+    },
+    {
+      "id": "validation:arm:fresh_combination_0",
+      "stage": "arm",
+      "split": "validation",
+      "reset_seed": 34200008,
+      "travel_m": 0,
+      "turn_rad": 0,
+      "arm_delta": [
+        0.04,
+        -0.03,
+        0.07,
+        -0.04,
+        0.05
+      ]
+    },
+    {
+      "id": "validation:arm:fresh_combination_1",
+      "stage": "arm",
+      "split": "validation",
+      "reset_seed": 34200009,
+      "travel_m": 0,
+      "turn_rad": 0,
+      "arm_delta": [
+        -0.04,
+        0.03,
+        -0.07,
+        0.04,
+        -0.05
+      ]
+    },
+    {
+      "id": "validation:arm:fresh_combination_2",
+      "stage": "arm",
+      "split": "validation",
+      "reset_seed": 34200010,
+      "travel_m": 0,
+      "turn_rad": 0,
+      "arm_delta": [
+        0.03,
+        0.04,
+        -0.09,
+        0.05,
+        -0.06
+      ]
+    },
+    {
+      "id": "validation:arm:fresh_combination_3",
+      "stage": "arm",
+      "split": "validation",
+      "reset_seed": 34200011,
+      "travel_m": 0,
+      "turn_rad": 0,
+      "arm_delta": [
+        -0.03,
+        -0.04,
+        0.09,
+        -0.05,
+        0.06
+      ]
+    }
+  ],
+  "hardware_used": false,
+  "safety_promoted": false
+}

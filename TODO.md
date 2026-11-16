@@ -1,5 +1,11 @@
 # Living TODOs (small / near-term)
 
+- [ ] Qualify observed robot self-occupancy and phase-specific contact admission:
+      [issue #245](https://github.com/cpaxton/home_robot_v3/issues/245). PR #226
+      supplies evidence/adapter contracts only. Preserve unknown-space rejection
+      and read-only default discovery; require an actual observed transfer before
+      claiming live observed execution. Native privileged controls remain separate.
+
 - [ ] Profile failed-search cost without answer overrides or target-specific rules:
       final S0 seed 1 misses the receptacle in both arms but candidate takes
       798.6 s versus control 287.2 s. Seed 2 succeeds faster (478.0 vs 790.4 s).
@@ -88,10 +94,609 @@ Strike through or move to a PR when done.
       [consolidated evidence and review](docs/plans/eqa_context_evidence.md).
 ## RL controller integration and acceptance (Mars first)
 
-- [ ] Restore continuous pick/place after explicit stage rearming: v5 at
+Accepted plan: [Mars controller integration](docs/plans/mars_controller_integration.md).
+
+### Current WBC follow-through (2026-11-15)
+
+Use the [complete setup/status](docs/rl/status_20261114.md) and
+[WBC philosophy](docs/rl/whole_body_control.md) alongside the ordered work below.
+Historical entries further down retain their original populations and outcomes;
+they are not evidence that the remaining stages have passed. Research-code
+merges, measured policy improvement and hardware readiness are separate decisions.
+
+- [x] Merge the core WBC implementation/evidence: PRs #224, #227, #232 and #233;
+      close superseded #214 without restoring its older code. Preserve the
+      stronger source and negative results. Repair serialized paired settings,
+      physical-tick reward discounting and duplicate-trial confidence reporting.
+- [x] **Finish the corrected learning baseline.** The
+      [C1 comparison is complete](docs/experiments/mars_c1_normalization_recovery_20261115.md):
+      preserve the original 4,096-decision control and failed 256 unoptimized
+      candidate ticks; recover only the remaining 4,096 decisions. Fresh
+      regressions pass 1,249/1,249; explicit source/teacher/optimizer equivalence
+      and every initial/first-rollout hash pass. All twelve fixed-final outcomes
+      and diagnostics are recorded. Shared full mastery is 2/12 versus per-head
+      0/12 and initial 2/12; completed arm endpoints meeting 3mm/0.02rad improve
+      1/10 to 5/10. This completes the experiment, not whole-body qualification:
+      base, quiet-hold and jerk failures remain, with no checkpoint promotion.
+- [x] **Separate C1 base interference from arm learning.** All 24 unchanged
+      initial/final replays reproduce every continuous metric and outcome.
+      Replacing only final base requests with initial zero requests raises
+      arm full passes 1/10 to 3/10 and smoothness 1/10 to 9/10, but worsens
+      full-amplitude pitch orientation. Preserve the
+      [36-rollout diagnostic](docs/experiments/mars_c1_zero_base_diagnostic_20261115.md);
+      no training, exported controller or qualification follows from it.
+- [x] **Complete the frozen-base/context coordination test.** The new
+      [bounded pair is complete](docs/experiments/mars_frozen_base_arm_20261115.md):
+      seed90, 16,384 transitions each; baseline arm full 59→57/64 and velocity
+      60→61/64, both 64/64 tracking. All 488 expanded outcomes, 244 matched
+      initial/final identities and serialized protected-function checks are
+      recorded. Each teacher passes 122/122 on the source gated by 1,249 tests.
+      Base-only metrics are exactly preserved; coupled remains 2/8. Keep the
+      retained source: one positive development seed does not qualify a new
+      controller. Preserve the old zero-step queue failure and add no automatic
+      retries, extra seeds or checkpoint selection.
+      [Bounded follow-through protocol](docs/plans/mars_frozen_base_arm_followthrough.md).
+- [x] **Test reference-conditioned base exploration.** Fresh seed90 shared
+      GRU pair completes 4,096 decisions each on source gated by 1,260 tests.
+      Candidate arm tracking/settling improves 1→7/10 and fixed-base stops
+      5→0, but full arm remains 1/10 with nine linear-jerk failures. All twelve
+      fixed cases and identical initial anchors are retained; default control
+      exactly reproduces earlier C1 metrics, rollout hashes and final weights.
+      [Complete report](docs/experiments/mars_reference_base_exploration_20261115.md).
+      Keep default scale 1.0 and the retained production source; no promotion.
+- [ ] **Resolve remaining coordination and quiet-hold failures.** Use the
+      [ordered next-steps plan](docs/plans/mars_wbc_next_steps.md): isolate the
+      low-level base feedback/oscillation first, validate current-velocity
+      feedback through reset/motion/stop, then train missing directions on the
+      corrected plant. Matched current-COM replay already improves frozen
+      candidate full success 2/12→8/12 with no PPO or gate change. The completed
+      [actual-reset validation](docs/experiments/mars_current_feedback_reset_validation_20261115.md)
+      confirms 24 stops and 1,299 regressions; legacy reaches 151/164 general and
+      12/12 common cases, but 0/6 TAMP versus teacher 5/6. The
+      [four-episode trace study](docs/experiments/mars_tamp_input_diagnostic_20261115.md)
+      confirms input delivery and small learned commands, followed by clipped
+      open-jaw feedback. Preserve real inputs; train the actual near-contact
+      distribution mixed with general tracking after fresh checks/admission.
+      The teacher's support-margin rejection now has an actionable public
+      failure code; independently admit the measured-state replan without
+      weakening the support check. Settling/velocity/GRU frozen probes
+      did not close this gap. Keep PR #240's 17 training and 24 audit cases
+      distinct from admitted/trained evidence. The conditional curriculum
+      pair remains bounded at 16,384 decisions per variant after fresh
+      source/teacher gates; preserve reward/representation and report exact
+      per-case exposure. Measurement/reward changes are conditional if still
+      needed, not simultaneous knobs. Preserve original scores and independent
+      stop/force/support/retention checks. Freeze the separate audit cases before
+      training; no automatic budget extension or policy promotion. Existing
+      offline and native diagnostics do not relabel any candidate failure.
+      The opt-in axis-angle feature still needs a separate controlled trained
+      comparison; do not confound it with the plant, reward or velocity studies.
+- [x] **Repair drift after Cartesian hold entry.** Bounded nonfault reacquisition
+      preserves goals, history, grip authority and the original deadline. On
+      the explicitly declared 4 mm / 0.04 rad task contract, the retained actor
+      now completes grasp pose and executor closure; lift planning rejects
+      insufficient support reserve. Keep the original precision failures and
+      all [twelve task diagnostics](docs/experiments/mars_task_arrival_20261115.md).
+- [ ] **Train actual grasp-pose and fixed-world-hand/base motion.** Extend the
+      pregrasp-only primitive boundary, obtain fresh stage-specific teacher
+      admission, and mix these reachable references with general tracking.
+      Do not increase timeouts or accept the actor's 2.15 mm advance as a
+      completed 20 mm support-preparation goal. Keep loaded retention/grasp-fit
+      repair separate, with original force/support/retention thresholds.
+- [x] Prepare the exact [17-case directional curriculum and 24-case audit](docs/plans/mars_directional_curriculum.md)
+      with a strict separate loader, source/control hashes, unchanged contracts
+      and disjoint audit resets/motions. This is case preparation only: no
+      native admission, training or policy promotion. Keep actual task-stage
+      coverage and the latest #239 diagnosis in the next training decision.
+- [ ] Admit the prepared directional/audit cases on the corrected plant for
+      the selected training stage. Bind the new source's own checks and teacher
+      evidence; keep original case rejections visible. Loaded retention failures
+      do not qualify loaded training or invalidate admitted unloaded references.
+- [ ] **Advance real contact skills in stages.** Follow the
+      [safety/task curriculum](docs/plans/2026-11-13_whole_body_safety_curriculum.md)
+      from actual pregrasp to closure/lift, loaded transport/braking, and
+      placement/release. Freeze each stage's cases, observations, teacher
+      admission and budgets before training. Retain independent retention,
+      force, wheel-support and measured-stop checks. Supported open-jaw
+      tracking and pregrasp do not qualify loaded manipulation. Evaluate
+      complete public-tool programs and fresh audit cases before broader claims.
+- [ ] **Evaluate a bounded differentiable world-model backend.** Use
+      SuperMimic as a method reference, not a claimed Mars result. First capture
+      per-tick physical, actuator/servo and executor state, executed actions,
+      reference progress and termination semantics. Split complete trajectories
+      and case families into training/holdouts; do not leak adjacent windows.
+      Measure multi-step errors by horizon and by contact, slip, wheel unloading
+      and retention event. Keep privileged model state outside actor inputs.
+      Validate trained actors in unchanged native physics, and compare total
+      collection, fitting, policy-update and evaluation wall time with corrected
+      PPO. Predicted success is not qualification; published flat-ground motion
+      tracking speedups are not Mars manipulation speedups.
+- [ ] **Establish robustness and transfer.** Identify actuator/sensor timing
+      and dynamics, then test declared noise, delay, payload/friction variation,
+      disturbances and held-out tasks. Require complete native/alternative-host
+      parity before scaling; Caliban's frozen-fixture gate remains open.
+      State-of-the-art claims require matched strong baselines and measured
+      capability/compute comparisons. Hardware needs verified feedback, limits,
+      watchdog and stop behavior plus separately authorized testing.
+
+Olympia rules remain one CPU14 training/preflight worker and at most one CPU15
+test worker, one numerical thread each, CUDA hidden and ordinary rendering off.
+Use explicit host-visible handoffs and immutable, managed run records. Do not
+leave an expired queue described as running or count software-only PPO checks
+as an experimental training result.
+
+### Historical WBC evidence and remaining integration work
+
+- [ ] Complete the bounded [hand-accuracy pilot](docs/plans/mars_hand_accuracy.md):
+      teacher baseline 66/66, latest base-trained actor 0/8 arm cases with near-zero
+      arm requests. Use stage-balanced arm/base resets, smaller reachable arm
+      amplitudes and native hand-gated base credit, preserving canonical gates.
+      Measure requested versus actual hand/joint motion before adding loaded
+      hold/lift and replaying the public learned-controller pick/place programs.
+- [x] Clear finite empty-hand arm learning with the [five-output component diagnostic](docs/plans/mars_arm_component.md).
+      The completed local 65,536-step mixed fallback remains 0/8 arm cases; retain
+      its regressions. Component teacher passes16/16 with wheel/grip requests
+      fixed; one32k PPO run passes8/8 at all checkpoints after8k and16/16 on final
+      expanded/reloaded evaluation. This is not whole-body or loaded qualification.
+- [x] Verify [arm-to-whole-body mean-preserving training transfer](docs/plans/mars_arm_to_whole_body.md):
+      exact arm/critic predictions and16/16 physical arm passes before training.
+- [ ] Retain full arm smoothness while reintroducing base motion, then loaded hold/lift and public
+      pick/place. Keep one production actor; no permanent multi-task architecture
+      or teacher/student loss is needed by the current component evidence.
+- [x] Correct mixed-training exposure using actual control-step budgets. The
+      [first whole-body pilot](docs/experiments/mars_arm_to_whole_body_20261031.md)
+      retains16/16 arm tracking but8/16 full passes, with base38/50 tracking and
+      33/50 full passes. Forward/reverse receive only389/32,768 steps (1.19%);
+      test deterministic budget accounting before another bounded comparison.
+- [x] Remove executor-ignored requests from policy sampling/means/likelihood/
+      entropy and keep known wheel/grip history in actor units. The completed
+      [repair pilot](docs/experiments/mars_command_history_20261031.md) allocates
+      6,368/32,768 steps (19.43%) to translation. Arm tracking remains16/16,
+      but full arm/base passes are4/16 and32/50; no policy promotion.
+- [x] Correct simulator forward/yaw diagnostics from principal-inertia axes to
+      regular body axes. Verify rotated inertia frames, identical66-case physical
+      metrics/rewards after replay, and constant-request velocity response.
+- [x] Run the bounded [frozen-arm base diagnostic](docs/experiments/mars_base_isolation_20261101.md)
+      and sustained-request return audit. One 32k gSDE pilot improves expanded
+      base tracking to48/50 but only15/50 full passes; arm14/16 tracking and0/16
+      full. Keep every failure and retain the unpromoted source bundle. Removing
+      direct hand-to-base connections in a final-only diagnostic restores
+      canonical arm tracking8/8, but not smoothness; do not deploy that mask.
+- [x] Complete the paired [base curriculum and reward comparison](docs/experiments/mars_contract_curriculum_20261103.md):
+      1,005 regressions pass and teacher66/66 reproduces exactly. Native-reward
+      base-only8k reaches49/50 base tracking,42/50 full base and15/16 full arm;
+      aligned reward reaches48/50,41/50 and12/16. Both retain16/16 arm tracking.
+      Preserve the stronger native baseline; neither actor is promoted.
+- [x] Add tunable force/jerk budget excess costs and a terminal full-contract
+      bonus shared with evaluation, with teacher/reset binding and native
+      observation/physics preservation checks. Keep the package opt-in.
+- [ ] Test a gradual reward transition and quieter refinement exploration:
+      the first aligned run removes50 native completion points but pays no
+      full-contract bonuses during exploration. Preserve movement credit early,
+      repair the remaining base/arm jerk cases and validation translation lag,
+      then restore coordinated hand/base cases before loaded/TAMP work. Verify
+      exact source-transfer fidelity for partly qualified continuation rather
+      than silently bypassing initial admission or relaxing evaluation gates.
+- [ ] Port exact frozen TAMP fixture initialization to ARM without relaxing its
+      hash/pose checks. Caliban's eight-worker pilot never started: one missing
+      camera source is fixed; two exact frozen-fixture checks still reject ARM's
+      compiled/reset differences. The current 122-case ARM teacher passes; the
+      fresh full gate is 1,077/1,080, with the third Git-context setup failure
+      repaired by a focused rerun. An exact binary model/state numeric probe
+      passes its listed checks, but full admission/dynamic parity and a portable
+      loader remain open. See [evidence](docs/experiments/mars_caliban_portability_20261106.md).
+      Keep training local until the complete ARM gate passes.
+
+- [x] Externalize generated control archives/streams into ignored, checksummed
+      storage with a retrieval catalog and a regression guard against force-add.
+      Preserve original artifacts and branch history before publishing cleanup.
+- [x] Wire independent native worker count and per-worker rollout length into
+      the mastery trainer, counting telemetry for every worker. Keep this unstable
+      workstation serial; use Caliban for bounded parallel probes. The current
+      seven-motion trainer now also supports1–8 workers with all-worker telemetry
+      and aligned rollout/warmup boundaries. Native two-world parity/PPO tests
+      and two/eight spawned-worker ARM plumbing probes pass; all1,095 fresh
+      regressions pass. Frozen-fixture portability remains required before scaling
+      a trained checkpoint. See [worker evidence](docs/experiments/mars_motion_workers_20261106.md).
+- [ ] Admit the GPU backend for PPO: short native/GPU Mars state-parity probes
+      pass with no-slip physics intact; still require independent-world resets,
+      loaded grasp/lift/placement and per-substep force/wheel parity, then batched
+      controller/history/reward logic and end-to-end PPO. See the
+      [parallel simulation plan](docs/plans/mars_parallel_simulation.md).
+
+- [x] Address PR 224 runtime review: require all six base velocity DOFs to stop,
+      use measured arm feedback for startup/overspeed checks, expose explicit
+      simulator timing budgets with a post-inference deadline/freshness check,
+      and name/document spatial teacher gains and the task metric. See the
+      [review repair report](docs/experiments/pr224_runtime_review_20261024.md).
+- [x] Address PR 227's concrete review notes: shared test fixtures compatible
+      with importlib collection, scalar critic-unit validation, staged and
+      validated component exports, and documented masked likelihood semantics.
+      Bind helper sources into regression receipts. See the
+      [review follow-up](docs/experiments/pr227_review_20261106.md).
+
+- [x] Generate and execute privileged real-model multi-step development cases
+      through public TAMP tools without resets between transfers. Stretch's
+      two-object reference and agent pass; Mars delivery/return stops at return
+      planning for both selectors. Preserve the failed prefix in the
+      [multi-step report](docs/experiments/agent_multistep_control_20261024.md).
+- [ ] Fix the frozen Mars post-placement return/regrasp planning case without
+      changing its goals or thresholds; budget rejection is not an infeasibility
+      label. Then freeze broader multi-step layouts/objects before qualification.
+- [x] Add an opt-in fixed-checkpoint TAMP execution backend for Mars simulation,
+      with verified robot/actuator/mesh/physics compatibility across primitive
+      world fixtures, bound training evidence, actual actor-call counts and
+      measured stop on inference/tracking failure. Preserve reference execution
+      and the original full-training-model fingerprint check. The real agent
+      also exercises discovery/planning/execution with this backend; see the
+      [checkpoint handoff report](docs/experiments/mars_tamp_policy_backend_20261025.md).
+- [ ] Train and validate on the actual public TAMP command distribution: the
+      new explicit Cartesian backend consumes whole FK pose schedules and keeps
+      measured configuration/support/retention/base checks. Joint execution
+      remains available. Current development programs still fail at pregrasp;
+      an executable policy remains open. Keep fixed-base approach
+      constraints, force, retention and wheel limits unchanged; a wired backend
+      is not a successful learned pick/place controller. Extend the frozen
+      development comparisons across layouts, masses and composed tasks.
+- [x] Fix checkpoint inference before the first motion command and suppress
+      inference during explicit terminal hold. Audit stationary tracking against
+      reference/zero control, warm history, categorical normalization and target
+      sensitivity. See the [startup audit](docs/experiments/mars_policy_startup_audit_20261025.md).
+- [x] Add bounded hold/fixed-current-base curricula, categorical identity
+      normalization, all-six-DOF body motion costs and checked training-only
+      tracking transfer. Correct near-object hold/closed-empty examples.
+- [x] Compare ordinary and learned-feedback motion heads with actual PPO:
+      24,576 new steps across five offline W&B runs; archive negative controls,
+      teacher comparisons and a fresh 692-test receipt. Ten-second hand holds
+      remain within 1.2 mm on five development fixtures. See the
+      [hold-repair report](docs/experiments/mars_hold_repair_20261025.md).
+- [x] Isolate hold chatter with matched zero/explicit/reference/policy controls
+      and fixed-weight wheel-gain ablations. Gain 0.5 gives continuous quiet
+      holds on five development pregrasp fixtures; restore the checkpoint's gain
+      and retention observation context in compatible UI sessions as well.
+- [x] Align optional training settling with all six base velocities; add nearby
+      FK orientation/translation coverage, function-preserving angular feature
+      scaling and a gripper-close transition during explicit terminal hold.
+- [x] Add fixed-base training boundaries matching the 1 cm / 0.02 rad execution
+      envelope, tighter heading reward and same-target progress without credit
+      for goal changes. Refresh Cartesian executor snapshots every cycle.
+- [x] Restore actual Cartesian actor phase/retention/aperture handoff and replace
+      the intermediate binary clock gate with continuous lag scaling inside the
+      unchanged tracking tube. Archive all three public failures and completed
+      65,536-step refinement, with strict angular and quiet diagnostics.
+- [x] Complete matched 16k-step goal-gated settling pilots. Both regress from
+      the source on moving targets; all public replays still fail. Preserve
+      negative results and the recorded-observation normalization/weight audit.
+- [ ] Collect independent same-controller simulator challenge outcomes before
+      enabling unsupported safety-risk heads. Preserve per-head abstention and
+      keep these challenge outcomes separate from promotion qualification.
+- [x] Complete four-way 8k-step continuation audit. Fixed normalization and
+      smaller updates preserve position better; angular and TAMP gates still
+      fail. Archive completed runs and the corrected base-first action audit.
+- [x] Compare bounded reachable translation coverage against the same control,
+      retaining general base/hand/combined, retarget and disturbance tests plus
+      TAMP. Both 16k pilots complete with no task gain; preserve all negative
+      results. See the [general tracking plan](docs/plans/general_whole_body_tracking.md).
+- [x] Exercise a single-delivery development contract through the real remote
+      agent and public tools: reference completes; source learned actor stops.
+      Diagnose gain variants, expose per-seed IK versus collision failures and
+      add scoped shallow payload-support departure. See the
+      [agent/controller report](docs/experiments/mars_agent_controller_20261026.md).
+- [ ] Complete the same delivery with the learned controller: grasp-to-lift
+      tracking currently trips orientation/base limits. Add bounded loaded
+      transitions to training while retaining ordinary tracking; preserve all
+      original multi-transfer, force/retention/wheel and general regression gates.
+- [x] Add opt-in supported grasp-to-lift resets within carry, preserving 70%
+      tracking and the remaining manipulation mix. Require physical quiet closure,
+      private path/support admission, pose preview and measured collision stops.
+      The first lift subtype uses boxes; other tasks retain mixed objects.
+      See the [curriculum plan](docs/plans/mars_grasp_lift_curriculum.md).
+- [ ] Fix cylinder load-transfer retention: quiet supported grasps still spin/
+      slide during teacher lift; depth changes alone do not fix it. Preserve
+      strict retention limits and failed mixed-shape component cases.
+- [x] Complete both 16,384-step supported-lift PPO pilots and unchanged public
+      delivery/multi-transfer replay. Teacher is 7/8 on identical independent
+      lifts; all three actors remain 0/8 and 0/3 public programs. Preserve the
+      negative comparison and treatment wheel-unloading failures. See the
+      [supported-lift report](docs/experiments/mars_grasp_lift_20261027.md).
+- [x] Audit parking incentives and fixed-case learning. Coupling fixed-base credit
+      to hand tracking improves the independent component mean to 13.48 mm /
+      0.0295 rad with no observed retention/wheel failures, but remains 0/8.
+      Preserve every checkpoint, regression and unchanged strict success gate.
+- [x] Isolate loaded arm/base failures on matched physics: reference wheels leave
+      learned hand error; reference arm leaves learned base stops. Reject naive
+      gain increases (1/8 and 6/8 retention losses). Audit world-origin sensitivity
+      and prior-tick wrapper reward accounting. See the
+      [failure diagnosis](docs/experiments/mars_lift_failure_diagnosis_20261027.md).
+- [x] Align retimed preview, reference completion and terminal hold-age clocks;
+      preserve paused progress, endpoint packet deduplication, new-path reset
+      and existing episode/executor deadlines. Prior fixed-clock metrics remain
+      historical; fresh source-bound qualification is required before training.
+- [x] Implement/test native same-tick hand-conditioned base credit, coarse-to-fine
+      precision and validation-gated later motion regularization. Base-only reward,
+      force/retention costs and hard safety limits stay intact.
+- [x] Add continuous FK/jerk-bounded TAMP references with exact collinear compression,
+      analytic derivative checks and a smooth phase-rate governor; retain legacy
+      comparisons and explicitly reject internal v2 records on the v1 wire.
+- [x] Add physically verified loaded start/mid/late/hold resets within the existing
+      9% supported-lift share, preserving grasp references and logging raw counts.
+- [x] Complete the matched 65,536-step-per-variant reward/curriculum retraining
+      and unchanged public TAMP replay under both reference profiles. See the
+      [jerk-reference report](docs/experiments/mars_jerk_tracking_20261027.md). Keep base-only tracking valid; retain
+      70% general tracking and use source-bound regressions before launching.
+      Completed v20: both learned variants 0/8 new full-start lifts and 0/3 public
+      deliveries under both profiles; no qualification or curriculum promotion.
+      Single-case reward wrappers are diagnostic and have no TAMP admission.
+- [x] Expose final physical wheel-motor slew in training configuration; reject
+      incompatible exact resumes and record dynamics changes on weight transfer.
+- [x] Add source-bound, bounded failure-neighborhood reset sampling with whole-
+      family train/validation splits and unchanged physical admission checks.
+- [x] Generate development failure families and compare the bounded v25 PPO
+      refinement against source/teacher and public deliveries. Result regressed:
+      0/6 validation children, all base stops; 0/3 deliveries under both profiles.
+      Preserve the complete negative result; do not extend v25 unchanged.
+- [ ] Move the demonstrated dynamic retiming improvement into the shared TAMP
+      reference-generation path and validate on new cases/load ranges. A 1.1x
+      duration fixes the teacher's two retention failures: 19/19 admitted on the
+      development set (19/20 including the original support-margin rejection).
+      Keep the original baseline and every failure; do not cap RL at teacher success.
+- [ ] Audit dependence on executor phase labels; compare a tracking actor using
+      only measured state, masked pose/gripper references and explicit retain
+      intent. Keep task-stage decisions and release authority in TAMP/execution.
+- [ ] Qualify matched Cartesian TAMP carry: an explicit privileged pose teacher
+      with admitted checkpoint settings gets past pregrasp but violates retention
+      in all three cases (lift/preplace), despite about2mm hand tracking.
+      Learned finals still fail earlier. See [matched evidence](docs/experiments/mars_matched_reference_20261106.md).
+      The resulting unconfirmed stops expose repeated hold-target rebasing:
+      the fix latches the first arm/grip target and passes three recorded loaded
+      stop resets in0.10/0.25/0.20s, with original thresholds. Fresh full-source
+      gates and an initialized-source compatibility audit precede integrated
+      retesting. Do not claim retention fixed or hardware ready.
+- [ ] Repair full-volume Mars grasp fit: height priorities fail0/30 each over90
+      diagnostic episodes. Open-pad overlap is verified against recorded FK;
+      axial pinch36/38mm also fails0/30 each after exact baseline replays,
+      with one36mm wheel-unloading guard trip (stop confirmed).
+      Three solved-contact probes reproduce original physics exactly; inspect
+      wrench capacity, contact locations, joint-stop compliance and angular
+      creep before calibrating physical parameters. See [fit evidence](docs/experiments/mars_grasp_fit_20261106.md).
+      Keep grasp/placement planning fixes separate from learned tracking; no
+      candidate is qualified by static clearance alone.
+- [x] Complete the orientation-preserving translation262k trial and full post-tests:
+      reject the final (base42/50 full, arm14/88 vs source80/88, coupled4/8).
+      Fresh full0/12,2/12,7/12; learned public-tool transfers0/3, stops confirmed.
+      Preserve original70/94/122 subsets and all failures. See [complete report](docs/experiments/mars_translation_final_20261106.md).
+- [x] Audit actual training returns against physical contract scores before
+      another PPO run. All292 exact replays complete; all67 lost-full arm cases
+      earn lower final shaped return, and the weighted deterministic reward
+      rate declines6.52%. See [audit](docs/experiments/mars_objective_audit_20261106.md).
+- [ ] Complete the matched gain-bias learning-rate control300→1, preserving
+      all data/reward/physical settings and fixed262k final. Require self/parent
+      warmup equality, old-subset/fresh/TAMP acceptance and no automatic promotion.
+      The completed objective audit must not be treated as a PPO-causality proof. Require exact source/final native rollouts under the
+      real terminal contract wrapper, term/discount accounting and all146 cases.
+      Direct hand-to-base readout removal improves arm only29→32/64 and
+      regresses coupled4→3/8: reject it as a standalone fix. Herman remains gated.
+- [ ] Continue the [Mars refinement hill climb](docs/plans/mars_refinement_hillclimb.md):
+      retain the stronger 49/50 base-tracking, 15/16 full-arm source; both quieter
+      mixed refinements reach 50/50 base tracking but regress arm smoothness.
+      Critic-only warmup improves base value calibration but regresses full arm
+      to 5/16; return-unit conditioning plus 40/20/40 coordination training also
+      remains 0/4 coupled. Gain-bias ×1000 reaches 1/4 coupled but regresses to
+      0/16 full arm: reject it. Preserve every negative result. A real public-tool
+      replay stops in pregrasp after 56 policy calls; original arm primitives
+      excite only two joint directions. Train all seven motion rows on the
+      [rank-complete nearby arm expansion](docs/experiments/mars_tamp_arm_coverage_20261106.md),
+      then replay actual admitted pick/place checkpoints. The first seven-motion
+      final reaches 151 public-tool calls inside the hand-position tube but stops
+      on base drift and regresses arm smoothness: reject it. A matched smaller-step
+      control completed in an immutable checkout; procedural near-straight postures and
+      coupled amplitudes pass 1,080 regressions and teacher122/122 (94 legacy
+      physical cases exact). The smaller-step final is also rejected: arm40/40
+      tracking but20/40 full and zero public-tool transfers. The262k scheduled
+      posture final is rejected (base50/50 tracking40/50 full, arm62/64 tracking
+      7/64 full, coupled2/8 full). The matched trainable-context262k final
+      improves arm to63/64 tracking29/64 full and coupled4/8, but regresses
+      from the retained source. Its two fresh audits give4/12 and3/12 full,
+      and actual public-tool transfers remain0/3: reject it. See the
+      [complete context report](docs/experiments/mars_context_20261106.md). The rejected posture final has0/3
+      public-tool transfers and0/12,2/12 full fresh-audit passes; teacher/source
+      have12/12 on each. See [full report](docs/experiments/mars_tamp_postures_20261106.md). Keep both finals
+      and actual public-tool/fresh-pose results; no hardware qualification.
+      Require coupled
+      dynamic-pose, loaded TAMP and real feedback/watchdog/stop acceptance before
+      hardware motion. Primitive success alone does not close this gate.
+- [x] Add a frozen small Mars mastery suite: 13 training / 13 nearby validation
+      cases, paired FK/axle-valid targets, two-second holding and per-case safety/
+      smoothness gates. Teacher passes 26/26; old policy passes 1/26 full mastery.
+      See [setup and results](docs/experiments/mars_tracking_mastery_setup.md).
+- [x] Add signed command/response, per-case reward/action and post-optimizer PPO
+      diagnostics. Merge main harness updates; launch three sequential 262,144-step
+      base-only seeds after fresh controller/harness/teacher gates. Results pending;
+      see [longer-run protocol](docs/experiments/mars_mastery_long_training_20261028.md).
+- [x] Complete the single-seed 262,144-step mastery experiment and matched
+      settling replays. Translation endpoints reach 0.02–0.33 mm, but yaw/quiet/jerk
+      leave full mastery 0/10. Repeats cancelled; do not extend unchanged. See the
+      [completed report](docs/experiments/mars_mastery_long_training_20261028.md).
+- [x] Add/test opt-in physical wheel jerk smoothing and dense fine-yaw/quiet
+      rewards with aligned 2 s bonus. Frozen old actor improves to 6/10 mastery
+      and 10/10 smoothness; teacher26/26, regressions873. One 131k-step turning
+      refinement running (first16k:8/10mastery,10/10smoothness); see [v2 report](docs/experiments/mars_turning_jerk_20261029.md).
+- [x] Complete the filtered refinement: 9/10 full mastery, all10 smoothness,
+      remaining train-left yaw. Audit added filter: 0.65 s small-step rise; frozen
+      actor fails without it. Preserve baseline; see [filter audit](docs/experiments/mars_filter_audit_20261029.md).
+- [x] Complete the unfiltered 64k comparison:5/10mastery,9/10tracking+quiet,
+      median measured linear jerk down82%, raw-command jerk down91%. Fixed filtered
+      smoothness only3/10; retain every failure and comparison. See [completed audit](docs/experiments/mars_filter_audit_20261029.md).
+- [x] Add an explicit 25-pair base primitive/posture training population; preserve
+      canonical ten-case evaluation, thresholds and disjoint validation postures.
+      Expanded teacher admission is required before training. See [protocol](docs/experiments/mars_crossed_posture_20261029.md).
+- [x] Complete the bounded crossed-population refinement and matched expanded
+      replay: canonical5/10→6/10, expanded14/30→16/30; tracking stays9/10 and27/30.
+      Smoothness is mixed; three left-turn tracking failures persist. See [complete results](docs/experiments/mars_crossed_posture_20261029.md).
+- [x] Audit signed yaw error and deployed normalization: correct positive error
+      reaches the actor, but current/preview learned yaw gains become negative in
+      the failed posture. Add opt-in latched turn-divergence protection and a
+      45-case nearby signed-turn replay preset; see [diagnosis](docs/experiments/mars_yaw_sign_20261030.md).
+- [x] Add/test opt-in positive restoring yaw gains and opposing learned damping,
+      with smooth preview/mask-based selection and preserved general outputs.
+      Explicit non-function-preserving transfer; see [experiment](docs/experiments/mars_restoring_yaw_20261030.md).
+- [x] Complete the 64k restoring-yaw experiment: expanded tracking40/50→50/50
+      before learning and retained50/50 after PPO; full23/50→33/50→34/50. Canonical
+      tracking10/10, full6/10; mixed jerk and validation smoothness regressions kept.
+      See [complete results](docs/experiments/mars_restoring_yaw_20261030.md).
+- [ ] Audit peak-jerk failure timing and measured/commanded channels against the
+      integrated smoothness reward before another extension or stage expansion.
+      Record mode-radius changes explicitly in restoring-head weight transfers.
+- [x] Finish the matched gain-bias LR300-to-1 control and all post-tests: full
+      arm14/88→68/88 but below source80/88; public learned transfers remain0/3.
+      Preserve the source. See the [completed report](docs/experiments/mars_bias_control_20261107.md).
+- [x] Reproduce the pregrasp gap with supported open-jaw tracking probes:
+      teacher2/2, both learned actors0/2, while all pass the free-space version.
+      Preserve phase/jaw-input interventions, including the deadline failure.
+- [x] Admit and train the bounded supported-contact curriculum: preserve all146
+      earlier cases, add18 contact cases, reserve12.5% of total control steps
+      for them, and freeze12 new-seed audit cases before optimization. Require
+      fresh regressions/teacher/source/warmup gates; no hardware qualification.
+- [x] Complete the supported-contact final and all post-tests: fresh contact
+      full3/12→9/12, but earlier arm full80/88→63/88 and learned public tools0/3.
+      Retain source; all1,138 regressions and teacher164/164/fresh12/12 pass.
+      See the [complete report](docs/experiments/mars_supported_contact_20261108.md).
+- [ ] Prevent base jerk regression during arm learning and close the actual
+      pregrasp transfer gap before another broad training extension. Keep all
+      earlier tasks, supported-contact audits and full public-tool failures visible.
+- [x] Replay all114 arm/coupled cases exactly and isolate wheel readout/shared
+      context effects: restoring old wheel feedback helps free-space smoothness
+      but loses contact/coupled passes. Reject both in-memory interventions.
+- [x] Audit actual jaw-input clipping and hidden activation saturation against
+      six exact supported-training replays. Reject static jaw rescaling alone.
+      See [feedback/unit diagnosis](docs/experiments/mars_feedback_units_20261113.md).
+- [x] Test opt-in jaw-unit curriculum after exact critic warmup, with physical
+      std floor0.087275rad, a32768-step geometric ramp and the unchanged262k final.
+      Require fresh regression/teacher/source gates and all existing post-tests.
+      Fixed 262k and post-tests complete: earlier arm 53/88, supported 4/18,
+      learned full public tools 0/3. Reject final and retain source.
+- [x] Implement the [v2 general/TAMP training prototype](docs/plans/mars_whole_body_v2.md):
+      50/50 physical ticks, one full-history actor, three independent critics,
+      training-only privileged state and retimed S-curve velocity references.
+      Keep the diagnosed object-motion challenge as a failure, not a pass.
+- [x] Complete fresh v2 full regressions/preflight, then the bounded8k pilot
+      and paired source/general/TAMP audit. Pregrasp is not full pick/place.
+      All 1,170 regressions pass, but final full 2/164 and pregrasp 0/6.
+      Preserve repaired harness failures and [complete report](docs/experiments/mars_whole_body_validation_20261113.md).
+- [x] Audit per-critic advantage scaling and implement the bounded
+      [normalization diagnostic](docs/plans/mars_whole_body_advantage_pair.md).
+      Full source-bound regressions 1,187/1,187; original teacher admission
+      retained. Historical control completes 4,096 decisions; shared candidate
+      stops before its first update on JSON-list/Python-tuple settings comparison.
+      No paired result existed at that snapshot; completed recovery is below.
+- [x] Repair and test the serialized/in-memory settings comparison (`29a9fcec`),
+      including an actual candidate call against the saved control record.
+      Preserve that incomplete attempt separately from the completed recovery.
+- [x] Complete the declared normalization comparison with an explicit source
+      bridge and unchanged initial/first-rollout hashes. Fresh regressions
+      1,249/1,249; shared final 2/12 full versus per-head 0/12 and initial 2/12.
+      Completed arm endpoints within 3mm/0.02rad improve 1/10 to 5/10, but
+      quiet/base/jerk remain unresolved. Preserve all failures and the
+      [completed report](docs/experiments/mars_c1_normalization_recovery_20261115.md).
+- [ ] Improve actor-active terminal settling and base authority while retaining
+      the C1 hand-following gains. Distinguish endpoint accuracy from the full
+      quiet/force/jerk contract; do not silently extend the completed C1 budget.
+- [x] Correct bundled TAMP reward timing: discount each physical tick, including
+      terminal credit, before `gamma ** ticks` continuation; preserve raw rewards
+      for evaluation and test bundled-versus-expanded return equivalence.
+      All 61 focused tests pass, including the native oracle terminal hold.
+      See [timing correction](docs/experiments/pr227_tick_reward_timing_20261114.md).
+- [x] Evaluate the opt-in frozen-base/shared-context arm-adaptation pilot from
+      [PR #232](https://github.com/cpaxton/home_robot_v3/pull/232). The new 32,768-step
+      pair completes after C1: baseline arm full 59→57/64; velocity 60→61/64;
+      protected serialized functions and every base-only metric are preserved.
+      Record the [complete result](docs/experiments/mars_frozen_base_arm_20261115.md)
+      and earlier zero-step queue failure separately. One seed, coupled 2/8;
+      keep the retained production source and no automatic extra training.
+- [ ] Fix cold-start exploration/completion learning and audit per-critic
+      advantages before scaling v2. Keep retained-source comparisons and all
+      measured safety/precision gates; add the missing mask/observability strata.
+- [ ] Add v2 grasp→lift/loaded/placement primitives and actor-active terminal
+      stability audits only after the first pilot's behavior is understood.
+- [ ] Master the five base cases first, then add arm, coupled and loaded cases
+      while retaining earlier rehearsal. Keep stage IDs out of actor input and
+      require both complete splits before restoring the broad distribution.
+- [ ] Test base-error feature conditioning and separate arm/base exploration on
+      matched recovery/trajectory cases, with function-preserving initialization
+      where possible; report safety and generalization alongside tracking error.
+- [ ] Extend the TAMP trajectory contract with an XY base region/optional yaw and
+      untimed geometric paths, with smooth retiming and load-aware validation in
+      the planning/execution layer. Keep task decisions out of the controller.
+- [ ] Test relative-frame inputs or consistent world-coordinate augmentation;
+      preserve public pose/mask semantics. Add explicit small base-heading recovery
+      resets, derivative actor inputs and optional velocity/acceleration tracking
+      ablations after reference rollout gates. Require multi-case settling before
+      wider randomization, base/transport retiming or hardware admission.
+- [ ] Pass moving-goal orientation/base safety, loaded and full public TAMP
+      gates. The final 65k-step refinement reaches nearby positions within 0.42 mm,
+      but orientation still misses the strict 0.02 rad contract. Two wrist probes
+      avoid their earlier base abort; paired no-regression still fails. See the
+      [hold/Cartesian report](docs/experiments/mars_hold_cartesian_20261025.md).
+
+- [x] Add opt-in tracking-majority retention training: 70% tracking, bounded
+      grasp/carry/place/disturbance shares, retention intent, closed-empty
+      counterexamples, mass/COM randomization and separate advisory object-held
+      predictor. See [training plan](docs/plans/retention_training.md).
+- [x] Run 10,240 additional PPO smoke steps with offline W&B and a new-seed
+      paired occupancy diagnostic; preserve the failed arm/action heads. The
+      gripper-local head passed six closed-empty and six loaded attempts, but
+      full task success has not improved or qualified. See the
+      [experiment report](docs/experiments/mars_retention_training_20261024.md).
+- [ ] Qualify occupancy prediction on independent objects/grasps with calibration,
+      held recall and empty-hand false-positive rates; confirm loaded training
+      improves retention without degrading tracking, smoothness or wheel support.
+      A short training diagnostic does not close these performance gates.
+
+- [x] Isolate placement rearm bias regression with matched frozen-case ablations;
+      add explicit free-space compensation authorization and regression tests.
+      Full source-bound requalification remains required below.
+- [x] Add simulator task-pose command-protocol prototype, GT TAMP component replay,
+      measured-Jacobian teacher, and disabled-by-default guarded driver interface.
+      These are not public-tool, learned-policy, or hardware qualification.
+
+- [x] Restore continuous pick/place after explicit stage rearming: v5 at
       `42aa2f30` passed 27/30 versus v4 30/30. Diagnose the 20 g seed 1860001
       retention loss and 50 g seeds 1860007/1860010 tracking timeouts; preserve
-      all cases and thresholds, then repeat source-bound qualification before PPO.
+      all cases and thresholds. Immutable `b181db61` requalification passed
+      298/300 carry and 30/30 continuous pick/place, with 367 fresh regression
+      tests and a verified combined readiness receipt. The canonical carry-training
+      supervisor remains stopped;
+      this evidence does not qualify subsequent public-tool/control changes.
+
+- [x] Add explicit Mars simulator support to public TAMP discovery/planning/
+      execution, a frozen 30-case two-support catalog, independently measured
+      task scoring, per-stage failure reports and trajectory visualizations.
+      Implementation is not task qualification: moving-base retention remains
+      under investigation and all failures count toward the acceptance gate.
+- [x] Add the real agent prompt/parser/dispatcher harness with three local
+      agent seeds per case and an oracle-readiness prerequisite. Missing normal
+      observations stop before model calls; GT never substitutes for observations.
+- [ ] Pass all 30 public-tool two-support transfers without changing the frozen
+      cases or retention/force/wheel limits; diagnose loaded turning, then
+      support-confirmed release and post-placement stability.
+- [x] Complete and archive the full public-tool v2/v3 reports: 4/30 at
+      `a17a5734`, then 16/30 at `9dee06fc` (20 g 10/10; 50 g 6/10; 100 g 0/10).
+      All fixtures admitted; the public gate remains false. That snapshot's source-bound
+      regression receipt covers 588 passing tests. See the
+      [experiment report](docs/experiments/mars_public_tamp_20261023.md).
+- [x] Add free-base hand-only pose tracking to the teacher and actual nearby FK
+      witness tests for both Mars and Stretch. These free-space checks do not
+      qualify loaded tasks, learned checkpoints or real hardware.
+- [x] Complete one frozen public-tool 20 g transfer with actual base motion and
+      independently measured support/release/stability. This selected positive
+      case does not close the full gate. Preserve the earlier complete 0/30
+      development sweep and failed fixture-binding report alongside new results.
+- [ ] Improve public-task execution time after retention and wheel gates pass;
+      the first full successful diagnostic took about 100 simulated seconds.
+      Keep geometric retiming and fixed-deadline tracking scores distinct.
+- [ ] Install an observed-scene provider and run the normal-observation agent
+      acceptance trials after the public oracle gate passes. No real-model
+      success is established by parser/dispatcher tests.
 
 - [ ] Integrate the qualified controller with the robot command interface: masked
       base SE(2), hand SE(3), and gripper targets; trajectory updates, measured versus
@@ -106,6 +711,17 @@ Strike through or move to a PR when done.
       interaction under an explicitly authorized hardware procedure. Compare measured
       trajectories and loads against simulation; do not infer hardware safety from
       simulator success or start motion from this checklist alone.
+- [x] Passive Herman connection check (2026-10-23): SSH responds and ROS Humble
+      is installed. The default ROS graph showed only metadata topics; actual
+      driver domain, modes, watchdog and stop behavior remain unverified. No
+      deployment, service start, motion or contact commands were sent.
+- [x] Audit upstream velocity units and failed-read behavior; prepare and test
+      a patch on temporary copies without changing upstream or Herman. See the
+      [hardware feedback audit](docs/experiments/herman_feedback_audit_20261023.md).
+- [ ] Review/apply the upstream feedback patch, build the ROS package, propagate
+      invalid reads/source ages and actual odometry twist through the bridge,
+      and verify installed units/signs before implementing a physical velocity
+      driver. Calibrate typed current/load proxies before treating them as forces.
 
 ## Proprioceptive contact learning (2026-10-23)
 

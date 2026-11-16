@@ -1,0 +1,19 @@
+{
+  "initial": {
+    "cases": 12,
+    "outcomes_and_all_metrics_equal": true,
+    "original_report_sha256": "ae621f201f31d787fdd237f9384f04bf24848c92016ce252853b3e50bfcc191c",
+    "current_report_sha256": "9f19848cf41d9fe0df058126b09e697470efd26be2c28ecc758fa587bb9cde3d"
+  },
+  "final": {
+    "cases": 12,
+    "outcomes_and_all_metrics_equal": true,
+    "original_report_sha256": "03e5eb70708f237547d4e5c95756549aa9d6c820d5c05ddf0978cd6d5e6e78e3",
+    "current_report_sha256": "1dfb8521071d0de469ca76a6b611934093638dff5d81f91fc4572a52ea1d13cd"
+  },
+  "first_rollout_numeric_hashes_equal": true,
+  "final_actor_weights_sha256_equal": true,
+  "original_implementation_revision": "afeef3d0b2c24492f492c00efceddde21d420ce5",
+  "current_implementation_revision": "3ac722e1096dc901d68192b803dc9596471c46c7",
+  "scope": "read-only post-training audit; both current runs were freshly trained, no reused control or admission bridge"
+}

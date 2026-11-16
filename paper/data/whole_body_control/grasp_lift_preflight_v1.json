@@ -1,0 +1,410 @@
+{
+  "scope": "Supported grasp/lift preflight; every mixed-shape, depth and box outcome retained; no qualification",
+  "reports": {
+    "mixed_before_quiet": {
+      "cases": 8,
+      "admitted": 8,
+      "final_success": 0,
+      "ever_settled": 1,
+      "outcomes": [
+        {
+          "seed": 3101000,
+          "initialization_failed": false,
+          "reason": null,
+          "code": "retention_lost",
+          "first_settle_s": null,
+          "retention_lost": true,
+          "wheel_lift": false
+        },
+        {
+          "seed": 3101001,
+          "initialization_failed": false,
+          "reason": null,
+          "code": "retention_lost",
+          "first_settle_s": null,
+          "retention_lost": true,
+          "wheel_lift": false
+        },
+        {
+          "seed": 3101002,
+          "initialization_failed": false,
+          "reason": null,
+          "code": "retention_lost",
+          "first_settle_s": null,
+          "retention_lost": true,
+          "wheel_lift": false
+        },
+        {
+          "seed": 3101003,
+          "initialization_failed": false,
+          "reason": null,
+          "code": "retention_lost",
+          "first_settle_s": null,
+          "retention_lost": true,
+          "wheel_lift": false
+        },
+        {
+          "seed": 3101004,
+          "initialization_failed": false,
+          "reason": null,
+          "code": "retention_lost",
+          "first_settle_s": null,
+          "retention_lost": true,
+          "wheel_lift": false
+        },
+        {
+          "seed": 3101005,
+          "initialization_failed": false,
+          "reason": null,
+          "code": "retention_lost",
+          "first_settle_s": null,
+          "retention_lost": true,
+          "wheel_lift": false
+        },
+        {
+          "seed": 3101006,
+          "initialization_failed": false,
+          "reason": null,
+          "code": "retention_lost",
+          "first_settle_s": null,
+          "retention_lost": true,
+          "wheel_lift": false
+        },
+        {
+          "seed": 3101007,
+          "initialization_failed": false,
+          "reason": null,
+          "code": "tracking_timeout",
+          "first_settle_s": 6.59999999999954,
+          "retention_lost": false,
+          "wheel_lift": false
+        }
+      ]
+    },
+    "mixed_quiet": {
+      "cases": 8,
+      "admitted": 8,
+      "final_success": 0,
+      "ever_settled": 1,
+      "outcomes": [
+        {
+          "seed": 3101000,
+          "initialization_failed": false,
+          "reason": null,
+          "code": "retention_lost",
+          "first_settle_s": null,
+          "retention_lost": true,
+          "wheel_lift": false
+        },
+        {
+          "seed": 3101001,
+          "initialization_failed": false,
+          "reason": null,
+          "code": "retention_lost",
+          "first_settle_s": null,
+          "retention_lost": true,
+          "wheel_lift": false
+        },
+        {
+          "seed": 3101002,
+          "initialization_failed": false,
+          "reason": null,
+          "code": "retention_lost",
+          "first_settle_s": null,
+          "retention_lost": true,
+          "wheel_lift": false
+        },
+        {
+          "seed": 3101003,
+          "initialization_failed": false,
+          "reason": null,
+          "code": "retention_lost",
+          "first_settle_s": null,
+          "retention_lost": true,
+          "wheel_lift": false
+        },
+        {
+          "seed": 3101004,
+          "initialization_failed": false,
+          "reason": null,
+          "code": "retention_lost",
+          "first_settle_s": null,
+          "retention_lost": true,
+          "wheel_lift": false
+        },
+        {
+          "seed": 3101005,
+          "initialization_failed": false,
+          "reason": null,
+          "code": "retention_lost",
+          "first_settle_s": null,
+          "retention_lost": true,
+          "wheel_lift": false
+        },
+        {
+          "seed": 3101006,
+          "initialization_failed": false,
+          "reason": null,
+          "code": "retention_lost",
+          "first_settle_s": null,
+          "retention_lost": true,
+          "wheel_lift": false
+        },
+        {
+          "seed": 3101007,
+          "initialization_failed": false,
+          "reason": null,
+          "code": "tracking_timeout",
+          "first_settle_s": 6.59999999999954,
+          "retention_lost": false,
+          "wheel_lift": false
+        }
+      ]
+    },
+    "depth20mm": {
+      "cases": 8,
+      "admitted": 7,
+      "final_success": 0,
+      "ever_settled": 0,
+      "outcomes": [
+        {
+          "seed": 3101000,
+          "initialization_failed": false,
+          "reason": null,
+          "code": "grasp_lift_collision",
+          "first_settle_s": null,
+          "retention_lost": false,
+          "wheel_lift": false
+        },
+        {
+          "seed": 3101001,
+          "initialization_failed": false,
+          "reason": null,
+          "code": "grasp_lift_collision",
+          "first_settle_s": null,
+          "retention_lost": false,
+          "wheel_lift": false
+        },
+        {
+          "seed": 3101002,
+          "initialization_failed": false,
+          "reason": null,
+          "code": "grasp_lift_collision",
+          "first_settle_s": null,
+          "retention_lost": false,
+          "wheel_lift": false
+        },
+        {
+          "seed": 3101003,
+          "initialization_failed": false,
+          "reason": null,
+          "code": "grasp_lift_collision",
+          "first_settle_s": null,
+          "retention_lost": false,
+          "wheel_lift": false
+        },
+        {
+          "seed": 3101004,
+          "initialization_failed": false,
+          "reason": null,
+          "code": "retention_lost",
+          "first_settle_s": null,
+          "retention_lost": true,
+          "wheel_lift": false
+        },
+        {
+          "seed": 3101005,
+          "initialization_failed": false,
+          "reason": null,
+          "code": "grasp_lift_collision",
+          "first_settle_s": null,
+          "retention_lost": false,
+          "wheel_lift": false
+        },
+        {
+          "seed": 3101006,
+          "initialization_failed": true,
+          "reason": null,
+          "code": null,
+          "first_settle_s": null,
+          "retention_lost": false,
+          "wheel_lift": false
+        },
+        {
+          "seed": 3101007,
+          "initialization_failed": false,
+          "reason": null,
+          "code": "grasp_lift_collision",
+          "first_settle_s": null,
+          "retention_lost": false,
+          "wheel_lift": false
+        }
+      ]
+    },
+    "depth40mm": {
+      "cases": 8,
+      "admitted": 8,
+      "final_success": 1,
+      "ever_settled": 1,
+      "outcomes": [
+        {
+          "seed": 3101000,
+          "initialization_failed": false,
+          "reason": null,
+          "code": "retention_lost",
+          "first_settle_s": null,
+          "retention_lost": true,
+          "wheel_lift": false
+        },
+        {
+          "seed": 3101001,
+          "initialization_failed": false,
+          "reason": null,
+          "code": "retention_lost",
+          "first_settle_s": null,
+          "retention_lost": true,
+          "wheel_lift": false
+        },
+        {
+          "seed": 3101002,
+          "initialization_failed": false,
+          "reason": null,
+          "code": "retention_lost",
+          "first_settle_s": null,
+          "retention_lost": true,
+          "wheel_lift": false
+        },
+        {
+          "seed": 3101003,
+          "initialization_failed": false,
+          "reason": null,
+          "code": "retention_lost",
+          "first_settle_s": null,
+          "retention_lost": true,
+          "wheel_lift": false
+        },
+        {
+          "seed": 3101004,
+          "initialization_failed": false,
+          "reason": null,
+          "code": "retention_lost",
+          "first_settle_s": null,
+          "retention_lost": true,
+          "wheel_lift": false
+        },
+        {
+          "seed": 3101005,
+          "initialization_failed": false,
+          "reason": null,
+          "code": "retention_lost",
+          "first_settle_s": null,
+          "retention_lost": true,
+          "wheel_lift": false
+        },
+        {
+          "seed": 3101006,
+          "initialization_failed": false,
+          "reason": null,
+          "code": "retention_lost",
+          "first_settle_s": null,
+          "retention_lost": true,
+          "wheel_lift": false
+        },
+        {
+          "seed": 3101007,
+          "initialization_failed": false,
+          "reason": null,
+          "code": "ok",
+          "first_settle_s": 5.999999999999428,
+          "retention_lost": false,
+          "wheel_lift": false
+        }
+      ]
+    },
+    "box_quiet": {
+      "cases": 8,
+      "admitted": 8,
+      "final_success": 5,
+      "ever_settled": 7,
+      "outcomes": [
+        {
+          "seed": 3101000,
+          "initialization_failed": false,
+          "reason": null,
+          "code": "ok",
+          "first_settle_s": 7.0999999999997065,
+          "retention_lost": false,
+          "wheel_lift": false
+        },
+        {
+          "seed": 3101001,
+          "initialization_failed": false,
+          "reason": null,
+          "code": "tracking_timeout",
+          "first_settle_s": 8.70000000000024,
+          "retention_lost": false,
+          "wheel_lift": false
+        },
+        {
+          "seed": 3101002,
+          "initialization_failed": false,
+          "reason": null,
+          "code": "ok",
+          "first_settle_s": 8.300000000000107,
+          "retention_lost": false,
+          "wheel_lift": false
+        },
+        {
+          "seed": 3101003,
+          "initialization_failed": false,
+          "reason": null,
+          "code": "ok",
+          "first_settle_s": 7.34999999999979,
+          "retention_lost": false,
+          "wheel_lift": false
+        },
+        {
+          "seed": 3101004,
+          "initialization_failed": false,
+          "reason": null,
+          "code": "ok",
+          "first_settle_s": 8.650000000000224,
+          "retention_lost": false,
+          "wheel_lift": false
+        },
+        {
+          "seed": 3101005,
+          "initialization_failed": false,
+          "reason": null,
+          "code": "retention_lost",
+          "first_settle_s": null,
+          "retention_lost": true,
+          "wheel_lift": false
+        },
+        {
+          "seed": 3101006,
+          "initialization_failed": false,
+          "reason": null,
+          "code": "ok",
+          "first_settle_s": 8.600000000000207,
+          "retention_lost": false,
+          "wheel_lift": false
+        },
+        {
+          "seed": 3101007,
+          "initialization_failed": false,
+          "reason": null,
+          "code": "tracking_timeout",
+          "first_settle_s": 6.59999999999954,
+          "retention_lost": false,
+          "wheel_lift": false
+        }
+      ]
+    }
+  },
+  "smoke_ppo_steps": 512,
+  "smoke_completed": true,
+  "safety_promoted": false,
+  "full_report_archive": "paper/data/whole_body_control/grasp_lift_preflight_v1.json.gz",
+  "uncompressed_sha256": "2c4c7a43705901fe942d314ad87adcb922bbe0959c386ca14944416f403c67dd"
+}

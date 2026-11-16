@@ -1,0 +1,27 @@
+{
+  "format": "mars-current-feedback-regressions-v1",
+  "producer_revision": "77714a30d6b6079095a24f0026b9734e08ae1963",
+  "verified_against_current_runtime_and_test_sources": true,
+  "tests": 1284,
+  "returncode": 0,
+  "elapsed_wall_seconds": 973.8857047557831,
+  "receipt_sha256": "6580f960a208f6ad497cef623499095d05c4dfd99f33dd7abcaeb3f31560ff94",
+  "xml_sha256": "21f075a1359238a4395ba99748f838c2ab763e5ae47c09b183e5fbfe798f007c",
+  "source_state_sha256": "795d437b87f3b3106ad1d337291a0daaf3a25cfa06111a9d377d7838e626b99c",
+  "targets": [
+    "src/test/rl",
+    "src/test/core",
+    "src/test/controller/task/tamp",
+    "src/test/eval/test_mars_tamp_agent_driver.py",
+    "src/test/eval/test_mars_tamp_control.py",
+    "src/test/eval/test_mars_tamp_sequences.py",
+    "src/test/robots/test_mars_motion_boundary.py",
+    "src/test/robots/test_mars_control_session.py",
+    "src/test/robots/test_head_capability.py",
+    "src/test/scripts/test_train_mars_carry_when_ready.py",
+    "src/test/scripts/test_trace_mars_carry.py",
+    "src/test/scripts/test_control_artifacts.py",
+    "src/test/scripts/test_pack_mars_training_snapshot.py"
+  ],
+  "teacher_admission_or_hardware_qualification": false
+}

@@ -1,0 +1,22 @@
+{
+  "complete": true,
+  "implementation_revision": "f94f96c2",
+  "teacher_cases": 122,
+  "teacher_full": 122,
+  "previous_native_cases_exact": 122,
+  "hardware_used": false,
+  "safety_promoted": false,
+  "regressions": 1085,
+  "artifacts": [
+    {
+      "path": "logs/eval/mars-context-v1-teacher/report.json.gz",
+      "sha256": "84378caa4055f4c6cccf3c0b62535a23df3416dc80fae775a2024e767010682f",
+      "bytes": 16416749
+    },
+    {
+      "path": "logs/recovery/hand-accuracy-v1/context-full.receipt.json",
+      "sha256": "37110c852f2c546365b0674a4fa8aab7ad9ece7ddd504488a22596ef9fcad5cd",
+      "bytes": 197920
+    }
+  ]
+}
