@@ -93,8 +93,14 @@ class NativeTableAdapter:
 
     def _failure(self, tool, reason, *, completed=(), phase=None, started=False, identity=None):
         logging.getLogger(__name__).warning("Native TAMP %s failed at %s: %s", tool, phase, reason)
+        # Preserve actionable semantic evidence without exposing arbitrary
+        # planner strings or simulator body identities to the agent.
+        evidence = ({'motion_rejection': 'static_support_margin'}
+                    if {'arm_static_support_margin', 'arm_path_static_support_margin'} & set(str(reason).split(':'))
+                    else {})
         return response(tool, code=failure_code(reason), status='partial' if completed or started else 'error',
                         data=self._data(**(identity or {}), completed_ops=list(completed), failed_stage=phase, execution_started=bool(started or completed),
+                            **evidence,
                             **({'planning_rejections': dict(self.planning_rejections),
                                 'planning_ik_calls': self.planning_ik_calls, 'max_ik_calls': self.max_planning_ik_calls}
                                if tool == 'plan_pick_place' else {})),

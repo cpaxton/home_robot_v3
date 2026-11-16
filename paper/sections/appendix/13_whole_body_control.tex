@@ -658,5 +658,83 @@ alignment remains a subsequent audit, not a relaxed gate. All outcomes are in
 Synthetic constant-acceleration reversals show that unsigned-speed derivatives
 can spike despite zero vector jerk. Saved candidate signed-displacement peaks
 are nevertheless larger, so this audit does not remove its failures or revise
-qualification. Sampling/reset alignment with the instantaneous-velocity reward
-remains to be measured.
+qualification. This saved-pose audit could not measure sampling/reset alignment
+with the instantaneous-velocity reward.
+
+\paragraph{Native wheel-feedback timing diagnosis.}
+A subsequent matched native replay records the reward and acceptance channels
+on the same states, preserving all 24 original final-actor trajectories exactly.
+Stationary zero-head and analytic-teacher anchors show a real approximately
+50\,Hz chassis/wheel-command oscillation at the 2\,ms physics cadence, despite
+zero requested base motion. The inner loop reads a spatial-velocity cache from
+the preceding solve. Using current generalized velocity at the same chassis
+center of mass reduces teacher hold speed RMS from 1.583 to 0.000217\,mm/s
+after the first second. Disabling proportional feedback also quiets the hold
+but fails the forward-motion smoothness check; the current-velocity correction
+retains that pass without adding an output filter.
+
+With the same learned candidate weights, references and acceptance budgets,
+the opt-in correction increases full passes from 2/12 to 8/12 and full arm
+passes from 1/10 to 7/10. All ten arm cases pass smoothness, versus one before;
+arm tracking/settling remains 7/10. Median hand position error is 0.174\,mm;
+both roll orientations, full supported-arm orientation and forward-base
+tracking remain unresolved. Full-supported contact load increases from 0.757
+to 0.970\,N, so improved smoothness is not a claim of uniformly lower loads.
+There are no PPO updates, policy promotion or hardware trials. The corrected
+teacher probe, learned comparison, raw-archive identities and an excluded
+first probe with a lifecycle error are retained in
+\texttt{mars\_aligned\_jerk\_measurements\_v1/results.json} and its report.
+
+A subsequent actual-reset validation enables current-velocity feedback before
+initialization. Both feedback variants confirm all twelve measured stops across
+nominal/reverse/yaw, finite end-effector pushes and mid-motion cancellation,
+with maximum stopping time 0.15 simulated seconds. Fresh regressions pass
+1,299/1,299. On the shared twelve cases, retained legacy achieves 12/12 full
+passes versus GRU candidate 8/12; its broader result is 151/164, including
+49/50 base, 100/106 arm and 2/8 coupled. Current and archived teacher-relative
+budgets are reported separately. Actual public-tool pregrasp success remains
+0/6 for retained legacy versus teacher 5/6. A further twenty-four episodes with
+extra initialization settling, the frozen velocity-feature final and GRU
+candidate produce no learned pregrasp success. The teacher's difficult case
+becomes a planning rejection after settling. These results favor the retained
+general baseline and motivate execution/distribution diagnosis before further
+optimization; they do not qualify manipulation or hardware. Complete cases,
+budget identities and stopped/rejected outcomes are in
+\texttt{mars\_current\_feedback\_validation\_v2/}.
+
+Four subsequent fixed diagnostic episodes verify teacher recording parity and
+exact offline replay of all 221 learned decisions on one actual pregrasp.
+Teacher and retained actor finish at 1.11 versus 3.01\,mm hand error and
+0.00108 versus 0.02966\,rad orientation error; only the teacher completes the
+contract. Peak normalized arm commands are 0.2383 versus 0.02846. Grip feedback
+leaves the actor's narrow normalization range after tracking begins to lag;
+offline sensitivity does not establish an executed improvement. The separate
+teacher failure is measured-state lift replanning rejected by the static
+support-margin check. All four stops confirm with no scored safety flag.
+These results motivate mixed general/pregrasp training and measured-state
+planner admission, not hidden feedback replacement or a relaxed support check.
+Compact provenance and phase metrics are in
+\texttt{mars\_tamp\_input\_diagnostic\_v1/results.json}. Later source-bound
+regressions cover the instrumentation; policy qualification remains separate.
+
+Twelve further development attempts distinguish task regions from verified
+grasp/lift execution. A 4\,mm/0.04\,rad pregrasp arrival region advances the
+retained actor to the next stage, but does not repair grasp accuracy. A separate
+grasp-region trial exposes a hold-handoff deadlock: slight drift leaves the
+arrival region while the actor remains disabled. Bounded, nonfault tracking
+reacquisition preserves trajectory/history/grip authority and the original
+deadline. One reacquisition lets the unchanged actor complete grasp pose and
+executor closure, after which lift planning rejects insufficient support reserve.
+The teacher control's physical trace is unchanged by the fix. The nominal lift
+witness is only 4.1\,$\mu$m above the 5\,mm static support cutoff. An explicit
+maximum-margin reset raises sampled margin to 21.1\,mm; an independently tested
+physical 20\,mm base preparation with fixed world hand also lets the teacher
+pass the prior support bottleneck. Both still fail loaded retention. The actor
+advances only 2.15\,mm on that reachable coupled preparation. All twelve stops
+confirm with no wheel-lift flag, but no full task succeeds; reused seeds and
+different contracts are not pooled into a reliability claim. These results
+motivate actual grasp-pose and fixed-hand/base training, support-reserved
+planning and grasp-wrench validation, with unchanged physical limits. Complete
+provenance and stage metrics are in \texttt{mars\_task\_arrival\_v1/results.json}.
+The corresponding runtime passes 1,330/1,330 fresh source-bound software
+regressions; those checks do not establish successful loaded control.

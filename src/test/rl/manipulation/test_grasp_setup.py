@@ -48,3 +48,33 @@ def test_loaded_setup_changes_base_but_preserves_world_hand_and_live_state():
         assert env.data.time == time
     finally:
         env.close()
+
+
+@pytest.mark.sim
+def test_maximum_margin_option_does_not_prefer_a_marginal_nominal_stance():
+    from emet.eval.mars_tamp_control import fixture as public_fixture
+    from emet.rl.manipulation.whole_body_training import load_development
+
+    development, _ = load_development()
+    env, admission = public_fixture(development["train_cases"][1], wheel_feedback_current_velocity=True)
+    robust_env = None
+    try:
+        assert admission["accepted"]
+        robust_env, robust_admission = public_fixture(
+            development["train_cases"][1], wheel_feedback_current_velocity=True, grasp_setup_prefer_nominal=False
+        )
+        assert robust_admission["accepted"]
+        # Compare selection before the procedural pregrasp approach and settling;
+        # asking plan_setup() to lift again afterward is a different reach task.
+        nominal = env.randomization["grasp_setup"]
+        robust = robust_env.randomization["grasp_setup"]
+        assert nominal["selection_reason"] == "nominal_path_margin"
+        assert robust["selection_reason"] == "maximum_margin"
+        assert robust["minimum_sampled_margin_m"] > nominal["minimum_sampled_margin_m"]
+        np.testing.assert_allclose(robust["hand"], nominal["hand"], atol=1e-6)
+        assert robust_env.config.grasp_setup_prefer_nominal is False
+        assert env.config.grasp_setup_prefer_nominal is True
+    finally:
+        env.close()
+        if robust_env is not None:
+            robust_env.close()

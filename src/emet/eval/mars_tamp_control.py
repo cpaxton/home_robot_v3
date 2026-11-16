@@ -68,7 +68,7 @@ def sources():
     return result
 
 
-def fixture(case):
+def fixture(case, *, wheel_feedback_current_velocity=False, grasp_setup_prefer_nominal=True):
     env = ManipulationEnv(
         ManipulationConfig(
             robot="innate_mars",
@@ -81,11 +81,13 @@ def fixture(case):
             grasp_lift_height=0.06,
             support_half_width=0.04,
             balanced_grasp_setup=True,
+            grasp_setup_prefer_nominal=grasp_setup_prefer_nominal,
             contact_cone="elliptic",
             contact_impratio=3,
             base_xy_tolerance=0.005,
             hand_position_tolerance=0.005,
             hand_orientation_tolerance=0.05,
+            wheel_feedback_current_velocity=wheel_feedback_current_velocity,
         )
     )
     try:

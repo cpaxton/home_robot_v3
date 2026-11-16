@@ -179,12 +179,14 @@ def failure_code(message: str) -> str:
             "invalid_physics": "invalid_physics",
             "transport_tracking_timeout": "tracking_timeout",
             "cartesian_tracking_timeout": "tracking_timeout",
+            "cartesian_hold_unsettled": "tracking_timeout",
             "cartesian_path_tracking_envelope": "tracking_timeout",
             "cartesian_witness_goal_mismatch": "invalid_plan",
             "cartesian_schedule_too_long": "invalid_plan",
             "invalid_cartesian_witness": "invalid_plan",
             "arm_joint_margin": "joint_bounds",
             "arm_static_support_margin": "planning_failed",
+            "arm_path_static_support_margin": "planning_failed",
         }
         if part in control_codes:
             return control_codes[part]

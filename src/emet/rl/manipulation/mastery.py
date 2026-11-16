@@ -735,7 +735,8 @@ def summarize(report):
     }
 
 
-def evaluate_suite(suite, *, stages=STAGES, policy=None, teacher_report=None, population="canonical"):
+def evaluate_suite(suite, *, stages=STAGES, policy=None, teacher_report=None, population="canonical", observer=None):
+    """Evaluate unchanged contracts; optional observers only inspect copied state."""
     from emet.rl.manipulation.command_runtime import task_pose_teacher_action
     from emet.rl.manipulation.hand_audit import hand_tracking_diagnostics
 
@@ -773,9 +774,15 @@ def evaluate_suite(suite, *, stages=STAGES, policy=None, teacher_report=None, po
             }
             report["cases"].append(row)
             if row["admitted"]:
+                if observer is not None:
+                    observer.reset(env, case)
                 for _ in range(round(env.config.horizon / env.profile.dt) + 1):
                     action = task_pose_teacher_action(env.control) if policy is None else policy(obs)
+                    if observer is not None:
+                        observer.before_step(env, action)
                     obs, reward, done, truncated, info = env.step(action)
+                    if observer is not None:
+                        observer.after_step(env, action, info, terminated=done, truncated=truncated)
                     row["trace"].append(
                         {
                             "time": info["time"],
@@ -841,6 +848,8 @@ def evaluate_suite(suite, *, stages=STAGES, policy=None, teacher_report=None, po
                 final_info=info,
             )
             print("MASTERY", case["id"], row["code"], "pass" if row["mastered"] else "fail", flush=True)
+            if observer is not None and hasattr(observer, "case_complete"):
+                observer.case_complete(report, row)
     finally:
         env.close()
     if report["source_hashes"] != source_hashes():
@@ -1035,7 +1044,9 @@ def train(args, suite):
         or suite.get("training_policy") != "executor_mask_v1"
         or getattr(args, "initialize_arm_from", None)
     ):
-        raise ValueError("arm adaptation requires arm-only stages, source bundle, frozen normalization and executor masks")
+        raise ValueError(
+            "arm adaptation requires arm-only stages, source bundle, frozen normalization and executor masks"
+        )
     teacher = read_report(args.preflight)
     validate_preflight(teacher, suite, args.stages)
     out = Path(args.output)
@@ -1366,7 +1377,8 @@ def main():
     parser.add_argument("--arm-evidence", type=Path, help="checksummed component evidence required for transfer")
     parser.add_argument("--freeze-normalization", action="store_true")
     parser.add_argument(
-        "--arm-adaptation-only", action="store_true",
+        "--arm-adaptation-only",
+        action="store_true",
         help="train only arm gains/exploration and critic; freeze actor context/base/grip and use deterministic base/grip sampling",
     )
     parser.add_argument("--steps", type=int, default=16384)

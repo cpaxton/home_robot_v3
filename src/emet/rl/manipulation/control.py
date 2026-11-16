@@ -46,6 +46,7 @@ class ManipulationControl:
         self.action_mode = "residual"
         self.base_xy_tolerance = 0.02
         self.base_velocity_feedback_gain = 2.0
+        self.base_velocity_feedback_current = False
         self.base_velocity_integral_gain = 1.0
         self.base_feedback_at_rest = True
         # Keep the qualified legacy servo until the opt-in mode is qualified.
@@ -492,6 +493,24 @@ class ManipulationControl:
         self._base_velocity_time = float(self.data.time)
         self.stopped = False
 
+    def resume_tracking_from_hold(self):
+        """Executor reacquires the same goal after drift from a nonfault hold.
+
+        Preserve the trajectory clock, history, grip/release authority and
+        bounded servo compensation. This transition never clears a fault or
+        authorizes a new goal, and never changes the measured physical state.
+        """
+        if self.stopped or self.motion_fault or not self.holding:
+            raise ValueError("tracking may resume only from an unfaulted hold")
+        self.holding = False
+        self.arm_holding = False
+        self.velocity[:] = 0
+        self.base_command[:] = 0
+        self.last_action[:] = 0
+        self._trim_time = float(self.data.time)
+        self._base_velocity_time = float(self.data.time)
+        self.apply()
+
     def stop(self):
         """Latch one measured hold target; repeated fault receipts cannot rebase it."""
         first_stop = not self.stopped
@@ -564,10 +583,7 @@ class ManipulationControl:
                 and (not self.holding or self.base_bias_compensation_enabled)
                 and (self.base_feedback_at_rest or np.any(np.abs(self.base_command) > 1e-6))
             ):
-                spatial = np.zeros(6)
-                mujoco.mj_objectVelocity(self.model, self.data, mujoco.mjtObj.mjOBJ_BODY, self.base, spatial, 0)
-                forward = self.data.xmat[self.base].reshape(3, 3)[:, 0]
-                measured = np.array([spatial[3:] @ forward, spatial[2]])
+                measured = self._base_feedback_velocity()
                 limits = np.array([self.profile.base_speed, self.profile.base_yaw_speed])
                 velocity_error = drive - measured
                 interval = max(0.0, now - self._base_velocity_time)
@@ -628,6 +644,25 @@ class ManipulationControl:
             self.data.ctrl[self.wheel_act] = commands
         valid = self.base_hold_act[self.base_hold_act >= 0]
         self.data.ctrl[valid] = 0
+
+    def _base_feedback_velocity(self):
+        """COM forward/yaw velocity; current-qvel correction remains opt-in.
+
+        mj_step integrates qvel after computing cvel. Between substeps the
+        legacy spatial cache therefore belongs to the preceding solve. Reuse
+        position-stage Jacobians with current qvel without another forward
+        solve, retaining the same COM measurement point and physical bounds.
+        """
+        if self.base_velocity_feedback_current:
+            jp, jr = np.zeros((3, self.model.nv)), np.zeros((3, self.model.nv))
+            mujoco.mj_jacBodyCom(self.model, self.data, jp, jr, self.base)
+            velocity = self.data.qvel.copy()
+            forward = self.data.xmat[self.base].reshape(3, 3)[:, 0]
+            return np.array([(jp @ velocity) @ forward, (jr @ velocity)[2]])
+        spatial = np.zeros(6)
+        mujoco.mj_objectVelocity(self.model, self.data, mujoco.mjtObj.mjOBJ_BODY, self.base, spatial, 0)
+        forward = self.data.xmat[self.base].reshape(3, 3)[:, 0]
+        return np.array([spatial[3:] @ forward, spatial[2]])
 
     def update_task_reference(self):
         if self.task_trajectory is not None:

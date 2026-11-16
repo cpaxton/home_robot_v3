@@ -67,16 +67,37 @@ def load_development(path=DEFAULT_SUITE):
     return suite, general
 
 
-def primitive_rollout(cases, *, policy=None, arm_reference="s_curve", initial_settle_s=0.0):
+def primitive_rollout(
+    cases,
+    *,
+    policy=None,
+    arm_reference="s_curve",
+    initial_settle_s=0.0,
+    wheel_feedback_current_velocity=False,
+    trace_dir=None,
+):
     from emet.rl.manipulation.tamp_primitive_env import TampPrimitiveEnv
 
-    env = TampPrimitiveEnv(cases, oracle=policy is None, arm_reference=arm_reference, initial_settle_s=initial_settle_s)
+    env = TampPrimitiveEnv(
+        cases,
+        oracle=policy is None,
+        arm_reference=arm_reference,
+        initial_settle_s=initial_settle_s,
+        wheel_feedback_current_velocity=wheel_feedback_current_velocity,
+        trace_dir=trace_dir,
+    )
     rows = []
     try:
         for case in cases:
             ticks, count, returns = 0, 0, np.zeros(3)
             try:
                 obs, info = env.reset(options={"case_id": case["id"]})
+                expected_model = getattr(policy, "fingerprint", None)
+                if expected_model is not None and expected_model != info.get("model_fingerprint"):
+                    raise ValueError("TAMP primitive policy/model mismatch before inference")
+                expected_robot = getattr(policy, "compiled_robot_identity", None)
+                if expected_robot is not None and expected_robot != info.get("compiled_robot_identity"):
+                    raise ValueError("TAMP primitive compiled robot/physics mismatch before inference")
                 for _ in range(2000):
                     count += 1
                     if policy is None:
@@ -108,6 +129,10 @@ def primitive_rollout(cases, *, policy=None, arm_reference="s_curve", initial_se
                         "object_rotation_rad": info["object_rotation_rad"],
                         "executor_result": info["executor_result"],
                         "initial_settle_s": info["initial_settle_s"],
+                        "wheel_feedback_current_velocity": info["wheel_feedback_current_velocity"],
+                        "initial_state_sha256": info["initial_state_sha256"],
+                        "model_fingerprint": info["model_fingerprint"],
+                        "compiled_robot_identity": info["compiled_robot_identity"],
                         "initialization_failed": info["initialization_failed"],
                         "safety_flags": {
                             k: info[k] for k in ("wheel_lift", "invalid_physics", "unsafe_contact", "retention_lost")

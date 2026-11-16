@@ -5,6 +5,53 @@ The goal is one reactive actor that follows base/hand references, settles and
 satisfies physical smoothness, support, force and retention contracts. A better
 hand endpoint is useful progress; it is not the full objective.
 
+## Latest decision after actual-reset validation
+
+The [completed reset/baseline study](../experiments/mars_current_feedback_reset_validation_20261115.md)
+passes all 24 loop stop checks and 1,299 fresh software regressions. Current-COM
+feedback is validated through initialization, forward/reverse/yaw and finite
+disturbances. Retained legacy gives 151/164 general and 12/12 on the common C1
+cases, versus GRU candidate 8/12. Original budgets and outcomes remain available.
+
+Actual TAMP execution remains the limiting result: retained legacy 0/6 versus
+teacher 5/6. A further 24 fixed episodes find no learned success from extra
+settling, the frozen velocity final or the GRU candidate. The difficult teacher
+fixture changes from an execution lift-stage failure to a planning rejection
+after settling; it is not silently admitted under the old exception.
+
+The [four-episode input diagnostic](../experiments/mars_tamp_input_diagnostic_20261115.md)
+now verifies exact teacher recording parity and exact offline actor replay.
+Targets reach the learned actor, but its small commands lag; open-jaw feedback
+then leaves the narrow training normalization range. Its final matched error is
+3.01 mm/0.02966 rad versus teacher 1.11 mm/0.00108 rad. The separate teacher
+rejection is measured-pose lift replanning with `arm_path_static_support_margin`.
+The public failure now preserves `planning_failed` and semantic support-margin
+evidence. Keep the legacy actor as the stronger general baseline. Independently
+admit measured-state references; then test
+actual pregrasp/near-contact training mixed with general tracking, collecting
+normalization statistics from that distribution. Keep real grip feedback and
+all safety checks. PR #240's direction/audit manifests remain preparation,
+not native admission or training evidence. More time on C1-only training is
+not the selected next action. No default promotion or hardware qualification
+follows from these results; retain the staged validation.
+
+The [task-level follow-up](../experiments/mars_task_arrival_20261115.md) now
+separates endpoint acceptance from actual grasp/lift execution. A bounded
+nonfault-hold reacquisition fixes an executor deadlock: the same retained actor
+reaches the declared grasp region and the executor closes the jaws. Lift planning
+still rejects insufficient support reserve. The nominal admitted witness has
+only about 4 micrometres above the 5 mm cutoff. Opt-in maximum-margin resets and
+an actual fixed-world-hand/base preparation let the teacher pass that bottleneck,
+but retention still fails. The actor also under-tracks the fixed-hand 20 mm
+base shift, confirming a concrete coupled-motion curriculum gap.
+
+Keep the repaired handoff and all guards. Before new training, extend the real
+TAMP primitive boundary through the unloaded grasp pose, admit it independently,
+and include reachable fixed-world-hand/base references alongside general
+tracking. Keep the outer general/task balance; do not train only TAMP or require
+a broken loaded grasp to supervise unloaded tracking. Loaded progression needs
+support-reserved planning and independently stable grasp/wrench evidence.
+
 ## Why this order
 
 | Evidence | What it supports | What it does not establish |

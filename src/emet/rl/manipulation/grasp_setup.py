@@ -36,10 +36,15 @@ def support_margin(model, data, profile, payload):
     return {"margin_m": min(margins), "loaded_com_m": com.tolist(), "support_polygon_m": polygon.tolist()}
 
 
-def plan_setup(env, *, minimum_margin=0.005, azimuths=(0.0, -0.7, 0.7, -1.0, 1.0, -1.4, 1.4)):
+def plan_setup(env, *, minimum_margin=0.005, azimuths=(0.0, -0.7, 0.7, -1.0, 1.0, -1.4, 1.4), prefer_nominal=True):
     """Return a collision-checked candidate without mutating the live model/data."""
     c, model = env.control, env.model
-    if c.profile.robot != "innate_mars" or not np.isfinite(minimum_margin) or minimum_margin < 0:
+    if (
+        c.profile.robot != "innate_mars"
+        or not np.isfinite(minimum_margin)
+        or minimum_margin < 0
+        or type(prefer_nominal) is not bool
+    ):
         raise ValueError("invalid Mars grasp setup request")
     base = c.base_pose().copy()
     arm = c.positions().copy()
@@ -124,7 +129,7 @@ def plan_setup(env, *, minimum_margin=0.005, azimuths=(0.0, -0.7, 0.7, -1.0, 1.0
         return None
     nominal = next((item for item in candidates if item["azimuth_offset_rad"] == 0), None)
     disturbance = getattr(env, "_carry_push_selected", False)
-    if nominal is not None and not disturbance:
+    if nominal is not None and not disturbance and prefer_nominal:
         nominal["selection_reason"] = "nominal_path_margin"
         return nominal
     # Once a different setup is required, maximize its robustness margin.

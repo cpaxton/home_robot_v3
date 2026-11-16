@@ -1,0 +1,1150 @@
+{
+  "format": "mars-tamp-tracking-followup-v1",
+  "producer_revision": "71c9e0f4fb93dec3a0522428fb467778ea17334a",
+  "script_sha256": "222dff87faba95ce2a71be426444147850b0f69f9b07c6aceee7285df186c6ca",
+  "baseline_summary_sha256": "3b65be06eac6ffcddb24ea1b308cf8c28fd5107c44dd6a01a1486a5a56987f2e",
+  "full_regression_receipt_sha256": "f8127b32dbc6491ebf9cbf81eddb7be65834e3fd57964f32c405db064efc7956",
+  "groups": {
+    "teacher_settle2": {
+      "initial_settle_s": 2.0,
+      "weights_sha256": null,
+      "cases": [
+        {
+          "id": "development:left:20g:0",
+          "success": true,
+          "code": "pregrasp_complete",
+          "stop_confirmed": true,
+          "control_ticks": 128,
+          "decisions": 74,
+          "returns": [
+            20.459953352808952,
+            -0.005353487667447421,
+            0.0
+          ],
+          "inference_counts": {
+            "policy_calls": 0,
+            "reference_controller_calls": 74
+          },
+          "full_pick_place_success": false,
+          "object_translation_m": [
+            0.004796900368664425,
+            0.0005273702259572313,
+            -1.535924222478835e-05
+          ],
+          "object_rotation_rad": 0.3625871446743301,
+          "executor_result": null,
+          "initial_settle_s": 2.0,
+          "wheel_feedback_current_velocity": true,
+          "initial_state_sha256": "f91850bde6e7388d9ca2c6ef54d8cd7d630d51f94eaba0e65ca342f0a90e0c03",
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "initialization_failed": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          },
+          "command_count": 3,
+          "command_phases": [
+            "approach_clearance",
+            null,
+            "pregrasp"
+          ],
+          "commands_sha256": "cbf205c0082658bc1822c61b81847c42ee550d6336a234bfc46c9dd831771d56"
+        },
+        {
+          "id": "development:right:50g:1",
+          "success": true,
+          "code": "pregrasp_complete",
+          "stop_confirmed": true,
+          "control_ticks": 128,
+          "decisions": 74,
+          "returns": [
+            20.737105518579483,
+            -0.00447804594817805,
+            0.0
+          ],
+          "inference_counts": {
+            "policy_calls": 0,
+            "reference_controller_calls": 74
+          },
+          "full_pick_place_success": false,
+          "object_translation_m": [
+            0.00015049183883908412,
+            -2.194677068764056e-05,
+            -1.281901831137744e-05
+          ],
+          "object_rotation_rad": 0.004998639591236152,
+          "executor_result": null,
+          "initial_settle_s": 2.0,
+          "wheel_feedback_current_velocity": true,
+          "initial_state_sha256": "c9be93d91f1f090da402d12d7a0d8e6ee0fff54dfeb2f083771b17efdb89b168",
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "initialization_failed": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          },
+          "command_count": 3,
+          "command_phases": [
+            "approach_clearance",
+            null,
+            "pregrasp"
+          ],
+          "commands_sha256": "2f5bb03fca2a36b8bfe9b33733e96c6fdb0a7f39d5cf567d9b20bbc93513912d"
+        },
+        {
+          "id": "development:left:50g:2",
+          "success": false,
+          "code": "TAMP training worker: public_plan:no_plan_within_budget\nTraceback (most recent call last):\n  File \"/tmp/mars-tamp-tracking-71c9e0f4/src/emet/rl/manipulation/tamp_primitive_env.py\", line 152, in _worker\n    raise ValueError(\"public_plan:\" + str(planned.get(\"code\")))\nValueError: public_plan:no_plan_within_budget\n",
+          "control_ticks": 0,
+          "decisions": 0,
+          "initialization_failed": true,
+          "stop_confirmed": null,
+          "execution_error": true,
+          "full_pick_place_success": false,
+          "command_count": 0,
+          "command_phases": [],
+          "commands_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "id": "development:right:20g:3",
+          "success": true,
+          "code": "pregrasp_complete",
+          "stop_confirmed": true,
+          "control_ticks": 128,
+          "decisions": 74,
+          "returns": [
+            20.69911201298237,
+            -0.0040891958004767165,
+            0.0
+          ],
+          "inference_counts": {
+            "policy_calls": 0,
+            "reference_controller_calls": 74
+          },
+          "full_pick_place_success": false,
+          "object_translation_m": [
+            0.0002761396535655436,
+            5.464254896710846e-05,
+            -1.407162960767594e-05
+          ],
+          "object_rotation_rad": 0.00804367978104083,
+          "executor_result": null,
+          "initial_settle_s": 2.0,
+          "wheel_feedback_current_velocity": true,
+          "initial_state_sha256": "2e4fee9a0d7ef5e87cc71ff453618df6357d03f10365fc614c4d55c50aae9913",
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "initialization_failed": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          },
+          "command_count": 3,
+          "command_phases": [
+            "approach_clearance",
+            null,
+            "pregrasp"
+          ],
+          "commands_sha256": "7bb212d390334c55230ddd16d6c94f16572390e51ab85bcb03933aeb4d960525"
+        },
+        {
+          "id": "audit:left:20g:0",
+          "success": true,
+          "code": "pregrasp_complete",
+          "stop_confirmed": true,
+          "control_ticks": 129,
+          "decisions": 75,
+          "returns": [
+            20.83709315955639,
+            -0.005150348012368033,
+            0.0
+          ],
+          "inference_counts": {
+            "policy_calls": 0,
+            "reference_controller_calls": 75
+          },
+          "full_pick_place_success": false,
+          "object_translation_m": [
+            0.000263456316529076,
+            3.567146376769886e-05,
+            -1.4222584983680786e-05
+          ],
+          "object_rotation_rad": 0.00901573019079839,
+          "executor_result": null,
+          "initial_settle_s": 2.0,
+          "wheel_feedback_current_velocity": true,
+          "initial_state_sha256": "99c3b1df14643c065f63b3fcfa59e547094e49247dc3227a48c85e2188e9e136",
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "initialization_failed": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          },
+          "command_count": 3,
+          "command_phases": [
+            "approach_clearance",
+            null,
+            "pregrasp"
+          ],
+          "commands_sha256": "a169c423ae68eff3901cea3fab17211058a8cc21e475189cc569c72ce9398a68"
+        },
+        {
+          "id": "audit:right:50g:1",
+          "success": true,
+          "code": "pregrasp_complete",
+          "stop_confirmed": true,
+          "control_ticks": 130,
+          "decisions": 76,
+          "returns": [
+            20.948096856474876,
+            -0.006708150079862987,
+            0.0
+          ],
+          "inference_counts": {
+            "policy_calls": 0,
+            "reference_controller_calls": 76
+          },
+          "full_pick_place_success": false,
+          "object_translation_m": [
+            0.000523182386507115,
+            -5.5255270281599767e-05,
+            -9.367999771581204e-06
+          ],
+          "object_rotation_rad": 0.0068771622759037105,
+          "executor_result": null,
+          "initial_settle_s": 2.0,
+          "wheel_feedback_current_velocity": true,
+          "initial_state_sha256": "1bc9cff77c159e8d6c1f032900dd14765d5e5743102cb184a789fe2c925e7bf8",
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "initialization_failed": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          },
+          "command_count": 3,
+          "command_phases": [
+            "approach_clearance",
+            null,
+            "pregrasp"
+          ],
+          "commands_sha256": "8ae087205ffa5070b740745c1fa25ac74152d1d19b9cb0ba7dbac31a385f8946"
+        }
+      ],
+      "complete": true,
+      "archive_sha256": "69474c7dafed61a76e45a733ff1ddc718eac416faa4e3a51ed335bd599394605",
+      "successes": 5,
+      "confirmed_stops": 5
+    },
+    "legacy_settle2": {
+      "initial_settle_s": 2.0,
+      "weights_sha256": "e7b425699510cc635485bdd8f59a5b25692fb165faf248aaecbc2707c0dbb883",
+      "cases": [
+        {
+          "id": "development:left:20g:0",
+          "success": false,
+          "code": "cartesian_tracking_timeout",
+          "stop_confirmed": true,
+          "control_ticks": 228,
+          "decisions": 222,
+          "returns": [
+            18.270806178450584,
+            -0.0003788921070738624,
+            0.0
+          ],
+          "inference_counts": {
+            "policy_calls": 222,
+            "reference_controller_calls": 0
+          },
+          "full_pick_place_success": false,
+          "object_translation_m": [
+            0.0012103138319516371,
+            -0.0002587540094208182,
+            -0.00044236078499734766
+          ],
+          "object_rotation_rad": 0.03892539797311933,
+          "executor_result": null,
+          "initial_settle_s": 2.0,
+          "wheel_feedback_current_velocity": true,
+          "initial_state_sha256": "f91850bde6e7388d9ca2c6ef54d8cd7d630d51f94eaba0e65ca342f0a90e0c03",
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "initialization_failed": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          },
+          "command_count": 3,
+          "command_phases": [
+            "approach_clearance",
+            null,
+            "pregrasp"
+          ],
+          "commands_sha256": "2c73211c9b7c613af7a4a710990e594c7fd1e022de1cf1df90047fd59367218d"
+        },
+        {
+          "id": "development:right:50g:1",
+          "success": false,
+          "code": "cartesian_tracking_timeout",
+          "stop_confirmed": true,
+          "control_ticks": 227,
+          "decisions": 221,
+          "returns": [
+            18.60053949058056,
+            -0.0028290564507159194,
+            -0.0011548283039627405
+          ],
+          "inference_counts": {
+            "policy_calls": 221,
+            "reference_controller_calls": 0
+          },
+          "full_pick_place_success": false,
+          "object_translation_m": [
+            0.0007890811033843259,
+            0.00012809485498528617,
+            -0.00024431319020429276
+          ],
+          "object_rotation_rad": 0.0518146891627584,
+          "executor_result": null,
+          "initial_settle_s": 2.0,
+          "wheel_feedback_current_velocity": true,
+          "initial_state_sha256": "c9be93d91f1f090da402d12d7a0d8e6ee0fff54dfeb2f083771b17efdb89b168",
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "initialization_failed": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          },
+          "command_count": 3,
+          "command_phases": [
+            "approach_clearance",
+            null,
+            "pregrasp"
+          ],
+          "commands_sha256": "1828f2266078b6730a1145017a8b748bb5d1018eb28121a93c37e497910cc764"
+        },
+        {
+          "id": "development:left:50g:2",
+          "success": false,
+          "code": "TAMP training worker: public_plan:no_plan_within_budget\nTraceback (most recent call last):\n  File \"/tmp/mars-tamp-tracking-71c9e0f4/src/emet/rl/manipulation/tamp_primitive_env.py\", line 152, in _worker\n    raise ValueError(\"public_plan:\" + str(planned.get(\"code\")))\nValueError: public_plan:no_plan_within_budget\n",
+          "control_ticks": 0,
+          "decisions": 0,
+          "initialization_failed": true,
+          "stop_confirmed": null,
+          "execution_error": true,
+          "full_pick_place_success": false,
+          "command_count": 0,
+          "command_phases": [],
+          "commands_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "id": "development:right:20g:3",
+          "success": false,
+          "code": "cartesian_tracking_timeout",
+          "stop_confirmed": true,
+          "control_ticks": 228,
+          "decisions": 222,
+          "returns": [
+            18.791525475680828,
+            -0.001181142991699767,
+            0.0
+          ],
+          "inference_counts": {
+            "policy_calls": 222,
+            "reference_controller_calls": 0
+          },
+          "full_pick_place_success": false,
+          "object_translation_m": [
+            0.0008373081585865694,
+            -0.00014835965522962818,
+            -0.0004865594237714044
+          ],
+          "object_rotation_rad": 0.02597037817620147,
+          "executor_result": null,
+          "initial_settle_s": 2.0,
+          "wheel_feedback_current_velocity": true,
+          "initial_state_sha256": "2e4fee9a0d7ef5e87cc71ff453618df6357d03f10365fc614c4d55c50aae9913",
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "initialization_failed": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          },
+          "command_count": 3,
+          "command_phases": [
+            "approach_clearance",
+            null,
+            "pregrasp"
+          ],
+          "commands_sha256": "2c7b341136b9cd8fa0d1f2892e955a51d6a7f619383e9d711e996ff22519a52c"
+        },
+        {
+          "id": "audit:left:20g:0",
+          "success": false,
+          "code": "cartesian_tracking_timeout",
+          "stop_confirmed": true,
+          "control_ticks": 230,
+          "decisions": 224,
+          "returns": [
+            18.435119584202766,
+            -0.0011818340979404696,
+            0.0
+          ],
+          "inference_counts": {
+            "policy_calls": 224,
+            "reference_controller_calls": 0
+          },
+          "full_pick_place_success": false,
+          "object_translation_m": [
+            0.0012565718112579893,
+            -0.00025670127916906094,
+            -0.0004913753896662321
+          ],
+          "object_rotation_rad": 0.04363824627765449,
+          "executor_result": null,
+          "initial_settle_s": 2.0,
+          "wheel_feedback_current_velocity": true,
+          "initial_state_sha256": "99c3b1df14643c065f63b3fcfa59e547094e49247dc3227a48c85e2188e9e136",
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "initialization_failed": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          },
+          "command_count": 3,
+          "command_phases": [
+            "approach_clearance",
+            null,
+            "pregrasp"
+          ],
+          "commands_sha256": "740e74e45693c4ab6c19360f3f2d153d5329bac95b6a2e92e09f831cd1bd220a"
+        },
+        {
+          "id": "audit:right:50g:1",
+          "success": false,
+          "code": "cartesian_path_tracking_envelope",
+          "stop_confirmed": true,
+          "control_ticks": 61,
+          "decisions": 55,
+          "returns": [
+            -1.393030971288681,
+            -9.523917968803398e-05,
+            0.0
+          ],
+          "inference_counts": {
+            "policy_calls": 55,
+            "reference_controller_calls": 0
+          },
+          "full_pick_place_success": false,
+          "object_translation_m": [
+            0.00025428318194775645,
+            -0.0001049718268391342,
+            -8.109760984081893e-05
+          ],
+          "object_rotation_rad": 0.009213643106204338,
+          "executor_result": null,
+          "initial_settle_s": 2.0,
+          "wheel_feedback_current_velocity": true,
+          "initial_state_sha256": "1bc9cff77c159e8d6c1f032900dd14765d5e5743102cb184a789fe2c925e7bf8",
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "initialization_failed": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          },
+          "command_count": 3,
+          "command_phases": [
+            "approach_clearance",
+            null,
+            "pregrasp"
+          ],
+          "commands_sha256": "40b66c433838a6fd4a48bb92f264a63680af4d302c59b5252db2e99849029c7a"
+        }
+      ],
+      "complete": true,
+      "archive_sha256": "26e2f6e542c54e88ace0d3e2981c496b877e328392a4de635193442918e33105",
+      "successes": 0,
+      "confirmed_stops": 5
+    },
+    "velocity_legacy": {
+      "initial_settle_s": 0.0,
+      "weights_sha256": "38c291b84c3b898fe40b55b6d257801db1c344c04a2b28bf9446daf607b4b21a",
+      "cases": [
+        {
+          "id": "development:left:20g:0",
+          "success": false,
+          "code": "transport_tracking_timeout",
+          "stop_confirmed": true,
+          "control_ticks": 358,
+          "decisions": 353,
+          "returns": [
+            30.65281432121992,
+            -0.0019353414616704867,
+            0.0
+          ],
+          "inference_counts": {
+            "policy_calls": 353,
+            "reference_controller_calls": 0
+          },
+          "full_pick_place_success": false,
+          "object_translation_m": [
+            0.0011705037834502385,
+            -0.005837919351932855,
+            7.17506119473077e-05
+          ],
+          "object_rotation_rad": 0.09998887358487688,
+          "executor_result": {
+            "schema_version": 1,
+            "tool": "execute_pick_place_plan",
+            "status": "partial",
+            "code": "tracking_timeout",
+            "message": "tracking timeout",
+            "data": {
+              "mode": "physical",
+              "inputs": "privileged",
+              "geometry_source": "simulator_ground_truth",
+              "assistance": [],
+              "base_motion": "coordinated",
+              "collision_scope": "sampled_whole_body_arm_payload; runtime force/wheel monitoring",
+              "robot": "innate_mars",
+              "controller": "mars_checkpoint_policy",
+              "object_name": "blue cube",
+              "receptacle_name": "destination support",
+              "completed_ops": [],
+              "failed_stage": "transport",
+              "execution_started": true,
+              "policy_calls": 353,
+              "policy_admission": null,
+              "execution_ik_calls": 0,
+              "stop_confirmed": true
+            },
+            "recovery": "inspect"
+          },
+          "initial_settle_s": 0.0,
+          "wheel_feedback_current_velocity": true,
+          "initial_state_sha256": "f91850bde6e7388d9ca2c6ef54d8cd7d630d51f94eaba0e65ca342f0a90e0c03",
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "initialization_failed": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          },
+          "command_count": 1,
+          "command_phases": [
+            "approach_clearance"
+          ],
+          "commands_sha256": "e6d45a28be55df4444736620591eca42ae101c03bf9e57668fee07e7d2ee03a6"
+        },
+        {
+          "id": "development:right:50g:1",
+          "success": false,
+          "code": "cartesian_tracking_timeout",
+          "stop_confirmed": true,
+          "control_ticks": 227,
+          "decisions": 221,
+          "returns": [
+            18.86383756250143,
+            -0.004915799983424091,
+            0.0
+          ],
+          "inference_counts": {
+            "policy_calls": 221,
+            "reference_controller_calls": 0
+          },
+          "full_pick_place_success": false,
+          "object_translation_m": [
+            0.0007957734990717835,
+            7.167422214193753e-05,
+            -0.00020074529994681956
+          ],
+          "object_rotation_rad": 0.040970973133072665,
+          "executor_result": null,
+          "initial_settle_s": 0.0,
+          "wheel_feedback_current_velocity": true,
+          "initial_state_sha256": "c9be93d91f1f090da402d12d7a0d8e6ee0fff54dfeb2f083771b17efdb89b168",
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "initialization_failed": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          },
+          "command_count": 3,
+          "command_phases": [
+            "approach_clearance",
+            null,
+            "pregrasp"
+          ],
+          "commands_sha256": "01dd4dd7cca4d90ad4cbe8c802be1754d1ce986281e71d05ecf096cc3f5f5836"
+        },
+        {
+          "id": "development:left:50g:2",
+          "success": false,
+          "code": "operation_failed",
+          "stop_confirmed": true,
+          "control_ticks": 55,
+          "decisions": 30,
+          "returns": [
+            -2.0957555025815964,
+            -0.0028172846278806674,
+            0.0
+          ],
+          "inference_counts": {
+            "policy_calls": 30,
+            "reference_controller_calls": 0
+          },
+          "full_pick_place_success": false,
+          "object_translation_m": [
+            9.196703232294823e-09,
+            1.981182648491675e-09,
+            -4.600498593188007e-10
+          ],
+          "object_rotation_rad": 3.097148193542154e-07,
+          "executor_result": {
+            "schema_version": 1,
+            "tool": "execute_pick_place_plan",
+            "status": "partial",
+            "code": "operation_failed",
+            "message": "operation failed",
+            "data": {
+              "mode": "physical",
+              "inputs": "privileged",
+              "geometry_source": "simulator_ground_truth",
+              "assistance": [],
+              "base_motion": "coordinated",
+              "collision_scope": "sampled_whole_body_arm_payload; runtime force/wheel monitoring",
+              "robot": "innate_mars",
+              "controller": "mars_checkpoint_policy",
+              "object_name": "blue cube",
+              "receptacle_name": "destination support",
+              "completed_ops": [],
+              "failed_stage": "lift",
+              "execution_started": true,
+              "policy_calls": 30,
+              "policy_admission": null,
+              "execution_ik_calls": 8,
+              "stop_confirmed": true
+            },
+            "recovery": "inspect"
+          },
+          "initial_settle_s": 0.0,
+          "wheel_feedback_current_velocity": true,
+          "initial_state_sha256": "4ea9902356ec4e14c89d3adcd9fb221922e40376b9d807c60dae63ecbeeabcbe",
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "initialization_failed": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          },
+          "command_count": 1,
+          "command_phases": [
+            "approach_clearance"
+          ],
+          "commands_sha256": "8adba6b840b8806d9bcf382831fdf3910b8cf8fbc42c55b99065ff9b11549c63"
+        },
+        {
+          "id": "development:right:20g:3",
+          "success": false,
+          "code": "cartesian_tracking_timeout",
+          "stop_confirmed": true,
+          "control_ticks": 272,
+          "decisions": 246,
+          "returns": [
+            25.406694628298283,
+            -0.003956575563994612,
+            0.0
+          ],
+          "inference_counts": {
+            "policy_calls": 246,
+            "reference_controller_calls": 0
+          },
+          "full_pick_place_success": false,
+          "object_translation_m": [
+            0.00088971343149713,
+            -5.540082671015578e-05,
+            -0.00036628360137064275
+          ],
+          "object_rotation_rad": 0.02897175845793489,
+          "executor_result": null,
+          "initial_settle_s": 0.0,
+          "wheel_feedback_current_velocity": true,
+          "initial_state_sha256": "2e4fee9a0d7ef5e87cc71ff453618df6357d03f10365fc614c4d55c50aae9913",
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "initialization_failed": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          },
+          "command_count": 3,
+          "command_phases": [
+            "approach_clearance",
+            null,
+            "pregrasp"
+          ],
+          "commands_sha256": "ee26dc6ac80f9abcf4ddeeec7de95b356617394e855367a49bb8d6d0da7cde32"
+        },
+        {
+          "id": "audit:left:20g:0",
+          "success": false,
+          "code": "cartesian_tracking_timeout",
+          "stop_confirmed": true,
+          "control_ticks": 230,
+          "decisions": 224,
+          "returns": [
+            18.80106780678034,
+            -0.0016738355348071554,
+            0.0
+          ],
+          "inference_counts": {
+            "policy_calls": 224,
+            "reference_controller_calls": 0
+          },
+          "full_pick_place_success": false,
+          "object_translation_m": [
+            0.0011056608720717565,
+            -0.00010582701143602158,
+            -0.0005216802941354071
+          ],
+          "object_rotation_rad": 0.03685348628117567,
+          "executor_result": null,
+          "initial_settle_s": 0.0,
+          "wheel_feedback_current_velocity": true,
+          "initial_state_sha256": "99c3b1df14643c065f63b3fcfa59e547094e49247dc3227a48c85e2188e9e136",
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "initialization_failed": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          },
+          "command_count": 3,
+          "command_phases": [
+            "approach_clearance",
+            null,
+            "pregrasp"
+          ],
+          "commands_sha256": "97e6c177b3184c63d90e54eeccd5bd1486f9c164109897f99da7d72b7f88f668"
+        },
+        {
+          "id": "audit:right:50g:1",
+          "success": false,
+          "code": "cartesian_path_tracking_envelope",
+          "stop_confirmed": true,
+          "control_ticks": 61,
+          "decisions": 55,
+          "returns": [
+            -1.4176591113209724,
+            -0.0019022232597673862,
+            0.0
+          ],
+          "inference_counts": {
+            "policy_calls": 55,
+            "reference_controller_calls": 0
+          },
+          "full_pick_place_success": false,
+          "object_translation_m": [
+            0.00031799818751804265,
+            -0.00010924344539330749,
+            -0.00010172094801252918
+          ],
+          "object_rotation_rad": 0.011270483085869696,
+          "executor_result": null,
+          "initial_settle_s": 0.0,
+          "wheel_feedback_current_velocity": true,
+          "initial_state_sha256": "1bc9cff77c159e8d6c1f032900dd14765d5e5743102cb184a789fe2c925e7bf8",
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "initialization_failed": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          },
+          "command_count": 3,
+          "command_phases": [
+            "approach_clearance",
+            null,
+            "pregrasp"
+          ],
+          "commands_sha256": "58b781992cc9787792d2add24f5e792b6636f9f646724752e2c3182054b9160f"
+        }
+      ],
+      "complete": true,
+      "archive_sha256": "369ff95ec20171fddc8b3fee08766f426d16c1e2179ce9f673f9ebb4e7256849",
+      "successes": 0,
+      "confirmed_stops": 6
+    },
+    "gru_candidate": {
+      "initial_settle_s": 0.0,
+      "weights_sha256": "ee2e5f1fa5302efb341892768c4f16dab5aab3bf75d90d0a4ddafd6e02a41a4e",
+      "cases": [
+        {
+          "id": "development:left:20g:0",
+          "success": false,
+          "code": "transport_tracking_timeout",
+          "stop_confirmed": true,
+          "control_ticks": 183,
+          "decisions": 178,
+          "returns": [
+            11.387227952480316,
+            -0.0014607524435644725,
+            0.0
+          ],
+          "inference_counts": {
+            "policy_calls": 178,
+            "reference_controller_calls": 0
+          },
+          "full_pick_place_success": false,
+          "object_translation_m": [
+            0.0015732563173786462,
+            0.005690592155818429,
+            -1.4271720530922849e-05
+          ],
+          "object_rotation_rad": 0.03881284573732861,
+          "executor_result": {
+            "schema_version": 1,
+            "tool": "execute_pick_place_plan",
+            "status": "partial",
+            "code": "tracking_timeout",
+            "message": "tracking timeout",
+            "data": {
+              "mode": "physical",
+              "inputs": "privileged",
+              "geometry_source": "simulator_ground_truth",
+              "assistance": [],
+              "base_motion": "coordinated",
+              "collision_scope": "sampled_whole_body_arm_payload; runtime force/wheel monitoring",
+              "robot": "innate_mars",
+              "controller": "mars_checkpoint_policy",
+              "object_name": "blue cube",
+              "receptacle_name": "destination support",
+              "completed_ops": [],
+              "failed_stage": "transport",
+              "execution_started": true,
+              "policy_calls": 178,
+              "policy_admission": null,
+              "execution_ik_calls": 0,
+              "stop_confirmed": true
+            },
+            "recovery": "inspect"
+          },
+          "initial_settle_s": 0.0,
+          "wheel_feedback_current_velocity": true,
+          "initial_state_sha256": "f91850bde6e7388d9ca2c6ef54d8cd7d630d51f94eaba0e65ca342f0a90e0c03",
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "initialization_failed": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          },
+          "command_count": 1,
+          "command_phases": [
+            "approach_clearance"
+          ],
+          "commands_sha256": "e6d45a28be55df4444736620591eca42ae101c03bf9e57668fee07e7d2ee03a6"
+        },
+        {
+          "id": "development:right:50g:1",
+          "success": false,
+          "code": "cartesian_tracking_timeout",
+          "stop_confirmed": true,
+          "control_ticks": 227,
+          "decisions": 221,
+          "returns": [
+            17.750211350619793,
+            -0.008175446377733875,
+            0.0
+          ],
+          "inference_counts": {
+            "policy_calls": 221,
+            "reference_controller_calls": 0
+          },
+          "full_pick_place_success": false,
+          "object_translation_m": [
+            0.0007292773435623179,
+            -0.0006027301514043709,
+            -2.9556755231918697e-05
+          ],
+          "object_rotation_rad": 0.06383547636699087,
+          "executor_result": null,
+          "initial_settle_s": 0.0,
+          "wheel_feedback_current_velocity": true,
+          "initial_state_sha256": "c9be93d91f1f090da402d12d7a0d8e6ee0fff54dfeb2f083771b17efdb89b168",
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "initialization_failed": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          },
+          "command_count": 3,
+          "command_phases": [
+            "approach_clearance",
+            null,
+            "pregrasp"
+          ],
+          "commands_sha256": "56eb7587eb532037614b788bc97fc1618f8de4c54af87056dfe8ce18c21c5190"
+        },
+        {
+          "id": "development:left:50g:2",
+          "success": false,
+          "code": "operation_failed",
+          "stop_confirmed": true,
+          "control_ticks": 54,
+          "decisions": 29,
+          "returns": [
+            -2.2678877413272858,
+            -0.004993001523097007,
+            0.0
+          ],
+          "inference_counts": {
+            "policy_calls": 29,
+            "reference_controller_calls": 0
+          },
+          "full_pick_place_success": false,
+          "object_translation_m": [
+            9.373568669590604e-06,
+            -8.483225607001932e-06,
+            -5.563812228437381e-07
+          ],
+          "object_rotation_rad": 0.00042220349214539845,
+          "executor_result": {
+            "schema_version": 1,
+            "tool": "execute_pick_place_plan",
+            "status": "partial",
+            "code": "operation_failed",
+            "message": "operation failed",
+            "data": {
+              "mode": "physical",
+              "inputs": "privileged",
+              "geometry_source": "simulator_ground_truth",
+              "assistance": [],
+              "base_motion": "coordinated",
+              "collision_scope": "sampled_whole_body_arm_payload; runtime force/wheel monitoring",
+              "robot": "innate_mars",
+              "controller": "mars_checkpoint_policy",
+              "object_name": "blue cube",
+              "receptacle_name": "destination support",
+              "completed_ops": [],
+              "failed_stage": "lift",
+              "execution_started": true,
+              "policy_calls": 29,
+              "policy_admission": null,
+              "execution_ik_calls": 8,
+              "stop_confirmed": true
+            },
+            "recovery": "inspect"
+          },
+          "initial_settle_s": 0.0,
+          "wheel_feedback_current_velocity": true,
+          "initial_state_sha256": "4ea9902356ec4e14c89d3adcd9fb221922e40376b9d807c60dae63ecbeeabcbe",
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "initialization_failed": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          },
+          "command_count": 1,
+          "command_phases": [
+            "approach_clearance"
+          ],
+          "commands_sha256": "8adba6b840b8806d9bcf382831fdf3910b8cf8fbc42c55b99065ff9b11549c63"
+        },
+        {
+          "id": "development:right:20g:3",
+          "success": false,
+          "code": "cartesian_tracking_timeout",
+          "stop_confirmed": true,
+          "control_ticks": 270,
+          "decisions": 244,
+          "returns": [
+            23.97403684258461,
+            -0.009411968286108352,
+            0.0
+          ],
+          "inference_counts": {
+            "policy_calls": 244,
+            "reference_controller_calls": 0
+          },
+          "full_pick_place_success": false,
+          "object_translation_m": [
+            0.0008339733172715302,
+            -0.0005915702180098181,
+            -7.589033341276474e-06
+          ],
+          "object_rotation_rad": 0.06465601253789068,
+          "executor_result": null,
+          "initial_settle_s": 0.0,
+          "wheel_feedback_current_velocity": true,
+          "initial_state_sha256": "2e4fee9a0d7ef5e87cc71ff453618df6357d03f10365fc614c4d55c50aae9913",
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "initialization_failed": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          },
+          "command_count": 3,
+          "command_phases": [
+            "approach_clearance",
+            null,
+            "pregrasp"
+          ],
+          "commands_sha256": "50fa4f281ca9129529518b9ec1cd000acfaa355911f3b2ec2647175fc693eb23"
+        },
+        {
+          "id": "audit:left:20g:0",
+          "success": false,
+          "code": "cartesian_tracking_timeout",
+          "stop_confirmed": true,
+          "control_ticks": 230,
+          "decisions": 224,
+          "returns": [
+            18.159070782363415,
+            -0.002165670943198972,
+            0.0
+          ],
+          "inference_counts": {
+            "policy_calls": 224,
+            "reference_controller_calls": 0
+          },
+          "full_pick_place_success": false,
+          "object_translation_m": [
+            0.00079432295224241,
+            -0.0006906552906267779,
+            -0.00013252355552109685
+          ],
+          "object_rotation_rad": 0.07368114897768797,
+          "executor_result": null,
+          "initial_settle_s": 0.0,
+          "wheel_feedback_current_velocity": true,
+          "initial_state_sha256": "99c3b1df14643c065f63b3fcfa59e547094e49247dc3227a48c85e2188e9e136",
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "initialization_failed": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          },
+          "command_count": 3,
+          "command_phases": [
+            "approach_clearance",
+            null,
+            "pregrasp"
+          ],
+          "commands_sha256": "b779c1fa17d625e1892e316c7edef8d21c14e739c223da95465091ae2084e1da"
+        },
+        {
+          "id": "audit:right:50g:1",
+          "success": false,
+          "code": "cartesian_tracking_timeout",
+          "stop_confirmed": true,
+          "control_ticks": 232,
+          "decisions": 226,
+          "returns": [
+            17.92798265069723,
+            -0.01464662211991604,
+            -0.00037521406869700513
+          ],
+          "inference_counts": {
+            "policy_calls": 226,
+            "reference_controller_calls": 0
+          },
+          "full_pick_place_success": false,
+          "object_translation_m": [
+            0.0007872825284095941,
+            -0.0008315499762936648,
+            -0.00017629154800063995
+          ],
+          "object_rotation_rad": 0.08659853214374212,
+          "executor_result": null,
+          "initial_settle_s": 0.0,
+          "wheel_feedback_current_velocity": true,
+          "initial_state_sha256": "1bc9cff77c159e8d6c1f032900dd14765d5e5743102cb184a789fe2c925e7bf8",
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "initialization_failed": false,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          },
+          "command_count": 3,
+          "command_phases": [
+            "approach_clearance",
+            null,
+            "pregrasp"
+          ],
+          "commands_sha256": "bb1593387c03e71b278da6a7db44c1d62fba5f69cf95802e1a9cae2bdf2b3563"
+        }
+      ],
+      "complete": true,
+      "archive_sha256": "3e0a57fa2d8552fff735b1defaf64d65926e923f7a0fc478b2941119dc096081",
+      "successes": 0,
+      "confirmed_stops": 6
+    }
+  },
+  "new_ppo_steps": 0,
+  "hardware_used": false,
+  "qualified": false,
+  "defaults_changed": false,
+  "initial_state_hash_convention": "worker initial_state_sha256 precedes optional settling; do not claim equal post-conditioning states across settling settings",
+  "complete": true,
+  "runtime_source_hashes_equal_to_baseline": true,
+  "source_hashes_digest": "f73dfddfd18693de31a48464a4b137bf91bcac0dbf2714ff118610b49e92acc1",
+  "original_summary_sha256": "6a81008ce9a82778b570437c3bb2efc25e7ff190c7da2127ca32ae25e22a5a91"
+}

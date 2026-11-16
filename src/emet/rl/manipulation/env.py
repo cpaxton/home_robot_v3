@@ -90,6 +90,7 @@ class ManipulationConfig:
     contact_cone: str = "pyramidal"
     contact_impratio: float = 1.0
     balanced_grasp_setup: bool = False
+    grasp_setup_prefer_nominal: bool = True
     tamp_carry_trajectories: bool = False
     carry_target_mode: str = "combined"
     carry_push_scale: float = 0.0
@@ -144,6 +145,7 @@ class ManipulationConfig:
     feedback_orientation_error: str = "rotation6"
     feedback_reference_velocity: bool = False
     wheel_feedback_gain: float = 2.0
+    wheel_feedback_current_velocity: bool = False
     physical_wheel_slew: bool = False
     wheel_jerk_limits: tuple[float, float] | None = None
     precision_tracking_reward: bool = False
@@ -178,6 +180,10 @@ class ManipulationConfig:
             raise ValueError("translation share requires a local reach curriculum")
         if not np.isfinite(self.wheel_feedback_gain) or not 0 <= self.wheel_feedback_gain <= 2:
             raise ValueError("wheel feedback gain must be in [0, 2]")
+        if type(self.wheel_feedback_current_velocity) is not bool:
+            raise ValueError("current wheel feedback velocity must be boolean")
+        if self.wheel_feedback_current_velocity and self.robot != "innate_mars":
+            raise ValueError("current wheel feedback velocity is Mars-only")
         if type(self.restoring_yaw_feedback) is not bool or (
             self.restoring_yaw_feedback
             and (
@@ -335,6 +341,10 @@ class ManipulationConfig:
             raise ValueError("TAMP carry references require Mars direct-velocity pose tracking with preview")
         if self.balanced_grasp_setup and self.robot != "innate_mars":
             raise ValueError("balanced grasp setup currently supports Mars only")
+        if type(self.grasp_setup_prefer_nominal) is not bool or (
+            not self.grasp_setup_prefer_nominal and not self.balanced_grasp_setup
+        ):
+            raise ValueError("maximum-margin setup requires a boolean preference and balanced grasp setup")
         if not np.isfinite(self.contact_impratio) or not 1 <= self.contact_impratio <= 10:
             raise ValueError("contact impedance ratio must be in [1, 10]")
         if self.contact_impratio != 1 and self.contact_cone != "elliptic":
@@ -434,6 +444,8 @@ class ManipulationEnv(gym.Env):
         self._configure_preview()
         self.monitor = ContactMonitor(self.model, self.profile)
         self.substeps = round(self.profile.dt / self.model.opt.timestep)
+        # Optional read-only diagnostics, attached only around an observed tick.
+        self.physics_observer = None
         self.action_space = spaces.Box(-1, 1, (self.profile.action_size,), dtype=np.float32)
         self.observation_space = spaces.Dict(
             {
@@ -453,6 +465,7 @@ class ManipulationEnv(gym.Env):
     def _configure_preview(self):
         self.control.turn_progress_guard_enabled = self.config.base_turn_progress_guard
         self.control.base_velocity_feedback_gain = self.config.wheel_feedback_gain
+        self.control.base_velocity_feedback_current = self.config.wheel_feedback_current_velocity
         # The old teacher's 0.015-rad deadband exceeds this task's 0.01-rad
         # heading success condition. Correct the new task's comparator without
         # changing historical reset/teacher behavior for other distributions.
@@ -573,6 +586,8 @@ class ManipulationEnv(gym.Env):
                 self.control.stop()
                 self._physics_invalid = True
                 return {"force": 0.0, "bilateral_contact": False, "invalid_physics": True}
+            if self.physics_observer is not None:
+                self.physics_observer(self)
             if score and (
                 last["force"] > self.profile.unsafe_force
                 or self.monitor.wheel_lift
@@ -714,7 +729,7 @@ class ManipulationEnv(gym.Env):
         if self.config.balanced_grasp_setup and grasp_fixture:
             from emet.rl.manipulation.grasp_setup import plan_setup
 
-            plan = plan_setup(self)
+            plan = plan_setup(self, prefer_nominal=self.config.grasp_setup_prefer_nominal)
             if plan is None:
                 self.initialization_failure_reason = "no_stable_grasp_setup"
                 return False

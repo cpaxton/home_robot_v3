@@ -7,6 +7,7 @@ remain explicit. This is a primitive environment, never a full pick/place claim.
 
 import multiprocessing as mp
 import traceback
+from pathlib import Path
 
 import gymnasium as gym
 import numpy as np
@@ -25,7 +26,8 @@ class _Closed(BaseException):
     pass
 
 
-def _worker(connection, case, oracle, arm_reference, initial_settle_s):
+def _worker(connection, case, oracle, arm_reference, initial_settle_s, wheel_feedback_current_velocity, trace_path):
+    import hashlib
     import json
 
     from emet.agent.tools import get_tools
@@ -33,14 +35,20 @@ def _worker(connection, case, oracle, arm_reference, initial_settle_s):
     from emet.controller.task.tamp.native_adapter import adapter_for
     from emet.eval.mars_tamp_control import fixture
     from emet.rl.manipulation.command_runtime import TaskPoseRuntimeTiming, task_pose_teacher_action
+    from emet.rl.manipulation.tamp_policy import robot_identity
     from emet.rl.manipulation.whole_body_observation import actor_observation, privileged_state
     from emet.rl.manipulation.whole_body_reward import RewardMeter
 
     env = robot = None
+    decisions, outcome = [], {"status": "incomplete"}
     try:
-        env, admission = fixture(case)
+        env, admission = fixture(case, wheel_feedback_current_velocity=wheel_feedback_current_velocity)
         if not admission["accepted"]:
             raise ValueError("fixture_admission:" + str(admission.get("reason")))
+        initial_state_sha256 = hashlib.sha256(
+            np.r_[env.data.qpos.copy(), env.data.qvel.copy(), float(env.data.time)].tobytes()
+        ).hexdigest()
+        compiled_robot_identity = robot_identity(env.model)
         env.control.retention_context_enabled = True
         env.control.history = None
         env.control.base_velocity_feedback_gain = 0.5
@@ -73,6 +81,8 @@ def _worker(connection, case, oracle, arm_reference, initial_settle_s):
                     self.meter = RewardMeter(env)
                 info = {
                     "case_id": case["id"],
+                    "model_fingerprint": env.fingerprint,
+                    "compiled_robot_identity": compiled_robot_identity,
                     "reward_terms": self.meter.last_terms.copy(),
                     "elapsed_control_ticks": max(1, self.ticks),
                     "reward_group_ticks": np.asarray(self.tick_rewards, dtype=np.float32).reshape(-1, 3),
@@ -98,6 +108,16 @@ def _worker(connection, case, oracle, arm_reference, initial_settle_s):
                 self.ticks = 0
                 self.pending = True
                 self.motion = reference_velocity(env.control)
+                if trace_path is not None:
+                    decisions.append(
+                        {
+                            "time": float(env.data.time),
+                            # Exactly the sensor arrays supplied over IPC. The
+                            # privileged critic is deliberately excluded.
+                            "observation": {k: observation[k].tolist() for k in ("history", "preview", "motion")},
+                            "action": action.tolist(),
+                        }
+                    )
                 return action
 
             def after_step(self):
@@ -117,6 +137,7 @@ def _worker(connection, case, oracle, arm_reference, initial_settle_s):
             timing=TaskPoseRuntimeTiming(60.0, 61.0),
             arm_execution="cartesian",
             arm_reference=arm_reference,
+            record_observations=trace_path is not None,
         )
         robot.step_observer = bridge.after_step
         # Development reset conditioning: physical settling before planning,
@@ -208,6 +229,10 @@ def _worker(connection, case, oracle, arm_reference, initial_settle_s):
             "retention_lost": bool(getattr(env, "retention_lost", False)),
             "executor_result": executor_result,
             "initial_settle_s": initial_settle_s,
+            "wheel_feedback_current_velocity": env.control.base_velocity_feedback_current,
+            "initial_state_sha256": initial_state_sha256,
+            "model_fingerprint": env.fingerprint,
+            "compiled_robot_identity": compiled_robot_identity,
             "object_translation_m": (env.data.xpos[env.payload].copy() - object_initial).tolist(),
             "object_rotation_rad": float(
                 np.arccos(
@@ -217,11 +242,28 @@ def _worker(connection, case, oracle, arm_reference, initial_settle_s):
                 )
             ),
         }
+        outcome = {
+            "status": "terminal",
+            **{
+                k: info[k]
+                for k in (
+                    "code",
+                    "primitive_success",
+                    "stop_confirmed",
+                    "executor_result",
+                    "initial_state_sha256",
+                    "model_fingerprint",
+                    "compiled_robot_identity",
+                )
+            },
+        }
         connection.send(("terminal", bridge.observation(), bridge.reward.copy(), info))
     except _Closed:
+        outcome = {"status": "client_closed"}
         if robot is not None:
             robot.stop_and_confirm("training_client_closed")
     except BaseException as exc:
+        outcome = {"status": "error", "error": str(exc), "traceback": traceback.format_exc()}
         if robot is not None:
             robot.stop_and_confirm("training_worker_failed")
         try:
@@ -229,19 +271,55 @@ def _worker(connection, case, oracle, arm_reference, initial_settle_s):
         except (BrokenPipeError, EOFError):
             pass
     finally:
-        if env is not None:
-            env.close()
-        connection.close()
+        try:
+            if trace_path is not None:
+                from emet.rl.manipulation.mastery import save_report
+
+                save_report(
+                    trace_path,
+                    {
+                        "format": "mars-tamp-primitive-trace-v1",
+                        "case": case,
+                        "oracle": bool(oracle),
+                        "initial_settle_s": initial_settle_s,
+                        "wheel_feedback_current_velocity": wheel_feedback_current_velocity,
+                        "outcome": outcome,
+                        "stop_confirmed": robot.stop_confirmed if robot is not None else None,
+                        "commands": robot.commands if robot is not None else [],
+                        "ticks": robot.trace if robot is not None else [],
+                        "decisions": decisions,
+                    },
+                )
+        finally:
+            if env is not None:
+                env.close()
+            connection.close()
 
 
 class TampPrimitiveEnv(gym.Env):
-    def __init__(self, cases, *, oracle=False, arm_reference="s_curve", timeout=90.0, initial_settle_s=0.0):
+    def __init__(
+        self,
+        cases,
+        *,
+        oracle=False,
+        arm_reference="s_curve",
+        timeout=90.0,
+        initial_settle_s=0.0,
+        wheel_feedback_current_velocity=False,
+        trace_dir=None,
+    ):
         if not cases or arm_reference not in {"s_curve", "jerk_limited"} or not np.isfinite(timeout) or timeout <= 0:
             raise ValueError("nonempty cases and a bounded simulator training configuration required")
         if not np.isfinite(initial_settle_s) or not 0 <= initial_settle_s <= 2.0:
             raise ValueError("development settling must be bounded in [0,2] seconds")
+        if type(wheel_feedback_current_velocity) is not bool:
+            raise ValueError("current wheel feedback velocity must be boolean")
+        self.wheel_feedback_current_velocity = wheel_feedback_current_velocity
         self.cases, self.oracle, self.arm_reference, self.timeout = list(cases), bool(oracle), arm_reference, timeout
         self.initial_settle_s = float(initial_settle_s)
+        self.trace_dir = Path(trace_dir).resolve() if trace_dir is not None else None
+        if self.trace_dir is not None:
+            self.trace_dir.mkdir(parents=True, exist_ok=False)
         self.observation_space = spaces.Dict(
             {
                 "history": spaces.Box(-np.inf, np.inf, (20, 101), np.float32),
@@ -277,10 +355,22 @@ class TampPrimitiveEnv(gym.Env):
             else self.cases[self.cursor % len(self.cases)]
         )
         self.cursor += 1
+        # Per-reset numbering prevents overwriting repeated case identities.
+        self.trace_path = self.trace_dir / f"episode-{self.cursor:04d}.json.gz" if self.trace_dir else None
         context = mp.get_context("spawn")
         self.connection, child = context.Pipe()
         self.process = context.Process(
-            target=_worker, args=(child, case, self.oracle, self.arm_reference, self.initial_settle_s), daemon=True
+            target=_worker,
+            args=(
+                child,
+                case,
+                self.oracle,
+                self.arm_reference,
+                self.initial_settle_s,
+                self.wheel_feedback_current_velocity,
+                self.trace_path,
+            ),
+            daemon=True,
         )
         self.process.start()
         child.close()

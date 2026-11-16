@@ -111,9 +111,20 @@ merges, measured policy improvement and hardware readiness are separate decision
       low-level base feedback/oscillation first, validate current-velocity
       feedback through reset/motion/stop, then train missing directions on the
       corrected plant. Matched current-COM replay already improves frozen
-      candidate full success 2/12→8/12 with no PPO or gate change; publish the
-      companion diagnostic before treating the option as qualified. Next
-      curriculum pair is bounded at 16,384 decisions per variant after fresh
+      candidate full success 2/12→8/12 with no PPO or gate change. The completed
+      [actual-reset validation](docs/experiments/mars_current_feedback_reset_validation_20261115.md)
+      confirms 24 stops and 1,299 regressions; legacy reaches 151/164 general and
+      12/12 common cases, but 0/6 TAMP versus teacher 5/6. The
+      [four-episode trace study](docs/experiments/mars_tamp_input_diagnostic_20261115.md)
+      confirms input delivery and small learned commands, followed by clipped
+      open-jaw feedback. Preserve real inputs; train the actual near-contact
+      distribution mixed with general tracking after fresh checks/admission.
+      The teacher's support-margin rejection now has an actionable public
+      failure code; independently admit the measured-state replan without
+      weakening the support check. Settling/velocity/GRU frozen probes
+      did not close this gap. Keep PR #240's 17 training and 24 audit cases
+      distinct from admitted/trained evidence. The conditional curriculum
+      pair remains bounded at 16,384 decisions per variant after fresh
       source/teacher gates; preserve reward/representation and report exact
       per-case exposure. Measurement/reward changes are conditional if still
       needed, not simultaneous knobs. Preserve original scores and independent
@@ -122,6 +133,18 @@ merges, measured policy improvement and hardware readiness are separate decision
       offline and native diagnostics do not relabel any candidate failure.
       The opt-in axis-angle feature still needs a separate controlled trained
       comparison; do not confound it with the plant, reward or velocity studies.
+- [x] **Repair drift after Cartesian hold entry.** Bounded nonfault reacquisition
+      preserves goals, history, grip authority and the original deadline. On
+      the explicitly declared 4 mm / 0.04 rad task contract, the retained actor
+      now completes grasp pose and executor closure; lift planning rejects
+      insufficient support reserve. Keep the original precision failures and
+      all [twelve task diagnostics](docs/experiments/mars_task_arrival_20261115.md).
+- [ ] **Train actual grasp-pose and fixed-world-hand/base motion.** Extend the
+      pregrasp-only primitive boundary, obtain fresh stage-specific teacher
+      admission, and mix these reachable references with general tracking.
+      Do not increase timeouts or accept the actor's 2.15 mm advance as a
+      completed 20 mm support-preparation goal. Keep loaded retention/grasp-fit
+      repair separate, with original force/support/retention thresholds.
 - [ ] **Advance real contact skills in stages.** Follow the
       [safety/task curriculum](docs/plans/2026-11-13_whole_body_safety_curriculum.md)
       from actual pregrasp to closure/lift, loaded transport/braking, and
