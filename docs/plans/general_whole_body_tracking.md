@@ -13,6 +13,61 @@ combined constrained targets, rotations, translations, goal changes and
 recovery. A grasp-planning IK witness establishes geometric admission; the actor
 still receives pose targets and emits bounded velocities.
 
+## Coupled control and embodiment comparison
+
+Current direction, 2026-11-16: learn coupled base/arm control for both Mars and
+Stretch. General-purpose control remains a goal for both; it is not restricted
+to robots with a six-axis stationary arm. Use the
+[active work index](../rl/ACTIVE_WORK.md) and [ordered current plan](mars_wbc_next_steps.md)
+for launch decisions. The continuation experiments below are historical
+protocols/results, not instructions to restart those runs or their old mixture.
+The current intended outer allocation is 50/50 general/task by physical ticks,
+after stage-specific admission.
+
+The common contract is one component-masked SE(2) base target plus one SE(3)
+target and native gripper/hand coordinates per supported hand. In hand-only
+mode the authorized base may move. In base-region/partial-mask mode coordinate
+within the declared constraints; fully specified base/hand references must be
+jointly feasible. Do not independently sample arbitrary endpoints and interpret
+failures as a deficiency of the controller. Region and multi-hand adapter
+support are requirements to verify, not claims about existing runtime coverage.
+
+1. Construct reachable start/goal pairs and smooth paths using full-robot FK/IK
+   witnesses, including nonholonomic base motion where applicable. Preserve
+   rejected references and identify geometric, timing, collision, support and
+   solver failures separately. FK endpoint reachability alone does not certify
+   the intervening trajectory or its dynamics.
+2. Test hand-only/free-base, fixed-world-hand with moving base, constrained
+   coupled motion, changing goals and quiet holds. Preserve precise hand
+   tracking and native force/jerk/support limits. Pair learned/teacher cases
+   within each embodiment and keep the frozen task/audit populations distinct.
+3. Diagnose model, controller and learning failures before declaring an
+   embodiment limitation. On demonstrated executable references, failure of
+   the learned actor remains a tracking/training problem to investigate.
+
+### Optional MABEL diagnostic
+
+Keep Mars first and Stretch in scope. If those diagnostics suggest an
+embodiment limitation or leave it unresolved, add a more redundant robot as a
+separate simulator comparison. [MABEL's official project](https://robotmabel.github.io/website/)
+and [source repository](https://github.com/robotmabel/open_mabel) describe two
+7-DoF arms, a lift/torso, dexterous hands and a holonomic base, with a published
+MuJoCo model. These make it a candidate for the comparison; its assets and
+runtime have not been imported or validated here.
+
+Before a MABEL rollout, pin its source revision and model/assets/licenses;
+validate joint coupling, actuator units/limits, contacts, gravity, wheel/base
+mapping and support/stop behavior. Begin with one active hand and a declared
+stationary posture for other coordinates, then explicitly test both hands and
+their self-collision/shared-body constraints. Represent its native hand
+coordinates explicitly; do not silently reinterpret them as a scalar gripper.
+Use the same task semantics and outcome definitions with native physical
+limits and comparable workspace-relative difficulty. Report differences in
+redundancy, actuation, contacts and base mobility: better performance on MABEL
+alone would not prove that Mars or Stretch failures are hardware limitations.
+No MABEL integration, policy, hardware readiness or cross-robot transfer is
+claimed by this plan.
+
 ## First gate: preserve moving-goal performance during updates
 
 The completed goal-gated settling experiment retains accurate stationary holds,
