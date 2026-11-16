@@ -141,13 +141,24 @@ development calibration. Learned pose gains remain trainable; active-hand and
 partial-base mappings remain unchanged. The nested v2 navigation contract makes
 older v3 actor runtimes reject unsupported semantics. Legacy defaults are kept.
 
-These are rest-to-rest reference tests. Before integrating interactive goal
-dragging, implement and validate moving-start braking/replans that match the
-previous reference velocity/acceleration, preserve physics/history/faults, and
-remain inside the native derivative and geometry bounds. Do not restart a
-zero-velocity reference while the robot is moving. Keep the
+The rest-to-rest tests now have a moving-replan follow-up. `install_base_goal`
+matches the current unretimed base reference, brakes within the native derivative
+bounds, screens the new geometry and preserves physics/history/faults. Its 50 ms
+past tail keeps preview derivatives continuous. The viewer uses the final
+endpoint for markers/edits and batches adjacent updates without dropping pause
+or mode commands. This changes the announced reference, not an actor output
+filter. Unrelated moving schedules, external phase retiming and loaded commands
+remain rejected by this base-only interface.
+
+Physical support remains independent of reference continuity: two reverse
+caster failures reproduce with and without retargeting. Removing body-velocity
+feedback globally helps reverse motion but harms coupled hand accuracy, so test
+a supported per-axis execution contract before another training run. The
+scoped diagnostic passes 15/15, but is not a deployable checkpoint. Validate
+broader coupled cases, fresh audits, TAMP and mask transitions next. Keep the
+[replan/servo report](../experiments/base_goal_replan_20261116.md) and prior
 [endpoint diagnostic](../experiments/base_goal_reference_20261116.md) distinct
-from raw static-goal convergence, loaded carry and hardware qualification.
+from loaded carry, checkpointed agent integration and hardware qualification.
 
 ## Next gate: expand the distribution after updates are reliable
 

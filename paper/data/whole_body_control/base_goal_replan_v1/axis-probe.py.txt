@@ -1,0 +1,34 @@
+"""Diagnostic bridge only: base-only forward P=0/yaw P=.5, hand P=.5/.5.
+
+The execution override is deliberately not exported as a deployable checkpoint.
+"""
+import hashlib,json,runpy
+from pathlib import Path
+import numpy as np,torch
+from emet.rl.manipulation.carry_benchmark import digest
+from emet.rl.manipulation.coupled_tracking import CoupledTrackingEnv as Original,SUITE,load_suite
+from emet.rl.manipulation.policy import load_control_policy
+from emet.rl.test_drive import Simulation
+from emet.rl.regression_gate import ROOT,source_state
+
+def feedback(c):
+ c.base_velocity_feedback_gain=np.array([0.,.5]) if not c.hand_mask and c.base_mask.all() else .5
+class ScopedEnv(Original):
+ def step(self,action):feedback(self.unwrapped.control);return super().step(action)
+class ScopedSimulation(Simulation):
+ def step(self):feedback(self.env.control);return super().step()
+
+def main():
+ torch.set_num_threads(1);out=ROOT/'logs/eval/base-goal-axis-feedback-probe-v1';out.mkdir(parents=True,exist_ok=False)
+ bundle=load_control_policy(ROOT/'logs/eval/base-goal-reference-native-v1/actor',robot='innate_mars');before=source_state(ROOT)
+ helpers=runpy.run_path(str(ROOT/'logs/recovery/base-direction-bootstrap-v1/train.py'));moving=runpy.run_path(str(ROOT/'logs/recovery/base-goal-replan-native-v1/moving.py'))
+ all_specs=moving['specs']();moving['run_moving'].__globals__['specs']=lambda:[s for s in all_specs if s['id'].endswith(':5') or s['id'].endswith(':7')];moving['run_moving'].__globals__['CoupledTrackingEnv']=ScopedEnv;moving['run_ui'].__globals__['Simulation']=ScopedSimulation
+ report={'format':'base-goal-axis-feedback-probe-v1','source_state_digest':digest(before),'runner_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),'diagnostic_execution_bridge':True,'not_a_deployable_checkpoint':True,'base_only_gains':[0,.5],'active_hand_gains':[.5,.5],'new_training_steps':0,'hardware_used':False,'safety_promoted':False,'summary':{},'complete':False}
+ def save():(out/'run.json').write_text(json.dumps(report,indent=2,allow_nan=False)+'\n')
+ save()
+ rows=moving['run_moving'](bundle,helpers['new_base_cases']()[0],helpers,out);report['summary']['failed-reverse-replays']={'attempts':len(rows),'successes':sum(c['success'] for c in rows)};save()
+ rows=moving['run_ui'](bundle,helpers,out);report['summary']['ui-moving']={'attempts':len(rows),'successes':sum(c['success'] for c in rows)};save()
+ evaluate=helpers['evaluate_general'];evaluate.__globals__['OUT']=out;evaluate.__globals__['CoupledTrackingEnv']=ScopedEnv
+ rows=evaluate(bundle.actor,load_suite()['robots']['innate_mars'],SUITE,'general-v1');report['summary']['general-v1']={'attempts':len(rows),'successes':sum(c['success'] for c in rows)}
+ assert source_state(ROOT)==before;report['complete']=True;save();print('SCOPED_SUMMARY',report['summary'],flush=True)
+if __name__=='__main__':main()

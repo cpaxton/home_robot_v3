@@ -55,7 +55,7 @@ The earlier 4,096-decision pilot and both 1,024-update imitation diagnostics are
 complete. Static lateral endpoint convergence and broader coupled coverage remain gaps. No full
 pick-and-place or hardware controller is qualified.
 
-Current follow-up source **`0a682deb`** adds a continuous rest-to-rest base
+Earlier endpoint source **`0a682deb`** adds a continuous rest-to-rest base
 endpoint compiler and opt-in reference feedforward/XY-region/heading calibration.
 Its complete native readout preserves **24/24 base paths, 10/10 small general,
 6/10 larger general, 6/6 unloaded TAMP and 4/4 moving handoffs**. Raw static goals
@@ -65,6 +65,17 @@ verified canonical receipt; the paper builds (59 pages), and evaluation is
 logged to offline W&B `ybaxsdnt`. Measured jerk and moving-start retarget continuity
 remain explicit gaps. No UI/service default or checkpoint is promoted. See the
 [endpoint report](../experiments/base_goal_reference_20261116.md).
+
+Current implementation source **`13c53634`** adds motion-matched base replans,
+past-preview continuity and atomic opt-in viewer goal batching. Native source
+`e30a7dfc` preserves the old 86-case cohorts and passes 10/12 new moving cases
+and 3/3 actual viewer/public-bundle cases. Two reverse caster events reproduce
+without retargeting. Global gain zero resolves those reverse replays but
+regresses coupled accuracy, so it is rejected as a global replacement. The
+axis/mask-scoped diagnostic passes 15/15; it remains unsupported for deployment.
+Final source-bound regressions pass 1,520/1,520, the cold viewer passes and the
+paper builds (60 pages); no PPO is active. See the
+[replan/servo report](../experiments/base_goal_replan_20261116.md).
 
 | Evidence | Scope / result |
 | --- | --- |
@@ -108,8 +119,8 @@ grasp. Open-jaw pose operations do not establish loaded retention.
    rate path causes substantial hunting; disabling it helps nine hand/coupled
    cases but harms base-only. Retain native servo limits and reactive arm
    compensation. The opt-in signed/reference-tracking modes now pass the
-   existing paths and rest-to-rest endpoint audit. Next validate boundary-matched
-   moving-goal replans and diagnose measured jerk at turn transitions, while
+   existing paths and rest-to-rest endpoint audit. Moving replans now have
+   complete readouts. Next implement and validate a supported per-axis feedback contract and diagnose measured jerk, while
    retaining the larger coupled hand misses and contact stops as failures.
 3. **Improve training exposure, then run a bounded comparison.** Preserve outer
    50/50 general/task physical ticks, train/audit separation and fixed-final
@@ -179,6 +190,22 @@ Completed jobs: native `20261116_122228_f4f79a` and regressions
 `20261116_122228_e25e20`, immutable runtime `/tmp/emet-base-navigation-823b3d1d`.
 The previous source's canceled partial suite is not reused.
 
-The explicit unpromoted v3 test candidate is
-`logs/eval/base-navigation-native-v2/actor`. It is opt-in; existing service/UI
-checkpoints are not switched. All controller training/test workers are finished.
+The retained reference-tracking v3 test candidate is
+`logs/eval/base-goal-reference-native-v1/actor` (gain 0.5). The global gain-zero
+candidate at `logs/eval/base-goal-replan-feedback0-v1/actor` is a rejected
+diagnostic replacement; do not switch service/UI defaults to it. No actor or
+hardware interface is promoted. Final source runtime is
+`/tmp/emet-base-goal-replan-13c53634`, with its verified compressed source archive
+under ignored `logs/recovery/`. Completed duplicate runtimes `0a682deb`,
+`adc5d168` and `e30a7dfc` were pruned after process/job/archive verification;
+their archives, logs and results remain intact.
+
+Completed jobs: native gain-zero `20261116_151955_512625`, full regressions
+`20261116_151952_bd45a2`, scoped diagnostic `20261116_153146_db79d9` and final
+verification/evidence `20261116_153518_be7428`. The only live controller UI is
+job `20261116_154539_54ba7e` on CPU14, localhost port8766, retained gain-0.5
+checkpoint root. Reset a finished/faulted scene before selecting the actor;
+accepted goal edits then resume automatically. The completed offline stopping
+check `20261116_155434_94880d` confirms both failed reverse cases stop after
+0.15 s of physical stepping; original wheel failures remain counted. The
+superseded partial regression run is cancelled and its verified orphan group terminated; its XML is never reused.

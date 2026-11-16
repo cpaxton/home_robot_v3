@@ -840,3 +840,23 @@ are preserved. These rest-to-rest experiments do not establish moving-start
 retarget continuity, force/jerk qualification, loaded manipulation or hardware
 readiness. Complete producer-separated cases are retained in
 \texttt{base\_goal\_reference\_v1/}.
+
+\paragraph{Moving goals and native feedback diagnosis.}
+Moving base-only replans match the announced pose, velocity and acceleration,
+brake with bounded reference jerk, and join a new feasible reference at rest.
+A bounded past-reference tail preserves the negative preview and derivative
+sample at the replacement boundary. Geometry rejection retains the old
+schedule; no physics, history or fault reset occurs. The initial fixed audit
+completes 10/12 moving-goal cases and three direct viewer/checkpoint cases.
+Both failures unload the caster during reverse motion. Matched unchanged-plan
+replays reproduce the same gaps, separating an existing servo/plant failure
+from reference retargeting. Removing extra body-velocity proportional feedback
+resolves the reused reverse cases but regresses coupled hand accuracy; it is
+rejected as a global replacement. Native wheel servos, support/force guards,
+velocity limits and learned tensors are unchanged. An unsupported axis/mask
+override passes fifteen diagnostic cases (two reverse replays, three viewer
+cases and ten small-general cases); larger coupled cases and mask transitions
+remain untested under that override. Fresh source-bound regressions pass
+1,520 tests. This work does not establish loaded-task or hardware qualification.
+Complete producer-separated outcomes are retained in
+\texttt{base\_goal\_replan\_v1/}.

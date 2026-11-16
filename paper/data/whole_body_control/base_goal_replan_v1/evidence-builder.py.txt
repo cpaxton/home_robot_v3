@@ -1,0 +1,64 @@
+"""Keep compact complete outcomes; raw dynamics traces/weights stay ignored."""
+import hashlib,json,gzip,shutil
+from pathlib import Path
+import numpy as np
+ROOT=Path.cwd();OUT=ROOT/'paper/data/whole_body_control/base_goal_replan_v1';NATIVE=ROOT/'logs/eval/base-goal-replan-feedback0-v1'
+def sha(p):return hashlib.sha256(p.read_bytes()).hexdigest()
+def read(p):return json.loads(p.read_text())
+def render(value,depth=0,key=None):
+ indent='  '*depth
+ if isinstance(value,dict):return '{\n'+',\n'.join('  '*(depth+1)+json.dumps(k)+': '+render(v,depth+1,k) for k,v in value.items())+'\n'+indent+'}'
+ if isinstance(value,list):
+  if key=='cases':return '[\n'+',\n'.join('  '*(depth+1)+json.dumps(row,separators=(',',': '),allow_nan=False) for row in value)+'\n'+indent+']'
+  if all(not isinstance(v,(dict,list)) for v in value):return json.dumps(value,allow_nan=False)
+  return '[\n'+',\n'.join('  '*(depth+1)+render(v,depth+1) for v in value)+'\n'+indent+']'
+ return json.dumps(value,allow_nan=False)
+KEYS=('base_goal_error','base_heading_error_rad','ee_position_error','ee_orientation_error','time_to_first_settle','peak_contact_force','unsafe_contact','wheel_lift','max_wheel_gap','min_wheel_load','peak_base_linear_jerk_m_s3','peak_base_yaw_jerk_rad_s3','peak_hold_base_drift_m','randomization')
+def compact(c):
+ row={k:c[k] for k in ('id','seed','case','mode','cohort','success','code','target','start','duration_s','endpoint_xy_error_m','endpoint_heading_error_rad','stop_confirmed','all_updates_delivered','checkpoint_model_match','inference_counts','safety_flags','physics_trace','events','initial_admission','feedback_gain','runtime_override_only') if k in c}
+ if 'physics_trace' in row:
+  record=dict(row['physics_trace']);parts=Path(record['path']).parts;relative=Path(*parts[parts.index('logs'):]);assert sha(ROOT/relative)==record['sha256'];record['path']=str(relative);row['physics_trace']=record
+ if 'updates' in c:row['updates']=c['updates']
+ if 'metrics' in c:row['metrics']={k:c['metrics'][k] for k in KEYS if k in c['metrics']}
+ if 'error' in c:row['error']=c['error']
+ return row
+
+def main():
+ OUT.mkdir(parents=True,exist_ok=True);run=read(NATIVE/'run.json');assert run['complete']
+ from emet.rl.regression_gate import verify_regressions
+ receipt=ROOT/'logs/eval/base-goal-replan-regressions-v2/full.receipt.json';verified=verify_regressions(receipt,root=ROOT)
+ cf=ROOT/'logs/eval/base-goal-replan-counterfactual-v1/results.json';counter=read(cf);assert counter['complete']
+ cohorts={}
+ for name in ('base-directions','general-v1','general-v2','tamp','point-goals','compiled-goals','handoffs','moving-goals','ui-moving'):
+  path=NATIVE/f'{name}.json';rows=read(path);cohorts[name]={'report_sha256':sha(path),'attempts':len(rows),'successes':sum(c['success'] for c in rows),'cases':[compact(c) for c in rows]}
+ report={'format':'base-goal-replan-evidence-v1','run':run,'run_sha256':sha(NATIVE/'run.json'),'source_archive_sha256':'01d33ac94b1600aa1b522bdfc90bda76c75be5d437fe889785fec97604437f7f','native_job':'20261116_151955_512625','regression_job':'20261116_151952_bd45a2','counterfactual_job':'20261116_145325_e28df4','regressions':{'tests':len(verified['test_ids']),'seconds':verified['finished_unix']-verified['started_unix'],'receipt_sha256':sha(receipt),'xml_sha256':verified['xml_sha256']},'cohorts':cohorts,'counterfactual':{'raw_report_sha256':sha(cf),'source_state_digest':counter['source_state_digest'],'cases':[compact(c) for c in counter['cases']]},'evidence_builder_sha256':sha(Path(__file__)),'new_training_steps':0,'hardware_used':False,'safety_promoted':False}
+ wb=NATIVE/'wandb-evaluation.json'
+ if wb.exists():report['wandb_evaluation']=read(wb)
+ previous=ROOT/'logs/eval/base-goal-replan-native-v1';old=read(previous/'run.json');assert old['complete']
+ report['prior_feedback05']={'run':old,'run_sha256':sha(previous/'run.json'),'source_archive_sha256':'529c678577c06535290651736239397b8ddc9f14359ceee4c4c1969ddd982011','moving_cases':[compact(c) for c in read(previous/'moving-goals.json')],'ui_cases':[compact(c) for c in read(previous/'ui-moving.json')]}
+ fresh=NATIVE/'fresh-reverse/moving-goals.json';cohorts['fresh-reverse']={'report_sha256':sha(fresh),'cases':[compact(c) for c in read(fresh)]}
+ probe=ROOT/'logs/eval/base-goal-feedback-ablation-v1/results.json';p=read(probe);assert p['complete'];report['feedback_gain_probe']={'raw_report_sha256':sha(probe),'cases':[compact(c) for c in p['cases']]}
+ scoped=ROOT/'logs/eval/base-goal-axis-feedback-probe-v1';p=read(scoped/'run.json');assert p['complete'];report['axis_probe']={'run':p,'cases':{name:[compact(c) for c in read(scoped/(name+'.json'))] for name in ('moving-goals','ui-moving','general-v1')}}
+ cold=NATIVE/'cold-viewer.json';report['cold_viewer']=read(cold);assert report['cold_viewer']['success'];report['cold_viewer_sha256']=sha(cold)
+ stop=ROOT/'logs/eval/base-goal-stop-window-v1/results.json';p=read(stop);assert p['complete'];report['stop_window_diagnostic']={'job':'20261116_155434_94880d','raw_report_sha256':sha(stop),'report':p}
+ shutil.copyfile(ROOT/'logs/recovery/base-goal-stop-window-v1/run.py',OUT/'stop-window-runner.py.txt')
+ report['uncompressed_source_archive_sha256']='1283c90af4f92a64eafdebbd8abce58c723aa0da7e8551bbc6948b65bac38a38'
+ text=render(report)+'\n';assert json.loads(text)==report;(OUT/'results.json').write_text(text)
+ for source,name in ((ROOT/'logs/recovery/base-goal-replan-feedback0-v1/run.py','native-runner.py.txt'),(ROOT/'logs/recovery/base-goal-replan-feedback0-v1/moving.py','moving-runner.py.txt'),(ROOT/'logs/recovery/base-goal-replan-counterfactual-v1/run.py','counterfactual-runner.py.txt'),(Path(__file__),'evidence-builder.py.txt')):shutil.copyfile(source,OUT/name)
+ for source,name in ((ROOT/'logs/recovery/base-goal-feedback-ablation-v1/run.py','gain-probe.py.txt'),(ROOT/'logs/recovery/base-goal-axis-feedback-probe-v1/run.py','axis-probe.py.txt'),(ROOT/'logs/recovery/base-goal-replan-native-v1/run.py','prior-native-runner.py.txt'),(ROOT/'logs/recovery/base-goal-replan-native-v1/moving.py','prior-moving-runner.py.txt'),(ROOT/'logs/recovery/base-goal-replan-finalize-v1/cold_viewer.py','cold-viewer.py.txt'),(ROOT/'logs/recovery/base-goal-replan-finalize-v1/log_wandb.py','offline-logging.py.txt')):shutil.copyfile(source,OUT/name)
+ (OUT/'protocol.json').write_text(json.dumps(read(NATIVE/'moving-protocol.json'),indent=2)+'\n')
+ import matplotlib
+ matplotlib.use('Agg')
+ import matplotlib.pyplot as plt
+ rows=read(NATIVE/'moving-goals.json');selected=next(c for c in rows if c['id'].endswith(':4'));trace=selected['trace'];b=np.array([t['base'] for t in trace]);reference=np.array([t['reference'] for t in trace]);origin=np.array(selected['target'])-selected['spec']['updates'][-1][1];t=.05*(np.arange(len(trace))+1)
+ fig,axes=plt.subplots(1,3,figsize=(14,4))
+ axes[0].plot(*(b[:,:2]-origin[:2]).T,label='Measured');axes[0].plot(*(reference[:,:2]-origin[:2]).T,linestyle='--',label='Continuous reference');axes[0].scatter(*np.array(selected['spec']['initial'])[:2],marker='x',label='Initial goal');axes[0].scatter(*(np.array(selected['target'])[:2]-origin[:2]),marker='*',label='Updated goal');axes[0].axis('equal');axes[0].set(xlabel='World x displacement (m)',ylabel='World y displacement (m)',title='Gain-zero diagnostic: moving goal');axes[0].legend(fontsize=7)
+ for key,label in (('requested_base_velocity','Actor request'),('applied_base_velocity','Applied wheel request'),('measured_base_velocity','Measured COM')):axes[1].plot(t,np.array([x[key] for x in trace])[:,0],label=label)
+ axes[1].axvline(1.5,color='black',linestyle=':');axes[1].set(xlabel='Physical time (s)',ylabel='Forward velocity (m/s)',title='Reference continuity is not motor tracking');axes[1].legend(fontsize=7)
+ for c in counter['cases']:
+  if not c['id'].endswith(':5'):continue
+  trace=c['trace'];axes[2].plot(.05*(np.arange(len(trace))+1),[x['caster_gap_m']*1000 for x in trace],label=c['mode'],linestyle='--' if c['mode']=='retarget' else '-')
+ axes[2].axhline(.1,color='black',linestyle=':',label='Unchanged unloading threshold');axes[2].axvline(1.5,color='grey',linestyle=':');axes[2].set(xlabel='Physical time (s)',ylabel='Maximum caster gap (mm)',title='Matched reverse replay; failures retained');axes[2].legend(fontsize=7);fig.tight_layout();fig.savefig(OUT/'moving-goals.svg');fig.savefig(NATIVE/'moving-goals-preview.png',dpi=120);plt.close(fig)
+ svg=OUT/'moving-goals.svg';svg.write_text('\n'.join(line.rstrip() for line in svg.read_text().splitlines())+'\n')
+ print(json.dumps({'summary':run['summary'],'regressions':report['regressions'],'artifact_bytes':sum(p.stat().st_size for p in OUT.iterdir())}))
+if __name__=='__main__':main()

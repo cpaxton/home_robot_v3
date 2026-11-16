@@ -186,10 +186,21 @@ merges, measured policy improvement and hardware readiness are separate decision
       region and explicit base-only heading calibration reach 8/8 development
       endpoints, 16/16 fresh endpoint audits and 1,480 source-bound tests. Keep
       measured jerk and all failed reference/governor ablations visible. Still
-      need boundary-matched moving replans
-      before wiring continuous UI dragging. Do not call timed-path tracking
+      validate the now-implemented moving replans and opt-in UI dragging against
+      physical support/jerk failures. Do not call timed-path tracking
       universal endpoint navigation. See the
       [endpoint report](docs/experiments/base_goal_reference_20261116.md).
+- [ ] **Validate continuous replans and native servo response together.**
+      Motion-matched braking/replans, bounded past previews, atomic admission,
+      final UI markers and batched edits are implemented. The first moving
+      audit is 10/12 and actual viewer integration 3/3. Both reverse caster
+      failures reproduce without a goal change. Gain zero fixes reused reverse
+      cases but regresses coupled hand accuracy, so do not make it a global
+      default. The scoped diagnostic passes 15/15 and current-source regressions
+      pass 1,520/1,520. Implement a supported/versioned per-axis contract and
+      audit broader coupled cases, TAMP and moving mask transitions before
+      deployment or further PPO. Keep support/force thresholds unchanged.
+      See the [replan/servo report](docs/experiments/base_goal_replan_20261116.md).
 - [ ] **Bind future actor exports to their actual training plants.** General
       and TAMP currently use different contact solver settings. Use explicit
       per-plant export/admission evidence or align the configurations before
