@@ -40,10 +40,16 @@ Strike through or move to a PR when done.
       4/8 / Caliban 3/4. These are separate development cohorts. Evidence:
       [base approach results](docs/experiments/tamp_native_base_approach_20261116.md).
 - [ ] Review and merge the opt-in stack in dependency order (#226, #231, #234,
-      #242); repeat integration checks after retargeting. Add a
-      predeclared held-out native cohort and explicit execution-failure/recovery
-      trials before reliability claims. Observed task execution, exploration,
+      #242); repeat integration checks after retargeting. Observed task execution, exploration,
       household native adapters and hardware remain separate gates.
+- [x] Freeze new untouched layouts and native scripted recovery trials on
+      `feat/tamp-prospective-evaluation`: 4/4 new native tasks and 4/4 actual-agent
+      tasks, 10/10 transfers each; 2/2 scripted recovery tasks, 5/5 boundary checks;
+      416 affected tests pass. [Results](docs/experiments/tamp_prospective_20261116.md).
+- [ ] Exercise the same between-transfer partial failure through the LLM, then
+      qualify observed task admission and exploration. The completed recovery
+      trials are scripted planning-admission faults, not grasp-loss or held-object
+      recovery; four new layouts do not establish broad reliability.
 
 ## Shared evidence/navigation stack (#199 / #202)
 

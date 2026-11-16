@@ -51,3 +51,12 @@ CPU0–7 and serialized agent CPU8–13. Keep local GPU/VLM use disabled. Respec
 other controller work; do not modify its stage-prefix, actor or training code.
 Raw outputs stay in `.tamp-runs/prospective-20261116/`; commit compact results
 and update the paper only after every declared run terminates.
+
+## Completed frozen gate
+
+All ten declared episodes completed on clean source `63b85dfa`, with unchanged
+PR242 motion-module hashes. Prospective native and actual-agent cohorts each
+pass 4/4 tasks and 10/10 transfers. Both native scripted recovery trials pass,
+including all five expected boundary checks. The affected suite passes 416 tests
+without failures/errors/skips. [Results and limitations](../experiments/tamp_prospective_20261116.md).
+No native policy was tuned or failed case replaced during this cohort.

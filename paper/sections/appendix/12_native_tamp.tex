@@ -386,3 +386,43 @@ unchanged bound. These are sparse simulator debug samples, ending before any
 loaded-payload rebinding; they do not measure force or establish replay fidelity.}
 \label{fig:tamp_base_approach}
 \end{figure}
+
+\paragraph{Prospective layouts and bounded scripted recovery.}
+A separate protocol is committed before execution at \texttt{63b85dfa}.
+Four untouched within-family layouts combine new XY shifts and cube yaw,
+retaining the existing two-goal and buffered-swap instructions. Motion-module
+and command-client hashes match the frozen checked-approach implementation.
+No policy is tuned or failed case replaced. Native tools and the actual CLI each
+pass 4/4 tasks and 10/10 transfers (Figure~\ref{fig:tamp_prospective}); the agent
+also satisfies 8/8 independent object goals. It makes 16 remote model calls
+(116.4~s inference wall time), with valid result contracts, no shutdown warnings
+and one compliant invalid-handle stop before a new authorized user turn.
+Native prospective trials contain 2,573 audited commands; agent trials contain
+2,545, with no forbidden commands or infrastructure failures.
+
+Two separately counted native scripted recovery trials pass, completing four
+transfers and five expected boundary checks. The first invalidates a plan through
+ordinary head motion, verifies stale/consumed-handle rejection without dispatch,
+then rediscovers and replans. The second injects one admission refusal after a
+measured completed transfer. Its receipt remains partial with one completed step
+and a preflight failure on step two; a new request completes only the remaining
+transfer. These 987 audited commands contain no forbidden commands. The injected
+refusal represents planning admission, not contact loss or an exhausted real
+solver budget. Scripted recovery does not qualify LLM handling of partial tasks
+or held-object recovery. All 416 affected tests pass. Protocol, receipt histories
+and source/job hashes are in
+\path{docs/experiments/tamp_prospective_20261116.json}.
+These single-trial, independently initialized layouts do not establish broad
+reliability, new-language reasoning, observed grounding or household/hardware
+capability; historical development cohorts are unchanged.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/tamp_prospective_20261116.pdf}
+\caption{The four prospectively frozen layouts through native tools and the
+actual agent CLI. Labels show completed/declared transfers; green requires a
+successful receipt and independent physical goals. Recovery trials are counted
+separately. One independently initialized trial per cell does not estimate broad
+reliability. XY offsets are in millimetres; yaw is in radians.}
+\label{fig:tamp_prospective}
+\end{figure}
