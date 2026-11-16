@@ -51,7 +51,13 @@ pick-and-place or hardware controller is qualified.
 | [Unloaded-stage admission](../experiments/mars_unloaded_grasp_admission_20261116.md) | Strict original contracts: teacher 5/6 at both pregrasp and grasp-pose boundaries, all twelve stops confirmed, no closure/loaded commands. Both stage admissions remain false. |
 | #239 runtime `2cbf70d8` | 1,330 passing source-bound canonical regressions, verified against that runtime. |
 | Pre-consolidation #241 runtime `9cd439bf` | 1,367 passing source-bound canonical regressions, exactly bound to the twelve-episode teacher source; four offline readout tests pass. |
-| Combined #240 + #241 source | Requires its own fresh regression receipt. Parent receipts are historical evidence, not a qualification of the combined source. |
+| Combined runtime `c2d82bb7` | **1,389/1,389 passing canonical regressions**, zero failures/errors/skips, 744.87 s. Fresh receipt verified against the consolidated source; [compact validation record](../../paper/data/whole_body_control/mars_controller_consolidation_v1/validation.json). Parent receipts are not reused. |
+
+The combined check ran as managed job `20261116_014840_fbac92` on CPU15.
+Its full XML/receipt remain ignored under
+`logs/eval/mars-controller-unification-v1/`; the compact record binds their
+hashes and the preserved source archive. This is software validation only,
+with no additional teacher episodes, PPO steps or hardware use.
 
 Keep EE pose-tracking rotation distinct from object rotation relative to the
 hand. Successful teacher unloaded grasp errors are 0.000295–0.001423 rad;
@@ -95,11 +101,16 @@ side should conceal the other's failures.
 The TAMP benchmark/agent effort in thread
 `01a0ddca-cf1f-7a43-ab7f-30a48ba6dcd0` continues its already-running validation
 in `/home/cpaxton/src/home_robot_v2/.worktrees/tamp-benchmark-runtime`.
+Its completed handoff is [PR #242](https://github.com/cpaxton/home_robot_v3/pull/242),
+branch `feat/tamp-native-base-approach`, head `855348a2`, stacked on #234.
+It reports privileged native 8/8 tasks and 18/18 transfers, actual-agent 4/4
+tasks and 10/10 transfers, four rejection checks and 407 affected tests.
 It is a planning/agent validation partner, not a second controller-training
 owner. Reuse its supported planning interfaces where appropriate; coordinate
 changes to shared TAMP code before editing. Its native/agent results are not
-learned-policy or Mars hardware qualification. Current partner branch/PR and
-any reserved lanes must be confirmed at handoff, not inferred from old #231.
+learned-policy or Mars hardware qualification. Its completed benchmark package is separate from the controller review stack;
+do not infer its branch from old #231 or merge planner changes without semantic
+review. Confirm any new job reservations at the next handoff.
 
 These completed overlapping conversations were preserved and archived:
 

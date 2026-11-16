@@ -1,0 +1,29 @@
+{
+  "format": "mars-controller-consolidation-validation-v1",
+  "runtime_producer_revision": "c2d82bb725166e76ca8f38957816a348bbea4649",
+  "source_state_digest": "2f8fb69f3aff21ccfc04eeea6d4632d3cebd69dc81236f709a84017f86b353fa",
+  "verified_against_consolidated_runtime": true,
+  "source_archive": {
+    "path": "logs/recovery/mars-controller-unification-source-c2d82bb7.tar",
+    "sha256": "ccc5c9d152a1959b5631e6c759758319ac8e19d5181f7f3173f2e007da9774a0"
+  },
+  "regressions": {
+    "tests": 1389,
+    "failures": 0,
+    "errors": 0,
+    "skips": 0,
+    "elapsed_wall_s": 744.8714807033539,
+    "job": "20261116_014840_fbac92",
+    "receipt_path": "logs/eval/mars-controller-unification-v1/full.receipt.json",
+    "receipt_sha256": "8ad29b5d006e99318b504ebbdc3014f02a537e32df4dc8a0d2608ceb8aa100b0",
+    "xml_sha256": "d17c49b8b9691d63d0349ee9c30c009fabd82c59d5483ee74826cd38225cb332"
+  },
+  "scope": "Fresh software validation of combined #239/#240/#241 source; no new physical admission or policy qualification.",
+  "historical_teacher_stage_admissions": {
+    "pregrasp": false,
+    "grasp_pose": false
+  },
+  "new_teacher_episodes": 0,
+  "new_ppo_steps": 0,
+  "hardware_used": false
+}
