@@ -78,6 +78,38 @@ def test_approach_requires_measured_arrival_and_confirmed_stop(monkeypatch, faul
         assert result.reason == 'navigation_cancellation_unconfirmed'
     elif fault == 'timeout':
         assert result.reason == 'command_outcome_unknown'
+    robot.cancel_navigation.assert_called_once()
+
+
+def test_quaternion_sign_is_not_scene_motion_or_mutation():
+    from emet.controller.manipulation.native_scene import qpos_difference
+    model, data = scene(obstacle='<body name="object" pos="1 0 1"><freejoint/><geom size=".01"/></body>')
+    original = data.qpos.copy()
+    flipped = original.copy()
+    for j in range(model.njnt):
+        if model.jnt_type[j] == mujoco.mjtJoint.mjJNT_FREE:
+            a = int(model.jnt_qposadr[j])+3
+            flipped[a:a+4] *= -1
+    np.testing.assert_array_equal(qpos_difference(model, flipped, original), 0.)
+    changed = flipped.copy()
+    changed[0] += .02
+    assert qpos_difference(model, changed, original)[0] == pytest.approx(.02)
+    np.testing.assert_array_equal(data.qpos, original)
+
+
+@pytest.mark.parametrize('drift', ['base', 'arm', 'stalled_clock', None])
+def test_grasp_requires_fresh_quiet_base_and_arm(monkeypatch, drift):
+    model, data = scene()
+    clock = [0.]
+    def sync(d):
+        d.time = 0. if drift == 'stalled_clock' else clock[0]
+        d.qpos[0] = .04 + (.02 if drift == 'base' else 0.)
+        d.qpos[7] = .005*np.sin(clock[0]*30) if drift == 'arm' else 0.
+        mujoco.mj_kinematics(model, d)
+    monkeypatch.setattr(module, 'time', SimpleNamespace(monotonic=lambda: clock[0],
+        sleep=lambda dt: clock.__setitem__(0, clock[0]+dt)))
+    ex = SimpleNamespace(model=model, data=data, qadr=np.array([7]), synchronize=sync)
+    assert module.verify_approach_ready(ex, module.BaseApproach((0., 0., 0.), (.04, 0., 0.))) is (drift is None)
 
 
 def test_changed_geometry_rejects_before_dispatch(monkeypatch):

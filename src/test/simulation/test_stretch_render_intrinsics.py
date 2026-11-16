@@ -56,6 +56,8 @@ def test_actual_stretch_registration_and_published_k_match_render_projection(mon
     )
     np.testing.assert_allclose(server.head_K, expected, atol=1e-10)
     np.testing.assert_allclose(manager.get_camera_params(StretchCameras.cam_d435i_rgb), raw_k)
+    np.testing.assert_allclose(model.cam_intrinsic[cid, :2], raw_k[[0, 1], [0, 1]])
+    np.testing.assert_allclose(raw_k[:2, 2], [(settings.width-1)/2, (settings.height-1)/2])
     # Independently ask MuJoCo for the actual GL camera frustum (no GL context).
     data, scene = mujoco.MjData(model), mujoco.MjvScene(model, maxgeom=2000)
     mujoco.mj_forward(model, data)
@@ -63,6 +65,11 @@ def test_actual_stretch_registration_and_published_k_match_render_projection(mon
     camera.type, camera.fixedcamid = mujoco.mjtCamera.mjCAMERA_FIXED, cid
     mujoco.mjv_updateScene(model, data, mujoco.MjvOption(), None, camera, mujoco.mjtCatBit.mjCAT_ALL, scene)
     frustum = scene.camera[0]
+    # GL window coordinates have pixel centres at i+0.5. For this symmetric
+    # actual frustum, the optical axis is W/2,H/2 in window coordinates, hence
+    # (W-1)/2,(H-1)/2 in the zero-based pixel-index convention used by RGBD.
+    assert frustum.frustum_center == pytest.approx(0., abs=1e-10)
+    assert frustum.frustum_top+frustum.frustum_bottom == pytest.approx(0., abs=1e-10)
     focal = settings.height * frustum.frustum_near / (frustum.frustum_top - frustum.frustum_bottom)
     np.testing.assert_allclose(raw_k[[0, 1], [0, 1]], focal, atol=1e-4)
     points = np.array([[0.03, 0.01, 1.0], [-0.05, 0.1, 0.8]])

@@ -50,13 +50,14 @@ def main():
     goals = dict(zip(('object2', 'object1'), regions, strict=True))
     os.environ['EMET_PHYSICAL_EXECUTION'] = '1'
     os.environ['EMET_PHYSICAL_AUDIT'] = str(out / 'actuation.jsonl')
+    public_goals = {'red cylinder': goals['object2'], 'blue cube': goals['object1']}
     instruction = (
         'Execute both pick-and-place goals on the table. These are privileged simulator inputs. '
         'Discover tasks, plan with placement_region, execute returned plan_ref, read results, '
         'and rediscover before the next object. Whole footprints must fit the regions. '
         'Return one tool call per round; do not stop at a plan. Stop on any partial or unknown '
         'execution; no held-object recovery is available. Do not drop constraints. Goals: '
-        + json.dumps({'red cylinder': goals['object2'], 'blue cube': goals['object1']})
+        + json.dumps(public_goals)
     )
     if args.native_task_config:
         from emet.controller.task.tamp.native_transfer import validate_native_task_config
@@ -124,7 +125,8 @@ def main():
                 pass
         rejection_seen = any(e.get('code') == 'unknown_plan' for e in envelopes)
         physical_goals = rc == 0 and stable and not any(r['satisfied'] for r in initial.values())
-        receipt_complete = completion_receipt(envelopes, multi_step=args.native_task_config is not None)
+        receipt_complete = completion_receipt(envelopes, multi_step=args.native_task_config is not None,
+                                             required_objects=public_goals)
         result = {'physical_goals_satisfied': physical_goals, 'execution_completion_verified': receipt_complete,
                   'task_passed': physical_goals and receipt_complete,
                   'agent_integration': integration_evidence(rows),

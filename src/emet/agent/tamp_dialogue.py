@@ -27,7 +27,10 @@ class TampDialogueContext:
 
     This supplies referents for a new user request, never current scene evidence
     or permission to execute. Oversized records are dropped whole so constraints
-    are not silently truncated. A non-TAMP turn clears the retained context.
+    are not silently truncated. Each record is capped at 8192 serialized
+    characters, so two records can contribute 16384 characters plus prompt
+    framing. A dispatched non-TAMP tool clears context, including mixed turns;
+    dispatcher bookkeeping and unexecuted proposals do not count as tools.
     """
 
     def __init__(self):
@@ -56,12 +59,15 @@ class TampDialogueContext:
         for line in results:
             prefix, sep, body = line.partition('] ')
             name = prefix.removeprefix('[')
-            if not sep or name not in TAMP_TOOLS:
+            if not sep or not prefix.startswith('[') or name == 'dispatch':
                 continue
+            if name not in TAMP_TOOLS:
+                self._turns = []
+                return
             outcome = ToolOutcome.coerce(name, body)
             data = outcome.payload.get('data', {})
             progress = {key: data[key] for key in _PROGRESS_FIELDS
-                        if key in data and type(data[key]) in (str, int, bool)}
+                        if key in data and type(data[key]) in (str, int, bool, type(None))}
             for key in ('completed_actions', 'unverified_actions'):
                 if isinstance(data.get(key), list):
                     progress[key] = [_action(action) for action in data[key]]

@@ -316,13 +316,16 @@ class MujocoServerCameraManagerSync:
         settings = camera.initial_camera_settings
 
         self.mujoco_server.mjmodel.cam_fovy[cam.id] = settings.field_of_view_vertical_in_degrees
-        self.mujoco_server.mjmodel.cam_intrinsic[cam.id] = list(settings.focal) + [
-            0,
-            0,
-        ]  # a Mujoco takes: [fx, fy, px, py]
-        self.mujoco_server.mjmodel.cam_resolution[cam.id] = (
-            settings.sensor_resolution if settings.sensor_resolution is not None else (settings.width, settings.height)
-        )
+        # MuJoCo stores focal/principal offsets in sensor units when a physical
+        # sensor size is declared; our renderer uses the equivalent pinhole FOV.
+        resolution = ((settings.width, settings.height) if settings.sensor_size is None else
+                      (settings.sensor_resolution or (settings.width, settings.height)))
+        focal = rendered_camera_intrinsics(settings.field_of_view_vertical_in_degrees,
+                                          *resolution).diagonal()[:2]
+        if settings.sensor_size is not None:
+            focal *= np.asarray(settings.sensor_size) / np.asarray(resolution)
+        self.mujoco_server.mjmodel.cam_intrinsic[cam.id] = [*focal, 0., 0.]
+        self.mujoco_server.mjmodel.cam_resolution[cam.id] = resolution
         if settings.sensor_size is not None:
             self.mujoco_server.mjmodel.cam_sensorsize[cam.id] = settings.sensor_size
 

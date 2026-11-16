@@ -33,7 +33,7 @@ class RefuseAfterOneTransfer:
                 self.record_path.write_text(json.dumps(self.records, indent=2) + '\n')
             return receipt
         receipt = self.provider.execute(operator)
-        if isinstance(receipt, TaskExecutionResult) and receipt.success or receipt is True:
+        if (isinstance(receipt, TaskExecutionResult) and receipt.success) or receipt is True:
             self.completed += 1
         return receipt
 
@@ -45,10 +45,12 @@ def replan_after_boundary(call, rejection, checks, instruction, consumed_ref):
     native provider this also rejects held or unsettled objects. Never continue
     after an unexpected receipt or an incorrectly reusable failed handle.
     """
-    if not checks or not all(row["passed"] for row in checks):
+    if not checks or not all(row.get("passed") is True for row in checks):
         return None
     rejection("execute_task_plan", ["unknown_plan"], plan_ref=consumed_ref)
-    if not all(row["passed"] for row in checks):
+    # The callback appends its rejection outcome to checks. Re-evaluate the
+    # updated ledger before rediscovery; this is not a duplicate pure check.
+    if not all(row.get("passed") is True for row in checks):
         return None
     if call("scene_tasks")["status"] != "ok":
         return None

@@ -1,5 +1,10 @@
 # Living TODOs (small / near-term)
 
+- [ ] Land the consolidated [merged TAMP review corrections](docs/plans/2026-11-16_tamp_stack_review.md)
+      on `fix/tamp-stack-review`, then integrate them into the observed-admission
+      follow-up. Original #226/#231/#234/#242/#243/#244 are merged; the new
+      review findings require this separate fix, not rewriting historical runs.
+
 - [ ] Qualify observed robot self-occupancy and phase-specific contact admission:
       [issue #245](https://github.com/cpaxton/home_robot_v3/issues/245). PR #226
       supplies evidence/adapter contracts only. Preserve unknown-space rejection

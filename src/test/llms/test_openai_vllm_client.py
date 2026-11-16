@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import base64
 import copy
+from concurrent.futures import ThreadPoolExecutor
+from threading import Event
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock
@@ -18,6 +20,65 @@ import pytest
 from emet.llms.eqa_vl_settings import resolve_vl_endpoint
 from emet.llms.openai_vllm_client import OpenaiVLLMClient, parse_openai_endpoint_spec
 from emet.llms.vllm_factory import create_dynamem_vllm
+
+
+def test_remote_generation_serializes_concurrent_reset_and_history():
+    client = OpenaiVLLMClient(base_url='http://unused:1/v1')
+    entered, release, reset_started, reset_done = Event(), Event(), Event(), Event()
+    def create(**kwargs):
+        entered.set()
+        assert release.wait(5.)
+        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content='answer'))])
+    client._openai = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+    def reset():
+        reset_started.set()
+        client.reset()
+        reset_done.set()
+    with ThreadPoolExecutor(2) as pool:
+        first = pool.submit(client.generate_multimodal, 'question')
+        assert entered.wait(5.)
+        second = pool.submit(reset)
+        assert reset_started.wait(5.)
+        try:
+            assert not reset_done.wait(.05)
+        finally:
+            release.set()
+        assert first.result(5.) == 'answer'
+        second.result(5.)
+    assert client.get_history() == [] and client.steps == 0
+
+
+def test_explicit_dialogue_cannot_enter_before_preserved_history_restores():
+    client = OpenaiVLLMClient(base_url='http://unused:1/v1')
+    original = [{'role': 'user', 'content': 'original'}]
+    client.add_history(original[0])
+    preserved, release, attempted, sdk_entered = Event(), Event(), Event(), Event()
+    def create(**kwargs):
+        sdk_entered.set()
+        raise RuntimeError('request failed')
+    client._openai = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+    def preserve():
+        with client.preserve_conversation():
+            client.reset()
+            client.add_history({'role': 'user', 'content': 'temporary'})
+            preserved.set()
+            assert release.wait(5.)
+    def generate():
+        attempted.set()
+        with pytest.raises(RuntimeError, match='request failed'):
+            client.generate_messages([{'role': 'user', 'content': 'explicit'}])
+    with ThreadPoolExecutor(2) as pool:
+        first = pool.submit(preserve)
+        assert preserved.wait(5.)
+        second = pool.submit(generate)
+        assert attempted.wait(5.)
+        try:
+            assert not sdk_entered.wait(.05)
+        finally:
+            release.set()
+        first.result(5.)
+        second.result(5.)
+    assert client.get_history() == original and client.last_call_metrics['completed'] is False
 
 
 def test_parse_openai_endpoint_spec() -> None:

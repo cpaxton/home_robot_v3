@@ -525,19 +525,31 @@ def test_checked_approach_plan_uses_real_shifted_base_without_commands(native, m
         command.assert_not_called()
 
 
-def test_place_target_rotates_measured_payload_center_offset(native):
-    _, _, context, _ = native
-    adapter = context['_native_tamp_adapter']
-    ex = adapter._executor('object1')
-    ee = adapter.data.body(ex.ee_body)
-    entries = placements_from_mujoco_model(adapter.model, adapter.data)
-    offset = ee.xmat.reshape(3, 3).T @ (np.array(entries['object1']['pos'])-ee.xpos)
-    c, s = np.cos(.2), np.sin(.2)
-    rotation = np.array([[c, -s, 0], [s, c, 0], [0, 0, 1]]) @ ee.xmat.reshape(3, 3)
-    goal, before = np.array([.02, -.65, .54]), adapter.data.qpos.copy()
-    targets = adapter._place_targets(ex, 'object1', goal, rotation)
-    np.testing.assert_allclose(targets[1][0]+rotation@offset, goal, atol=1e-12)
-    np.testing.assert_array_equal(adapter.data.qpos, before)
+def test_place_target_rotates_measured_payload_center_offset():
+    model = mujoco.MjModel.from_xml_string("""<mujoco><compiler angle="radian"/><worldbody>
+      <body name="ee" pos=".2 .1 .3" euler=".2 -.4 .7"><geom size=".01"/></body>
+      <body name="desired" euler=".4 .2 -.6"/>
+      <body name="payload" pos=".4 -.1 .6" euler=".1 .3 -.2"><freejoint/>
+        <geom type="box" pos=".02 -.01 .03" size=".01 .02 .03"/>
+      </body></worldbody></mujoco>""")
+    data = mujoco.MjData(model)
+    mujoco.mj_forward(model, data)
+    adapter = NativeTableAdapter.__new__(NativeTableAdapter)
+    adapter.model, adapter.data = model, data
+    ee = data.body('ee')
+    gid = int(model.body('payload').geomadr[0])
+    corners = np.array([[x, y, z] for x in (-1, 1) for y in (-1, 1) for z in (-1, 1)])
+    world_vertices = (corners*model.geom_size[gid]) @ data.geom_xmat[gid].reshape(3, 3).T + data.geom_xpos[gid]
+    attached_vertices = (world_vertices-ee.xpos) @ ee.xmat.reshape(3, 3)
+    rotation = data.body('desired').xmat.reshape(3, 3).copy()
+    goal, before = np.array([.02, -.65, .54]), data.qpos.copy()
+    targets = adapter._place_targets(SimpleNamespace(ee_body='ee'), 'payload', goal, rotation)
+    delivered = attached_vertices @ rotation.T + targets[1][0]
+    np.testing.assert_allclose((delivered.min(0)+delivered.max(0))/2, goal, atol=1e-12)
+    old_offset = (world_vertices.min(0)+world_vertices.max(0))/2-ee.xpos
+    old_delivered = attached_vertices @ rotation.T + (goal-old_offset)
+    assert np.linalg.norm((old_delivered.min(0)+old_delivered.max(0))/2-goal) > .01
+    np.testing.assert_array_equal(data.qpos, before)
 
 
 @pytest.mark.parametrize('exhausted', [False, True])
@@ -621,8 +633,12 @@ def test_policy_change_invalidates_cached_native_handles(native, monkeypatch):
     old = context['_native_tamp_adapter']
     # Exercise cache/policy identity without aging the measured fixture during
     # an unrelated cold mesh reload. Production freshness checks stay active.
-    monkeypatch.setattr('emet.controller.task.tamp.native_adapter.NativeTableAdapter',
-                        lambda client, **kwargs: NativeTableAdapter(client, model=old.model, **kwargs))
+    def construct(client, *, model=None, **kwargs):
+        assert model is old.model
+        return NativeTableAdapter(client, model=model, **kwargs)
+    monkeypatch.setattr('emet.controller.task.tamp.native_adapter.NativeTableAdapter', construct)
+    robot._state['native_tamp_snapshot']['captured_at'] = time.time()
+    robot._state_received_monotonic = time.monotonic()
     old.plans['old'] = object()
     context['native_tamp_policy'] = 'bounded_release'
     current = adapter_for(context, robot)
@@ -747,3 +763,29 @@ def test_legacy_grasp_search_has_no_extra_approach():
     assert len(list(adapter._grasp_options(None, None, None, None, None, None))) == 1
     assert adapter._grasp_candidates.call_count == 1
     assert not adapter._grasp_candidates.call_args.kwargs
+
+
+def test_primary_placement_cannot_spend_the_vertical_fallback_reserve(native, monkeypatch):
+    _, _, context, call = native
+    adapter = context['_native_tamp_adapter']
+    adapter.pregrasp_fallback_offset_m = (0., 0., .08)
+    adapter.max_planning_ik_calls = 8
+    seen = []
+    dummy = SimpleNamespace(plan_pose=lambda *a, **k: ([], None))
+    def grasps(*args, approach_offset=None, **kwargs):
+        seen.append(approach_offset)
+        adapter._plan_candidate_pose(dummy, None, None)
+        yield np.eye(3), [[], [], []]
+    def placement(*args):
+        if seen[-1] is None:
+            while True:
+                adapter._plan_candidate_pose(dummy, None, None)
+        adapter._plan_candidate_pose(dummy, None, None)
+        return [[], [], []], None
+    monkeypatch.setattr(adapter, '_grasp_candidates', grasps)
+    monkeypatch.setattr('emet.controller.task.tamp.native_adapter.placement_paths', placement)
+    monkeypatch.setattr(surfaces_module, 'free_surface_centers',
+        lambda *a, **k: SimpleNamespace(centers=[np.array([.15, -.6, .54])]))
+    result = call('plan_pick_place', object_name='blue cube', receptacle_name='table')
+    assert result['status'] == 'ok', result
+    assert seen == [None, (0., 0., .08)] and adapter.planning_ik_calls == 8

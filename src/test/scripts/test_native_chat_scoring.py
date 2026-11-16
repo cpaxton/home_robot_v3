@@ -101,5 +101,9 @@ def test_primitive_completion_requires_both_named_objects_and_place_receipts():
     from emet.eval.native_chat_scoring import completion_receipt
     rows = [response('execute_pick_place_plan', data={'object_name': name, 'completed_ops': ['grasp','place']})
             for name in ('red cylinder','blue cube')]
-    assert completion_receipt(rows, multi_step=False)
-    assert not completion_receipt(rows[:1], multi_step=False)
+    names = ('red cylinder', 'blue cube')
+    assert completion_receipt(rows, multi_step=False, required_objects=names)
+    assert not completion_receipt(rows[:1], multi_step=False, required_objects=names)
+    assert not completion_receipt(rows, multi_step=False)
+    rows = [response('pick_place', data={'object_name': 'novel object', 'completed_ops': ['place']})]
+    assert completion_receipt(rows, multi_step=False, required_objects=('novel object',))

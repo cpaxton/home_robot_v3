@@ -15,6 +15,7 @@ from emet.motion.release import (
     ReleasedFallChecker,
     ReleaseLimits,
     body_bounds,
+    held_checker,
     plan_release,
     refine_release,
     wait_native_open,
@@ -82,6 +83,8 @@ def search(ex, drop=0.04):
 def test_opening_collision_finds_bounded_alternative_without_mutating_state():
     ex = rig()
     reference = ex.collision.payload_transform.copy()
+    robot_ids, allowed_pairs, geom_pairs = (set(ex.collision.robot_ids), set(ex.collision.allowed_pairs),
+                                            set(ex.collision.allowed_geom_pairs))
     _, error = ex.plan_gripper_open()
     assert error == "gripper_open_path_failed:invalid_goal:collision"
     before = [a.copy() for a in (ex.data.qpos, ex.data.qvel, ex.data.qacc, ex.data.contact.dist)]
@@ -92,6 +95,7 @@ def test_opening_collision_finds_bounded_alternative_without_mutating_state():
     for old, new in zip(before, (ex.data.qpos, ex.data.qvel, ex.data.qacc, ex.data.contact.dist), strict=True):
         np.testing.assert_array_equal(old, new)
     np.testing.assert_array_equal(reference, ex.collision.payload_transform)
+    assert (ex.collision.robot_ids, ex.collision.allowed_pairs, ex.collision.allowed_geom_pairs) == (robot_ids, allowed_pairs, geom_pairs)
     ex.command_joints.assert_not_called()
 
 
@@ -106,9 +110,125 @@ def test_drop_limit_rejects_all_clearance_alternatives_without_commands():
 
 def test_retreat_obstacle_is_checked_with_open_fingers():
     ex = rig('<body name="obstacle" pos="-.045 0 .05"><geom type="box" size=".008 .02 .008"/></body>')
+    ids = set(ex.collision.robot_ids)
     plan, error = search(ex)
     assert plan is None and "collision" in error
+    assert ex.collision.robot_ids == ids
     ex.command_joints.assert_not_called()
+
+
+def test_held_checker_has_independent_exclusions_and_nested_departure_state():
+    ex = rig()
+    ex.collision._support_departure = {frozenset((0, 1)): {'height_m': 1.}}
+    clone = held_checker(ex.collision, ex.collision.payload_transform)
+    clone.robot_ids.clear()
+    clone.allowed_pairs.clear()
+    clone.allowed_geom_pairs.add(frozenset((1, 2)))
+    clone._support_departure[frozenset((0, 1))]['height_m'] = 2.
+    assert ex.collision.robot_ids and ex.collision.allowed_pairs
+    assert not ex.collision.allowed_geom_pairs
+    assert ex.collision._support_departure[frozenset((0, 1))]['height_m'] == 1.
+
+
+@pytest.mark.parametrize('anchor,reserve', [(np.nan, 0.), (np.inf, 0.), (.025, np.nan), (.025, -.001)])
+def test_release_numeric_limits_cannot_be_disabled_by_bad_anchor_or_reserve(anchor, reserve):
+    ex = rig()
+    plan, error = plan_release(ex, support='table', region=None,
+        limits=ReleaseLimits(.04, .04, height_joint='height'), initial_z=anchor, tracking_reserve_m=reserve)
+    assert plan is None and error == 'native_execution_unavailable'
+
+
+def test_unrelated_vertical_slide_cannot_certify_ee_lowered_clearance():
+    ex = rig('<body name="other" pos="1 0 0"><joint name="other_height" type="slide" axis="0 0 1"/><geom size=".01"/></body>')
+    ex.joint_names = (*ex.joint_names, 'other_height')
+    plan, error = plan_release(ex, support='table', region=None,
+        limits=ReleaseLimits(.04, .04, height_joint='other_height'), initial_z=.025)
+    assert plan is None and error == 'native_execution_unavailable'
+
+
+def test_ik_tolerance_cannot_overshoot_actual_raise_limit(monkeypatch):
+    ex = rig()
+    def overshoot(self, point, rotation):
+        start = self.data.qpos[self.qadr].copy()
+        self.data.qpos[self.qadr] = point[2]-.025+.002
+        mujoco.mj_kinematics(self.model, self.data)
+        return [start, self.data.qpos[self.qadr].copy()], None
+    monkeypatch.setattr(PhysicalPickPlaceExecutor, 'plan_pose', overshoot)
+    plan, error = plan_release(ex, support='table', region=None,
+        limits=ReleaseLimits(.01, .04, offsets_m=(.01,), height_joint='height'), initial_z=.025)
+    assert plan is None and error == 'release_raise_limit'
+    ex.command_joints.assert_not_called()
+
+
+def test_last_adjustment_still_requires_fresh_current_only_verification(monkeypatch):
+    ex = rig()
+    ex.payload_retained = Mock(return_value=True)
+    ex._execute_path = Mock(return_value=PhysicalMotionResult(True, 'ok'))
+    plans = [SimpleNamespace(prefix=[np.array([0.]), np.array([value])], checker=ex.collision,
+        released_checker=object(), target_z=.025+value, gap_m=.01) for value in (.01, .02)]
+    plans.append(SimpleNamespace(prefix=[np.array([.02])], checker=ex.collision,
+        released_checker=object(), target_z=.045, gap_m=.01))
+    planner = Mock(side_effect=[(plan, None) for plan in plans])
+    monkeypatch.setattr('emet.motion.release.plan_release', planner)
+    result = refine_release(ex, support='table', region=None,
+        limits=ReleaseLimits(.04, .04, height_joint='height', max_adjustments=2))
+    assert result.success and ex._execute_path.call_count == 2
+    assert [call.kwargs['allow_adjustment'] for call in planner.call_args_list] == [True, True, False]
+    assert all(call.kwargs['initial_z'] == .025 for call in planner.call_args_list)
+
+
+@pytest.mark.parametrize('fault', ['targets', 'support', 'height', 'payload', 'parent', 'empty_open'])
+def test_release_missing_preconditions_reject_without_commands(fault):
+    ex = rig()
+    support, limits = 'table', ReleaseLimits(.04, .04, height_joint='height')
+    if fault == 'targets':
+        ex.place_targets = []
+    elif fault == 'support':
+        support = 'missing'
+    elif fault == 'height':
+        limits = ReleaseLimits(.04, .04, height_joint='missing')
+    elif fault == 'payload':
+        ex.collision.payload_body = 'another'
+    elif fault == 'parent':
+        ex.collision.payload_parent = 'table'
+    else:
+        ex.gripper_open_configuration = {}
+    plan, error = plan_release(ex, support=support, region=None, limits=limits, initial_z=.025)
+    assert plan is None and error == 'native_execution_unavailable'
+    ex.command_joints.assert_not_called()
+
+
+def test_zero_adjustment_budget_does_not_search_unexecutable_raise(monkeypatch):
+    ex = rig()
+    ex.plan_pose = Mock(side_effect=AssertionError('No alternative IK permitted'))
+    plan, error = plan_release(ex, support='table', region=None,
+        limits=ReleaseLimits(.04, .04, height_joint='height', max_adjustments=0),
+        initial_z=.025, allow_adjustment=False)
+    assert plan is None and error.startswith('gripper_open_path_failed')
+    ex.plan_pose.assert_not_called()
+
+
+def test_missing_release_checker_or_opening_geometry_is_typed_failure():
+    ex = rig()
+    assert wait_native_open(ex).message == 'native_execution_unavailable'
+    ex.released_collision = object()
+    ex.gripper_open_configuration = {}
+    assert wait_native_open(ex).message == 'native_execution_unavailable'
+
+
+@pytest.mark.parametrize('depth,rejected', [(.0009, False), (.0011, True)])
+def test_resting_support_keeps_the_unchanged_one_mm_penetration_gate(depth, rejected):
+    ex = rig()
+    for name, value in [('height', .05), ('left', .02), ('right', .02)]:
+        ex.data.qpos[ex.model.joint(name).qposadr[0]] = value
+    address = int(ex.model.jnt_qposadr[ex.model.body('payload').jntadr[0]])
+    ex.data.qpos[address+2] = .02-depth
+    mujoco.mj_kinematics(ex.model, ex.data)
+    checker = ReleasedFallChecker(ex.model, ex.collision, 'payload', 'table',
+        np.array([[-.3, -.3, 0.], [.3, .3, 0.]]), None, ReleaseLimits(.04, .04))
+    assert checker.configuration_collides(ex.model, ex.data) is rejected
+    if rejected:
+        assert checker.last_contacts[0]['reason'] == 'support_penetration'
 
 
 def test_measured_tracking_reserve_selects_more_clearance_without_relaxing_limits():
@@ -126,6 +246,37 @@ def test_measured_tracking_reserve_selects_more_clearance_without_relaxing_limit
     assert reserved is not None and error is None
     assert reserved.target_z > ordinary.target_z
     assert reserved.gap_m <= 0.04
+    ex.command_joints.assert_not_called()
+
+
+def test_large_measured_shortfall_is_included_in_candidate_height_without_widening_limits():
+    ex = rig()
+    plan, error = plan_release(ex, support='table', region=None,
+        limits=ReleaseLimits(.04, .04, height_joint='height'), initial_z=.025, tracking_reserve_m=.019)
+    assert plan is not None, error
+    assert .025+.02 < plan.target_z <= .025+.04
+    assert plan.gap_m <= .04
+    ex.command_joints.assert_not_called()
+
+
+@pytest.mark.parametrize('maximum_raise,accepted', [(.04, True), (.01, False)])
+def test_release_raises_from_delivered_pose_above_nominal_without_ratchet(maximum_raise, accepted):
+    ex = rig('<body name="opening_obstacle" pos="-.045 0 .06"><geom type="box" size=".002 .01 .002"/></body>')
+    ex.data.qpos[ex.model.joint('height').qposadr[0]] = .05
+    address = int(ex.model.jnt_qposadr[ex.model.body('payload').jntadr[0]])
+    ex.data.qpos[address+2] = .075
+    mujoco.mj_kinematics(ex.model, ex.data)
+    ex.collision.set_payload(ex.model, ex.data, 'payload', ex.ee_body)
+    # Original nominal release was .025: all its old +offsets are below the
+    # delivered pose. A correction may only rise vertically from measured .075.
+    before = ex.data.qpos.copy()
+    ex.place_targets[2] = (np.array([0., 0., .125]), np.eye(3))
+    plan, error = plan_release(ex, support='table', region=None,
+        limits=ReleaseLimits(maximum_raise, .08, height_joint='height'), initial_z=.075)
+    assert (plan is not None) is accepted, error
+    if plan is not None:
+        assert .075 < plan.target_z <= .075+maximum_raise
+    np.testing.assert_array_equal(ex.data.qpos, before)
     ex.command_joints.assert_not_called()
 
 

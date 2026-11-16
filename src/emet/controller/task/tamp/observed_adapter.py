@@ -115,12 +115,13 @@ class _CommandBoundary:
 class ObservedNativeAdapter:
     input_mode = 'observed'
 
-    def __init__(self, robot, *, source, refine, tasks, clock=time.monotonic, max_ik_calls=128):
-        if (source.input_mode != 'observed' or not callable(refine) or type(max_ik_calls) is not int
+    def __init__(self, robot, *, source, refine, tasks, clock=time.monotonic, max_ik_calls=128, robot_name=''):
+        if (not isinstance(robot_name, str) or source.input_mode != 'observed' or not callable(refine) or type(max_ik_calls) is not int
                 or not 6 <= max_ik_calls <= 2048 or not all(callable(getattr(source, name, None))
                 for name in ('snapshot', 'collect', 'current_revision', 'invalidate'))):
             raise ValueError('invalid_observed_native_provider')
         self.robot, self.source, self.refine, self.clock = robot, source, refine, clock
+        self.robot_name = robot_name.strip().casefold()
         self.namespace = uuid.uuid4().hex
         self.task_session = None
         self.tasks = {}
@@ -187,7 +188,8 @@ class ObservedNativeAdapter:
     def discover(self, object_filter='', robot=''):
         with self.lock:
             try:
-                if robot:
+                robot = robot.strip().casefold()
+                if robot and robot != self.robot_name:
                     return self._failure('scene_tasks', 'native_robot_unsupported')
                 rows = []
                 for ref, task in self.tasks.items():
@@ -341,15 +343,24 @@ class ObservedNativeAdapter:
                     current = observe_effect(obj)
                     if frames and frames[-1] is not None:
                         a, b = frames[-1].payload, current.payload
-                        if ((a.reference_id, a.revision) != (b.reference_id, b.revision)
+                        if ((a.object_ref, a.reference_id, a.revision, a.construction)
+                                != (b.object_ref, b.reference_id, b.revision, b.construction)
+                                or not np.array_equal(a.vertices_reference, b.vertices_reference)
+                                or frames[-1].capture.calibration_id != current.capture.calibration_id
                                 or np.linalg.norm(a.pose.world_from_object[:3, 3] - b.pose.world_from_object[:3, 3]) > .005
                                 or shape_identity(a.pose) != shape_identity(b.pose)
                                 or evidence_rotation_distance(a.pose, a.pose.world_from_object[:3, :3], b.pose.world_from_object[:3, :3]) > .02):
                             raise ObservationUnavailable('payload_geometry_changed')
                     return frames
 
+                def observe_after(obj, *, after):
+                    frames = collect_effect(obj, after=after)
+                    if not frames:
+                        raise ObservationUnavailable('visual_evidence_incomplete')
+                    return frames[-1]
+
                 verifier = ObservedVisualVerifier(object_ref=task.object_ref, support_bounds=target_bounds,
-                    observe=observe_effect, collect=collect_effect, clock=self.clock)
+                    observe=observe_effect, collect=collect_effect, observe_after=observe_after, clock=self.clock)
                 ex.visual_verifier = verifier
                 ex.transport = lambda: PhysicalMotionResult(True, 'stationary', 'transport')
                 ref = f'observed_plan:{uuid.uuid4().hex}'

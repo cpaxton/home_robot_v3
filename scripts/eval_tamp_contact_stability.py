@@ -115,6 +115,7 @@ def prepare(args, pilot, case, out):
                  'src/emet/controller/task/tamp/native_transfer.py',
                  'src/emet/simulation/stretch_mujoco/mujoco_server.py',
                  'src/emet/controller/task/tamp/native_adapter.py',
+                 'src/emet/controller/manipulation/native_scene.py',
                  'src/emet/controller/manipulation/physical_pick_place.py'):
         path = REPO / name
         shutil.copyfile(path, sources / path.name)

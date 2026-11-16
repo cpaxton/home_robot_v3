@@ -10,7 +10,7 @@ No live object pose, contact tolerance or retention reference is changed.
 from __future__ import annotations
 
 import time
-from copy import copy
+from copy import copy, deepcopy
 from dataclasses import dataclass
 
 import mujoco
@@ -31,13 +31,23 @@ class ReleaseLimits:
     max_adjustments: int = 2
     height_joint: str = "joint_lift"
     open_settle_timeout_s: float = 3.0
+    descent_step_m: float = 0.002
+    height_axis_min_z: float = 0.99
+    target_epsilon_m: float = 1e-6
+    stable_interval_s: float = 0.1
+    poll_interval_s: float = 0.05
 
     def __post_init__(self):
-        values = [self.max_raise_m, self.max_drop_m, self.clearance_m, self.open_settle_timeout_s, *self.offsets_m]
+        values = [self.max_raise_m, self.max_drop_m, self.clearance_m, self.open_settle_timeout_s,
+                  self.descent_step_m, self.height_axis_min_z, self.target_epsilon_m,
+                  self.stable_interval_s, self.poll_interval_s, *self.offsets_m]
         if (
             not np.isfinite(values).all()
             or min(values) < 0
             or self.open_settle_timeout_s <= 0
+            or min(self.descent_step_m, self.height_axis_min_z, self.target_epsilon_m,
+                   self.stable_interval_s, self.poll_interval_s) <= 0
+            or self.height_axis_min_z > 1
             or type(self.max_adjustments) is not int
             or self.max_adjustments < 0
             or not self.offsets_m
@@ -116,6 +126,10 @@ class HeldPoseChecker(MujocoSceneCollisionChecker):
 def held_checker(base, measured):
     checker = HeldPoseChecker.__new__(HeldPoseChecker)
     checker.__dict__ = base.__dict__.copy()
+    checker.robot_ids = set(base.robot_ids)
+    checker.allowed_pairs = set(base.allowed_pairs)
+    checker.allowed_geom_pairs = set(base.allowed_geom_pairs)
+    checker._support_departure = deepcopy(base._support_departure)
     checker.payload_transform = base.payload_transform.copy()
     checker.measured_transform = measured.copy()
     checker.last_contacts = []
@@ -137,6 +151,9 @@ class ReleasedFallChecker(MujocoSceneCollisionChecker):
         names = {model.body(b).name for b in self.ids}
         self.robot_ids = base.robot_ids | self.ids
         self.allowed_pairs = {p for p in base.allowed_pairs if not names.intersection(p)}
+        self.allowed_geom_pairs = {p for p in base.allowed_geom_pairs
+                                   if not any(int(model.geom_bodyid[g]) in self.ids for g in p)}
+        self._support_departure = {}
         # Ordinary support contact is below the existing penetration tolerance.
         # Watching the released payload must not exempt deep table penetration.
         self.obj, self.patch, self.region, self.limits = obj, patch, region, limits
@@ -151,11 +168,13 @@ class ReleasedFallChecker(MujocoSceneCollisionChecker):
         bounds = body_bounds(model, probe, self.ids)
         gap = float(bounds[0, 2] - self.patch[1, 2])
         if not bounds_fit(bounds, self.patch, self.region, self.limits.max_drop_m):
-            self.last_contacts = [{"bodies": [self.obj], "reason": "release_bounds_invalid"}]
+            self.last_contacts = [{"bodies": [self.obj], "reason":
+                "support_penetration" if gap < -.001 else "release_bounds_invalid"}]
             return True
         addr = int(model.jnt_qposadr[model.body(self.obj).jntadr[0]])
         z = float(probe.qpos[addr + 2])
-        for shift in np.linspace(0, max(0.0, gap), max(2, int(np.ceil(max(0.0, gap) / 0.002)) + 1)):
+        for shift in np.linspace(0, max(0.0, gap),
+                                 max(2, int(np.ceil(max(0.0, gap) / self.limits.descent_step_m)) + 1)):
             probe.qpos[addr + 2] = z - shift
             if MujocoSceneCollisionChecker.configuration_collides(self, model, probe):
                 return True
@@ -184,25 +203,62 @@ class ReleasePlan:
     gap_m: float
 
 
-def plan_release(executor, *, support, region, limits, initial_z, attempted=(), tracking_reserve_m=0.0):
+def plan_release(executor, *, support, region, limits, initial_z, attempted=(), tracking_reserve_m=0.0,
+                 allow_adjustment=True):
     """Certify closed-arm motion, opening (including reserve) and retreat; no IO."""
     ex = executor
     if (
         ex.input_mode != "privileged"
+        or not np.isfinite([initial_z, tracking_reserve_m]).all()
+        or tracking_reserve_m < 0
         or type(ex.collision) not in (MujocoSceneCollisionChecker, HeldPoseChecker)
         or ex.payload_body is None
         or ex.collision.payload_transform is None
+        or ex.collision.payload_body != ex.payload_body
+        or ex.collision.payload_parent != ex.ee_body
+        or len(ex.place_targets) != 3
+        or not ex.gripper_open_configuration
     ):
         return None, "native_execution_unavailable"
     model = ex.model
-    cursor = int(model.body(support).id)
+    for target in ex.place_targets:
+        if not isinstance(target, (list, tuple)) or len(target) != 2:
+            return None, 'native_execution_unavailable'
+        try:
+            point, rotation = (np.asarray(value, dtype=float) for value in target)
+        except (TypeError, ValueError):
+            return None, 'native_execution_unavailable'
+        if (point.shape != (3,) or rotation.shape != (3, 3)
+                or not np.isfinite(point).all() or not np.isfinite(rotation).all()):
+            return None, 'native_execution_unavailable'
+    if any(mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, name) < 0
+           for name in ex.gripper_open_configuration):
+        return None, 'native_execution_unavailable'
+    cursor = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, support)
+    root = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, ex.payload_body)
+    height_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, limits.height_joint)
+    if cursor < 0 or root < 0 or height_id < 0:
+        return None, 'native_execution_unavailable'
+    ee = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, ex.ee_body)
+    ancestors = set()
+    while ee > 0:
+        ancestors.add(ee)
+        ee = int(model.body_parentid[ee])
+    if limits.height_joint not in ex.joint_names or int(model.jnt_bodyid[height_id]) not in ancestors:
+        return None, 'native_execution_unavailable'
+    joint = int(model.body_jntadr[root])
+    if joint < 0 or model.jnt_type[joint] != mujoco.mjtJoint.mjJNT_FREE:
+        return None, 'native_execution_unavailable'
     while cursor:
         if model.body_jntnum[cursor]:
             return None, "native_execution_unavailable"
         cursor = int(model.body_parentid[cursor])
-    root = int(model.body(ex.payload_body).id)
-    if any(model.body_jntnum[b] for b in body_subtree(model, ex.payload_body) if b != root):
+    payload_ids = body_subtree(model, ex.payload_body)
+    if any(model.body_jntnum[b] for b in payload_ids if b != root):
         return None, "native_execution_unavailable"
+    if not any(int(model.geom_bodyid[g]) in payload_ids
+               and (model.geom_contype[g] or model.geom_conaffinity[g]) for g in range(model.ngeom)):
+        return None, 'native_execution_unavailable'
     probe = copy(ex)
     probe.data = mujoco.MjData(model)
     mujoco.mj_copyData(probe.data, model, ex.data)
@@ -215,18 +271,26 @@ def plan_release(executor, *, support, region, limits, initial_z, attempted=(), 
     current_point, current_rotation = current.xpos.copy(), current.xmat.reshape(3, 3).copy()
     height = model.joint(limits.height_joint)
     height_z = float(probe.data.xaxis[height.id, 2])
-    if height.type[0] != mujoco.mjtJoint.mjJNT_SLIDE or height_z < 0.99:
+    if height.type[0] != mujoco.mjtJoint.mjJNT_SLIDE or height_z < limits.height_axis_min_z:
         return None, "native_execution_unavailable"
-    surfaces = placements_from_mujoco_model(model, probe.data)[support]["support_surfaces"]
+    entry = placements_from_mujoco_model(model, probe.data).get(support, {})
+    surfaces = entry.get('support_surfaces', ())
+    if len(surfaces) == 0:
+        return None, 'native_execution_unavailable'
     region = None if region is None else np.asarray(region)
     targets = [(current_point, current_rotation)]
-    nominal, rotation = ex.place_targets[1]
-    targets += [(np.asarray(nominal) + [0, 0, delta], rotation) for delta in limits.offsets_m]
+    if allow_adjustment:
+        # Start from measured geometry, while reserving the observed command/FK
+        # shortfall in both candidate construction and the lowered probe. The
+        # original global max_raise still bounds requested and sampled FK poses.
+        targets += [(current_point + [0, 0, tracking_reserve_m+delta], current_rotation)
+                    for delta in limits.offsets_m]
     last = "no_plan_within_budget"
     for index, (point, rotation) in enumerate(targets):
         target_z = float(point[2])
         if target_z > initial_z + limits.max_raise_m or (
-            index and (target_z < current_point[2] or any(abs(target_z - old) < 1e-6 for old in attempted))
+            index and (target_z < current_point[2]
+                       or any(abs(target_z - old) < limits.target_epsilon_m for old in attempted))
         ):
             continue
         probe.data.qpos[:] = original
@@ -255,6 +319,22 @@ def plan_release(executor, *, support, region, limits, initial_z, attempted=(), 
             path = [start.copy(), goal.copy()]
             probe.data.qpos[ex.qadr] = goal
             mujoco.mj_kinematics(model, probe.data)
+            # IK tolerance cannot widen the physical raise limit. Check actual
+            # FK along the already sampled direct path and its delivered goal.
+            heights_valid = True
+            for waypoint in direct.waypoints:
+                probe.data.qpos[ex.qadr] = waypoint
+                mujoco.mj_kinematics(model, probe.data)
+                z = float(probe.data.body(ex.ee_body).xpos[2])
+                if not current_point[2] <= z <= initial_z+limits.max_raise_m:
+                    heights_valid = False
+                    break
+            if not heights_valid:
+                last = 'release_raise_limit'
+                continue
+            probe.data.qpos[ex.qadr] = goal
+            mujoco.mj_kinematics(model, probe.data)
+            target_z = float(probe.data.body(ex.ee_body).xpos[2])
         else:
             path = [start.copy()]
         set_private_payload(model, probe.data, ex.payload_body, ex.ee_body, measured)
@@ -330,6 +410,7 @@ def refine_release(executor, *, support, region, limits):
             initial_z=initial_z,
             attempted=attempted,
             tracking_reserve_m=tracking_reserve,
+            allow_adjustment=len(attempted) < limits.max_adjustments,
         )
         ex.event(
             phase="release_plan",
@@ -364,6 +445,8 @@ def wait_native_open(executor):
         return PhysicalMotionResult(False, "native_execution_unavailable", "release")
     scratch = mujoco.MjData(ex.model)
     released = ex.released_collision
+    if released is None or not ex.gripper_open_configuration:
+        return PhysicalMotionResult(False, 'native_execution_unavailable', 'release')
     # Planning and the opening ACK may advance native time. Anchor the phase
     # budget to fresh post-command feedback, not the saved placement snapshot.
     ex.synchronize(ex.data)
@@ -408,6 +491,7 @@ def wait_native_open(executor):
             "supported": bool(supported),
             "settled": bool(settled),
             "geometry_clear": geometry_clear,
+            "geometry_rejections": list(getattr(released, 'last_contacts', ())),
             "linear_speed_m_s": float(np.linalg.norm(scratch.qvel[dof : dof + 3])),
             "angular_speed_rad_s": float(np.linalg.norm(scratch.qvel[dof + 3 : dof + 6])),
             "timeout_s": released.limits.open_settle_timeout_s,
@@ -415,20 +499,20 @@ def wait_native_open(executor):
         if geometry_clear:
             if stable_since is None:
                 stable_since = ex._motion_time()
-            if ex._motion_time() - stable_since >= 0.1:
+            if ex._motion_time() - stable_since >= released.limits.stable_interval_s:
                 ex.event(
                     phase="release_open_verified",
                     controller_success=True,
                     source="simulator_ground_truth_debug",
                     supported=True,
                     settled=True,
-                    stable_interval_s=0.1,
+                    stable_interval_s=released.limits.stable_interval_s,
                 )
                 return PhysicalMotionResult(True, "gripper_open_verified", "release")
         else:
             stable_since = None
         if arrived:
             last_reason = "release_verify_failed"
-        time.sleep(0.05)
+        time.sleep(released.limits.poll_interval_s)
     ex.event(phase="release_check", reason=last_reason, **evidence)
     return PhysicalMotionResult(False, last_reason, "release")

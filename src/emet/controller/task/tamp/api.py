@@ -27,7 +27,7 @@ class VerificationFailure:
             "bilateral_contact_unverified", "support_contact_persists", "unexpected_contact",
             "relative_pose_unstable", "settling_timeout", "effect_unverified",
             "support_contact_unverified", "fingertip_contact_persists", "object_not_settled",
-            "placement_region_unverified",
+            "placement_region_unverified", "placement_xy_unverified", "placement_height_unverified",
         }:
             raise ValueError("invalid_verification_failure")
 
@@ -63,6 +63,8 @@ TASK_FAILURE_CODES = frozenset({
     "unsupported_task_instruction", "conflicting_task_goals",
     "observation_unavailable", "tracking_timeout", "verification_failed",
     "visual_verification_unavailable", "visual_effect_unknown", "visual_lift_not_verified",
+    "payload_identity_mismatch", "invalid_gripper_closing_axis",
+    "release_raise_limit",
     "visual_placement_not_verified", "scene_observation_stale", "scene_revision_changed",
     "payload_geometry_unknown", "payload_geometry_changed", "capture_motion_alignment_unknown", "robot_feedback_unqualified",
     "base_approach_unavailable", "base_approach_invalidated", "base_approach_failed",
