@@ -143,8 +143,12 @@ merges, measured policy improvement and hardware readiness are separate decision
       pregrasp-only primitive boundary, obtain fresh stage-specific teacher
       admission, and mix these reachable references with general tracking.
       The isolated [unloaded-grasp extension](docs/plans/mars_unloaded_grasp_admission.md)
-      adds an explicit pre-closure boundary and a fixed twelve-episode teacher
-      readout; its fresh checks/admission are separate from PR #239's receipt.
+      adds an explicit pre-closure boundary. The completed
+      [twelve-episode readout](docs/experiments/mars_unloaded_grasp_admission_20261116.md)
+      gives 5/6 at each boundary, all stops confirmed, with unchanged default
+      physical results. The known loaded-lift replan blocks the unloaded
+      prefix too; admit that prefix explicitly before training. Its fresh
+      checks/admission are separate from PR #239's receipt.
       Do not increase timeouts or accept the actor's 2.15 mm advance as a
       completed 20 mm support-preparation goal. Keep loaded retention/grasp-fit
       repair separate, with original force/support/retention thresholds.
