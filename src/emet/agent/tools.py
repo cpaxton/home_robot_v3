@@ -172,6 +172,9 @@ def format_base_clearance_hint(agent: Any | None) -> str:
         return ""
     try:
         pose = np.asarray(robot.get_base_pose(), dtype=np.float64).reshape(-1)
+        planning_pose = getattr(agent, "_planning_base_xyt", None)
+        if callable(planning_pose):
+            pose = np.asarray(planning_pose(pose), dtype=np.float64).reshape(-1)
         if pose.size < 2:
             return ""
         if getattr(planner, "_clearance_m", None) is None:
