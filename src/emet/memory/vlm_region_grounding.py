@@ -478,6 +478,8 @@ def ground_vlm_region(
         purpose=purpose,
     )
     if not verification["valid"]:
+        if isinstance(parsed, dict) and isinstance(parsed.get("reason"), str):
+            verification["model_reason"] = parsed["reason"][:500]
         return detected, [], [], verification
     detections = frame_instances_to_detections(
         detected,

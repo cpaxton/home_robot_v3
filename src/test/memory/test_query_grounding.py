@@ -132,6 +132,7 @@ def test_coordinator_object_constraints_reach_real_vlm_prompt():
     agent.update = Mock(side_effect=lambda **kw: agent.voxel_map.observations.append(frame))
     result = agent.ground_current_view("nearest black stool in the foreground")
     assert not result["ok"] and not agent.query_candidates.records
+    assert result["geometry"]["model_reason"] == "not visible"
     command = client.call_args[0][0]
     assert "nearest black stool in the foreground" in command[0]
     agent.detection_model.predict.assert_not_called()

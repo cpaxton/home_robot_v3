@@ -188,7 +188,11 @@ class LazyGraphController(DynagraphController):
                         "point_count": len(self._grounded_query_target.points),
                     }
                     if result["ok"]
-                    else {"reason": result.get("reason"), "depth_support": result.get("depth_support")}
+                    else {
+                        "reason": result.get("reason"),
+                        "model_reason": result.get("model_reason"),
+                        "depth_support": result.get("depth_support"),
+                    }
                 ),
             },
         }
@@ -330,6 +334,7 @@ class LazyGraphController(DynagraphController):
                 "matching_ids": matching_ids,
                 "verification_source": verification["source"],
                 "support_reason": verification.get("reason"),
+                "model_reason": verification.get("model_reason"),
                 "depth_support": verification.get("depth_support"),
             }
         det = matches[0]
