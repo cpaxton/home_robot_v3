@@ -23,6 +23,7 @@ from eval_stretch_moving_masks import CameraContactRobot
 from PIL import Image
 from scipy.ndimage import binary_erosion
 
+from emet.controller.manipulation.capture_clock import local_monotonic_clock_id
 from emet.controller.manipulation.geometry_models import PrimitiveModel
 from emet.controller.manipulation.multiview_rgbd_tracking import MultiViewRgbdTracker, SynchronizedRgbdView
 from emet.controller.manipulation.native_inputs import ObservationUnavailable
@@ -30,10 +31,16 @@ from emet.controller.manipulation.observed_effects import CaptureInterval
 from emet.eval.episode_video import write_rgb_sequence_mp4
 from emet.simulation.mujoco_server_stretch import default_scene_xml_path
 from emet.simulation.stretch_mujoco.enums.stretch_cameras import StretchCameras
+from emet.simulation.synchronized_capture import (
+    capture_stretch_motors,
+    robot_kinematic_signature,
+)
 from emet.visualization.manip_video import overlay_manip_frame
 
 
 class PairedContactRobot(CameraContactRobot):
+    capture_period_s = 0.25
+
     def __init__(self, model, object_body, **kwargs):
         self.wrist_renderer = None
         self._sensor_finished = 0.0
@@ -48,6 +55,7 @@ class PairedContactRobot(CameraContactRobot):
             cid = model.camera(camera.camera_name_in_mjcf).id
             model.cam_fovy[cid] = camera.initial_camera_settings.field_of_view_vertical_in_degrees
         self.wrist_renderer = mujoco.Renderer(model, height=settings.height, width=settings.width)
+        self._kinematic_signature = robot_kinematic_signature(model)
         self.observe()
         self.refresh()
 
@@ -67,12 +75,23 @@ class PairedContactRobot(CameraContactRobot):
     def observe(self):
         if self.wrist_renderer is None:
             return  # Parent creates the head renderer before the paired sample.
-        time.sleep(max(0.0, 0.25 - (time.monotonic() - self.last_capture)))
+        time.sleep(max(0.0, self.capture_period_s - (time.monotonic() - self.last_capture)))
         probe = mujoco.MjData(self.model)
-        start = time.monotonic()
-        mujoco.mj_copyData(probe, self.model, self.data)
-        end = time.monotonic()
+        with self._state_lock:
+            start_ns = time.monotonic_ns()
+            mujoco.mj_copyData(probe, self.model, self.data)
+            end_ns = time.monotonic_ns()
+        start, end = start_ns / 1e9, end_ns / 1e9
         self.last_capture = start
+        sample = {
+            "clock_id": local_monotonic_clock_id(),
+            "interval_ns": [start_ns, end_ns],
+            "kinematic_signature": self._kinematic_signature,
+        }
+        motors = capture_stretch_motors(self.model, probe, sample)
+        if motors is None:
+            raise ValueError("unsupported_stretch_encoder_calibration")
+        registration = {"head": {}, "wrist": {}}
         arrays = {
             "head": capture(
                 self.model,
@@ -81,6 +100,7 @@ class PairedContactRobot(CameraContactRobot):
                 camera=self.rgb_camera.camera_name_in_mjcf,
                 depth_camera=self.depth_camera.camera_name_in_mjcf,
                 target_geom_id=self.target_geom_id,
+                registration_evidence=registration["head"],
             ),
             "wrist": capture(
                 self.model,
@@ -89,6 +109,7 @@ class PairedContactRobot(CameraContactRobot):
                 camera=self.wrist_pair[0],
                 depth_camera=self.wrist_pair[1],
                 target_geom_id=self.target_geom_id,
+                registration_evidence=registration["wrist"],
             ),
         }
         index = len(self.rows)
@@ -101,6 +122,11 @@ class PairedContactRobot(CameraContactRobot):
                 "earliest": start,
                 "latest": end,
                 "received_monotonic": ticket.received_monotonic,
+                "clock_id": sample["clock_id"],
+                "interval_ns": sample["interval_ns"],
+                "motor_sample": motors,
+                "camera_pose_source": "simulator_robot_localization_debug",
+                "registration": "nearest_measured_sample_z_buffer",
             },
             "state": "candidate",
             "sim_time": float(probe.time),
@@ -157,6 +183,7 @@ class PairedContactRobot(CameraContactRobot):
                 predicted_mask=mask,
                 scorer_mask=truth,
                 metadata_json=json.dumps(row["capture"]),
+                **registration[name],
             )
             colored = rgb.copy()
             colored[mask] = (0.45 * colored[mask] + 0.55 * np.array([40, 255, 70])).astype(np.uint8)
@@ -189,9 +216,18 @@ class PairedContactRobot(CameraContactRobot):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument(
+        "--capture-period-s",
+        type=float,
+        default=0.25,
+        help="Minimum real time between samples; longer gaps stress the unchanged motion envelope.",
+    )
     args = parser.parse_args()
+    if not np.isfinite(args.capture_period_s) or args.capture_period_s < 0.25:
+        parser.error("--capture-period-s must be finite and at least 0.25")
     args.output.mkdir(parents=True, exist_ok=True)
     PairedContactRobot.output = args.output
+    PairedContactRobot.capture_period_s = args.capture_period_s
     previous = contact.ContactRobot
     try:
         contact.ContactRobot = PairedContactRobot
@@ -209,6 +245,9 @@ def main():
         "scope": "co-sampled camera handoff during privileged contact control",
         "observed_task_success_assessed": False,
         "execution_qualified": False,
+        "capture_evidence": "same_snapshot_eight_motors_and_original_depth_reprojection",
+        "robot_geometry_qualified": False,
+        "minimum_capture_period_s": args.capture_period_s,
         "privileged_control_passed": control["passed"],
         "frames": len(robot.rows),
         "candidate_frames": sum(r["state"] == "candidate" for r in robot.rows),

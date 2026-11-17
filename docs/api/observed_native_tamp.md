@@ -43,6 +43,7 @@ those paths. This planning blocker is separate from moving-mask visibility loss.
 | `ObservedBackground` | Historical environment/free-space evidence with original per-cell capture ages and geometry-qualified self exclusion | Unqualified excluded endpoints invalidate cached free cells; occupied evidence survives. False self labels remain environment when qualification is requested. Longer validity requires a bounded static-scene assumption |
 | `ShapePoseEvidence` | Explicit primitive solid equivalence with external pose-error bounds | Unknown material yaw remains unknown; generic unique-pose consumers reject |
 | `GripperGeometryEnvelope` | Full tool subtree over unmeasured joint intervals, anchored at motor-derived rigid EE | Conditional model bounds; no passive-joint sensor claim or full-arm certificate |
+| `StretchGeometryEnvelope` | Whole collidable robot over motor-conditioned telescope marginals and passive-joint intervals | Outer geometry only; mechanical limits and localization margins remain explicit assumptions, never inner material or free space |
 | `PayloadGeometryEvidence` | Complete conservative volume in an explicit tracked reference frame | No visible-point AABB promoted to a complete shape; geometry priors remain declared inputs |
 | `ObservedNativeCollisionChecker` | Robot-only FK, payload geometry and optional captured-material solid queries | Missing workspace, stale geometry, scene revisions, unresolved payload geometry or unqualified candidate bounds |
 | `CapturedRobotMaterial` / `RobotGeometryBound` | Immutable captured inner material and model/calibration/profile-bound candidate envelopes | Future-pose ownership, relocated/undersized links, clock/calibration changes and uncertain clearance shells |
@@ -73,6 +74,36 @@ retains one track through all 81 captures while privileged native control
 completes. This qualifies neither the live collision source nor hardware error
 bounds. Different real camera exposures require independently bounded alignment;
 the development producer uses one frozen simulator snapshot.
+
+The paired diagnostic now archives the same-snapshot eight motor positions,
+original depth image/intrinsics, depth-to-RGB transform, winning source pixel
+index and continuous projected UV. `register_depth(..., return_provenance=True)`
+returns these mappings alongside the unchanged aligned-depth image; holes use
+index `-1` and NaN UV, and equal-depth ties choose the first row-major source.
+Registration does not establish RGB/depth surface ownership. Camera world poses
+in this diagnostic are labelled simulator localization debug, not observed
+navigation or hardware calibration. `--capture-period-s` defaults to `0.25`;
+larger values delay real acquisitions without changing their timestamps or the
+tracker's existing 1.5-second maximum gap. Setup/processing may make actual gaps
+longer than that requested minimum. See the
+[November 16 progress and retained failures](../experiments/observed_transfer_progress_20261116.md).
+
+`bound_stretch_robot(model, estimate, now=..., position_error_m=...,
+rotation_error_rad=...)` consumes motor feedback and the estimated localized base
+pose. It intersects each telescope's mechanical interval with measured total
+extension and retains uncertain intermediate-link volumes. After checking serial
+ancestry and parallel axes, the distal rigid frame uses the measured sum; it does
+not claim the individual split is sensed. Wheels, passive fingers, rubber and the
+navigation-camera hinge retain their model intervals. Supplied pose errors dilate
+all output volumes. The motor/model signature includes named tendon terms and
+coefficients; changing that calibration invalidates the capture. These bounds
+cannot by themselves justify deleting robot-labelled depth endpoints.
+
+`scripts/eval_stretch_encoder_geometry.py --robot-envelope --output DIR` audits
+all collidable geometry against separate simulator state during native contact
+controls. `--gripper-envelope` retains the earlier tool-only scope. An outer-bound
+escape or whole-robot interval violation fails the robot audit; sampled
+containment still does not certify mechanical/hardware bounds or task execution.
 
 ## Provider assembly
 

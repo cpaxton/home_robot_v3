@@ -10,11 +10,14 @@ def rendered_camera_intrinsics(fovy, width, height):
     return np.array([[f, 0.0, (width - 1) / 2.0], [0.0, f, (height - 1) / 2.0], [0.0, 0.0, 1.0]])
 
 
-def register_depth(depth, depth_k, rgb_k, rgb_from_depth, output_shape):
+def register_depth(depth, depth_k, rgb_k, rgb_from_depth, output_shape, *, return_provenance=False):
     """Project measured CV-camera depth with a nearest-sample z buffer.
 
     Holes, outside-image points and points behind the RGB camera remain zero.
     This is spatial registration, not exposure synchronization or hole filling.
+    Optional provenance names the winning original depth pixel and its continuous
+    RGB projection. It does not establish that RGB and depth saw the same surface.
+    Ties use the lowest row-major source index. Holes have index -1 and NaN UV.
     """
     depth = np.asarray(depth, dtype=float)
     kd, kr, transform = (np.asarray(a, dtype=float) for a in (depth_k, rgb_k, rgb_from_depth))
@@ -36,15 +39,34 @@ def register_depth(depth, depth_k, rgb_k, rgb_from_depth, output_shape):
     if h <= 0 or w <= 0:
         raise ValueError("invalid_depth_registration_shape")
     y, x = np.where(np.isfinite(depth) & (depth > 0))
+    source_indices = y * depth.shape[1] + x
     rays = np.stack([x, y, np.ones(len(x))], axis=-1) @ np.linalg.inv(kd).T
     points = (rays * depth[y, x, None]) @ transform[:3, :3].T + transform[:3, 3]
     valid = np.isfinite(points).all(axis=-1) & (points[:, 2] > 0)
     points = points[valid]
+    source_indices = source_indices[valid]
     projected = points @ kr.T
-    pixels = np.rint(projected[:, :2] / projected[:, 2, None])
+    uv = projected[:, :2] / projected[:, 2, None]
+    pixels = np.rint(uv)
     valid = (pixels[:, 0] >= 0) & (pixels[:, 0] < w) & (pixels[:, 1] >= 0) & (pixels[:, 1] < h)
     pixels = pixels[valid].astype(int)
     aligned = np.full(h * w, np.inf)
     np.minimum.at(aligned, pixels[:, 1] * w + pixels[:, 0], points[valid, 2])
+    provenance = None
+    if return_provenance:
+        targets = pixels[:, 1] * w + pixels[:, 0]
+        winners = points[valid, 2] == aligned[targets]
+        sentinel = depth.size
+        selected = np.full(h * w, sentinel, dtype=np.int64)
+        np.minimum.at(selected, targets[winners], source_indices[valid][winners])
+        chosen = winners & (source_indices[valid] == selected[targets])
+        projected_uv = np.full((h * w, 2), np.nan)
+        projected_uv[targets[chosen]] = uv[valid][chosen]
+        selected[selected == sentinel] = -1
+        provenance = {
+            "source_pixel_index": selected.reshape(h, w),
+            "projected_uv": projected_uv.reshape(h, w, 2),
+        }
     aligned[~np.isfinite(aligned)] = 0.0
-    return aligned.reshape(h, w).astype(np.float32)
+    result = aligned.reshape(h, w).astype(np.float32)
+    return (result, provenance) if return_provenance else result

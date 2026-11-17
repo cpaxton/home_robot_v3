@@ -16,6 +16,10 @@
       on `fix/tamp-observed-admission`; captured-material mechanics, fingertip
       contact, finite checked closing and error/receipt repairs are implemented.
       Local support contact, full live source and observed transfer remain open.
+      [Current capture/geometry evidence](docs/experiments/observed_transfer_progress_20261116.md):
+      whole-robot outer bounds pass contact sampling; synchronized depth provenance
+      reproduces wrist-camera/target RGB ownership disagreement. Normal tracking
+      81/81 is a separate development repeat, not observed control qualification.
 
 - [ ] Profile failed-search cost without answer overrides or target-specific rules:
       final S0 seed 1 misses the receptacle in both arms but candidate takes

@@ -1,0 +1,75 @@
+# Observed transfer: capture provenance and whole-robot bounds
+
+Branch `fix/tamp-observed-admission`, continuation of `b0ff18ad`. No complete
+observed-input pick-and-place succeeds in this record. Controls use privileged
+native planning and independent physical scoring; tracking receives RGBD,
+calibration, an operator red-appearance seed and a declared cylinder prior.
+No VLM, local GPU or physical hardware is used.
+
+Raw files remain under `.tamp-runs/observed-transfer-20261116/`. The accompanying
+JSON retains compact results and evidence hashes instead of per-frame arrays.
+These are dirty-source development diagnostics, not a clean-commit benchmark or
+an independent reliability population. The normal transfer and physical envelope
+audit precede the final tendon-signature/base-validation guards; those guards
+have separate regression coverage. Their physical outcomes are not retroactively
+rescored at the later source.
+
+| Check | Result | Limit |
+| --- | --- | --- |
+| Initial capture/encoder/multiview regressions | 45 pass, zero failures/errors/skips | Before whole-robot addition |
+| Initial whole-robot/encoder/gripper regressions | 20 pass, zero failures/errors/skips | Before final calibration guards |
+| Full motion + capture + observed adapter | 620 pass, zero failures/errors/skips | Overlaps the focused batches; not task trials |
+| Final source-depth reconstruction/calibration checks | 33 pass, zero failures/errors/skips | Includes the last added source-to-UV test; overlaps the full regression batch |
+| Final whole-robot ancestry checks | 9 pass, zero failures/errors/skips | Pins nonserial-arm rejection after the last ancestry guard |
+| Normal synchronized native transfer | Physical control passes; tracking 81/81 | Unchanged tracker; timing-dependent failure remains |
+| Requested 1.5 s minimum capture gap | Physical control passes; tracking 1/89 | Actual first interval 1.5011 s exceeds unchanged 1.5 s maximum |
+| Requested 1.35 s minimum capture gap | Physical control passes; tracking 1/83 | Startup/processing makes first interval 1.7692 s; not an inside-limit ownership test |
+| Separate stationary pair | Tracking 1/2; `geometry_tracking_no_match` at 1.35137 s | Real inside-limit reproduction; no task execution |
+| Whole-robot physical audit | Both native controls pass; 175 samples, zero corner escapes/interval violations | 75 contact samples; conditional mechanical/model bounds, not hardware certification |
+
+The first renderer launch fails before simulation because its environment lacks
+the existing user-space OSMesa library path. `head-wrist/` preserves that failure;
+the corrected CPU renderer uses the existing software libraries. All later
+failed tracking runs and their successful privileged controls remain separate.
+The loss stays latched; no implicit identity reset or threshold changes occur.
+
+## Concrete tracking cause
+
+The stationary pair archives eight motor readings at the original shared
+snapshot interval and both cameras' original depth/calibration. Nearest-depth
+provenance identifies head source pixels `(115,308)` and `(116,308)` for registered
+RGB pixels `(115,316)` and `(116,316)`. Independent evaluator rays identify both
+source surfaces as the wrist-camera body `link_d405`. RGB is respectively
+`[196,143,143]` and `[177,128,128]`; the second is also target-labelled by the
+independent RGB scorer. Thus RGB target colour does not establish depth ownership.
+
+The scorer identities never enter tracking. The source has no passive finger
+angles, telescope split measurements, object pose or contact channel. Camera
+world poses are explicitly ideal simulator localization debug. An outer robot
+envelope is insufficient to remove these points as proven robot material;
+uncertain registration/ownership must remain unknown or trigger a fresh view.
+The normal 81/81 repeat does not resolve the delayed-source case.
+
+## Geometry and review
+
+`StretchGeometryEnvelope` covers all collidable robot geoms using the eight motor
+channels, a rigid localized base and declared mechanical intervals. Telescope
+marginals preserve uncertainty in intermediate links; checked serial collinear
+kinematics make the distal sum exact. Passive fingers/rubber/wheels remain
+intervals, not sensors. Localization errors explicitly dilate the bounds.
+
+Independent review found a missing tendon-coefficient binding in the kinematic
+signature. The fix adds canonical named wrap terms/types/coefficients. Mutation
+tests cover coefficients and arm reference positions, plus rigid base validation
+and retracted/extended motor endpoints. Follow-up review finds no concrete blocker
+in these additions. These are outer geometry and provenance, not inner material,
+free-space evidence or observed task success.
+
+## Next acceptance gate
+
+Implement finite local payload/support contact with support-only provenance,
+qualified target self-occupancy, and the concrete live source/refiner. Then run
+`scene_tasks → plan_pick_place → execute_pick_place_plan` using observed inputs,
+score the physical effect independently, and exercise pre-command stale/unknown
+and post-dispatch loss/consumed-handle feedback. Preserve the 1 mm penetration
+bound, unknown-space rejection and existing retention/tracking thresholds.

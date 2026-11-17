@@ -42,6 +42,56 @@ def test_rendered_intrinsics_use_fov_and_pixel_centers():
     np.testing.assert_allclose(k, [[1.0, 0.0, 1.5], [0.0, 1.0, 0.5], [0.0, 0.0, 1.0]])
 
 
+def test_provenance_preserves_original_pixel_and_continuous_projection():
+    depth = np.array([[1.0, np.nan, 2.0], [0.0, 3.0, 4.0]])
+    transform = np.eye(4)
+    transform[0, 3] = 0.2
+    aligned, evidence = register_depth(depth, np.eye(3), np.eye(3), transform, depth.shape, return_provenance=True)
+    np.testing.assert_array_equal(aligned, register_depth(depth, np.eye(3), np.eye(3), transform, depth.shape))
+    np.testing.assert_array_equal(evidence["source_pixel_index"], [[0, -1, 2], [-1, 4, 5]])
+    np.testing.assert_allclose(evidence["projected_uv"][0, 0], [0.2, 0])
+    np.testing.assert_allclose(evidence["projected_uv"][0, 2], [2.1, 0])
+    assert np.isnan(evidence["projected_uv"][0, 1]).all()
+    assert np.isnan(evidence["projected_uv"][1, 0]).all()
+
+
+@pytest.mark.parametrize("depth, expected_source", [([[2.0, 1.0]], 1), ([[1.0, 1.0]], 0)])
+def test_provenance_selects_nearest_surface_with_deterministic_ties(depth, expected_source):
+    aligned, evidence = register_depth(
+        depth, np.eye(3), np.diag([0.1, 1.0, 1.0]), np.eye(4), (1, 2), return_provenance=True
+    )
+    np.testing.assert_array_equal(aligned, [[1.0, 0.0]])
+    np.testing.assert_array_equal(evidence["source_pixel_index"], [[expected_source, -1]])
+    np.testing.assert_allclose(evidence["projected_uv"][0, 0], [0.1 * expected_source, 0])
+
+
+def test_empty_registration_has_no_provenance():
+    aligned, evidence = register_depth(
+        np.zeros((2, 3)), np.eye(3), np.eye(3), np.eye(4), (4, 5), return_provenance=True
+    )
+    assert not aligned.any()
+    assert (evidence["source_pixel_index"] == -1).all()
+    assert np.isnan(evidence["projected_uv"]).all()
+
+
+def test_every_winning_source_reconstructs_its_saved_depth_and_uv():
+    depth = np.random.default_rng(52).uniform(0.4, 2.0, (8, 12))
+    depth[2, 3], depth[4, 8] = 0.0, np.nan
+    kd = rendered_camera_intrinsics(60.0, 12, 8)
+    kr = rendered_camera_intrinsics(50.0, 10, 6)
+    transform = np.eye(4)
+    transform[:3, 3] = [0.03, -0.01, 0.05]
+    aligned, evidence = register_depth(depth, kd, kr, transform, (6, 10), return_provenance=True)
+    np.testing.assert_array_equal(aligned, register_depth(depth, kd, kr, transform, (6, 10)))
+    for y, x in np.argwhere(evidence["source_pixel_index"] >= 0):
+        sy, sx = divmod(int(evidence["source_pixel_index"][y, x]), depth.shape[1])
+        p = transform[:3, :3] @ (np.linalg.inv(kd) @ [sx, sy, 1.0] * depth[sy, sx]) + transform[:3, 3]
+        uv = kr @ p
+        np.testing.assert_allclose(evidence["projected_uv"][y, x], uv[:2] / uv[2])
+        np.testing.assert_array_equal(np.rint(uv[:2] / uv[2]), [x, y])
+        assert aligned[y, x] == np.float32(p[2])
+
+
 def test_head_camera_manager_registers_rigid_pair_instead_of_rendering_new_depth():
     from types import SimpleNamespace
 

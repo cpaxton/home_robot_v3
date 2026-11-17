@@ -1,0 +1,141 @@
+{
+  "schema_version": 1,
+  "scope": "development capture and conditional geometry diagnostics; no observed execution acceptance",
+  "base_commit": "b0ff18ad4bc5b08cb60ca817f334eea98af853e7",
+  "observed_task_success_assessed": false,
+  "execution_qualified": false,
+  "tests": {
+    "capture-tests.xml": {
+      "tests": 45,
+      "errors": 0,
+      "failures": 0,
+      "skipped": 0
+    },
+    "final-checks.xml": {
+      "tests": 33,
+      "errors": 0,
+      "failures": 0,
+      "skipped": 0
+    },
+    "regressions.xml": {
+      "tests": 620,
+      "errors": 0,
+      "failures": 0,
+      "skipped": 0
+    },
+    "robot-tests.xml": {
+      "tests": 20,
+      "errors": 0,
+      "failures": 0,
+      "skipped": 0
+    },
+    "nonserial-checks.xml": {
+      "tests": 9,
+      "errors": 0,
+      "failures": 0,
+      "skipped": 0
+    }
+  },
+  "diagnostics": {
+    "head-wrist-v2": {
+      "scope": "co-sampled camera handoff during privileged contact control",
+      "observed_task_success_assessed": false,
+      "execution_qualified": false,
+      "capture_evidence": "same_snapshot_eight_motors_and_original_depth_reprojection",
+      "robot_geometry_qualified": false,
+      "privileged_control_passed": true,
+      "frames": 81,
+      "candidate_frames": 81,
+      "rejection_codes": []
+    },
+    "head-wrist-slow": {
+      "scope": "co-sampled camera handoff during privileged contact control",
+      "observed_task_success_assessed": false,
+      "execution_qualified": false,
+      "capture_evidence": "same_snapshot_eight_motors_and_original_depth_reprojection",
+      "robot_geometry_qualified": false,
+      "minimum_capture_period_s": 1.5,
+      "privileged_control_passed": true,
+      "frames": 89,
+      "candidate_frames": 1,
+      "rejection_codes": [
+        "moving_tracking_epoch_or_capture_invalid",
+        "moving_tracking_lost_reinitialize"
+      ]
+    },
+    "head-wrist-bounded-delay": {
+      "scope": "co-sampled camera handoff during privileged contact control",
+      "observed_task_success_assessed": false,
+      "execution_qualified": false,
+      "capture_evidence": "same_snapshot_eight_motors_and_original_depth_reprojection",
+      "robot_geometry_qualified": false,
+      "minimum_capture_period_s": 1.35,
+      "privileged_control_passed": true,
+      "frames": 83,
+      "candidate_frames": 1,
+      "rejection_codes": [
+        "moving_tracking_epoch_or_capture_invalid",
+        "moving_tracking_lost_reinitialize"
+      ]
+    },
+    "stationary-pair": {
+      "scope": "two stationary synchronized captures; not a task trial or observed execution",
+      "frames": 2,
+      "candidate_frames": 1,
+      "gap_s": 1.3513705939985812,
+      "row1_reason": "geometry_tracking_no_match",
+      "execution_qualified": false
+    }
+  },
+  "physical_controls": [
+    {
+      "object": "object1",
+      "passed": true,
+      "robot_envelope": {
+        "samples": 88,
+        "contact_samples": 38,
+        "max_corner_escape_m": 0.0,
+        "samples_outside_declared_intervals": 0,
+        "scope": "sampled containment only; not certified hardware bounds"
+      }
+    },
+    {
+      "object": "object2",
+      "passed": true,
+      "robot_envelope": {
+        "samples": 87,
+        "contact_samples": 37,
+        "max_corner_escape_m": 0.0,
+        "samples_outside_declared_intervals": 0,
+        "scope": "sampled containment only; not certified hardware bounds"
+      }
+    }
+  ],
+  "evidence": {
+    "capture-tests.xml": "054e236ec1c9b6f04c63bdb92fc267d5e38cd5674bdf3fd7774bc65d75ef5c4c",
+    "final-checks.xml": "3f87e4f7f4ae8928af8229cf887a5a5ef996abd454b7e1083e264da6d1bc1061",
+    "head-wrist-bounded-delay/summary.json": "132bf7d8711828c95a502e2390631ea69081658ff7081f46b7ce5f435b6fabdc",
+    "head-wrist-slow/summary.json": "4074bc1c0386efeac8497f4221f256cb06d05bc8d9a3298db1040255abe991ff",
+    "head-wrist-v2/summary.json": "55f28668478fee9852354a7f0b731ae35332cfe7623234113d9c9f4a0c4c9384",
+    "regressions.xml": "daaa6b104490f137bfd947489427f3ec3bd008331780272bec571f7215f52e52",
+    "robot-contact-audit/summary.json": "a53c3bb272e7994d1928008157479abc346edeb28433d433461a03c4443129fc",
+    "robot-tests.xml": "9421e585f0894726c65d77e6fd8e7ff1d3ad6844c353e514555e8a9dc32d225f",
+    "stationary-pair/scorer-ownership.json": "2be97809a142676ecba9f6d136dc2e6bbe53cb292b1ee8e5993b761fe41ef96d",
+    "stationary-pair/sources.json": "8ae7ec6da89b14db3816e497c9a54130015335a4f5c28d0f0a76d957b270832d",
+    "stationary-pair/summary.json": "478fe485d330ed0e636422bb777b3d62b97ba330583542a26138f2d5a3f60a55",
+    "nonserial-checks.xml": "aa8b9fc1ffee935680e8bf978d0a445bad12f8af7b53a9bcb5a53d48b25b0935"
+  },
+  "jobs": {
+    "initial_capture_tests": "20261116_230657_d709e1",
+    "initial_renderer_setup_failure": "20261116_230715_ff961a",
+    "normal_head_wrist": "20261116_230819_530693",
+    "initial_robot_tests": "20261116_231150_5ec67c",
+    "slow_head_wrist": "20261116_231316_665a09",
+    "robot_contact_audit": "20261116_231425_80b24d",
+    "delayed_head_wrist": "20261116_231539_8263e6",
+    "stationary_pair": "20261116_231905_022dd9",
+    "full_regressions": "20261116_232123_63e3cc",
+    "final_capture_checks": "20261116_232503_b67ba3",
+    "nonserial_ancestry": "20261116_232747_7c319f"
+  }
+}

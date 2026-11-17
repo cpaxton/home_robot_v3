@@ -184,3 +184,12 @@ The paired
 wrist from one private physics snapshot and runs independent RGBD tracking during
 the privileged native control. It uses CPU OSMesa via `emet jobs`, no VLM. See
 [tracking profiles, attempts and limits](experiments/observed_handoff_20261030.md).
+`depth_registration.register_depth(..., return_provenance=True)` additionally
+reports the original depth pixel and continuous RGB projection selected by the
+nearest-sample z buffer. The default aligned-depth result is unchanged. The
+paired diagnostic archives those maps, raw depth/calibration and eight motor
+channels from the same frozen sample, with privileged camera localization labelled
+separately. `robot_kinematic_signature` binds named tendon terms and coefficients
+as well as rigid joint/camera calibration. See the
+[capture/whole-robot progress record](experiments/observed_transfer_progress_20261116.md);
+neither reprojection nor outer robot geometry establishes endpoint ownership.

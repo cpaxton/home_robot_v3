@@ -96,15 +96,38 @@ filter. Preserve unknown/mixed endpoints and keep scorer masks evaluator-only.
 
 Remaining gates, in order:
 
+November 16 continuation: same-sample eight-motor and original-depth provenance
+are now archived, and the new whole-robot outer envelope passes the 620-check
+motion/capture/adapter regression batch. Two separate physical controls contain
+all 175 sampled whole-robot volumes, including 75 in target contact. This remains
+conditional model/audit evidence, not qualified self ownership. A two-frame
+capture at a valid 1.351-second gap reproduces the old tracking rejection:
+independent rays identify both suspicious depth returns as `link_d405`, even
+though one RGB pixel is target-labelled. A fresh normal 81/81 repeat is therefore
+not a fix for timing-dependent association. See
+[results and exact cohort limits](../experiments/observed_transfer_progress_20261116.md).
+
 1. Local support-contact rules and full-source validation of the new fingertip
    and finite-closing policy. Preserve unrelated obstacles, wrist/housing checks
    and deep-penetration rejection; no whole-support or unknown-space exemption.
+   Retain support-only versus mixed/unattributed occupancy provenance. Compare
+   the full uncertain physical payload against the local plane and unchanged
+   1 mm penetration limit; strip only planning clearance. Lift departure uses
+   one fixed initial penetration floor, independent of planner query order.
+   Initial and destination patches can differ: a fresh view cannot fill the
+   support hole under the resting object. Preserve original scan ages or declare
+   a separately qualified finite planar-continuity prior.
 2. Full calibrated Stretch outer link/gripper geometry over unmeasured joints,
    with inner material justified independently. Do not substitute passive debug
    joints or telescope equal-split estimates for actual sensors.
+   The motor-conditioned whole-robot interval implementation is now tested;
+   qualification of its model/pose bounds and separate inner material is open.
 3. Concrete live source/refiner assembly using original synchronized captures,
    measured support/background scans, qualified self attribution and visual
    effects. No default execution enabled from read-only discovery alone.
+   Target self-occupancy also needs a separately typed, capture-bound material
+   proof for a declared solid prior. Excluded target cells remain unknown;
+   captured robot material cannot admit the payload's own occupied volume.
 4. Resolve moving-mask foreign components with independent geometry/provenance
    evidence; preserve tiny unresolved competitors, complete-union controls,
    latched loss and explicit fresh reacquisition. Do not retime captures, shrink

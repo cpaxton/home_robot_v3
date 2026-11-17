@@ -80,6 +80,14 @@ def test_motor_feedback_has_no_passive_angles_or_telescope_split(encoder_setup):
     np.testing.assert_allclose(list(again["positions"].values()), list(before.values()), atol=1e-12)
 
 
+def test_changed_telescope_transmission_cannot_reuse_a_motor_capture(encoder_setup):
+    model, probe, packet, motors, obs = encoder_setup
+    tendon = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_TENDON, "extend")
+    model.wrap_prm[int(model.tendon_adr[tendon])] = 2.0
+    with pytest.raises(ObservationUnavailable, match="robot_capture_model_mismatch"):
+        estimate_stretch_ee_from_encoders(obs, model)
+
+
 @pytest.mark.parametrize(
     "failure", ["hardware", "stale", "other_clock", "passive_angle", "missing_arm", "nan", "different_depth"]
 )
