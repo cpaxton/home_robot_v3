@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from emet.agent.skills.modes import AgentMode
@@ -41,6 +41,24 @@ class SkillSpec:
     # EQA_EPISODE only: answer mode vs explore mode terminal tool.
     eqa_answer_only: bool = False
     eqa_explore_only: bool = False
+
+
+def head_view_skill(spec: SkillSpec, capability) -> SkillSpec:
+    """Bind optional gaze arguments to the actual session, keeping tool names."""
+    if spec.name not in {"describe_scene", "look_around"}:
+        return spec
+    if capability is None:
+        return replace(
+            spec,
+            parameters=_NO_PARAMS,
+            description=spec.description.replace(_HEAD_VIEW_DESCRIPTION, "")
+            + " Explicit head aiming is unavailable in this session.",
+        )
+    properties = {}
+    for name, (lo, hi) in zip(("pan_rad", "tilt_rad"), (capability.pan, capability.tilt), strict=True):
+        if hi > lo:
+            properties[name] = {**_HEAD_VIEW_PARAMS["properties"][name], "minimum": lo, "maximum": hi}
+    return replace(spec, parameters={"type": "object", "properties": properties, "required": []})
 
 
 # Conceptual aliases (different tool *names* per mode; do not rename EQA tools — traces depend on them).

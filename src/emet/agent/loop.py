@@ -826,7 +826,10 @@ def run_agent_with_robot(
         except Exception:
             robot_client.stop()
             raise
+    from emet.controller.dynamem.head_observation import task_head_capability
+
     context: dict[str, Any] = {
+        "head_view_capability": task_head_capability(robot_client),
         "executor": executor,
         "robot": robot_client,
         "tamp_task_session": tamp_task_session,

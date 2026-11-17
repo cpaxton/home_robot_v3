@@ -133,3 +133,64 @@ def test_eqa_explicit_gaze_captures_the_measured_observation_without_a_sweep(mon
     out = _tool_look_around(executor, verify=False, tilt_rad=5.0)
     assert not out["ok"] and out["status"] == "invalid_head_tilt"
     executor._tool_capture_and_update.assert_not_called()
+
+
+@pytest.mark.parametrize("supported", [False, True])
+def test_session_head_arguments_match_the_capture_contract(monkeypatch, supported):
+    from emet.agent.skills.eqa import bind_eqa_episode_tools
+    from emet.controller.dynamem.head_observation import task_head_capability
+
+    agent, _ = scene(monkeypatch)
+    if not supported:
+        agent.robot.get_head_capability = lambda: None
+    executor = SimpleNamespace(agent=agent, mode="answer")
+    capability = task_head_capability(agent.robot)
+    chat = {tool.name: tool for tool in get_tools({"executor": executor, "head_view_capability": capability})}
+    eqa = {tool.name: tool for tool in bind_eqa_episode_tools(executor)}
+    for tool in [chat["describe_scene"], eqa["look_around"]]:
+        assert bool(tool.parameters["properties"]) is supported
+        if supported:
+            assert tool.parameters["properties"]["tilt_rad"]["maximum"] == 0.5
+        else:
+            assert "head aiming is unavailable" in tool.description
+    assert len(chat) == 34  # Capability changes arguments, not the registry.
+
+
+def test_synchronous_native_capture_does_not_require_a_zmq_sequence(monkeypatch):
+    from emet.controller.dynamem.head_observation import task_head_capability
+
+    agent, obs = scene(monkeypatch)
+    del agent.robot._seq_id
+    agent.robot.capture_head_observation = Mock(return_value=obs)
+    assert task_head_capability(agent.robot) is not None
+    out, actual = capture_head_view(agent, tilt_rad=-0.3)
+    assert out["ok"] and actual is obs
+    assert out["observation"]["received_frame_sequence"] is None
+    assert out["observation"]["capture_confirmation"] == "adapter_post_arrival_capture"
+    agent.robot.capture_head_observation.assert_called_once_with(timeout=5.0)
+    agent.robot.capture_head_observation.return_value = None
+    out, actual = capture_head_view(agent, tilt_rad=-0.2)
+    assert not out["ok"] and out["status"] == "stale_observation" and actual is None
+
+
+def test_habitat_capture_uses_acquisition_time_and_applied_sensor_pose():
+    import time
+
+    from emet_habitat.robot_client import HabitatRobotClient
+
+    robot = object.__new__(HabitatRobotClient)
+    robot._sim = SimpleNamespace(
+        head_pan_rad=0.2,
+        head_tilt_rad=-0.3,
+        get_head_capability=lambda: HeadCapability((-np.pi, np.pi), (-np.pi / 2, np.pi / 2), "habitat_virtual_camera"),
+    )
+    robot._head_pan, robot._head_tilt = 99, 99  # Requested cache cannot replace applied feedback.
+    assert robot.get_pan_tilt() == (0.2, -0.3)
+    robot.get_observation = lambda: SimpleNamespace(
+        image_timing={"head_cam_left": {"clock_domain": "habitat_monotonic", "timestamp_ns": time.monotonic_ns()}}
+    )
+    assert robot.capture_head_observation() is not None
+    robot.get_observation = lambda: SimpleNamespace(
+        image_timing={"head_cam_left": {"clock_domain": "habitat_monotonic", "timestamp_ns": 1}}
+    )
+    assert robot.capture_head_observation() is None

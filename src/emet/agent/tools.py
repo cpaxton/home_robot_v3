@@ -1797,7 +1797,7 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         )
     )
 
-    from emet.agent.skills.specs import CHAT_EXCLUSIVE_TOOL_NAMES, CHAT_SKILL_SPECS
+    from emet.agent.skills.specs import CHAT_EXCLUSIVE_TOOL_NAMES, CHAT_SKILL_SPECS, head_view_skill
 
     by_name = {s.name: s for s in CHAT_SKILL_SPECS}
     registered = {t.name for t in tools}
@@ -1808,6 +1808,8 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         raise RuntimeError(f"CHAT tool pack drift vs CHAT_SKILL_SPECS: missing={missing} extra={extra}")
     for t in tools:
         spec = by_name[t.name]
+        if "head_view_capability" in context:
+            spec = head_view_skill(spec, context["head_view_capability"])
         t.description = spec.description
         t.parameters = spec.parameters
         t.returns_info = spec.returns_info

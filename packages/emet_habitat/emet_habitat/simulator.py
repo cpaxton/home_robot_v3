@@ -224,6 +224,8 @@ class HabitatEQASimulator:
         """
         pan = float(pan_rad)
         tilt = float(tilt_rad)
+        if not self.get_head_capability().contains([pan, tilt]):
+            raise ValueError("Camera look exceeds the declared non-inverted virtual-camera range")
         orient = self._mn.Vector3(tilt, pan, 0.0)
         for spec in self._agent.agent_config.sensor_specifications:
             spec.orientation = orient
@@ -232,6 +234,12 @@ class HabitatEQASimulator:
         self._head_pan_rad = pan
         self._head_tilt_rad = tilt
         self._camera_tilt_deg = float(np.rad2deg(tilt))
+
+    def get_head_capability(self):
+        """Virtual sensor orientation range, not mechanical actuator limits."""
+        from emet.robots.head_capability import HeadCapability
+
+        return HeadCapability((-np.pi, np.pi), (-np.pi / 2, np.pi / 2), "habitat_virtual_camera")
 
     @property
     def floor_y(self) -> float:
