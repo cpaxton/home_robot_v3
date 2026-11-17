@@ -400,7 +400,7 @@ def admit_reference(env, reference):
 class CoupledTrackingEnv(gym.Wrapper):
     """Reusable general training share; task/case metadata stays outside the actor."""
 
-    def __init__(self, robot, cases=None, *, suite_path=SUITE):
+    def __init__(self, robot, cases=None, *, suite_path=SUITE, reward_config=None):
         from gymnasium import spaces
 
         from emet.rl.manipulation.observation_layout import history_layout
@@ -409,6 +409,9 @@ class CoupledTrackingEnv(gym.Wrapper):
         if robot not in {"innate_mars", "stretch"}:
             raise ValueError("unsupported coupled robot")
         suite = load_suite(suite_path)
+        from emet.rl.manipulation.reward_config import WholeBodyRewardConfig
+
+        self.reward_config = WholeBodyRewardConfig.from_record(reward_config)
         self.suite_format = suite["format"]
         self.cases = cases if cases is not None else suite["robots"][robot]
         cfg = ManipulationConfig(
@@ -480,13 +483,16 @@ class CoupledTrackingEnv(gym.Wrapper):
         e.control.history = None
         self.retarget_at = reference.end * case["retarget"]["at_fraction"] if "retarget" in case else None
         self.retargeted = False
-        self.meter = RewardMeter(e, base_heading_region=self.suite_format == "coupled-tracking-v2")
+        self.meter = RewardMeter(
+            e, base_heading_region=self.suite_format == "coupled-tracking-v2", config=self.reward_config
+        )
         raw = e.control.observe()
         return self.observe(raw), {
             **info,
             "case_id": case["id"],
             "coupled_case_id": case["id"],
             "coupled_admission": self.admission,
+            "reward_contract": self.meter.record(),
             "reference_sha256": digest(reference.record()),
         }
 
@@ -505,11 +511,12 @@ class CoupledTrackingEnv(gym.Wrapper):
             e.set_task_trajectory(reference)
             self.retargeted = True
         motion = reference_velocity(e.control)
+        self.meter.before_step()
         raw, _, done, truncated, info = e.step(action)
         rewards = self.meter.tick(action, motion)
         success = bool(info.get("is_success", False))
         if done or truncated:
-            rewards[0] += 2.0 if success else -2.0
+            rewards[0] += self.meter.terminal_bonus(success)
         return (
             self.observe(raw),
             float(rewards.sum()),
@@ -526,6 +533,7 @@ class CoupledTrackingEnv(gym.Wrapper):
                 "retarget_delivered": self.retargeted,
                 "coupled_admission": self.admission,
                 "reward_terms": self.meter.last_terms.copy(),
+                "reward_contract": self.meter.record(),
             },
         )
 

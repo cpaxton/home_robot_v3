@@ -16,6 +16,7 @@ import torch
 
 from emet.rl.manipulation.carry_benchmark import source_hashes
 from emet.rl.manipulation.multi_critic_ppo import MultiCriticPPO, PPOConfig, discount_tick_rewards, grouped_gae
+from emet.rl.manipulation.reward_config import WholeBodyRewardConfig
 from emet.rl.manipulation.whole_body_actor import MultiCriticPolicy
 
 DEFAULT_SUITE = Path("configs/benchmarks/mars_whole_body_v2_development.json")
@@ -79,6 +80,7 @@ def primitive_rollout(
     planning_scope="full_task",
     wheel_feedback_gain=0.5,
     wheel_feedback_base_only_gains=None,
+    reward_config=None,
 ):
     from emet.rl.manipulation.tamp_primitive_env import TampPrimitiveEnv
 
@@ -93,6 +95,7 @@ def primitive_rollout(
         planning_scope=planning_scope,
         wheel_feedback_gain=wheel_feedback_gain,
         wheel_feedback_base_only_gains=wheel_feedback_base_only_gains,
+        reward_config=reward_config,
     )
     rows = []
     try:
@@ -136,6 +139,7 @@ def primitive_rollout(
                         "control_ticks": ticks,
                         "decisions": count,
                         "returns": returns.tolist(),
+                        "reward_contract": info.get("reward_contract"),
                         "commands": info["commands"],
                         "inference_counts": info["policy_calls"],
                         "full_pick_place_success": False,
@@ -271,7 +275,7 @@ def require_preflight(path, suite_path):
     return report
 
 
-def make_environment(suite_path, *, basic_cases=None):
+def make_environment(suite_path, *, basic_cases=None, reward_config=None):
     from emet.rl.manipulation.mastery import MasteryEnv
     from emet.rl.manipulation.tamp_primitive_env import TampPrimitiveEnv
     from emet.rl.manipulation.whole_body_env import ControlStepMixture, GeneralTrackingEnv
@@ -289,7 +293,7 @@ def make_environment(suite_path, *, basic_cases=None):
             training_stage_weights=spec["training_stage_weights"],
         )
         try:
-            return ControlStepMixture({"general": GeneralTrackingEnv(native)}, [1.0])
+            return ControlStepMixture({"general": GeneralTrackingEnv(native, reward_config=reward_config)}, [1.0])
         except BaseException:
             native.close()
             raise
@@ -303,8 +307,10 @@ def make_environment(suite_path, *, basic_cases=None):
     try:
         return ControlStepMixture(
             {
-                "general": GeneralTrackingEnv(native),
-                "tamp": TampPrimitiveEnv(suite["train_cases"], arm_reference=suite["arm_reference"]),
+                "general": GeneralTrackingEnv(native, reward_config=reward_config),
+                "tamp": TampPrimitiveEnv(
+                    suite["train_cases"], arm_reference=suite["arm_reference"], reward_config=reward_config
+                ),
             },
             suite["family_control_tick_weights"],
         )
@@ -332,6 +338,8 @@ def policy_state_digest(policy):
 
 def verify_initial_pair(reference, current, *, recovery_proof=None, reference_sha256=None):
     """Reject an unpaired candidate before its first optimizer update."""
+    if reference.get("reward_configuration") != current.get("reward_configuration"):
+        raise ValueError("paired reward configurations differ")
     keys = (
         "source_hashes",
         "seed",
@@ -368,6 +376,8 @@ def verify_exploration_pair(reference, current):
 
     This does not relax C1's full first-rollout comparison or reuse old sources.
     """
+    if reference.get("reward_configuration") != current.get("reward_configuration"):
+        raise ValueError("paired reward configurations differ")
     keys = (
         "source_hashes",
         "suite_sha256",
@@ -483,6 +493,10 @@ def train(args):
     from emet.rl.manipulation.whole_body_bundle import export_actor
     from emet.rl.regression_gate import verify_regressions
 
+    reward_path = getattr(args, "reward_config", None)
+    reward_config = WholeBodyRewardConfig.from_record(
+        json.loads(Path(reward_path).read_text()) if reward_path else None
+    )
     receipt = verify_regressions(args.regression_receipt)
     require_preflight(args.preflight, args.suite)
     sources = source_hashes()
@@ -516,6 +530,7 @@ def train(args):
         "safety_promoted": False,
         "teacher_actions_in_loss": False,
         "reward_timing": "per_control_tick_discounted_within_decision",
+        "reward_configuration": reward_config.record(),
         "privileged_critic": not args.no_privileged_critic,
         "stationary_base_std_scale": policy.stationary_base_std_scale,
         "actor_inputs": ["history", "preview", "motion"],
@@ -538,7 +553,7 @@ def train(args):
                 config=metadata,
                 settings=wandb.Settings(disable_git=True, save_code=False),
             )
-        env = make_environment(args.suite, basic_cases=args.basic_cases)
+        env = make_environment(args.suite, basic_cases=args.basic_cases, reward_config=reward_config)
         native = env.environments["general"].unwrapped
         initial_bundle = export_actor(
             policy.actor,
@@ -546,7 +561,7 @@ def train(args):
             native.config,
             native.fingerprint,
             steps=0,
-            training={"scope": "initial_before_ppo", "seed": args.seed},
+            training={"scope": "initial_before_ppo", "seed": args.seed, "reward_configuration": reward_config.record()},
         )
         metadata.update(
             initial_actor_weights_sha256=initial_bundle.manifest["weights_sha256"],
@@ -727,6 +742,7 @@ def train(args):
         verify_regressions(args.regression_receipt)
         training = {
             "algorithm": "direct_multi_critic_ppo_v2",
+            "reward_configuration": reward_config.record(),
             "advantage_normalization": config.advantage_normalization,
             "stationary_base_std_scale": policy.stationary_base_std_scale,
             "basic_cases_sha256": metadata["basic_cases_sha256"],
@@ -763,6 +779,9 @@ def main():
     parser.add_argument("command", choices=("preflight", "train"))
     parser.add_argument("--suite", type=Path, default=DEFAULT_SUITE)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument(
+        "--reward-config", type=Path, help="explicit versioned wrapper reward JSON; omitted preserves legacy reward"
+    )
     parser.add_argument("--preflight", type=Path)
     parser.add_argument("--regression-receipt", type=Path)
     parser.add_argument("--steps", type=int, default=8192)
@@ -797,6 +816,13 @@ def main():
         parser.error("exploration pairing requires basic cases, reduced noise and no normalization/recovery pairing")
     if args.pair_recovery_proof and not (args.basic_cases and args.pair_reference_run):
         parser.error("C1 recovery proof requires the basic manifest and original paired control")
+    if args.reward_config is not None:
+        try:
+            WholeBodyRewardConfig.from_record(json.loads(args.reward_config.read_text()))
+        except (OSError, ValueError, TypeError) as exc:
+            parser.error(str(exc))
+        if args.command != "train":
+            parser.error("reward configuration applies to training, not teacher admission")
     if args.command == "preflight":
         report = preflight(args.suite, args.output)
         if not report["ready_for_experimental_training"]:

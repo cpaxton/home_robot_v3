@@ -54,6 +54,7 @@ def _worker(
     planning_scope,
     wheel_feedback_gain=0.5,
     wheel_feedback_base_only_gains=None,
+    reward_config=None,
 ):
     import hashlib
     import json
@@ -65,10 +66,12 @@ def _worker(
     from emet.controller.task.tamp.native_adapter import adapter_for
     from emet.eval.mars_tamp_control import fixture
     from emet.rl.manipulation.command_runtime import TaskPoseRuntimeTiming, task_pose_teacher_action
+    from emet.rl.manipulation.reward_config import WholeBodyRewardConfig
     from emet.rl.manipulation.tamp_policy import robot_identity
     from emet.rl.manipulation.whole_body_observation import actor_observation, privileged_state
     from emet.rl.manipulation.whole_body_reward import RewardMeter
 
+    reward_config = WholeBodyRewardConfig.from_record(reward_config)
     env = robot = None
     decisions, outcome = [], {"status": "incomplete"}
     try:
@@ -102,7 +105,7 @@ def _worker(
                 self.pending, self.ticks = False, 0
                 self.reward = np.zeros(3, dtype=np.float32)
                 self.tick_rewards = []
-                self.meter = RewardMeter(env)
+                self.meter = RewardMeter(env, config=reward_config)
                 self.start = float(env.data.time)
                 self.motion = np.zeros(9, dtype=np.float32)
 
@@ -118,12 +121,13 @@ def _worker(
                     "critic": privileged_state(env, float(env.data.time) - self.start, 30.0)
                 }
                 if not self.pending:
-                    self.meter = RewardMeter(env)
+                    self.meter = RewardMeter(env, config=reward_config)
                 info = {
                     "case_id": case["id"],
                     "model_fingerprint": env.fingerprint,
                     "compiled_robot_identity": compiled_robot_identity,
                     "reward_terms": self.meter.last_terms.copy(),
+                    "reward_contract": self.meter.record(),
                     "elapsed_control_ticks": max(1, self.ticks),
                     "reward_group_ticks": np.asarray(self.tick_rewards, dtype=np.float32).reshape(-1, 3),
                     "primitive": primitive,
@@ -159,6 +163,7 @@ def _worker(
                             "action": action.tolist(),
                         }
                     )
+                self.meter.before_step()
                 return action
 
             def after_step(self):
@@ -168,6 +173,7 @@ def _worker(
                     self.reward += reward
                     self.tick_rewards.append(reward.copy())
                     self.ticks += 1
+                    self.meter.before_step()
 
         bridge = Bridge()
         # External PPO updates pause this simulator. These explicit wall budgets
@@ -264,7 +270,7 @@ def _worker(
         if primitive == "grasp_pose" and success and not (terminal_pose_in_contract and gripper_open):
             success = False
             reason = "terminal_pose_outside_contract" if not terminal_pose_in_contract else "terminal_gripper_not_open"
-        bonus = 2.0 if success else -10.0
+        bonus = reward_config.success_bonus if success else -reward_config.tamp_failure_penalty
         bridge.reward[0] += bonus
         if not bridge.tick_rewards:
             # A rejected initialization has the existing one-tick transition
@@ -288,6 +294,7 @@ def _worker(
             "reward_group_ticks": np.asarray(bridge.tick_rewards, dtype=np.float32),
             "actor_action_applied": bridge.pending,
             "reward_terms": bridge.meter.last_terms.copy(),
+            "reward_contract": bridge.meter.record(),
             "initialization_failed": not bridge.pending,
             "full_pick_place_success": False,
             "policy_calls": robot.inference_counts,
@@ -361,6 +368,7 @@ def _worker(
                         "wheel_feedback_current_velocity": wheel_feedback_current_velocity,
                         "wheel_feedback_gain": wheel_feedback_gain,
                         "wheel_feedback_base_only_gains": wheel_feedback_base_only_gains,
+                        "reward_configuration": reward_config.record(),
                         "outcome": outcome,
                         "stop_confirmed": robot.stop_confirmed if robot is not None else None,
                         "commands": robot.commands if robot is not None else [],
@@ -389,11 +397,15 @@ class TampPrimitiveEnv(gym.Env):
         planning_scope="full_task",
         wheel_feedback_gain=0.5,
         wheel_feedback_base_only_gains=None,
+        reward_config=None,
     ):
         if type(primitive) is not str or primitive not in PRIMITIVE_PHASE:
             raise ValueError("primitive must be pregrasp or grasp_pose; loaded stages are not supported")
         if type(planning_scope) is not str or planning_scope not in {"full_task", "unloaded_prefix"}:
             raise ValueError("planning_scope must be full_task or unloaded_prefix")
+        from emet.rl.manipulation.reward_config import WholeBodyRewardConfig
+
+        self.reward_config = WholeBodyRewardConfig.from_record(reward_config)
         self.primitive = primitive
         self.planning_scope = planning_scope
         if not cases or arm_reference not in {"s_curve", "jerk_limited"} or not np.isfinite(timeout) or timeout <= 0:
@@ -467,6 +479,7 @@ class TampPrimitiveEnv(gym.Env):
                 self.planning_scope,
                 self.wheel_feedback_gain,
                 self.wheel_feedback_base_only_gains,
+                self.reward_config.record(),
             ),
             daemon=True,
         )

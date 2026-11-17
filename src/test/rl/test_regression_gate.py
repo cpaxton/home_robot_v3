@@ -122,3 +122,9 @@ def test_support_and_ancestor_fixture_sources_are_bound_without_becoming_test_mo
     assert set(gate.test_sources(tmp_path)) == set(paths)
     monkeypatch.setattr(gate, "REGRESSION_TARGETS", ("src/test/example/test_gate.py",))
     assert set(gate.test_sources(tmp_path)) == set(paths) - {suite / "_helpers.py"}
+
+
+def test_wrapper_reward_profile_is_source_bound():
+    state = gate.source_state(gate.ROOT)
+    assert "configs/benchmarks/whole_body_reward_contract_v1.json" in state
+    assert "control/rl/manipulation/reward_config.py" in state

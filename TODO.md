@@ -1,5 +1,11 @@
 # Living TODOs (small / near-term)
 
+- [ ] Run a bounded wrapper-reward comparison for hand precision and quiet false
+      equilibria, with independent coupled/mask cases and disjoint audit seeds;
+      then restore the 50/50 general/TAMP physical-tick mix. Preserve force, jerk,
+      wheel-lift and confirmed-stop reporting. Profile and baseline:
+      [reward specification](docs/experiments/wrapper_reward_20261116.md).
+
 - [ ] Profile failed-search cost without answer overrides or target-specific rules:
       final S0 seed 1 misses the receptacle in both arms but candidate takes
       798.6 s versus control 287.2 s. Seed 2 succeeds faster (478.0 vs 790.4 s).

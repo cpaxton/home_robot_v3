@@ -17,7 +17,7 @@ from emet.rl.manipulation.whole_body_reward import RewardMeter
 class GeneralTrackingEnv(gym.Wrapper):
     """Keep the native goals, reset admission, horizon and hard stop guards."""
 
-    def __init__(self, env):
+    def __init__(self, env, *, reward_config=None):
         super().__init__(env)
         p = env.unwrapped.profile
         if not env.unwrapped.config.retention_context or not env.unwrapped.config.trajectory_preview:
@@ -31,6 +31,9 @@ class GeneralTrackingEnv(gym.Wrapper):
                 "critic": spaces.Box(-np.inf, np.inf, (PRIVILEGED_WIDTH,), np.float32),
             }
         )
+        from emet.rl.manipulation.reward_config import WholeBodyRewardConfig
+
+        self.reward_config = WholeBodyRewardConfig.from_record(reward_config)
         self.meter = None
 
     def observation(self, raw):
@@ -43,14 +46,15 @@ class GeneralTrackingEnv(gym.Wrapper):
         raw, info = self.env.reset(**kwargs)
         if info.get("initialization_failed"):
             raise ValueError("general development reset rejected: " + str(info.get("initialization_failure_reason")))
-        self.meter = RewardMeter(self.env.unwrapped)
-        return self.observation(raw), info
+        self.meter = RewardMeter(self.env.unwrapped, config=self.reward_config)
+        return self.observation(raw), {**info, "reward_contract": self.meter.record()}
 
     def step(self, action):
         from emet.rl.manipulation.mastery_objective import mastery_metrics, tracking_contract_passes
 
         e = self.env.unwrapped
         motion = reference_velocity(e.control)
+        self.meter.before_step()
         raw, _, done, truncated, info = self.env.step(action)
         rewards = self.meter.tick(action, motion)
         success = False
@@ -58,11 +62,12 @@ class GeneralTrackingEnv(gym.Wrapper):
             success = bool(
                 tracking_contract_passes(info, mastery_metrics(e, info), e.suite["gate"], path_failed=e.path_failed)
             )
-            rewards[0] += 2.0 if success else -2.0
+            rewards[0] += self.meter.terminal_bonus(success)
         info = {
             **info,
             "reward_groups": rewards,
             "reward_terms": self.meter.last_terms.copy(),
+            "reward_contract": self.meter.record(),
             "elapsed_control_ticks": 1,
             "primitive_success": success,
             "full_pick_place_success": False,

@@ -108,6 +108,7 @@ def source_state(root):
             root / "configs/benchmarks/mars_tracking_mastery_supported_v1.json",
             root / "configs/benchmarks/mars_whole_body_v2_development.json",
             root / "configs/benchmarks/mars_whole_body_basic_learning_v1.json",
+            root / "configs/benchmarks/whole_body_reward_contract_v1.json",
             root / "configs/benchmarks/mars_directional_curriculum_v1.json",
             root / "configs/benchmarks/coupled_tracking_v1.json",
             root / "configs/benchmarks/coupled_tracking_v2.json",

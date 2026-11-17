@@ -42,6 +42,15 @@ files. Parent merges do not promote an actor or qualify hardware.
 
 ## Current state and evidence
 
+**Wrapper reward work:** the [reward specification](../experiments/wrapper_reward_20261116.md)
+records the legacy 20 Hz objective and an opt-in, versioned contract-tracking
+profile shared by general/coupled/TAMP wrappers. It adds fine hand priority,
+pose-gated velocity credit and measured progress against the same active goal.
+Legacy defaults remain unchanged. This profile is not yet trained; old runtime
+receipts do not qualify the new source. Next is a bounded reward comparison with
+independent coupled/mask cases, then the existing 50/50 general/TAMP tick mix.
+
+
 **No PPO run is active.** The 32,768-decision joint fine-tuning run completes
 with scores unchanged: v1 9/10, v2 5/10, fresh base audits 0/16 and TAMP 6/6.
 It is not promoted. The earlier retained checkpoint remains the control anchor.
