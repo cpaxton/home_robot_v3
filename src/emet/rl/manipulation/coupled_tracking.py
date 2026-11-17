@@ -520,10 +520,13 @@ class CoupledTrackingEnv(gym.Wrapper):
         return (
             self.observe(raw),
             float(rewards.sum()),
-            done,
-            truncated,
+            bool(done or truncated),
+            False,
             {
                 **info,
+                "native_terminated": bool(done),
+                "native_truncated": bool(truncated),
+                "episode_contract": "finite_tracking_deadline_v1",
                 "reward_groups": rewards,
                 "elapsed_control_ticks": 1,
                 "primitive_success": success,

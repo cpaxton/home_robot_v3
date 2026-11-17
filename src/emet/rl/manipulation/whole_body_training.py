@@ -507,6 +507,7 @@ def train(args):
     output.mkdir(parents=True, exist_ok=False)
     config = PPOConfig(
         learning_rate=args.learning_rate,
+        critic_epochs=getattr(args, "critic_epochs", 0),
         epochs=args.epochs,
         batch_size=args.batch_size,
         advantage_normalization=args.advantage_normalization,
@@ -530,6 +531,7 @@ def train(args):
         "safety_promoted": False,
         "teacher_actions_in_loss": False,
         "reward_timing": "per_control_tick_discounted_within_decision",
+        "episode_contract": "finite_tracking_deadline_v1",
         "reward_configuration": reward_config.record(),
         "privileged_critic": not args.no_privileged_critic,
         "stationary_base_std_scale": policy.stationary_base_std_scale,
@@ -561,7 +563,13 @@ def train(args):
             native.config,
             native.fingerprint,
             steps=0,
-            training={"scope": "initial_before_ppo", "seed": args.seed, "reward_configuration": reward_config.record()},
+            training={
+                "scope": "initial_before_ppo",
+                "seed": args.seed,
+                "reward_configuration": reward_config.record(),
+                "episode_contract": "finite_tracking_deadline_v1",
+                "critic_epochs": config.critic_epochs,
+            },
         )
         metadata.update(
             initial_actor_weights_sha256=initial_bundle.manifest["weights_sha256"],
@@ -742,6 +750,8 @@ def train(args):
         verify_regressions(args.regression_receipt)
         training = {
             "algorithm": "direct_multi_critic_ppo_v2",
+            "episode_contract": "finite_tracking_deadline_v1",
+            "critic_epochs": config.critic_epochs,
             "reward_configuration": reward_config.record(),
             "advantage_normalization": config.advantage_normalization,
             "stationary_base_std_scale": policy.stationary_base_std_scale,
@@ -789,6 +799,9 @@ def main():
     parser.add_argument("--seed", type=int, default=90)
     parser.add_argument("--learning-rate", type=float, default=3e-4)
     parser.add_argument("--epochs", type=int, default=5)
+    parser.add_argument(
+        "--critic-epochs", type=int, default=0, help="independent critic epoch budget; 0 retains joint KL stopping"
+    )
     parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--no-privileged-critic", action="store_true")
     parser.add_argument("--advantage-normalization", choices=("shared", "per_head"), default="shared")
@@ -805,6 +818,8 @@ def main():
     )
     parser.add_argument("--wandb-mode", choices=("offline", "disabled"), default="offline")
     args = parser.parse_args()
+    if args.critic_epochs < 0:
+        parser.error("critic epochs must be nonnegative")
     if not 0 < args.stationary_base_std_scale <= 1:
         parser.error("stationary base exploration scale must be finite and in (0,1]")
     if args.exploration_reference_run and (

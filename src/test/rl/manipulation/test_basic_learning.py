@@ -220,9 +220,13 @@ def test_training_persists_paired_initial_state_and_first_rollout(tmp_path, monk
         )
         training.train(args)
         record = json.loads((target / "run.json").read_text())
+        assert record["episode_contract"] == "finite_tracking_deadline_v1"
         assert record["reward_configuration"] == expected_reward.record()
         assert json.loads((target / "summary.json").read_text())["reward_configuration"] == expected_reward.record()
         for bundle in ("initial", "last"):
+            saved_training = json.loads((target / bundle / "actor/manifest.json").read_text())["training"]
+            assert saved_training["episode_contract"] == "finite_tracking_deadline_v1"
+            assert saved_training["critic_epochs"] == 0
             assert (
                 json.loads((target / bundle / "actor/manifest.json").read_text())["training"]["reward_configuration"]
                 == expected_reward.record()
@@ -287,6 +291,6 @@ def test_pair_verification_rejects_state_data_or_optimizer_changes_before_update
         if key == "advantage_normalization":
             continue
         changed = copy.deepcopy(second)
-        changed["ppo"][key] = (1.0, 2.0, 1.0) if key == "advantage_weights" else value * 2
+        changed["ppo"][key] = (1.0, 2.0, 1.0) if key == "advantage_weights" else value * 2 if value != 0 else 1
         with pytest.raises(ValueError, match="PPO settings"):
             verify_initial_pair(first, changed)

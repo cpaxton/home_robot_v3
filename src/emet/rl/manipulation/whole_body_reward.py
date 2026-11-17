@@ -56,6 +56,7 @@ class RewardMeter:
             "hand_rotation_tolerance_rad": self.env.config.hand_orientation_tolerance,
             "base_heading_region": self.base_heading_region,
             "progress": "measured_pose_change_against_same_poststep_active_goal",
+            "episode_contract": "finite_tracking_deadline_v1",
         }
 
     def before_step(self):

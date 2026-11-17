@@ -85,6 +85,34 @@ def combine_advantages(advantages, weights=(1.0, 1.0, 1.0), *, normalization="sh
     return components.sum(-1), components
 
 
+def value_fit_statistics(targets, predictions):
+    """Three-head fit diagnostics; constant targets have undefined variance.
+
+    Training GAE-target fit is not Monte Carlo calibration or a safety/value
+    certificate. Independent episode/case-held-out returns are audited separately.
+    """
+    targets, predictions = np.asarray(targets, dtype=np.float64), np.asarray(predictions, dtype=np.float64)
+    if (
+        targets.ndim != 2
+        or targets.shape[1] != 3
+        or len(targets) < 2
+        or predictions.shape != targets.shape
+        or not np.isfinite(targets).all()
+        or not np.isfinite(predictions).all()
+    ):
+        raise ValueError("two or more finite three-head targets and predictions required")
+    error = predictions - targets
+    variance = targets.var(0)
+    explained = [float(1 - error[:, i].var() / v) if v > 1e-12 else None for i, v in enumerate(variance)]
+    return {
+        "rmse": np.sqrt(np.mean(error**2, axis=0)).tolist(),
+        "bias": error.mean(0).tolist(),
+        "explained_variance": explained,
+        "target_std": np.sqrt(variance).tolist(),
+        "samples": len(targets),
+    }
+
+
 @dataclass
 class PPOConfig:
     learning_rate: float = 3e-4
@@ -99,6 +127,9 @@ class PPOConfig:
     target_kl: float = 0.02
     advantage_weights: tuple = (1.0, 1.0, 1.0)
     advantage_normalization: str = "shared"
+    # Zero retains historical joint updates/KL stopping. Positive values give
+    # the critic an independent full-data epoch budget after actor updates.
+    critic_epochs: int = 0
 
     def __post_init__(self):
         vals = [self.learning_rate, self.critic_learning_rate, self.clip, self.max_grad_norm, self.target_kl]
@@ -108,6 +139,8 @@ class PPOConfig:
             raise ValueError("positive PPO epochs and batch size at least two required")
         if not np.isfinite(self.entropy_weight) or self.entropy_weight < 0:
             raise ValueError("nonnegative entropy weight required")
+        if type(self.critic_epochs) is not int or self.critic_epochs < 0:
+            raise ValueError("critic epochs must be a nonnegative integer")
         combine_advantages(torch.zeros((2, 3)), self.advantage_weights, normalization=self.advantage_normalization)
 
 
@@ -170,6 +203,8 @@ class MultiCriticPPO:
             torch.from_numpy(advantages), cfg.advantage_weights, normalization=cfg.advantage_normalization
         )
         targets = torch.from_numpy(targets)
+        before_fit = value_fit_statistics(targets.numpy(), np.asarray(rollout["values"]))
+        independent_critic = cfg.critic_epochs > 0
         logs, stop, gradient_stats, grad_norms = [], False, {}, []
         for _ in range(cfg.epochs):
             for indices in torch.randperm(len(actions)).split(cfg.batch_size):
@@ -183,7 +218,7 @@ class MultiCriticPPO:
                 )
                 actor_loss = -surrogate.mean() - cfg.entropy_weight * entropy.mean()
                 value_losses = ((values - targets[indices]) ** 2).mean(0)
-                loss = actor_loss + 0.5 * value_losses.sum()
+                loss = actor_loss if independent_critic else actor_loss + 0.5 * value_losses.sum()
                 if not torch.isfinite(loss):
                     raise RuntimeError("nonfinite multi-critic PPO loss")
                 with torch.no_grad():
@@ -195,18 +230,44 @@ class MultiCriticPPO:
                     break
                 if not gradient_stats:
                     gradient_stats = self.actor_gradient_diagnostics(ratio, normalized[indices])
-                self.optimizer.zero_grad()
+                self.optimizer.zero_grad(set_to_none=True)
                 loss.backward()
                 norm = torch.nn.utils.clip_grad_norm_(
                     [*self.policy.actor.parameters(), self.policy.log_std], cfg.max_grad_norm
                 )
                 grad_norms.append(float(norm))
-                for critic in self.policy.critics:
-                    torch.nn.utils.clip_grad_norm_(critic.parameters(), cfg.max_grad_norm)
+                if not independent_critic:
+                    for critic in self.policy.critics:
+                        torch.nn.utils.clip_grad_norm_(critic.parameters(), cfg.max_grad_norm)
                 self.optimizer.step()
             if stop:
                 break
+        critic_logs = []
+        if independent_critic:
+            # Critic minibatch permutations must not perturb the next actor
+            # exploration stream, and critic steps must leave actor Adam state
+            # untouched (including momentum and log_std).
+            with torch.random.fork_rng(devices=[]):
+                for _ in range(cfg.critic_epochs):
+                    for indices in torch.randperm(len(actions)).split(cfg.batch_size):
+                        if len(indices) < 2:
+                            continue
+                        batch = {k: v[indices] for k, v in obs.items()}
+                        errors = ((self.policy.values(batch) - targets[indices]) ** 2).mean(0)
+                        loss = 0.5 * errors.sum()
+                        if not torch.isfinite(loss):
+                            raise RuntimeError("nonfinite independent critic loss")
+                        self.optimizer.zero_grad(set_to_none=True)
+                        loss.backward()
+                        for critic in self.policy.critics:
+                            torch.nn.utils.clip_grad_norm_(critic.parameters(), cfg.max_grad_norm)
+                        self.optimizer.step()
+                        critic_logs.append(errors.detach().tolist())
+        with torch.no_grad():
+            after_fit = value_fit_statistics(targets.numpy(), self.policy.values(obs).numpy())
         avg = np.mean(logs, axis=0)
+        if critic_logs:
+            avg[1:4] = np.mean(critic_logs, axis=0)
         rewards = np.asarray(rollout["rewards"])
         raw_values = np.asarray(rollout["values"])
         discount = cfg.gamma ** np.asarray(rollout["ticks"], dtype=float)
@@ -222,6 +283,10 @@ class MultiCriticPPO:
             "clip_fraction": float(avg[5]),
             "actor_gradient_norm_pre_clip": float(np.mean(grad_norms)) if grad_norms else 0.0,
             "optimizer_steps": len(grad_norms),
+            "critic_optimizer_steps": len(critic_logs) if independent_critic else len(grad_norms),
+            "actor_kl_early_stop": stop,
+            "critic_gae_target_fit_before": before_fit,
+            "critic_gae_target_fit_after": after_fit,
             "raw_reward_mean": rewards.mean(0).tolist(),
             "raw_reward_std": rewards.std(0).tolist(),
             "raw_value_mean": raw_values.mean(0).tolist(),

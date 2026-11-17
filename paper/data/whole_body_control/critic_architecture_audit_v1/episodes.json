@@ -1,0 +1,1218 @@
+[
+  {
+    "case": {
+      "id": "mars:wrapper-reward-v2:train:hand:0",
+      "seed": 35900000,
+      "split": "train",
+      "mode": "coupled",
+      "travel_m": 0.09,
+      "turn_rad": -0.16,
+      "arm_delta": [
+        0.0,
+        -0.004,
+        0.004,
+        0.0,
+        0.0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ]
+    },
+    "noise_seed": 108,
+    "ticks": 500,
+    "terminated": false,
+    "truncated": true,
+    "stopped_at_bootstrap": true,
+    "success": false,
+    "code": "tracking_timeout",
+    "state_trace_sha256": "dd3f2bc04c0c409ab64725532ddd4b18fd83fa1f5bb55b4a6bb16859e11a0118",
+    "array_sha256": "1a8db0facab06fe7a8a7363a9a893a62e55367a504b920ec77ab592d38697f3f",
+    "terminal_values": {
+      "contract": [
+        33.844112396240234,
+        -1.0922327041625977,
+        -0.02758295089006424
+      ],
+      "legacy": [
+        21.327482223510742,
+        -1.1270027160644531,
+        -0.07654022425413132
+      ]
+    },
+    "finite_contract_returns": {
+      "legacy": [
+        37.21732711791992,
+        -1.342971920967102,
+        0.0
+      ],
+      "priority_only": [
+        72.492919921875,
+        -1.342971920967102,
+        0.0
+      ],
+      "fine_only": [
+        34.22863006591797,
+        -1.342971920967102,
+        0.0
+      ],
+      "progress_only": [
+        36.60354995727539,
+        -1.342971920967102,
+        0.0
+      ],
+      "gating_only": [
+        31.56760597229004,
+        -1.342971920967102,
+        0.0
+      ],
+      "contract": [
+        54.27465057373047,
+        -1.342971920967102,
+        0.0
+      ]
+    },
+    "stop_confirmed": true
+  },
+  {
+    "case": {
+      "id": "mars:wrapper-reward-v2:train:hand:0",
+      "seed": 35900000,
+      "split": "train",
+      "mode": "coupled",
+      "travel_m": 0.09,
+      "turn_rad": -0.16,
+      "arm_delta": [
+        0.0,
+        -0.004,
+        0.004,
+        0.0,
+        0.0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ]
+    },
+    "noise_seed": 109,
+    "ticks": 500,
+    "terminated": false,
+    "truncated": true,
+    "stopped_at_bootstrap": true,
+    "success": false,
+    "code": "tracking_timeout",
+    "state_trace_sha256": "f9ff7960e804f4f4a188432ec9c8efd4d61845145e78d37526bb59f246ba6db2",
+    "array_sha256": "b01937dbea351070ab48e964d0a93d71d77382db5be76625a6efda04f56fd2f1",
+    "terminal_values": {
+      "contract": [
+        33.88951873779297,
+        -1.078938364982605,
+        -0.028329424560070038
+      ],
+      "legacy": [
+        21.415559768676758,
+        -1.1423979997634888,
+        -0.07773057371377945
+      ]
+    },
+    "finite_contract_returns": {
+      "legacy": [
+        36.979740142822266,
+        -1.3300395011901855,
+        0.0
+      ],
+      "priority_only": [
+        70.89956665039062,
+        -1.3300395011901855,
+        0.0
+      ],
+      "fine_only": [
+        33.66486740112305,
+        -1.3300395011901855,
+        0.0
+      ],
+      "progress_only": [
+        36.45359420776367,
+        -1.3300395011901855,
+        0.0
+      ],
+      "gating_only": [
+        30.427248001098633,
+        -1.3300395011901855,
+        0.0
+      ],
+      "contract": [
+        50.561439514160156,
+        -1.3300395011901855,
+        0.0
+      ]
+    },
+    "stop_confirmed": true
+  },
+  {
+    "case": {
+      "id": "mars:wrapper-reward-v2:train:hand:1",
+      "seed": 35900001,
+      "split": "train",
+      "mode": "coupled",
+      "travel_m": -0.09,
+      "turn_rad": -0.18,
+      "arm_delta": [
+        0.0,
+        0.006,
+        -0.006,
+        0.0,
+        0.0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ]
+    },
+    "noise_seed": 108,
+    "ticks": 500,
+    "terminated": false,
+    "truncated": true,
+    "stopped_at_bootstrap": true,
+    "success": false,
+    "code": "tracking_timeout",
+    "state_trace_sha256": "ebed0aa76f7ec08e17acc5a1fe0c60071abfd5e76613c975093035bdd31cac84",
+    "array_sha256": "75da3ca656a34f40d3c67754782dee05452aaadde9fb640e1c2047a48893e232",
+    "terminal_values": {
+      "contract": [
+        33.36211395263672,
+        -1.1501386165618896,
+        -0.028629101812839508
+      ],
+      "legacy": [
+        21.156036376953125,
+        -1.163750410079956,
+        -0.07591105252504349
+      ]
+    },
+    "finite_contract_returns": {
+      "legacy": [
+        32.823368072509766,
+        -1.394348382949829,
+        0.0
+      ],
+      "priority_only": [
+        56.33832931518555,
+        -1.394348382949829,
+        0.0
+      ],
+      "fine_only": [
+        28.96106719970703,
+        -1.394348382949829,
+        0.0
+      ],
+      "progress_only": [
+        33.140323638916016,
+        -1.394348382949829,
+        0.0
+      ],
+      "gating_only": [
+        22.953947067260742,
+        -1.394348382949829,
+        0.0
+      ],
+      "contract": [
+        31.336652755737305,
+        -1.394348382949829,
+        0.0
+      ]
+    },
+    "stop_confirmed": true
+  },
+  {
+    "case": {
+      "id": "mars:wrapper-reward-v2:train:hand:1",
+      "seed": 35900001,
+      "split": "train",
+      "mode": "coupled",
+      "travel_m": -0.09,
+      "turn_rad": -0.18,
+      "arm_delta": [
+        0.0,
+        0.006,
+        -0.006,
+        0.0,
+        0.0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ]
+    },
+    "noise_seed": 109,
+    "ticks": 500,
+    "terminated": false,
+    "truncated": true,
+    "stopped_at_bootstrap": true,
+    "success": false,
+    "code": "tracking_timeout",
+    "state_trace_sha256": "4a198b3698346ffa56182287107a6a9a1fd4604c02d65c0bcbf9545327b3ccb5",
+    "array_sha256": "291b905c81e97c79664ab108a9a06158d135cf31af43d8c2ac73d4edca87ef44",
+    "terminal_values": {
+      "contract": [
+        33.48426818847656,
+        -1.1302907466888428,
+        -0.029047854244709015
+      ],
+      "legacy": [
+        21.34398651123047,
+        -1.1711461544036865,
+        -0.07696285098791122
+      ]
+    },
+    "finite_contract_returns": {
+      "legacy": [
+        33.59980010986328,
+        -1.3188412189483643,
+        0.0
+      ],
+      "priority_only": [
+        58.64809799194336,
+        -1.3188412189483643,
+        0.0
+      ],
+      "fine_only": [
+        29.672239303588867,
+        -1.3188412189483643,
+        0.0
+      ],
+      "progress_only": [
+        34.07660675048828,
+        -1.3188412189483643,
+        0.0
+      ],
+      "gating_only": [
+        23.920761108398438,
+        -1.3188412189483643,
+        0.0
+      ],
+      "contract": [
+        33.735626220703125,
+        -1.3188412189483643,
+        0.0
+      ]
+    },
+    "stop_confirmed": true
+  },
+  {
+    "case": {
+      "id": "mars:wrapper-reward-v2:train:hand:3",
+      "seed": 35900003,
+      "split": "train",
+      "mode": "coupled",
+      "travel_m": -0.12,
+      "turn_rad": 0.16,
+      "arm_delta": [
+        0.0,
+        -0.003,
+        0.003,
+        0.0,
+        0.006
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ]
+    },
+    "noise_seed": 108,
+    "ticks": 500,
+    "terminated": false,
+    "truncated": true,
+    "stopped_at_bootstrap": true,
+    "success": false,
+    "code": "tracking_timeout",
+    "state_trace_sha256": "a235e516f75a98f0314f4e0b7cba07444240db526f089f7ffb68f2f90961f962",
+    "array_sha256": "71db09faaa95fe753659eefa77585aca87fca761c492177a92edbcc9ea126c05",
+    "terminal_values": {
+      "contract": [
+        32.84165573120117,
+        -1.1054556369781494,
+        -0.03372540324926376
+      ],
+      "legacy": [
+        21.110788345336914,
+        -1.139919400215149,
+        -0.0670347586274147
+      ]
+    },
+    "finite_contract_returns": {
+      "legacy": [
+        35.143394470214844,
+        -1.3857996463775635,
+        0.0
+      ],
+      "priority_only": [
+        66.01274871826172,
+        -1.3857996463775635,
+        0.0
+      ],
+      "fine_only": [
+        31.451990127563477,
+        -1.3857996463775635,
+        0.0
+      ],
+      "progress_only": [
+        34.31722640991211,
+        -1.3857996463775635,
+        0.0
+      ],
+      "gating_only": [
+        27.866907119750977,
+        -1.3857996463775635,
+        0.0
+      ],
+      "contract": [
+        43.144466400146484,
+        -1.3857996463775635,
+        0.0
+      ]
+    },
+    "stop_confirmed": true
+  },
+  {
+    "case": {
+      "id": "mars:wrapper-reward-v2:train:hand:3",
+      "seed": 35900003,
+      "split": "train",
+      "mode": "coupled",
+      "travel_m": -0.12,
+      "turn_rad": 0.16,
+      "arm_delta": [
+        0.0,
+        -0.003,
+        0.003,
+        0.0,
+        0.006
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ]
+    },
+    "noise_seed": 109,
+    "ticks": 500,
+    "terminated": false,
+    "truncated": true,
+    "stopped_at_bootstrap": true,
+    "success": false,
+    "code": "tracking_timeout",
+    "state_trace_sha256": "d90fd1bbe2049ee21889a9cf350f03882ac591402d327bd3a98c1c563092b525",
+    "array_sha256": "c49461f687f86ee69ea96a65de008cd54147c340d6e9e7751eef2eee22e0798e",
+    "terminal_values": {
+      "contract": [
+        32.973140716552734,
+        -1.063633918762207,
+        -0.03500116616487503
+      ],
+      "legacy": [
+        21.410375595092773,
+        -1.1497199535369873,
+        -0.06909311562776566
+      ]
+    },
+    "finite_contract_returns": {
+      "legacy": [
+        35.634342193603516,
+        -1.3371765613555908,
+        0.0
+      ],
+      "priority_only": [
+        66.87516784667969,
+        -1.3371765613555908,
+        0.0
+      ],
+      "fine_only": [
+        31.99107551574707,
+        -1.3371765613555908,
+        0.0
+      ],
+      "progress_only": [
+        34.786216735839844,
+        -1.3371765613555908,
+        0.0
+      ],
+      "gating_only": [
+        28.26931381225586,
+        -1.3371765613555908,
+        0.0
+      ],
+      "contract": [
+        44.08893585205078,
+        -1.3371765613555908,
+        0.0
+      ]
+    },
+    "stop_confirmed": true
+  },
+  {
+    "case": {
+      "id": "mars:wrapper-reward-v2:train:hand:4",
+      "seed": 35900004,
+      "split": "train",
+      "mode": "coupled",
+      "travel_m": 0.1,
+      "turn_rad": 0.14,
+      "arm_delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.006
+      ],
+      "base_mask": [
+        true,
+        true,
+        false
+      ]
+    },
+    "noise_seed": 108,
+    "ticks": 500,
+    "terminated": false,
+    "truncated": true,
+    "stopped_at_bootstrap": true,
+    "success": false,
+    "code": "tracking_timeout",
+    "state_trace_sha256": "a33f4d8130cefb8d19b724f09387479cfb35fc2ae3aa0b8f279920f38e2f5f82",
+    "array_sha256": "ee601a3eb25150b6c75a65ede5d89ccf1f7ba3313e66ad2d91b7c4815e6c066e",
+    "terminal_values": {
+      "contract": [
+        38.280155181884766,
+        -1.1772406101226807,
+        -0.023465894162654877
+      ],
+      "legacy": [
+        22.606578826904297,
+        -1.1892435550689697,
+        -0.07682230323553085
+      ]
+    },
+    "finite_contract_returns": {
+      "legacy": [
+        36.495670318603516,
+        -1.2752865552902222,
+        0.0
+      ],
+      "priority_only": [
+        68.24845123291016,
+        -1.2752865552902222,
+        0.0
+      ],
+      "fine_only": [
+        33.108375549316406,
+        -1.2752865552902222,
+        0.0
+      ],
+      "progress_only": [
+        37.677330017089844,
+        -1.2752865552902222,
+        0.0
+      ],
+      "gating_only": [
+        29.012134552001953,
+        -1.2752865552902222,
+        0.0
+      ],
+      "contract": [
+        48.397377014160156,
+        -1.2752865552902222,
+        0.0
+      ]
+    },
+    "stop_confirmed": true
+  },
+  {
+    "case": {
+      "id": "mars:wrapper-reward-v2:train:hand:4",
+      "seed": 35900004,
+      "split": "train",
+      "mode": "coupled",
+      "travel_m": 0.1,
+      "turn_rad": 0.14,
+      "arm_delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.006
+      ],
+      "base_mask": [
+        true,
+        true,
+        false
+      ]
+    },
+    "noise_seed": 109,
+    "ticks": 500,
+    "terminated": false,
+    "truncated": true,
+    "stopped_at_bootstrap": true,
+    "success": false,
+    "code": "tracking_timeout",
+    "state_trace_sha256": "2e51726822b7033896c7130b63957a907ed6a75284f76d21450d267072b78c2a",
+    "array_sha256": "4f23981f67e8999507b8cfc6b2a4cceee3b3302aed3a01c7641510829f550f3a",
+    "terminal_values": {
+      "contract": [
+        38.40278244018555,
+        -1.1528273820877075,
+        -0.02434983104467392
+      ],
+      "legacy": [
+        22.794958114624023,
+        -1.1881802082061768,
+        -0.07798276096582413
+      ]
+    },
+    "finite_contract_returns": {
+      "legacy": [
+        36.69153594970703,
+        -1.2677937746047974,
+        0.0
+      ],
+      "priority_only": [
+        68.61466217041016,
+        -1.2677937746047974,
+        0.0
+      ],
+      "fine_only": [
+        33.26912307739258,
+        -1.2677937746047974,
+        0.0
+      ],
+      "progress_only": [
+        37.86559295654297,
+        -1.2677937746047974,
+        0.0
+      ],
+      "gating_only": [
+        29.16754913330078,
+        -1.2677937746047974,
+        0.0
+      ],
+      "contract": [
+        48.57508087158203,
+        -1.2677937746047974,
+        0.0
+      ]
+    },
+    "stop_confirmed": true
+  },
+  {
+    "case": {
+      "id": "mars:wrapper-reward-v2:train:base:2",
+      "seed": 35900022,
+      "split": "train",
+      "mode": "base_only",
+      "travel_m": 0.0,
+      "turn_rad": 0.18,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ]
+    },
+    "noise_seed": 108,
+    "ticks": 500,
+    "terminated": false,
+    "truncated": true,
+    "stopped_at_bootstrap": true,
+    "success": false,
+    "code": "tracking_timeout",
+    "state_trace_sha256": "198d6e9ccb15b0c48e77d98461ed920f32511d56283a42eb85c8fb2089690b92",
+    "array_sha256": "9edcd1873058554ef2c6a6c75a64b6bc1aea49f6b700698149b17b6965396c86",
+    "terminal_values": {
+      "contract": [
+        18.89095115661621,
+        -1.281459927558899,
+        -0.03822437673807144
+      ],
+      "legacy": [
+        23.319372177124023,
+        -1.3027467727661133,
+        -0.05563496798276901
+      ]
+    },
+    "finite_contract_returns": {
+      "legacy": [
+        19.026391983032227,
+        -2.0876598358154297,
+        0.0
+      ],
+      "priority_only": [
+        19.026391983032227,
+        -2.0876598358154297,
+        0.0
+      ],
+      "fine_only": [
+        19.026391983032227,
+        -2.0876598358154297,
+        0.0
+      ],
+      "progress_only": [
+        19.026391983032227,
+        -2.0876598358154297,
+        0.0
+      ],
+      "gating_only": [
+        19.026391983032227,
+        -2.0876598358154297,
+        0.0
+      ],
+      "contract": [
+        19.026391983032227,
+        -2.0876598358154297,
+        0.0
+      ]
+    },
+    "stop_confirmed": true
+  },
+  {
+    "case": {
+      "id": "mars:wrapper-reward-v2:train:base:2",
+      "seed": 35900022,
+      "split": "train",
+      "mode": "base_only",
+      "travel_m": 0.0,
+      "turn_rad": 0.18,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ]
+    },
+    "noise_seed": 109,
+    "ticks": 500,
+    "terminated": false,
+    "truncated": true,
+    "stopped_at_bootstrap": true,
+    "success": false,
+    "code": "tracking_timeout",
+    "state_trace_sha256": "8bfadde3625d8a9a1415e61368328e282c6a064e6f7b0a4b649de4108b4566e2",
+    "array_sha256": "7e3fc2044e4491eee0a4c1548d7a3c7c92daf150f503981115639cd902111f28",
+    "terminal_values": {
+      "contract": [
+        17.510435104370117,
+        -1.2524091005325317,
+        -0.03598152846097946
+      ],
+      "legacy": [
+        23.32668113708496,
+        -1.2903550863265991,
+        -0.05518332123756409
+      ]
+    },
+    "finite_contract_returns": {
+      "legacy": [
+        18.98171043395996,
+        -2.055983543395996,
+        0.0
+      ],
+      "priority_only": [
+        18.98171043395996,
+        -2.055983543395996,
+        0.0
+      ],
+      "fine_only": [
+        18.98171043395996,
+        -2.055983543395996,
+        0.0
+      ],
+      "progress_only": [
+        18.98171043395996,
+        -2.055983543395996,
+        0.0
+      ],
+      "gating_only": [
+        18.98171043395996,
+        -2.055983543395996,
+        0.0
+      ],
+      "contract": [
+        18.98171043395996,
+        -2.055983543395996,
+        0.0
+      ]
+    },
+    "stop_confirmed": true
+  },
+  {
+    "case": {
+      "id": "mars:wrapper-reward-v2:audit:hand:1",
+      "seed": 35901001,
+      "split": "audit",
+      "mode": "coupled",
+      "travel_m": -0.09720000000000001,
+      "turn_rad": -0.19440000000000002,
+      "arm_delta": [
+        0.0,
+        0.0064800000000000005,
+        -0.0064800000000000005,
+        0.0,
+        0.0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ]
+    },
+    "noise_seed": 108,
+    "ticks": 500,
+    "terminated": false,
+    "truncated": true,
+    "stopped_at_bootstrap": true,
+    "success": false,
+    "code": "tracking_timeout",
+    "state_trace_sha256": "e3b39f3332c06f051830d57e02beab22a55fa100bdba8e60f3356c9f3b684e24",
+    "array_sha256": "96a2eb8749593c41d9de6d2e5529eadac97bc7b1e51b34d39336069d14d0a353",
+    "terminal_values": {
+      "contract": [
+        33.14824676513672,
+        -1.1393629312515259,
+        -0.02740105241537094
+      ],
+      "legacy": [
+        20.711214065551758,
+        -1.1507034301757812,
+        -0.07865608483552933
+      ]
+    },
+    "finite_contract_returns": {
+      "legacy": [
+        32.015899658203125,
+        -1.3654145002365112,
+        0.0
+      ],
+      "priority_only": [
+        53.61752700805664,
+        -1.3654145002365112,
+        0.0
+      ],
+      "fine_only": [
+        28.391681671142578,
+        -1.3654145002365112,
+        0.0
+      ],
+      "progress_only": [
+        32.455970764160156,
+        -1.3654145002365112,
+        0.0
+      ],
+      "gating_only": [
+        22.006040573120117,
+        -1.3654145002365112,
+        0.0
+      ],
+      "contract": [
+        29.550865173339844,
+        -1.3654145002365112,
+        0.0
+      ]
+    },
+    "stop_confirmed": true
+  },
+  {
+    "case": {
+      "id": "mars:wrapper-reward-v2:audit:hand:1",
+      "seed": 35901001,
+      "split": "audit",
+      "mode": "coupled",
+      "travel_m": -0.09720000000000001,
+      "turn_rad": -0.19440000000000002,
+      "arm_delta": [
+        0.0,
+        0.0064800000000000005,
+        -0.0064800000000000005,
+        0.0,
+        0.0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ]
+    },
+    "noise_seed": 109,
+    "ticks": 500,
+    "terminated": false,
+    "truncated": true,
+    "stopped_at_bootstrap": true,
+    "success": false,
+    "code": "tracking_timeout",
+    "state_trace_sha256": "783a9fa226077ebb44d7f8a497bcb3f9887b03724fa4aba841cd982d1020ad0b",
+    "array_sha256": "1c14a502306311a0409ff1f99c4862c44dbf575d14db87e9c0fcd9ccb8ae1402",
+    "terminal_values": {
+      "contract": [
+        33.498207092285156,
+        -1.105646014213562,
+        -0.027972176671028137
+      ],
+      "legacy": [
+        21.074539184570312,
+        -1.1605608463287354,
+        -0.08028679341077805
+      ]
+    },
+    "finite_contract_returns": {
+      "legacy": [
+        33.408382415771484,
+        -1.3115044832229614,
+        0.0
+      ],
+      "priority_only": [
+        58.09403991699219,
+        -1.3115044832229614,
+        0.0
+      ],
+      "fine_only": [
+        29.546611785888672,
+        -1.3115044832229614,
+        0.0
+      ],
+      "progress_only": [
+        34.115203857421875,
+        -1.3115044832229614,
+        0.0
+      ],
+      "gating_only": [
+        23.768375396728516,
+        -1.3115044832229614,
+        0.0
+      ],
+      "contract": [
+        33.71377944946289,
+        -1.3115044832229614,
+        0.0
+      ]
+    },
+    "stop_confirmed": true
+  },
+  {
+    "case": {
+      "id": "mars:wrapper-reward-v2:audit:hand:2",
+      "seed": 35901002,
+      "split": "audit",
+      "mode": "coupled",
+      "travel_m": 0.1296,
+      "turn_rad": 0.20520000000000002,
+      "arm_delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.00864
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ]
+    },
+    "noise_seed": 108,
+    "ticks": 500,
+    "terminated": false,
+    "truncated": true,
+    "stopped_at_bootstrap": true,
+    "success": false,
+    "code": "tracking_timeout",
+    "state_trace_sha256": "03d71b374f77be872a410a59e7d55dcbc330e095b08fa5c383b77c937f26b06a",
+    "array_sha256": "9763763f21b72dd2e938c070bb3d1a541e84240f551fd090cbee66bc96d08d30",
+    "terminal_values": {
+      "contract": [
+        32.446006774902344,
+        -1.0981260538101196,
+        -0.03625691682100296
+      ],
+      "legacy": [
+        20.775646209716797,
+        -1.1326667070388794,
+        -0.06773454695940018
+      ]
+    },
+    "finite_contract_returns": {
+      "legacy": [
+        33.56755065917969,
+        -1.3283621072769165,
+        0.0
+      ],
+      "priority_only": [
+        58.90758514404297,
+        -1.3283621072769165,
+        0.0
+      ],
+      "fine_only": [
+        29.89716339111328,
+        -1.3283621072769165,
+        0.0
+      ],
+      "progress_only": [
+        34.65580749511719,
+        -1.3283621072769165,
+        0.0
+      ],
+      "gating_only": [
+        24.376068115234375,
+        -1.3283621072769165,
+        0.0
+      ],
+      "contract": [
+        36.122802734375,
+        -1.3283621072769165,
+        0.0
+      ]
+    },
+    "stop_confirmed": true
+  },
+  {
+    "case": {
+      "id": "mars:wrapper-reward-v2:audit:hand:2",
+      "seed": 35901002,
+      "split": "audit",
+      "mode": "coupled",
+      "travel_m": 0.1296,
+      "turn_rad": 0.20520000000000002,
+      "arm_delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.00864
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ]
+    },
+    "noise_seed": 109,
+    "ticks": 500,
+    "terminated": false,
+    "truncated": true,
+    "stopped_at_bootstrap": true,
+    "success": false,
+    "code": "tracking_timeout",
+    "state_trace_sha256": "3e947732db8d6b88d818a4e8e0619bd1a7e940132bc2ff9ecdf70b41df7bd270",
+    "array_sha256": "ede7624955cce63449b510802c19a6c3c64c7d546f9e69cb75a4bd01e22c0a80",
+    "terminal_values": {
+      "contract": [
+        32.93405532836914,
+        -1.076789140701294,
+        -0.03737553209066391
+      ],
+      "legacy": [
+        21.14723777770996,
+        -1.1586923599243164,
+        -0.06978992372751236
+      ]
+    },
+    "finite_contract_returns": {
+      "legacy": [
+        33.85066604614258,
+        -1.294244408607483,
+        0.0
+      ],
+      "priority_only": [
+        59.627689361572266,
+        -1.294244408607483,
+        0.0
+      ],
+      "fine_only": [
+        30.162349700927734,
+        -1.294244408607483,
+        0.0
+      ],
+      "progress_only": [
+        34.876216888427734,
+        -1.294244408607483,
+        0.0
+      ],
+      "gating_only": [
+        24.698997497558594,
+        -1.294244408607483,
+        0.0
+      ],
+      "contract": [
+        36.74831008911133,
+        -1.294244408607483,
+        0.0
+      ]
+    },
+    "stop_confirmed": true
+  },
+  {
+    "case": {
+      "id": "mars:wrapper-reward-v2:audit:hand:7",
+      "seed": 35901007,
+      "split": "audit",
+      "mode": "hand_free_base",
+      "travel_m": -0.0648,
+      "turn_rad": 0.10800000000000001,
+      "arm_delta": [
+        0.0,
+        0.0032400000000000003,
+        -0.0032400000000000003,
+        0.0,
+        0.0
+      ],
+      "base_mask": [
+        false,
+        false,
+        false
+      ]
+    },
+    "noise_seed": 108,
+    "ticks": 48,
+    "terminated": true,
+    "truncated": false,
+    "stopped_at_bootstrap": true,
+    "success": false,
+    "code": "unsafe_contact",
+    "state_trace_sha256": "6c57ce2116f40d29609991ab5c64961a0fc11f7575f049c6492451f28097c145",
+    "array_sha256": "1e37a13654734068b310c3fca745bc45df1a4d93ac15ae216bff2e8df54c9e70",
+    "terminal_values": {
+      "contract": [
+        42.85182189941406,
+        -1.4427154064178467,
+        -0.014414474368095398
+      ],
+      "legacy": [
+        22.799161911010742,
+        -1.0467923879623413,
+        -0.042282141745090485
+      ]
+    },
+    "finite_contract_returns": {
+      "legacy": [
+        0.7076957821846008,
+        -0.21366725862026215,
+        -0.1719694882631302
+      ],
+      "priority_only": [
+        5.761120796203613,
+        -0.21366725862026215,
+        -0.1719694882631302
+      ],
+      "fine_only": [
+        0.17307721078395844,
+        -0.21366725862026215,
+        -0.1719694882631302
+      ],
+      "progress_only": [
+        0.17119117081165314,
+        -0.21366725862026215,
+        -0.1719694882631302
+      ],
+      "gating_only": [
+        0.22244688868522644,
+        -0.21366725862026215,
+        -0.1719694882631302
+      ],
+      "contract": [
+        2.600893020629883,
+        -0.21366725862026215,
+        -0.1719694882631302
+      ]
+    },
+    "stop_confirmed": true
+  },
+  {
+    "case": {
+      "id": "mars:wrapper-reward-v2:audit:hand:7",
+      "seed": 35901007,
+      "split": "audit",
+      "mode": "hand_free_base",
+      "travel_m": -0.0648,
+      "turn_rad": 0.10800000000000001,
+      "arm_delta": [
+        0.0,
+        0.0032400000000000003,
+        -0.0032400000000000003,
+        0.0,
+        0.0
+      ],
+      "base_mask": [
+        false,
+        false,
+        false
+      ]
+    },
+    "noise_seed": 109,
+    "ticks": 49,
+    "terminated": true,
+    "truncated": false,
+    "stopped_at_bootstrap": true,
+    "success": false,
+    "code": "unsafe_contact",
+    "state_trace_sha256": "4cdc4ef8483aa206af7936b25abfbf9b8e3d6ccfc5a06df332e71472a42d64fb",
+    "array_sha256": "3d57a27022633de2b93f7ea0874e05313daca79af1a1efa7574345607b3eb169",
+    "terminal_values": {
+      "contract": [
+        43.31476593017578,
+        -1.4443689584732056,
+        -0.011550121009349823
+      ],
+      "legacy": [
+        22.939212799072266,
+        -1.0494732856750488,
+        -0.03949546813964844
+      ]
+    },
+    "finite_contract_returns": {
+      "legacy": [
+        0.7638659477233887,
+        -0.1749313622713089,
+        -0.3120400607585907
+      ],
+      "priority_only": [
+        5.699942588806152,
+        -0.1749313622713089,
+        -0.3120400607585907
+      ],
+      "fine_only": [
+        0.217232808470726,
+        -0.1749313622713089,
+        -0.3120400607585907
+      ],
+      "progress_only": [
+        0.14397040009498596,
+        -0.1749313622713089,
+        -0.3120400607585907
+      ],
+      "gating_only": [
+        0.20775693655014038,
+        -0.1749313622713089,
+        -0.3120400607585907
+      ],
+      "contract": [
+        2.3374056816101074,
+        -0.1749313622713089,
+        -0.3120400607585907
+      ]
+    },
+    "stop_confirmed": true
+  }
+]

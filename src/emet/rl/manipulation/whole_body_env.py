@@ -65,6 +65,12 @@ class GeneralTrackingEnv(gym.Wrapper):
             rewards[0] += self.meter.terminal_bonus(success)
         info = {
             **info,
+            # These wrappers score a finite tracking contract, including its
+            # deadline bonus/penalty. The native timeout has already stopped
+            # the plant; its observation is not a continuing-MDP bootstrap.
+            "native_terminated": bool(done),
+            "native_truncated": bool(truncated),
+            "episode_contract": "finite_tracking_deadline_v1",
             "reward_groups": rewards,
             "reward_terms": self.meter.last_terms.copy(),
             "reward_contract": self.meter.record(),
@@ -72,7 +78,7 @@ class GeneralTrackingEnv(gym.Wrapper):
             "primitive_success": success,
             "full_pick_place_success": False,
         }
-        return self.observation(raw), float(rewards.sum()), done, truncated, info
+        return self.observation(raw), float(rewards.sum()), bool(done or truncated), False, info
 
 
 class ControlStepMixture(gym.Env):

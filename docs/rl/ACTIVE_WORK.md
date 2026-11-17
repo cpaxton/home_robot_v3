@@ -42,6 +42,20 @@ files. Parent merges do not promote an actor or qualify hardware.
 
 ## Current state and evidence
 
+**Architecture/critic audit is in progress (2026-11-17).** The
+[architecture review](WHOLE_BODY_ARCHITECTURE_REVIEW.md) keeps the coupled
+pose interface and sensor-history actor, and identifies a concrete critic-target
+mismatch: finite deadline wrappers bootstrapped a physically stopped state.
+Fourteen frozen native deadline probes show 17–38 units of continuation credit
+versus a terminal bonus/penalty of 2. The wrappers now mark these deadlines
+terminal, while generic collection truncations still bootstrap. An opt-in
+independent critic epoch budget prevents actor KL stopping from cutting value
+fitting short. Actor inference is unchanged. A frozen region-aware feedback
+probe improves selected successes 2/6 → 4/6 but introduces contact and worsens
+one reverse case, so it is not exported. Targeted tests/new full-source evidence
+are required before corrected PPO; historical receipts do not qualify source edits.
+
+
 **Wrapper reward work:** the [reward specification](../experiments/wrapper_reward_20261116.md)
 records the legacy 20 Hz objective and an opt-in, versioned contract-tracking
 profile shared by general/coupled/TAMP wrappers. It adds fine hand priority,
