@@ -3029,8 +3029,10 @@
     "tamp": {
       "initial": [
         {
-          "case_id": null,
-          "seed": null,
+          "id": "development:left:20g:0",
+          "primitive": "grasp_pose",
+          "planning_scope": "unloaded_prefix",
+          "code": "grasp_pose_complete",
           "success": true,
           "stop_confirmed": true,
           "safety_flags": {
@@ -3043,14 +3045,25 @@
             "policy_calls": 129,
             "reference_controller_calls": 0
           },
-          "planning_scope": "unloaded_prefix",
           "full_pick_place_success": false,
           "initial_state_sha256": "f91850bde6e7388d9ca2c6ef54d8cd7d630d51f94eaba0e65ca342f0a90e0c03",
-          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a"
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "terminal_pose": {
+            "position_error_m": 0.0014863210302168894,
+            "orientation_error_rad": 0.004715214791667734,
+            "position_tolerance_m": 0.003,
+            "orientation_tolerance_rad": 0.02
+          },
+          "terminal_pose_in_contract": true,
+          "gripper_open": true,
+          "control_ticks": 193
         },
         {
-          "case_id": null,
-          "seed": null,
+          "id": "development:right:50g:1",
+          "primitive": "grasp_pose",
+          "planning_scope": "unloaded_prefix",
+          "code": "grasp_pose_complete",
           "success": true,
           "stop_confirmed": true,
           "safety_flags": {
@@ -3063,14 +3076,25 @@
             "policy_calls": 129,
             "reference_controller_calls": 0
           },
-          "planning_scope": "unloaded_prefix",
           "full_pick_place_success": false,
           "initial_state_sha256": "c9be93d91f1f090da402d12d7a0d8e6ee0fff54dfeb2f083771b17efdb89b168",
-          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a"
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "terminal_pose": {
+            "position_error_m": 0.0013261251938843821,
+            "orientation_error_rad": 0.004034279674779303,
+            "position_tolerance_m": 0.003,
+            "orientation_tolerance_rad": 0.02
+          },
+          "terminal_pose_in_contract": true,
+          "gripper_open": true,
+          "control_ticks": 191
         },
         {
-          "case_id": null,
-          "seed": null,
+          "id": "development:left:50g:2",
+          "primitive": "grasp_pose",
+          "planning_scope": "unloaded_prefix",
+          "code": "grasp_pose_complete",
           "success": true,
           "stop_confirmed": true,
           "safety_flags": {
@@ -3083,14 +3107,25 @@
             "policy_calls": 148,
             "reference_controller_calls": 0
           },
-          "planning_scope": "unloaded_prefix",
           "full_pick_place_success": false,
           "initial_state_sha256": "4ea9902356ec4e14c89d3adcd9fb221922e40376b9d807c60dae63ecbeeabcbe",
-          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a"
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "terminal_pose": {
+            "position_error_m": 0.002082874492853421,
+            "orientation_error_rad": 0.006509124176025879,
+            "position_tolerance_m": 0.003,
+            "orientation_tolerance_rad": 0.02
+          },
+          "terminal_pose_in_contract": true,
+          "gripper_open": true,
+          "control_ticks": 235
         },
         {
-          "case_id": null,
-          "seed": null,
+          "id": "development:right:20g:3",
+          "primitive": "grasp_pose",
+          "planning_scope": "unloaded_prefix",
+          "code": "grasp_pose_complete",
           "success": true,
           "stop_confirmed": true,
           "safety_flags": {
@@ -3103,14 +3138,25 @@
             "policy_calls": 150,
             "reference_controller_calls": 0
           },
-          "planning_scope": "unloaded_prefix",
           "full_pick_place_success": false,
           "initial_state_sha256": "2e4fee9a0d7ef5e87cc71ff453618df6357d03f10365fc614c4d55c50aae9913",
-          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a"
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "terminal_pose": {
+            "position_error_m": 0.0029471444485339544,
+            "orientation_error_rad": 0.008849365593172995,
+            "position_tolerance_m": 0.003,
+            "orientation_tolerance_rad": 0.02
+          },
+          "terminal_pose_in_contract": true,
+          "gripper_open": true,
+          "control_ticks": 235
         },
         {
-          "case_id": null,
-          "seed": null,
+          "id": "audit:left:20g:0",
+          "primitive": "grasp_pose",
+          "planning_scope": "unloaded_prefix",
+          "code": "grasp_pose_complete",
           "success": true,
           "stop_confirmed": true,
           "safety_flags": {
@@ -3123,14 +3169,25 @@
             "policy_calls": 131,
             "reference_controller_calls": 0
           },
-          "planning_scope": "unloaded_prefix",
           "full_pick_place_success": false,
           "initial_state_sha256": "99c3b1df14643c065f63b3fcfa59e547094e49247dc3227a48c85e2188e9e136",
-          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a"
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "terminal_pose": {
+            "position_error_m": 0.0016102903345920241,
+            "orientation_error_rad": 0.004843512132372061,
+            "position_tolerance_m": 0.003,
+            "orientation_tolerance_rad": 0.02
+          },
+          "terminal_pose_in_contract": true,
+          "gripper_open": true,
+          "control_ticks": 198
         },
         {
-          "case_id": null,
-          "seed": null,
+          "id": "audit:right:50g:1",
+          "primitive": "grasp_pose",
+          "planning_scope": "unloaded_prefix",
+          "code": "grasp_pose_complete",
           "success": true,
           "stop_confirmed": true,
           "safety_flags": {
@@ -3143,16 +3200,27 @@
             "policy_calls": 132,
             "reference_controller_calls": 0
           },
-          "planning_scope": "unloaded_prefix",
           "full_pick_place_success": false,
           "initial_state_sha256": "1bc9cff77c159e8d6c1f032900dd14765d5e5743102cb184a789fe2c925e7bf8",
-          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a"
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "terminal_pose": {
+            "position_error_m": 0.00141411931414533,
+            "orientation_error_rad": 0.004475979858498739,
+            "position_tolerance_m": 0.003,
+            "orientation_tolerance_rad": 0.02
+          },
+          "terminal_pose_in_contract": true,
+          "gripper_open": true,
+          "control_ticks": 198
         }
       ],
       "finite_joint": [
         {
-          "case_id": null,
-          "seed": null,
+          "id": "development:left:20g:0",
+          "primitive": "grasp_pose",
+          "planning_scope": "unloaded_prefix",
+          "code": "grasp_pose_complete",
           "success": true,
           "stop_confirmed": true,
           "safety_flags": {
@@ -3165,14 +3233,25 @@
             "policy_calls": 129,
             "reference_controller_calls": 0
           },
-          "planning_scope": "unloaded_prefix",
           "full_pick_place_success": false,
           "initial_state_sha256": "f91850bde6e7388d9ca2c6ef54d8cd7d630d51f94eaba0e65ca342f0a90e0c03",
-          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a"
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "terminal_pose": {
+            "position_error_m": 0.0011639912985692445,
+            "orientation_error_rad": 0.0033160870406647174,
+            "position_tolerance_m": 0.003,
+            "orientation_tolerance_rad": 0.02
+          },
+          "terminal_pose_in_contract": true,
+          "gripper_open": true,
+          "control_ticks": 194
         },
         {
-          "case_id": null,
-          "seed": null,
+          "id": "development:right:50g:1",
+          "primitive": "grasp_pose",
+          "planning_scope": "unloaded_prefix",
+          "code": "grasp_pose_complete",
           "success": true,
           "stop_confirmed": true,
           "safety_flags": {
@@ -3185,14 +3264,25 @@
             "policy_calls": 129,
             "reference_controller_calls": 0
           },
-          "planning_scope": "unloaded_prefix",
           "full_pick_place_success": false,
           "initial_state_sha256": "c9be93d91f1f090da402d12d7a0d8e6ee0fff54dfeb2f083771b17efdb89b168",
-          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a"
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "terminal_pose": {
+            "position_error_m": 0.001105359067921112,
+            "orientation_error_rad": 0.003148656428012814,
+            "position_tolerance_m": 0.003,
+            "orientation_tolerance_rad": 0.02
+          },
+          "terminal_pose_in_contract": true,
+          "gripper_open": true,
+          "control_ticks": 193
         },
         {
-          "case_id": null,
-          "seed": null,
+          "id": "development:left:50g:2",
+          "primitive": "grasp_pose",
+          "planning_scope": "unloaded_prefix",
+          "code": "grasp_pose_complete",
           "success": true,
           "stop_confirmed": true,
           "safety_flags": {
@@ -3205,14 +3295,25 @@
             "policy_calls": 148,
             "reference_controller_calls": 0
           },
-          "planning_scope": "unloaded_prefix",
           "full_pick_place_success": false,
           "initial_state_sha256": "4ea9902356ec4e14c89d3adcd9fb221922e40376b9d807c60dae63ecbeeabcbe",
-          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a"
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "terminal_pose": {
+            "position_error_m": 0.0018649009930933698,
+            "orientation_error_rad": 0.006104940699027959,
+            "position_tolerance_m": 0.003,
+            "orientation_tolerance_rad": 0.02
+          },
+          "terminal_pose_in_contract": true,
+          "gripper_open": true,
+          "control_ticks": 235
         },
         {
-          "case_id": null,
-          "seed": null,
+          "id": "development:right:20g:3",
+          "primitive": "grasp_pose",
+          "planning_scope": "unloaded_prefix",
+          "code": "grasp_pose_complete",
           "success": true,
           "stop_confirmed": true,
           "safety_flags": {
@@ -3225,14 +3326,25 @@
             "policy_calls": 150,
             "reference_controller_calls": 0
           },
-          "planning_scope": "unloaded_prefix",
           "full_pick_place_success": false,
           "initial_state_sha256": "2e4fee9a0d7ef5e87cc71ff453618df6357d03f10365fc614c4d55c50aae9913",
-          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a"
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "terminal_pose": {
+            "position_error_m": 0.001371622840127706,
+            "orientation_error_rad": 0.004315743404052959,
+            "position_tolerance_m": 0.003,
+            "orientation_tolerance_rad": 0.02
+          },
+          "terminal_pose_in_contract": true,
+          "gripper_open": true,
+          "control_ticks": 237
         },
         {
-          "case_id": null,
-          "seed": null,
+          "id": "audit:left:20g:0",
+          "primitive": "grasp_pose",
+          "planning_scope": "unloaded_prefix",
+          "code": "grasp_pose_complete",
           "success": true,
           "stop_confirmed": true,
           "safety_flags": {
@@ -3245,14 +3357,25 @@
             "policy_calls": 131,
             "reference_controller_calls": 0
           },
-          "planning_scope": "unloaded_prefix",
           "full_pick_place_success": false,
           "initial_state_sha256": "99c3b1df14643c065f63b3fcfa59e547094e49247dc3227a48c85e2188e9e136",
-          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a"
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "terminal_pose": {
+            "position_error_m": 0.0016201625077890572,
+            "orientation_error_rad": 0.00467588641802614,
+            "position_tolerance_m": 0.003,
+            "orientation_tolerance_rad": 0.02
+          },
+          "terminal_pose_in_contract": true,
+          "gripper_open": true,
+          "control_ticks": 196
         },
         {
-          "case_id": null,
-          "seed": null,
+          "id": "audit:right:50g:1",
+          "primitive": "grasp_pose",
+          "planning_scope": "unloaded_prefix",
+          "code": "grasp_pose_complete",
           "success": true,
           "stop_confirmed": true,
           "safety_flags": {
@@ -3265,16 +3388,27 @@
             "policy_calls": 133,
             "reference_controller_calls": 0
           },
-          "planning_scope": "unloaded_prefix",
           "full_pick_place_success": false,
           "initial_state_sha256": "1bc9cff77c159e8d6c1f032900dd14765d5e5743102cb184a789fe2c925e7bf8",
-          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a"
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "terminal_pose": {
+            "position_error_m": 0.0021600401527741833,
+            "orientation_error_rad": 0.007061735578007374,
+            "position_tolerance_m": 0.003,
+            "orientation_tolerance_rad": 0.02
+          },
+          "terminal_pose_in_contract": true,
+          "gripper_open": true,
+          "control_ticks": 195
         }
       ],
       "finite_independent": [
         {
-          "case_id": null,
-          "seed": null,
+          "id": "development:left:20g:0",
+          "primitive": "grasp_pose",
+          "planning_scope": "unloaded_prefix",
+          "code": "grasp_pose_complete",
           "success": true,
           "stop_confirmed": true,
           "safety_flags": {
@@ -3287,14 +3421,25 @@
             "policy_calls": 128,
             "reference_controller_calls": 0
           },
-          "planning_scope": "unloaded_prefix",
           "full_pick_place_success": false,
           "initial_state_sha256": "f91850bde6e7388d9ca2c6ef54d8cd7d630d51f94eaba0e65ca342f0a90e0c03",
-          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a"
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "terminal_pose": {
+            "position_error_m": 0.0007764174055243548,
+            "orientation_error_rad": 0.0019184243388690573,
+            "position_tolerance_m": 0.003,
+            "orientation_tolerance_rad": 0.02
+          },
+          "terminal_pose_in_contract": true,
+          "gripper_open": true,
+          "control_ticks": 190
         },
         {
-          "case_id": null,
-          "seed": null,
+          "id": "development:right:50g:1",
+          "primitive": "grasp_pose",
+          "planning_scope": "unloaded_prefix",
+          "code": "grasp_pose_complete",
           "success": true,
           "stop_confirmed": true,
           "safety_flags": {
@@ -3307,14 +3452,25 @@
             "policy_calls": 128,
             "reference_controller_calls": 0
           },
-          "planning_scope": "unloaded_prefix",
           "full_pick_place_success": false,
           "initial_state_sha256": "c9be93d91f1f090da402d12d7a0d8e6ee0fff54dfeb2f083771b17efdb89b168",
-          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a"
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "terminal_pose": {
+            "position_error_m": 0.0008650236115665269,
+            "orientation_error_rad": 0.0023395610546584973,
+            "position_tolerance_m": 0.003,
+            "orientation_tolerance_rad": 0.02
+          },
+          "terminal_pose_in_contract": true,
+          "gripper_open": true,
+          "control_ticks": 193
         },
         {
-          "case_id": null,
-          "seed": null,
+          "id": "development:left:50g:2",
+          "primitive": "grasp_pose",
+          "planning_scope": "unloaded_prefix",
+          "code": "grasp_pose_complete",
           "success": true,
           "stop_confirmed": true,
           "safety_flags": {
@@ -3327,14 +3483,25 @@
             "policy_calls": 148,
             "reference_controller_calls": 0
           },
-          "planning_scope": "unloaded_prefix",
           "full_pick_place_success": false,
           "initial_state_sha256": "4ea9902356ec4e14c89d3adcd9fb221922e40376b9d807c60dae63ecbeeabcbe",
-          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a"
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "terminal_pose": {
+            "position_error_m": 0.001661946950475509,
+            "orientation_error_rad": 0.005366714254056475,
+            "position_tolerance_m": 0.003,
+            "orientation_tolerance_rad": 0.02
+          },
+          "terminal_pose_in_contract": true,
+          "gripper_open": true,
+          "control_ticks": 233
         },
         {
-          "case_id": null,
-          "seed": null,
+          "id": "development:right:20g:3",
+          "primitive": "grasp_pose",
+          "planning_scope": "unloaded_prefix",
+          "code": "grasp_pose_complete",
           "success": true,
           "stop_confirmed": true,
           "safety_flags": {
@@ -3347,14 +3514,25 @@
             "policy_calls": 150,
             "reference_controller_calls": 0
           },
-          "planning_scope": "unloaded_prefix",
           "full_pick_place_success": false,
           "initial_state_sha256": "2e4fee9a0d7ef5e87cc71ff453618df6357d03f10365fc614c4d55c50aae9913",
-          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a"
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "terminal_pose": {
+            "position_error_m": 0.0020561934909317384,
+            "orientation_error_rad": 0.005655740148511545,
+            "position_tolerance_m": 0.003,
+            "orientation_tolerance_rad": 0.02
+          },
+          "terminal_pose_in_contract": true,
+          "gripper_open": true,
+          "control_ticks": 236
         },
         {
-          "case_id": null,
-          "seed": null,
+          "id": "audit:left:20g:0",
+          "primitive": "grasp_pose",
+          "planning_scope": "unloaded_prefix",
+          "code": "grasp_pose_complete",
           "success": true,
           "stop_confirmed": true,
           "safety_flags": {
@@ -3367,14 +3545,25 @@
             "policy_calls": 130,
             "reference_controller_calls": 0
           },
-          "planning_scope": "unloaded_prefix",
           "full_pick_place_success": false,
           "initial_state_sha256": "99c3b1df14643c065f63b3fcfa59e547094e49247dc3227a48c85e2188e9e136",
-          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a"
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "terminal_pose": {
+            "position_error_m": 0.0009902329962811751,
+            "orientation_error_rad": 0.002847152894761714,
+            "position_tolerance_m": 0.003,
+            "orientation_tolerance_rad": 0.02
+          },
+          "terminal_pose_in_contract": true,
+          "gripper_open": true,
+          "control_ticks": 197
         },
         {
-          "case_id": null,
-          "seed": null,
+          "id": "audit:right:50g:1",
+          "primitive": "grasp_pose",
+          "planning_scope": "unloaded_prefix",
+          "code": "grasp_pose_complete",
           "success": true,
           "stop_confirmed": true,
           "safety_flags": {
@@ -3387,10 +3576,19 @@
             "policy_calls": 133,
             "reference_controller_calls": 0
           },
-          "planning_scope": "unloaded_prefix",
           "full_pick_place_success": false,
           "initial_state_sha256": "1bc9cff77c159e8d6c1f032900dd14765d5e5743102cb184a789fe2c925e7bf8",
-          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a"
+          "model_fingerprint": "73e1cef4b7284076474d0e329adeac96327cac15da2e7139bc97573463df296a",
+          "compiled_robot_identity": "b8047d8d77a1956a911a49c579806bb99ab2e6b51e934d9458558fe0bcef75f1",
+          "terminal_pose": {
+            "position_error_m": 0.001531481594938638,
+            "orientation_error_rad": 0.004413718441754397,
+            "position_tolerance_m": 0.003,
+            "orientation_tolerance_rad": 0.02
+          },
+          "terminal_pose_in_contract": true,
+          "gripper_open": true,
+          "control_ticks": 197
         }
       ]
     }
@@ -3922,5 +4120,6 @@
         }
       }
     }
-  }
+  },
+  "tamp_initial_states_plants_and_ids_matched": true
 }

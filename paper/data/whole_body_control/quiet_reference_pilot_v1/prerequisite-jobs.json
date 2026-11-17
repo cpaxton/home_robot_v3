@@ -1,0 +1,34 @@
+{
+  "quiet-reference-regressions-v1": {
+    "job_id": "20261117_015047_2d92b1",
+    "pid": 119983,
+    "command": [
+      "taskset",
+      "-c",
+      "15",
+      "timeout",
+      "10800",
+      "/tmp/emet-quiet-reference-9d0620f9/.venv/bin/python",
+      "-u",
+      "-m",
+      "emet.rl.regression_gate",
+      "--output",
+      "/tmp/emet-quiet-reference-9d0620f9/logs/eval/quiet-reference-regressions-v1/full.xml"
+    ]
+  },
+  "quiet-reference-admission-v1": {
+    "job_id": "20261117_015047_4e1b10",
+    "pid": 120002,
+    "command": [
+      "taskset",
+      "-c",
+      "14",
+      "timeout",
+      "10800",
+      "/tmp/emet-quiet-reference-9d0620f9/.venv/bin/python",
+      "-u",
+      "/tmp/emet-quiet-reference-9d0620f9/logs/recovery/quiet-reference-pilot-v1/run.py",
+      "admission"
+    ]
+  }
+}

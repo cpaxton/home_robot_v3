@@ -63,6 +63,15 @@ an optional training distribution, then run a fixed-budget pair with independent
 critics and unchanged rewards/guards. Source changes require fresh regression
 and teacher admission; the completed 2acc receipt cannot qualify them.
 
+**Next training pair is queued at frozen source `9d0620f9`.** The optional
+stationary-reference motion-noise distribution passes 99 focused checks. Full
+gate `20261117_015047_2d92b1` and fresh native admission
+`20261117_015047_4e1b10` precede PPO supervisor `20261117_015136_781d98`.
+Both arms use independent critics, original rewards and fixed 16,384-decision
+budgets; only hold exploration differs. At launch PPO has not started. The
+viewer is paused for the sole native worker and restored automatically after
+completion/failure. [Protocol/live-log locations](../experiments/quiet_reference_training_20261117.md).
+
 **Wrapper reward work:** the [reward specification](../experiments/wrapper_reward_20261116.md)
 records the legacy 20 Hz objective and an opt-in, versioned contract-tracking
 profile shared by general/coupled/TAMP wrappers. It adds fine hand priority,

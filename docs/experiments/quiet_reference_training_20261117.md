@@ -36,3 +36,22 @@ cannot qualify it. The source-bound runner and exact protocol remain under
 ignored `logs/recovery/quiet-reference-pilot-v1/`; raw native evidence,
 checkpoints and offline W&B records go to ignored
 `logs/manipulation/quiet-reference-pilot-v1/`. No hardware motion or promotion.
+
+## Launch record
+
+Runtime `9d0620f9c3d3e198494b0a02ca3ce78513b4d04c` is frozen from the committed
+source, with archive/model/test inputs verified against the canonical worktree.
+The 99 focused checks pass. Fresh full gate `20261117_015047_2d92b1` runs on
+CPU15; native admission `20261117_015047_4e1b10` runs on CPU14. PPO supervisor
+`20261117_015136_781d98` waits for both, verifies the complete new receipt and
+runner hashes, then trains the ordinary/quiet pair. At this launch snapshot,
+PPO has not started. A paper build waits until the test worker finishes.
+The viewer is paused while the native worker is reserved, then automatically
+restored on localhost:8766. Numerical threads are one and CUDA is hidden.
+[Compact launch evidence](../../paper/data/whole_body_control/quiet_reference_pilot_v1/README.md)
+contains exact producers and identities; live status is in ignored job logs.
+
+Fresh native teacher admission passes 12/12 training and 6/6 TAMP prefixes;
+all 24 teacher cases remain recorded (23/24 overall). The retained deterministic
+baseline replay continues while the fresh full regression gate runs. This is
+admission evidence, not new PPO progress or a learned-policy success claim.
