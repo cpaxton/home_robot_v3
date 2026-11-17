@@ -51,6 +51,16 @@
       unchanged; no active deployment, binary execution or motor commands.
 - [ ] Review/install and live-verify the feedback fix, validate joint/model mapping
       and real velocity/stop/watchdog integration before a scoped motion test.
+- [x] Build a passive captured-scene Herman rehearsal: paired head/depth/arm/TF,
+      explicit geometry/limit admission, matched teacher/actor cases and offline
+      real/sim replay viewer on 8771. [Report](docs/experiments/herman_rehearsal_20261117.md).
+- [ ] Reconcile Herman's reported stow pose with joint1/joint2 declared limits and
+      link3/chassis proxy geometry; validate an actual staging path. Preserve
+      blocked exact capture separately from any synthetic start.
+- [ ] Add admitted Herman-like posture/hold/handoff cases to a bounded training
+      distribution with separate held-out poses. Current staged teacher is 6/6,
+      both actors 0/6; improve quiet holds and prevent base wandering before
+      hardware. Keep the general-purpose mixture and real driver gates separate.
 - [ ] Isolate fine-pose weighting, progress and pose-gated velocity reward
       changes; measure critic calibration and late-hold exploration before
       extending the reward PPO budget. Keep jerk/force protections active.

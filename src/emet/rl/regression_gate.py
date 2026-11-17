@@ -25,6 +25,7 @@ REGRESSION_TARGETS = (
     "src/test/scripts/test_trace_mars_carry.py",
     "src/test/scripts/test_control_artifacts.py",
     "src/test/scripts/test_pack_mars_training_snapshot.py",
+    "src/test/visualization/test_herman_rehearsal.py",
 )
 
 
@@ -76,6 +77,11 @@ def source_state(root):
             root / "scripts/pack_mars_training_snapshot.py",
             root / "scripts/generate_wbc_goal_changes.py",
             root / "scripts/report_wbc_training_mix.py",
+            root / "scripts/capture_herman_rehearsal.py",
+            root / "scripts/rehearse_herman.py",
+            root / "src/test/rl/manipulation/fixtures/herman_capture_v1.json",
+            root / "src/emet/visualization/herman_rehearsal.py",
+            root / "src/emet/visualization/herman_rehearsal.html",
             root / "src/emet/rl/test_drive.html",
             root / "scripts/prove_mars_c1_recovery.py",
             root / "scripts/validate_mars_unloaded_primitives.py",

@@ -420,7 +420,7 @@ class ManipulationConfig:
 class ManipulationEnv(gym.Env):
     metadata = {"render_modes": []}
 
-    def __init__(self, config=None, *, mesh_storage="inline"):
+    def __init__(self, config=None, *, mesh_storage="inline", model_factory=None):
         self.config = config if isinstance(config, ManipulationConfig) else ManipulationConfig(**(config or {}))
         self.profile = PROFILES[self.config.robot]
         self.reach_hold_trial = self.fixed_base_trial = False
@@ -433,7 +433,10 @@ class ManipulationEnv(gym.Env):
         self.grasp_lift_reset_attempts = []
         self.fixed_base_distance_m = self.fixed_base_rotation_rad = 0.0
         self.fixed_base_contract_violation = False
-        self.model, self.fingerprint = build_manipulation_model(
+        # Offline scene rehearsals may provide an explicit, fingerprinted model
+        # factory. Training reset options still cannot inject arbitrary physics.
+        factory = build_manipulation_model if model_factory is None else model_factory
+        self.model, self.fingerprint = factory(
             self.config.robot,
             diagnostics=self.config.diagnostics,
             payload_asset_set=self.config.payload_asset_set,
@@ -614,6 +617,10 @@ class ManipulationEnv(gym.Env):
         """Procedural reset hook; runtime goals never set joint configurations."""
         return sampled
 
+    def _initial_gripper_posture(self, sampled):
+        """Reset-only scene adapter hook; runtime release remains executor-owned."""
+        return sampled
+
     def _initialize(self):
         grasp_fixture = self.scenario != "reach" or (
             (self.reach_hold_trial or self.reach_local_trial) and self.config.hold_pregrasp_fixture
@@ -676,7 +683,7 @@ class ManipulationEnv(gym.Env):
             if grasp_fixture:
                 q[0] = q[4] = 0
                 q[3] = -q[1] - q[2] + self.config.grasp_pitch_rad
-        self.control.initialize(self._initial_arm_posture(q), p.gripper_open)
+        self.control.initialize(self._initial_arm_posture(q), self._initial_gripper_posture(p.gripper_open))
         if self.scenario == "reach" and self.config.initial_heading_range:
             base_joint = int(m.body_jntadr[self.control.base])
             if base_joint < 0 or m.jnt_type[base_joint] != mujoco.mjtJoint.mjJNT_FREE:

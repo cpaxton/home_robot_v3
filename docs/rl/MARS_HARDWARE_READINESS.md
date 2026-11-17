@@ -45,6 +45,15 @@ The published current arm pose is outside the latest narrow training reset
 neighborhood. Validate joint/model mapping and select a tested initial envelope;
 do not stream the current policy from an arbitrary parked posture.
 
+The [captured-scene rehearsal](../experiments/herman_rehearsal_20261117.md) now
+makes that gap concrete. Reported joint1/joint2 exceed both published URDF and
+model bounds by 1.318°/10.019°; the conservative link3 proxy intersects the chassis.
+The as-recorded state is static-FK-only. From a separate admitted synthetic start,
+teacher succeeds 6/6 while both learned actors succeed 0/6; all 18 simulator stops
+confirm. Small hand errors coexist with continued motion. Reconcile the stow
+envelope/geometry and validate posture-specific stable tracking before deployment.
+This is also distinct from the outstanding driver/stop verification.
+
 ## First physical sequence
 
 1. **Passive audit and shadow inference:** verify installed driver/profile,

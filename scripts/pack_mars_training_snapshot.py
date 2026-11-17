@@ -26,6 +26,9 @@ REQUIRED = (
     "src/emet/rl/test_drive.html",
     "configs/benchmarks/mars_goal_changes_v1.json",
     "scripts/generate_wbc_goal_changes.py",
+    "scripts/capture_herman_rehearsal.py",
+    "scripts/rehearse_herman.py",
+    "src/test/rl/manipulation/fixtures/herman_capture_v1.json",
     "paper/data/whole_body_control/fresh_tracking_confirmation_v1/cases.json",
 )
 TEXT = {".py", ".sh", ".json", ".yaml", ".yml", ".toml", ".tsv", ".txt", ".xml", ".urdf", ".srdf", ".md", ".svg", ".html"}

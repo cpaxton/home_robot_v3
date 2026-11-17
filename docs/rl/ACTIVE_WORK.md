@@ -18,6 +18,16 @@ ROS build, but is not deployed or executed.
 Current reported joint posture is outside the recent small training neighborhood.
 No motion, driver/service startup or active software deployment. [Audit](../experiments/herman_feedback_audit_20261117.md).
 
+**Captured-scene rehearsal is complete and visible on localhost:8771.** Actual
+parked posture is blocked by two published-limit discrepancies and a conservative
+link3/chassis proxy overlap; no physics rollout or hardware motion from that
+state. A separate explicitly synthetic staged start admits all six nearby cases:
+teacher **6/6**, both actors **0/6**, all **18/18** simulator stops confirmed.
+The new actor has sub-1.6 mm hand errors in four arm-active cases but does not
+settle; both yaw cases exceed the measured translation boundary. Partial room
+geometry and camera calibration are observed, not a physical dynamics fit.
+[Report, viewer and next steps](../experiments/herman_rehearsal_20261117.md).
+
 ## One controller owner and development worktree
 
 Continue controller implementation, training decisions and progress updates in

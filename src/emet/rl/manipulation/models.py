@@ -12,9 +12,37 @@ from emet.robots.innate_mars.chassis import add_physical_chassis
 
 
 def build_manipulation_model(
-    robot, *, diagnostics=False, payload_asset_set="training", contact_cone="pyramidal", contact_impratio=1.0, two_supports=False,
+    robot,
+    *,
+    diagnostics=False,
+    payload_asset_set="training",
+    contact_cone="pyramidal",
+    contact_impratio=1.0,
+    two_supports=False,
     mesh_storage="inline",
+    scene_geoms=(),
+    hide_training_fixtures=False,
 ):
+    if type(hide_training_fixtures) is not bool or (hide_training_fixtures and robot != "innate_mars"):
+        raise ValueError("fixture-free scene rehearsal requires Mars")
+    if not isinstance(scene_geoms, (list, tuple)) or len(scene_geoms) > 2000:
+        raise ValueError("bounded scene geometry required")
+    for geom in scene_geoms:
+        if not isinstance(geom, dict) or set(geom) != {"position", "half_size", "rgba"}:
+            raise ValueError("scene geometry requires position, half_size and rgba")
+        position, size, rgba = (np.asarray(geom[k], dtype=float) for k in ("position", "half_size", "rgba"))
+        if (
+            position.shape != (3,)
+            or size.shape != (3,)
+            or rgba.shape != (4,)
+            or not np.isfinite(np.r_[position, size, rgba]).all()
+            or np.any(abs(position) > 5)
+            or np.any(size <= 0)
+            or np.any(size > 1)
+            or np.any(rgba < 0)
+            or np.any(rgba > 1)
+        ):
+            raise ValueError("finite bounded scene geometry required")
     if mesh_storage not in {"inline", "binary"}:
         raise ValueError("mesh storage must be inline or binary")
     if type(two_supports) is not bool or (two_supports and robot != "innate_mars"):
@@ -77,6 +105,31 @@ def build_manipulation_model(
                 raise ValueError("scene is missing a required payload slot")
             world.remove(old)
             world.append(body)
+    if hide_training_fixtures:
+        # Keep named bookkeeping bodies for the unloaded reach environment, but
+        # do not invent a training table/payload in the reconstructed room.
+        for name in ("table", "object1", "object2"):
+            if name.startswith("object"):
+                # Invisible, noncolliding bookkeeping bodies must not fall
+                # through the ground and trigger false physics divergence.
+                root.find(f".//body[@name='{name}']").set("gravcomp", "1")
+            for geom in root.findall(f".//body[@name='{name}']/geom"):
+                geom.set("contype", "0")
+                geom.set("conaffinity", "0")
+                geom.set("rgba", "0 0 0 0")
+    for index, geom in enumerate(scene_geoms):
+        ET.SubElement(
+            root.find("worldbody"),
+            "geom",
+            name=f"observed_scene_{index}",
+            type="box",
+            pos=" ".join(map(str, geom["position"])),
+            size=" ".join(map(str, geom["half_size"])),
+            rgba=" ".join(map(str, geom["rgba"])),
+            mass="0",
+            contype="1",
+            conaffinity="1",
+        )
     option = root.find("option")
     if option is None:
         option = ET.SubElement(root, "option")

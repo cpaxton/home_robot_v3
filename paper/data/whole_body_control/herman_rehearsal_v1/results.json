@@ -1,0 +1,1810 @@
+{
+  "format": "herman-rehearsal-v1",
+  "capture_sha256": "a425242b157d2a180fe25bc7f65b65056f10f303780f1764aec188ae2a65765c",
+  "audit": {
+    "format": "herman-rehearsal-audit-v1",
+    "captured_arm_rad": {
+      "joint1": 1.5938060386131812,
+      "joint2": -1.7456701366138596,
+      "joint3": 1.5631264228554684,
+      "joint4": 1.0906603401866908,
+      "joint5": -0.019941750242513337,
+      "joint6": 0.08897088569736719
+    },
+    "head_rad": -0.0,
+    "published_joint_limits": {
+      "joint1": [
+        -1.5708,
+        1.5708
+      ],
+      "joint2": [
+        -1.5708,
+        1.22
+      ],
+      "joint3": [
+        -1.5708,
+        1.7453
+      ],
+      "joint4": [
+        -1.9199,
+        1.7453
+      ],
+      "joint5": [
+        -1.5708,
+        1.5708
+      ],
+      "joint6": [
+        -0.8727,
+        0.3491
+      ],
+      "joint6M": [
+        -0.8727,
+        0.3491
+      ],
+      "joint_head": [
+        -0.1745,
+        0.5236
+      ]
+    },
+    "limit_violations": [
+      {
+        "joint": "joint1",
+        "reported_rad": 1.5938060386131812,
+        "limits_rad": [
+          -1.5708,
+          1.5708
+        ],
+        "outside_rad": 0.02300603861318118,
+        "outside_degrees": 1.318148915850287
+      },
+      {
+        "joint": "joint2",
+        "reported_rad": -1.7456701366138596,
+        "limits_rad": [
+          -1.5708,
+          1.22
+        ],
+        "outside_rad": 0.17487013661385964,
+        "outside_degrees": 10.019320790850285
+      }
+    ],
+    "live_urdf_vs_tf": {
+      "ee_link": {
+        "available": true,
+        "position_m": 3.4867510341210807e-17,
+        "rotation_rad": 1.1741143653860667e-16
+      },
+      "head": {
+        "available": true,
+        "position_m": 0.0,
+        "rotation_rad": 0.0
+      },
+      "camera_optical_frame": {
+        "available": true,
+        "position_m": 0.0,
+        "rotation_rad": 3.5217744074312443e-16
+      },
+      "right_camera_optical_frame": {
+        "available": true,
+        "position_m": 0.0,
+        "rotation_rad": 3.5217744074312443e-16
+      }
+    },
+    "position_span_rad": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.001533980787885643,
+      0.0
+    ],
+    "captured_physics_admitted": false,
+    "physics_blockers": [
+      "published_joint_limit:joint1",
+      "published_joint_limit:joint2",
+      "captured_link3_chassis_proxy_penetration"
+    ],
+    "velocity_initialization": "zero-motion simulator hypothesis; published velocity units are unverified",
+    "wrist_image_available": false,
+    "wrist_optical_tf_available": false,
+    "hardware_ready": false,
+    "hardware_motion_commands_sent": 0,
+    "geometry_diagnostic": {
+      "proxy_signed_distance_m": -0.012920447422502833,
+      "cad_hull_signed_distance_m": 0.00011214722899435341
+    },
+    "mujoco_vs_live_tf": {
+      "ee_link": {
+        "position_m": 5.96906223549092e-17,
+        "rotation_rad": 2.262667333033765e-16
+      },
+      "head": {
+        "position_m": 0.0,
+        "rotation_rad": 0.0
+      },
+      "camera_optical_frame": {
+        "position_m": 0.0,
+        "rotation_rad": 8.210092466372717e-17
+      },
+      "right_camera_optical_frame": {
+        "position_m": 0.0,
+        "rotation_rad": 8.210092466372717e-17
+      }
+    }
+  },
+  "model_fingerprint": "2e8bbe1a1b2caf296dc7db172804d3ca7abf1439bc68b648342d782a59ea1e6e",
+  "scene_geoms": 588,
+  "depth": {
+    "valid_depth_fraction": 0.1871484375,
+    "sampled_points": 3339,
+    "depth_rule": {
+      "encoding": "16SC1",
+      "metres_per_unit": 0.001,
+      "invalid": "nonpositive",
+      "publisher_sha256": "9b862dccbffa958b8e9f4e5faa044719f57ace694cdefe35a5d3e09059fb978f",
+      "source": "maurice_cam/depth_estimator/publishing.cpp:134-175",
+      "physical_depth_calibration_verified": false
+    },
+    "stride_pixels": 4,
+    "unknown_pixels_are_free": false,
+    "calibration": "scaled_rectified_P_with_inverse_R_and_capture_time_TF",
+    "pair_skew_s": 0.003947236
+  },
+  "laser": {
+    "used": false,
+    "pair_skew_s": 0.137909262
+  },
+  "captured": {
+    "admitted": false,
+    "physics_steps": 0,
+    "reason": [
+      "published_joint_limit:joint1",
+      "published_joint_limit:joint2",
+      "captured_link3_chassis_proxy_penetration"
+    ]
+  },
+  "policy_sources": {
+    "policy_0": {
+      "path": "logs/manipulation/long-finetune-v1/continued/checkpoint-65536/actor",
+      "weights_sha256": "e21dafc156967cf5f098b555da5606724127576b3eb3f79b9cb7dd910d64df0a"
+    },
+    "policy_1": {
+      "path": "logs/manipulation/goal-change-curriculum-v1/curriculum/checkpoint-131072/actor",
+      "weights_sha256": "7971c16dfac4b4ba35eb1da413a2d5d1a30990ebd0e2ff027ed324c443830393"
+    }
+  },
+  "proposed_start": {
+    "joint_positions_rad": [
+      1.5308,
+      -1.5308,
+      1.0631264228554684,
+      1.0906603401866908,
+      -0.019941750242513337
+    ],
+    "delta_from_capture_rad": [
+      -0.06300603861318121,
+      0.21487013661385967,
+      -0.5,
+      0.0,
+      0.0
+    ],
+    "kind": "synthetic_geometry_admitted_staging_proposal",
+    "executed_on_robot": false,
+    "requires_reposition_validation": true
+  },
+  "proposals": [
+    {
+      "id": "herman-proposed-v1:hold",
+      "seed": 430000000,
+      "split": "audit",
+      "mode": "coupled",
+      "travel_m": 0.0,
+      "turn_rad": 0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "initial_kind": "synthetic_geometry_admitted_staging_proposal",
+      "hardware_executable": false
+    },
+    {
+      "id": "herman-proposed-v1:arm_shoulder",
+      "seed": 430000001,
+      "split": "audit",
+      "mode": "coupled",
+      "travel_m": 0.0,
+      "turn_rad": 0,
+      "arm_delta": [
+        0,
+        0.012,
+        -0.006,
+        0,
+        0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "initial_kind": "synthetic_geometry_admitted_staging_proposal",
+      "hardware_executable": false
+    },
+    {
+      "id": "herman-proposed-v1:arm_wrist",
+      "seed": 430000002,
+      "split": "audit",
+      "mode": "coupled",
+      "travel_m": 0.0,
+      "turn_rad": 0,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0.01,
+        -0.01
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "initial_kind": "synthetic_geometry_admitted_staging_proposal",
+      "hardware_executable": false
+    },
+    {
+      "id": "herman-proposed-v1:yaw_left",
+      "seed": 430000003,
+      "split": "audit",
+      "mode": "base_only",
+      "travel_m": 0.0,
+      "turn_rad": 0.05,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        false,
+        false,
+        true
+      ],
+      "initial_kind": "synthetic_geometry_admitted_staging_proposal",
+      "hardware_executable": false
+    },
+    {
+      "id": "herman-proposed-v1:yaw_right",
+      "seed": 430000004,
+      "split": "audit",
+      "mode": "base_only",
+      "travel_m": 0.0,
+      "turn_rad": -0.05,
+      "arm_delta": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "base_mask": [
+        false,
+        false,
+        true
+      ],
+      "initial_kind": "synthetic_geometry_admitted_staging_proposal",
+      "hardware_executable": false
+    },
+    {
+      "id": "herman-proposed-v1:handoff",
+      "seed": 430000005,
+      "split": "audit",
+      "mode": "coupled",
+      "travel_m": 0.0,
+      "turn_rad": 0.03,
+      "arm_delta": [
+        0,
+        0.012,
+        -0.006,
+        0,
+        0
+      ],
+      "base_mask": [
+        false,
+        false,
+        true
+      ],
+      "initial_kind": "synthetic_geometry_admitted_staging_proposal",
+      "hardware_executable": false
+    }
+  ],
+  "results": {
+    "teacher": [
+      {
+        "id": "herman-proposed-v1:hold",
+        "seed": 430000000,
+        "admitted": true,
+        "admission": {
+          "accepted": true,
+          "reason": null,
+          "minimum_support_margin_m": 0.02812667522556542,
+          "fixed_hand_witness_position_m": 0.0,
+          "fixed_hand_witness_orientation_rad": 0.0,
+          "dynamic_feasibility_verified": false,
+          "geometry_sample_period_s": 0.025
+        },
+        "second_admission": null,
+        "success": true,
+        "code": "ok",
+        "second_delivered": false,
+        "stop_confirmed": true,
+        "initial_state_sha256": "7e08c70b5ca36a498c14685509260f81394a1421dec1aca5471e64b26b5901d2",
+        "reference_sha256": "18dd15dd7ec5e29df5c55637d3fe29a2c57dd200941be9385358a64bd3fac3af",
+        "second_reference_sha256": null,
+        "model_fingerprint": "2e8bbe1a1b2caf296dc7db172804d3ca7abf1439bc68b648342d782a59ea1e6e",
+        "replay": "hold-teacher-replay.npz",
+        "trace": "hold-teacher-trace.json",
+        "metrics": {
+          "ee_position_error": 2.8812073015021145e-06,
+          "ee_orientation_error": 3.175031505921871e-07,
+          "base_goal_error": 4.860701425063341e-06,
+          "base_heading_error_rad": 3.969682500913212e-05,
+          "peak_contact_force": 0.0,
+          "peak_base_linear_jerk_m_s3": 0.00021791318915493694,
+          "peak_base_yaw_jerk_rad_s3": 0.0026879785236695597,
+          "wheel_lift": false,
+          "unsafe_contact": false,
+          "settled_seconds": 21.100000000000165
+        },
+        "simulation_only": true,
+        "active_last_sample": {
+          "time_s": 24.949999999996496,
+          "position_error_m": 2.8760660301959497e-06,
+          "rotation_error_rad": 3.182017282256888e-07,
+          "measured_arm_velocity": [
+            -1.2705008003191962e-06,
+            -1.0733926258654282e-06,
+            2.998538262407031e-09,
+            1.0655762136751067e-06,
+            -5.921011968705869e-09
+          ],
+          "commanded_arm_velocity": [
+            -1.589013650249091e-06,
+            -1.3450123641271864e-06,
+            7.589737247292198e-09,
+            1.3347908863981113e-06,
+            -7.572087236742964e-09
+          ],
+          "measured_base_velocity": [
+            1.8189587304728685e-07,
+            1.5752772134587558e-06
+          ],
+          "commanded_base_velocity": [
+            0.0,
+            0.0
+          ]
+        },
+        "private_replay_sha256": "2fdf486d480efd3d6c66253025becb827b7f5b592102a9aba9a7c96b831371fc"
+      },
+      {
+        "id": "herman-proposed-v1:arm_shoulder",
+        "seed": 430000001,
+        "admitted": true,
+        "admission": {
+          "accepted": true,
+          "reason": null,
+          "minimum_support_margin_m": 0.02812334853113163,
+          "fixed_hand_witness_position_m": 0.0,
+          "fixed_hand_witness_orientation_rad": 0.0,
+          "dynamic_feasibility_verified": false,
+          "geometry_sample_period_s": 0.025
+        },
+        "second_admission": null,
+        "success": true,
+        "code": "ok",
+        "second_delivered": false,
+        "stop_confirmed": true,
+        "initial_state_sha256": "7e08c70b5ca36a498c14685509260f81394a1421dec1aca5471e64b26b5901d2",
+        "reference_sha256": "f1b28659a6d93de03a56f9e62fcc3d23889220682d81b297c7db726c4e2855a2",
+        "second_reference_sha256": null,
+        "model_fingerprint": "2e8bbe1a1b2caf296dc7db172804d3ca7abf1439bc68b648342d782a59ea1e6e",
+        "replay": "arm_shoulder-teacher-replay.npz",
+        "trace": "arm_shoulder-teacher-trace.json",
+        "metrics": {
+          "ee_position_error": 2.7319528635044607e-06,
+          "ee_orientation_error": 3.2578723295145546e-07,
+          "base_goal_error": 4.8333339305566175e-06,
+          "base_heading_error_rad": 4.1342949708803554e-05,
+          "peak_contact_force": 0.0,
+          "peak_base_linear_jerk_m_s3": 0.00021681386903911048,
+          "peak_base_yaw_jerk_rad_s3": 0.0026224547469782225,
+          "wheel_lift": false,
+          "unsafe_contact": false,
+          "settled_seconds": 21.100000000000165
+        },
+        "simulation_only": true,
+        "active_last_sample": {
+          "time_s": 24.949999999996496,
+          "position_error_m": 2.726776086648216e-06,
+          "rotation_error_rad": 3.2510495527493244e-07,
+          "measured_arm_velocity": [
+            -1.2602282343627801e-06,
+            -1.061147112447017e-06,
+            1.0060185868711448e-08,
+            1.0461004118846443e-06,
+            -6.093021917775725e-09
+          ],
+          "commanded_arm_velocity": [
+            -1.57613518169189e-06,
+            -1.3248989513434413e-06,
+            1.4344921195544986e-08,
+            1.3104075687444527e-06,
+            -7.728421035080313e-09
+          ],
+          "measured_base_velocity": [
+            1.819898857072829e-07,
+            1.5621517116730464e-06
+          ],
+          "commanded_base_velocity": [
+            0.0,
+            0.0
+          ]
+        },
+        "private_replay_sha256": "6ffd7207ef4cc84dc3daf37a70cd9d3828fd2711856b86ff6e4b2e3af562d44b"
+      },
+      {
+        "id": "herman-proposed-v1:arm_wrist",
+        "seed": 430000002,
+        "admitted": true,
+        "admission": {
+          "accepted": true,
+          "reason": null,
+          "minimum_support_margin_m": 0.02812667522556542,
+          "fixed_hand_witness_position_m": 0.0,
+          "fixed_hand_witness_orientation_rad": 0.0,
+          "dynamic_feasibility_verified": false,
+          "geometry_sample_period_s": 0.025
+        },
+        "second_admission": null,
+        "success": true,
+        "code": "ok",
+        "second_delivered": false,
+        "stop_confirmed": true,
+        "initial_state_sha256": "7e08c70b5ca36a498c14685509260f81394a1421dec1aca5471e64b26b5901d2",
+        "reference_sha256": "82ba7efb196b37af008f67819a3f0b3329c757b84ff16b22cee883a3a3d92b2f",
+        "second_reference_sha256": null,
+        "model_fingerprint": "2e8bbe1a1b2caf296dc7db172804d3ca7abf1439bc68b648342d782a59ea1e6e",
+        "replay": "arm_wrist-teacher-replay.npz",
+        "trace": "arm_wrist-teacher-trace.json",
+        "metrics": {
+          "ee_position_error": 3.2319368788349404e-06,
+          "ee_orientation_error": 3.8339735061730996e-07,
+          "base_goal_error": 4.884274298588298e-06,
+          "base_heading_error_rad": 3.399448493654039e-05,
+          "peak_contact_force": 0.0,
+          "peak_base_linear_jerk_m_s3": 0.00021659636011193118,
+          "peak_base_yaw_jerk_rad_s3": 0.002824988333632178,
+          "wheel_lift": false,
+          "unsafe_contact": false,
+          "settled_seconds": 21.100000000000165
+        },
+        "simulation_only": true,
+        "active_last_sample": {
+          "time_s": 24.949999999996496,
+          "position_error_m": 3.2268092312146118e-06,
+          "rotation_error_rad": 3.804905812383825e-07,
+          "measured_arm_velocity": [
+            -1.274360686599235e-06,
+            -1.076881874337171e-06,
+            3.0409808047382943e-09,
+            1.06871454865965e-06,
+            -5.728227967365943e-09
+          ],
+          "commanded_arm_velocity": [
+            -1.5938044886417563e-06,
+            -1.3494230560251653e-06,
+            7.914804602399117e-09,
+            1.3427315519166276e-06,
+            -1.1353338207065189e-08
+          ],
+          "measured_base_velocity": [
+            1.818536989295439e-07,
+            1.5800807808192575e-06
+          ],
+          "commanded_base_velocity": [
+            0.0,
+            0.0
+          ]
+        },
+        "private_replay_sha256": "dc07ff1a7d9cddb071b6469a4837e1e04d18798220557735e5273997b8a1910d"
+      },
+      {
+        "id": "herman-proposed-v1:yaw_left",
+        "seed": 430000003,
+        "admitted": true,
+        "admission": {
+          "accepted": true,
+          "reason": null,
+          "minimum_support_margin_m": 0.028126675225565338,
+          "fixed_hand_witness_position_m": 0.0,
+          "fixed_hand_witness_orientation_rad": 0.0,
+          "dynamic_feasibility_verified": false,
+          "geometry_sample_period_s": 0.025
+        },
+        "second_admission": null,
+        "success": true,
+        "code": "ok",
+        "second_delivered": false,
+        "stop_confirmed": true,
+        "initial_state_sha256": "7e08c70b5ca36a498c14685509260f81394a1421dec1aca5471e64b26b5901d2",
+        "reference_sha256": "1b55377cc597d542f3c2a3dbfa614453b76f97434298483239526fddbf5275e1",
+        "second_reference_sha256": null,
+        "model_fingerprint": "2e8bbe1a1b2caf296dc7db172804d3ca7abf1439bc68b648342d782a59ea1e6e",
+        "replay": "yaw_left-teacher-replay.npz",
+        "trace": "yaw_left-teacher-trace.json",
+        "metrics": {
+          "ee_position_error": 0.0015160743381350196,
+          "ee_orientation_error": 0.01481188735781292,
+          "base_goal_error": 0.0,
+          "base_heading_error_rad": 0.014754619321677341,
+          "peak_contact_force": 0.0,
+          "peak_base_linear_jerk_m_s3": 0.16882834905027538,
+          "peak_base_yaw_jerk_rad_s3": 30.38137355454931,
+          "wheel_lift": false,
+          "unsafe_contact": false,
+          "settled_seconds": 21.100000000000165
+        },
+        "simulation_only": true,
+        "active_last_sample": {
+          "time_s": 24.949999999996496,
+          "position_error_m": 0.001516018191132446,
+          "rotation_error_rad": 0.014811260780466169,
+          "measured_arm_velocity": [
+            -4.804313097657377e-13,
+            3.1385597081262805e-10,
+            -1.2933726040240902e-09,
+            -2.3570454378433903e-10,
+            3.798513341026915e-13
+          ],
+          "commanded_arm_velocity": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "measured_base_velocity": [
+            5.903686452331587e-08,
+            -1.2575469379161321e-05
+          ],
+          "commanded_base_velocity": [
+            0.0,
+            0.0
+          ]
+        },
+        "private_replay_sha256": "6f6224fbcaec7c3ba2de078ec8ea6331ad510119f5c82b9ce11a52356d362751"
+      },
+      {
+        "id": "herman-proposed-v1:yaw_right",
+        "seed": 430000004,
+        "admitted": true,
+        "admission": {
+          "accepted": true,
+          "reason": null,
+          "minimum_support_margin_m": 0.02812667522556533,
+          "fixed_hand_witness_position_m": 0.0,
+          "fixed_hand_witness_orientation_rad": 0.0,
+          "dynamic_feasibility_verified": false,
+          "geometry_sample_period_s": 0.025
+        },
+        "second_admission": null,
+        "success": true,
+        "code": "ok",
+        "second_delivered": false,
+        "stop_confirmed": true,
+        "initial_state_sha256": "7e08c70b5ca36a498c14685509260f81394a1421dec1aca5471e64b26b5901d2",
+        "reference_sha256": "78c9b6698f6c56d18bd4c9d3bdff07addafa6616893e072e3c94fcde306485bd",
+        "second_reference_sha256": null,
+        "model_fingerprint": "2e8bbe1a1b2caf296dc7db172804d3ca7abf1439bc68b648342d782a59ea1e6e",
+        "replay": "yaw_right-teacher-replay.npz",
+        "trace": "yaw_right-teacher-trace.json",
+        "metrics": {
+          "ee_position_error": 0.0015046585197111936,
+          "ee_orientation_error": 0.014903590513013994,
+          "base_goal_error": 0.0,
+          "base_heading_error_rad": 0.014861709517791422,
+          "peak_contact_force": 0.0,
+          "peak_base_linear_jerk_m_s3": 0.2908342876951062,
+          "peak_base_yaw_jerk_rad_s3": 30.56762665410215,
+          "wheel_lift": false,
+          "unsafe_contact": false,
+          "settled_seconds": 21.100000000000165
+        },
+        "simulation_only": true,
+        "active_last_sample": {
+          "time_s": 24.949999999996496,
+          "position_error_m": 0.0015045936755631764,
+          "rotation_error_rad": 0.0149028275311675,
+          "measured_arm_velocity": [
+            -2.090585069056442e-12,
+            3.127405558195847e-10,
+            -1.2939445494789087e-09,
+            -2.355650438365108e-10,
+            5.007365812835942e-13
+          ],
+          "commanded_arm_velocity": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "measured_base_velocity": [
+            2.3527880208380025e-07,
+            1.530883717709708e-05
+          ],
+          "commanded_base_velocity": [
+            0.0,
+            0.0
+          ]
+        },
+        "private_replay_sha256": "d2e96d3fefeb1c51c47678ce36bfb6016c443070ceea61086614c4792ec32795"
+      },
+      {
+        "id": "herman-proposed-v1:handoff",
+        "seed": 430000005,
+        "admitted": true,
+        "admission": {
+          "accepted": true,
+          "reason": null,
+          "minimum_support_margin_m": 0.028123348531131614,
+          "fixed_hand_witness_position_m": 0.0,
+          "fixed_hand_witness_orientation_rad": 0.0,
+          "dynamic_feasibility_verified": false,
+          "geometry_sample_period_s": 0.025
+        },
+        "second_admission": {
+          "accepted": true,
+          "reason": null,
+          "minimum_support_margin_m": 0.028123348531131614,
+          "fixed_hand_witness_position_m": 0.0,
+          "fixed_hand_witness_orientation_rad": 0.0,
+          "dynamic_feasibility_verified": false,
+          "geometry_sample_period_s": 0.025
+        },
+        "success": true,
+        "code": "ok",
+        "second_delivered": true,
+        "stop_confirmed": true,
+        "initial_state_sha256": "7e08c70b5ca36a498c14685509260f81394a1421dec1aca5471e64b26b5901d2",
+        "reference_sha256": "0d23ee5ef99b1b5b6f70f37ac62cd90c3cb47252e4037fc311cfbed453cffd18",
+        "second_reference_sha256": "2a61f7818e8a85df3f1996c47c61e2d9879da63f87b5563d0523982cc8b5d4cc",
+        "model_fingerprint": "2e8bbe1a1b2caf296dc7db172804d3ca7abf1439bc68b648342d782a59ea1e6e",
+        "replay": "handoff-teacher-replay.npz",
+        "trace": "handoff-teacher-trace.json",
+        "metrics": {
+          "ee_position_error": 7.655965025584627e-08,
+          "ee_orientation_error": 4.28780751524516e-07,
+          "base_goal_error": 0.0,
+          "base_heading_error_rad": 7.417587133568016e-07,
+          "peak_contact_force": 0.0,
+          "peak_base_linear_jerk_m_s3": 0.0011219309467676503,
+          "peak_base_yaw_jerk_rad_s3": 0.04649041370828827,
+          "wheel_lift": false,
+          "unsafe_contact": false,
+          "settled_seconds": 16.900000000000105
+        },
+        "simulation_only": true,
+        "active_last_sample": {
+          "time_s": 24.949999999996496,
+          "position_error_m": 7.655878050583896e-08,
+          "rotation_error_rad": 4.246177330248092e-07,
+          "measured_arm_velocity": [
+            -4.899314943882651e-10,
+            3.6625742223232605e-08,
+            -1.7887545860985748e-09,
+            -3.3815378055732224e-08,
+            -1.7398841098121962e-10
+          ],
+          "commanded_arm_velocity": [
+            4.446802370534456e-09,
+            2.2455259342958407e-08,
+            1.588846792670925e-08,
+            -4.8730120008951264e-08,
+            -5.459747812450266e-10
+          ],
+          "measured_base_velocity": [
+            4.287774106652695e-09,
+            2.058377882203921e-11
+          ],
+          "commanded_base_velocity": [
+            1.9363031093743638e-07,
+            -1.7194848014200928e-06
+          ]
+        },
+        "private_replay_sha256": "fc9e997ae5acb63b5c1295b78d08b669366c242c35678e3dbaa7135ecc240381"
+      }
+    ],
+    "policy_0": [
+      {
+        "id": "herman-proposed-v1:hold",
+        "seed": 430000000,
+        "admitted": true,
+        "admission": {
+          "accepted": true,
+          "reason": null,
+          "minimum_support_margin_m": 0.02812667522556542,
+          "fixed_hand_witness_position_m": 0.0,
+          "fixed_hand_witness_orientation_rad": 0.0,
+          "dynamic_feasibility_verified": false,
+          "geometry_sample_period_s": 0.025
+        },
+        "second_admission": null,
+        "success": false,
+        "code": "rehearsal_boundary",
+        "second_delivered": false,
+        "stop_confirmed": true,
+        "initial_state_sha256": "7e08c70b5ca36a498c14685509260f81394a1421dec1aca5471e64b26b5901d2",
+        "reference_sha256": "18dd15dd7ec5e29df5c55637d3fe29a2c57dd200941be9385358a64bd3fac3af",
+        "second_reference_sha256": null,
+        "model_fingerprint": "2e8bbe1a1b2caf296dc7db172804d3ca7abf1439bc68b648342d782a59ea1e6e",
+        "replay": "hold-policy_0-replay.npz",
+        "trace": "hold-policy_0-trace.json",
+        "metrics": {
+          "ee_position_error": 0.08216705104974001,
+          "ee_orientation_error": 0.23610375659799146,
+          "base_goal_error": 0.050732877870715794,
+          "base_heading_error_rad": 0.3188498967227509,
+          "peak_contact_force": 0.0,
+          "peak_base_linear_jerk_m_s3": 3.8913470847233187,
+          "peak_base_yaw_jerk_rad_s3": 29.806462852193548,
+          "wheel_lift": false,
+          "unsafe_contact": false,
+          "settled_seconds": 0
+        },
+        "simulation_only": true,
+        "active_last_sample": {
+          "time_s": 13.650000000001562,
+          "position_error_m": 0.0804515901596411,
+          "rotation_error_rad": 0.23690389006848042,
+          "measured_arm_velocity": [
+            2.3237852472531694e-05,
+            0.10885450764131979,
+            -0.37327287008051824,
+            0.24240491507297834,
+            0.0635701217739865
+          ],
+          "commanded_arm_velocity": [
+            0.5848478078842163,
+            0.13964646756649016,
+            -0.411053466796875,
+            0.23542484879493714,
+            0.09832520484924316
+          ],
+          "measured_base_velocity": [
+            0.019065435439461435,
+            -0.014007043475330324
+          ],
+          "commanded_base_velocity": [
+            0.02416315734386444,
+            0.047735727429389946
+          ]
+        },
+        "private_replay_sha256": "b0591fa4a2bf47c48e5b3f5a499769d70fab096f76e17ac66e252e487370b8fb"
+      },
+      {
+        "id": "herman-proposed-v1:arm_shoulder",
+        "seed": 430000001,
+        "admitted": true,
+        "admission": {
+          "accepted": true,
+          "reason": null,
+          "minimum_support_margin_m": 0.02812334853113163,
+          "fixed_hand_witness_position_m": 0.0,
+          "fixed_hand_witness_orientation_rad": 0.0,
+          "dynamic_feasibility_verified": false,
+          "geometry_sample_period_s": 0.025
+        },
+        "second_admission": null,
+        "success": false,
+        "code": "rehearsal_boundary",
+        "second_delivered": false,
+        "stop_confirmed": true,
+        "initial_state_sha256": "7e08c70b5ca36a498c14685509260f81394a1421dec1aca5471e64b26b5901d2",
+        "reference_sha256": "f1b28659a6d93de03a56f9e62fcc3d23889220682d81b297c7db726c4e2855a2",
+        "second_reference_sha256": null,
+        "model_fingerprint": "2e8bbe1a1b2caf296dc7db172804d3ca7abf1439bc68b648342d782a59ea1e6e",
+        "replay": "arm_shoulder-policy_0-replay.npz",
+        "trace": "arm_shoulder-policy_0-trace.json",
+        "metrics": {
+          "ee_position_error": 0.08220215476616098,
+          "ee_orientation_error": 0.27652163144194347,
+          "base_goal_error": 0.05136626855421448,
+          "base_heading_error_rad": 0.36477374201022966,
+          "peak_contact_force": 0.0,
+          "peak_base_linear_jerk_m_s3": 1.9385597647699482,
+          "peak_base_yaw_jerk_rad_s3": 21.626055272775638,
+          "wheel_lift": false,
+          "unsafe_contact": false,
+          "settled_seconds": 0
+        },
+        "simulation_only": true,
+        "active_last_sample": {
+          "time_s": 20.89999999999874,
+          "position_error_m": 0.07908160455411145,
+          "rotation_error_rad": 0.2755940022911042,
+          "measured_arm_velocity": [
+            0.00011270798255569316,
+            -0.00031486188040966227,
+            -0.2837466305715046,
+            0.2778947281033938,
+            -0.030264344605782666
+          ],
+          "commanded_arm_velocity": [
+            0.5955253601074219,
+            0.049636678397655495,
+            -0.4005132794380188,
+            0.3798798680305481,
+            -0.0020388639997690923
+          ],
+          "measured_base_velocity": [
+            0.04481385806032007,
+            -0.06503054799671282
+          ],
+          "commanded_base_velocity": [
+            0.05098552107810974,
+            -0.09236161768436432
+          ]
+        },
+        "private_replay_sha256": "3f919407246705df6e117474f031a3cdee624f9009309ce73149a8e263120118"
+      },
+      {
+        "id": "herman-proposed-v1:arm_wrist",
+        "seed": 430000002,
+        "admitted": true,
+        "admission": {
+          "accepted": true,
+          "reason": null,
+          "minimum_support_margin_m": 0.02812667522556542,
+          "fixed_hand_witness_position_m": 0.0,
+          "fixed_hand_witness_orientation_rad": 0.0,
+          "dynamic_feasibility_verified": false,
+          "geometry_sample_period_s": 0.025
+        },
+        "second_admission": null,
+        "success": false,
+        "code": "rehearsal_boundary",
+        "second_delivered": false,
+        "stop_confirmed": true,
+        "initial_state_sha256": "7e08c70b5ca36a498c14685509260f81394a1421dec1aca5471e64b26b5901d2",
+        "reference_sha256": "82ba7efb196b37af008f67819a3f0b3329c757b84ff16b22cee883a3a3d92b2f",
+        "second_reference_sha256": null,
+        "model_fingerprint": "2e8bbe1a1b2caf296dc7db172804d3ca7abf1439bc68b648342d782a59ea1e6e",
+        "replay": "arm_wrist-policy_0-replay.npz",
+        "trace": "arm_wrist-policy_0-trace.json",
+        "metrics": {
+          "ee_position_error": 0.08493634590658938,
+          "ee_orientation_error": 0.4420528287561716,
+          "base_goal_error": 0.05180610009159512,
+          "base_heading_error_rad": 0.5560108117083604,
+          "peak_contact_force": 0.0,
+          "peak_base_linear_jerk_m_s3": 11.19549041876911,
+          "peak_base_yaw_jerk_rad_s3": 58.339223752393416,
+          "wheel_lift": false,
+          "unsafe_contact": false,
+          "settled_seconds": 0
+        },
+        "simulation_only": true,
+        "active_last_sample": {
+          "time_s": 13.950000000001662,
+          "position_error_m": 0.07758560554281321,
+          "rotation_error_rad": 0.42315168351809074,
+          "measured_arm_velocity": [
+            0.00011611433334432285,
+            -0.40205142797583304,
+            0.2010712168450592,
+            0.25666192135371213,
+            -0.09315589122675617
+          ],
+          "commanded_arm_velocity": [
+            0.599856162071228,
+            -0.5107575416564941,
+            0.027581112384796158,
+            0.40455272197723385,
+            -0.07343261182308197
+          ],
+          "measured_base_velocity": [
+            0.10561563023241999,
+            -0.5551548950644425
+          ],
+          "commanded_base_velocity": [
+            0.09801966190338135,
+            -0.4450693726539612
+          ]
+        },
+        "private_replay_sha256": "62d98e571597ec14a7cad02ea653542c473ee8050215e0e9efd00d803713e10f"
+      },
+      {
+        "id": "herman-proposed-v1:yaw_left",
+        "seed": 430000003,
+        "admitted": true,
+        "admission": {
+          "accepted": true,
+          "reason": null,
+          "minimum_support_margin_m": 0.028126675225565338,
+          "fixed_hand_witness_position_m": 0.0,
+          "fixed_hand_witness_orientation_rad": 0.0,
+          "dynamic_feasibility_verified": false,
+          "geometry_sample_period_s": 0.025
+        },
+        "second_admission": null,
+        "success": false,
+        "code": "rehearsal_boundary",
+        "second_delivered": false,
+        "stop_confirmed": true,
+        "initial_state_sha256": "7e08c70b5ca36a498c14685509260f81394a1421dec1aca5471e64b26b5901d2",
+        "reference_sha256": "1b55377cc597d542f3c2a3dbfa614453b76f97434298483239526fddbf5275e1",
+        "second_reference_sha256": null,
+        "model_fingerprint": "2e8bbe1a1b2caf296dc7db172804d3ca7abf1439bc68b648342d782a59ea1e6e",
+        "replay": "yaw_left-policy_0-replay.npz",
+        "trace": "yaw_left-policy_0-trace.json",
+        "metrics": {
+          "ee_position_error": 0.05627749710926602,
+          "ee_orientation_error": 0.1169042554303885,
+          "base_goal_error": 0.0,
+          "base_heading_error_rad": 0.11689163810544621,
+          "peak_contact_force": 0.0,
+          "peak_base_linear_jerk_m_s3": 0.010409198199340894,
+          "peak_base_yaw_jerk_rad_s3": 0.0331065930309145,
+          "wheel_lift": false,
+          "unsafe_contact": false,
+          "settled_seconds": 0
+        },
+        "simulation_only": true,
+        "active_last_sample": {
+          "time_s": 12.350000000001128,
+          "position_error_m": 0.055992999835717344,
+          "rotation_error_rad": 0.1166193377967823,
+          "measured_arm_velocity": [
+            1.246805259763894e-07,
+            2.101846092784692e-07,
+            -9.590460505884471e-07,
+            -1.6746402658631092e-07,
+            5.051654790043187e-08
+          ],
+          "commanded_arm_velocity": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "measured_base_velocity": [
+            0.005453495365932171,
+            -0.005686857728742499
+          ],
+          "commanded_base_velocity": [
+            0.005435297638177871,
+            -0.005641433410346508
+          ]
+        },
+        "private_replay_sha256": "83c222a1c85155f2d70c091608b4e04085e5908d96e543e1d391afbdb0c9fe92"
+      },
+      {
+        "id": "herman-proposed-v1:yaw_right",
+        "seed": 430000004,
+        "admitted": true,
+        "admission": {
+          "accepted": true,
+          "reason": null,
+          "minimum_support_margin_m": 0.02812667522556533,
+          "fixed_hand_witness_position_m": 0.0,
+          "fixed_hand_witness_orientation_rad": 0.0,
+          "dynamic_feasibility_verified": false,
+          "geometry_sample_period_s": 0.025
+        },
+        "second_admission": null,
+        "success": false,
+        "code": "rehearsal_boundary",
+        "second_delivered": false,
+        "stop_confirmed": true,
+        "initial_state_sha256": "7e08c70b5ca36a498c14685509260f81394a1421dec1aca5471e64b26b5901d2",
+        "reference_sha256": "78c9b6698f6c56d18bd4c9d3bdff07addafa6616893e072e3c94fcde306485bd",
+        "second_reference_sha256": null,
+        "model_fingerprint": "2e8bbe1a1b2caf296dc7db172804d3ca7abf1439bc68b648342d782a59ea1e6e",
+        "replay": "yaw_right-policy_0-replay.npz",
+        "trace": "yaw_right-policy_0-trace.json",
+        "metrics": {
+          "ee_position_error": 0.05492600353388509,
+          "ee_orientation_error": 0.11549366730746784,
+          "base_goal_error": 0.0,
+          "base_heading_error_rad": 0.11549346703541774,
+          "peak_contact_force": 0.0,
+          "peak_base_linear_jerk_m_s3": 0.010457740920099618,
+          "peak_base_yaw_jerk_rad_s3": 0.033373346845107926,
+          "wheel_lift": false,
+          "unsafe_contact": false,
+          "settled_seconds": 0
+        },
+        "simulation_only": true,
+        "active_last_sample": {
+          "time_s": 12.500000000001178,
+          "position_error_m": 0.05461207981840374,
+          "rotation_error_rad": 0.11502701368226212,
+          "measured_arm_velocity": [
+            -8.167919119540493e-08,
+            4.094717068384118e-07,
+            -1.1327306067581485e-06,
+            -2.374630273787042e-07,
+            -1.17115513839877e-07
+          ],
+          "commanded_arm_velocity": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "measured_base_velocity": [
+            0.005878722238533076,
+            0.009317352821507918
+          ],
+          "commanded_base_velocity": [
+            -0.005919549018144607,
+            0.007083809934556484
+          ]
+        },
+        "private_replay_sha256": "161d0686d1f78f5b92f2254defb1b8e98ea8de127b438d7a17879c9acd0d0c87"
+      },
+      {
+        "id": "herman-proposed-v1:handoff",
+        "seed": 430000005,
+        "admitted": true,
+        "admission": {
+          "accepted": true,
+          "reason": null,
+          "minimum_support_margin_m": 0.028123348531131614,
+          "fixed_hand_witness_position_m": 0.0,
+          "fixed_hand_witness_orientation_rad": 0.0,
+          "dynamic_feasibility_verified": false,
+          "geometry_sample_period_s": 0.025
+        },
+        "second_admission": {
+          "accepted": true,
+          "reason": null,
+          "minimum_support_margin_m": 0.028123348531131614,
+          "fixed_hand_witness_position_m": 0.0,
+          "fixed_hand_witness_orientation_rad": 0.0,
+          "dynamic_feasibility_verified": false,
+          "geometry_sample_period_s": 0.025
+        },
+        "success": false,
+        "code": "tracking_timeout",
+        "second_delivered": true,
+        "stop_confirmed": true,
+        "initial_state_sha256": "7e08c70b5ca36a498c14685509260f81394a1421dec1aca5471e64b26b5901d2",
+        "reference_sha256": "0d23ee5ef99b1b5b6f70f37ac62cd90c3cb47252e4037fc311cfbed453cffd18",
+        "second_reference_sha256": "2a61f7818e8a85df3f1996c47c61e2d9879da63f87b5563d0523982cc8b5d4cc",
+        "model_fingerprint": "2e8bbe1a1b2caf296dc7db172804d3ca7abf1439bc68b648342d782a59ea1e6e",
+        "replay": "handoff-policy_0-replay.npz",
+        "trace": "handoff-policy_0-trace.json",
+        "metrics": {
+          "ee_position_error": 0.0033548609760504656,
+          "ee_orientation_error": 0.05618840435104551,
+          "base_goal_error": 0.0,
+          "base_heading_error_rad": 0.004653722284517787,
+          "peak_contact_force": 0.0,
+          "peak_base_linear_jerk_m_s3": 2.503123341226177,
+          "peak_base_yaw_jerk_rad_s3": 38.94855300375275,
+          "wheel_lift": false,
+          "unsafe_contact": false,
+          "settled_seconds": 0
+        },
+        "simulation_only": true,
+        "active_last_sample": {
+          "time_s": 24.949999999996496,
+          "position_error_m": 0.002991444165956024,
+          "rotation_error_rad": 0.05118625984124563,
+          "measured_arm_velocity": [
+            -0.11654655411290153,
+            -0.036307651025714864,
+            0.05448413832878136,
+            -0.12177273785484954,
+            0.03204782048566747
+          ],
+          "commanded_arm_velocity": [
+            -0.0655086350440979,
+            -0.028399177640676496,
+            0.07512378394603729,
+            -0.12642784416675568,
+            -0.05684734225273133
+          ],
+          "measured_base_velocity": [
+            0.002537784886912669,
+            -0.044162105683362464
+          ],
+          "commanded_base_velocity": [
+            -0.00535784438252449,
+            0.01877233743667603
+          ]
+        },
+        "private_replay_sha256": "929470201d973f076978772e607e37321f5c5de7b0ee6464658aa194d50bb133"
+      }
+    ],
+    "policy_1": [
+      {
+        "id": "herman-proposed-v1:hold",
+        "seed": 430000000,
+        "admitted": true,
+        "admission": {
+          "accepted": true,
+          "reason": null,
+          "minimum_support_margin_m": 0.02812667522556542,
+          "fixed_hand_witness_position_m": 0.0,
+          "fixed_hand_witness_orientation_rad": 0.0,
+          "dynamic_feasibility_verified": false,
+          "geometry_sample_period_s": 0.025
+        },
+        "second_admission": null,
+        "success": false,
+        "code": "tracking_timeout",
+        "second_delivered": false,
+        "stop_confirmed": true,
+        "initial_state_sha256": "7e08c70b5ca36a498c14685509260f81394a1421dec1aca5471e64b26b5901d2",
+        "reference_sha256": "18dd15dd7ec5e29df5c55637d3fe29a2c57dd200941be9385358a64bd3fac3af",
+        "second_reference_sha256": null,
+        "model_fingerprint": "2e8bbe1a1b2caf296dc7db172804d3ca7abf1439bc68b648342d782a59ea1e6e",
+        "replay": "hold-policy_1-replay.npz",
+        "trace": "hold-policy_1-trace.json",
+        "metrics": {
+          "ee_position_error": 0.0009488463117595561,
+          "ee_orientation_error": 0.009967715424441668,
+          "base_goal_error": 0.0002516920113542167,
+          "base_heading_error_rad": 0.005542322816801738,
+          "peak_contact_force": 0.0,
+          "peak_base_linear_jerk_m_s3": 1.680292795866687,
+          "peak_base_yaw_jerk_rad_s3": 14.88955053478412,
+          "wheel_lift": false,
+          "unsafe_contact": false,
+          "settled_seconds": 0
+        },
+        "simulation_only": true,
+        "active_last_sample": {
+          "time_s": 24.949999999996496,
+          "position_error_m": 0.0005151621750779773,
+          "rotation_error_rad": 0.005606397894543272,
+          "measured_arm_velocity": [
+            0.07434216787867551,
+            0.024477424731581147,
+            0.006052275036790431,
+            0.022576888768919876,
+            -0.048413944634703845
+          ],
+          "commanded_arm_velocity": [
+            0.08544504940509796,
+            0.03414776176214218,
+            -0.020610221475362775,
+            0.07148061096668243,
+            -0.043866419792175294
+          ],
+          "measured_base_velocity": [
+            0.0019121599389515026,
+            -0.021489475975071844
+          ],
+          "commanded_base_velocity": [
+            0.0016137793287634848,
+            -0.026708465069532394
+          ]
+        },
+        "private_replay_sha256": "f46440b1e3d4a0ef1594c1b60827259863868be6e94f5717a8eb75a46709d361"
+      },
+      {
+        "id": "herman-proposed-v1:arm_shoulder",
+        "seed": 430000001,
+        "admitted": true,
+        "admission": {
+          "accepted": true,
+          "reason": null,
+          "minimum_support_margin_m": 0.02812334853113163,
+          "fixed_hand_witness_position_m": 0.0,
+          "fixed_hand_witness_orientation_rad": 0.0,
+          "dynamic_feasibility_verified": false,
+          "geometry_sample_period_s": 0.025
+        },
+        "second_admission": null,
+        "success": false,
+        "code": "tracking_timeout",
+        "second_delivered": false,
+        "stop_confirmed": true,
+        "initial_state_sha256": "7e08c70b5ca36a498c14685509260f81394a1421dec1aca5471e64b26b5901d2",
+        "reference_sha256": "f1b28659a6d93de03a56f9e62fcc3d23889220682d81b297c7db726c4e2855a2",
+        "second_reference_sha256": null,
+        "model_fingerprint": "2e8bbe1a1b2caf296dc7db172804d3ca7abf1439bc68b648342d782a59ea1e6e",
+        "replay": "arm_shoulder-policy_1-replay.npz",
+        "trace": "arm_shoulder-policy_1-trace.json",
+        "metrics": {
+          "ee_position_error": 0.00046054419540215487,
+          "ee_orientation_error": 0.010473385632302048,
+          "base_goal_error": 0.00014236268190204515,
+          "base_heading_error_rad": 0.0018510475377947386,
+          "peak_contact_force": 0.0,
+          "peak_base_linear_jerk_m_s3": 1.476585459243327,
+          "peak_base_yaw_jerk_rad_s3": 14.063668951507834,
+          "wheel_lift": false,
+          "unsafe_contact": false,
+          "settled_seconds": 0
+        },
+        "simulation_only": true,
+        "active_last_sample": {
+          "time_s": 24.949999999996496,
+          "position_error_m": 0.0006493436288362718,
+          "rotation_error_rad": 0.013930442444420639,
+          "measured_arm_velocity": [
+            0.04440192431732277,
+            0.0019036628975134947,
+            0.02802334678910976,
+            -0.028215324708169606,
+            -0.0378502211008592
+          ],
+          "commanded_arm_velocity": [
+            0.10279379189014434,
+            0.04042522162199019,
+            0.010763539373874663,
+            0.010942994803190234,
+            -0.0756013959646225
+          ],
+          "measured_base_velocity": [
+            0.0025202868720471815,
+            -0.05158338352793975
+          ],
+          "commanded_base_velocity": [
+            0.0018924996256828308,
+            -0.04195186868309975
+          ]
+        },
+        "private_replay_sha256": "d8a584edc8c1bd744255b843236fff9b8627ba04f0248281900a4be1730aa1a0"
+      },
+      {
+        "id": "herman-proposed-v1:arm_wrist",
+        "seed": 430000002,
+        "admitted": true,
+        "admission": {
+          "accepted": true,
+          "reason": null,
+          "minimum_support_margin_m": 0.02812667522556542,
+          "fixed_hand_witness_position_m": 0.0,
+          "fixed_hand_witness_orientation_rad": 0.0,
+          "dynamic_feasibility_verified": false,
+          "geometry_sample_period_s": 0.025
+        },
+        "second_admission": null,
+        "success": false,
+        "code": "tracking_timeout",
+        "second_delivered": false,
+        "stop_confirmed": true,
+        "initial_state_sha256": "7e08c70b5ca36a498c14685509260f81394a1421dec1aca5471e64b26b5901d2",
+        "reference_sha256": "82ba7efb196b37af008f67819a3f0b3329c757b84ff16b22cee883a3a3d92b2f",
+        "second_reference_sha256": null,
+        "model_fingerprint": "2e8bbe1a1b2caf296dc7db172804d3ca7abf1439bc68b648342d782a59ea1e6e",
+        "replay": "arm_wrist-policy_1-replay.npz",
+        "trace": "arm_wrist-policy_1-trace.json",
+        "metrics": {
+          "ee_position_error": 0.0015937864055802354,
+          "ee_orientation_error": 0.012320355443900423,
+          "base_goal_error": 0.0003823764520457377,
+          "base_heading_error_rad": 0.007818277928887061,
+          "peak_contact_force": 0.0,
+          "peak_base_linear_jerk_m_s3": 1.939852591410044,
+          "peak_base_yaw_jerk_rad_s3": 15.826904481681998,
+          "wheel_lift": false,
+          "unsafe_contact": false,
+          "settled_seconds": 0
+        },
+        "simulation_only": true,
+        "active_last_sample": {
+          "time_s": 24.949999999996496,
+          "position_error_m": 0.001322456740052142,
+          "rotation_error_rad": 0.007610929171810769,
+          "measured_arm_velocity": [
+            0.06382114510274552,
+            0.02623535939547191,
+            -0.018189258416405018,
+            0.043646130592293664,
+            -0.03349001554841253
+          ],
+          "commanded_arm_velocity": [
+            0.0546397402882576,
+            0.03253239020705223,
+            -0.044529680907726285,
+            0.08230740129947663,
+            -0.015158087387681006
+          ],
+          "measured_base_velocity": [
+            0.0009248422323090324,
+            -0.003563660799081013
+          ],
+          "commanded_base_velocity": [
+            0.0017077282816171646,
+            -0.019172245636582375
+          ]
+        },
+        "private_replay_sha256": "55083fa54bd429e398a14029f05c0c05957d587277db333c2acd70661c5724aa"
+      },
+      {
+        "id": "herman-proposed-v1:yaw_left",
+        "seed": 430000003,
+        "admitted": true,
+        "admission": {
+          "accepted": true,
+          "reason": null,
+          "minimum_support_margin_m": 0.028126675225565338,
+          "fixed_hand_witness_position_m": 0.0,
+          "fixed_hand_witness_orientation_rad": 0.0,
+          "dynamic_feasibility_verified": false,
+          "geometry_sample_period_s": 0.025
+        },
+        "second_admission": null,
+        "success": false,
+        "code": "rehearsal_boundary",
+        "second_delivered": false,
+        "stop_confirmed": true,
+        "initial_state_sha256": "7e08c70b5ca36a498c14685509260f81394a1421dec1aca5471e64b26b5901d2",
+        "reference_sha256": "1b55377cc597d542f3c2a3dbfa614453b76f97434298483239526fddbf5275e1",
+        "second_reference_sha256": null,
+        "model_fingerprint": "2e8bbe1a1b2caf296dc7db172804d3ca7abf1439bc68b648342d782a59ea1e6e",
+        "replay": "yaw_left-policy_1-replay.npz",
+        "trace": "yaw_left-policy_1-trace.json",
+        "metrics": {
+          "ee_position_error": 0.05270561609485569,
+          "ee_orientation_error": 0.050930928764042684,
+          "base_goal_error": 0.0,
+          "base_heading_error_rad": 0.05091002184192072,
+          "peak_contact_force": 0.0,
+          "peak_base_linear_jerk_m_s3": 0.011044511377946492,
+          "peak_base_yaw_jerk_rad_s3": 0.029788273930315277,
+          "wheel_lift": false,
+          "unsafe_contact": false,
+          "settled_seconds": 12.050000000000036
+        },
+        "simulation_only": true,
+        "active_last_sample": {
+          "time_s": 15.900000000001512,
+          "position_error_m": 0.05256990483849414,
+          "rotation_error_rad": 0.05098357557454646,
+          "measured_arm_velocity": [
+            -5.790710176894074e-08,
+            3.056879383883561e-08,
+            -1.8896685833788987e-07,
+            -3.164240990196994e-08,
+            -8.91168984079385e-09
+          ],
+          "commanded_arm_velocity": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "measured_base_velocity": [
+            0.0027774480892363046,
+            0.001054303986413813
+          ],
+          "commanded_base_velocity": [
+            0.0027870652824640275,
+            0.001082284259609878
+          ]
+        },
+        "private_replay_sha256": "2b8744d2d2fa6fdd67e570f4febd8b79f5feea7017242c097c3e8d0631509abb"
+      },
+      {
+        "id": "herman-proposed-v1:yaw_right",
+        "seed": 430000004,
+        "admitted": true,
+        "admission": {
+          "accepted": true,
+          "reason": null,
+          "minimum_support_margin_m": 0.02812667522556533,
+          "fixed_hand_witness_position_m": 0.0,
+          "fixed_hand_witness_orientation_rad": 0.0,
+          "dynamic_feasibility_verified": false,
+          "geometry_sample_period_s": 0.025
+        },
+        "second_admission": null,
+        "success": false,
+        "code": "rehearsal_boundary",
+        "second_delivered": false,
+        "stop_confirmed": true,
+        "initial_state_sha256": "7e08c70b5ca36a498c14685509260f81394a1421dec1aca5471e64b26b5901d2",
+        "reference_sha256": "78c9b6698f6c56d18bd4c9d3bdff07addafa6616893e072e3c94fcde306485bd",
+        "second_reference_sha256": null,
+        "model_fingerprint": "2e8bbe1a1b2caf296dc7db172804d3ca7abf1439bc68b648342d782a59ea1e6e",
+        "replay": "yaw_right-policy_1-replay.npz",
+        "trace": "yaw_right-policy_1-trace.json",
+        "metrics": {
+          "ee_position_error": 0.051096060841419315,
+          "ee_orientation_error": 0.039309354646820706,
+          "base_goal_error": 0.0,
+          "base_heading_error_rad": 0.039296079244849486,
+          "peak_contact_force": 0.0,
+          "peak_base_linear_jerk_m_s3": 0.011092099792361889,
+          "peak_base_yaw_jerk_rad_s3": 0.03006335369881534,
+          "wheel_lift": false,
+          "unsafe_contact": false,
+          "settled_seconds": 13.850000000000062
+        },
+        "simulation_only": true,
+        "active_last_sample": {
+          "time_s": 17.700000000000514,
+          "position_error_m": 0.050990900327702045,
+          "rotation_error_rad": 0.03929765909288184,
+          "measured_arm_velocity": [
+            -5.958730500655517e-09,
+            1.806268707462594e-08,
+            -6.58723152146618e-08,
+            -1.2532492239235373e-08,
+            -2.15199120651658e-09
+          ],
+          "commanded_arm_velocity": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "measured_base_velocity": [
+            0.0021003356144363877,
+            0.00022427860889861345
+          ],
+          "commanded_base_velocity": [
+            -0.0022359933704137803,
+            -0.0006887114723213017
+          ]
+        },
+        "private_replay_sha256": "3fd22dfe19cc7478abc8871bca16d4a819aef7bf71b1e4f7debc6b6556aa7472"
+      },
+      {
+        "id": "herman-proposed-v1:handoff",
+        "seed": 430000005,
+        "admitted": true,
+        "admission": {
+          "accepted": true,
+          "reason": null,
+          "minimum_support_margin_m": 0.028123348531131614,
+          "fixed_hand_witness_position_m": 0.0,
+          "fixed_hand_witness_orientation_rad": 0.0,
+          "dynamic_feasibility_verified": false,
+          "geometry_sample_period_s": 0.025
+        },
+        "second_admission": {
+          "accepted": true,
+          "reason": null,
+          "minimum_support_margin_m": 0.028123348531131614,
+          "fixed_hand_witness_position_m": 0.0,
+          "fixed_hand_witness_orientation_rad": 0.0,
+          "dynamic_feasibility_verified": false,
+          "geometry_sample_period_s": 0.025
+        },
+        "success": false,
+        "code": "tracking_timeout",
+        "second_delivered": true,
+        "stop_confirmed": true,
+        "initial_state_sha256": "7e08c70b5ca36a498c14685509260f81394a1421dec1aca5471e64b26b5901d2",
+        "reference_sha256": "0d23ee5ef99b1b5b6f70f37ac62cd90c3cb47252e4037fc311cfbed453cffd18",
+        "second_reference_sha256": "2a61f7818e8a85df3f1996c47c61e2d9879da63f87b5563d0523982cc8b5d4cc",
+        "model_fingerprint": "2e8bbe1a1b2caf296dc7db172804d3ca7abf1439bc68b648342d782a59ea1e6e",
+        "replay": "handoff-policy_1-replay.npz",
+        "trace": "handoff-policy_1-trace.json",
+        "metrics": {
+          "ee_position_error": 0.0007170542085243131,
+          "ee_orientation_error": 0.012008891241105766,
+          "base_goal_error": 0.0,
+          "base_heading_error_rad": 0.0022068992487584258,
+          "peak_contact_force": 0.0,
+          "peak_base_linear_jerk_m_s3": 1.3645829063411608,
+          "peak_base_yaw_jerk_rad_s3": 23.469783549946097,
+          "wheel_lift": false,
+          "unsafe_contact": false,
+          "settled_seconds": 0
+        },
+        "simulation_only": true,
+        "active_last_sample": {
+          "time_s": 24.949999999996496,
+          "position_error_m": 0.0008286537215271852,
+          "rotation_error_rad": 0.014234954279926488,
+          "measured_arm_velocity": [
+            0.028367455735841905,
+            -0.0074925376589122135,
+            0.020892467832367066,
+            -0.029643960938206933,
+            -0.018650298707999564
+          ],
+          "commanded_arm_velocity": [
+            0.0866699606180191,
+            0.018618210777640344,
+            0.019165541231632232,
+            -0.014729717373847963,
+            -0.050933767855167386
+          ],
+          "measured_base_velocity": [
+            0.0018909041124426766,
+            -0.05263892467837072
+          ],
+          "commanded_base_velocity": [
+            0.0014061490818858145,
+            -0.038601089268922806
+          ]
+        },
+        "private_replay_sha256": "f6de8c8aa3f5a2a9b5c920799f4aeaf7eb591eb7426281e4addbe998f1ce7848"
+      }
+    ]
+  },
+  "summary": {
+    "teacher": {
+      "attempts": 6,
+      "admitted": 6,
+      "successes": 6,
+      "confirmed_stops": 6
+    },
+    "policy_0": {
+      "attempts": 6,
+      "admitted": 6,
+      "successes": 0,
+      "confirmed_stops": 6
+    },
+    "policy_1": {
+      "attempts": 6,
+      "admitted": 6,
+      "successes": 0,
+      "confirmed_stops": 6
+    }
+  },
+  "complete": true,
+  "hardware_ready": false,
+  "hardware_motion_commands_sent": 0,
+  "private_artifacts": {
+    "report.json": "eb906e5f8b01342df4d30a83414cdb7c91fdf8f58520a88bc7e72e9d95375f0f",
+    "artifacts.json": "5ade9dc582e4e597fae55eb0d95dda7848a5fe251f15c8bea52c8655df7c8615",
+    "scene.mjb": "17e051eac1f08225b78a25958b713424e8e6ce816563e4ab998180c8716ee3c7"
+  },
+  "sources_sha256": "853808b31dff33fd057ecdab1fe8869875a9b412433d9a4272fcc356b09150e4",
+  "pairing_verified": true,
+  "source_files": {
+    "assets/robot/docking_station.xml": "3e00fc48583e27dd18c5c6e2471979b1e47b2b973b85c4ed4dc0a67411562ccf",
+    "assets/robot/innate_mars/NOTICE.md": "1e1d8e600976d8fc3b7f4f2eb6559eb91e5d8598610df138acc1731dbc346fa5",
+    "assets/robot/innate_mars/innate_mars.xml": "8535ccdaddbe696ba2ee5e7b556205a020a9d866860a05df16d558940eb58985",
+    "assets/robot/innate_mars/innate_mars_visual_extras.xml": "4a52fbf5d07b6242115d5f185f83bd81070aa27ee26a4d90473a8781294ddfa4",
+    "assets/robot/innate_mars/meshes/base.STL": "e725a419bbe85a9346a0187aff6b9c1fd3bcf9cf6cc1f1c4164777134b31f5ca",
+    "assets/robot/innate_mars/meshes/head.STL": "3852748e253644f9e9d710e92d11a15fee06cc9eeb4ed0d595eeedfebc03bd55",
+    "assets/robot/innate_mars/meshes/link1.STL": "9eb892e67efe447e802009cbbeaf46c30c86d46c08563858c9d26f1cee286587",
+    "assets/robot/innate_mars/meshes/link2.STL": "d8fe401af1ee98323ff128eeaab64945533ccf6e5a836ae1252fb571b6d70182",
+    "assets/robot/innate_mars/meshes/link3.STL": "71956e0cd0b868c46200af5e1b0a5191207fc056e0878fbba9dffbdd023add40",
+    "assets/robot/innate_mars/meshes/link4.STL": "2f1c87f188ddd71479f30d2e20c488b3d7eb30b4d19d4aec572e70d4c0529fae",
+    "assets/robot/innate_mars/meshes/link5.STL": "e668681a8f62060382c73f11630a1a752b11332012791886b1e21bfceeff54d0",
+    "assets/robot/innate_mars/meshes/link61.STL": "b57b1b055e3d0bb8eda43ae23604219a1155c01f4fcecfea6d3560494280e40e",
+    "assets/robot/innate_mars/meshes/link62.STL": "44df6c24e9af8cc1bc5a0feb179d23c7039c590e45dff7e5a388363f79b5f0ba",
+    "assets/robot/innate_mars/molmospaces_spawn.json": "fffc446085228f4f1a1783fedabbf7d5050f2c8f496e70c5adbe223a5659ed9d",
+    "assets/robot/innate_mars/reference/arm.srdf": "72f67c20b8e090b09be9ac3688a88b06d09360d1ae43f9fecb9b9780d0cb8aa3",
+    "assets/robot/innate_mars/reference/chassis_support.json": "05b58956b294505f045b4a916f6a3b40e1199c64384ef61c7f63cd42fe64a7b4",
+    "assets/robot/innate_mars/reference/maurice.urdf": "3e1dadfa4e3e10085691962dfa06e3fb2e9508663f7631829c17307e4f077b41",
+    "assets/robot/innate_mars/reference/provenance.json": "fa9763d7d18b5d06b33287d11b6527cbf153950f5e6d62a14c9769855ddac75a",
+    "assets/robot/innate_mars/t_2ki2q578.xml": "74fc54315db8bd0e0a1080c09262e4fab59eacb0c2877ad3c50ae3bd7a5f10b7",
+    "assets/robot/scene_environment.xml": "a4391e7ad761aa79c5ccde265bf20b6ea6d90336a63383d634bc91f3f5c5d68c",
+    "assets/robot/stretch.xml": "f84efccb18a5aaf4378f76654341140a45a6640e2457c49f0aa100a2d721a63c",
+    "controller/manipulation/__init__.py": "3867df5eff56c05d380f3c8ea1e1aefff4d70e387e64fafd911ef43f633bc929",
+    "controller/manipulation/closer_look.py": "069bd1f6c09a01b0a1daff6287045466044138210489ef93d6f4ed2d967d6f46",
+    "controller/manipulation/dynamem_manipulation/dynamem_manipulation.py": "0983079cf9cbf0f76a18856f070614a77197849b01e9b0bfa30685d9bc4540b3",
+    "controller/manipulation/dynamem_manipulation/grasper_utils.py": "6062ad09da372f767620d383121654bb70c1c57bec837dd4411a87c2cfd97089",
+    "controller/manipulation/dynamem_manipulation/image_publisher.py": "ddd19d4e32e20df45e122b4dbc32667ed6541414b4f82f4a87dfc9be99d434b1",
+    "controller/manipulation/dynamem_manipulation/place.py": "e86e33a3b3cd4477f15e09934962997bd1844f7f0a4e547e86701226fcf06df2",
+    "controller/manipulation/kinematic_pick_place.py": "d1e31f505047f1c87b3f790d993d763ffc5c16b1ed8092d917b87049935aff36",
+    "controller/manipulation/native_inputs.py": "e304662f3635ac8776005864fca64fa2c23c744c3d704fd9ad5020cafc62a56f",
+    "controller/manipulation/native_scene.py": "404fc7cfdd96adce6b16ed4bb843e118a6fa2b03ebdfaf1c8f62b710d6d77af5",
+    "controller/manipulation/physical_pick_place.py": "70af3255b3056c85a0365d65d69991d587cc35f12fc504934aa7496a5e47842e",
+    "eval/physical_tamp.py": "deff19474bb165a33ca09ec63e7aa0708a5ecd0c79ed20faf64333c43b41fa4f",
+    "motion/__init__.py": "627228d1da4ec1fcf495127dd8a17cdfc154a10d3d9170eddcaace6e6b0088f0",
+    "motion/aabb_arm_collision.py": "d3d3190387717f7ecb78d3abced63a566763f56a1098450bce9db935ccdafecb",
+    "motion/agent_mcts.py": "7f7a7eef6e4e38e2e9e7eb5c090e300c4706178133360a376b293e1b3f4995fb",
+    "motion/algo/__init__.py": "239164c88ebd81c494b1bd0e67254edea795c9364a57792051bcca2ec63d00d6",
+    "motion/algo/a_star.py": "3c39ae9d57c44c1b05e1dadc6e6c46adf08e22d0590559806349b4936a4c9e63",
+    "motion/algo/node.py": "f0f0b02a487e08c8578c310ade0aabde16e235d719cf32dc6d0f13c0fa30e593",
+    "motion/algo/rrt.py": "23287d5010ea9eb87dd6a08859bc05b1dd6c06b8febf0ef15b5b4de77e202eb1",
+    "motion/algo/rrt_connect.py": "84390b19d04b6f17086c318a929f7abe730195f063c1789e2b1c2d138805b0ed",
+    "motion/algo/shortcut.py": "009b98197f26fe6467c632d6b816b01c24aff465a8e68f353fc399f8a78484f0",
+    "motion/algo/simplify.py": "1e10dd32d285f3d6ff3f0bb88910faed93aff623b66b48a5e84d5b8d1694df07",
+    "motion/arm_manip_profile.py": "2fb08fef144c87f991c906b33a1196ca3f16eb9dd358c56e1d63bdcc1fb12684",
+    "motion/arm_rrt.py": "bee9d28b4754f39d7aa977621bd80600e12657ac5caf3c532f57a0fb7d626131",
+    "motion/base/__init__.py": "5f16e1eb851328923b2994601c9672dbdcb622dd32fcd72e3effd225f5621d94",
+    "motion/base/base.py": "e0cc759cd4328b6859d7d6c70412fdbd4f747b8d8cca8c9a7419e94e095a42b0",
+    "motion/base/ik_solver_base.py": "28bc9d5dc51097587ef7d9cdd39e8161601120b5c66d75c5ca4380ed67b6f6dd",
+    "motion/base/space.py": "23f499f52c93df19400f486bc94b8a2d3e8e4422f2176b923e68e85c28230bfa",
+    "motion/base_goal_rank.py": "5084824c95765725e2025391bdfa0280b559cb61e0957e53731caa31b24fba75",
+    "motion/constants.py": "e79e7bab1e91ec5e33f42bb5450594eaa9820511aa34aef24f77c2b3a13a5bd4",
+    "motion/control/__init__.py": "824c822b380186ad14996ee4f1e53c57cebe11f2c08022a3d5bcd4bc861fcd7f",
+    "motion/control/feedback/__init__.py": "824c822b380186ad14996ee4f1e53c57cebe11f2c08022a3d5bcd4bc861fcd7f",
+    "motion/control/feedback/velocity_controllers.py": "f9711b8f12ec5b7ca1c41e1332fdbb948e003001885af5d406833d9d3d0c75c2",
+    "motion/control/goto_controller.py": "e95b871b4cb6bdbe3eafa1be40ba3e03734507d7304966f5e3d6a93774eb7f40",
+    "motion/control/traj_following_controller.py": "6ba470d045457e16da6377052e1ad6854f2bb92d2d6a22181eecfabf42c0dacc",
+    "motion/conversions.py": "b6307baa7cc391fe978d0547cb2dd0255a0652a38d4369908770cb935af9d901",
+    "motion/frontier_goals.py": "ea2fc1dd96a66ea9bbd02052feaf172c0c561a9a19a59b21fa5949b7330aa4a5",
+    "motion/grid_coordinates.py": "c2ae78a5555a2135edc57b655db423b3959f28447b05676d8d21c20bb876065f",
+    "motion/kinematics.py": "9f679bbbe8d98ef61975a6e6888956cc83eac7a88cb5242c853a57b5ca8aadd3",
+    "motion/mujoco_arm_ik.py": "313e0e09d7a8281fca608ab4bcff507f8fb633c01590b04ac738550b2df76b0f",
+    "motion/mujoco_collision.py": "145995c586858a6f06e4ac5ed943aa6c868fe273100197f67354f5457e02ff14",
+    "motion/navigation_sweep.py": "2a553a4c9631a28fd776b02e609d398be5097a9654d8913fe3c481ba42a702bb",
+    "motion/pinocchio_ik_solver.py": "f776d1f74b674215e74ae4076f87dfee914a8ef97e901c6129c7d3f675bbf29a",
+    "motion/placement.py": "9184873daa769c92c84d3b14009f4e4d600ada5847c807e182d7982e5816477e",
+    "motion/placement_geometry.py": "83dc90e667e4f81e602c247b5edb945c2923f4937aab31a8db1345eb25627487",
+    "motion/placement_replay.py": "06ff34147484b567509e7ab0541f3d2897a51adbb3367f87185ce93ec82e6aeb",
+    "motion/placement_surfaces.py": "98600279efd68451ec091fa34b64fc3d95a215b5ffd399a1da15906f999bf75f",
+    "motion/robot.py": "4e1926d18a5483b078a46ed9179476a84fe62a3d80f89ea2ad454d85f8398346",
+    "motion/simple_ik.py": "af9c4c9a2feb2c66c2a89d8d4331a8f3d6d40bb1bb70ded81dc9cd8d1d7c3b3e",
+    "motion/simple_ik_equations_numba.py": "f79e3130d18a1e899f90bcbcdec13b2e2f93c27e20feef389f6a478c1ba484cb",
+    "motion/utils/__init__.py": "3867df5eff56c05d380f3c8ea1e1aefff4d70e387e64fafd911ef43f633bc929",
+    "motion/utils/geometry.py": "cf20d151542f162c645e3ac8469563a4e6b2d51e534fec574b2ba592fcf1c952",
+    "motion/utils/simple_env.py": "3592c7229e3f220e619d3ff23612677855062201f54884fa1ae94988b0eb406d",
+    "motion/viewpoint_selection.py": "ec55a3eafa1cb1715354ee1537eed993d51e26d91c0f181abcacf03bb63caae0",
+    "motion/voxel_arm_collision.py": "4cb99647badbe66785581f33f6d5b9c76704c06bd2cddc5c1a143403d6867ad0",
+    "rl/__init__.py": "fd8747eb2e1726ca596569f9154471d9cb7282c555236fe2d38ed2af4021b735",
+    "rl/__main__.py": "1fa6f2731c91b3691e168ee8c090b9dc9719b09299af133763fc50aca5383d4e",
+    "rl/arm.py": "5931a057a5c1d86ad811ca8fa59dc00dd812a4796ce7232f9a64bb9462dad38f",
+    "rl/artifacts.py": "b0843988f9ce40fc65b55ca2c905aeb80ba327fbc6588e4c1ce23a5d518ae7a5",
+    "rl/audit.py": "f3f9c4de94b10621f20f6a2f67f0369cd1839753ac1891684ee3857e932f2e21",
+    "rl/base.py": "fc14e81f6881737e4eee8970317feea7fa9f8280f86fafe5a1210ddb9838ad51",
+    "rl/bootstrap.py": "9cf0b903247b94b724f753288c3ae7a3ae115de40b88de4fe0cce5c31716209c",
+    "rl/contact.py": "7258b978a81f9f7a941efcaf5f8b05609abeb2ba516662bf0c33cb2a5d497039",
+    "rl/control.py": "f2a0bfcaac71b03762e6060dfb1818d3a13086ee18dbd97082ae3284d572166e",
+    "rl/coverage.py": "258e5f9735beb3d2768f0658c7d59f1671901a8132ba6574a29c478566ddc189",
+    "rl/critic.py": "6a82b9d405fef8dfb903b6225e22c30629bc99e330a9d4b81636ae8e2f13d191",
+    "rl/env.py": "bcd6231ef2f59be80f09155069cf78237a46f9add2a807ed44c6e6d8bdea281d",
+    "rl/manipulation/__init__.py": "b1d021af151c366fb3569bf9dff91bd26a911b81a9d61fab8da49721a9242cea",
+    "rl/manipulation/__main__.py": "50699fc9ee63830903b26363acc1df6b26c5d1d9058594b79c2d2fd838415efe",
+    "rl/manipulation/action_audit.py": "b189e2b8bc285552d619a9a43b67f5f0edd7f81b8b500289955cae2eb3e63913",
+    "rl/manipulation/arm_adaptation.py": "321ce6d059ddc3e612c92710d2abb856e9be27cbdb47859f1a50e9bac55578a3",
+    "rl/manipulation/arm_component.py": "41b2f39483457b40cd8887e4a44b1f622b103b5d3702aec47675207ad551df2d",
+    "rl/manipulation/base_benchmark.py": "470333af478bedb851c9f8e9eaaf8d4376a2c51d6b8344588074da3efa59feed",
+    "rl/manipulation/base_braking.py": "1744054c0226df565fa24c3aa9e0ecd179459eb40a14bc0f4ac5b03f0c1dcf01",
+    "rl/manipulation/base_component.py": "923f5b5b1d8c6e8e1bce5e03e0a4f94fbff5ca8faa3b8075a529d03fef1e366e",
+    "rl/manipulation/base_goal_reference.py": "f670d830783d2e06a7e6ba7ff44cd6cd6751cdf2bfe9a948692ed01dbf9a04ea",
+    "rl/manipulation/base_navigation_feedback.py": "71aad39c6a82aa7e234e7b6ba211de8f14e552504609bdbeece64dc250e9ad8e",
+    "rl/manipulation/basic_learning.py": "fcecf860b3a276ef056fef68883bae4438565d4a851123f912b19b7640c17cad",
+    "rl/manipulation/calibration.py": "0d6d134063c362dff0d13ed67dc5445509df8fd4381403ec2821850ff1cb663b",
+    "rl/manipulation/carry_benchmark.py": "e33e3858667d61260f5aa2da3712c371bec1839c276a3f626c96f36b3897e09d",
+    "rl/manipulation/carry_training.py": "21b9180134176d8a85c9095ad72c7ac917d69030a44ec5a65c4c635b35347633",
+    "rl/manipulation/command_policy.py": "b657b667a2cc9272a7fd523d6ac4b0de214f90fbcae6747e0b2bf8cd3d4f68f4",
+    "rl/manipulation/command_runtime.py": "e91d921561972919796712726136f4b03fc154c5ec348ae0b5b4f2c08bf33ce9",
+    "rl/manipulation/component_transfer.py": "c237e5888a52087f8331f4523a64ae9ebe59618c7246f0b6af411c7408ec83c5",
+    "rl/manipulation/control.py": "704afc4253bea9a3ace6bc0ee7f8968a5d37d40f00e341ee568dbf12bc265052",
+    "rl/manipulation/coupled_evaluation.py": "1d33339d7d296dd939431da090857d63583c8be2ca572b53d22606319745cc09",
+    "rl/manipulation/coupled_tracking.py": "f47368117cb5787405a16f864a8e102b09b7a00b6d4f6d5ae048adb42234179f",
+    "rl/manipulation/directional_curriculum.py": "1781441cb7e8e4bc3ac6dac2b776fdadefc100eecd04eb2e86d13d57e8b38aa7",
+    "rl/manipulation/dynamic_trajectory.py": "e41e1f1ee80849f4d049db02427d63a1181ce8e2382b96b364b02078a326b4fc",
+    "rl/manipulation/env.py": "e5b20b975dd0fa1b400594885b8f1dff6447f99ed2b981b4f865a21054209db6",
+    "rl/manipulation/evaluation.py": "faf7e938d9f49cef12bfbe90c1ec67ccda386515e9e9400b1fbcbc222916cb3b",
+    "rl/manipulation/failure_replay.py": "e4eba3c5f114c303905e488c9f81e4fa83df1604d4215d164cb44ba965e65ea1",
+    "rl/manipulation/feedback_geometry.py": "0392918bb18ba0acb25f1ffffa907cbe3eac3806841bdd0080a388fa285bd3b0",
+    "rl/manipulation/feedback_policy.py": "e62ef38500c67234f2d45834d93f7e69c06e718b396d509f9b3c576f94994566",
+    "rl/manipulation/fixtures.py": "baaae9df99435b2713c46299c3610bae319a581496b7dda6da7d801028659503",
+    "rl/manipulation/goal_change_tracking.py": "fb287b4a9cfac7f68b449f20b4f8946600e1ec0f9a612a5d83aed7d58268ad28",
+    "rl/manipulation/grasp_lift.py": "75ce50a29c4f44813cad9d7de7e9b5e1e199b32631a164f2c8949d1aaf472d27",
+    "rl/manipulation/grasp_setup.py": "81364a4886e2fe2ca83a8f82cdae862c0b6a0145673baa4ed16fef86ee8c3de8",
+    "rl/manipulation/hand_audit.py": "d022475b8c6b077ffd62fa5686a60be5a6ee681a5194c493e519fd5d52572f6b",
+    "rl/manipulation/held_object.py": "9875fef7a8de43859945b0466b86327429611a9b36dc5d3a55a5a2a3d3967aef",
+    "rl/manipulation/herman_rehearsal.py": "09f860319eecf384090db379985d3fb5ca1bec27ec39d97bb28786c18f110861",
+    "rl/manipulation/herman_rehearsal_env.py": "a718a11ab259d49d8e8a86d4187a527706441f51a405f487fdaa68c4acb0db7f",
+    "rl/manipulation/hold_audit.py": "9711458c42eb5883cbf522dc6b9abb0d7e08f3f6d626db240dff732b8f832cab",
+    "rl/manipulation/hold_experiment.py": "ff286289eac3cf996f0fc2e4a2276372dbce535af666c7469eacb6f78cd79bd2",
+    "rl/manipulation/imitation.py": "eb301820f1a3692f8c8865ae6ec66dd98a17ca18d14be97461a93ddf1e8a59bf",
+    "rl/manipulation/initialization.py": "235fa9d0f039f92128d48c6e5d5c3be9c17ee29e5462df4cf199cf6596958933",
+    "rl/manipulation/integrated.py": "13c8df2bdd7940b5d3957d4bd23977b7698fea23ec60ea7aa035f36507980ca9",
+    "rl/manipulation/jerk_measurements.py": "5f926cbc097d4f3eb09f4e2ba0912c87b9c7121c0d891a49ba9ebfe98eb55d95",
+    "rl/manipulation/jerk_pose_reference.py": "88a5ebebed2de6f19db6acbef2f2165e8d85e44459413c8f686da104dd393098",
+    "rl/manipulation/jerk_reference.py": "51f734b7af70e38d5bfc6eb702736afb1b869cb0c5838b7fe92616bc9655f1a1",
+    "rl/manipulation/mastery.py": "4ff16f0cf6d0dd100a781576c962e126a5efdf83f1f28519f31b1c9ff7170b66",
+    "rl/manipulation/mastery_objective.py": "6fd77cd15de3fb6a6c5c6833fb54dc7ebaf0de29d70ff3d77c9f80736b754d9e",
+    "rl/manipulation/mesh_storage.py": "8f16ea0b7180ad213c74f6d2d15f797065e4795c4231fa619ec4d47f1970e917",
+    "rl/manipulation/models.py": "603f96944dd51fd38675fcb4ee511f63ed103782a76090be83d733a398d53220",
+    "rl/manipulation/multi_critic_ppo.py": "e373ad417a761d8de37406f38f2202b280340e4ef985e39ebd655ab858cd495a",
+    "rl/manipulation/normalization.py": "a980968d40a8d7ed5d503297d26434bea0df4368a70f051d4ff94f1e92c941de",
+    "rl/manipulation/normalization_schedule.py": "0c84a9a04c1dd386f58379bf9edb779a72571bd177d6bffb205a7e77af6ca716",
+    "rl/manipulation/observation_layout.py": "bfa754fe0df5b2d4d86bc227c7002b54269febd462e7ac3481ee76dd0ca2514c",
+    "rl/manipulation/oracle.py": "09fb2d61194e6b143531c79e46cf49c033d7d6e365ccfa15ae81931fee0c5603",
+    "rl/manipulation/oracle_runner.py": "58ca9bcfabcb85a07c594e8ed0a8b4c9579e7debadbc2c590a1ab5656f6e0765",
+    "rl/manipulation/pair_recovery.py": "ee27538b6b512ea8d5d49bbeb27b99b11c33cd881a102a3c1df8172b91ab5ee2",
+    "rl/manipulation/payload_assets.py": "5b1f0eb2efbd9af135894443c6d39bf1ab5419097531d70f5e6e8e31c8bb10cd",
+    "rl/manipulation/policy.py": "fdec069406c4aa9d80e441f377d804189fd51de2deab734c037e233316b4fd24",
+    "rl/manipulation/pose_value.py": "beda169d04e729262d7f6a4e6c36d64dd5fc5c450e78dfa813702793bbee87cb",
+    "rl/manipulation/post_training.py": "e38524b858e80d93aa894999154319c51dc80170c8239486cdf17d0410a117ed",
+    "rl/manipulation/primitive_admission.py": "c7285413e10132ac08edba67cd63ba257c33364e2e6726c78b7f9b96cfe67851",
+    "rl/manipulation/profiles.py": "911acb00c84f16634e3413b992d3ae1900ec991507c94f8b8e91f7760e148b86",
+    "rl/manipulation/retention_training.py": "d60b8955315a3493e629524130e3615e1f48b2909a1b710248038481af74a690",
+    "rl/manipulation/reward_audit.py": "a2be3c3852dc71c8618aa6c62c9310ad2dabed9c9fb7ad440310fd217b5e47de",
+    "rl/manipulation/reward_config.py": "c7a0da902e8594dc3877b7fe044cead9be665da575774317e9a94a5e7811dfdb",
+    "rl/manipulation/risk.py": "3c09fa301cedf185ebba9d8f80d746ea8e1e99954c07ff724e9d5d821179cf18",
+    "rl/manipulation/s_curve.py": "158a774df10764cb06b32f55375a748d1e47f1b6e2e8f3e5fa8957a1b93eee74",
+    "rl/manipulation/safety.py": "a1933653d66bb3daae2835e965398df427358ab5469d104f4c5a08a60aa7d4b8",
+    "rl/manipulation/support_audit.py": "6fd349215bb683c6d4818355a892d2db2ce7a968c4b24490a7a9bd6b878c7d04",
+    "rl/manipulation/tamp_benchmark.py": "869b7ce09ce9ce638c73cf8c0d0d4e28da59ed9f1ecfb6b8492df1304489329c",
+    "rl/manipulation/tamp_cases.py": "609c55b878bf0d8e2ed4f0b2727c5207c1a8c73664ce807c23f3e0ce294f6f79",
+    "rl/manipulation/tamp_policy.py": "b3c81aba7b38759ebc45e2282fc8e6c51152a4e3cfc569355445e015f421a0ed",
+    "rl/manipulation/tamp_primitive_env.py": "3871ca404b075a0fcd514a018c4d5b3b34d45caacb417a9d22bbd544a62e1d78",
+    "rl/manipulation/tracking.py": "c9bcd24c706a83a252aa021e70a207934604b57ecb58686bbdb0c643214877fb",
+    "rl/manipulation/tracking_audit.py": "6d78cb1258e444e244d555016a3bec3e76a53871221b480d536be546674c6d0a",
+    "rl/manipulation/tracking_curriculum.py": "01af7763ec4a00d31306bc16a0c91c63951ab2e6f14e4867949eaa559749c006",
+    "rl/manipulation/translation_curriculum.py": "200ef7be25ff731b141f3c304f2b914b170c32b0f0ffe36b6adb118fa0f59376",
+    "rl/manipulation/turn_guard.py": "3e1545fe6f5fa7e90e94c221882cf9bc84e2987805d55d739db4d66709b1502a",
+    "rl/manipulation/velocity_filter.py": "cde01f4034d6d0d26e908f2e721ff23ca31a48e0581c0c48db29b6673ed35f8c",
+    "rl/manipulation/wheel_feedback.py": "b279d5b4a0ceec70bce0ab864b1d59046907d951dcedef78cd08aae7ac64e3b1",
+    "rl/manipulation/whole_body.py": "232e130f7bd01303ed1008ba10f9839717fb2f2bef5e7d95545e7df571564689",
+    "rl/manipulation/whole_body_actor.py": "7fd62566043727c115644a544a003a8629e7772668aecb3a5df2437a78f12ff5",
+    "rl/manipulation/whole_body_bundle.py": "96f885999e3f4ee8422fec36c9e8fb1b55a49fb3fc26411cb53323279b472ce3",
+    "rl/manipulation/whole_body_env.py": "d50da94973f849f2508982d922c003d75f77b6be7c9a69001216105c01dd62dc",
+    "rl/manipulation/whole_body_observation.py": "ae6d5f7c59fb11de0fc902df69e8117ad3d90639af0d72cd4e5f67fe39d351db",
+    "rl/manipulation/whole_body_reward.py": "7766325547f0257962c8df90ba7e84485e34c3dd15c7c3b76f9418e7ea3ec35d",
+    "rl/manipulation/whole_body_training.py": "bb37b054bfbb069e990dbc4e1993d8fae892b5d7e0d70ec2873fbe85b9946932",
+    "rl/manipulation/yaw_audit.py": "2a30a56447549b80357741df0b4dd1cbab2eee7e42e1cd010749a2386b2b53ba",
+    "rl/model.py": "a4a1354b3867f03b092d9158ff1bc7fa7ec83586ca7abd37a8ff053e53891453",
+    "rl/networks.py": "c58e59cf89945af1341eff23383c14293dfe4ed79029afde5037fbe454e4ec99",
+    "rl/policy.py": "ddd1e6ba0fdffc8dd5821618f36f7d9aff8cd4c5c47dc3625d2cecb6bf2d0406",
+    "rl/pose_targets.py": "85e2b4f9f31a1d11d31219b3030125221a11334dd77fb371bf58cdcde3465d7a",
+    "rl/profile.py": "9e02df85eb4f122e4ac1cf033c4caa36b9d5be2c854d0f99ca33d46510f09577",
+    "rl/reference.py": "213f1c3b882e339bc0361fe7c621347e77b443a30d66a2a415e8edc751b2fde6",
+    "rl/refit.py": "f2f4d58abed823727dc49e0829b2c17f5154ef07293dd7c1dae7da04325dc8e2",
+    "rl/regression_gate.py": "eea5456855948195434788444c0cef64023d1676294decc2de03cae244855895",
+    "rl/residual.py": "5a04900c56b419e4fefa6bd4380ea315e0ecd6281f40291892d87de65afc78ff",
+    "rl/robustness.py": "f864a9f3298dc2df038ca3515a445db7860b286d48de49c9cb04cc8554fdab51",
+    "rl/server.py": "cf69d1a87d32c39a1b44310476108ef5a33590bd6a1da29c6476c67eb2a1678e",
+    "rl/test_drive.py": "4837ac843f32438ef6412ec55797f76c2140407b4357f159c882aa164fb3c8eb",
+    "rl/training.py": "4af1015abc0a488fc379a9087e0e2c12d42585a3c43cd0a4df408b1df7e0e338",
+    "rl/trajectories.py": "31545e53a2bd2bb9773fde0cab715ace31922e18f3316d52fcc3c09352e9588c",
+    "rl/transformer.py": "b7aa84a64c3f0dd76b6a647af23617c3a38c4e2bec76500d62e0c861fd610dbc",
+    "rl/waypoints.py": "bf7be5ebc76301d46da3e642177e1cfb600844decee98ae22620bb9bb29b77bf",
+    "robots/__init__.py": "bcd3da62da771c642ac3c3ee353fae6a14c956f37e6a88e7bae5b624c1e4e5cb",
+    "robots/base.py": "92b6b2fd557e52a5f0638d01012b80319cc731648274287876548f40589176be",
+    "robots/footprint.py": "5466857b9e23237f9821ed74b3fdf85911b65d8fe03a43731024e0e172a83de2",
+    "robots/franka_fr3/__init__.py": "c74675d245bba7653609cf95ddc0fa8993a7657f6b588dc78d6966967940a2ba",
+    "robots/galaxea_r1/__init__.py": "28524c18609a5890b530e05c9fd3f756a89fd5ccb31d684c2b77046a67457bc3",
+    "robots/galaxea_r1/sim_stationary.py": "4345966232c33e2851724e905143ba5e0299d0a54818fa5c02e5e3d3e0fef8e5",
+    "robots/head_capability.py": "76ab8f959b7a4ff3c23cc9cb5ce5555d86166d471b50320fd85daffb6d877b11",
+    "robots/innate_mars/__init__.py": "a47d9596586bd6b4dd4519f8a512dcb9f9cfee0b131ed830d011ea4cbf8f580e",
+    "robots/innate_mars/chassis.py": "ee9373ef44fc5de88e27d4985311f7f92a27fd3e21363058cefd438f91aa80bf",
+    "robots/innate_mars/control_session.py": "e4426e2cc9dfb8d2caf7e7342130e86e61a1a7448120e943b471eaf92b8af24c",
+    "robots/innate_mars/dummy_client.py": "332d4710a82ce3b3cff91974582e99793e64fd136d58f3a965a4f1ebcd45c246",
+    "robots/innate_mars/emote_backend.py": "a830f20675cf59943417340c44eee49c7c2d99f0e3605a1d203af5079d598104",
+    "robots/innate_mars/head_kinematics.py": "6eaefab297668d799854931568ccccfb70c5037af5374a10886b91fab2c852ef",
+    "robots/innate_mars/motion_boundary.py": "aefe8821a761c0463ba6bc5a64d8a8733aa8d4c4ded2d329fb4ebe72a1979fb9",
+    "robots/innate_mars/passive_relay.py": "d32682ef26b7f3c0ee807f4905d8cc47bbfd4a234834b4de6ee698f2d0ae0354",
+    "robots/innate_mars/passive_ssh.py": "d7c5ba83049466684c67bc990fa50181e00db012bf25ebec9af0f2abb225022b",
+    "robots/innate_mars/rehearsal_capture_ros.py": "44061c834f4fcc5a3868ab2a9fa07a9bcda8e423b694f2496eab7dc524c1f3c7",
+    "robots/innate_mars/ros_client.py": "95699538778c00f61ff09c6555493fa2d6c319c0d3976256c82be5f32e9043ee",
+    "robots/mobile_aloha/__init__.py": "788d13d6917cad4bdd3ae251da03e23e27bca578836a993f03a30ed769d950f0",
+    "robots/nori/__init__.py": "13e0964f820493d8313a96b31e25d0c953d379bf8c915cef26b8ccfb8192dce8",
+    "robots/rby1/__init__.py": "85b02034b848ac9aa7a8e4a3d5fa881ba53587eb1c37802af9262b6f1a1078db",
+    "robots/sourccey/__init__.py": "7fae96deca59c5fcbc13f4beaf9cac2f143082c6672515aad5656ec44d4262e5",
+    "robots/sourccey/emote_backend.py": "aed8810f56a3a782f49bb03be70f432ba655058ad0537552d3bd4cc7e5d79859",
+    "robots/spec_robot_model.py": "f88f76a8c80e82bfa84ea60197cd1c1d039a1ed3df79e8c94128d590aec934be",
+    "robots/stretch/__init__.py": "ffa2e2b7085bfd9aef6fc02b1837fd6790eca1bcd05f96db1cd3fda0b1230e3c",
+    "robots/stretch/sim_stationary.py": "a8f1ef1cc1ade25a4d7403da23d30ad86f740d11363fb66e785eb4a2ac3f9451",
+    "robots/xlerobot/__init__.py": "85f5d0539067a11faa3814bb9fc46357e098056c7baa0291f63daa0d864bf789",
+    "robots/yor/__init__.py": "3720dfb788c7bfb4d7786107aa9590e788c4ca763db69fb3dc6bf1a6339473a6",
+    "simulation/sim_object_placements.py": "fe8c0b11c31e9731021a9a943a2fd150c08369bd69cf3f21ce6e945f94e17586",
+    "utils/assets.py": "384085ced638f51a5208565d723577b31eced4188f641132825124605bfb65df",
+    "utils/logger.py": "f4a7e195cfd54d0146a1900c59b8790a2a7204b2cc043cd1de924cae32397877",
+    "@runtime": "549fb212e22c858dfb74c184b72642f056b184c6472eae95fcf74fa39e09276e",
+    "@canonical_suite": "5c7c8fd285f9c1fbad294b5887ed74c5d09ae400afb4fe1ae7427307462c5da2",
+    "@canonical_regressions": "f3143e2ab37cec866d1d8defbd6ce65dda90dfe8c9e66a5ec9362e741b9fb457",
+    "@rehearsal_runner": "7a183170a4df5b7b011e136801b3cf15c4251b46c3a2d02952585b2a9371cadb"
+  },
+  "proposal_search": {
+    "attempts": 23,
+    "rejected": 22,
+    "accepted": 1
+  }
+}

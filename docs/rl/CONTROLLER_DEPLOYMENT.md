@@ -5,6 +5,14 @@ whole-body controller, TAMP, operator steering and physical execution. The
 [training mixture](TRAINING_MIXTURE.md) owns sampling proportions; the
 [hardware readiness checklist](MARS_HARDWARE_READINESS.md) owns deployment status.
 
+An [offline Herman rehearsal](../experiments/herman_rehearsal_20261117.md) is now
+available on **localhost:8771**, separate from the live passive console on 8770.
+It compares real captured head imagery with calibrated renders and recorded
+teacher/policy executions. It has no robot transport or motion endpoint. The
+recorded parked pose is blocked; the separate synthetic staged-start tests
+currently pass teacher 6/6 and both actors 0/6. They are deployment-distribution
+evidence, not hardware qualification.
+
 ## Command and feedback path
 
 ```mermaid
