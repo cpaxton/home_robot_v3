@@ -219,6 +219,7 @@ def failure_code(message: str) -> str:
         "gripper_hold_command_failed": "execution_error",
         "invalid_gripper_feedback": "invalid_measured_state",
         "gripper_tracking_failed": "tracking_timeout",
+        "payload_attachment_outside_calibration": "payload_geometry_changed",
     }.get(message, message)
     # MCTS wraps a bounded grounding failure; preserve only its known code,
     # never arbitrary body identifiers or planner details from that wrapper.

@@ -245,8 +245,14 @@ are measured free. Any refinement behind that return additionally requires
 `backing_depth_m` and a nonempty `backing_prior_id`: an explicitly qualified finite
 solid top layer covering the admitted band, including waived planning padding.
 Depth endpoints alone cannot establish that material. Missing backing leaves it
-blocked. Unknown cells and other/mixed occupied owners never consume this exception,
-and no occupancy cell becomes free because contact is allowed.
+blocked. Other/mixed occupied owners never consume this exception. A coarse
+unknown subvolume can be certified strictly in front of every original selected
+depth return, without changing its cell to free. Only an eligible shallow
+payload contact can additionally consume the finite backing-layer prior there:
+the material layer is continuous across voxel boundaries. A robot or noncontact
+query can use only the original free-ray proof, never the backing material.
+Missing pixel coverage, shadowed space and geometry behind the declared layer
+remain blocked. No occupancy cell becomes free because contact is allowed.
 
 The worst physical payload corner is checked against the uncertain **unit** plane
 with at most 1 mm penetration. Payload pose error and the mandatory explicit
@@ -283,6 +289,42 @@ current-capture uncertainty both contribute to retention. Planning-only failures
 return no-actuation receipts, while missing dispatch feedback after execution
 remains possible progress. Public ambiguity/calibration errors are finite codes;
 private provider exception details remain hidden.
+
+Canonical payload vertices are kept separate from pose uncertainty. Collision
+queries include object error once and the two EE captures' attachment error
+once each. Retention uses each capture's relative-pose bound once; angular
+displacement is already included in `attachment_error_m`. All candidate grasp
+levers contribute to the reserved attachment limit, which is checked at actual
+attachment and subsequent retention measurements. Requested placement regions
+must contain the physical uncertainty envelope, excluding ordinary clearance.
+Release and hypothetical-state restoration retain these bounds.
+
+`RgbdCaptureGeometry.from_stretch(..., original_rays=True)` requires original
+registration provenance matching the wire RGB, quantized depth, calibration and
+capture intervals. It retains the original raw-depth grid/K/pose for map carving
+and the exact winning original endpoints for RGB-associated tracking. Rounded
+RGB pixel centres are not substituted for the original depth rays. This opt-in
+path uses unquantized simulated sensor returns; it is a separate source profile
+from the millimetre wire-depth reconstruction, not a hardware accuracy claim.
+The cadence script exposes `--original-depth-rays`, requiring
+`--registration-audit`, `--robot-only-model` and `--geometry-profile`.
+
+The [mapped contact diagnostic](../experiments/mapped_contact_20261117.md) runs
+public tools with a provided simulated RGBD background scan and **privileged**
+native state. It is a separate assisted control, not observed-input acceptance.
+Native collision checkers accept optional conjunctive `additional_scene_checks`
+that return a strict boolean and receive the current checker/model/private data.
+Native contacts always win; held/opening/released-fall clones preserve the
+guards, so release planning cannot accidentally drop the collision map. Default
+native checks retain an empty guard tuple.
+
+The diagnostic's `--map-resolution` chooses 2 cm, 1 cm or 5 mm (default 5 mm);
+`--placement-region` takes JSON world-XY bounds. `--fault` selects an explicitly
+labelled occupied-map preflight control or loss of evidence after grasp. Raw
+artifacts stay in `.tamp-runs/`; the compact experiment index records outcomes.
+`ObservedEnvironmentAdmission` shares the strict environment/ray/support query
+engine without captured robot material. It cannot grant self ownership or pass
+the observed executor's material-admission type check.
 
 
 The initial grasp reference now requests a genuinely post-motion frame through

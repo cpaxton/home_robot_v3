@@ -65,9 +65,18 @@ def main():
         action="store_true",
         help="Archive original sensor grids/calibration alongside the ordinary wire observation.",
     )
+    parser.add_argument(
+        "--original-depth-rays",
+        action="store_true",
+        help="Use exact winning sensor endpoints; requires geometry profile and registration audit.",
+    )
     args = parser.parse_args()
     if bool(args.robot_only_model) != bool(args.geometry_profile):
         parser.error("--robot-only-model and --geometry-profile must be supplied together")
+    if args.original_depth_rays and not (args.registration_audit and args.geometry_profile):
+        parser.error("--original-depth-rays requires --registration-audit and --geometry-profile")
+    if args.original_depth_rays and args.rgb_codec != "png":
+        parser.error("--original-depth-rays requires --rgb-codec png to match original sensor RGB")
     profile = SimGeometryProfile(**json.loads(args.geometry_profile.read_text())) if args.geometry_profile else None
     robot_model = mujoco.MjModel.from_xml_path(str(args.robot_only_model.resolve())) if args.robot_only_model else None
     if (
@@ -107,6 +116,7 @@ def main():
         "execution_qualified": False,
         "robot_interference_guard": "not installed in this candidate-source diagnostic",
         "registration_audit": args.registration_audit,
+        "point_geometry": "original_depth_rays" if args.original_depth_rays else "registered_rgb_pixel_centres",
         "rgb_codec": args.rgb_codec,
         "camera_pose_source": "simulator_localization_debug",
         "seed": "operator red appearance interior; explicit known cylinder radius .02 halfheight .04 m",
@@ -140,10 +150,18 @@ def main():
                 motor = read_local_sim_motor_capture(observation)
                 rgb, depth, world = capture_arrays(observation)
                 geometry = (
-                    RgbdCaptureGeometry.from_stretch(observation, robot_model, profile=profile, now=time.monotonic())
+                    RgbdCaptureGeometry.from_stretch(
+                        observation,
+                        robot_model,
+                        profile=profile,
+                        now=time.monotonic(),
+                        original_rays=args.original_depth_rays,
+                    )
                     if profile
                     else None
                 )
+                if args.original_depth_rays:
+                    world = geometry.source_points_world
                 view = SynchronizedRgbdView(rgb, depth, world, motor.capture, geometry=geometry)
                 if not inputs or inputs[-1].capture.observation_id != motor.capture.observation_id:
                     inputs.append(view)
@@ -158,6 +176,7 @@ def main():
                                 key: observation.image_timing["head_cam_left"][key]
                                 for key in ("clock_id", "capture_interval_ns", "depth_capture_interval_ns")
                             },
+                            "motor_sample": observation.image_timing["head_cam_left"]["motor_sample"],
                             "camera_pose_source": "simulator_localization_debug",
                         }
                         retained = {v.capture.observation_id for v in inputs}

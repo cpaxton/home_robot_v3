@@ -31,7 +31,7 @@ from emet.controller.manipulation.shape_pose import ShapePoseEvidence, evidence_
 from emet.motion.observed_admission import ObservedMaterialAdmission
 from emet.motion.observed_contact import ObservedTargetContact
 from emet.motion.observed_support_contact import ObservedSupportContact
-from emet.motion.placement_geometry import PlacementScene, bounds_array, box_corners
+from emet.motion.placement_geometry import PlacementScene, bounds_array
 
 from .api import failure_code, response
 
@@ -102,13 +102,22 @@ class ObservedStoredPlan:
 class _PayloadEnvelope:
     input_mode = 'observed'
 
-    def __init__(self, observe, initial):
+    def __init__(self, observe, initial, *, attachment_ee_positions=None, attachment_tracking_error_m=0.):
         self.observe, self.initial = observe, initial
         frame = initial.frame
-        vertices = frame.payload.vertices_reference
-        radius = np.linalg.norm(vertices, axis=1).max()
-        margin = pose_uncertainty_margin(radius, frame.position_error_m, frame.rotation_error_rad)
-        self.vertices = box_corners([vertices.min(0)-margin, vertices.max(0)+margin])
+        self.vertices = frame.payload.vertices_reference
+        ee = (frame.robot_after.world_from_ee[:3, 3][None] if attachment_ee_positions is None
+              else np.asarray(attachment_ee_positions, float).reshape(-1, 3))
+        radius = np.linalg.norm(self.vertices, axis=1).max()
+        lever = np.linalg.norm(frame.payload.pose.world_from_object[:3, 3]-ee, axis=1).max()+radius
+        self.lever_limit = lever+frame.position_error_m+attachment_tracking_error_m
+        self.robot_position = max(frame.robot_before.position_error_m, frame.robot_after.position_error_m)
+        self.robot_rotation = max(frame.robot_before.rotation_error_rad, frame.robot_after.rotation_error_rad)
+        # Per-capture EE error. Transport needs two captures; retention adds
+        # before/current once each. Angular displacement is included in metres.
+        self.attachment_error = pose_uncertainty_margin(self.lever_limit+self.robot_position,
+            self.robot_position+frame.alignment_error_m, self.robot_rotation+frame.alignment_error_rad)
+        self.attachment_rotation = self.robot_rotation+frame.alignment_error_rad
 
     def observe_payload(self, object_ref):
         current, initial = self.observe().frame, self.initial.frame
@@ -117,10 +126,16 @@ class _PayloadEnvelope:
                 or a.object_ref != object_ref or not np.array_equal(a.vertices_reference, b.vertices_reference)
                 or shape_identity(a.pose) != shape_identity(b.pose)
                 or current.position_error_m > initial.position_error_m
-                or current.rotation_error_rad > initial.rotation_error_rad):
+                or current.rotation_error_rad > initial.rotation_error_rad
+                or max(current.robot_before.position_error_m, current.robot_after.position_error_m) > self.robot_position
+                or max(current.robot_before.rotation_error_rad, current.robot_after.rotation_error_rad) > self.robot_rotation
+                or current.alignment_error_m > initial.alignment_error_m
+                or current.alignment_error_rad > initial.alignment_error_rad):
             raise ObservationUnavailable('payload_geometry_changed')
         return PayloadGeometryEvidence(a.object_ref, a.reference_id, a.revision, self.vertices, a.pose, a.construction,
-            position_error_m=current.position_error_m, rotation_error_rad=current.rotation_error_rad)
+            position_error_m=current.position_error_m, rotation_error_rad=current.rotation_error_rad,
+            attachment_error_m=self.attachment_error, attachment_rotation_error_rad=self.attachment_rotation,
+            attachment_lever_limit_m=self.lever_limit)
 
 
 class _CommandBoundary:
@@ -305,9 +320,8 @@ class ObservedNativeAdapter:
                     if error:
                         return error
                     if phase == 'place' and region is not None:
-                        ee = ex.data.body(ex.ee_body)
-                        vertices = ex.collision.payload.world_vertices(ee.xpos, ee.xmat)
-                        if np.any(vertices[:, :2].min(0) < region[0]) or np.any(vertices[:, :2].max(0) > region[1]):
+                        bounds = ex.collision.possible_payload_bounds(ex.model, ex.data)
+                        if np.any(bounds[0, :2] < region[0]) or np.any(bounds[1, :2] > region[1]):
                             return 'placement_region_unavailable'
                     paths.append(path)
                 if grasp:
@@ -367,7 +381,10 @@ class ObservedNativeAdapter:
                 if self._model_signature is not None and self._model_signature != signature:
                     raise ObservationUnavailable('scene_changed_replan')
                 self._model_signature = signature
-                ex.collision.provider = _PayloadEnvelope(lambda: self._observe(task), initial)
+                ex.collision.provider = _PayloadEnvelope(lambda: self._observe(task), initial,
+                    attachment_ee_positions=[targets[1][0] for targets in
+                        [ex.grasp_targets, *ex.grasp_target_options]],
+                    attachment_tracking_error_m=ex.position_tolerance_m)
                 ex.synchronize(ex.data)
                 initial_joints = ex.data.qpos.copy()
                 ex.observed_support_bounds = initial.support_bounds.copy()

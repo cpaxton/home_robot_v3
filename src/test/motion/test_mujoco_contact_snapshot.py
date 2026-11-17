@@ -59,3 +59,37 @@ def test_empty_contact_set_clears_previous_collision():
     assert not checker.configuration_collides(model, data)
     assert data.ncon == 0
     assert checker.last_contacts == []
+
+
+def test_additional_guard_runs_without_contacts_and_cannot_bypass_native_collision():
+    model, data, checker = fixture()
+    calls = []
+    checker.additional_scene_checks = (lambda owner, m, d: calls.append((owner, m, d)) or True,)
+    data.qpos[2] = data.qpos[9] = .4
+    assert checker.configuration_collides(model, data)
+    assert data.ncon == 0 and calls == [(checker, model, data)]
+    checker.additional_scene_checks = (lambda *_: False,)
+    data.qpos[2] = .05
+    assert checker.configuration_collides(model, data)
+    assert checker.last_contacts
+    checker.additional_scene_checks = (lambda *_: None,)
+    data.qpos[2] = .4
+    with pytest.raises(ValueError, match='invalid_additional_scene_check_result'):
+        checker.configuration_collides(model, data)
+
+
+def test_collision_reason_cannot_survive_a_passing_or_native_contact_query():
+    model, data, checker = fixture()
+    def blocked(owner, *_):
+        owner.last_reason = 'map_unknown'
+        return True
+    checker.additional_scene_checks = (blocked,)
+    assert checker.configuration_collides(model, data)
+    assert checker.last_reason == 'map_unknown'
+    checker.additional_scene_checks = (lambda *_: False,)
+    assert not checker.configuration_collides(model, data)
+    assert checker.last_reason is None
+    checker.last_reason = 'map_unknown'
+    data.qpos[2] = .05
+    assert checker.configuration_collides(model, data)
+    assert checker.last_reason == 'collision'

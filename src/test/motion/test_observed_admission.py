@@ -14,7 +14,12 @@ from emet.controller.manipulation.native_scene import model_signature
 from emet.controller.manipulation.observed_collision import ObservedNativeCollisionChecker
 from emet.controller.manipulation.observed_effects import CaptureInterval
 from emet.motion.arm_rrt import plan_arm_joint_path
-from emet.motion.observed_admission import CapturedRobotMaterial, ObservedMaterialAdmission, RobotGeometryBound
+from emet.motion.observed_admission import (
+    CapturedRobotMaterial,
+    ObservedEnvironmentAdmission,
+    ObservedMaterialAdmission,
+    RobotGeometryBound,
+)
 from emet.motion.observed_background import ObservedBackground, StaticBackgroundAssumption
 from emet.motion.observed_solids import WorldSolid
 from emet.motion.observed_workspace import ObservedWorkspace
@@ -99,6 +104,27 @@ def test_expiry_identity_and_subdivision_budget_reject():
         admission.require(now=10.02, model_signature='model', capture_id='replayed')
     result = admission.query(solid(center=(.03, 0, .5)), now=10.02, allow_captured_robot=True)
     assert not result.allowed and result.reason == 'admission_budget_exhausted'
+
+
+def test_environment_only_static_query_does_not_consult_expired_robot_material():
+    g = grid(np.ones(grid().cells.shape, np.uint8))
+    admission = evidence(g, (solid(),))
+    assumption = StaticBackgroundAssumption('epoch', 9., 20., 'isolated-static-scene')
+    admission = ObservedMaterialAdmission(admission.background, admission.robot_material,
+        static_assumption=assumption, query_robot_geometry=admission.query_robot_geometry)
+    assert admission.query(solid(), now=13., allow_captured_robot=False).allowed
+    with pytest.raises(ObservationUnavailable, match='stale'):
+        admission.query(solid(), now=13., allow_captured_robot=True)
+    assert not admission.query(solid(), now=21., allow_captured_robot=False).allowed
+
+
+def test_environment_only_admission_needs_no_robot_evidence_and_cannot_admit_self():
+    source = evidence(grid(), (solid(),))
+    environment = ObservedEnvironmentAdmission(source.background)
+    assert not environment.query(solid(), now=10.02).allowed
+    with pytest.raises(ObservationUnavailable, match='robot_material_geometry_unavailable'):
+        environment.query(solid(), now=10.02, allow_captured_robot=True)
+    assert not isinstance(environment, ObservedMaterialAdmission)
 
 
 def test_mesh_does_not_become_owned_convex_material_without_a_declaration():

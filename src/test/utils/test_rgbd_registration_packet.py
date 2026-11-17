@@ -8,7 +8,7 @@ from copy import deepcopy
 import numpy as np
 import pytest
 
-from emet.core.rgbd_registration import decode_registration, encode_registration
+from emet.core.rgbd_registration import decode_registration, encode_registration, source_points_rgb
 from emet.simulation.depth_registration import register_depth
 
 
@@ -45,6 +45,23 @@ def test_json_roundtrip_preserves_exact_original_grids_and_reprojection():
         assert not decoded[key].flags.writeable
     assert decoded["source_pixel_index"].shape == aligned.shape
     assert value["rgb_interval_ns"] == [100, 110]
+
+
+def test_source_endpoints_keep_original_rays_and_registration_holes():
+    value, _, raw, _ = packet()
+    decoded = decode_registration(value)
+    points = source_points_rgb(decoded)
+    source = decoded["source_pixel_index"]
+    valid = source >= 0
+    y, x = np.divmod(source[valid], raw.shape[1])
+    expected = np.column_stack((x, y, np.ones(len(x)))) * raw[y, x, None]
+    expected[:, 0] += 0.03
+    np.testing.assert_allclose(points[valid], expected, rtol=0, atol=1e-12)
+    assert np.isnan(points[~valid]).all()
+    # A rounded RGB pixel ray is different despite using the same Z.
+    rows, cols = np.where(valid)
+    reconstructed = np.column_stack((cols, rows, np.ones(len(rows)))) * points[valid, 2, None]
+    assert np.max(np.linalg.norm(points[valid] - reconstructed, axis=1)) > 0.01
 
 
 @pytest.mark.parametrize(

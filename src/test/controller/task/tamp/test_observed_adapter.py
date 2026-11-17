@@ -529,6 +529,25 @@ def test_unique_visual_frame_errors_reach_the_retention_provider(system):
     assert evidence.position_error_m == .006 and evidence.rotation_error_rad == .02
 
 
+def test_canonical_payload_is_not_preinflated_and_region_keeps_pose_error(system):
+    raw = system.source.snapshot
+    def snapshot(*args):
+        current = raw(*args)
+        return replace(current, frame=replace(current.frame, position_error_m=.003))
+    system.source.snapshot = snapshot
+    result = system.adapter.plan(object_name='block', receptacle_name='counter',
+                                 placement_region=[[.1, -.011], [.14, .011]])
+    # The nominal footprint fits, but the possible footprint does not.
+    assert result['code'] == 'placement_region_unavailable', result
+    assert system.calls == []
+    result = plan(system)
+    assert result['status'] == 'ok', result
+    ex = system.adapter.plans[result['data']['plan_ref']].executor
+    evidence = ex.collision.provider.observe_payload('opaque')
+    np.testing.assert_array_equal(evidence.vertices_reference, snapshot('opaque', 'support').frame.payload.vertices_reference)
+    assert evidence.position_error_m == .003
+
+
 def test_visual_frame_cannot_downgrade_unique_payload_error_bounds(system):
     raw = system.source.snapshot
     def snapshot(*args):

@@ -55,7 +55,8 @@ def verify_collision_kernel(model, data):
 
 class MujocoSceneCollisionChecker:
     def __init__(
-        self, model, *, robot_body: str, allowed_pairs=(), allowed_geom_pairs=(), penetration_tolerance_m: float = 0.001
+        self, model, *, robot_body: str, allowed_pairs=(), allowed_geom_pairs=(), penetration_tolerance_m: float = 0.001,
+        additional_scene_checks=()
     ):
         self.robot_ids = body_subtree(model, robot_body)
         self.allowed_pairs = {frozenset(pair) for pair in allowed_pairs}
@@ -67,7 +68,26 @@ class MujocoSceneCollisionChecker:
         self.payload_parent: str | None = None
         self.payload_transform: np.ndarray | None = None
         self.last_contacts: list[dict] = []
+        self.last_reason = None
         self._support_departure = {}
+        self.additional_scene_checks = tuple(additional_scene_checks)
+        if not all(callable(check) for check in self.additional_scene_checks):
+            raise ValueError('invalid_additional_scene_check')
+
+    def _additional_collides(self, model, data):
+        """Conjunctive read-only guards, preserved by private release clones.
+
+        The current checker is passed explicitly: a callback must use this
+        clone's attachment/release state, never a captured live checker.
+        Missing/ambiguous results reject rather than silently pass.
+        """
+        for check in self.additional_scene_checks:
+            result = check(self, model, data)
+            if not isinstance(result, (bool, np.bool_)):
+                raise ValueError('invalid_additional_scene_check_result')
+            if result:
+                return True
+        return False
 
     @contextmanager
     def payload_support_departure(self, model, data):
@@ -161,6 +181,7 @@ class MujocoSceneCollisionChecker:
         self.payload_body, self.payload_parent, self.payload_transform = state
 
     def configuration_collides(self, model, data) -> bool:
+        self.last_reason = None
         mujoco.mj_kinematics(model, data)
         watched = set(self.robot_ids)
         if self.payload_body is not None:
@@ -192,7 +213,7 @@ class MujocoSceneCollisionChecker:
         # copied arrays preserves geometry, thresholds and contact exceptions.
         count = int(data.ncon)
         if not count:
-            return False
+            return self._additional_collides(model, data)
         geom_pairs, distances = np.empty((count, 2), dtype=int), np.empty(count)
         for index in range(count):
             contact = data.contact[index]
@@ -219,7 +240,10 @@ class MujocoSceneCollisionChecker:
             ):
                 continue
             self.last_contacts.append({"bodies": pair, "distance_m": float(contact.dist)})
-        return bool(self.last_contacts)
+        if self.last_contacts:
+            self.last_reason = 'collision'
+            return True
+        return self._additional_collides(model, data)
 
     def trajectory_collides(self, model, data, *, joint_names, arm_waypoints):
         from emet.motion.mujoco_arm_ik import joint_qpos_addrs

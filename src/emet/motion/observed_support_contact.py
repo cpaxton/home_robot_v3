@@ -162,8 +162,8 @@ class ObservedSupportContact:
             floor = max(floor, departure_clearance_m)
         return self.physical_clearance(physical) >= floor - 1e-12
 
-    def covers_box(self, bounds):
-        """Prove free-or-permitted-support for a subbox of a support-only cell.
+    def covers_box(self, bounds, *, allow_support_material=True):
+        """Prove free-or-permitted-support for a subbox at the measured support.
 
         Before the nearest possible return is measured free. A box reaching
         behind the return additionally needs the named finite solid-layer prior.
@@ -192,7 +192,7 @@ class ObservedSupportContact:
             return False
         if camera[:, 2].max() + margin < self.depth[region].min():
             return True
-        if not self.backing_prior_id:
+        if not allow_support_material or not self.backing_prior_id:
             return False
         normal, offset = self.unit_plane
         return bool(np.min(corners @ normal - offset) >= margin - self.backing_depth_m)

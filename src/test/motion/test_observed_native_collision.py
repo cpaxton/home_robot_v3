@@ -79,6 +79,41 @@ def test_unique_pose_retention_includes_both_capture_error_bounds():
         checker.payload_retention_residual(model, data, evidence.object_ref)
 
 
+def test_transport_and_retention_count_each_error_once_and_restore_release_bounds():
+    model, data, checker, provider, evidence, *_ = rig()
+    evidence = replace(evidence, position_error_m=.003, attachment_error_m=.001,
+                       attachment_rotation_error_rad=.005, attachment_lever_limit_m=.3)
+    provider.observe_payload = lambda _: evidence
+    attach(model, data, checker)
+    # Canonical material is unchanged; two EE captures affect transport once.
+    actual = checker.possible_payload_bounds(model, data)
+    expected = np.stack((evidence.vertices_reference.min(0), evidence.vertices_reference.max(0))) + [.2, .2, 0]
+    np.testing.assert_allclose(actual, expected + np.array([[-1.], [1.]])*.005)
+    np.testing.assert_allclose(checker.payload_retention_residual(model, data, evidence.object_ref), [.008, .01])
+    saved = checker.capture_payload()
+    checker.set_payload(model, data, None)
+    assert checker._released_target.offset_m == pytest.approx(.005)
+    checker.restore_payload(saved)
+    np.testing.assert_allclose(checker.possible_payload_bounds(model, data), actual)
+
+
+@pytest.mark.parametrize('stage', ['attachment', 'retention'])
+def test_attachment_and_retention_reject_lever_outside_declared_calibration(stage):
+    model, data, checker, provider, evidence, *_ = rig()
+    evidence = replace(evidence, attachment_lever_limit_m=.3)
+    provider.observe_payload = lambda _: evidence
+    if stage == 'retention':
+        attach(model, data, checker)
+    moved = evidence.pose.world_from_object.copy()
+    moved[1, 3] = .5
+    provider.observe_payload = lambda _: replace(evidence, pose=replace(evidence.pose, world_from_object=moved))
+    with pytest.raises(ObservationUnavailable, match='payload_attachment_outside_calibration'):
+        if stage == 'attachment':
+            attach(model, data, checker)
+        else:
+            checker.payload_retention_residual(model, data, evidence.object_ref)
+
+
 @pytest.mark.parametrize('kwargs,reason', [
     ({'known_free': None}, 'observed_known_free_workspace_required'),
     ({'source': 'ground_truth'}, 'observed_known_free_workspace_required'),

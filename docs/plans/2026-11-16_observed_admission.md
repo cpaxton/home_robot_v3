@@ -175,3 +175,18 @@ does not close the source/contact gates below.
    pre-command stale/unknown rejection and post-dispatch loss/consumed-handle
    controls. Then actual Caliban orchestration, held-out layouts and multistep
    tasks. Do not report those gates complete from the synthetic adapter tests.
+
+November 17 mapped-contact integration now completes a **separate assisted
+control**: both a cube and cylinder pass public-tool grasp/lift/place/release/
+retreat against a provided 5 mm RGBD map, with native robot/object state.
+Original depth-ray geometry, continuous backing contact across voxel boundaries,
+canonical payload uncertainty, and map guards through held/released checker
+clones are implemented. Pre-command occupied-map and after-grasp evidence-loss
+controls stop correctly; the latter preserves partial progress and sends no
+further command. Full motion/TAMP regression passes 1,044 tests; subsequent
+environment-query and immutable-cache batches pass 192 and 129 overlapping
+checks. The [experiment record](../experiments/mapped_contact_20261117.md)
+retains source profiles, negative cases, cancelled infeasible goals and a native
+crash separately. This establishes collision-map integration, **not completion
+of gates 2–5 above**. The observed source/refiner and relative contact geometry
+remain the next qualification work; no fictitious passive sensor was added.

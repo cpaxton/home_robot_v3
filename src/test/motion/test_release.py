@@ -108,6 +108,26 @@ def test_drop_limit_rejects_all_clearance_alternatives_without_commands():
     ex.command_joints.assert_not_called()
 
 
+@pytest.mark.parametrize('block_release', [False, True])
+def test_additional_map_guard_survives_held_opening_and_released_fall_clones(block_release):
+    ex = rig()
+    calls = []
+    original = ex.collision
+    def guard(owner, model, data):
+        assert owner is not original
+        assert model is ex.model and data is not ex.data
+        calls.append(type(owner).__name__)
+        return block_release and isinstance(owner, ReleasedFallChecker)
+    original.additional_scene_checks = (guard,)
+    plan, error = search(ex)
+    assert 'HeldPoseChecker' in calls and 'ReleasedFallChecker' in calls
+    if block_release:
+        assert plan is None and 'collision' in error
+    else:
+        assert plan is not None and error is None
+    ex.command_joints.assert_not_called()
+
+
 def test_retreat_obstacle_is_checked_with_open_fingers():
     ex = rig('<body name="obstacle" pos="-.045 0 .05"><geom type="box" size=".008 .02 .008"/></body>')
     ids = set(ex.collision.robot_ids)

@@ -36,6 +36,11 @@ class PayloadGeometryEvidence:
     samples. ``known_model_prior`` is an explicit prior tier; ``multiview_bound``
     requires a separately qualified multi-view constructor. These labels record
     provenance and do not prove that the producer built a valid bound.
+
+    Vertices describe canonical material in the reference frame. Object pose
+    error stays separate. Attachment errors are per-capture EE-relative bounds;
+    their metre value already includes angular displacement at the declared
+    lever limit. Transport reserves two captures; retention adds before/current.
     """
     object_ref: str
     reference_id: str
@@ -45,6 +50,9 @@ class PayloadGeometryEvidence:
     construction: str
     position_error_m: float = 0.0
     rotation_error_rad: float = 0.0
+    attachment_error_m: float = 0.0
+    attachment_rotation_error_rad: float = 0.0
+    attachment_lever_limit_m: float | None = None
 
     def __post_init__(self):
         # HeldObject validates finite positive extent; its EE naming is irrelevant
@@ -56,7 +64,12 @@ class PayloadGeometryEvidence:
                 or not isinstance(self.pose, (ObjectPoseEvidence, ShapePoseEvidence))
                 or self.construction not in {'known_model_prior', 'multiview_bound'}
                 or not np.isfinite([self.position_error_m, self.rotation_error_rad]).all()
-                or self.position_error_m < 0 or not 0 <= self.rotation_error_rad <= np.pi):
+                or self.position_error_m < 0 or not 0 <= self.rotation_error_rad <= np.pi
+                or not np.isfinite([self.attachment_error_m, self.attachment_rotation_error_rad]).all()
+                or self.attachment_error_m < 0 or self.attachment_rotation_error_rad < 0):
+            raise ValueError('invalid_payload_geometry_evidence')
+        if self.attachment_lever_limit_m is not None and (
+                not np.isfinite(self.attachment_lever_limit_m) or self.attachment_lever_limit_m <= 0):
             raise ValueError('invalid_payload_geometry_evidence')
         # Shape records already carry their calibration bounds. Unique rigid
         # poses receive the enclosing visual frame's bounds at the adapter seam.
@@ -146,6 +159,7 @@ class ObservedNativeCollisionChecker(PlacementCollisionChecker):
         self._released_object_ref = None
         self._released_evidence = None
         self._support_payload_error_m = 0.
+        self._payload_pose_error_m = 0.
         self.support_contact = None
         self.set_support_contact(support_contact)
 
@@ -210,12 +224,14 @@ class ObservedNativeCollisionChecker(PlacementCollisionChecker):
         if self.admission is None:
             return super()._robot_scene_collides(model, data, gid, bounds)
         solid, _ = self._robot_bound(model, data, gid)
-        self.last_admission = self.admission.query(solid, now=self.clock(), allow_captured_robot=True)
+        self.last_admission = self.admission.query(solid, now=self.clock(), allow_captured_robot=True,
+                                                 free_witness=self.support_contact)
         return not self.last_admission.allowed
 
     def _payload_robot_collides(self, model, data, gid, bounds, payload_bounds):
         if self.target_contact is None:
-            return super()._payload_robot_collides(model, data, gid, bounds, payload_bounds)
+            expanded = payload_bounds + np.array([[-1.], [1.]])*self._payload_pose_error_m
+            return super()._payload_robot_collides(model, data, gid, bounds, expanded)
         if self.payload is None:
             target = self._released_target
             if target is None:
@@ -227,17 +243,20 @@ class ObservedNativeCollisionChecker(PlacementCollisionChecker):
             pose = np.eye(4)
             pose[:3, :3], pose[:3, 3] = ee.xmat.reshape(3, 3), ee.xpos
             target = WorldSolid('convex', (), pose, vertices=self.payload.vertices_ee,
+                                offset_m=self._payload_pose_error_m,
                                 material_calibration_id='observed-payload-envelope')
         return self._target_robot_collides(model, data, gid, target)
 
     def _payload_scene_collides(self, model, data, bounds):
         if self.admission is None:
-            return super()._payload_scene_collides(model, data, bounds)
+            return super()._payload_scene_collides(model, data,
+                bounds + np.array([[-1.], [1.]])*self._payload_pose_error_m)
         pose = np.eye(4)
         pose[:3, 3] = bounds.mean(0)
         solid = WorldSolid('box', tuple((bounds[1]-bounds[0])/2), pose)
         if self.support_contact is None:
-            self.last_admission = self.admission.query(solid, now=self.clock(), allow_captured_robot=True)
+            self.last_admission = self.admission.query(replace(solid, offset_m=self._payload_pose_error_m),
+                now=self.clock(), allow_captured_robot=True)
         else:
             if self.payload is not None:
                 ee = data.body(self.ee_body)
@@ -269,11 +288,16 @@ class ObservedNativeCollisionChecker(PlacementCollisionChecker):
             object_ref=ref, phase=phase, now=self.clock(), departure_clearance_m=self._support_departure_clearance)
 
     def _support_pose_error(self, evidence):
+        return self._pose_error(evidence) + self.support_contact.payload_motion_error_m
+
+    @staticmethod
+    def _pose_error(evidence):
         from emet.controller.manipulation.observed_effects import pose_uncertainty_margin
 
+        # The attachment frame and the queried EE each contribute once.
         return (pose_uncertainty_margin(np.linalg.norm(evidence.vertices_reference, axis=1).max(),
                                        evidence.position_error_m, evidence.rotation_error_rad)
-                + self.support_contact.payload_motion_error_m)
+                + 2*evidence.attachment_error_m)
 
     def _evidence(self, object_ref):
         evidence = self.provider.observe_payload(object_ref)
@@ -287,6 +311,9 @@ class ObservedNativeCollisionChecker(PlacementCollisionChecker):
                 or previous.construction != evidence.construction
                 or evidence.position_error_m > previous.position_error_m
                 or evidence.rotation_error_rad > previous.rotation_error_rad
+                or evidence.attachment_error_m > previous.attachment_error_m
+                or evidence.attachment_rotation_error_rad > previous.attachment_rotation_error_rad
+                or evidence.attachment_lever_limit_m != previous.attachment_lever_limit_m
                 or shape_identity(previous.pose) != shape_identity(evidence.pose)
                 or not np.array_equal(previous.vertices_reference, evidence.vertices_reference)):
             raise ObservationUnavailable('payload_geometry_changed')
@@ -303,11 +330,16 @@ class ObservedNativeCollisionChecker(PlacementCollisionChecker):
         inverse = ee.xmat.reshape(3, 3).T
         position = inverse @ (pose[:3, 3]-ee.xpos)
         rotation = inverse @ pose[:3, :3]
+        current_vertices = evidence.vertices_reference @ rotation.T + position
+        if (evidence.attachment_lever_limit_m is not None
+                and np.linalg.norm(current_vertices, axis=1).max() > evidence.attachment_lever_limit_m):
+            raise ObservationUnavailable('payload_attachment_outside_calibration')
         distance = float(np.linalg.norm(position-self.payload_transform[:3, 3]))
         angle = evidence_rotation_distance(evidence.pose, self.payload_transform[:3, :3], rotation)
         before = self._attachment_evidence
-        distance += before.position_error_m + evidence.position_error_m
-        angle += before.rotation_error_rad + evidence.rotation_error_rad
+        distance += before.position_error_m + evidence.position_error_m + before.attachment_error_m + evidence.attachment_error_m
+        angle += (before.rotation_error_rad + evidence.rotation_error_rad
+                  + before.attachment_rotation_error_rad + evidence.attachment_rotation_error_rad)
         return distance, angle
 
     def observe_object(self, object_ref):
@@ -318,6 +350,15 @@ class ObservedNativeCollisionChecker(PlacementCollisionChecker):
         """Geometry representative for explicitly shape-aware native consumers."""
         _, pose = self._evidence(object_ref)
         return pose
+
+    def possible_payload_bounds(self, model, data):
+        """Physical payload enclosure including uncertainty, without clearance."""
+        if model is not self._model or self.payload is None:
+            raise ObservationUnavailable('payload_geometry_unknown')
+        ee = data.body(self.ee_body)
+        vertices = self.payload.world_vertices(ee.xpos, ee.xmat)
+        return np.stack((vertices.min(0)-self._payload_pose_error_m,
+                         vertices.max(0)+self._payload_pose_error_m))
 
     def set_payload(self, model, data, body, parent=None):
         """``body`` is an opaque observed handle here, never a MuJoCo body name."""
@@ -336,6 +377,7 @@ class ObservedNativeCollisionChecker(PlacementCollisionChecker):
                 vertices = self.payload.world_vertices(ee.xpos, ee.xmat)
                 self.released_bounds = np.stack((vertices.min(0) - self.margin, vertices.max(0) + self.margin))
                 self._released_target = WorldSolid('convex', (), np.eye(4), vertices=vertices,
+                    offset_m=self._payload_pose_error_m,
                     material_calibration_id='observed-released-envelope')
             self.payload = None
             self.payload_body = self.payload_parent = self.payload_transform = None
@@ -347,6 +389,7 @@ class ObservedNativeCollisionChecker(PlacementCollisionChecker):
         same_attachment = self.payload_body == body and self._attachment_evidence is not None
         previous_floor = self._support_departure_clearance if same_attachment else None
         previous_error = self._support_payload_error_m if same_attachment else 0.
+        previous_pose_error = self._payload_pose_error_m if same_attachment else 0.
         evidence, world_from_reference = self._evidence(body)
         if self.support_contact is not None and body != self.support_contact.object_ref:
             raise ObservationUnavailable('support_geometry_unknown')
@@ -362,11 +405,15 @@ class ObservedNativeCollisionChecker(PlacementCollisionChecker):
         ee_from_reference[:3, :3] = rotation @ world_from_reference[:3, :3]
         ee_from_reference[:3, 3] = rotation @ (world_from_reference[:3, 3] - ee.xpos)
         vertices = evidence.vertices_reference @ ee_from_reference[:3, :3].T + ee_from_reference[:3, 3]
+        if (evidence.attachment_lever_limit_m is not None
+                and np.linalg.norm(vertices, axis=1).max() > evidence.attachment_lever_limit_m):
+            raise ObservationUnavailable('payload_attachment_outside_calibration')
         payload = HeldObject(vertices, ee_from_reference)
         self.payload = payload
         self.payload_body, self.payload_parent = body, parent
         self.payload_transform = payload.body_pose_ee
         self._attachment_evidence = evidence
+        self._payload_pose_error_m = max(previous_pose_error, self._pose_error(evidence))
         if self.support_contact is not None:
             self._support_payload_error_m = max(previous_error, self._support_pose_error(evidence))
             # Measured payload evidence, not the hypothetical IK/RRT pose,
@@ -385,12 +432,12 @@ class ObservedNativeCollisionChecker(PlacementCollisionChecker):
         return (self.payload_body, self.payload_parent, self.payload_transform,
                 self.payload, self._attachment_evidence,
                 None if self.released_bounds is None else self.released_bounds.copy(), self._released_target, self._released_evidence,
-                self._support_departure_clearance, self._released_object_ref, self._support_payload_error_m)
+                self._payload_pose_error_m, self._support_departure_clearance, self._released_object_ref, self._support_payload_error_m)
 
     def restore_payload(self, state):
         (self.payload_body, self.payload_parent, self.payload_transform,
          self.payload, self._attachment_evidence, self.released_bounds, self._released_target, self._released_evidence,
-         self._support_departure_clearance, self._released_object_ref, self._support_payload_error_m) = state
+         self._payload_pose_error_m, self._support_departure_clearance, self._released_object_ref, self._support_payload_error_m) = state
 
     def configuration_collides(self, model, data):
         self.last_contacts = []

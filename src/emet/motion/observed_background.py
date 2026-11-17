@@ -10,6 +10,8 @@ A bounded static-scene assumption may extend its validity, never its timestamp.
 import hashlib
 import time
 from dataclasses import dataclass
+from functools import cached_property
+from types import MappingProxyType
 
 import numpy as np
 
@@ -187,13 +189,22 @@ class ObservedBackground:
         )
         return "observed-background:" + digest.hexdigest()
 
-    def exclusively_owned_cells(self, ref):
+    @cached_property
+    def _exclusive_owners(self):
         owners = dict(self.occupied_owners)
-        exclusive = set(owners.get(ref, ()))
-        for other, ids in owners.items():
-            if other != ref:
-                exclusive.difference_update(ids)
-        return frozenset(exclusive)
+        result = {}
+        for ref, own in owners.items():
+            exclusive = set(own)
+            for other, ids in owners.items():
+                if other != ref:
+                    exclusive.difference_update(ids)
+            result[ref] = frozenset(exclusive)
+        return MappingProxyType(result)
+
+    def exclusively_owned_cells(self, ref):
+        # The immutable owner layer changes only with a new background object.
+        # Avoid rebuilding large support sets at every dense path sample.
+        return self._exclusive_owners.get(ref, frozenset())
 
     def known_free(self, bounds, *, now, static_assumption=None, max_age_s=2.0):
         if not np.isfinite(max_age_s) or not 0 < max_age_s <= 2:

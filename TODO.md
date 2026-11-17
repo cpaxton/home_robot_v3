@@ -37,6 +37,13 @@
       pose errors through visual checks, and preserve original reference receipt
       times. Live frame assembly passes; full collision-scene ownership and
       source/refiner integration still precede observed transfer acceptance.
+      [Mapped contact integration](docs/experiments/mapped_contact_20261117.md)
+      now completes a native-state-assisted public-tool transfer with a real
+      provided RGBD collision map, including release/retreat. Original-ray
+      refinement, voxel-boundary support contact, release guard propagation,
+      uncertainty accounting and partial/no-command controls are covered.
+      This is a separate control; full observed source/refiner and relative
+      contact/geometry qualification remain open.
 
 - [ ] Profile failed-search cost without answer overrides or target-specific rules:
       final S0 seed 1 misses the receptacle in both arms but candidate takes

@@ -111,6 +111,43 @@ def test_support_contact_admits_shallow_payload_but_never_frees_the_voxel():
     np.testing.assert_array_equal(background.workspace.cells, before)
 
 
+def test_cached_exclusive_owners_follow_immutable_background_replacement():
+    background, _, _ = scene()
+    original = background.exclusively_owned_cells('table')
+    assert original and background.exclusively_owned_cells('table') is original
+    changed = replace(background, occupied_owners=(('other', tuple(original)),))
+    assert not changed.exclusively_owned_cells('table')
+    assert background.exclusively_owned_cells('table') is original
+
+
+def test_robot_free_witness_refines_coarse_surface_voxel_without_allowing_contact():
+    background, contact, _ = scene()
+    layer = admission(background)
+    hovering = box(center=(0., 0., .011), half=(.01, .01, .01))
+    before = background.workspace.cells.copy()
+    assert not layer.query(hovering, now=10.02).allowed
+    assert layer.query(hovering, now=10.02, free_witness=contact).allowed
+    touching = box(center=(0., 0., .0097), half=(.01, .01, .01))
+    assert not layer.query(touching, now=10.02, free_witness=contact).allowed
+    np.testing.assert_array_equal(background.workspace.cells, before)
+
+
+def test_free_ray_witness_does_not_refine_mixed_or_unobserved_cells():
+    background, contact, _ = scene()
+    hovering = box(center=(0., 0., .011), half=(.01, .01, .01))
+    # Removing exclusive ownership makes these ordinary obstacle cells.
+    mixed = replace(background, occupied_owners=())
+    assert not admission(mixed).query(hovering, now=10.02, free_witness=contact).allowed
+    cells = background.workspace.cells.copy()
+    cells[5:7, 5:7, 0:2] = 0
+    unknown = replace(background, workspace=ObservedWorkspace(background.workspace.origin, .05, cells))
+    assert admission(unknown).query(hovering, now=10.02, free_witness=contact).allowed
+    mask = contact.support_mask.copy()
+    mask[40:56, 40:56] = False
+    hidden = replace(contact, support_mask=mask)
+    assert not admission(unknown).query(hovering, now=10.02, free_witness=hidden).allowed
+
+
 @pytest.mark.parametrize("phase", ["preflight", "pregrasp", "grasp", "preplace", "retreat", "gripper_open"])
 def test_wrong_phases_keep_ordinary_support_collision(phase):
     background, contact, _ = scene()
@@ -142,6 +179,29 @@ def test_padding_cannot_reach_behind_the_declared_top_layer():
     assert not query(admission(background), contact).allowed
 
 
+@pytest.mark.parametrize('z_origin', [-.025, -.00001, .00001])
+def test_shallow_support_contact_is_independent_of_endpoint_cell_boundary(z_origin):
+    background, contact, _ = scene()
+    origin = background.workspace.origin.copy()
+    origin[2] = z_origin
+    cells = np.zeros_like(background.workspace.cells)
+    # Original returns at z=0 lie either just above or below a grid boundary.
+    index = int(np.floor(-z_origin/.05))
+    if index >= 0:
+        cells[:, :, index] = 2
+    # Extend downward so the complete padded payload stays inside the grid.
+    origin[2] -= .05
+    cells = np.concatenate((np.zeros_like(cells[:, :, :1]), cells), axis=2)
+    ids = tuple(map(int, np.flatnonzero(cells.ravel() == 2)))
+    shifted = replace(background, workspace=ObservedWorkspace(origin, .05, cells),
+        observed_monotonic=np.where(cells != 0, contact.capture.earliest, np.nan),
+        occupied_owners=(('table', ids),))
+    assert query(admission(shifted), contact).allowed
+    assert not query(admission(shifted), contact, box(center=(0., 0., .038))).allowed
+    assert not query(admission(shifted), contact, phase='pregrasp').allowed
+    assert not query(admission(shifted), replace(contact, backing_depth_m=.002)).allowed
+
+
 def test_mixed_cell_and_historical_unattributed_evidence_remain_obstacles():
     background, contact, partition = scene()
     point = np.array([[0.001, 0.001, 0.001]])
@@ -159,12 +219,15 @@ def test_mixed_cell_and_historical_unattributed_evidence_remain_obstacles():
     assert not query(admission(updated), contact, now=11.02).allowed
 
 
-def test_unknown_above_support_is_not_proved_free_by_the_contact_witness():
+def test_unknown_above_support_needs_actual_original_rays():
     background, contact, _ = scene()
     cells = background.workspace.cells.copy()
     cells[5, 5, 2] = 0
     modified = replace(background, workspace=ObservedWorkspace(background.workspace.origin, 0.05, cells))
-    assert not query(admission(modified), contact).allowed
+    mask = contact.support_mask.copy()
+    mask[40:56, 40:56] = False
+    hidden = replace(contact, support_mask=mask)
+    assert not query(admission(modified), hidden).allowed
 
 
 def test_lift_departure_uses_one_fixed_floor_in_any_query_order():

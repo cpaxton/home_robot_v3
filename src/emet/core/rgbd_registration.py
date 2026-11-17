@@ -112,3 +112,20 @@ def decode_registration(packet):
         "rgb_from_depth": transform,
         **provenance,
     }
+
+
+def source_points_rgb(decoded):
+    """Winning original depth endpoints, in native RGB optical coordinates.
+
+    Nearest registered pixel centres do not define the original rays. Holes
+    stay NaN; no endpoint is interpolated and ownership is not inferred.
+    """
+    source = decoded["source_pixel_index"]
+    valid = source >= 0
+    raw, transform = decoded["raw_depth"], decoded["rgb_from_depth"]
+    y, x = np.divmod(source[valid], raw.shape[1])
+    rays = np.stack((x, y, np.ones(len(x))), axis=-1) @ np.linalg.inv(decoded["depth_k"]).T
+    points = (rays * raw[y, x, None]) @ transform[:3, :3].T + transform[:3, 3]
+    result = np.full((*source.shape, 3), np.nan)
+    result[valid] = points
+    return result

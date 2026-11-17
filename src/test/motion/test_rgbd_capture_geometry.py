@@ -20,6 +20,8 @@ from emet.controller.manipulation.native_inputs import ObservationUnavailable
 from emet.controller.manipulation.observed_effects import evaluate_lift, evaluate_place
 from emet.controller.manipulation.rgbd_capture_geometry import RgbdCaptureGeometry, SimGeometryProfile
 from emet.controller.task.tamp.observed_capture import capture_arrays
+from emet.core.rgbd_registration import encode_registration
+from emet.simulation.depth_registration import register_depth
 from emet.simulation.synchronized_capture import capture_scene_for_sensors, capture_stretch_motors
 
 
@@ -143,6 +145,48 @@ def test_gripper_bounds_cannot_silently_use_another_error_profile(sample):
     _, _, view, _ = sample
     with pytest.raises(ValueError, match="invalid_rgbd_capture_geometry"):
         replace(view.geometry, profile=replace(view.geometry.profile, robot_position_error_m=0.002))
+
+
+def test_original_depth_rays_pin_rotation_calibration_and_wire_capture(sample):
+    model, obs, view, _ = sample
+    native_k = np.array([[20.0, 0, 5.0], [0, 20.0, 5.0], [0, 0, 1.0]])
+    raw = np.full((12, 10), 0.9, np.float32)
+    rgb = np.zeros((*raw.shape, 3), np.uint8)
+    transform = np.eye(4)
+    transform[0, 3] = 0.013
+    aligned = register_depth(raw, native_k, native_k, transform, raw.shape)
+    timing = obs.image_timing["head_cam_left"]
+    obs.rgbd_registration = encode_registration(
+        rgb=rgb,
+        raw_depth=raw,
+        registered_depth=aligned,
+        depth_k=native_k,
+        rgb_k=native_k,
+        rgb_from_depth=transform,
+        rgb_interval_ns=timing["capture_interval_ns"],
+        depth_interval_ns=timing["depth_capture_interval_ns"],
+        clock_id=timing["clock_id"],
+    )
+    obs.rgb = np.rot90(rgb, -1)
+    obs.depth = (np.rot90(aligned, -1) * 1000).astype(np.uint16).astype(np.float32) / 1000
+    geom = RgbdCaptureGeometry.from_stretch(
+        obs, model, profile=view.geometry.profile, now=time.monotonic(), original_rays=True
+    )
+    measured = SynchronizedRgbdView(obs.rgb, obs.depth, geom.source_points_world, geom.capture, geometry=geom)
+    geom.require(measured, now=time.monotonic())
+    y, x = np.indices(raw.shape)
+    camera = np.stack(((x - 5) * raw / 20, (y - 5) * raw / 20, raw), axis=-1)
+    world = camera @ geom.world_from_depth[:3, :3].T + geom.world_from_depth[:3, 3]
+    # Every selected registered return is an ORIGINAL depth endpoint.
+    valid = np.isfinite(geom.source_points_world).all(-1)
+    distances = np.linalg.norm(geom.source_points_world[valid, None] - world.reshape(-1, 3), axis=-1)
+    assert distances.min(axis=1).max() < 1e-12
+    assert not geom.source_depth.flags.writeable
+    obs.depth = obs.depth + 0.001
+    with pytest.raises(ObservationUnavailable, match="rgbd_geometry_capture_mismatch"):
+        RgbdCaptureGeometry.from_stretch(
+            obs, model, profile=view.geometry.profile, now=time.monotonic(), original_rays=True
+        )
 
 
 def test_assembled_reference_validates_at_original_receipt_not_earlier_motor_capture(sample):
