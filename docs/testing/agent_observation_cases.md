@@ -19,6 +19,15 @@ process exit-zero does not pass them. See the
 [operator report](../experiments/independent_operator_trial_20261116.md) for
 exact actions, source pin, receipt paths and the proposed repair tests.
 
+Current-view `ground_object` is covered by `test_ground_object.py`,
+`test_query_grounding.py` and the real CHAT/HTTP cases in
+`test_chat_camera_history.py`. They distinguish admitted object geometry from
+search anchors, preserve abstention/provenance and verify that explicit object
+constraints reach the VLM prompt. A bounded recorded RGB-D check exercises real
+Qwen/SAM2 providers with manually inspected masks; see
+[grounding qualification](../experiments/coordinator_grounding_20261116.md).
+Live use of this newly exposed tool remains a separate acceptance gate.
+
 ## Fast cross-tool integration gate
 
 ```bash

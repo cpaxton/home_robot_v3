@@ -29,10 +29,16 @@
       Keep unverified search references distinct from object geometry; preserve
       fresh manipulation authorization. `ground_object` now uses the existing
       capture/admission path and returns geometry/provenance or explicit failure;
-      opt-in find profile enables verified instance admission. The 119-test
+      opt-in find profile enables verified instance admission. The 140-test
       focused pack passes, including real CHAT/HTTP continuation checks.
-- [ ] Qualify the new grounding call on recorded RGB-D, then retry the bounded
-      operator case and small paired EQA/OVMM gates. No broad sweep yet.
+- [x] Qualify the new grounding call on recorded RGB-D. Initial optional
+      description was ignored by the VLM's intentional question-context rule;
+      a single complete object phrase now reaches both inference prompts.
+      Foreground stool mask is manually verified, 20,454 depth points admitted;
+      cropped microwave abstains. No robot actions or GT masks/poses. Report:
+      `docs/experiments/coordinator_grounding_20261116.md`.
+- [ ] Retry the bounded operator case with ground_object exposed, then small
+      paired EQA/OVMM gates. No broad sweep yet.
 - [ ] Expose floor-support coverage alongside obstacle clearance; targeted floor
       inspection should consider reachable visible unknown cells rather than
       stopping on the first behind-camera candidate. Preserve drop/step safety.
