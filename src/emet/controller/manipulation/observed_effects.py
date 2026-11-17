@@ -67,27 +67,46 @@ class RobotPoseSample:
     joints: np.ndarray
     received_monotonic: float
     gripper_bounds: np.ndarray | None = None
-    source: str = 'measured_joint_feedback'
+    source: str = "measured_joint_feedback"
+    position_error_m: float = 0.0
+    rotation_error_rad: float = 0.0
 
     def __post_init__(self):
-        if self.source not in {'measured_joint_feedback', 'simulator_robot_kinematics_debug'}:
-            raise ValueError('invalid_robot_feedback_source')
+        if (
+            not np.isfinite([self.position_error_m, self.rotation_error_rad]).all()
+            or self.position_error_m < 0
+            or not 0 <= self.rotation_error_rad <= np.pi
+        ):
+            raise ValueError("invalid_robot_pose_sample")
+        if self.source not in {"measured_joint_feedback", "simulator_robot_kinematics_debug"}:
+            raise ValueError("invalid_robot_feedback_source")
         pose = rigid_copy(self.world_from_ee)
         joints = np.asarray(self.joints, float)
-        if joints.ndim != 1 or not joints.size or not np.isfinite(joints).all() or not np.isfinite(self.received_monotonic):
-            raise ValueError('invalid_robot_pose_sample')
-        object.__setattr__(self, 'world_from_ee', pose)
-        object.__setattr__(self, 'joints', np.frombuffer(joints.tobytes(), dtype=joints.dtype))
+        if (
+            joints.ndim != 1
+            or not joints.size
+            or not np.isfinite(joints).all()
+            or not np.isfinite(self.received_monotonic)
+        ):
+            raise ValueError("invalid_robot_pose_sample")
+        object.__setattr__(self, "world_from_ee", pose)
+        object.__setattr__(self, "joints", np.frombuffer(joints.tobytes(), dtype=joints.dtype))
         if self.gripper_bounds is not None:
             boxes = np.asarray(self.gripper_bounds, float)
-            if (boxes.ndim != 3 or boxes.shape[1:] != (2, 3) or not len(boxes)
-                    or not np.isfinite(boxes).all() or np.any(boxes[:, 0] >= boxes[:, 1])):
-                raise ValueError('invalid_gripper_geometry')
-            object.__setattr__(self, 'gripper_bounds', np.frombuffer(boxes.tobytes(), dtype=boxes.dtype).reshape(boxes.shape))
+            if (
+                boxes.ndim != 3
+                or boxes.shape[1:] != (2, 3)
+                or not len(boxes)
+                or not np.isfinite(boxes).all()
+                or np.any(boxes[:, 0] >= boxes[:, 1])
+            ):
+                raise ValueError("invalid_gripper_geometry")
+            object.__setattr__(
+                self, "gripper_bounds", np.frombuffer(boxes.tobytes(), dtype=boxes.dtype).reshape(boxes.shape)
+            )
 
     @classmethod
-    def from_model(cls, model, data, *, ee_body, gripper_bodies, received_monotonic,
-                   source='measured_joint_feedback'):
+    def from_model(cls, model, data, *, ee_body, gripper_bodies, received_monotonic, source="measured_joint_feedback"):
         """Derive complete gripper volumes from calibrated robot FK, not contacts."""
         probe = mujoco.MjData(model)
         mujoco.mj_copyData(probe, model, data)
@@ -102,7 +121,7 @@ class RobotPoseSample:
             half = np.abs(rotation) @ model.geom_aabb[gid, 3:]
             boxes.append([center - half, center + half])
         if not boxes:
-            raise ObservationUnavailable('gripper_geometry_unknown')
+            raise ObservationUnavailable("gripper_geometry_unknown")
         ee = probe.body(ee_body)
         pose = np.eye(4)
         pose[:3, :3], pose[:3, 3] = ee.xmat.reshape(3, 3), ee.xpos
@@ -198,9 +217,10 @@ def _frames(reference, frames, *, now, after, min_span_s):
         raise ObservationUnavailable('visual_evidence_incomplete')
     # The grasp baseline is historical evidence, not a claim of current pose.
     # Validate it at its actual bracketed receive time without renewing its age.
-    if not 0 <= now - reference.capture.earliest <= 30.:
+    historical_time = max(reference.capture.received_monotonic, reference.robot_after.received_monotonic)
+    if not 0 <= now - reference.capture.earliest <= 30. or historical_time > now:
         raise ObservationUnavailable('object_observation_stale')
-    reference.require(now=reference.robot_after.received_monotonic)
+    reference.require(now=historical_time)
     last = reference.capture.latest
     seen = {reference.capture.observation_id}
     for frame in frames:
@@ -224,45 +244,83 @@ def _frames(reference, frames, *, now, after, min_span_s):
         raise ObservationUnavailable('visual_evidence_incomplete')
 
 
+def _robot_error(frame, name):
+    return max(getattr(frame.robot_before, name), getattr(frame.robot_after, name))
+
+
+def _relative_position_error(frame):
+    """Bound EE-frame object translation, including rotation of its lever arm."""
+    base = frame.position_error_m + frame.alignment_error_m + _robot_error(frame, "position_error_m")
+    delta = frame.payload.pose.world_from_object[:3, 3] - frame.robot_after.world_from_ee[:3, 3]
+    angle = _robot_error(frame, "rotation_error_rad") + frame.alignment_error_rad
+    return pose_uncertainty_margin(np.linalg.norm(delta) + base, base, angle)
+
+
 def evaluate_lift(reference, frames, *, support_top_z, after, now=None):
     """Require separation and measured object/EE co-motion across fresh captures."""
     now = time.monotonic() if now is None else now
     try:
-        _frames(reference, frames, now=now, after=after, min_span_s=.2)
-        initial, initial_ee = reference.require(now=reference.robot_after.received_monotonic)
+        _frames(reference, frames, now=now, after=after, min_span_s=0.2)
+        initial, initial_ee = reference.require(now=max(reference.capture.received_monotonic,
+                                                       reference.robot_after.received_monotonic))
         expected = np.linalg.inv(initial_ee) @ initial
         if not np.isfinite(support_top_z):
-            raise ObservationUnavailable('support_geometry_unknown')
+            raise ObservationUnavailable("support_geometry_unknown")
         ids = tuple(f.capture.observation_id for f in frames)
         for frame in frames:
             obj, ee = frame.require(now=now, after=after)
             relative = np.linalg.inv(ee) @ obj
-            error = (frame.position_error_m + reference.position_error_m
-                     + frame.alignment_error_m + reference.alignment_error_m)
-            angular_error = (frame.rotation_error_rad + reference.rotation_error_rad
-                             + frame.alignment_error_rad + reference.alignment_error_rad)
-            if (np.linalg.norm(relative[:3, 3] - expected[:3, 3]) + error > .02
-                    or evidence_rotation_distance(frame.payload.pose, relative[:3, :3], expected[:3, :3]) + angular_error > .1
-                    or frame.bounds()[0, 2] <= support_top_z + .02
-                    or ee[2, 3] - initial_ee[2, 3] < .04
-                    or obj[2, 3] - initial[2, 3] - error < .04):
+            object_error = (
+                frame.position_error_m
+                + reference.position_error_m
+                + frame.alignment_error_m
+                + reference.alignment_error_m
+            )
+            error = _relative_position_error(frame) + _relative_position_error(reference)
+            angular_error = (
+                frame.rotation_error_rad
+                + reference.rotation_error_rad
+                + frame.alignment_error_rad
+                + reference.alignment_error_rad
+                + _robot_error(frame, "rotation_error_rad")
+                + _robot_error(reference, "rotation_error_rad")
+            )
+            ee_error = (
+                _robot_error(frame, "position_error_m")
+                + _robot_error(reference, "position_error_m")
+                + frame.alignment_error_m
+                + reference.alignment_error_m
+            )
+            if (
+                np.linalg.norm(relative[:3, 3] - expected[:3, 3]) + error > 0.02
+                or evidence_rotation_distance(frame.payload.pose, relative[:3, :3], expected[:3, :3]) + angular_error
+                > 0.1
+                or frame.bounds()[0, 2] <= support_top_z + 0.02
+                or ee[2, 3] - initial_ee[2, 3] - ee_error < 0.04
+                or obj[2, 3] - initial[2, 3] - object_error < 0.04
+            ):
                 definite_failure = (
-                    np.linalg.norm(relative[:3, 3] - expected[:3, 3]) - error > .02
-                    or evidence_rotation_distance(frame.payload.pose, relative[:3, :3], expected[:3, :3]) - angular_error > .1
-                    or frame.bounds()[1, 2] <= support_top_z + .02
-                    or ee[2, 3] - initial_ee[2, 3] < .04
-                    or obj[2, 3] - initial[2, 3] + error < .04)
-                return VisualEffectResult('violated' if definite_failure else 'unknown', 'visual_lift_not_verified', ids)
-        return VisualEffectResult('satisfied', 'visual_lift_verified', ids)
+                    np.linalg.norm(relative[:3, 3] - expected[:3, 3]) - error > 0.02
+                    or evidence_rotation_distance(frame.payload.pose, relative[:3, :3], expected[:3, :3])
+                    - angular_error
+                    > 0.1
+                    or frame.bounds()[1, 2] <= support_top_z + 0.02
+                    or ee[2, 3] - initial_ee[2, 3] + ee_error < 0.04
+                    or obj[2, 3] - initial[2, 3] + object_error < 0.04
+                )
+                return VisualEffectResult(
+                    "violated" if definite_failure else "unknown", "visual_lift_not_verified", ids
+                )
+        return VisualEffectResult("satisfied", "visual_lift_verified", ids)
     except ObservationUnavailable as exc:
-        return VisualEffectResult('unknown', str(exc))
+        return VisualEffectResult("unknown", str(exc))
 
 
 def evaluate_place(reference, frames, *, support_bounds, after, now=None):
     """Verify footprint/support consistency and settling after measured retreat."""
     now = time.monotonic() if now is None else now
     try:
-        _frames(reference, frames, now=now, after=after, min_span_s=.3)
+        _frames(reference, frames, now=now, after=after, min_span_s=0.3)
         support = bounds_array(support_bounds)
         ids = tuple(f.capture.observation_id for f in frames)
         anchor = frames[0]
@@ -274,20 +332,37 @@ def evaluate_place(reference, frames, *, support_bounds, after, now=None):
             # visual geometry, not an invented force/contact measurement.
             gripper = frame.robot_after.gripper_bounds
             if gripper is None:
-                raise ObservationUnavailable('gripper_geometry_unknown')
-            separation = np.maximum(np.maximum(box[0] - gripper[:, 1], gripper[:, 0] - box[1]), 0.)
+                raise ObservationUnavailable("gripper_geometry_unknown")
+            separation = np.maximum(np.maximum(box[0] - gripper[:, 1], gripper[:, 0] - box[1]), 0.0)
+            # Bounds may already contain model/pose reserves. Reserving declared
+            # robot pose error here as well is conservative for legacy sources
+            # whose volume contract does not record whether it was inflated.
+            radius = np.linalg.norm(
+                np.maximum(abs(gripper[:, 0] - ee[:3, 3]), abs(gripper[:, 1] - ee[:3, 3])), axis=1
+            ).max()
+            retreat_error = pose_uncertainty_margin(
+                radius, _robot_error(frame, "position_error_m"),
+                _robot_error(frame, "rotation_error_rad") + frame.alignment_error_rad
+            )
+            if np.linalg.norm(separation, axis=1).min() - frame.alignment_error_m - retreat_error < 0.01:
+                # An outer gripper envelope close to the object does not prove
+                # actual contact, but cannot certify completed retreat either.
+                return VisualEffectResult("unknown", "visual_placement_not_verified", ids)
             error = frame.position_error_m + anchor.position_error_m
             angular_error = frame.rotation_error_rad + anchor.rotation_error_rad
-            if (np.any(box[0, :2] < support[0, :2]) or np.any(box[1, :2] > support[1, :2])
-                    or box[0, 2] < support[1, 2] - .02 or box[1, 2] <= support[1, 2]
-                    or box[0, 2] > support[1, 2] + .02
-                    or np.linalg.norm(separation, axis=1).min() - frame.alignment_error_m < .01
-                    or np.linalg.norm(obj[:3, 3] - first[:3, 3]) + error > .01
-                    or evidence_rotation_distance(frame.payload.pose, obj[:3, :3], first[:3, :3]) + angular_error > .1):
-                return VisualEffectResult('violated', 'visual_placement_not_verified', ids)
-        return VisualEffectResult('satisfied', 'visual_placement_verified', ids)
+            if (
+                np.any(box[0, :2] < support[0, :2])
+                or np.any(box[1, :2] > support[1, :2])
+                or box[0, 2] < support[1, 2] - 0.02
+                or box[1, 2] <= support[1, 2]
+                or box[0, 2] > support[1, 2] + 0.02
+                or np.linalg.norm(obj[:3, 3] - first[:3, 3]) + error > 0.01
+                or evidence_rotation_distance(frame.payload.pose, obj[:3, :3], first[:3, :3]) + angular_error > 0.1
+            ):
+                return VisualEffectResult("violated", "visual_placement_not_verified", ids)
+        return VisualEffectResult("satisfied", "visual_placement_verified", ids)
     except ObservationUnavailable as exc:
-        return VisualEffectResult('unknown', str(exc))
+        return VisualEffectResult("unknown", str(exc))
 
 
 class ObservedVisualVerifier:

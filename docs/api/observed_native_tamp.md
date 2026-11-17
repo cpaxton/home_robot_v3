@@ -42,7 +42,8 @@ those paths. This planning blocker is separate from moving-mask visibility loss.
 | `MovingRgbdTracker` | Current whole measured appearance components and declared geometry/motion profile | Lost/ambiguous associations latch; diagnostic candidates, not calibrated global identity |
 | `MultiViewRgbdTracker` | Continuous head/wrist association within one source-synchronized capture; explicit complete-prior fragment and lighting profiles | Cached/misaligned views, global loss, competing or incompatible geometry; ideal shared-snapshot diagnostic, not hardware timing qualification |
 | `RobotViewGuard` | Reject camera association if an original winning depth ray may hit motor-derived rigid tool/camera outer geometry | Rejection only: never trims pixels, labels self, frees cells or proves absence of interference outside its named scope |
-| `ContinuousRgbdSource` | Process original camera captures in a background producer independently of tool/LLM reads; publish immutable candidate/frame pairs | Stale, changed/replayed, lost or invalidated evidence stops the source; does not assemble the support/background/robot effects required by `ObservedNativeAdapter` |
+| `ContinuousRgbdSource` | Process original camera captures in a background producer independently of tool/LLM reads; publish immutable candidate/frame pairs | Stale, changed/replayed, lost or invalidated evidence stops the source; does not assemble the support/background/collision evidence required by `ObservedNativeAdapter` |
+| `RgbdCaptureGeometry` | Retain original camera calibration, motor-derived EE and conservative gripper volumes with each immutable RGBD view; assemble visual-effect frames | Mixed captures, changed geometry profiles and world-point mismatches reject; explicit simulation assumptions do not qualify hardware or a complete collision scene |
 | `ObservedBackground` | Historical environment/free-space evidence with original per-cell capture ages and geometry-qualified self exclusion | Unqualified excluded endpoints invalidate cached free cells; occupied evidence survives. False self labels remain environment when qualification is requested. Longer validity requires a bounded static-scene assumption |
 | `ShapePoseEvidence` | Explicit primitive solid equivalence with external pose-error bounds | Unknown material yaw remains unknown; generic unique-pose consumers reject |
 | `GripperGeometryEnvelope` | Full tool subtree over unmeasured joint intervals, anchored at motor-derived rigid EE | Conditional model bounds; no passive-joint sensor claim or full-arm certificate |
@@ -110,6 +111,30 @@ escape or whole-robot interval violation fails the robot audit; sampled
 containment still does not certify mechanical/hardware bounds or task execution.
 
 ## Provider assembly
+
+`SynchronizedRgbdView.geometry` optionally retains immutable `RgbdCaptureGeometry`.
+Its camera unprojection must match the view's world points. Motor feedback and
+gripper geometry must describe that exact original capture; a later robot read
+cannot substitute. Tracking pins camera/model/error profiles, and duplicate
+handling compares the retained geometry as well as pixels. `visual_frame(...)`
+uses the stored fit and robot brackets without reacquiring either.
+
+The explicit schema-1
+[`observed_stretch_geometry_debug.json`](../../configs/eval/observed_stretch_geometry_debug.json)
+supplies **simulation assumptions**, not measured hardware calibration or errors
+inferred from fit residuals. Only the ideal shared-snapshot simulator source can
+use its zero temporal-alignment term. Robot FK/localization errors remain
+nonzero and propagate separately through relative retention, rotation, EE lift
+height and retreat checks. Rotation uncertainty includes the EE-to-object lever
+arm. Gripper envelopes retain their pose-error budgets so they cannot silently
+be paired with another profile. Retreat reserves robot pose error conservatively,
+including when a source's boxes already contain a reserve; unproven separation
+is unknown, not evidence of actual contact. Historical references validate at
+the later of their original image receipt and robot bracket time, without retiming.
+
+The [coherent-frame integration record](../experiments/observed_visual_frames_20261117.md)
+separates live visual-frame assembly from the remaining background/material/
+contact-source/refiner and actual observed pick/place gates.
 
 The camera source has a separate candidate-level contract:
 `ContinuousRgbdSource(tracker, initial_views=..., read_views=...).start()` calls

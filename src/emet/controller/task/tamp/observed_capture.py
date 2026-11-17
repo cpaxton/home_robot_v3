@@ -12,8 +12,6 @@ def capture_arrays(observation):
     client-side timestamp replacement is used. Camera pose is expected in the
     same world frame as the reference processor's points.
     """
-    from emet.utils.image import Camera, camera_xyz_to_global_xyz
-
     rgb, depth = np.asarray(observation.rgb), np.asarray(observation.depth)
     intrinsic, pose = np.asarray(observation.camera_K, dtype=float), np.asarray(observation.camera_pose, dtype=float)
     if (
@@ -34,11 +32,15 @@ def capture_arrays(observation):
         or not np.isclose(np.linalg.det(pose[:3, :3]), 1.0, atol=1e-5)
     ):
         raise ValueError("invalid_observed_camera_geometry")
-    camera = Camera.from_K(intrinsic, width=depth.shape[1], height=depth.shape[0])
-    # The generic camera helper defaults to float16. At metre-scale ranges that
-    # can add millimetre quantization unrelated to the sensor/calibration budget.
-    # Preserve input precision here; this does not improve physical accuracy.
-    world = camera_xyz_to_global_xyz(camera.depth_to_xyz(depth, data_type=np.float64), pose)
+    # Compute in float64, not merely cast the result: the generic camera helper
+    # uses float32 pixel/depth intermediates even with a float64 output request.
+    # This preserves input precision; it does not improve sensor accuracy.
+    y, x = np.indices(depth.shape, dtype=np.float64)
+    z = depth.astype(np.float64)
+    camera = np.stack(
+        ((x - intrinsic[0, 2]) * z / intrinsic[0, 0], (y - intrinsic[1, 2]) * z / intrinsic[1, 1], z), axis=-1
+    )
+    world = camera @ pose[:3, :3].T + pose[:3, 3]
     return rgb, depth, world
 
 

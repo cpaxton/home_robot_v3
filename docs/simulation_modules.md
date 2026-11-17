@@ -229,3 +229,11 @@ ordinary decoded observation. `scripts/eval_rgbd_transport.py --recording DIR
 captures, keeping model, seed pixels and tracker thresholds fixed. It rejects
 bounded archive tails that no longer contain the original reference capture.
 See [the transport cause and live checks](experiments/observed_rgbd_transport_20261117.md).
+
+`eval_continuous_rgbd_source.py` also accepts the pair `--robot-only-model PATH`
+and `--geometry-profile JSON`. They retain same-capture camera/encoder/gripper
+geometry and assemble two visual-effect frames per successful pause window.
+Both flags are required together and default off. The supplied profile is
+simulation-only declared error/model assumptions; it does not enable execution.
+The source never substitutes a later encoder read or treats passive joints as
+measured. See [the coherent-frame audit](experiments/observed_visual_frames_20261117.md).

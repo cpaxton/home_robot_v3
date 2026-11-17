@@ -33,6 +33,15 @@ def test_observed_unprojection_keeps_submillimetre_depth_precision():
     np.testing.assert_allclose(world[0, 0], [-.010003, -.010003, 1.0003], rtol=0, atol=1e-12)
 
 
+def test_unprojection_computes_in_float64_before_casting_the_result():
+    obs = SimpleNamespace(rgb=np.zeros((3, 3, 3), np.uint8), depth=np.full((3, 3), 1.0003, np.float32),
+        camera_K=np.array([[312.610712, 0, .9321024], [0, 312.610713, 1.013924], [0, 0, 1.]]), camera_pose=np.eye(4))
+    _, _, world = capture_arrays(obs)
+    z = float(obs.depth[0, 0])
+    np.testing.assert_allclose(world[0, 0], [-obs.camera_K[0, 2]*z/obs.camera_K[0, 0],
+        -obs.camera_K[1, 2]*z/obs.camera_K[1, 1], z], rtol=0, atol=1e-14)
+
+
 def capture(stamp, received):
     rgb = np.zeros((80, 80, 3), dtype=np.uint8)
     depth = np.full((80, 80), np.nan)

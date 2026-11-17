@@ -161,6 +161,12 @@ does not close the source/contact gates below.
    through four paused-consumer windows. This resolves the live transport gate;
    complete source/refiner/ownership assembly below remains open. See
    [the causal transport record](../experiments/observed_rgbd_transport_20261117.md).
+   Same-capture camera/motor/gripper evidence is now retained with tracked views.
+   The live debug profile assembles six visual frames across 27 tracked captures;
+   declared FK/localization error reaches lift, retention and retreat checks.
+   Historical reference validation uses original image receipt as well as robot
+   bracket time. This is a source component, not the complete collision source
+   or observed task gate. See [the visual-frame integration audit](../experiments/observed_visual_frames_20261117.md).
 4. Resolve moving-mask foreign components with independent geometry/provenance
    evidence; preserve tiny unresolved competitors, complete-union controls,
    latched loss and explicit fresh reacquisition. Do not retime captures, shrink

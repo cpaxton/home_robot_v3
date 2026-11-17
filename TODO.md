@@ -32,6 +32,11 @@
       41/43 tracked captures in separate stationary views, four consumer-pause
       windows each; one uses no provenance channel. Full observed execution
       source/refiner assembly remains the next gate.
+      [Coherent visual frames](docs/experiments/observed_visual_frames_20261117.md)
+      now retain original camera calibration and eight motors, propagate robot
+      pose errors through visual checks, and preserve original reference receipt
+      times. Live frame assembly passes; full collision-scene ownership and
+      source/refiner integration still precede observed transfer acceptance.
 
 - [ ] Profile failed-search cost without answer overrides or target-specific rules:
       final S0 seed 1 misses the receptacle in both arms but candidate takes

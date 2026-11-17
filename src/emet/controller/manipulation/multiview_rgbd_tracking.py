@@ -19,6 +19,7 @@ from emet.controller.manipulation.geometry_tracking import GeometryFit, fit_geom
 from emet.controller.manipulation.moving_rgbd_tracking import MovingRgbdTracker, _arrays, _frozen
 from emet.controller.manipulation.native_inputs import ObservationUnavailable
 from emet.controller.manipulation.observed_effects import CaptureInterval
+from emet.controller.manipulation.rgbd_capture_geometry import RgbdCaptureGeometry
 from emet.controller.manipulation.robot_view_guard import RobotViewGuard
 
 
@@ -29,6 +30,7 @@ class SynchronizedRgbdView:
     world: np.ndarray
     capture: CaptureInterval
     robot_guard: RobotViewGuard | None = None
+    geometry: RgbdCaptureGeometry | None = None
 
     def __post_init__(self):
         arrays = _arrays(self.rgb, self.depth, self.world)
@@ -36,6 +38,10 @@ class SynchronizedRgbdView:
             object.__setattr__(self, name, _frozen(array))
         if self.robot_guard is not None and not isinstance(self.robot_guard, RobotViewGuard):
             raise ValueError("invalid_robot_view_guard")
+        if self.geometry is not None:
+            if not isinstance(self.geometry, RgbdCaptureGeometry):
+                raise ValueError("invalid_rgbd_capture_geometry")
+            self.geometry.require(self, now=self.capture.received_monotonic)
 
 
 @dataclass(frozen=True)
@@ -111,7 +117,10 @@ class MultiViewRgbdTracker(MovingRgbdTracker):
         self._guard_profiles = {
             reference_view: (reference.robot_guard.profile_identity if reference.robot_guard is not None else None)
         }
+        self._geometry_profiles = {reference_view: reference.geometry.profile_identity if reference.geometry else None}
         capture.require(now=kwargs.get("clock", time.monotonic)())
+        if reference.geometry is not None:
+            reference.geometry.require(reference, now=kwargs.get("clock", time.monotonic)())
         if reference.robot_guard is not None:
             reference.robot_guard.require(
                 capture, reference.depth, reference.world, now=kwargs.get("clock", time.monotonic)()
@@ -171,6 +180,12 @@ class MultiViewRgbdTracker(MovingRgbdTracker):
         masks, points, rejected, clipped = [], [], [], []
         for name, view in views.items():
             rgb, depth, world = view.rgb, view.depth, view.world
+            geometry_profile = view.geometry.profile_identity if view.geometry else None
+            if name in self._geometry_profiles and geometry_profile != self._geometry_profiles[name]:
+                raise ObservationUnavailable("rgbd_geometry_profile_changed")
+            self._geometry_profiles[name] = geometry_profile
+            if view.geometry is not None:
+                view.geometry.require(view, now=self.clock())
             profile = view.robot_guard.profile_identity if view.robot_guard is not None else None
             if name in self._guard_profiles and profile != self._guard_profiles[name]:
                 raise ObservationUnavailable("robot_view_profile_changed")

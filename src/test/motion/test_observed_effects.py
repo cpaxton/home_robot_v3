@@ -138,6 +138,54 @@ def test_lift_uncertainty_straddling_retention_limit_is_unknown():
     assert evaluate_lift(frame(10.), frames, support_top_z=0, after=10.4, now=11.).state == 'unknown'
 
 
+def robot_error(f, *, position=0., rotation=0.):
+    return replace(f, robot_before=replace(f.robot_before, position_error_m=position, rotation_error_rad=rotation),
+        robot_after=replace(f.robot_after, position_error_m=position, rotation_error_rad=rotation))
+
+
+def test_robot_position_error_prevents_false_retention_acceptance():
+    before = frame(10.)
+    frames = [frame(t, obj=(.015, 0, .13), ee=(0, 0, .13)) for t in (10.5, 10.8)]
+    assert evaluate_lift(before, frames, support_top_z=0, after=10.4, now=11.).satisfied
+    result = evaluate_lift(robot_error(before, position=.002),
+        [robot_error(f, position=.002) for f in frames], support_top_z=0, after=10.4, now=11.)
+    assert result.state == 'unknown'
+
+
+def test_robot_angular_error_accounts_for_ee_to_object_lever_arm():
+    before = frame(10., obj=(.4, 0, .03))
+    frames = [frame(t, obj=(.4, 0, .13), ee=(0, 0, .13)) for t in (10.5, 10.8)]
+    assert evaluate_lift(before, frames, support_top_z=0, after=10.4, now=11.).satisfied
+    result = evaluate_lift(robot_error(before, rotation=.03),
+        [robot_error(f, rotation=.03) for f in frames], support_top_z=0, after=10.4, now=11.)
+    assert result.state == 'unknown'
+
+
+def test_ee_height_uncertainty_cannot_certify_a_marginal_lift():
+    before = frame(10.)
+    frames = [frame(t, obj=(0, 0, .075), ee=(0, 0, .071)) for t in (10.5, 10.8)]
+    assert evaluate_lift(before, frames, support_top_z=0, after=10.4, now=11.).satisfied
+    result = evaluate_lift(robot_error(before, position=.001),
+        [robot_error(f, position=.001) for f in frames], support_top_z=0, after=10.4, now=11.)
+    assert result.state == 'unknown'
+
+
+def test_robot_uncertainty_prevents_false_retreat_acceptance():
+    before = frame(10.)
+    frames = [frame(t, obj=(0, 0, .02), ee=(0, 0, .2)) for t in (10.5, 10.9)]
+    frames = [replace(f, robot_after=replace(f.robot_after,
+        gripper_bounds=np.array([[[-.001, -.001, .054], [.001, .001, .055]]]))) for f in frames]
+    assert evaluate_place(before, frames, support_bounds=[[-.3, -.3, -.1], [.3, .3, 0]], after=10.4, now=11.).satisfied
+    result = evaluate_place(before, [robot_error(f, position=.005) for f in frames],
+        support_bounds=[[-.3, -.3, -.1], [.3, .3, 0]], after=10.4, now=11.)
+    assert result.state == 'unknown'
+
+
+def test_empty_gripper_bounds_are_missing_geometry():
+    with pytest.raises(ValueError, match='invalid_gripper_geometry'):
+        replace(frame(10.).robot_after, gripper_bounds=np.empty((0, 2, 3)))
+
+
 def test_identical_joint_endpoints_without_motion_bound_do_not_prove_alignment():
     frames = [frame(t, obj=(0, 0, .13), ee=(0, 0, .13)) for t in (10.5, 10.8)]
     frames[1] = replace(frames[1], alignment_error_m=None)

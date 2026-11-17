@@ -18,6 +18,7 @@ import time
 from collections import deque
 from pathlib import Path
 
+import mujoco
 import numpy as np
 from PIL import Image
 from scipy.ndimage import binary_erosion
@@ -27,6 +28,7 @@ from emet.controller.manipulation.continuous_rgbd import ContinuousRgbdSource
 from emet.controller.manipulation.encoder_capture import read_local_sim_motor_capture
 from emet.controller.manipulation.geometry_models import PrimitiveModel
 from emet.controller.manipulation.multiview_rgbd_tracking import MultiViewRgbdTracker, SynchronizedRgbdView
+from emet.controller.manipulation.rgbd_capture_geometry import RgbdCaptureGeometry, SimGeometryProfile
 from emet.controller.task.tamp.observed_capture import capture_arrays
 from emet.eval.sim_eval_session import (
     connect_benchmark_robot,
@@ -43,6 +45,16 @@ def main():
     parser.add_argument("--rounds", type=int, default=2)
     parser.add_argument("--head-tilt", type=float, default=-0.7)
     parser.add_argument(
+        "--robot-only-model",
+        type=Path,
+        help="Bind same-capture motor-only robot geometry; requires --geometry-profile.",
+    )
+    parser.add_argument(
+        "--geometry-profile",
+        type=Path,
+        help="Explicit simulation geometry/error assumptions JSON; requires --robot-only-model.",
+    )
+    parser.add_argument(
         "--rgb-codec",
         choices=("jpeg", "png"),
         default="jpeg",
@@ -54,6 +66,10 @@ def main():
         help="Archive original sensor grids/calibration alongside the ordinary wire observation.",
     )
     args = parser.parse_args()
+    if bool(args.robot_only_model) != bool(args.geometry_profile):
+        parser.error("--robot-only-model and --geometry-profile must be supplied together")
+    profile = SimGeometryProfile(**json.loads(args.geometry_profile.read_text())) if args.geometry_profile else None
+    robot_model = mujoco.MjModel.from_xml_path(str(args.robot_only_model.resolve())) if args.robot_only_model else None
     if (
         not np.isfinite([args.consumer_pause_s, args.head_tilt]).all()
         or args.consumer_pause_s <= 1.5
@@ -96,6 +112,8 @@ def main():
         "seed": "operator red appearance interior; explicit known cylinder radius .02 halfheight .04 m",
         "consumer_pause_s": args.consumer_pause_s,
         "head_pose": [-1.57, args.head_tilt],
+        "geometry_profile": json.loads(args.geometry_profile.read_text()) if profile else None,
+        "visual_frames": [],
         "rounds": [],
         "captures": [],
         "passed": False,
@@ -121,7 +139,12 @@ def main():
                     return None
                 motor = read_local_sim_motor_capture(observation)
                 rgb, depth, world = capture_arrays(observation)
-                view = SynchronizedRgbdView(rgb, depth, world, motor.capture)
+                geometry = (
+                    RgbdCaptureGeometry.from_stretch(observation, robot_model, profile=profile, now=time.monotonic())
+                    if profile
+                    else None
+                )
+                view = SynchronizedRgbdView(rgb, depth, world, motor.capture, geometry=geometry)
                 if not inputs or inputs[-1].capture.observation_id != motor.capture.observation_id:
                     inputs.append(view)
                     if args.registration_audit:
@@ -175,6 +198,24 @@ def main():
                 after_pause_count = source.processed_captures
                 current = source.snapshot()
                 first, last = source.collect(after=barrier, min_span_s=0.2, timeout_s=2.0)
+                if profile:
+                    for record in (first, last):
+                        measured = dict(record.views)["head"]
+                        frame = measured.geometry.visual_frame(
+                            record.fit, robot_model=robot_model, now=time.monotonic()
+                        )
+                        result["visual_frames"].append(
+                            {
+                                "observation_id": frame.capture.observation_id,
+                                "source": "same_capture_rgbd_and_eight_motors",
+                                "motor_count": len(frame.robot_before.joints),
+                                "gripper_volumes": len(frame.robot_before.gripper_bounds),
+                                "position_error_m": frame.position_error_m,
+                                "rotation_error_rad": frame.rotation_error_rad,
+                                "capture_alignment": "ideal_shared_simulator_snapshot",
+                                "execution_qualified": False,
+                            }
+                        )
                 result["rounds"].append(
                     {
                         "processed_during_pause": after_pause_count - before,

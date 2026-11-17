@@ -64,6 +64,10 @@ class ContinuousRgbdSource:
             return False
         for name, old in previous.views:
             new = current[name]
+            if (old.geometry is None) != (new.geometry is None):
+                return False
+            if old.geometry is not None and not old.geometry.equivalent_capture(new.geometry):
+                return False
             if any(
                 getattr(old.capture, key) != getattr(new.capture, key)
                 for key in ("observation_id", "earliest", "latest", "calibration_id")
@@ -118,6 +122,8 @@ class ContinuousRgbdSource:
                     raise ObservationUnavailable("invalid_rgbd_views")
                 for view in views.values():
                     view.capture.require(now=self.clock(), max_age_s=min(2.0, self.tracker.gap))
+                    if view.geometry is not None:
+                        view.geometry.require(view, now=self.clock())
                     if view.robot_guard is not None:
                         view.robot_guard.require(view.capture, view.depth, view.world, now=self.clock())
                 cap = next(iter(views.values())).capture

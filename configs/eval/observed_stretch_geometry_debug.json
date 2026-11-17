@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "calibration_id": "stretch-ideal-synchronized-model-debug-v1",
+  "scope": "simulation_geometry_assumptions",
+  "object_position_error_m": 0.003,
+  "object_rotation_error_rad": 0.02,
+  "robot_position_error_m": 0.001,
+  "robot_rotation_error_rad": 0.005
+}
