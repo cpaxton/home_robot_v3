@@ -361,8 +361,9 @@ def verify_initial_pair(reference, current, *, recovery_proof=None, reference_sh
         keys = tuple(key for key in keys if key not in {"source_hashes", "preflight_sha256"})
     if any(key not in reference or key not in current or reference[key] != current[key] for key in keys):
         raise ValueError("paired initial state or first pre-update rollout differs")
-    if reference.get("stationary_base_std_scale", 1.0) != current.get("stationary_base_std_scale", 1.0):
-        raise ValueError("normalization pair cannot change the exploration distribution")
+    for key in ("stationary_base_std_scale", "quiet_reference_std_scale"):
+        if reference.get(key, 1.0) != current.get(key, 1.0):
+            raise ValueError("normalization pair cannot change the exploration distribution")
     first = {k: v for k, v in reference["ppo"].items() if k != "advantage_normalization"}
     second = {k: v for k, v in current["ppo"].items() if k != "advantage_normalization"}
     # The reference came from run.json; current still contains dataclass tuples.
@@ -402,6 +403,7 @@ def verify_exploration_pair(reference, current):
             or current.get("training_family_scope") != "basic_general_only"
             or reference.get("stationary_base_std_scale") != 1.0
             or not 0 < current.get("stationary_base_std_scale", 1.0) < 1
+            or reference.get("quiet_reference_std_scale", 1.0) != current.get("quiet_reference_std_scale", 1.0)
             or any(k not in reference or k not in current for k in keys)
             or json.loads(json.dumps({k: reference[k] for k in keys}, allow_nan=False))
             != json.loads(json.dumps({k: current[k] for k in keys}, allow_nan=False))
@@ -515,6 +517,7 @@ def train(args):
     policy = MultiCriticPolicy(
         privileged=not args.no_privileged_critic,
         stationary_base_std_scale=getattr(args, "stationary_base_std_scale", 1.0),
+        quiet_reference_std_scale=getattr(args, "quiet_reference_std_scale", 1.0),
     )
     learner = MultiCriticPPO(policy, config)
     metadata = {
@@ -535,6 +538,7 @@ def train(args):
         "reward_configuration": reward_config.record(),
         "privileged_critic": not args.no_privileged_critic,
         "stationary_base_std_scale": policy.stationary_base_std_scale,
+        "quiet_reference_std_scale": policy.quiet_reference_std_scale,
         "actor_inputs": ["history", "preview", "motion"],
         "full_pick_place_qualified": False,
         "basic_cases_sha256": digest(args.basic_cases) if args.basic_cases else None,
@@ -715,6 +719,13 @@ def train(args):
                 int(condition.sum()) if policy.stationary_base_std_scale < 1 else 0
             )
             row["action_log_std"] = policy.log_std.detach().numpy().tolist()
+            hold_condition = policy.quiet_reference_condition(
+                {k: torch.from_numpy(v) for k, v in rollout["observations"].items()}
+            )
+            row["quiet_reference_condition_decisions"] = int(hold_condition.sum())
+            row["quiet_reference_reduced_decisions"] = (
+                int(hold_condition.sum()) if policy.quiet_reference_std_scale < 1 else 0
+            )
             with (output / "updates.jsonl").open("a") as stream:
                 stream.write(json.dumps(row, allow_nan=False) + "\n")
             if run is not None:
@@ -755,6 +766,7 @@ def train(args):
             "reward_configuration": reward_config.record(),
             "advantage_normalization": config.advantage_normalization,
             "stationary_base_std_scale": policy.stationary_base_std_scale,
+            "quiet_reference_std_scale": policy.quiet_reference_std_scale,
             "basic_cases_sha256": metadata["basic_cases_sha256"],
             "training_family_scope": metadata["training_family_scope"],
             "initial_actor_weights_sha256": metadata["initial_actor_weights_sha256"],
@@ -806,6 +818,12 @@ def main():
     parser.add_argument("--no-privileged-critic", action="store_true")
     parser.add_argument("--advantage-normalization", choices=("shared", "per_head"), default="shared")
     parser.add_argument("--stationary-base-std-scale", type=float, default=1.0)
+    parser.add_argument(
+        "--quiet-reference-std-scale",
+        type=float,
+        default=1.0,
+        help="training-only motion noise scale for constant current/future targets; gripper noise is unchanged",
+    )
     parser.add_argument("--exploration-reference-run", type=Path)
     parser.add_argument("--basic-cases", type=Path, help="explicit small general-only diagnostic case manifest")
     parser.add_argument(
@@ -822,6 +840,8 @@ def main():
         parser.error("critic epochs must be nonnegative")
     if not 0 < args.stationary_base_std_scale <= 1:
         parser.error("stationary base exploration scale must be finite and in (0,1]")
+    if not 0 < args.quiet_reference_std_scale <= 1:
+        parser.error("quiet reference exploration scale must be finite and in (0,1]")
     if args.exploration_reference_run and (
         not args.basic_cases
         or args.stationary_base_std_scale == 1.0

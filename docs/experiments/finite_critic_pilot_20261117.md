@@ -6,12 +6,12 @@ and tests joint versus independently scheduled critic fitting after correcting
 finite tracking deadline semantics. The completed previous reward pilot is
 historical; its negative physical results are not relabeled as a corrected run.
 
-Frozen source: `a179dceb7335902befdb5108a62024662396c137`, 3,564 packed inputs.
-Source hashes/archive record are in
-`logs/recovery/finite-critic-a179dceb-source-record.json`.
-The corrected wrappers physically stop and score a finite deadline as terminal;
-generic collection truncations still bootstrap. Actor-only inference and guards
-are unchanged. The new critic fitting option is training-only.
+Completed runtime: `2acc3b52ed68009fc81ff7cc4923e999e7e1fec2`, 3,572 packed
+inputs, with **1,574 fresh passing source-bound regressions** (1,044.46 s).
+Source/archive record and compact exact producers are in
+[the evidence package](../../paper/data/whole_body_control/finite_critic_pilot_v2/README.md).
+The wrappers physically stop and score a finite deadline as terminal; generic
+collection truncations still bootstrap. Actor inference and guards are unchanged.
 
 Both arms use retained scoped-feedback v4 actor weights
 `46291c71ea4dccd93feaf94d4b0e88f3deb1ee5945667964300f3c9f1c165813`, fresh critics,
@@ -35,27 +35,62 @@ This does not establish loaded carry, full agent deployment or hardware readines
 The frozen native admission replays the existing results: teacher 12/12 training,
 11/12 audit and 6/6 TAMP. Retained actor is 20/24 new cases, 6/10 existing coupled
 and 6/6 TAMP, with all 40 stops confirmed. Known contact failures remain counted.
-176 targeted tests pass on the correction and critic isolation. Full regression
-job `20261117_002837_d29cc2` and native admission job
-`20261117_002841_fc6dd2` are the explicit prerequisites for training job
-`20261117_003315_6197ed`. The earlier queued supervisor was replaced before
-learning to preserve virtualenv-based viewer restoration. At preparation time,
-PPO remains waiting for the complete fresh source receipt.
+The corrected full gate is `20261117_005528_167274`; admission is
+`20261117_005605_ab7700`. Both pass before paired PPO job
+`20261117_005750_a59bcd` starts. All initial actor/critic states, observations and
+first actions match exactly across arms. The completed run produces:
 
-Exact protocol, cases and runners are under ignored
-`logs/recovery/finite-critic-pilot-v1/`; all checkpoints, losses, per-head GAE fit
-statistics, native metrics and offline W&B records go under ignored
-`logs/manipulation/finite-critic-pilot-v1/`. A successful paired run automatically
-checks matched initial states/first actions, produces physical-outcome tables,
-and restores the retained-policy localhost viewer on port 8766. Failures abort
-learning/comparison and preserve their records; no candidate is promoted.
+| Controller | New train | New audit | Existing coupled | Unloaded TAMP prefix |
+| --- | ---: | ---: | ---: | ---: |
+| Retained comparison | 11/12 | 9/12 | 6/10 | 6/6 |
+| Corrected finite, joint critic | 10/12 | 9/12 | 6/10 | 6/6 |
+| Corrected finite, independent critic | 11/12 | 9/12 | 7/10 | 6/6 |
 
-The first full gate at source `a179dceb` completes with 1,571 passing tests and
-two compact test-policy interface failures in the new value-fit diagnostics.
-No corrected PPO starts; the prerequisite supervisor aborts and restores the
-viewer. The learner now uses the existing `evaluate()` interface as a fallback
-when a policy has no separate `values()` query. Both fitting schedules pass
-the analytic one-step learning and actor-update isolation checks. This is a
-compatibility repair, not a change to production actor inference or rewards.
-The failed source/gate/native reports remain preserved; corrected-source jobs
-use fresh paths and receipts.
+The independent arm solves existing training case `innate_mars:v2:train:coupled:4`
+without losing an existing-coupled success. On the new cases it gains audit hand
+3 and loses audit hand 2, leaving 20/24 unchanged. Across the new and existing
+coupled cohorts, worst active-hand endpoint error changes **18.19 → 13.10 mm**
+and orientation **0.0782 → 0.0619 rad**. These are scoped gains, not general
+mastery. Worst yaw jerk increases **27.80 → 53.36 rad/s³**, peak contact force
+**34.65 → 34.96 N**, and hold-base drift **0.402 → 0.437 mm**. There is no clear
+joint accuracy/stability improvement and neither candidate is promoted.
+
+All **120/120 actor evaluation stops confirm**. Each controller has the same
+three unsafe-contact case identities, no wheel lift, invalid physics or retention
+loss. TAMP remains unloaded open-jaw prefix execution, not grasp/carry success.
+The original reward, acceptance thresholds, geometry and hard guards are fixed.
+The independent arm receives all **720/720** planned post-warmup critic updates;
+the joint arm receives 612, with 16 actor-KL stops. Independent actor updates
+number 624 with 15 KL stops. The value-budget implementation works as intended;
+that alone does not establish better deterministic physical control.
+
+Each arm completes 16,384 decisions, including 15,360 actor-update decisions.
+Physical ticks are 19,571 joint and 19,662 independent. Offline W&B IDs are
+`va12m86z` and `84m8vafn`; the comparison ID is in the evidence package.
+Raw traces, checkpoints and per-update diagnostics remain ignored under
+`logs/manipulation/finite-critic-pilot-v2/`. Compact results preserve every case,
+initial/reference/model fingerprints, safety outcomes and active-hand metrics.
+The retained-policy viewer is restored on localhost:8766 after completion.
+Retained remains an experimental comparison, not a finished controller.
+
+### Historical first gate
+
+The preceding source `a179dceb` packs 3,564 inputs and produces 1,571 passing
+tests with two compact test-policy interface failures in the new value-fit
+diagnostics. No PPO starts under that failed receipt. The learner is repaired to
+fall back to its existing `evaluate()` interface when a policy has no separate
+`values()` method. The fresh corrected-source gate above includes that repair.
+The original failed-source records remain in `finite_critic_pilot_v1/`; they are
+not relabeled as successful runtime evidence.
+
+### Next controlled improvement
+
+The [architecture review](../rl/WHOLE_BODY_ARCHITECTURE_REVIEW.md) finds that
+constant std 0.02 repeatedly interrupts the two-second quiet hold in stochastic
+training. A frozen-actor diagnostic reduces motion exploration only for an
+announced stationary reference: 0/8 → 3/8 stochastic successes, with all stops
+confirmed and the same contact-failure identity. This changes neither actor mean
+nor deterministic control. The next paired training experiment holds reward,
+finite semantics, three independent critic epochs, task mix and final budget
+fixed, and isolates that exploration change. It must pass a fresh source gate;
+this completed receipt does not qualify later source changes.

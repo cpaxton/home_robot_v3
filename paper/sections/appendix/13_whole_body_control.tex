@@ -919,3 +919,22 @@ contact load from 34.65 to 38.22 N and peak yaw jerk from 19.57 to
 further objective/optimizer ablations, not a policy-performance or hardware
 qualification claim. Compact cases and exact producers are in
 \texttt{wrapper\_reward\_training\_v2/}.
+
+
+\paragraph{Finite contract and critic audit.}
+The tracking wrappers previously scored and physically stopped finite deadlines
+while bootstrapping their final observations. They now terminate those contracts;
+genuine collection truncations still bootstrap. An optional independent value
+budget separates critic fitting from actor KL stopping. Fresh source-bound tests
+pass 1,574 cases. With original rewards, matched initial states and 16,384
+decisions per arm, corrected joint/independent PPO scores are 19/24 and 20/24
+new cases (retained 20/24), 6/10 and 7/10 existing coupled (retained 6/10),
+and 6/6 unloaded TAMP prefixes each. All 120 actor stops confirm. Independent
+fitting receives all 720 planned critic updates and reduces worst active-hand
+endpoint error from 18.19 to 13.10 mm, but worst yaw jerk rises from 27.80 to
+53.36 rad/s$^3$. Neither candidate is promoted. A separate frozen-actor
+stationary-reference noise probe yields 0/8 to 3/8 stochastic successes without
+changing mean commands; it motivates a training ablation, not a deterministic
+policy improvement claim. Compact producers and complete case outcomes are in
+\texttt{finite\_critic\_pilot\_v2/} and
+\texttt{critic\_architecture\_audit\_v1/}.

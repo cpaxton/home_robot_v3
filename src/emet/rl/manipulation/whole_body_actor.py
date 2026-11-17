@@ -163,11 +163,15 @@ class MultiCriticPolicy(nn.Module):
         *,
         base_rate_feedback=True,
         base_navigation_feedback=None,
+        quiet_reference_std_scale=1.0,
     ):
         super().__init__()
         if isinstance(stationary_base_std_scale, bool) or not 0 < stationary_base_std_scale <= 1:
             raise ValueError("stationary base exploration scale must be finite and in (0,1]")
         self.stationary_base_std_scale = float(stationary_base_std_scale)
+        if isinstance(quiet_reference_std_scale, bool) or not 0 < quiet_reference_std_scale <= 1:
+            raise ValueError("quiet reference exploration scale must be finite and in (0,1]")
+        self.quiet_reference_std_scale = float(quiet_reference_std_scale)
         self.actor = WholeBodyActor(
             robot, hidden, base_rate_feedback=base_rate_feedback, base_navigation_feedback=base_navigation_feedback
         )
@@ -192,17 +196,45 @@ class MultiCriticPolicy(nn.Module):
     def distribution(self, obs):
         mean = self.actor(obs)
         std = self.log_std.clamp(-6, 0).exp()
+        factors = torch.ones_like(mean)
         if self.stationary_base_std_scale != 1.0 and self.actor.encoder.profile.wheel_bodies:
             # Retain this profile guard even though the condition has one too:
             # the condition is also queried directly for training telemetry.
             # Training distribution only: retain mean/base authority, even when
             # a stationary announced reference still requires base correction.
             factor = torch.where(self.base_exploration_condition(obs), self.stationary_base_std_scale, 1.0)
-            std = std.expand_as(mean).clone()
             # Profile.action_size and actor.action_mask put forward/yaw first,
             # followed by arm joints and grip, whenever wheel_bodies is set.
-            std[:, :2] = std[:, :2] * factor[:, None]
+            factors[:, :2] = factor[:, None]
+        if self.quiet_reference_std_scale != 1.0:
+            factor = torch.where(self.quiet_reference_condition(obs), self.quiet_reference_std_scale, 1.0)
+            # Train motion corrections with less noise during announced holds.
+            # Means, gripper exploration and actuator authority are unchanged.
+            # Overlapping noise options use the smaller scale, not their product.
+            factors[:, :-1] = torch.minimum(factors[:, :-1], factor[:, None])
+        if self.stationary_base_std_scale != 1.0 or self.quiet_reference_std_scale != 1.0:
+            std = std * factors
         return torch.distributions.Normal(mean, std)
+
+    def quiet_reference_condition(self, obs):
+        """Constant current/future motion targets, using sensor-visible inputs.
+
+        Preview row zero is past reference; rows one onward include the present.
+        Exact zero announced twist and constant targets/masks identify a hold.
+        Measured error/velocity never disable correction. A free base may still
+        assist an active hand. Gripper intent does not gate motion exploration.
+        """
+        fields, pf = self.actor.encoder.fields, self.actor.encoder.preview_fields
+        history, preview = obs["history"][:, -1], obs["preview"][:, 1:]
+        constant = torch.ones(len(history), dtype=torch.bool, device=history.device)
+        for name in ("base_error", "base_mask", "hand_error", "hand_mask"):
+            values = preview[:, :, pf[name]]
+            constant &= (values == values[:, :1]).all(dim=(1, 2))
+        for name in ("base_mask", "hand_mask"):
+            constant &= (history[:, fields[name]] == preview[:, 0, pf[name]]).all(dim=-1)
+        active = (history[:, fields["base_mask"]] > 0.5).any(dim=-1)
+        active |= (history[:, fields["hand_mask"]] > 0.5).any(dim=-1)
+        return active & constant & (obs["motion"] == 0).all(dim=-1)
 
     def base_exploration_condition(self, obs):
         """An explicitly constrained, constant base preview with an active hand.

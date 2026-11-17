@@ -54,7 +54,11 @@ def test_fresh_exploration_pair_binds_initial_state_without_claiming_same_rollou
         del changed[key]
         with pytest.raises(ValueError, match="identical fresh initial"):
             verify_exploration_pair(first, changed)
-    for change in ({"stationary_base_std_scale": 1.0}, {"basic_cases_sha256": None}):
+    for change in (
+        {"stationary_base_std_scale": 1.0},
+        {"basic_cases_sha256": None},
+        {"quiet_reference_std_scale": 0.125},
+    ):
         with pytest.raises(ValueError, match="identical fresh initial"):
             verify_exploration_pair(first, second | change)
     for value in (float("nan"), float("inf"), -float("inf")):

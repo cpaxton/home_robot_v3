@@ -181,10 +181,44 @@ Do not reduce jerk or force protection as an unsupported explanation for the
 accuracy regression. Current effort cost is squared normalized action, not
 measured electrical energy. Keep that terminology precise.
 
-Next compare two fresh-source runs using the retained actor, the original reward,
-and the corrected finite-contract semantics: historical joint critic updates
-versus an independent three-epoch critic budget. Keep the 50/50 general/TAMP
-physical-tick mix, fixed final budget, unchanged acceptance and separate audit
-cases. Evaluate critic calibration and deterministic physical outcomes separately.
-Only then isolate reward components or change the actor head. No hardware motion
-or policy promotion follows from these diagnostics.
+The corrected finite-contract paired pilot now completes at source `2acc3b52`,
+with **1,574 fresh passing tests**. Joint/independent results are **19/24 and
+20/24** on new cases (retained 20/24), **6/10 and 7/10** on existing coupled
+(retained 6/10), and **6/6** unloaded TAMP prefixes each. Independent fitting
+receives its full 720 critic updates versus 612 joint updates and solves one old
+case, but worst yaw jerk rises. All 120 actor stops confirm. Neither candidate
+is promoted; [the report](../experiments/finite_critic_pilot_20261117.md) records
+all case changes and safety metrics. Fixing the bootstrap contract is necessary
+for a coherent objective, not evidence that this alone solves accuracy.
+
+### Quiet-hold exploration is a measured training obstacle
+
+Saved stochastic traces at std 0.02 have no native two-second quiet hold in any
+of 14 deadline episodes. Eight spend a majority of the late window within the
+pose contract, but none spends a majority quiet. Thus pose accuracy alone is
+not the entire training problem: persistent exploration prevents observing
+successful settling in states the deterministic actor can already hold.
+
+A same-actor/same-noise-stream eight-case probe reduces motion noise by 0.125
+only for zero announced twist with constant current/future pose targets and
+masks. Stochastic success changes **0/8 → 3/8**; all 16 stops confirm. Both
+variants have the same unsafe-contact identity, no wheel lift or invalid physics.
+Worst linear/yaw jerk changes 24.80/74.44 → 18.23/69.52 in respective SI units.
+This is a training-distribution diagnostic, not a better deterministic policy.
+
+**Added:** optional `--quiet-reference-std-scale` (default 1) conditions motion
+exploration using named sensor-visible preview fields. Sampling and PPO
+likelihood/entropy share that distribution. Upcoming target/mask changes or even
+tiny nonzero twist retain full exploration. Correction means remain unchanged,
+including for large errors, measured motion and free-base hand tasks. Gripper
+exploration stays unchanged. It introduces no output filter or action deadband;
+actor-only exports need no inference change. Overlapping base-noise settings use
+the smaller factor, rather than compounding reductions.
+
+Next run a fixed-budget noise pair with original reward, corrected finite
+semantics, independent critics and the same 50/50 general/TAMP tick mixture.
+Separate deterministic physical readouts from stochastic training success.
+Then isolate reward terms and broaden reachable reset/posture coverage; test a
+less cancellation-prone actor head if those interventions do not improve hand
+accuracy without worsening jerk/force. No hardware motion or promotion follows
+from these diagnostics.

@@ -8,6 +8,14 @@
       Completed: 20/24 retained → 18/24 new reward and 19/24 legacy PPO;
       existing coupled 6/10 → 6/10 and 7/10; all preserve 6/6 TAMP prefixes.
       Neither candidate is promoted. [Paired report](docs/experiments/wrapper_reward_training_20261116.md).
+- [x] Audit reward/critic/actor architecture, fix finite stopped-deadline targets,
+      and compare independent critic fitting: 1,574 tests; 20/24 new cases,
+      7/10 existing coupled, but yaw jerk worsens. No candidate promotion.
+      [Architecture review](docs/rl/WHOLE_BODY_ARCHITECTURE_REVIEW.md).
+- [ ] Train the stationary-reference exploration ablation with unchanged mean
+      controller, gripper authority, rewards and safety limits. Compare fixed
+      final checkpoints on identical cases; 0/8 → 3/8 frozen stochastic probe
+      is not evidence of improved deterministic policy.
 - [ ] Isolate fine-pose weighting, progress and pose-gated velocity reward
       changes; measure critic calibration and late-hold exploration before
       extending the reward PPO budget. Keep jerk/force protections active.

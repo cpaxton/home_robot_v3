@@ -1,6 +1,6 @@
 # Active Mars controller work
 
-Updated 2026-11-16. This is the operational index for ownership, branches,
+Updated 2026-11-17. This is the operational index for ownership, branches,
 validation and the next milestone. The
 [technical next-steps plan](../plans/mars_wbc_next_steps.md) owns the detailed
 implementation sequence; experiment reports own measured results. Older
@@ -42,29 +42,26 @@ files. Parent merges do not promote an actor or qualify hardware.
 
 ## Current state and evidence
 
-**Architecture/critic audit is in progress (2026-11-17).** The
-[architecture review](WHOLE_BODY_ARCHITECTURE_REVIEW.md) keeps the coupled
-pose interface and sensor-history actor, and identifies a concrete critic-target
-mismatch: finite deadline wrappers bootstrapped a physically stopped state.
-Fourteen frozen native deadline probes show 17–38 units of continuation credit
-versus a terminal bonus/penalty of 2. The wrappers now mark these deadlines
-terminal, while generic collection truncations still bootstrap. An opt-in
-independent critic epoch budget prevents actor KL stopping from cutting value
-fitting short. Actor inference is unchanged. A frozen region-aware feedback
-probe improves selected successes 2/6 → 4/6 but introduces contact and worsens
-one reverse case, so it is not exported. Targeted tests/new full-source evidence
-are required before corrected PPO; historical receipts do not qualify source edits.
-176 targeted tests pass. The first full gate at source `a179dceb` reports
-1,571 passes and two failures in compact test policies lacking a separate
-`values()` method. The diagnostics now preserve the original `evaluate()`
-interface; all 54 focused compatibility/critic tests pass, including learning
-with both critic schedules. No corrected PPO starts under the failed receipt,
-and the viewer is restored. A fresh corrected-source gate and automatic paired
-pilot follow; the [protocol report](../experiments/finite_critic_pilot_20261117.md)
-keeps the original reward/actor fixed and compares joint versus independent
-critic fitting. The retained policy remains a comparison anchor, not a finished
-controller; the objective is improved physical performance.
+**Architecture/critic audit and corrected PPO are complete (2026-11-17).**
+The [architecture review](WHOLE_BODY_ARCHITECTURE_REVIEW.md) keeps coupled
+pose inputs/history and fixes a concrete critic-target mismatch: finite tracking
+deadlines bootstrapped physically stopped states. The opt-in independent critic
+budget also separates value fitting from actor KL stopping. Frozen source
+`2acc3b52` passes **1,574 source-bound tests** and both corrected arms complete
+16,384 decisions. Retained/joint/independent are **20/24, 19/24, 20/24** on new
+cases, **6/10, 6/10, 7/10** on existing coupled and **6/6** TAMP prefixes each.
+All 120 actor stops confirm; known contact identities persist, with no wheel lift.
+Independent critic fitting reduces worst active-hand error but increases worst
+yaw jerk. Neither candidate is promoted. Exact results and the preserved failed
+first preflight are in the [completed report](../experiments/finite_critic_pilot_20261117.md).
 
+Retained is a comparison anchor, not a satisfactory controller. A frozen-actor
+probe finds stationary-reference exploration is a concrete remaining obstacle:
+0/8 → 3/8 stochastic successes when motion noise falls during announced holds.
+The mean commands and gripper noise are unchanged. Implement and test this as
+an optional training distribution, then run a fixed-budget pair with independent
+critics and unchanged rewards/guards. Source changes require fresh regression
+and teacher admission; the completed 2acc receipt cannot qualify them.
 
 **Wrapper reward work:** the [reward specification](../experiments/wrapper_reward_20261116.md)
 records the legacy 20 Hz objective and an opt-in, versioned contract-tracking
@@ -85,9 +82,8 @@ all three. All 120 actor stops confirm; three existing contact-failure identitie
 remain per controller, and some jerk/contact maxima worsen. Teacher is 12/12
 training and 11/12 audit. Legacy resolves the old reverse 10.09 mm false
 equilibrium to 0.0154 mm but regresses other cases. This is a tradeoff, not a
-general controller improvement. Keep the retained actor. No PPO job remains
-active; the viewer is restored on 8766. Next isolate reward components and
-critic/late-hold exploration effects before a larger budget. See the
+general controller improvement. Keep the retained actor. That historical PPO pair is complete. Subsequent critic and exploration work
+is tracked above; its viewer/job state supersedes this older snapshot. See the
 [completed paired report](../experiments/wrapper_reward_training_20261116.md).
 
 **Earlier PPO:** The 32,768-decision joint fine-tuning run completes

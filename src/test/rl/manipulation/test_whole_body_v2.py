@@ -121,9 +121,10 @@ def test_separate_advantage_normalization_removes_reward_unit_scaling():
 
 
 @pytest.mark.parametrize("base_scale", [1.0, 0.1])
-def test_ppo_changes_actor_and_all_three_critics_with_finite_losses(base_scale):
+@pytest.mark.parametrize("hold_scale", [1.0, 0.125])
+def test_ppo_changes_actor_and_all_three_critics_with_finite_losses(base_scale, hold_scale):
     torch.manual_seed(21)
-    model = MultiCriticPolicy(hidden=16, stationary_base_std_scale=base_scale)
+    model = MultiCriticPolicy(hidden=16, stationary_base_std_scale=base_scale, quiet_reference_std_scale=hold_scale)
     obs = observation(count=16)
     obs["preview"][:, :, 7] = 0.01
     with torch.no_grad():
@@ -151,6 +152,69 @@ def test_ppo_changes_actor_and_all_three_critics_with_finite_losses(base_scale):
 def test_base_exploration_rejects_invalid_scales(value):
     with pytest.raises(ValueError, match="exploration scale"):
         MultiCriticPolicy(stationary_base_std_scale=value)
+
+
+@pytest.mark.parametrize("value", [0, -0.1, 1.01, float("nan"), float("inf"), True])
+def test_hold_exploration_rejects_invalid_scales(value):
+    with pytest.raises(ValueError, match="exploration scale"):
+        MultiCriticPolicy(quiet_reference_std_scale=value)
+
+
+@pytest.mark.parametrize("robot", ["innate_mars", "stretch"])
+def test_hold_noise_uses_reference_and_preserves_correction_gripper_and_likelihood(robot):
+    torch.manual_seed(52)
+    model = MultiCriticPolicy(robot=robot, hidden=16, quiet_reference_std_scale=0.125)
+    with torch.no_grad():
+        model.actor.gain.weight.normal_(0, 0.1)
+    obs = observation(robot, count=11)
+    f, pf = model.actor.encoder.fields, model.actor.encoder.preview_fields
+    obs["preview"][:, :, pf["hand_error"]][..., 0] = 0.01
+    obs["motion"][1, 8] = 1e-12  # even tiny announced hand rotation is motion
+    obs["preview"][2, -1, pf["hand_error"].start + 1] = 1e-12
+    obs["preview"][3, -1, pf["base_error"].start] = 1e-12
+    obs["preview"][4, -1, pf["hand_mask"]] = 0  # upcoming activity change
+    obs["preview"][5, -1, pf["base_mask"]] = 0
+    obs["preview"][6, :, pf["hand_mask"]] = 0  # current token/preview disagree
+    for name in ("hand_mask", "base_mask"):
+        obs["history"][7, :, f[name]] = 0
+        obs["preview"][7, :, pf[name]] = 0  # no active motion goal
+    obs["history"][8, :, f["base_mask"]] = 0
+    obs["preview"][8, :, pf["base_mask"]] = 0  # free base still assists hand
+    obs["history"][9, :, f["base_velocity"]] = 0.1
+    obs["preview"][9, :, pf["hand_error"]][..., 0] = 0.2  # far/moving is still correctable
+    obs["history"][10, :, f["hand_mask"]] = 0
+    obs["preview"][10, :, pf["hand_mask"]] = 0  # base-only hold
+    obs["preview"][0, 0, pf["hand_error"]] = 0.2  # past motion is not future motion
+    expected_condition = [True, False, False, False, False, False, False, False, True, True, True]
+    assert model.quiet_reference_condition(obs).tolist() == expected_condition
+    mean = model.actor(obs).detach().clone()
+    expected_std = model.log_std.clamp(-6, 0).exp().expand_as(mean).clone()
+    expected_std[torch.tensor(expected_condition), :-1] *= 0.125
+    dist = model.distribution(obs)
+    torch.testing.assert_close(dist.mean, mean, rtol=0, atol=0)
+    torch.testing.assert_close(dist.scale, expected_std, rtol=0, atol=0)
+    assert torch.count_nonzero(mean[9, :-1]) > 0  # no motion cutoff or pose-error deadband
+    action = dist.sample() * model.actor.action_mask(obs)
+    log, entropy, _ = model.evaluate(obs, action)
+    expected = torch.distributions.Normal(mean, expected_std)
+    mask = model.actor.action_mask(obs)
+    torch.testing.assert_close(log, (expected.log_prob(action) * mask).sum(-1), rtol=0, atol=0)
+    torch.testing.assert_close(entropy, (expected.entropy() * mask).sum(-1), rtol=0, atol=0)
+    (-log.mean()).backward()
+    assert model.log_std.grad is not None and torch.isfinite(model.log_std.grad).all()
+
+
+def test_hold_and_base_noise_options_use_minimum_and_do_not_change_exported_actor():
+    model = MultiCriticPolicy(hidden=16, stationary_base_std_scale=0.1, quiet_reference_std_scale=0.125)
+    control = MultiCriticPolicy(hidden=16)
+    control.load_state_dict(model.state_dict(), strict=True)
+    obs = observation(count=1)
+    obs["preview"][:, :, 7] = 0.01
+    torch.testing.assert_close(control.actor(obs), model.actor(obs), rtol=0, atol=0)
+    expected = model.log_std.clamp(-6, 0).exp()[None].clone()
+    expected[:, :2] *= 0.1
+    expected[:, 2:-1] *= 0.125
+    torch.testing.assert_close(model.distribution(obs).scale, expected, rtol=0, atol=0)
 
 
 def test_default_exploration_keeps_identical_seeded_samples_and_probabilities():
@@ -550,7 +614,9 @@ def test_exported_v2_actor_loads_through_source_bound_tamp_backend(tmp_path):
 
 @pytest.mark.parametrize("robot", ["innate_mars", "stretch"])
 @pytest.mark.parametrize("mode", ["active_hand", "partial_base"])
-@pytest.mark.parametrize("config", [BaseNavigationFeedback(), BaseNavigationFeedback(reference_tracking=True, heading_gain_scale=2)])
+@pytest.mark.parametrize(
+    "config", [BaseNavigationFeedback(), BaseNavigationFeedback(reference_tracking=True, heading_gain_scale=2)]
+)
 def test_navigation_structure_preserves_coupled_and_partial_mask_actions(robot, mode, config):
     torch.manual_seed(82)
     original = WholeBodyActor(robot, base_rate_feedback=False)
@@ -635,7 +701,9 @@ def test_navigation_contract_rejects_invalid_units(xy, yaw):
         BaseNavigationFeedback(xy, yaw)
 
 
-@pytest.mark.parametrize("config", [BaseNavigationFeedback(), BaseNavigationFeedback(reference_tracking=True, heading_gain_scale=2)])
+@pytest.mark.parametrize(
+    "config", [BaseNavigationFeedback(), BaseNavigationFeedback(reference_tracking=True, heading_gain_scale=2)]
+)
 def test_navigation_bundle_pins_contract_and_rejects_incompatible_declared_tolerance(tmp_path, config):
     cfg = replace(
         ManipulationConfig(),
@@ -712,7 +780,15 @@ def test_heading_gain_calibration_is_explicit_and_does_not_change_other_rows():
     torch.testing.assert_close(actor(obs)[0, 2:], expected[0, 2:], rtol=0, atol=0)
 
 
-@pytest.mark.parametrize("kwargs", [{"reference_tracking": 1}, {"heading_gain_scale": True}, {"heading_gain_scale": 0}, {"heading_gain_scale": float("nan")}])
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"reference_tracking": 1},
+        {"heading_gain_scale": True},
+        {"heading_gain_scale": 0},
+        {"heading_gain_scale": float("nan")},
+    ],
+)
 def test_reference_tracking_rejects_invalid_configuration(kwargs):
     with pytest.raises(ValueError):
         BaseNavigationFeedback(**kwargs)
@@ -725,7 +801,11 @@ def test_reference_tracking_contract_is_versioned_and_fail_closed():
     record = config.record()
     assert record["format"] == "signed_base_navigation_v2"
     assert BaseNavigationFeedback.from_record(record) == config
-    for broken in ({**record, "format": "signed_base_navigation_v1"}, {k: v for k, v in record.items() if k != "heading_gain_scale"}, {**record, "unknown": True}):
+    for broken in (
+        {**record, "format": "signed_base_navigation_v1"},
+        {k: v for k, v in record.items() if k != "heading_gain_scale"},
+        {**record, "unknown": True},
+    ):
         with pytest.raises(ValueError, match="feedback contract"):
             BaseNavigationFeedback.from_record(broken)
 
