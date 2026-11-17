@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "scope": "same-capture transport cause and stationary live RGBD tracking repair",
+  "base_checkpoint": "1c10e344",
+  "raw_root": ".tamp-runs/observed-depth-20261117",
+  "observed_task_success_assessed": false,
+  "execution_qualified": false,
+  "legacy_rgb_codec": "jpeg",
+  "repair_rgb_codec": "png",
+  "depth_transport_changed": false,
+  "tracker_thresholds_changed": false,
+  "wire_audit_job": "20261117_093749_31e804",
+  "same_capture_replay": {
+    "job": "20261117_093911_43db76",
+    "wire_rgb_wire_depth_accepted": false,
+    "wire_rgb_original_depth_accepted": false,
+    "original_rgb_wire_depth_accepted": true,
+    "original_rgb_original_depth_accepted": true,
+    "wire_depth_max_error_m": 0.0009999275207519531,
+    "wire_rgb_changed_pixels": 67233
+  },
+  "live_cohorts": [
+    {
+      "job": "20261117_094228_2ef7af",
+      "directory": "lossless-live",
+      "head_tilt": -0.7,
+      "provenance_enabled": true,
+      "passed": true,
+      "tracked_captures": 41,
+      "pause_windows_passed": 4,
+      "pause_windows_total": 4,
+      "updates_during_pauses": [
+        10,
+        11,
+        9,
+        10
+      ],
+      "exact_retained_rgb_frames": 8
+    },
+    {
+      "job": "20261117_094430_eecfb4",
+      "directory": "lossless-repeat",
+      "head_tilt": -0.95,
+      "provenance_enabled": false,
+      "passed": true,
+      "tracked_captures": 43,
+      "pause_windows_passed": 4,
+      "pause_windows_total": 4,
+      "updates_during_pauses": [
+        10,
+        11,
+        10,
+        11
+      ]
+    }
+  ],
+  "final_regression_job": "20261117_094851_f43292",
+  "final_junit": "final-regressions.xml",
+  "paper_build_job": "20261117_094333_00c344",
+  "paper_build_passed": true,
+  "next_gate": "complete live observed source/refiner and actual observed transfer",
+  "final_tests": {
+    "tests": 96,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  }
+}

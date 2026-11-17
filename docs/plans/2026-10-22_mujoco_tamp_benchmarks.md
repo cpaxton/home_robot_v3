@@ -5,6 +5,15 @@ matched planning conditions, separate upstream and adapted robots. This extends
 [the household design](2026-10-18_household_agent_tamp.md); it does not replace its
 fixed-population, reference-certification, or observed-input gates.
 
+The harness is intended to support these task families for reusable agents and
+policies, beyond baseline comparisons. Its stable boundary should bind resets,
+permitted observations, parameterized actions, planning/execution separation,
+effect receipts, native horizons, goal checks and replayable records. Online
+agents, frozen synthesized programs and classical planners should use that same
+boundary where their access assumptions match. Agentic GenTAMP and TAMPAgent
+motivate generalization and observe/clear/manipulate task families; adapting
+their tasks or interfaces is distinct from reproducing their published systems.
+
 Machine-readable program: `configs/eval/mujoco_tamp_program.json`. It remains
 non-executable until real certified episodes and provenance are available.
 

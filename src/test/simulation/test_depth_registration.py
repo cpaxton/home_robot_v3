@@ -113,3 +113,38 @@ def test_head_camera_manager_registers_rigid_pair_instead_of_rendering_new_depth
     np.testing.assert_array_equal(imagery.cam_d435i_depth[:, :2], 0.0)
     np.testing.assert_array_equal(imagery.cam_d435i_depth[:, 2:], 1.0)
     np.testing.assert_allclose(imagery.cam_d435i_K, rendered_camera_intrinsics(90.0, 6, 4))
+
+
+def test_original_registration_packet_matches_timed_camera_sample_and_clears_on_replacement(monkeypatch):
+    from types import SimpleNamespace
+
+    import mujoco
+
+    from emet.core.rgbd_registration import decode_registration
+    from emet.simulation.stretch_mujoco.datamodels.status_stretch_camera import StatusStretchCameras
+    from emet.simulation.stretch_mujoco.enums.stretch_cameras import StretchCameras
+    from emet.simulation.stretch_mujoco.mujoco_server_camera_manager import MujocoServerCameraManagerSync
+
+    monkeypatch.setenv("EMET_SIM_RGBD_PROVENANCE", "1")
+    model = mujoco.MjModel.from_xml_string(
+        "<mujoco><worldbody><body>"
+        '<camera name="d435i_camera_rgb" fovy="90"/>'
+        '<camera name="d435i_camera_depth" pos="1 0 0" fovy="90"/>'
+        "</body></worldbody></mujoco>"
+    )
+    frame = StatusStretchCameras.default()
+    rgb, depth = np.zeros((4, 6, 3), np.uint8), np.ones((4, 6), np.float32)
+    frame.set_camera_data(StretchCameras.cam_d435i_rgb, rgb, timestamp_ns=100, capture_end_ns=110)
+    frame.set_camera_data(StretchCameras.cam_d435i_depth, depth, timestamp_ns=100, capture_end_ns=110)
+    MujocoServerCameraManagerSync._register_head_depth(
+        SimpleNamespace(mujoco_server=SimpleNamespace(mjmodel=model)), frame
+    )
+    packet = frame.head_depth_registration
+    decoded = decode_registration(packet)
+    np.testing.assert_array_equal(decoded["raw_depth"], depth)
+    np.testing.assert_array_equal(decoded["registered_depth"], frame.cam_d435i_depth)
+    assert packet["rgb_interval_ns"] == packet["depth_interval_ns"] == [100, 110]
+    restored = StatusStretchCameras.from_dict(frame.to_dict())
+    assert restored.head_depth_registration == packet
+    restored.set_camera_data(StretchCameras.cam_d435i_depth, depth, timestamp_ns=120, capture_end_ns=130)
+    assert restored.head_depth_registration is None

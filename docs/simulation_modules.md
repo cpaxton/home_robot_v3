@@ -151,6 +151,16 @@ uv run emet test src/test/config/test_robosuite_load_utils.py \
 
 ### Observed manipulation camera evidence
 
+[`rgb_encoding.py`](../src/emet/simulation/rgb_encoding.py) selects the explicit
+Stretch full/servo RGB wire profile: legacy JPEG by default, lossless PNG with
+`EMET_SIM_RGB_CODEC=png`. The existing client decoder accepts both. The
+[`rgbd_registration.py`](../src/emet/core/rgbd_registration.py) JSON sensor packet
+preserves original RGB/raw-depth grids, aligned depth, calibration and acquisition
+intervals using lossless compressed bytes. `EMET_SIM_RGBD_PROVENANCE=1` enables it
+in the head camera manager; the status object invalidates it when either head
+channel changes. The Stretch full observation and `Observations` carry it without
+retiming. Reprojection is validated before diagnostic use; ownership is not inferred.
+
 `stretch_mujoco/mujoco_server_camera_manager.py` and
 `stretch_mujoco/datamodels/status_stretch_camera.py` preserve each renderer's
 acquisition interval while holding the shared physics/render lock. RGB metadata
@@ -205,8 +215,17 @@ head-camera producer while its consumer pauses. `--consumer-pause-s` defaults to
 3.0 and must exceed the unchanged 1.5-second tracking gap; `--rounds` defaults to
 2; `--head-tilt` defaults to -0.7. It uses an explicit operator colour seed and
 known cylinder prior, eight same-sample motors and simulator camera localization.
-The ordinary ZMQ stream does not expose raw registration provenance, so this
-diagnostic explicitly lacks `RobotViewGuard`. Original input archives, source
+This diagnostic does not install `RobotViewGuard`; optional original registration
+provenance is archived separately with the flag below. Input archives, source
 hashes, capture intervals, dispatch audit and failure feedback are retained.
 It uses CPU OSMesa via managed jobs and requires no VLM. This is a stationary
 candidate-source check, not observed pick/place or hardware acceptance.
+
+The live script now accepts `--rgb-codec jpeg|png` (default JPEG) and
+`--registration-audit` (default off). The latter archives the optional original
+sensor packet alongside ordinary wire pixels; tracking continues to use the
+ordinary decoded observation. `scripts/eval_rgbd_transport.py --recording DIR
+--output FILE` compares original/wire RGB and depth from the same first two
+captures, keeping model, seed pixels and tracker thresholds fixed. It rejects
+bounded archive tails that no longer contain the original reference capture.
+See [the transport cause and live checks](experiments/observed_rgbd_transport_20261117.md).

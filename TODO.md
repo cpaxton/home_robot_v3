@@ -27,6 +27,11 @@
       add continuous tracking and whole-camera interference rejection. Normal
       0.266-second live camera updates still expose incompatible isolated depth
       returns; continuous processing alone does not resolve association.
+      [Transport cause and repair](docs/experiments/observed_rgbd_transport_20261117.md):
+      same-frame replay isolates JPEG colour corruption. PNG transport passes
+      41/43 tracked captures in separate stationary views, four consumer-pause
+      windows each; one uses no provenance channel. Full observed execution
+      source/refiner assembly remains the next gate.
 
 - [ ] Profile failed-search cost without answer overrides or target-specific rules:
       final S0 seed 1 misses the receptacle in both arms but candidate takes

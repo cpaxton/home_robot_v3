@@ -176,6 +176,7 @@ class Observations:
 
     task_observations: dict[str, Any] | None = None
     image_timing: dict[str, Any] | None = None
+    rgbd_registration: dict[str, Any] | None = None  # Optional original sensor grids/calibration; no scene labels.
 
     # Sequence number - which message was this?
     seq_id: int = -1
@@ -286,6 +287,7 @@ class Observations:
             is_holding=data.get("is_holding"),
             task_observations=data.get("task_observations"),
             image_timing=data.get("image_timing"),
+            rgbd_registration=data.get("rgbd_registration"),
             seq_id=data.get("seq_id"),
             is_simulation=data.get("is_simulation"),
             is_pose_graph_node=data.get("is_pose_graph_node"),

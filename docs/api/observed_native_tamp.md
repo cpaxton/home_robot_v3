@@ -136,6 +136,15 @@ The [November 17 camera-source diagnostics](../experiments/observed_camera_sourc
 preserve normal-cadence association failures as well as delayed-camera failures.
 Continuous processing is necessary plumbing, not a demonstrated fix for them.
 
+The subsequent [same-capture transport investigation](../experiments/observed_rgbd_transport_20261117.md)
+isolates the live first-update failure to JPEG RGB colour corruption: original
+RGB passes with either original or ordinary transported depth. An explicit
+lossless Stretch wire profile (`EMET_SIM_RGB_CODEC=png`, legacy JPEG default)
+then passes two stationary live camera diagnostics, including one without the
+optional raw-provenance channel. This closes that transport/cadence diagnostic,
+not the distinct private-snapshot robot-interference, collision-source or full
+observed-transfer gates. Sensor/model uncertainty budgets remain required.
+
 `ObservedNativeAdapter(robot, source=..., refine=..., tasks=...)` is deliberately
 explicit. `source.input_mode` must be `observed`.
 

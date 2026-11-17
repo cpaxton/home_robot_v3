@@ -42,6 +42,17 @@ def main():
     parser.add_argument("--consumer-pause-s", type=float, default=3.0)
     parser.add_argument("--rounds", type=int, default=2)
     parser.add_argument("--head-tilt", type=float, default=-0.7)
+    parser.add_argument(
+        "--rgb-codec",
+        choices=("jpeg", "png"),
+        default="jpeg",
+        help="Explicit wire RGB profile; PNG preserves sensor pixels. Depth transport is unchanged.",
+    )
+    parser.add_argument(
+        "--registration-audit",
+        action="store_true",
+        help="Archive original sensor grids/calibration alongside the ordinary wire observation.",
+    )
     args = parser.parse_args()
     if (
         not np.isfinite([args.consumer_pause_s, args.head_tilt]).all()
@@ -55,6 +66,8 @@ def main():
     if config.no_cameras or config.robot != "stretch":
         parser.error("requires simulated Stretch cameras")
     os.environ["EMET_SIM_SYNCHRONIZED_RGBD"] = "1"
+    os.environ["EMET_SIM_RGB_CODEC"] = args.rgb_codec
+    os.environ["EMET_SIM_RGBD_PROVENANCE"] = "1" if args.registration_audit else "0"
     os.environ["EMET_PHYSICAL_EXECUTION"] = "1"
     os.environ["EMET_PHYSICAL_AUDIT"] = str(out / "actuation.jsonl")
     result = {
@@ -67,12 +80,18 @@ def main():
                 Path(__file__),
                 repo / "src/emet/controller/manipulation/continuous_rgbd.py",
                 repo / "src/emet/controller/manipulation/multiview_rgbd_tracking.py",
+                repo / "src/emet/core/rgbd_registration.py",
+                repo / "src/emet/simulation/rgb_encoding.py",
+                repo / "src/emet/simulation/mujoco_server_stretch.py",
+                repo / "src/emet/simulation/stretch_mujoco/mujoco_server_camera_manager.py",
             ]
         },
         "sim_config_sha256": hashlib.sha256(args.sim.read_bytes()).hexdigest(),
         "task_success_assessed": False,
         "execution_qualified": False,
-        "robot_interference_guard": "unavailable: raw registration provenance not published by ZMQ",
+        "robot_interference_guard": "not installed in this candidate-source diagnostic",
+        "registration_audit": args.registration_audit,
+        "rgb_codec": args.rgb_codec,
         "camera_pose_source": "simulator_localization_debug",
         "seed": "operator red appearance interior; explicit known cylinder radius .02 halfheight .04 m",
         "consumer_pause_s": args.consumer_pause_s,
@@ -88,6 +107,7 @@ def main():
     save()
     client, source, server = None, None, None
     inputs = deque(maxlen=8)
+    registrations = {}
     with (out / "server.log").open("w") as log:
         try:
             server = launch_benchmark_sim_server(config, repo=repo, cpu_only=True, server_stderr=log)
@@ -104,6 +124,23 @@ def main():
                 view = SynchronizedRgbdView(rgb, depth, world, motor.capture)
                 if not inputs or inputs[-1].capture.observation_id != motor.capture.observation_id:
                     inputs.append(view)
+                    if args.registration_audit:
+                        if observation.rgbd_registration is None:
+                            raise RuntimeError("rgbd_registration_unavailable")
+                        registrations[motor.capture.observation_id] = {
+                            "registration": observation.rgbd_registration,
+                            "camera_K": np.asarray(observation.camera_K).tolist(),
+                            "camera_pose": np.asarray(observation.camera_pose).tolist(),
+                            "image_timing": {
+                                key: observation.image_timing["head_cam_left"][key]
+                                for key in ("clock_id", "capture_interval_ns", "depth_capture_interval_ns")
+                            },
+                            "camera_pose_source": "simulator_localization_debug",
+                        }
+                        retained = {v.capture.observation_id for v in inputs}
+                        for key in tuple(registrations):
+                            if key not in retained:
+                                del registrations[key]
                 return {"head": view}
 
             initial = read()
@@ -215,6 +252,10 @@ def main():
                     metadata_json=json.dumps(metadata),
                 )
                 result["input_captures"].append(metadata)
+                if v.capture.observation_id in registrations:
+                    (out / f"registration-{index:03}.json").write_text(
+                        json.dumps(registrations[v.capture.observation_id]) + "\n"
+                    )
             save()
     print(json.dumps({k: result.get(k) for k in ("passed", "error", "processed_captures", "rounds")}))
     return 0 if result["passed"] else 1

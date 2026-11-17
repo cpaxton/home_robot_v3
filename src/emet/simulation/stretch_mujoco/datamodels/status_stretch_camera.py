@@ -43,6 +43,7 @@ class StatusStretchCameras:
     synchronized_robot_sample: dict | None = None
     synchronized_motor_sample: dict | None = None
     synchronized_camera_poses: dict | None = None
+    head_depth_registration: dict | None = None
 
     def image_timing_for(self, camera: StretchCameras) -> dict | None:
         stamp = (self.capture_timestamps_ns or {}).get(camera.name)
@@ -154,6 +155,8 @@ class StatusStretchCameras:
 
         Note: This sets the values inside this dataclass; it does not send data to the simulator.
         """
+        if camera in (StretchCameras.cam_d435i_rgb, StretchCameras.cam_d435i_depth):
+            self.head_depth_registration = None
         if capture_end_ns is not None and (type(timestamp_ns) is not int or type(capture_end_ns) is not int
                                             or timestamp_ns <= 0 or capture_end_ns < timestamp_ns):
             raise ValueError("invalid_camera_capture_interval")

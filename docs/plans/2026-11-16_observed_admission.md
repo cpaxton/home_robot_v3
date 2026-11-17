@@ -154,6 +154,13 @@ does not close the source/contact gates below.
    gaps. Publish original raw registration provenance on the live ZMQ path next;
    continuous processing alone does not fix incompatible depth returns. See
    [the camera-source evidence](../experiments/observed_camera_source_20261117.md).
+   Subsequent same-capture replay isolates the live failure to JPEG RGB colour
+   corruption, not depth quantization. Optional original provenance publication
+   is implemented. Explicit PNG transport passes 41 captures at the original
+   view and 43 at the changed view (the latter without provenance inputs), each
+   through four paused-consumer windows. This resolves the live transport gate;
+   complete source/refiner/ownership assembly below remains open. See
+   [the causal transport record](../experiments/observed_rgbd_transport_20261117.md).
 4. Resolve moving-mask foreign components with independent geometry/provenance
    evidence; preserve tiny unresolved competitors, complete-union controls,
    latched loss and explicit fresh reacquisition. Do not retime captures, shrink
