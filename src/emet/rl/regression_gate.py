@@ -74,6 +74,8 @@ def source_state(root):
             root / "scripts/check_generated_artifacts.py",
             root / "scripts/control_artifacts.py",
             root / "scripts/pack_mars_training_snapshot.py",
+            root / "scripts/generate_wbc_goal_changes.py",
+            root / "scripts/report_wbc_training_mix.py",
             root / "src/emet/rl/test_drive.html",
             root / "scripts/prove_mars_c1_recovery.py",
             root / "scripts/validate_mars_unloaded_primitives.py",
@@ -107,6 +109,7 @@ def source_state(root):
             root / "configs/benchmarks/mars_tracking_mastery_tamp_translation_v1.json",
             root / "configs/benchmarks/mars_tracking_mastery_supported_v1.json",
             root / "configs/benchmarks/mars_whole_body_v2_development.json",
+            root / "configs/benchmarks/mars_goal_changes_v1.json",
             root / "configs/benchmarks/mars_whole_body_basic_learning_v1.json",
             root / "configs/benchmarks/whole_body_reward_contract_v1.json",
             root / "configs/benchmarks/mars_directional_curriculum_v1.json",
@@ -117,6 +120,7 @@ def source_state(root):
             root / "paper/data/whole_body_control/mars_tamp_translation_audit_v1/cases.json",
             root / "paper/data/whole_body_control/mars_supported_contact_audit_v1/cases.json",
             root / "paper/data/whole_body_control/mars_matched_reference_v1/stop-cases.json",
+            root / "paper/data/whole_body_control/fresh_tracking_confirmation_v1/cases.json",
         ]
     )
     for path in paths:

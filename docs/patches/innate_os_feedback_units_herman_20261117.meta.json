@@ -1,0 +1,12 @@
+{
+  "upstream_revision": "0d4c350d83ff1838be5db291dded4b412af9dff5",
+  "scope": "Robot source copied read-only on 2026-11-17; validate temporary local copies only. Not deployed, not a whole-body executor or watchdog. Removed legacy arm.cpp is intentionally absent.",
+  "before_sha256": {
+    "ros2_ws/src/maurice_bot/maurice_arm/maurice_arm/arm_control.cpp": "033a96d672474ecf847cc625c6ee98c00fbf13bbe6e4988691e64e23974ce7f3",
+    "ros2_ws/src/maurice_bot/maurice_arm/maurice_arm/robot.cpp": "784978d36fce72c1492a1128333a78a419f7989fb665ab47c7b6dca09916cae0",
+    "ros2_ws/src/maurice_bot/maurice_arm/include/maurice_arm/robot.hpp": "627ca46161ffc19d19dd7c0e234fffef9d4ac88064794ce2115299ce6f744867",
+    "ros2_ws/src/maurice_bot/maurice_arm/CMakeLists.txt": "03e1505ae9841dd9651db93e479a2dc4215f158b7549649eed2e90272ece0d9a"
+  },
+  "patch_sha256": "5e800803568693fbace6d862994205ae217e58e66eb19a1f6e2117e3a451000e",
+  "package": "ros2_ws/src/maurice_bot/maurice_arm"
+}

@@ -55,6 +55,7 @@ def summarize(record):
     return {
         "decisions_in_run": record["decisions"],
         "source_decisions": record.get("source_decisions", 0),
+        "source_lineage_decisions": record.get("source_cumulative_decisions", record.get("source_decisions", 0)),
         "control_ticks": total,
         "complete": record.get("complete", False),
         "rows": rows,

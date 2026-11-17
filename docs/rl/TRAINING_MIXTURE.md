@@ -92,7 +92,7 @@ first goal's required quiet hold finishes, with nominally anchored C2 references
 they are not discontinuous, arbitrary unreachable targets. Four cases do not
 establish a general transition success rate.
 
-## Next allocation — planned, not yet applied
+## Next allocation — implemented, awaiting fresh validation/training
 
 Preserve the outer 50/50 general/TAMP balance. Within general, move 20 percentage
 points from ordinary hand tracking into analogous goal-change cases:
@@ -104,12 +104,15 @@ points from ordinary hand tracking into analogous goal-change cases:
 | General two-stage goal changes | 0% | 10% |
 | TAMP unloaded prefixes | 50% | 50% |
 
-The proposed inner general weights are 60/20/20 regular-hand/base/goal-change.
+The new curriculum runner uses inner general weights of 60/20/20 regular-hand/base/goal-change.
 Thus goal changes use only 10% of all training; 90% retains the existing
 families. Generate new training seeds/paths analogous to these failures, rather
 than copying the 24 confirmation identities into PPO. Keep precise hand/coarse
 base contracts, reward, native limits, history and force/wheel guards fixed.
-Admit both nominal stages and test live-state/fault invariants before training.
+Both nominal-stage and live-state/fault invariants have implementation/tests.
+The new full-source gate and teacher/source admission must finish before PPO;
+this is not yet an observed training ledger. See the
+[curriculum protocol](../experiments/goal_change_curriculum_20261117.md).
 
 Subsequent additions should be explicit new rows, not silently folded into
 "TAMP": larger reachable posture/reset coverage, mid-reference motion changes,

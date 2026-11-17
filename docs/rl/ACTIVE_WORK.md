@@ -7,9 +7,15 @@ implementation sequence; experiment reports own measured results. Older
 snapshots and threads are historical evidence, not competing current plans.
 
 The maintained [training mixture](TRAINING_MIXTURE.md) distinguishes the actual
-40/10/50 hand-active/base/TAMP tick split from the planned 30/10/10/50 split
+40/10/50 hand-active/base/TAMP tick split from the prepared 30/10/10/50 split
 adding goal transitions. [Hardware readiness](MARS_HARDWARE_READINESS.md) keeps
 robot-side feedback/executor/stop work separate from policy progress.
+
+**Herman passive audit is current:** reachable, Zenoh/domain 0, arm/odom ~200/30 Hz.
+The active robot source retains the known velocity/failed-read bugs; a patch for
+its exact current revision passes offline C++ checks but is not deployed.
+Current reported joint posture is outside the recent small training neighborhood.
+No motion, service startup or robot software change. [Audit](../experiments/herman_feedback_audit_20261117.md).
 
 ## One controller owner and development worktree
 
@@ -91,7 +97,9 @@ match. Peak jerk and reused stress contact loads still worsen, so no promotion.
 Goal transitions are a specific gap: longer-trained 0/4 versus source 1/4 and
 teacher 2/4. Single-stage coupled is also only 4/8. The next planned allocation
 is 30% regular hand-active, 10% base-only, 10% goal changes, 50% unloaded TAMP
-by physical ticks; it is not yet implemented/running. No PPO job remains active.
+by physical ticks. The environment and runner are now implemented/tested, awaiting
+a new complete source gate and nominal-path admission before PPO. No PPO job
+is active yet. [Curriculum](../experiments/goal_change_curriculum_20261117.md).
 The retained viewer is restored on 8766. [Longer run](../experiments/long_finetune_20261117.md),
 [fresh cases](../experiments/fresh_tracking_confirmation_20261117.md),
 [mixture](TRAINING_MIXTURE.md), [hardware readiness](MARS_HARDWARE_READINESS.md).

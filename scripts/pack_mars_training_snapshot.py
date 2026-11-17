@@ -24,6 +24,9 @@ REQUIRED = (
     "src/emet/perception/matterport_category_mappings.tsv",
     "src/test/core/test_image_timing.py",
     "src/emet/rl/test_drive.html",
+    "configs/benchmarks/mars_goal_changes_v1.json",
+    "scripts/generate_wbc_goal_changes.py",
+    "paper/data/whole_body_control/fresh_tracking_confirmation_v1/cases.json",
 )
 TEXT = {".py", ".sh", ".json", ".yaml", ".yml", ".toml", ".tsv", ".txt", ".xml", ".urdf", ".srdf", ".md", ".svg", ".html"}
 
