@@ -54,6 +54,10 @@
 - [x] Build a passive captured-scene Herman rehearsal: paired head/depth/arm/TF,
       explicit geometry/limit admission, matched teacher/actor cases and offline
       real/sim replay viewer on 8771. [Report](docs/experiments/herman_rehearsal_20261117.md).
+- [x] Restore refused 8771/8770 viewers as transient user services and build a
+      matched tiny-wave preflight. Teacher 1/1, both actors 0/1 with translation
+      faults by 4.5 s, all simulator stops confirmed; 50 focused tests pass.
+      No hardware motion. [Report](docs/experiments/herman_wave_20261117.md).
 - [ ] Reconcile Herman's reported stow pose with joint1/joint2 declared limits and
       link3/chassis proxy geometry; validate an actual staging path. Preserve
       blocked exact capture separately from any synthetic start.

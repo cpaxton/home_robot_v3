@@ -1,0 +1,539 @@
+{
+  "format": "herman-rehearsal-v1",
+  "capture_sha256": "0a1ce7909e179c2d7121453afaf907d523e5a3b9a01b54093bb6336b2662826b",
+  "audit": {
+    "format": "herman-rehearsal-audit-v1",
+    "captured_arm_rad": {
+      "joint1": 1.5938060386131812,
+      "joint2": -1.7456701366138596,
+      "joint3": 1.5631264228554684,
+      "joint4": 1.0906603401866908,
+      "joint5": -0.019941750242513337,
+      "joint6": 0.08897088569736719
+    },
+    "head_rad": -0.0,
+    "published_joint_limits": {
+      "joint1": [
+        -1.5708,
+        1.5708
+      ],
+      "joint2": [
+        -1.5708,
+        1.22
+      ],
+      "joint3": [
+        -1.5708,
+        1.7453
+      ],
+      "joint4": [
+        -1.9199,
+        1.7453
+      ],
+      "joint5": [
+        -1.5708,
+        1.5708
+      ],
+      "joint6": [
+        -0.8727,
+        0.3491
+      ],
+      "joint6M": [
+        -0.8727,
+        0.3491
+      ],
+      "joint_head": [
+        -0.1745,
+        0.5236
+      ]
+    },
+    "limit_violations": [
+      {
+        "joint": "joint1",
+        "reported_rad": 1.5938060386131812,
+        "limits_rad": [
+          -1.5708,
+          1.5708
+        ],
+        "outside_rad": 0.02300603861318118,
+        "outside_degrees": 1.318148915850287
+      },
+      {
+        "joint": "joint2",
+        "reported_rad": -1.7456701366138596,
+        "limits_rad": [
+          -1.5708,
+          1.22
+        ],
+        "outside_rad": 0.17487013661385964,
+        "outside_degrees": 10.019320790850285
+      }
+    ],
+    "live_urdf_vs_tf": {
+      "ee_link": {
+        "available": true,
+        "position_m": 4.2349997174859565e-17,
+        "rotation_rad": 3.777118874168811e-16
+      },
+      "head": {
+        "available": true,
+        "position_m": 0.0,
+        "rotation_rad": 0.0
+      },
+      "camera_optical_frame": {
+        "available": true,
+        "position_m": 0.0,
+        "rotation_rad": 3.5217744074312443e-16
+      },
+      "right_camera_optical_frame": {
+        "available": true,
+        "position_m": 0.0,
+        "rotation_rad": 3.5217744074312443e-16
+      }
+    },
+    "position_span_rad": [
+      0.0,
+      0.0015339807878855805,
+      0.0,
+      0.0,
+      0.001533980787885643,
+      0.0
+    ],
+    "captured_physics_admitted": false,
+    "physics_blockers": [
+      "published_joint_limit:joint1",
+      "published_joint_limit:joint2",
+      "captured_link3_chassis_proxy_penetration"
+    ],
+    "velocity_initialization": "zero-motion simulator hypothesis; published velocity units are unverified",
+    "wrist_image_available": false,
+    "wrist_optical_tf_available": false,
+    "hardware_ready": false,
+    "hardware_motion_commands_sent": 0,
+    "geometry_diagnostic": {
+      "proxy_signed_distance_m": -0.012920447422502833,
+      "cad_hull_signed_distance_m": 0.00011214722899435341
+    },
+    "mujoco_vs_live_tf": {
+      "ee_link": {
+        "position_m": 5.96906223549092e-17,
+        "rotation_rad": 4.566311521735014e-16
+      },
+      "head": {
+        "position_m": 0.0,
+        "rotation_rad": 0.0
+      },
+      "camera_optical_frame": {
+        "position_m": 0.0,
+        "rotation_rad": 8.210092466372717e-17
+      },
+      "right_camera_optical_frame": {
+        "position_m": 0.0,
+        "rotation_rad": 8.210092466372717e-17
+      }
+    }
+  },
+  "model_fingerprint": "88e432712ab2ce4f10c9bd36003acb81188239514461ceb7f968a96810b78de4",
+  "scene_geoms": 689,
+  "depth": {
+    "valid_depth_fraction": 0.1963671875,
+    "sampled_points": 3543,
+    "depth_rule": {
+      "encoding": "16SC1",
+      "metres_per_unit": 0.001,
+      "invalid": "nonpositive",
+      "publisher_sha256": "9b862dccbffa958b8e9f4e5faa044719f57ace694cdefe35a5d3e09059fb978f",
+      "source": "maurice_cam/depth_estimator/publishing.cpp:134-175",
+      "physical_depth_calibration_verified": false
+    },
+    "stride_pixels": 4,
+    "unknown_pixels_are_free": false,
+    "calibration": "scaled_rectified_P_with_inverse_R_and_capture_time_TF",
+    "pair_skew_s": 0.022474047
+  },
+  "laser": {
+    "used": true,
+    "pair_skew_s": 0.030089643
+  },
+  "captured": {
+    "admitted": false,
+    "physics_steps": 0,
+    "reason": [
+      "published_joint_limit:joint1",
+      "published_joint_limit:joint2",
+      "captured_link3_chassis_proxy_penetration"
+    ]
+  },
+  "policy_sources": {
+    "policy_0": {
+      "path": "logs/manipulation/long-finetune-v1/continued/checkpoint-65536/actor",
+      "weights_sha256": "e21dafc156967cf5f098b555da5606724127576b3eb3f79b9cb7dd910d64df0a"
+    },
+    "policy_1": {
+      "path": "logs/manipulation/goal-change-curriculum-v1/curriculum/checkpoint-131072/actor",
+      "weights_sha256": "7971c16dfac4b4ba35eb1da413a2d5d1a30990ebd0e2ff027ed324c443830393"
+    }
+  },
+  "proposed_start": {
+    "joint_positions_rad": [
+      1.5308,
+      -1.5308,
+      1.0631264228554684,
+      1.0906603401866908,
+      -0.019941750242513337
+    ],
+    "delta_from_capture_rad": [
+      -0.06300603861318121,
+      0.21487013661385967,
+      -0.5,
+      0.0,
+      0.0
+    ],
+    "kind": "synthetic_geometry_admitted_staging_proposal",
+    "executed_on_robot": false,
+    "requires_reposition_validation": true
+  },
+  "proposals": [
+    {
+      "id": "herman-wave-v1:wrist_wave",
+      "seed": 430010000,
+      "split": "audit",
+      "mode": "coupled",
+      "travel_m": 0.0,
+      "turn_rad": 0.0,
+      "arm_delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "base_mask": [
+        true,
+        true,
+        true
+      ],
+      "gesture": "wrist_wave",
+      "initial_kind": "synthetic_geometry_admitted_staging_proposal",
+      "hardware_executable": false
+    }
+  ],
+  "results": {
+    "teacher": [
+      {
+        "id": "herman-wave-v1:wrist_wave",
+        "seed": 430010000,
+        "admitted": true,
+        "admission": {
+          "accepted": true,
+          "reason": null,
+          "minimum_support_margin_m": 0.02810449902128233,
+          "fixed_hand_witness_position_m": 0.0,
+          "fixed_hand_witness_orientation_rad": 0.0,
+          "dynamic_feasibility_verified": false,
+          "geometry_sample_period_s": 0.025
+        },
+        "second_admission": null,
+        "success": true,
+        "wave_tracking": {
+          "complete_wave_observed": true,
+          "peak_position_error_m": 4.075435331492532e-05,
+          "peak_orientation_error_rad": 0.0008468416587374363,
+          "position_tolerance_m": 0.003,
+          "orientation_tolerance_rad": 0.02,
+          "passed": true
+        },
+        "code": "ok",
+        "second_delivered": false,
+        "stop_confirmed": true,
+        "initial_state_sha256": "7e08c70b5ca36a498c14685509260f81394a1421dec1aca5471e64b26b5901d2",
+        "reference_sha256": "49afbb6e4406e66ee4e599f27de661d27e837cac1a70874fbd6dc0f1dd87f7a2",
+        "second_reference_sha256": null,
+        "model_fingerprint": "88e432712ab2ce4f10c9bd36003acb81188239514461ceb7f968a96810b78de4",
+        "replay": "wrist_wave-teacher-replay.npz",
+        "trace": "wrist_wave-teacher-trace.json",
+        "metrics": {
+          "ee_position_error": 2.855516306036313e-06,
+          "ee_orientation_error": 2.931403454082168e-06,
+          "base_goal_error": 4.957032115492222e-06,
+          "base_heading_error_rad": 4.187733445010938e-05,
+          "peak_contact_force": 0.0,
+          "peak_base_linear_jerk_m_s3": 0.00021791318915493694,
+          "peak_base_yaw_jerk_rad_s3": 0.0026879785236695597,
+          "wheel_lift": false,
+          "unsafe_contact": false,
+          "settled_seconds": 8.04999999999998
+        },
+        "simulation_only": true,
+        "last_active_sample": {
+          "time_s": 24.949999999996496,
+          "position_error_m": 2.8506424117390465e-06,
+          "rotation_error_rad": 3.0050141419131405e-06,
+          "action": [
+            0.0,
+            0.0,
+            -2.8074382679536825e-06,
+            -2.13460940357637e-06,
+            -1.9498622850637774e-07,
+            2.308081766589034e-06,
+            2.0515567197637703e-05,
+            0.0
+          ],
+          "measured_arm_velocity": [
+            -1.3093751788679785e-06,
+            -1.049978569366131e-06,
+            -4.937758246857409e-08,
+            1.0834728981640957e-06,
+            -1.0482155138571353e-06
+          ],
+          "commanded_arm_velocity": [
+            -1.686816715971637e-06,
+            -1.279254274665416e-06,
+            -1.1994536318401942e-07,
+            1.386114579961794e-06,
+            1.2618657847753534e-05
+          ],
+          "measured_base_velocity": [
+            1.823316688230856e-07,
+            1.5756034633127112e-06
+          ],
+          "commanded_base_velocity": [
+            0.0,
+            0.0
+          ],
+          "second_delivered": false
+        },
+        "peak_measured_arm_speed_rad_s": 0.024967850247360222,
+        "end_active_time_s": 24.949999999996496
+      }
+    ],
+    "policy_0": [
+      {
+        "id": "herman-wave-v1:wrist_wave",
+        "seed": 430010000,
+        "admitted": true,
+        "admission": {
+          "accepted": true,
+          "reason": null,
+          "minimum_support_margin_m": 0.02810449902128233,
+          "fixed_hand_witness_position_m": 0.0,
+          "fixed_hand_witness_orientation_rad": 0.0,
+          "dynamic_feasibility_verified": false,
+          "geometry_sample_period_s": 0.025
+        },
+        "second_admission": null,
+        "success": false,
+        "wave_tracking": {
+          "complete_wave_observed": false,
+          "peak_position_error_m": 0.07414791630394446,
+          "peak_orientation_error_rad": 0.26410059868761304,
+          "position_tolerance_m": 0.003,
+          "orientation_tolerance_rad": 0.02,
+          "passed": false
+        },
+        "code": "rehearsal_boundary",
+        "second_delivered": false,
+        "stop_confirmed": true,
+        "initial_state_sha256": "7e08c70b5ca36a498c14685509260f81394a1421dec1aca5471e64b26b5901d2",
+        "reference_sha256": "49afbb6e4406e66ee4e599f27de661d27e837cac1a70874fbd6dc0f1dd87f7a2",
+        "second_reference_sha256": null,
+        "model_fingerprint": "88e432712ab2ce4f10c9bd36003acb81188239514461ceb7f968a96810b78de4",
+        "replay": "wrist_wave-policy_0-replay.npz",
+        "trace": "wrist_wave-policy_0-trace.json",
+        "metrics": {
+          "ee_position_error": 0.07729501307725897,
+          "ee_orientation_error": 0.2664516154481808,
+          "base_goal_error": 0.05042426589310268,
+          "base_heading_error_rad": 0.36728443797753185,
+          "peak_contact_force": 0.0,
+          "peak_base_linear_jerk_m_s3": 2.5859709350086604,
+          "peak_base_yaw_jerk_rad_s3": 23.431749410945155,
+          "wheel_lift": false,
+          "unsafe_contact": false,
+          "settled_seconds": 0
+        },
+        "simulation_only": true,
+        "last_active_sample": {
+          "time_s": 4.499999999999615,
+          "position_error_m": 0.07414791630394446,
+          "rotation_error_rad": 0.26410059868761304,
+          "action": [
+            0.46737954020500183,
+            -0.12308281660079956,
+            0.9846245646476746,
+            -0.2433643788099289,
+            -0.6837109923362732,
+            0.592384397983551,
+            0.03355632722377777,
+            0.0
+          ],
+          "measured_arm_velocity": [
+            3.265951722221631e-05,
+            0.0011886258330714833,
+            -0.2758703250438967,
+            0.24570001401441427,
+            -0.040161879710188024
+          ],
+          "commanded_arm_velocity": [
+            0.5927504181861877,
+            -0.2082977592945099,
+            -0.38804776668548585,
+            0.3395537495613098,
+            -0.004457404185086486
+          ],
+          "measured_base_velocity": [
+            0.05192898683671708,
+            -0.10469282478179798
+          ],
+          "commanded_base_velocity": [
+            0.05808829307556152,
+            -0.1356937474012375
+          ],
+          "second_delivered": false
+        },
+        "peak_measured_arm_speed_rad_s": 0.2758703250438967,
+        "end_active_time_s": 4.499999999999615
+      }
+    ],
+    "policy_1": [
+      {
+        "id": "herman-wave-v1:wrist_wave",
+        "seed": 430010000,
+        "admitted": true,
+        "admission": {
+          "accepted": true,
+          "reason": null,
+          "minimum_support_margin_m": 0.02810449902128233,
+          "fixed_hand_witness_position_m": 0.0,
+          "fixed_hand_witness_orientation_rad": 0.0,
+          "dynamic_feasibility_verified": false,
+          "geometry_sample_period_s": 0.025
+        },
+        "second_admission": null,
+        "success": false,
+        "wave_tracking": {
+          "complete_wave_observed": false,
+          "peak_position_error_m": 0.08005754602253068,
+          "peak_orientation_error_rad": 0.32893374662376174,
+          "position_tolerance_m": 0.003,
+          "orientation_tolerance_rad": 0.02,
+          "passed": false
+        },
+        "code": "rehearsal_boundary",
+        "second_delivered": false,
+        "stop_confirmed": true,
+        "initial_state_sha256": "7e08c70b5ca36a498c14685509260f81394a1421dec1aca5471e64b26b5901d2",
+        "reference_sha256": "49afbb6e4406e66ee4e599f27de661d27e837cac1a70874fbd6dc0f1dd87f7a2",
+        "second_reference_sha256": null,
+        "model_fingerprint": "88e432712ab2ce4f10c9bd36003acb81188239514461ceb7f968a96810b78de4",
+        "replay": "wrist_wave-policy_1-replay.npz",
+        "trace": "wrist_wave-policy_1-trace.json",
+        "metrics": {
+          "ee_position_error": 0.08331437854481187,
+          "ee_orientation_error": 0.3331937477174046,
+          "base_goal_error": 0.0510591550013433,
+          "base_heading_error_rad": 0.4224672634849066,
+          "peak_contact_force": 0.0,
+          "peak_base_linear_jerk_m_s3": 2.5935173485512584,
+          "peak_base_yaw_jerk_rad_s3": 26.525361510503352,
+          "wheel_lift": false,
+          "unsafe_contact": false,
+          "settled_seconds": 0
+        },
+        "simulation_only": true,
+        "last_active_sample": {
+          "time_s": 4.499999999999615,
+          "position_error_m": 0.08005754602253068,
+          "rotation_error_rad": 0.32893374662376174,
+          "action": [
+            0.44428205490112305,
+            -0.26288896799087524,
+            0.9953292608261108,
+            -0.13745872676372528,
+            -0.6944177746772766,
+            0.5349366068840027,
+            0.07386798411607742,
+            0.0
+          ],
+          "measured_arm_velocity": [
+            8.930984936677187e-05,
+            0.00178710667828323,
+            -0.28945194017662146,
+            0.21193316576138146,
+            -0.00803602638085218
+          ],
+          "commanded_arm_velocity": [
+            0.5975751757621764,
+            -0.14654237329959868,
+            -0.39168251752853395,
+            0.2993955373764038,
+            0.020856077224016188
+          ],
+          "measured_base_velocity": [
+            0.04921361792081828,
+            -0.13147345442760194
+          ],
+          "commanded_base_velocity": [
+            0.055727040767669676,
+            -0.17514868319034577
+          ],
+          "second_delivered": false
+        },
+        "peak_measured_arm_speed_rad_s": 0.28945194017662146,
+        "end_active_time_s": 4.499999999999615
+      }
+    ]
+  },
+  "summary": {
+    "teacher": {
+      "attempts": 1,
+      "admitted": 1,
+      "successes": 1,
+      "confirmed_stops": 1
+    },
+    "policy_0": {
+      "attempts": 1,
+      "admitted": 1,
+      "successes": 0,
+      "confirmed_stops": 1
+    },
+    "policy_1": {
+      "attempts": 1,
+      "admitted": 1,
+      "successes": 0,
+      "confirmed_stops": 1
+    }
+  },
+  "complete": true,
+  "hardware_ready": false,
+  "hardware_motion_commands_sent": 0,
+  "previous_source_manifest": "../herman_rehearsal_v1/results.json#source_files",
+  "source_changes": {
+    "rl/manipulation/herman_gestures.py": "927fffaad7713420a64baeefa84d032bb99ff14528404e4fa2cb419b194ab904",
+    "@rehearsal_runner": "323f6ba5aba5c1d8de6b4b28a923d6c11c90e8ea0a1aa54dd835bc651cddde24"
+  },
+  "source_removals": [],
+  "source_manifest_sha256": "5e7f401a44e0b7e8ff01bef7a2e09a32932d2b7146223e8ba5c01560b2d014cf",
+  "private_artifacts_sha256": {
+    "report.json": "844759c855cdc15f99672a00a916f2af949cb39d497abb72affa6798fd574187",
+    "artifacts.json": "cd0b0a8df6effe8c56e2c8980006a8d03434254705cdea6450aa9b198e13067c"
+  },
+  "hardware_source_check": {
+    "upstream_revision": "0d4c350d83ff1838be5db291dded4b412af9dff5",
+    "arm_control_cpp_sha256": "033a96d672474ecf847cc625c6ee98c00fbf13bbe6e4988691e64e23974ce7f3",
+    "robot_cpp_sha256": "784978d36fce72c1492a1128333a78a419f7989fb665ab47c7b6dca09916cae0",
+    "bridge_4400_4409_listening": false,
+    "installed_binary_matches_source_verified": false
+  },
+  "tests": {
+    "tests": "50",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0",
+    "xml_sha256": "6c79ff290d4f97b9f4b770e8588360a37f4dd01d14c5e44054f5ee7815dbac95",
+    "sources": {
+      "src/test/rl/manipulation/test_herman_gestures.py": "814b4b711b32ba4c486bfeff2885c9d41a06bf0a3317c5e6bdd79e83fe5dc0a5",
+      "src/emet/rl/manipulation/herman_gestures.py": "927fffaad7713420a64baeefa84d032bb99ff14528404e4fa2cb419b194ab904",
+      "scripts/rehearse_herman.py": "323f6ba5aba5c1d8de6b4b28a923d6c11c90e8ea0a1aa54dd835bc651cddde24"
+    }
+  }
+}

@@ -28,6 +28,14 @@ settle; both yaw cases exceed the measured translation boundary. Partial room
 geometry and camera calibration are observed, not a physical dynamics fit.
 [Report, viewer and next steps](../experiments/herman_rehearsal_20261117.md).
 
+**18:19 follow-up and wave preflight:** Herman's reported folded posture and
+feedback-source defects are unchanged; stereo/TF are live, wrist remains absent,
+no WBC bridge listens. A tiny base-held wrist wave admits from a separately
+synthetic start: teacher 1/1, both actors 0/1 (translation boundary at 4.5 s), all
+3/3 simulator stops confirmed. Fifty focused regressions pass. The restored
+8771 wave replay and 8770 passive console are transient user services. No motor
+commands or robot deployment. [Report](../experiments/herman_wave_20261117.md).
+
 ## One controller owner and development worktree
 
 Continue controller implementation, training decisions and progress updates in

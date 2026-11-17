@@ -13,6 +13,12 @@ recorded parked pose is blocked; the separate synthetic staged-start tests
 currently pass teacher 6/6 and both actors 0/6. They are deployment-distribution
 evidence, not hardware qualification.
 
+The latest [tiny-wave preflight](../experiments/herman_wave_20261117.md) is on
+8771: teacher passes, both actors stop at the measured translation boundary.
+The viewer and live console now run as transient user services, surviving the
+chat tool session. They are not installed for automatic reboot startup. See that
+report for service status, SSH forwarding and current hardware blockers.
+
 ## Command and feedback path
 
 ```mermaid

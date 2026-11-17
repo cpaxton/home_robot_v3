@@ -62,7 +62,13 @@ def install_posture(model, data, values, head):
     mujoco.mj_forward(model, data)
 
 
-def cases():
+def cases(kind="tracking"):
+    if kind == "wave":
+        from emet.rl.manipulation.herman_gestures import wave_case
+
+        return [wave_case()]
+    if kind != "tracking":
+        raise ValueError("unknown rehearsal case set")
     rows = []
     specs = [
         ("hold", [0] * 5, 0, True),
@@ -111,7 +117,12 @@ def evaluate(env, case, policy, output, name):
     initial_hash = digest(
         {"qpos": env.data.qpos.tolist(), "qvel": env.data.qvel.tolist(), "ctrl": env.data.ctrl.tolist()}
     )
-    reference = CoupledReference(control, case)
+    if case.get("gesture") == "wrist_wave":
+        from emet.rl.manipulation.herman_gestures import HermanWaveReference
+
+        reference = HermanWaveReference(control)
+    else:
+        reference = CoupledReference(control, case)
     admission = admit_reference(env, reference)
     second = None
     second_admission = None
@@ -177,6 +188,13 @@ def evaluate(env, case, policy, output, name):
             terminal = {**terminal, "is_success": False, "code": "rehearsal_boundary"}
             break
     metrics = env._info()
+    wave_tracking = None
+    if case.get("gesture") == "wrist_wave":
+        from emet.rl.manipulation.herman_gestures import wave_tracking_gate
+
+        wave_tracking = wave_tracking_gate(trace, reference.end)
+        if terminal.get("is_success") and not wave_tracking["passed"]:
+            terminal = {**terminal, "is_success": False, "code": "wave_tracking_failed"}
     control.stop()
     stop_start = float(env.data.time)
     while not whole_body_stopped(control) and not env._physics_invalid and env.data.time - stop_start < 0.75 - 1e-9:
@@ -193,6 +211,7 @@ def evaluate(env, case, policy, output, name):
         "admission": admission,
         "second_admission": second_admission,
         "success": bool(terminal.get("is_success")),
+        "wave_tracking": wave_tracking,
         "code": terminal.get("code"),
         "second_delivered": delivered,
         "stop_confirmed": bool(not env._physics_invalid and whole_body_stopped(control)),
@@ -239,6 +258,7 @@ def main():
     parser.add_argument("--capture", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--policy", action="append", type=Path, default=[])
+    parser.add_argument("--case-set", choices=("tracking", "wave"), default="tracking")
     parser.add_argument(
         "--include-proposals",
         action="store_true",
@@ -401,7 +421,7 @@ def main():
             "executed_on_robot": False,
             "requires_reposition_validation": True,
         }
-        report["proposals"] = cases()
+        report["proposals"] = cases(args.case_set)
         for name, policy in [("teacher", None)] + [(key, value["bundle"]) for key, value in policies.items()]:
             env = HermanRehearsalEnv(
                 baseline,
@@ -414,7 +434,7 @@ def main():
             try:
                 if env.fingerprint != fingerprint:
                     raise RuntimeError("replay and evaluation scene identity mismatch")
-                for case in cases():
+                for case in cases(args.case_set):
                     row = evaluate(env, case, policy, args.output, name)
                     rows.append(row)
                     report["results"][name] = rows
