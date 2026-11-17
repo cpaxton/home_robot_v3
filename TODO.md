@@ -29,15 +29,25 @@
       retaining 30% regular hand-active / 10% base-only / 50% unloaded TAMP.
       Keep the [mixture ledger](docs/rl/TRAINING_MIXTURE.md) current; validate
       driver/feedback/stop readiness separately before Mars motion tests.
-      Implemented at `2a2ce5c1`; 36 targeted checks pass. Pipeline
-      `20261117_111259_6729bc` runs fresh regressions/admission before the fixed
-      131,072-decision candidate. [Protocol](docs/experiments/goal_change_curriculum_20261117.md).
+      Implemented at `2a2ce5c1`; full frozen-source gate passes 1,604 tests.
+      Teacher/source admission is 13/16 vs 9/16, all 32 stops confirm. Job
+      `20261117_111259_6729bc` is training the fixed 131,072-decision candidate. [Protocol](docs/experiments/goal_change_curriculum_20261117.md).
 - [x] Repeat passive Herman audit after power-on: Zenoh discovery, ~200/30 Hz
       arm/odom timing, active driver source fingerprint and exact-revision offline
       reader/unit patch checks. No robot commands, service starts or deployment.
       [Current audit](docs/experiments/herman_feedback_audit_20261117.md).
-- [ ] Build/review the robot feedback fix, validate joint/model mapping and real
-      velocity/stop/watchdog integration before a separately scoped motion test.
+- [x] Document planner/reference/tracker/driver/operator responsibilities and add
+      a live passive operator console with head stereo, telemetry and bounded
+      base/6DoF-hand previews. No motor authority; wrist currently unavailable.
+      [Division and deployment sequence](docs/rl/CONTROLLER_DEPLOYMENT.md).
+- [x] Implement local source-timed bridge feedback and strengthen the guarded
+      session: separate capture ages, verified SI/read validity, complete base
+      twist and all-six-axis velocity checks. Hardware deployment remains below.
+- [x] Build the exact-revision reader/unit fix against Herman's native ROS stack
+      in an isolated temporary copy (107 s, one compiler thread). Original package
+      unchanged; no active deployment, binary execution or motor commands.
+- [ ] Review/install and live-verify the feedback fix, validate joint/model mapping
+      and real velocity/stop/watchdog integration before a scoped motion test.
 - [ ] Isolate fine-pose weighting, progress and pose-gated velocity reward
       changes; measure critic calibration and late-hold exploration before
       extending the reward PPO budget. Keep jerk/force protections active.

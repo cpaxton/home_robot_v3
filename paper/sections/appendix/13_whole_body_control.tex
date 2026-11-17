@@ -989,3 +989,22 @@ units. These are scoped generalization gains, not promotion or hardware safety
 qualification. Complete cases and targets are in
 \texttt{fresh\_tracking\_confirmation\_v1/}; current and planned task shares are
 maintained in \texttt{docs/rl/TRAINING\_MIXTURE.md}.
+
+\paragraph{Generic goal handoffs and hardware separation.}
+A versioned goal-change curriculum allocates 30/10/10/50 percent of physical
+control ticks to regular hand tracking, base tracking, nominal two-stage goal
+changes and unloaded TAMP prefixes. Eight training and eight separate audit
+cases retain continuous nominal pose/velocity/acceleration joins, measured
+history and fault latches. Teacher/source baseline is 13/16 versus 9/16, all
+32 stops confirm, and the teacher has one safety-flagged episode. Frozen-source
+regressions pass 1,604 tests before a fixed 131,072-decision continuation;
+final policy outcomes are pending. Task selection and grasp/release prerequisites
+remain planner-owned, reference feasibility/timing compiler-owned, tracking
+policy-owned and watchdog/stop/servo semantics executor-owned.
+A passive Herman console verifies live head stereo and telemetry with local
+masked pose previews but no motor command endpoint. Source-timed feedback and
+complete base-velocity checks are implemented locally; verified physical SI
+units, motor-read validity, servo transfer and robot-side stopping remain
+prerequisites for deployment. Live video and simulated success do not qualify
+a hardware controller. The responsibility and deployment ledger is
+\texttt{docs/rl/CONTROLLER\_DEPLOYMENT.md}.

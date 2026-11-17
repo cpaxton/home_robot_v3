@@ -60,3 +60,13 @@ those checks, not yet running or qualified. The retained viewer is paused during
 native work and restored by the supervisor. Exact compact
 [launch evidence](../../paper/data/whole_body_control/goal_change_curriculum_v1/README.md)
 includes immutable-input digests and the full producers; raw logs remain ignored.
+
+## Admission complete; PPO running
+
+Frozen source `2a2ce5c1` passes **1,604 source-bound regressions**. Both nominal
+stages admit for all 16 cases under both baseline controllers. Teacher/source
+success is **13/16 vs 9/16**, with **32/32 confirmed stops**. Teacher has one
+safety-flagged episode; source has none. No case was removed. Managed job
+`20261117_111259_6729bc` has entered PPO; W&B offline ID `4przjfk9`. The budget
+and fixed-final readout remain unchanged. Subsequent hardware/UI development runs
+outside this frozen runtime and does not inherit its regression qualification.

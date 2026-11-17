@@ -7,15 +7,16 @@ implementation sequence; experiment reports own measured results. Older
 snapshots and threads are historical evidence, not competing current plans.
 
 The maintained [training mixture](TRAINING_MIXTURE.md) distinguishes the actual
-40/10/50 hand-active/base/TAMP tick split from the prepared 30/10/10/50 split
-adding goal transitions. [Hardware readiness](MARS_HARDWARE_READINESS.md) keeps
+completed 40/10/50 hand-active/base/TAMP tick split from the running 30/10/10/50
+split adding goal transitions. [Hardware readiness](MARS_HARDWARE_READINESS.md) keeps
 robot-side feedback/executor/stop work separate from policy progress.
 
 **Herman passive audit is current:** reachable, Zenoh/domain 0, arm/odom ~200/30 Hz.
 The active robot source retains the known velocity/failed-read bugs; a patch for
-its exact current revision passes offline C++ checks but is not deployed.
+its exact current revision passes offline C++ checks and an isolated native
+ROS build, but is not deployed or executed.
 Current reported joint posture is outside the recent small training neighborhood.
-No motion, service startup or robot software change. [Audit](../experiments/herman_feedback_audit_20261117.md).
+No motion, driver/service startup or active software deployment. [Audit](../experiments/herman_feedback_audit_20261117.md).
 
 ## One controller owner and development worktree
 
@@ -95,16 +96,27 @@ teacher is 17/24. All 72 fresh stops confirm and initial/config/reference hashes
 match. Peak jerk and reused stress contact loads still worsen, so no promotion.
 
 Goal transitions are a specific gap: longer-trained 0/4 versus source 1/4 and
-teacher 2/4. Single-stage coupled is also only 4/8. The next planned allocation
-is 30% regular hand-active, 10% base-only, 10% goal changes, 50% unloaded TAMP
-by physical ticks. The environment and runner are now implemented/tested, awaiting
-a new complete source gate and nominal-path admission before PPO. Pipeline job
-`20261117_111259_6729bc` is running those checks at frozen source `2a2ce5c1`;
-131,072-decision PPO is queued behind them, not yet started. The retained viewer
-is paused during native work and restored afterward. [Curriculum](../experiments/goal_change_curriculum_20261117.md).
-The retained viewer is restored on 8766. [Longer run](../experiments/long_finetune_20261117.md),
-[fresh cases](../experiments/fresh_tracking_confirmation_20261117.md),
-[mixture](TRAINING_MIXTURE.md), [hardware readiness](MARS_HARDWARE_READINESS.md).
+teacher 2/4. Single-stage coupled is also only 4/8. Frozen source `2a2ce5c1` now
+passes **1,604 full regressions**. New goal cases are all admitted: teacher 13/16,
+source 9/16; all 32 stops confirm, teacher has one safety-flagged episode and
+source none. Managed job `20261117_111259_6729bc` is **training** the fixed
+131,072-decision candidate with 30/10/10/50 regular-hand/base/goals/TAMP physical
+ticks. No final performance or promotion claim yet. The retained simulator viewer
+is paused and restored automatically after the run.
+[Curriculum](../experiments/goal_change_curriculum_20261117.md),
+[longer run](../experiments/long_finetune_20261117.md),
+[fresh cases](../experiments/fresh_tracking_confirmation_20261117.md).
+
+**Herman console is live on localhost:8770**, job `20261117_120035_064abd`.
+Both head cameras, arm/odom and hand TF work through passive SSH subscriptions;
+wrist is unavailable. The new UI has base/6DoF-hand previews and masks, keyboard/
+pointer control, freshness displays and training progress. It sends no motor
+commands and cannot stop a robot. Local bridge/session fixes retain original
+capture ages, measured base twist and all-six-component velocity checks, requiring
+verified SI units/read validity. They are not deployed on Herman. Keep these
+changes distinct from the frozen training receipt.
+[Division of responsibility, console and deployment sequence](CONTROLLER_DEPLOYMENT.md),
+[hardware readiness](MARS_HARDWARE_READINESS.md).
 
 **Wrapper reward work:** the [reward specification](../experiments/wrapper_reward_20261116.md)
 records the legacy 20 Hz objective and an opt-in, versioned contract-tracking

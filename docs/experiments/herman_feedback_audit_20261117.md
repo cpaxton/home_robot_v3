@@ -6,8 +6,9 @@ artifacts are present. Checked-out innate-os revision is
 `0d4c350d83ff1838be5db291dded4b412af9dff5`. This identifies the source tree,
 not proof that every installed binary corresponds to that exact source.
 
-**No motor commands, command publishers, driver/service starts, software changes,
-rebuilds or deployments were performed on Herman.** Existing topics were read.
+**No motor commands, actuator command publishers, driver/service starts or active
+software deployments were performed on Herman.** Existing topics were read.
+The follow-up compilation below uses a temporary copy, not the active installation.
 An earlier same-day connection attempt had failed before the robot was available.
 
 ## Middleware and available feedback
@@ -71,8 +72,8 @@ communication-failure and incomplete-servo-data checks. The active timer already
 catches read exceptions; skipping invalid publication is not a substitute for
 a robot-side command watchdog and verified stop path.
 
-No upstream or robot file was patched. The ROS package has not been built with
-this patch, and hardware unit/stop validation has not occurred. Exact source
+At that initial audit stage no upstream or active robot file was patched and
+only SDK-double tests had run. Hardware unit/stop validation has not occurred. Exact source
 hashes, passive timing and offline validation are in
 `paper/data/whole_body_control/herman_passive_20261117/`; raw source copies remain
 ignored under `logs/recovery/herman-passive-20261117/source/`.
@@ -82,3 +83,19 @@ odom twist/source ages through the bridge, implement the guarded executor and
 independent command watchdog, then perform separately scoped supervised stop
 and low-speed free-space tests. Contact/load calibration and full manipulation
 remain later milestones. See [hardware readiness](../rl/MARS_HARDWARE_READINESS.md).
+
+## Follow-up native build and live console
+
+The [deployment division and console](../rl/CONTROLLER_DEPLOYMENT.md) now document
+planner, reference, policy, servo and operator responsibilities. A subscriber-only
+SSH console receives both head cameras, arm/odom and hand TF; wrist produced no
+frames. Its target edits are local previews with no motor/enable/stop endpoint.
+
+The exact same patch also passes a full native `colcon build` of `maurice_arm`
+in `/tmp/emet-feedback-build-20261117-g2_cxgr6`, using one compiler thread and the
+existing ROS underlay. Build time is 106.83 s; the 26 original package files
+remain unchanged. The resulting ARM64 binary is 1,628,288 bytes, SHA-256
+`badf57caf493ab685698ff862515e10b0ebbfe38ee7259c9542dcad23675b79d`.
+No active installation was changed, no package overlay was sourced into a running
+driver, and the new binary was never executed. Source and native-build evidence
+is in `paper/data/whole_body_control/herman_operator_console_v1/`.

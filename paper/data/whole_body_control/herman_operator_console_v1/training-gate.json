@@ -1,0 +1,25 @@
+{
+  "format": "goal-change-admission-gate-status-v1",
+  "source_revision": "2a2ce5c1",
+  "regression_tests": 1604,
+  "regression_receipt_sha256": "211becfbdd7c6c7a08acbc5b3e97e043c8cbca1f195d966e1ae51cd3b8e5ff72",
+  "xml_sha256": "d1b5ec2f08aa8e9bdcf35f81abad6d243459a333f6e827d81a338e0483bb005e",
+  "admission": {
+    "protocol_sha256": "67e1d5416e4018d7a564b05b61092c00220aea5c2e9c84b143ce6420b9f97854",
+    "cases_sha256": "5702612ff67c1e0a02ed5e352aa31f052ae4bb5cf9683531f8b285643123c10e",
+    "goal_manifest_sha256": "b66110052fe39c2139c59de9b0dcde4eb190c96b49e1732e4044a1099eb5681f",
+    "runner_sha256": "a15e0070637eb2ce9103759734804f2b70710f910ed6513456c686b3e0835db8",
+    "source_state_digest": "541d7d8b23d1870e2fce46001d1c9edebcf97932558ddc2f006b92af9cebd252",
+    "initializer_weights_sha256": "e21dafc156967cf5f098b555da5606724127576b3eb3f79b9cb7dd910d64df0a",
+    "runtime_revision": "2a2ce5c1ec06ff9d03bb7b770dc82188e717e9df",
+    "ready": true,
+    "complete": true,
+    "baseline_complete": true,
+    "teacher_goal_successes": 13,
+    "goal_attempts": 16,
+    "source_goal_successes": 9,
+    "teacher_goal_unsafe_episodes": 1,
+    "baseline_reused_from": "long-finetune-v1/continued"
+  },
+  "scope": "historical frozen training source only; current UI/hardware changes use their own targeted tests"
+}

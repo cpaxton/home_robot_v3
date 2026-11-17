@@ -241,8 +241,13 @@ The maintained [training mixture](TRAINING_MIXTURE.md) records actual exposure:
 40% general hand-active, 10% base-only, 50% unloaded TAMP prefixes, with no
 dedicated general goal changes. Next add analogous nominally anchored transitions
 at 10% overall, retaining 30% regular hand-active, 10% base-only and 50% TAMP.
-That allocation is planned, not yet running. Broader posture/reset coverage and
+That allocation is now running after 1,604 frozen-source regressions and new
+teacher/source goal admission (13/16 vs 9/16, all 32 stops confirmed). Broader posture/reset coverage and
 fresh confirmation remain necessary. Compare a less cancellation-prone actor
 head if distribution/reward fixes still leave quiet misses; do not infer a
 hardware limitation or require a transformer from these results. Hardware
 readiness has separate [driver/feedback/stop requirements](MARS_HARDWARE_READINESS.md).
+
+The [deployment division](CONTROLLER_DEPLOYMENT.md) separates reference compilation,
+learned tracking, servo transfer, guarded execution and passive operator video.
+Live target previews do not make the actor hardware-ready.

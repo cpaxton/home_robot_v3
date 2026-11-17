@@ -1,0 +1,21 @@
+{
+  "format": "herman-isolated-ros-build-v1",
+  "upstream_revision": "0d4c350d83ff1838be5db291dded4b412af9dff5",
+  "patch_sha256": "5e800803568693fbace6d862994205ae217e58e66eb19a1f6e2117e3a451000e",
+  "temporary_workspace": "/tmp/emet-feedback-build-20261117-g2_cxgr6",
+  "returncode": 0,
+  "elapsed_s": 106.8262791633606,
+  "original_package_unchanged": true,
+  "original_package_files": 26,
+  "active_install_modified": false,
+  "driver_binary_executed": false,
+  "robot_commands_sent": 0,
+  "hardware_stopping_validated": false,
+  "build_log": "[1.060s] WARNING:colcon.colcon_core.package_selection:Some selected packages are already built in one or more underlay workspaces:\n\t'maurice_arm' is in: /home/jetson1/innate-os/ros2_ws/install/maurice_arm\nIf a package in a merged underlay workspace is overridden and it installs headers, then all packages in the overlay must sort their include directories by workspace order. Failure to do so may result in build failures or undefined behavior at run time.\nIf the overridden package is used by another package in any underlay, then the overriding package in the overlay must be API and ABI compatible or undefined behavior at run time may occur.\n\nIf you understand the risks and want to override a package anyways, add the following to the command line:\n\t--allow-overriding maurice_arm\n\nThis may be promoted to an error in a future release of colcon-override-check.\nStarting >>> maurice_arm\nFinished <<< maurice_arm [1min 45s]\n\nSummary: 1 package finished [1min 45s]\n",
+  "binary": {
+    "path": "/tmp/emet-feedback-build-20261117-g2_cxgr6/ros2_ws/install/maurice_arm/lib/maurice_arm/arm",
+    "sha256": "badf57caf493ab685698ff862515e10b0ebbfe38ee7259c9542dcad23675b79d",
+    "bytes": 1628288,
+    "file": "/tmp/emet-feedback-build-20261117-g2_cxgr6/ros2_ws/install/maurice_arm/lib/maurice_arm/arm: ELF 64-bit LSB pie executable, ARM aarch64, version 1 (GNU/Linux), dynamically linked, interpreter /lib/ld-linux-aarch64.so.1, BuildID[sha1]=833eda249c10d4497725a461ac03443e0fb762a5, for GNU/Linux 3.7.0, not stripped"
+  }
+}

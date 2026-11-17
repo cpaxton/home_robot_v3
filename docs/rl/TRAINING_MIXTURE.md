@@ -5,7 +5,7 @@ training. [ACTIVE_WORK](ACTIVE_WORK.md) owns job/branch status; experiment repor
 own results. Update this page whenever sampling weights, case pools, reset
 conditions or training stages change. Planned allocations are not running ones.
 
-## Current implemented mixture
+## Completed ordinary-run mixture
 
 Shares are **physical 20 Hz control ticks**, not episode counts, PPO decisions
 or a random 50/50 draw at every step. `ControlStepMixture` keeps episodes intact
@@ -31,7 +31,7 @@ are speed/acceleration/jerk-bounded; real-model limits and independent guards
 remain active. TAMP fixture solver/model settings differ from the general plant;
 source/model identities and scope must stay explicit.
 
-The current custom experiment runner is authoritative:
+The completed ordinary-run custom runner is authoritative:
 `paper/data/whole_body_control/long_finetune_v1/run.py`, with its adjacent
 `protocol.json` and `cases.json`. The older generic CLI development config's
 30/50/20 base/arm/coupled stage weights do **not** describe this runner's inner
@@ -92,17 +92,21 @@ first goal's required quiet hold finishes, with nominally anchored C2 references
 they are not discontinuous, arbitrary unreachable targets. Four cases do not
 establish a general transition success rate.
 
-## Next allocation — implemented, awaiting fresh validation/training
+## Current goal-change experiment — training
 
 Preserve the outer 50/50 general/TAMP balance. Within general, move 20 percentage
 points from ordinary hand tracking into analogous goal-change cases:
 
-| Use case | Current share of all ticks | Next share of all ticks |
+| Use case | Completed ordinary share | Running goal-change target |
 | --- | ---: | ---: |
 | Regular hand-active tracking | 40% | 30% |
 | Base-only tracking | 10% | 10% |
 | General two-stage goal changes | 0% | 10% |
 | TAMP unloaded prefixes | 50% | 50% |
+
+The running curriculum producer is `paper/data/whole_body_control/goal_change_curriculum_v1/run.py`,
+with adjacent protocol/cases/curriculum manifests. The older ordinary runner above
+is historical. Read its live ledger with `--run logs/manipulation/goal-change-curriculum-v1/curriculum/run.json`.
 
 The new curriculum runner uses inner general weights of 60/20/20 regular-hand/base/goal-change.
 Thus goal changes use only 10% of all training; 90% retains the existing
@@ -110,8 +114,10 @@ families. Generate new training seeds/paths analogous to these failures, rather
 than copying the 24 confirmation identities into PPO. Keep precise hand/coarse
 base contracts, reward, native limits, history and force/wheel guards fixed.
 Both nominal-stage and live-state/fault invariants have implementation/tests.
-The new full-source gate and teacher/source admission must finish before PPO;
-this is not yet an observed training ledger. See the
+The full frozen-source gate passes 1,604 tests and teacher/source admission is
+complete (13/16 vs 9/16, all 32 stops confirmed). PPO is now running the fixed
+131,072-decision budget. This is an observed training allocation, not a final
+policy-performance result. See the
 [curriculum protocol](../experiments/goal_change_curriculum_20261117.md).
 
 Subsequent additions should be explicit new rows, not silently folded into

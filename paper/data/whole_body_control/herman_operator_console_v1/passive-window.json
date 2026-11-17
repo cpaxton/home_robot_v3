@@ -1,0 +1,27 @@
+{
+  "format": "herman-passive-console-window-v1",
+  "window_s": 10,
+  "samples": 100,
+  "scope": "passive observations only; no console motor command channel; external motion not excluded",
+  "hardware_motion_commands_sent": 0,
+  "odom_publishers": {
+    "count": 1,
+    "node": "bringup",
+    "source": "read-only ros2 topic info /odom -v"
+  },
+  "base_xy_span_m": [
+    0.0,
+    0.0
+  ],
+  "base_yaw_span_rad": 0.0,
+  "base_yaw_std_rad": 0.0,
+  "unique_observed_capture_stamps": {
+    "arm": 96,
+    "odom": 96
+  },
+  "reported_source_age_max_s": {
+    "arm": 0.23010901900022127,
+    "odom": 0.26307048200022237
+  },
+  "age_note": "excludes unmeasured SSH transit; not a hardware validity or stop certificate"
+}
