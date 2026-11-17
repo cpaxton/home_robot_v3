@@ -23,6 +23,7 @@ def controller():
         depth=np.ones((8, 8)),
         full_world_xyz=np.ones((8, 8, 3)),
         instance=None,
+        info={},
     )
     agent.voxel_map = SimpleNamespace(observations=[frame, frame], min_depth=0.1, max_depth=5.0)
     agent.detection_model = Mock(class_list=["mug"])
@@ -92,11 +93,14 @@ def test_coordinator_capture_uses_real_admission_without_retrieval_or_motion():
 def test_coordinator_supplied_snapshot_reaches_admission_without_recapture(tmp_path):
     import json
 
+    from emet.mapping.voxel.voxel import Frame
+
     agent = controller()
     agent.parameters["query_memory"] = {"grounding_cache_dir": str(tmp_path)}
     agent.graph_memory.eqa_client = Mock(return_value='{"matching_ids": [0], "constraints_verified": true}')
-    frame = agent.voxel_map.observations[-1]
-    frame.info = {}
+    source = agent.voxel_map.observations[-1]
+    frame = Frame(**{name: getattr(source, name, None) for name in Frame._fields})._replace(info={})
+    agent.voxel_map.observations[-1] = frame
     snapshot = SimpleNamespace(rgb=frame.rgb.copy(), depth=frame.depth.copy())
     identity = {
         "decision_view_id": "decision-view:fixture",

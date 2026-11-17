@@ -169,9 +169,10 @@ class LazyGraphController(DynagraphController):
         if source <= before:
             return {"ok": False, "status": "observation_unavailable", "reason": "new captured observation required"}
         frame = self.voxel_map.observations[-1]
-        info = getattr(frame, "info", None) or {}
+        info = frame.info
         if decision_view is not None:
-            frame.info = info = {**info, "decision_view": dict(decision_view)}
+            # Frame is a namedtuple; its metadata dictionary is mutable.
+            info["decision_view"] = dict(decision_view)
         result = self.ground_query_view(query, source_obs_id=source, target_description=query)
         return {
             **result,
