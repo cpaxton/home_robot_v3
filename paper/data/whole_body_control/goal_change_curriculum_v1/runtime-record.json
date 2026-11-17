@@ -1,0 +1,11 @@
+{
+  "format": "goal-change-runtime-v1",
+  "revision": "2a2ce5c1ec06ff9d03bb7b770dc82188e717e9df",
+  "runtime": "/home/cpaxton/src/home_robot_v4/.worktrees/wbc-grasp-primitive/logs/runtimes/goal-change-2a2ce5c1",
+  "archive": "logs/recovery/goal-change-2a2ce5c1-source.tar",
+  "archive_sha256": "c3d9dc680515b99d7296711797acf3828d231783739763261907974db3151133",
+  "inputs": 3673,
+  "hardware_used": false,
+  "source_state_sha256": "541d7d8b23d1870e2fce46001d1c9edebcf97932558ddc2f006b92af9cebd252",
+  "canonical_source_state_matches": true
+}

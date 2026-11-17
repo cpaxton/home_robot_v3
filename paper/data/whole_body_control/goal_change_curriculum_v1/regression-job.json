@@ -1,0 +1,17 @@
+{
+  "job_id": "20261117_111259_ff7487",
+  "pid": 384170,
+  "command": [
+    "taskset",
+    "-c",
+    "15",
+    "timeout",
+    "5400",
+    "/home/cpaxton/src/home_robot_v4/.worktrees/wbc-grasp-primitive/logs/runtimes/goal-change-2a2ce5c1/.venv/bin/python",
+    "-u",
+    "-m",
+    "emet.rl.regression_gate",
+    "--output",
+    "/home/cpaxton/src/home_robot_v4/.worktrees/wbc-grasp-primitive/logs/runtimes/goal-change-2a2ce5c1/logs/eval/goal-change-regressions-v1/full.xml"
+  ]
+}

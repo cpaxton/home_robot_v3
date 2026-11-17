@@ -1,0 +1,31 @@
+{
+  "format": "goal-change-launch-v1",
+  "pid": 384143,
+  "command": [
+    "/home/cpaxton/src/home_robot_v4/.worktrees/wbc-grasp-primitive/logs/runtimes/goal-change-2a2ce5c1/.venv/bin/python",
+    "-u",
+    "/home/cpaxton/src/home_robot_v4/.worktrees/wbc-grasp-primitive/logs/runtimes/goal-change-2a2ce5c1/logs/recovery/wrapper-reward-training-v1/supervise.py",
+    "--name",
+    "goal-change-curriculum-v1",
+    "--record-dir",
+    "/home/cpaxton/src/home_robot_v4/.worktrees/wbc-grasp-primitive/logs/jobs/goal-change-curriculum-v1",
+    "--cpu",
+    "14",
+    "--seconds",
+    "19800",
+    "--",
+    "/home/cpaxton/src/home_robot_v4/.worktrees/wbc-grasp-primitive/logs/runtimes/goal-change-2a2ce5c1/.venv/bin/python",
+    "-u",
+    "/home/cpaxton/src/home_robot_v4/.worktrees/wbc-grasp-primitive/logs/runtimes/goal-change-2a2ce5c1/logs/recovery/goal-change-curriculum-v1/supervise_training.py",
+    "--manifest-sha256",
+    "aa3caf201fc86c048cf243ed0b44bcfdaf97b9eae4cc57808b561274528863f4"
+  ],
+  "runtime_revision": "2a2ce5c1ec06ff9d03bb7b770dc82188e717e9df",
+  "runner_manifest_sha256": "aa3caf201fc86c048cf243ed0b44bcfdaf97b9eae4cc57808b561274528863f4",
+  "launched_unix": 1794931979.0779448,
+  "hardware_used": false,
+  "regression_cpu": 15,
+  "native_cpu": 14,
+  "viewer_paused": true,
+  "viewer_restored_by_supervisor": true
+}

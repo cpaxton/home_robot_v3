@@ -1,0 +1,93 @@
+{
+  "format": "goal-change-curriculum-v1",
+  "runtime_revision": "2a2ce5c1ec06ff9d03bb7b770dc82188e717e9df",
+  "initializer": "logs/manipulation/long-finetune-v1/continued/checkpoint-65536/actor",
+  "seed": 109,
+  "decisions_per_arm": 131072,
+  "critic_only_decisions": 0,
+  "rollout_steps": 256,
+  "actor_learning_rate": [
+    1e-05,
+    1e-06
+  ],
+  "critic_learning_rate": 0.001,
+  "initial_action_std": 0.02,
+  "epochs": 3,
+  "batch_size": 64,
+  "clip": 0.05,
+  "target_kl": 0.01,
+  "entropy_weight": 0.0001,
+  "family_control_tick_weights": [
+    0.5,
+    0.5
+  ],
+  "training_horizon_s": 25,
+  "evaluation_horizon_s": 25,
+  "randomization_scale": 0,
+  "case_manifest": "cases.json",
+  "reward_arms": [
+    "source",
+    "curriculum"
+  ],
+  "intermediate_checkpoint_selection": false,
+  "teacher_actions_in_loss": false,
+  "automatic_extensions": 0,
+  "hardware_used": false,
+  "safety_promoted": false,
+  "distribution": "FK-witness nonholonomic coupled trajectories with full/XY-only/free base masks, forward/reverse/base-yaw cases; separate audit motions/seeds; 50% TAMP grasp-pose unloaded prefix by physical ticks",
+  "checkpoint_admission": "raw actor is trained/evaluated on separately fingerprinted general and TAMP plants; export is scoped to its declared general plant, not qualified TAMP checkpoint deployment",
+  "preceding_attempt": {
+    "report": "docs/experiments/long_finetune_20261117.md",
+    "fresh_successes": 16,
+    "fresh_attempts": 24,
+    "goal_change_successes": 0,
+    "goal_change_attempts": 4
+  },
+  "independent_critic_epochs": 3,
+  "episode_contract": "finite_tracking_deadline_v1",
+  "reward": "unchanged legacy reward; ordinary exploration",
+  "comparison": "new nominal transition distribution at 10% overall; loaded actor/critic/Adam, explicit physical/RNG reset; same reward/noise/guards and decaying LR; not a new exact paired initialization",
+  "previous_preflight": null,
+  "quiet_reference_std_scale": 1.0,
+  "hand_pose_weight": 1.0,
+  "control_run": "logs/manipulation/long-finetune-v1/continued/run.json",
+  "control_physical_report": "logs/manipulation/long-finetune-v1/physical-comparison.json",
+  "control_retrained": false,
+  "admission_reuse": false,
+  "audit_scope": "eight new manifest audit cases never enter PPO; older regular and confirmation cohorts are inspected development evidence",
+  "source_training_state": "logs/manipulation/long-finetune-v1/continued/training.pt",
+  "source_training_state_sha256": "6fd733b8ebd0ceccc997340e7309e0c4442b14f9f9e336e324fa076e992ca824",
+  "source_decisions": 65536,
+  "optimizer_state_restored": true,
+  "environment_state_restored": false,
+  "checkpoint_every_decisions": 8192,
+  "source_cumulative_decisions": 81920,
+  "cumulative_decisions_if_complete": 212992,
+  "goal_manifest": "configs/benchmarks/mars_goal_changes_v1.json",
+  "goal_manifest_sha256": "b66110052fe39c2139c59de9b0dcde4eb190c96b49e1732e4044a1099eb5681f",
+  "general_control_tick_weights": [
+    0.6,
+    0.2,
+    0.2
+  ],
+  "admission_policy": "both nominal paths geometrically admitted; all teacher stops confirmed and no invalid physics; teacher task/safety failures retained as baseline, not filtered or promoted",
+  "regular_training_cases": 12,
+  "regular_development_audit_cases": 12,
+  "goal_training_cases": 8,
+  "goal_audit_cases": 8,
+  "initializer_weights_sha256": "e21dafc156967cf5f098b555da5606724127576b3eb3f79b9cb7dd910d64df0a",
+  "reused_baselines": {
+    "new-cases": {
+      "path": "logs/manipulation/long-finetune-v1/continued-final-new-cases.json",
+      "sha256": "ebfa7f692d56e7c72f2b33ef65a0e71d8e61857317e9a025b6e68bd956447c23"
+    },
+    "frozen-coupled": {
+      "path": "logs/manipulation/long-finetune-v1/continued-final-frozen-coupled.json",
+      "sha256": "43177a71b8be1916334327a24c4a3fcb1fcb7e0fc6d0c85fb05b5e5892aa50f8"
+    },
+    "tamp": {
+      "path": "logs/manipulation/long-finetune-v1/continued/final-tamp.json",
+      "sha256": "005e922f98056dd337d97db231d016d07f6311d8a0002e7e91cda7ecfdf37932"
+    }
+  }
+}

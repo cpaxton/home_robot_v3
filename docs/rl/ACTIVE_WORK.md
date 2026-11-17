@@ -98,8 +98,10 @@ Goal transitions are a specific gap: longer-trained 0/4 versus source 1/4 and
 teacher 2/4. Single-stage coupled is also only 4/8. The next planned allocation
 is 30% regular hand-active, 10% base-only, 10% goal changes, 50% unloaded TAMP
 by physical ticks. The environment and runner are now implemented/tested, awaiting
-a new complete source gate and nominal-path admission before PPO. No PPO job
-is active yet. [Curriculum](../experiments/goal_change_curriculum_20261117.md).
+a new complete source gate and nominal-path admission before PPO. Pipeline job
+`20261117_111259_6729bc` is running those checks at frozen source `2a2ce5c1`;
+131,072-decision PPO is queued behind them, not yet started. The retained viewer
+is paused during native work and restored afterward. [Curriculum](../experiments/goal_change_curriculum_20261117.md).
 The retained viewer is restored on 8766. [Longer run](../experiments/long_finetune_20261117.md),
 [fresh cases](../experiments/fresh_tracking_confirmation_20261117.md),
 [mixture](TRAINING_MIXTURE.md), [hardware readiness](MARS_HARDWARE_READINESS.md).

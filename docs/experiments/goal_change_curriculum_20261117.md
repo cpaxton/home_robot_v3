@@ -48,3 +48,15 @@ with the test worker on CPU15. Retained viewer restoration is automatic.
 
 Herman work remains passive: [current feedback audit](herman_feedback_audit_20261117.md).
 Preparing this simulator curriculum does not enable the hardware executor.
+
+## Launch status
+
+Source `2a2ce5c1` is committed and frozen under ignored workspace runtime storage,
+with matching canonical controller/test digest. Targeted handoff, deadline,
+regression-receipt and snapshot tests pass **36/36**; formatting/lint checks pass.
+Managed job `20261117_111259_6729bc` now runs fresh full regressions on CPU15
+and all 16 new teacher/source goal-change cases on CPU14. PPO is queued behind
+those checks, not yet running or qualified. The retained viewer is paused during
+native work and restored by the supervisor. Exact compact
+[launch evidence](../../paper/data/whole_body_control/goal_change_curriculum_v1/README.md)
+includes immutable-input digests and the full producers; raw logs remain ignored.
