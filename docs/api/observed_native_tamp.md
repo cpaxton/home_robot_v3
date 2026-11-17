@@ -41,6 +41,8 @@ those paths. This planning blocker is separate from moving-mask visibility loss.
 | `RigidRgbdTracker` | RGB feature correspondences, forward/backward optical flow, measured RGBD landmarks, RANSAC rigid fitting against a fixed reference | Lost masks/depth, repeated or insufficient texture, poor feature spread, inconsistent motion, replay, reference age >30 s; no global re-identification |
 | `MovingRgbdTracker` | Current whole measured appearance components and declared geometry/motion profile | Lost/ambiguous associations latch; diagnostic candidates, not calibrated global identity |
 | `MultiViewRgbdTracker` | Continuous head/wrist association within one source-synchronized capture; explicit complete-prior fragment and lighting profiles | Cached/misaligned views, global loss, competing or incompatible geometry; ideal shared-snapshot diagnostic, not hardware timing qualification |
+| `RobotViewGuard` | Reject camera association if an original winning depth ray may hit motor-derived rigid tool/camera outer geometry | Rejection only: never trims pixels, labels self, frees cells or proves absence of interference outside its named scope |
+| `ContinuousRgbdSource` | Process original camera captures in a background producer independently of tool/LLM reads; publish immutable candidate/frame pairs | Stale, changed/replayed, lost or invalidated evidence stops the source; does not assemble the support/background/robot effects required by `ObservedNativeAdapter` |
 | `ObservedBackground` | Historical environment/free-space evidence with original per-cell capture ages and geometry-qualified self exclusion | Unqualified excluded endpoints invalidate cached free cells; occupied evidence survives. False self labels remain environment when qualification is requested. Longer validity requires a bounded static-scene assumption |
 | `ShapePoseEvidence` | Explicit primitive solid equivalence with external pose-error bounds | Unknown material yaw remains unknown; generic unique-pose consumers reject |
 | `GripperGeometryEnvelope` | Full tool subtree over unmeasured joint intervals, anchored at motor-derived rigid EE | Conditional model bounds; no passive-joint sensor claim or full-arm certificate |
@@ -108,6 +110,31 @@ escape or whole-robot interval violation fails the robot audit; sampled
 containment still does not certify mechanical/hardware bounds or task execution.
 
 ## Provider assembly
+
+The camera source has a separate candidate-level contract:
+`ContinuousRgbdSource(tracker, initial_views=..., read_views=...).start()` calls
+a bounded-I/O reader independently of consumers. `snapshot()` returns the current
+candidate and its original immutable views. `collect(after=..., min_span_s=.2,
+timeout_s=2.)` returns two fresh original captures strictly after the barrier.
+It skips stale history instead of retiming it. Identical retransmissions can have
+a later transport receipt, but retain the original published packet and freshness.
+Changed source intervals or contents under the same ID reject. Tracking loss,
+staleness and `invalidate()` latch; an explicit new reference/source is required.
+Call `close()` and successfully join the producer before closing its camera or
+client. A blocked reader produces a shutdown error, not a successful close.
+This source is not directly interchangeable with the full adapter source below.
+
+`RobotViewGuard.from_registered_depth(...)` binds a capture's original winning
+depth rays, RGB-grid unprojection, calibrated camera pair and explicit pose/error
+profile. Any possible rigid housing/camera interference rejects that entire
+camera; another synchronized camera may still supply valid evidence. Whole-view
+or all-view loss never silently restarts identity. Outer visual/convex geometry
+is used only for rejection. Passive fingers, other robot links, depth ownership
+and workspace free space remain unqualified by this guard.
+
+The [November 17 camera-source diagnostics](../experiments/observed_camera_source_20261117.md)
+preserve normal-cadence association failures as well as delayed-camera failures.
+Continuous processing is necessary plumbing, not a demonstrated fix for them.
 
 `ObservedNativeAdapter(robot, source=..., refine=..., tasks=...)` is deliberately
 explicit. `source.input_mode` must be `observed`.

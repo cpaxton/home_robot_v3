@@ -193,3 +193,20 @@ separately. `robot_kinematic_signature` binds named tendon terms and coefficient
 as well as rigid joint/camera calibration. See the
 [capture/whole-robot progress record](experiments/observed_transfer_progress_20261116.md);
 neither reprojection nor outer robot geometry establishes endpoint ownership.
+
+The paired script also accepts `--stationary-captures N` (zero/default runs the
+native control; otherwise N must be at least two), `--head-pan` (default -1.57),
+`--head-tilt` (default -0.7), and `--robot-only-model PATH`. The last explicitly
+enables rejection of possible rigid-tool interference using original depth rays;
+it does not certify self ownership. Stationary mode scores no transfer.
+
+`scripts/eval_continuous_rgbd_source.py --sim CONFIG --output DIR` runs a live ZMQ
+head-camera producer while its consumer pauses. `--consumer-pause-s` defaults to
+3.0 and must exceed the unchanged 1.5-second tracking gap; `--rounds` defaults to
+2; `--head-tilt` defaults to -0.7. It uses an explicit operator colour seed and
+known cylinder prior, eight same-sample motors and simulator camera localization.
+The ordinary ZMQ stream does not expose raw registration provenance, so this
+diagnostic explicitly lacks `RobotViewGuard`. Original input archives, source
+hashes, capture intervals, dispatch audit and failure feedback are retained.
+It uses CPU OSMesa via managed jobs and requires no VLM. This is a stationary
+candidate-source check, not observed pick/place or hardware acceptance.

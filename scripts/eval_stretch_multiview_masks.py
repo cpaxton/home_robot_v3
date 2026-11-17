@@ -14,6 +14,7 @@ import argparse
 import json
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import eval_native_table_contact as contact
 import mujoco
@@ -28,6 +29,8 @@ from emet.controller.manipulation.geometry_models import PrimitiveModel
 from emet.controller.manipulation.multiview_rgbd_tracking import MultiViewRgbdTracker, SynchronizedRgbdView
 from emet.controller.manipulation.native_inputs import ObservationUnavailable
 from emet.controller.manipulation.observed_effects import CaptureInterval
+from emet.controller.manipulation.robot_view_guard import RobotViewGuard, rigid_gripper_outer_solids
+from emet.controller.manipulation.stretch_encoder_kinematics import estimate_stretch_ee_from_encoders
 from emet.eval.episode_video import write_rgb_sequence_mp4
 from emet.simulation.mujoco_server_stretch import default_scene_xml_path
 from emet.simulation.stretch_mujoco.enums.stretch_cameras import StretchCameras
@@ -40,6 +43,8 @@ from emet.visualization.manip_video import overlay_manip_frame
 
 class PairedContactRobot(CameraContactRobot):
     capture_period_s = 0.25
+    robot_only_model = None
+    stationary_only = False
 
     def __init__(self, model, object_body, **kwargs):
         self.wrist_renderer = None
@@ -115,6 +120,51 @@ class PairedContactRobot(CameraContactRobot):
         index = len(self.rows)
         ticket = CaptureInterval(f"paired:{index}:{start}", start, end, time.monotonic(), "sim-shared-snapshot")
         views = {name: SynchronizedRgbdView(a[0], a[1], a[2], ticket) for name, a in arrays.items()}
+        guard_ids = ()
+        if self.robot_only_model is not None:
+            head_pose = arrays["head"][7].copy()
+            head_pose[:3, :3] = head_pose[:3, :3] @ np.array([[0.0, 1.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])
+            timing = {
+                "available": True,
+                "source": "renderer_synchronized_snapshot",
+                "timestamp_ns": start_ns,
+                "clock_id": sample["clock_id"],
+                "clock_domain": "mujoco_render_monotonic",
+                "capture_interval_ns": sample["interval_ns"],
+                "depth_capture_interval_ns": sample["interval_ns"],
+                "motor_sample": motors,
+            }
+            observation = SimpleNamespace(
+                is_simulation=True,
+                image_timing={"head_cam_left": timing},
+                camera_pose=head_pose,
+                received_monotonic=ticket.received_monotonic,
+            )
+            estimate = estimate_stretch_ee_from_encoders(observation, self.robot_only_model)
+            ticket = estimate.motor_capture.capture
+            guard_ids, solids, signature = rigid_gripper_outer_solids(
+                self.robot_only_model, estimate, now=time.monotonic(), position_error_m=0.001, rotation_error_rad=0.005
+            )
+            views = {}
+            for name, a in arrays.items():
+                raw = registration[name]
+                guard = RobotViewGuard.from_registered_depth(
+                    capture=ticket,
+                    raw_depth=raw["raw_depth"],
+                    depth_k=raw["depth_K"],
+                    rgb_k=a[6],
+                    rgb_from_depth=raw["rgb_from_depth"],
+                    world_from_rgb=a[7],
+                    output_shape=a[1].shape,
+                    geom_ids=guard_ids,
+                    outer_solids=solids,
+                    model_signature=signature,
+                    calibration_id="diagnostic-rigid-tool-1mm-5mrad",
+                    point_error_m=0.001,
+                    robot_position_error_m=0.001,
+                    robot_rotation_error_rad=0.005,
+                )
+                views[name] = SynchronizedRgbdView(a[0], a[1], a[2], ticket, guard)
         row = {
             "index": index,
             "capture": {
@@ -122,6 +172,7 @@ class PairedContactRobot(CameraContactRobot):
                 "earliest": start,
                 "latest": end,
                 "received_monotonic": ticket.received_monotonic,
+                "calibration_id": ticket.calibration_id,
                 "clock_id": sample["clock_id"],
                 "interval_ns": sample["interval_ns"],
                 "motor_sample": motors,
@@ -131,6 +182,7 @@ class PairedContactRobot(CameraContactRobot):
             "state": "candidate",
             "sim_time": float(probe.time),
             "scorer_visible_pixels": {name: int(a[3].sum()) for name, a in arrays.items()},
+            "robot_guard_geom_ids": list(guard_ids),
         }
         masks = {}
         try:
@@ -200,9 +252,14 @@ class PairedContactRobot(CameraContactRobot):
         panel = overlay_manip_frame(
             np.concatenate(panels, axis=1),
             overlay_style="border",
-            title="Stretch native contact | head (presentation crop) / wrist | current masks",
+            title=("Stretch stationary cameras" if self.stationary_only else "Stretch native contact")
+            + " | head (presentation crop) / wrist | current masks",
             action="head/wrist tracking" if row["state"] == "candidate" else "STOP: global geometry unknown",
-            goal="diagnose observed visibility through a full native contact transfer",
+            goal=(
+                "stationary visibility; no transfer attempted"
+                if self.stationary_only
+                else "diagnose observed visibility through a full native contact transfer"
+            ),
             detail=f"t={probe.time:.2f}s views={row.get('views_used', [])} " + row.get("reason", ""),
             flags="RGBD + prior only for tracker | privileged controller/scorer | no observed task-success claim",
         )
@@ -222,16 +279,49 @@ def main():
         default=0.25,
         help="Minimum real time between samples; longer gaps stress the unchanged motion envelope.",
     )
+    parser.add_argument(
+        "--robot-only-model",
+        type=Path,
+        help="Opt in to motor-derived rigid-tool interference rejection; not ownership certification.",
+    )
+    parser.add_argument(
+        "--stationary-captures",
+        type=int,
+        default=0,
+        help="Collect only this many stationary captures (at least 2), without a transfer.",
+    )
+    parser.add_argument("--head-pan", type=float, default=-1.57)
+    parser.add_argument("--head-tilt", type=float, default=-0.7)
     args = parser.parse_args()
     if not np.isfinite(args.capture_period_s) or args.capture_period_s < 0.25:
         parser.error("--capture-period-s must be finite and at least 0.25")
+    if args.stationary_captures != 0 and args.stationary_captures < 2:
+        parser.error("--stationary-captures must be zero or at least 2")
+    if not np.isfinite([args.head_pan, args.head_tilt]).all():
+        parser.error("head pose must be finite")
     args.output.mkdir(parents=True, exist_ok=True)
     PairedContactRobot.output = args.output
     PairedContactRobot.capture_period_s = args.capture_period_s
+    PairedContactRobot.stationary_only = bool(args.stationary_captures)
+    PairedContactRobot.head_pose = (args.head_pan, args.head_tilt)
+    PairedContactRobot.robot_only_model = (
+        mujoco.MjModel.from_xml_path(str(args.robot_only_model)) if args.robot_only_model else None
+    )
+    model = mujoco.MjModel.from_xml_path(default_scene_xml_path)
+    for name, target in (("head_pan", args.head_pan), ("head_tilt", args.head_tilt)):
+        aid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, name)
+        if not model.actuator_ctrlrange[aid, 0] <= target <= model.actuator_ctrlrange[aid, 1]:
+            parser.error("head pose outside actuator range")
     previous = contact.ContactRobot
     try:
-        contact.ContactRobot = PairedContactRobot
-        control = contact.run_case(mujoco.MjModel.from_xml_path(default_scene_xml_path), "object2")
+        if args.stationary_captures:
+            robot = PairedContactRobot(model, "object2")
+            for _ in range(args.stationary_captures - 1):
+                robot.observe()
+            control = None
+        else:
+            contact.ContactRobot = PairedContactRobot
+            control = contact.run_case(model, "object2")
     finally:
         contact.ContactRobot = previous
         for robot in PairedContactRobot.instances:
@@ -242,20 +332,26 @@ def main():
     write_rgb_sequence_mp4(robot.frames, args.output / "head-wrist-contact.mp4", fps=4)
     (args.output / "control.json").write_text(json.dumps(control, indent=2) + "\n")
     summary = {
-        "scope": "co-sampled camera handoff during privileged contact control",
+        "scope": (
+            "stationary camera acquisition diagnostic"
+            if control is None
+            else "co-sampled camera handoff during privileged contact control"
+        ),
         "observed_task_success_assessed": False,
         "execution_qualified": False,
         "capture_evidence": "same_snapshot_eight_motors_and_original_depth_reprojection",
         "robot_geometry_qualified": False,
         "minimum_capture_period_s": args.capture_period_s,
-        "privileged_control_passed": control["passed"],
+        "privileged_control_passed": control["passed"] if control is not None else None,
+        "robot_guard_scope": "rigid-tool-only-rejection" if args.robot_only_model else "disabled",
+        "head_pose": list(PairedContactRobot.head_pose),
         "frames": len(robot.rows),
         "candidate_frames": sum(r["state"] == "candidate" for r in robot.rows),
         "rejection_codes": sorted({r["reason"] for r in robot.rows if "reason" in r}),
     }
     (args.output / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     print(json.dumps(summary), flush=True)
-    return 0 if control["passed"] and summary["candidate_frames"] == summary["frames"] else 1
+    return 0 if (control is None or control["passed"]) and summary["candidate_frames"] == summary["frames"] else 1
 
 
 if __name__ == "__main__":

@@ -23,6 +23,10 @@
       whole-robot outer bounds pass contact sampling; synchronized depth provenance
       reproduces wrist-camera/target RGB ownership disagreement. Normal tracking
       81/81 is a separate development repeat, not observed control qualification.
+      [November 17 camera-source checks](docs/experiments/observed_camera_source_20261117.md)
+      add continuous tracking and whole-camera interference rejection. Normal
+      0.266-second live camera updates still expose incompatible isolated depth
+      returns; continuous processing alone does not resolve association.
 
 - [ ] Profile failed-search cost without answer overrides or target-specific rules:
       final S0 seed 1 misses the receptacle in both arms but candidate takes

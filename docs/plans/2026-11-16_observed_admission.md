@@ -148,6 +148,12 @@ does not close the source/contact gates below.
    Target self-occupancy also needs a separately typed, capture-bound material
    proof for a declared solid prior. Excluded target cells remain unknown;
    captured robot material cannot admit the payload's own occupied volume.
+   November 17: the independent camera producer and whole-camera rigid-tool
+   interference rejection are implemented; 79 focused checks pass. Live original
+   and changed-tilt views still reject their first update at normal 0.266-second
+   gaps. Publish original raw registration provenance on the live ZMQ path next;
+   continuous processing alone does not fix incompatible depth returns. See
+   [the camera-source evidence](../experiments/observed_camera_source_20261117.md).
 4. Resolve moving-mask foreign components with independent geometry/provenance
    evidence; preserve tiny unresolved competitors, complete-union controls,
    latched loss and explicit fresh reacquisition. Do not retime captures, shrink
