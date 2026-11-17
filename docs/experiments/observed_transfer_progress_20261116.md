@@ -34,6 +34,8 @@ incident below.
 | Requested 1.35 s minimum capture gap | Physical control passes; tracking 1/83 | Startup/processing makes first interval 1.7692 s; not an inside-limit ownership test |
 | Separate stationary pair | Tracking 1/2; `geometry_tracking_no_match` at 1.35137 s | Real inside-limit reproduction; no task execution |
 | Whole-robot physical audit | Both native controls pass; 175 samples, zero corner escapes/interval violations | 75 contact samples; conditional mechanical/model bounds, not hardware certification |
+| Scalar-contact committed replay (`f34380ac`) | Both native controls pass; 175 samples contained, zero interval violations | Separate replay after both preserved native crashes; runtime sources unchanged throughout |
+| Post-mitigation motion/capture/native/observed adapters | 690 pass, zero failures/errors/skips | Final source `f34380ac`; overlaps earlier unit suites |
 
 The first renderer launch fails before simulation because its environment lacks
 the existing user-space OSMesa library path. `head-wrist/` preserves that failure;
@@ -99,5 +101,18 @@ thresholds, contact exclusions or retention limits change. Tests prohibit both
 bulk fields and per-contact geometry-array reads, alternate real contact counts
 through repeated copy/collision calls, and preserve body/geom exceptions. This
 bypasses the implicated binding path; the underlying native memory fault remains
-unproven until independently investigated. Live replay is required before
-claiming that mitigation works in this diagnostic.
+unproven until independently investigated.
+
+The committed `f34380ac` scalar-only replay, job `20261116_233748_a47132`, completes
+both physical controls and all 175 geometry samples (75 in contact), with zero
+corner escapes or interval violations. The raw manifest pins Python/native
+MuJoCo 3.5.0 and source hashes; its integrity check reports unchanged source and
+child exit 0. All 110 focused physical/contact/payload tests pass, including the
+guarded scalar-access regression. This is successful mitigation evidence for
+this replay, not proof that arbitrary native corruption is cured or that an
+observed task can execute. The broader post-change regression, job
+`20261116_233748_c3c620`, passes all 690 tests with zero failures/errors/skips.
+
+Read-only review finds no concrete semantic regression in the mitigation. Its
+per-contact Python copies add a constant cost; performance in furnished scenes
+remains unqualified and is not inferred from these small control fixtures.

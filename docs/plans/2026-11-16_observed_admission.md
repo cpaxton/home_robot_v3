@@ -107,6 +107,14 @@ though one RGB pixel is target-labelled. A fresh normal 81/81 repeat is therefor
 not a fix for timing-dependent association. See
 [results and exact cohort limits](../experiments/observed_transfer_progress_20261116.md).
 
+The committed geometry audit then exposes two native CPU `_structs` crashes;
+the faulthandler reproduction identifies the bulk contact-field read in the
+existing scene collision checker. A scalar-snapshot mitigation, `f34380ac`,
+passes 110 physical/contact/payload checks and a source-frozen 2/2 native-control
+replay with 175 contained geometry samples. Both failed attempts remain recorded.
+This native-runtime mitigation is separate from observed-task acceptance and
+does not close the source/contact gates below.
+
 1. Local support-contact rules and full-source validation of the new fingertip
    and finite-closing policy. Preserve unrelated obstacles, wrist/housing checks
    and deep-penetration rejection; no whole-support or unknown-space exemption.

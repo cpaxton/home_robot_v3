@@ -40,6 +40,12 @@
       "errors": 0,
       "failures": 0,
       "skipped": 0
+    },
+    "post-crash-regressions.xml": {
+      "tests": 690,
+      "errors": 0,
+      "failures": 0,
+      "skipped": 0
     }
   },
   "diagnostics": {
@@ -134,7 +140,15 @@
     "robot-contact-final/source-integrity.json": "96db0b32d715ec87b6e4f52d5e6d25acddbe6092692bc9a17cf183a511e08d7c",
     "robot-contact-faulthandler/source-manifest.json": "096826bf8fbbf6ad60e8a0a3d160d7bf3be8447912bec553ee223ec40b5cce8a",
     "robot-contact-faulthandler/source-integrity.json": "96db0b32d715ec87b6e4f52d5e6d25acddbe6092692bc9a17cf183a511e08d7c",
-    "scalar-contact-tests.xml": "e6dd1a4371562d5f22f682dc2491418b8b1b45e3f18d84f4c09e9d0298f43200"
+    "scalar-contact-tests.xml": "e6dd1a4371562d5f22f682dc2491418b8b1b45e3f18d84f4c09e9d0298f43200",
+    "robot-contact-scalar/object2-control.json": "b8aed39713a77e9b168f9d5df5958e5630e0a933e8a7ce7b88de203a000bd38d",
+    "robot-contact-scalar/object1-envelope.json": "590052f4821bb2ee525e0f8e8495ca03383e9ad8ab1570ec19817be6d1b7eeab",
+    "robot-contact-scalar/source-manifest.json": "a61d2cee14cd6368210f4976c79b33ab5b9865d43a232838f21f289fcf458ee0",
+    "robot-contact-scalar/source-integrity.json": "ce9d682fabca2b0a7d648787b946ab0224ee5e38d4a88fc999552e90604eaf40",
+    "robot-contact-scalar/summary.json": "a53c3bb272e7994d1928008157479abc346edeb28433d433461a03c4443129fc",
+    "robot-contact-scalar/object2-envelope.json": "01c99dfcbecf200beb3ce70b1578e2593671ecd40ca19742e36e8a5cad756460",
+    "robot-contact-scalar/object1-control.json": "832edc1b93e8c2ceed9b6c96a89e00f5ff9d2d5f964fcb2d4ccc8e7ee02b5804",
+    "post-crash-regressions.xml": "b0ef44075695ec9ec78f66610fe0b3d7804e61753ec8bd2059d1dbc23c986f04"
   },
   "jobs": {
     "initial_capture_tests": "20261116_230657_d709e1",
@@ -150,7 +164,9 @@
     "nonserial_ancestry": "20261116_232747_7c319f",
     "committed_source_audit": "20261116_232907_fb9824",
     "faulthandler_retry": "20261116_233200_b02240",
-    "scalar_contact_tests": "20261116_233619_e73e55"
+    "scalar_contact_tests": "20261116_233619_e73e55",
+    "scalar_physical_replay": "20261116_233748_a47132",
+    "post_crash_regressions": "20261116_233748_c3c620"
   },
   "native_incidents": {
     "robot-contact-final": {
@@ -163,5 +179,41 @@
       "changed_files": [],
       "child_exit_code": -11
     }
+  },
+  "committed_scalar_replay": {
+    "runtime_commit": "f34380ac",
+    "source_integrity": {
+      "unchanged": true,
+      "changed_files": [],
+      "child_exit_code": 0
+    },
+    "runtime": {
+      "mujoco_version": "3.5.0",
+      "native_version": "3.5.0"
+    },
+    "controls": [
+      {
+        "object": "object1",
+        "passed": true,
+        "robot_envelope": {
+          "samples": 88,
+          "contact_samples": 38,
+          "max_corner_escape_m": 0.0,
+          "samples_outside_declared_intervals": 0,
+          "scope": "sampled containment only; not certified hardware bounds"
+        }
+      },
+      {
+        "object": "object2",
+        "passed": true,
+        "robot_envelope": {
+          "samples": 87,
+          "contact_samples": 37,
+          "max_corner_escape_m": 0.0,
+          "samples_outside_declared_intervals": 0,
+          "scope": "sampled containment only; not certified hardware bounds"
+        }
+      }
+    ]
   }
 }
