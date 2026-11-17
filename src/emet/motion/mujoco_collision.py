@@ -151,8 +151,11 @@ class MujocoSceneCollisionChecker:
 
     def capture_payload(self):
         """Save all attachment state before hypothetical planning."""
-        return (self.payload_body, self.payload_parent,
-                None if self.payload_transform is None else self.payload_transform.copy())
+        return (
+            self.payload_body,
+            self.payload_parent,
+            None if self.payload_transform is None else self.payload_transform.copy(),
+        )
 
     def restore_payload(self, state):
         self.payload_body, self.payload_parent, self.payload_transform = state
@@ -182,23 +185,32 @@ class MujocoSceneCollisionChecker:
         else:
             mujoco.mj_collision(model, data)
         self.last_contacts = []
-        # Furnished scenes have many environment/environment contacts. Filter
-        # their body IDs and penetration depths in bulk; only relevant contacts
-        # need Python name/pair resolution. The geometry and exclusions are
-        # unchanged, including explicit MuJoCo contact pairs.
-        body_pairs = model.geom_bodyid[data.contact.geom[: data.ncon]]
+        # Native CPU audits faulted inside _MjContactList.geom (MuJoCo 3.5.0).
+        # Use fresh scalar contact fields, avoiding bulk array construction and
+        # retained views across collision/copy updates. This is a mitigation,
+        # not proof of the binding crash's underlying cause. Filtering on the
+        # copied arrays preserves geometry, thresholds and contact exceptions.
+        count = int(data.ncon)
+        if not count:
+            return False
+        geom_pairs, distances = np.empty((count, 2), dtype=int), np.empty(count)
+        for index in range(count):
+            contact = data.contact[index]
+            geom_pairs[index] = int(contact.geom1), int(contact.geom2)
+            distances[index] = float(contact.dist)
+        body_pairs = model.geom_bodyid[geom_pairs]
         relevant = np.isin(body_pairs, list(watched)).any(axis=1)
-        relevant &= data.contact.dist[: data.ncon] < -self.penetration_tolerance_m
+        relevant &= distances < -self.penetration_tolerance_m
         for index in np.flatnonzero(relevant):
             contact = data.contact[int(index)]
             a, b = map(int, body_pairs[index])
             pair = [model.body(a).name, model.body(b).name]
             if (
                 frozenset(pair) in self.allowed_pairs
-                or frozenset(int(g) for g in contact.geom) in self.allowed_geom_pairs
+                or frozenset(geom_pairs[index]) in self.allowed_geom_pairs
             ):
                 continue
-            departure = self._support_departure.get(frozenset(int(g) for g in contact.geom))
+            departure = self._support_departure.get(frozenset(geom_pairs[index]))
             if (
                 departure is not None
                 and float(contact.dist) >= departure["minimum_distance_m"] - 1e-7

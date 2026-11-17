@@ -14,6 +14,14 @@ audit precede the final tendon-signature/base-validation guards; those guards
 have separate regression coverage. Their physical outcomes are not retroactively
 rescored at the later source.
 
+The committed-source audit at `060cdb69` subsequently crashes in native code:
+`robot-contact-final` completes only the cube control, then child exit `-11`;
+the unchanged-source `robot-contact-faulthandler` retry crashes during its first
+placement before publishing a completed control. Both source-integrity records
+report unchanged Python sources. These attempts do **not** pass qualification,
+and the earlier development 2/2 is not substituted for them. See the native
+incident below.
+
 | Check | Result | Limit |
 | --- | --- | --- |
 | Initial capture/encoder/multiview regressions | 45 pass, zero failures/errors/skips | Before whole-robot addition |
@@ -73,3 +81,23 @@ qualified target self-occupancy, and the concrete live source/refiner. Then run
 score the physical effect independently, and exercise pre-command stale/unknown
 and post-dispatch loss/consumed-handle feedback. Preserve the 1 mm penetration
 bound, unknown-space rejection and existing retention/tracking thresholds.
+
+## Native CPU collision-accessor incident
+
+Jobs `20261116_232907_fb9824` and `20261116_233200_b02240` preserve the two failures.
+The kernel identifies the Python `_structs` extension in the first crash; the
+retry's faulthandler stack locates `MujocoSceneCollisionChecker.configuration_collides`
+at `data.contact.geom` during an RRT placement edge check. The installed/runtime
+MuJoCo is 3.5.0. The older kernel record mentioning 3.17.0 belongs to a different
+earlier process and is not this runtime. Rendering is disabled and CUDA devices
+are hidden in both jobs; this evidence does not identify a GPU failure.
+
+The targeted mitigation copies scalar `geom1`, `geom2`, `dist` from fresh indexed
+contacts, then retains the existing body/depth filtering and exact exceptions.
+An empty contact set returns immediately. No solver parameters, collision
+thresholds, contact exclusions or retention limits change. Tests prohibit both
+bulk fields and per-contact geometry-array reads, alternate real contact counts
+through repeated copy/collision calls, and preserve body/geom exceptions. This
+bypasses the implicated binding path; the underlying native memory fault remains
+unproven until independently investigated. Live replay is required before
+claiming that mitigation works in this diagnostic.

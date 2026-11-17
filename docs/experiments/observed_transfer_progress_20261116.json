@@ -34,6 +34,12 @@
       "errors": 0,
       "failures": 0,
       "skipped": 0
+    },
+    "scalar-contact-tests.xml": {
+      "tests": 110,
+      "errors": 0,
+      "failures": 0,
+      "skipped": 0
     }
   },
   "diagnostics": {
@@ -123,7 +129,12 @@
     "stationary-pair/scorer-ownership.json": "2be97809a142676ecba9f6d136dc2e6bbe53cb292b1ee8e5993b761fe41ef96d",
     "stationary-pair/sources.json": "8ae7ec6da89b14db3816e497c9a54130015335a4f5c28d0f0a76d957b270832d",
     "stationary-pair/summary.json": "478fe485d330ed0e636422bb777b3d62b97ba330583542a26138f2d5a3f60a55",
-    "nonserial-checks.xml": "aa8b9fc1ffee935680e8bf978d0a445bad12f8af7b53a9bcb5a53d48b25b0935"
+    "nonserial-checks.xml": "aa8b9fc1ffee935680e8bf978d0a445bad12f8af7b53a9bcb5a53d48b25b0935",
+    "robot-contact-final/source-manifest.json": "f6031c6ecda5acf2e1208c72aaf7d2a4b40f9a17bf12b12e8e8a27482c0772ba",
+    "robot-contact-final/source-integrity.json": "96db0b32d715ec87b6e4f52d5e6d25acddbe6092692bc9a17cf183a511e08d7c",
+    "robot-contact-faulthandler/source-manifest.json": "096826bf8fbbf6ad60e8a0a3d160d7bf3be8447912bec553ee223ec40b5cce8a",
+    "robot-contact-faulthandler/source-integrity.json": "96db0b32d715ec87b6e4f52d5e6d25acddbe6092692bc9a17cf183a511e08d7c",
+    "scalar-contact-tests.xml": "e6dd1a4371562d5f22f682dc2491418b8b1b45e3f18d84f4c09e9d0298f43200"
   },
   "jobs": {
     "initial_capture_tests": "20261116_230657_d709e1",
@@ -136,6 +147,21 @@
     "stationary_pair": "20261116_231905_022dd9",
     "full_regressions": "20261116_232123_63e3cc",
     "final_capture_checks": "20261116_232503_b67ba3",
-    "nonserial_ancestry": "20261116_232747_7c319f"
+    "nonserial_ancestry": "20261116_232747_7c319f",
+    "committed_source_audit": "20261116_232907_fb9824",
+    "faulthandler_retry": "20261116_233200_b02240",
+    "scalar_contact_tests": "20261116_233619_e73e55"
+  },
+  "native_incidents": {
+    "robot-contact-final": {
+      "unchanged": true,
+      "changed_files": [],
+      "child_exit_code": -11
+    },
+    "robot-contact-faulthandler": {
+      "unchanged": true,
+      "changed_files": [],
+      "child_exit_code": -11
+    }
   }
 }
