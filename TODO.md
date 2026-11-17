@@ -1,5 +1,24 @@
 # Living TODOs (small / near-term)
 
+- [x] Bind optional gaze arguments to adapter capabilities; native Habitat uses
+      acquisition-time confirmation rather than requiring a streaming sequence.
+      Preserve bounded movement RGB/pose/timing independently of voxel updates
+      and feed it to existing view selection. Keep query images and request
+      traces through debug finalization. The focused pack passes 789 tests;
+      native/live and frozen-packet qualification are separate gates.
+- [x] Document the full registry and evidence/action contracts in
+      `docs/agent_tool_contracts.md`; coverage checks include all registry names.
+- [ ] Qualify the new native head path, frozen Q12 overview/detail packets and
+      an end-to-end Q12 replay; preserve failures and abstentions. Prior paired
+      micro-pilot: EQA 0/2 both arms; S0 candidate object+destination 2/2 versus
+      pre-gaze 1/2 (212.2 vs 656.7 s episode wall). One seed/two questions do not
+      establish general superiority or a current-main merge gate.
+- [ ] Evaluate a small subset of [NVIDIA USDCraft-10K](https://huggingface.co/datasets/nvidia/USDCraft-10K)
+      assets for new articulated OVMM/TAMP/EQA scenes (doors, drawers, appliances
+      and hidden-object tasks). Assess OpenUSD/PhysX to MuJoCo/MJCF import;
+      preserve joint limits, collision shapes, scale and physical properties.
+      Validate opening/closing and retain asset IDs, revisions and attribution.
+
 - [x] Have a fresh-context subagent actually operate production CHAT tools in
       live simulation. Independent six-round trial and informed eight-round
       follow-up both fail localization; preserve failures and separate loop

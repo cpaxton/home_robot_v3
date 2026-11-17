@@ -355,6 +355,7 @@ Use this outline when updating docs or finding the right page. Prefer editing th
 | [eqa.md](docs/eqa.md) | Embodied QA overview (older Stretch path + pointers) |
 | [AGENT_RUN.md](docs/AGENT_RUN.md) | Discord/CHAT vs Habitat `EQA_EPISODE`; skill packs |
 | [Agent tools](docs/agent_tools.md) | Complete CHAT and EQA tool index, requirements, and reference links |
+| [Tool contracts](docs/agent_tool_contracts.md) | Inputs, effects, evidence guarantees, adapter capabilities, and failure/recovery semantics |
 | [TAMP overview](docs/tamp.md) | Task discovery, motion planning, execution, verification, and current limits |
 | [llm_serve.md](docs/llm_serve.md) | **Remote inference** (OpenAI LAN) + **testing LLMs** (`emet llm` / `emet run chat --host`) |
 | [llm_agent.md](docs/llm_agent.md) | Historical Stretch LLM pickup walkthrough → points at modern agent docs |

@@ -5,6 +5,8 @@ interactive terminal/Discord agent (`run agent`); **EQA_EPISODE** is the separat
 embodied question-answering/exploration loop. Their tool packs are distinct.
 Enabling a caption model in CHAT does not switch to the EQA episode loop.
 See [running the agent](AGENT_RUN.md) and the [TAMP overview](tamp.md).
+For the complete list with effects, evidence boundaries, failure codes and
+adapter support, use [Agent tools and contracts](agent_tool_contracts.md).
 
 A registered tool is not a guarantee that the connected robot can execute it.
 Handlers depend on the configured executor, robot, cameras, memory, and simulator
@@ -129,6 +131,7 @@ raw responses, admission settings and calibration for manual inspection.
 | --- | --- | --- |
 | `explore` | Navigate to grow map coverage; requires navigation/mapping executor | [Agent guide](AGENT_RUN.md#skill-checklist-interactive) |
 | `scan_environment` | In-place survey to update map and memory; can rotate the robot | [Agent guide](AGENT_RUN.md#lifelong-reload) |
+| `observe_floor` | Bounded downward inspection with footprint recheck and task-gaze restoration; does not authorize motion | [Observation contract](agent_tool_contracts.md#head-and-frame-contract) |
 | `find_objects` | Find and navigate toward a named object/location; inspect rejection or cancellation before retrying | [Navigation diagnostics](AGENT_RUN.md#skill-checklist-interactive) |
 | `go_home` | Navigate to the starting position using the accumulated map | [CHAT handlers](../src/emet/agent/tools.py) |
 | `rotate_base` | Relative base yaw in degrees; positive is left/counterclockwise | [CHAT handlers](../src/emet/agent/tools.py) |
@@ -174,14 +177,16 @@ See [Graph EQA](graph_eqa.md), [Habitat EQA](habitat_eqa.md), and
 
 | Tool | Purpose and requirements |
 | --- | --- |
+| `read_history` | Read exact archived dialogue text; no new observation |
+| `recall_image` | Reattach retained historical pixels, without fresh-visibility claims |
 | `inspect_graph` | Read detections and stored views without motion; detection handles are proposals, not camera images |
 | `explore_frontier` | Grow coverage; optional weak `toward` bias does not replace investigating a detection |
 | `investigate` | Navigate around a listed detection/place, capture a fresh view, and assess it |
 | `navigate_to_obs` | Compatibility alias for `investigate` |
-| `look_around` | Scan in place to refresh map/graph |
+| `look_around` | Configured scan, or optional capability-qualified measured head view |
 | `verify_siglip` | Visual matching plus VLM assessment of the current/stored view; matching alone does not establish answerability |
-| `submit_answer` | Answer-mode terminal action, gated by VLM answerability or exhausted round budget |
-| `finish` | Explore-mode terminal action, gated by exhausted frontiers or exploration budget |
+| `submit_answer` | Answer-mode terminal action; model-final preserves explicit model submission, while legacy policies can gate differently |
+| `finish` | Explore-mode terminal action; follows the active episode policy |
 
 `submit_answer` and `finish` belong to different submodes. The conceptual pairs
 `scan_environment`/`look_around` and `explore`/`explore_frontier` share intent but
