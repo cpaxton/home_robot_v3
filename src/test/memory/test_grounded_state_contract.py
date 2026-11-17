@@ -1204,7 +1204,9 @@ def test_replay_fused_confirmation_survives_raw_absent_and_invalidates_on_revisi
     )
 
 
-def test_grounded_verified_submission_references_persisted_confirmation():
+def test_grounded_verified_submission_references_persisted_confirmation(tmp_path, monkeypatch):
+    monkeypatch.setenv("EMET_AGENTIC_QUERY_IMAGES", "1")
+    monkeypatch.setenv("EMET_AGENTIC_QUERY_IMAGES_DIR", str(tmp_path))
     replay = _replay()
     dirty = replay["cases"]["dirty_obs76"]
     memory = _agent_memory()
@@ -1233,6 +1235,7 @@ def test_grounded_verified_submission_references_persisted_confirmation():
         trace_meta={"qid": replay["question_id"], "session_id": dirty["session_id"]},
     )
     executor._target_phrase = "silver trash can"
+    executor._inspection_context_by_obs = {obs_id: np.full((4, 4, 3), 77, dtype=np.uint8)}
     hypothesis_id = executor._begin_policy_approach("graph", obs_id, executor._target_phrase)
     executor._policy_approached(hypothesis_id, obs_id)
     proposal_event_id = executor._persist_agentic_evidence(
@@ -1275,6 +1278,12 @@ def test_grounded_verified_submission_references_persisted_confirmation():
         )
 
     assert result["verified"] is True
+    from PIL import Image
+
+    paths = executor._last_vlm_assess["vlm_packet_pngs"]
+    assert len(paths) == 2 and all(Path(path).is_file() for path in paths)
+    np.testing.assert_array_equal(np.asarray(Image.open(paths[0])), np.zeros((4, 4, 3), dtype=np.uint8))
+    np.testing.assert_array_equal(np.asarray(Image.open(paths[1])), executor._inspection_context_by_obs[obs_id])
     assert executor._verified_evidence_event_ids
     persisted = {event.event_id for event in memory.world_evidence.events}
     assert set(executor._verified_evidence_event_ids) <= persisted
