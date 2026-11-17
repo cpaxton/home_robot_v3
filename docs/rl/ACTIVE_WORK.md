@@ -46,12 +46,26 @@ files. Parent merges do not promote an actor or qualify hardware.
 records the legacy 20 Hz objective and an opt-in, versioned contract-tracking
 profile shared by general/coupled/TAMP wrappers. It adds fine hand priority,
 pose-gated velocity credit and measured progress against the same active goal.
-Legacy defaults remain unchanged. This profile is not yet trained; old runtime
-receipts do not qualify the new source. Next is a bounded reward comparison with
-independent coupled/mask cases, then the existing 50/50 general/TAMP tick mix.
+Legacy defaults remain unchanged. The bounded paired reward pilot below is
+now running with independent coupled/mask cases and the existing 50/50
+general/TAMP physical-tick mixture. Older runtime receipts are historical;
+the fresh 1,563-test receipt qualifies the pilot source.
 
 
-**No PPO run is active.** The 32,768-decision joint fine-tuning run completes
+**Reward PPO pilot is running.** Frozen runtime `5f0eb3c2` passes **1,563 fresh
+complete regressions** (1,110.89 s). Revised teacher admission passes 12/12
+training and 6/6 TAMP; its 11/12 audit result retains one contact stop.
+Retained-actor baselines are 11/12 training, 9/12 fresh audit, 6/10 existing
+coupled and 6/6 TAMP; all 40 stops confirm. Managed training job
+`20261116_224923_96115d` runs 16,384 decisions per reward arm from that actor,
+with fresh critics and the 50/50 general/TAMP physical-tick mixture. The
+new-reward run (`mqbn78v9`, offline W&B) exports a verified finite checkpoint
+at 2,048 decisions, including 1,024 actor-update decisions after critic warmup. The legacy control and final
+matched evaluation follow automatically; this is not yet a measured policy
+improvement. The viewer on 8766 remains stopped to free CPU14. The rejected
+v1 admission is preserved. See the [pilot report](../experiments/wrapper_reward_training_20261116.md).
+
+**Earlier PPO:** The 32,768-decision joint fine-tuning run completes
 with scores unchanged: v1 9/10, v2 5/10, fresh base audits 0/16 and TAMP 6/6.
 It is not promoted. The earlier retained checkpoint remains the control anchor.
 The fixed-weight signed-feedback intervention passes 24/24 base trajectory
