@@ -1238,6 +1238,9 @@ def run_agent_with_robot(
                         from emet.llms.vl_image import downsample_rgb_hwc, eqa_vl_image_kwargs
 
                         obs, identity = camera_snapshot(obs)
+                        scope = getattr(getattr(executor.agent, "voxel_map", None), "observation_scope_id", None)
+                        if isinstance(scope, str):
+                            identity["observation_scope_id"] = scope
                         context["decision_observation"] = obs
                         context["decision_view"] = identity
                         eqa_raw = parameters.get("eqa", {}) if parameters is not None else {}
@@ -1258,6 +1261,7 @@ def run_agent_with_robot(
                             + json.dumps(
                                 {
                                     "decision_view_id": identity["decision_view_id"],
+                                    "observation_scope_id": identity.get("observation_scope_id"),
                                     "frame_sequence": sequence if isinstance(sequence, int) else None,
                                     "image_timing": timing if isinstance(timing, dict) else None,
                                 }

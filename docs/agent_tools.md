@@ -75,6 +75,9 @@ hashes, sensor-depth hash and available acquisition timing. The decision ID also
 appears beside the coordinator's image, and the admission cache retains it with
 the calibration. Image
 timing does not become a freshness guarantee merely because a frame was added.
+The decision also retains the map scope when available; a reset during inference
+returns `observation_scope_mismatch` before map insertion or grounding, requiring
+a new camera decision rather than relabeling old evidence as a new episode.
 The result belongs to the recorded decision view, which can differ from the
 next live camera attachment or from a view after another action in a batch. It
 is observed evidence, not a claim of continued visibility. Failure clears the

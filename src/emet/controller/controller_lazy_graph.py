@@ -160,6 +160,13 @@ class LazyGraphController(DynagraphController):
         if not query:
             return {"ok": False, "status": "invalid_query", "reason": "target description required"}
         self._grounded_query_target = None
+        decision_scope = (decision_view or {}).get("observation_scope_id")
+        if decision_scope is not None and decision_scope != self.voxel_map.observation_scope_id:
+            return {
+                "ok": False,
+                "status": "observation_scope_mismatch",
+                "reason": "map changed since the decision view; a new camera decision is required",
+            }
         before = len(self.voxel_map.observations)
         if observation is None:
             self.update(full_perception=True)

@@ -97,6 +97,7 @@ def test_coordinator_supplied_snapshot_reaches_admission_without_recapture(tmp_p
 
     agent = controller()
     agent.parameters["query_memory"] = {"grounding_cache_dir": str(tmp_path)}
+    agent.voxel_map.observation_scope_id = "episode-1"
     agent.graph_memory.eqa_client = Mock(return_value='{"matching_ids": [0], "constraints_verified": true}')
     source = agent.voxel_map.observations[-1]
     frame = Frame(**{name: getattr(source, name, None) for name in Frame._fields})._replace(info={})
@@ -106,6 +107,7 @@ def test_coordinator_supplied_snapshot_reaches_admission_without_recapture(tmp_p
         "decision_view_id": "decision-view:fixture",
         "rgb_sha256": "source-rgb",
         "sensor_depth_sha256": "source-depth",
+        "observation_scope_id": "episode-1",
     }
     agent.update = Mock(side_effect=lambda **kw: agent.voxel_map.observations.append(frame))
     result = agent.ground_current_view("mug", observation=snapshot, decision_view=identity)
@@ -117,6 +119,20 @@ def test_coordinator_supplied_snapshot_reaches_admission_without_recapture(tmp_p
     with open(result["cache_path"]) as stream:
         cached = json.load(stream)
     assert cached["metadata"]["decision_view"] == identity
+
+
+def test_coordinator_snapshot_from_previous_map_cannot_admit_geometry():
+    agent = controller()
+    agent.voxel_map.observation_scope_id = "new-map"
+    agent._grounded_query_target = object()
+    agent.update = Mock()
+    result = agent.ground_current_view(
+        "mug", observation=object(), decision_view={"observation_scope_id": "previous-map"}
+    )
+    assert not result["ok"] and result["status"] == "observation_scope_mismatch"
+    assert agent._grounded_query_target is None
+    agent.update.assert_not_called()
+    agent.detection_model.predict.assert_not_called()
 
 
 def test_coordinator_capture_failure_clears_previous_geometry():

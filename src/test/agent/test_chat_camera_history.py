@@ -153,6 +153,7 @@ def test_chat_grounds_the_decision_rgbd_when_camera_changes_during_inference(mon
     )
     robot.get_observation.return_value = live
     executor = loop.DynamemTaskExecutor()
+    executor.agent.voxel_map.observation_scope_id = "captured-map"
     captured = []
 
     def ground(query, *, observation, decision_view):
@@ -161,6 +162,7 @@ def test_chat_grounds_the_decision_rgbd_when_camera_changes_during_inference(mon
         assert observation.camera_pose[0, 3] == 0
         assert observation.camera_K[0, 0] == 1
         assert decision_view["rgb_sha256"] == sha256(observation.rgb.tobytes()).hexdigest()
+        assert decision_view["observation_scope_id"] == "captured-map"
         captured.append(decision_view.copy())
         return {"ok": True, "status": "grounded", "geometry": {"xyz": [1, 2, 3]}, "observation": decision_view}
 
