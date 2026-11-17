@@ -43,11 +43,21 @@
       Active list stays 32 across all twelve rounds (34 registered; task-plan
       pair provider-gated), up one from the prior live session. Report:
       `docs/experiments/agent_tool_surface_20261117.md`.
-- [ ] Preserve the exact decision RGB-D snapshot, calibration and scope for
+- [x] Preserve the exact decision RGB-D snapshot, calibration and scope for
       grounding within the existing capability. Return source-image association;
       keep acquisition timing and manipulation reacquisition boundaries explicit.
-      Test clear decision pixels followed by a clipped newer frame, then repeat
-      bounded live qualification and small paired EQA/OVMM gates. No broad sweep.
+      Clear decision pixels survive a newer clipped capture in CHAT/HTTP tests;
+      live RGB/display/depth association passes 2/2. Foreground-stool positive
+      control admits 18,082 points with a manually checked mask; microwave still
+      abstains on a clipped view. Fix live-discovered immutable-frame metadata
+      error; 187 focused tests pass, including scope-reset rejection. Report:
+      `docs/experiments/decision_view_handoff_20261117.md`.
+- [ ] Qualify general measured task gaze through the existing inspection
+      capability, then unclipped microwave reacquisition and small paired
+      EQA/OVMM regression gates. Keep limits, freshness and geometry admission
+      explicit; do not use floor inspection as an indirect upward-gaze tool.
+      Latest r3 is parent-operated after subagent usage exhaustion, not an
+      independent usability result. No broad sweep.
 - [ ] Consolidate CHAT overlaps before further tool expansion: query_memory /
       query_scene_graph first, then head-photo delivery variants. Keep storage,
       wrist authorization and historical-vs-current evidence semantics intact;
