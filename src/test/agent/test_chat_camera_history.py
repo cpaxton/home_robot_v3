@@ -131,6 +131,124 @@ def test_chat_grounding_reaches_model_without_motion_or_answer_override(monkeypa
     executor.assert_not_called()
 
 
+def test_chat_grounds_the_decision_rgbd_when_camera_changes_during_inference(monkeypatch):
+    """A newer clipped frame must not replace the frame the coordinator chose."""
+    import base64
+    import copy
+    from hashlib import sha256
+    from io import BytesIO
+
+    import numpy as np
+    from PIL import Image
+
+    robot = setup_chat_loop(monkeypatch)
+    live = SimpleNamespace(
+        rgb=np.full((4, 6, 3), 80, dtype=np.uint8),
+        depth=np.ones((4, 6), dtype=np.float32),
+        camera_K=np.eye(3),
+        camera_pose=np.eye(4),
+        gps=np.array([1.0, 2.0]),
+        compass=np.array([0.3]),
+        seq_id=17,
+    )
+    robot.get_observation.return_value = live
+    executor = loop.DynamemTaskExecutor()
+    captured = []
+
+    def ground(query, *, observation, decision_view):
+        assert query == "microwave"
+        assert np.all(observation.rgb == 80) and np.all(observation.depth == 1)
+        assert observation.camera_pose[0, 3] == 0
+        assert observation.camera_K[0, 0] == 1
+        assert decision_view["rgb_sha256"] == sha256(observation.rgb.tobytes()).hexdigest()
+        captured.append(decision_view.copy())
+        return {"ok": True, "status": "grounded", "geometry": {"xyz": [1, 2, 3]}, "observation": decision_view}
+
+    executor.agent.ground_current_view.side_effect = ground
+    requests = []
+    replies = iter(
+        [
+            {"tool_calls": [{"name": "ground_object", "arguments": {"query": "microwave"}}], "message": ""},
+            {"tool_calls": [], "message": "Reporting the observed position."},
+        ]
+    )
+
+    def create(**kwargs):
+        requests.append(copy.deepcopy(kwargs["messages"]))
+        # The transport advances while the coordinator reasons over its image.
+        live.rgb[:] = 0
+        live.depth[:] = 9
+        live.camera_pose[0, 3] = 99
+        live.camera_K[0, 0] = 99
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content=json.dumps(next(replies)), tool_calls=None))]
+        )
+
+    client = OpenaiClient("sys", model="emet", base_url="http://127.0.0.1:9/v1")
+    client._openai = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+    monkeypatch.setattr(loop, "get_llm_client", lambda *a, **kw: client)
+    loop.run_agent_with_robot(
+        discord=False,
+        use_llm=True,
+        commands=["Ground the microwave without moving."],
+        device="cpu",
+        robot_client=robot,
+        max_tool_rounds=3,
+        thinking_status=False,
+        vl_include_camera=True,
+    )
+    assert len(requests) == 2 and len(captured) == 1
+    first = requests[0][-1]["content"]
+    pixels = np.asarray(Image.open(BytesIO(base64.b64decode(first[-1]["image_url"]["url"].split(",", 1)[1]))))
+    assert np.all(pixels == 80)
+    assert captured[0]["decision_view_id"] in first[0]["text"]
+    assert captured[0]["decision_view_id"] in json.dumps(requests[1][-1]["content"])
+    assert requests[1][1] == requests[0][1]  # The earlier pixel packet stays exact in history.
+    assert robot.get_observation.call_count == 2
+    executor.assert_not_called()
+
+
+def test_chat_does_not_reuse_prior_turn_snapshot_when_camera_disappears(monkeypatch):
+    import numpy as np
+
+    robot = setup_chat_loop(monkeypatch)
+    robot.get_observation.side_effect = [SimpleNamespace(rgb=np.full((4, 6, 3), 80, dtype=np.uint8)), None, None]
+    executor = loop.DynamemTaskExecutor()
+    executor.agent._grounded_query_target = object()
+    requests = []
+    replies = iter(
+        [
+            {"tool_calls": [], "message": "Observed."},
+            {"tool_calls": [{"name": "ground_object", "arguments": {"query": "microwave"}}], "message": ""},
+            {"tool_calls": [], "message": "The decision view is unavailable."},
+        ]
+    )
+
+    def create(**kwargs):
+        requests.append(json.dumps(kwargs["messages"]))
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content=json.dumps(next(replies)), tool_calls=None))]
+        )
+
+    client = OpenaiClient("sys", model="emet", base_url="http://127.0.0.1:9/v1")
+    client._openai = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+    monkeypatch.setattr(loop, "get_llm_client", lambda *a, **kw: client)
+    loop.run_agent_with_robot(
+        discord=False,
+        use_llm=True,
+        commands=["Observe.", "Ground the microwave."],
+        device="cpu",
+        robot_client=robot,
+        max_tool_rounds=3,
+        thinking_status=False,
+        vl_include_camera=True,
+    )
+    assert len(requests) == 3
+    assert "No camera view attached for this decision" in requests[-1]
+    executor.agent.ground_current_view.assert_not_called()
+    assert executor.agent._grounded_query_target is None
+
+
 def test_live_chat_session_preserves_earlier_user_turn_and_camera(monkeypatch):
     """Actual two-turn CHAT loop and HTTP client; robot and transport are controlled."""
     import copy

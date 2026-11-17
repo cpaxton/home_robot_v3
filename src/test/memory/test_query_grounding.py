@@ -70,6 +70,7 @@ def test_coordinator_capture_uses_real_admission_without_retrieval_or_motion():
     result = agent.ground_current_view(" MUG on the table ")
     assert result["ok"] and result["status"] == "grounded"
     assert result["observation"] == {
+        "input_source": "tool_capture",
         "source_obs_id": 3,
         "view_id": "voxel-frame:3",
         "image_timing": {"clock_domain": "fixture"},
@@ -86,6 +87,32 @@ def test_coordinator_capture_uses_real_admission_without_retrieval_or_motion():
     assert record.instance_id == result["geometry"]["obs_id"]
     agent.update.assert_called_once_with(full_perception=True)
     agent.retrieve_query_candidate.assert_not_called()
+
+
+def test_coordinator_supplied_snapshot_reaches_admission_without_recapture(tmp_path):
+    import json
+
+    agent = controller()
+    agent.parameters["query_memory"] = {"grounding_cache_dir": str(tmp_path)}
+    agent.graph_memory.eqa_client = Mock(return_value='{"matching_ids": [0], "constraints_verified": true}')
+    frame = agent.voxel_map.observations[-1]
+    frame.info = {}
+    snapshot = SimpleNamespace(rgb=frame.rgb.copy(), depth=frame.depth.copy())
+    identity = {
+        "decision_view_id": "decision-view:fixture",
+        "rgb_sha256": "source-rgb",
+        "sensor_depth_sha256": "source-depth",
+    }
+    agent.update = Mock(side_effect=lambda **kw: agent.voxel_map.observations.append(frame))
+    result = agent.ground_current_view("mug", observation=snapshot, decision_view=identity)
+    agent.update.assert_called_once_with(full_perception=True, observation=snapshot)
+    assert result["ok"]
+    assert result["observation"]["input_source"] == "coordinator_snapshot"
+    assert result["observation"]["decision_view_id"] == identity["decision_view_id"]
+    assert frame.info["decision_view"] == identity
+    with open(result["cache_path"]) as stream:
+        cached = json.load(stream)
+    assert cached["metadata"]["decision_view"] == identity
 
 
 def test_coordinator_capture_failure_clears_previous_geometry():

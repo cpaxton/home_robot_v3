@@ -228,7 +228,9 @@ CHAT_SKILL_SPECS: tuple[SkillSpec, ...] = (
         name="ground_object",
         modes=frozenset({AgentMode.CHAT}),
         description=(
-            "Localize one visible object from the latest available RGB-D view, without moving. "
+            "Localize one visible object from the camera view attached for this decision, without moving. "
+            "Uses that snapshot's pixels/depth/calibration even if the camera changes while you decide; "
+            "with no camera attachment, captures a view. Returns its decision_view_id when available. "
             "Use when you can see the target and need observed 3D geometry; no search candidate is required. "
             "Include all identifying appearance/spatial constraints in query, e.g. nearest black stool in the foreground. "
             "Returns admitted world XYZ and object/view references, or an explicit abstention with depth/support reasons. "

@@ -56,6 +56,16 @@ def test_ground_object_reports_unsupported_controller_without_retrieval_fallback
     executor.assert_not_called()
 
 
+def test_missing_decision_camera_does_not_recapture_or_reuse_old_geometry():
+    ground = Mock()
+    agent = SimpleNamespace(ground_current_view=ground, _grounded_query_target=object())
+    tools = {t.name: t for t in get_tools({"executor": SimpleNamespace(agent=agent), "decision_observation": None})}
+    result = tools["ground_object"].func(query="microwave")
+    assert not result["ok"] and result["status"] == "observation_unavailable"
+    assert agent._grounded_query_target is None
+    ground.assert_not_called()
+
+
 def test_ground_object_does_not_silently_ignore_extra_constraints():
     ground = Mock()
     executor = Mock()

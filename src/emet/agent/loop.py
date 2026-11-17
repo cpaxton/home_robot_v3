@@ -24,6 +24,7 @@ import timeit
 from collections.abc import Callable
 from contextlib import nullcontext
 from datetime import datetime
+from hashlib import sha256
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -1227,11 +1228,18 @@ def run_agent_with_robot(
             for _round in range(max_tool_rounds):
                 cam_image = None
                 followup_round = _round > 0
+                context.pop("decision_observation", None)
+                context.pop("decision_view", None)
                 if vl_include_camera and hasattr(robot_client, "get_observation"):
+                    context["decision_observation"] = None
                     obs = robot_client.get_observation()
                     if obs is not None and getattr(obs, "rgb", None) is not None:
+                        from emet.agent.camera_snapshot import camera_snapshot
                         from emet.llms.vl_image import downsample_rgb_hwc, eqa_vl_image_kwargs
 
+                        obs, identity = camera_snapshot(obs)
+                        context["decision_observation"] = obs
+                        context["decision_view"] = identity
                         eqa_raw = parameters.get("eqa", {}) if parameters is not None else {}
                         eqa_cfg = eqa_raw if isinstance(eqa_raw, dict) else {}
                         img_kw = eqa_vl_image_kwargs(eqa_cfg)
@@ -1240,7 +1248,8 @@ def run_agent_with_robot(
                             max_side=img_kw["image_max_side"],
                             max_pixels=img_kw["image_max_pixels"],
                         )
-                        sequence = getattr(obs, "_seq_id", None)
+                        identity["display_rgb_sha256"] = sha256(np.ascontiguousarray(cam_image).tobytes()).hexdigest()
+                        sequence = identity["frame_sequence"]
                         timing = getattr(obs, "image_timing", None)
                         current_input += (
                             "\n\nAttached head-camera image: latest available frame; it may be cached. "
@@ -1248,6 +1257,7 @@ def run_agent_with_robot(
                             "Earlier images in the dialogue are historical. Camera metadata: "
                             + json.dumps(
                                 {
+                                    "decision_view_id": identity["decision_view_id"],
                                     "frame_sequence": sequence if isinstance(sequence, int) else None,
                                     "image_timing": timing if isinstance(timing, dict) else None,
                                 }

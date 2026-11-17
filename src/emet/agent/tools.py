@@ -1047,7 +1047,18 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         ground = getattr(agent, "ground_current_view", None)
         if not callable(ground):
             return {"ok": False, "status": "unavailable", "note": "Current-view RGB-D grounding is unavailable."}
-        result = ground(query)
+        if "decision_observation" in context:
+            observation = context["decision_observation"]
+            if observation is None:
+                agent._grounded_query_target = None
+                return {
+                    "ok": False,
+                    "status": "observation_unavailable",
+                    "note": "No camera view attached for this decision.",
+                }
+            result = ground(query, observation=observation, decision_view=context["decision_view"])
+        else:
+            result = ground(query)
         return {**result, "note": result.get("reason") or "Object geometry admitted from the captured RGB-D view."}
 
     tools.append(

@@ -12,6 +12,7 @@ from typing import Any
 import numpy as np
 
 from emet.controller.controller_dynagraph import DynagraphController
+from emet.core.interfaces import Observations
 from emet.memory.graph_eqa.lazy_graph_commit import commit_graph_from_arrival_obs
 from emet.utils.logger import Logger
 from emet.visualization.null_visualizer import visualizer_is_enabled
@@ -146,8 +147,10 @@ class LazyGraphController(DynagraphController):
             return {"ok": False, "reason": "fresh observation required"}
         return self._ground_query_frame(record.query, record.target_description, record.source_obs_id, handle=handle)
 
-    def ground_current_view(self, query: str):
-        """Capture one view and use the same object admission as assessed EQA views.
+    def ground_current_view(
+        self, query: str, *, observation: Observations | None = None, decision_view: dict[str, Any] | None = None
+    ):
+        """Ground the supplied decision snapshot, or capture when none is supplied.
 
         This does not move the robot or retrieve a search anchor. Acquisition
         timing is evidence metadata, not a guarantee of a newly acquired frame;
@@ -158,18 +161,25 @@ class LazyGraphController(DynagraphController):
             return {"ok": False, "status": "invalid_query", "reason": "target description required"}
         self._grounded_query_target = None
         before = len(self.voxel_map.observations)
-        self.update(full_perception=True)
+        if observation is None:
+            self.update(full_perception=True)
+        else:
+            self.update(full_perception=True, observation=observation)
         source = len(self.voxel_map.observations)
         if source <= before:
             return {"ok": False, "status": "observation_unavailable", "reason": "new captured observation required"}
         frame = self.voxel_map.observations[-1]
         info = getattr(frame, "info", None) or {}
+        if decision_view is not None:
+            frame.info = info = {**info, "decision_view": dict(decision_view)}
         result = self.ground_query_view(query, source_obs_id=source, target_description=query)
         return {
             **result,
             "query": query,
             "status": "grounded" if result["ok"] else "not_grounded",
             "observation": {
+                **(decision_view or {}),
+                "input_source": "coordinator_snapshot" if observation is not None else "tool_capture",
                 "source_obs_id": source,
                 "view_id": f"voxel-frame:{source}",
                 "image_timing": info.get("image_timing"),
@@ -290,6 +300,7 @@ class LazyGraphController(DynagraphController):
                     for name in ("camera_K", "camera_pose", "base_pose")
                 },
                 "xyz_frame": getattr(observation_frame, "xyz_frame", None),
+                "decision_view": (getattr(observation_frame, "info", None) or {}).get("decision_view"),
                 "target_description": target_description,
                 "grounding_backend": backend,
                 "detector_vocabulary": [query]

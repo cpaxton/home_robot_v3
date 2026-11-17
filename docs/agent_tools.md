@@ -46,8 +46,14 @@ when the object is visible and the coordinator needs its geometry. The query
 must contain the complete identifying object phrase; do not pass an EQA question
 or answer options. The VLM grounder intentionally treats EQA's separate question
 context as non-binding, so constraints belong in this explicit object query.
-The tool captures a view through the controller and invokes the existing
-`ground_query_view` boundary, also used for confirmed EQA views. It does not
+When a camera image is attached to the coordinator decision, the loop retains
+an owned copy of its RGB, depth, calibration, pose, stereo inputs and timing.
+The tool grounds that snapshot, rather than recapturing after inference. Only
+one current decision snapshot is held; later decisions replace it. Without a
+camera-enabled decision it can capture through the controller. A missing image
+in a camera-enabled decision returns `observation_unavailable` rather than using
+the previous turn's image. The tool invokes the existing `ground_query_view`
+boundary, also used for confirmed EQA views. It does not
 require a retrieval candidate, navigate, or manipulate anything.
 
 With `query_memory.grounding_backend: vlm`, the configured VLM selects a region
@@ -64,10 +70,15 @@ using the tool does not silently select a different perception model.
 Results distinguish `grounded`, `not_grounded`, `observation_unavailable`, and
 unsupported configurations. `geometry` contains admitted world XYZ, graph
 observation ID, geometry source and point count only on success; `observation`
-identifies the captured voxel frame and available acquisition timing. Image
+identifies the captured voxel frame, `decision_view_id`, source/display RGB
+hashes, sensor-depth hash and available acquisition timing. The decision ID also
+appears beside the coordinator's image, and the admission cache retains it with
+the calibration. Image
 timing does not become a freshness guarantee merely because a frame was added.
-The result belongs to its recorded view, which can differ from the next live
-camera attachment. Failure clears the controller's current grounding reference;
+The result belongs to the recorded decision view, which can differ from the
+next live camera attachment or from a view after another action in a batch. It
+is observed evidence, not a claim of continued visibility. Failure clears the
+controller's current grounding reference;
 unverified search points never become a fallback success.
 
 Successful grounding stores the normal query target, so `find_objects` with
