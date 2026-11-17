@@ -827,6 +827,9 @@ def run_agent_with_robot(
             robot_client.stop()
             raise
     from emet.controller.dynamem.head_observation import task_head_capability
+    from emet.memory.navigation_views import bind_navigation_views
+
+    bind_navigation_views(executor.agent)
 
     context: dict[str, Any] = {
         "head_view_capability": task_head_capability(robot_client),

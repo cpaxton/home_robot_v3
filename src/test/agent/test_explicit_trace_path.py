@@ -18,3 +18,13 @@ def test_trace_destination_enables_collection_unless_explicitly_disabled(tmp_pat
         agent, "Where is the cup?", router=False, trace_path=tmp_path / "trace.jsonl", collect_trace=explicit
     )
     assert executor._collect_trace is expected
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+def test_episode_debug_directory_supplies_a_live_request_trace_destination(tmp_path, enabled):
+    agent = MagicMock()
+    agent.parameters = {"eqa": {"collect_agentic_trace": enabled}}
+    agent._episode_debug_dir = str(tmp_path)
+    agent.graph_memory.get_nodes.return_value = []
+    executor = AgenticEQAExecutor(agent, "How many tables?", router=False)
+    assert executor._trace_path == (tmp_path / "agentic_trace.jsonl" if enabled else None)

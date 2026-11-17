@@ -94,6 +94,10 @@ class HabitatRobotClient(AbstractRobotClient, RobotModel):
         """Run one Habitat discrete action and notify post-step hooks."""
         frame = self._sim.step(action)
         self._sync_pose_from_sim()
+        if getattr(self, "navigation_view_buffer", None) is not None:
+            from emet.memory.navigation_views import retain_navigation_observation
+
+            retain_navigation_observation(self, self._observation_from_frame(frame))
         for hook in self._post_step_hooks:
             try:
                 hook(self, frame)

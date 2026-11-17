@@ -138,6 +138,9 @@ def init_executor(
     cfg_decision = _eqa_cfg(agent).get("agentic_decision_policy", "legacy")
     self.decision_policy = resolve_agentic_decision_policy(env_decision if env_decision is not None else cfg_decision)
     eqa_cfg = _eqa_cfg(agent)
+    from emet.memory.navigation_views import bind_navigation_views
+
+    bind_navigation_views(agent)
     if getattr(agent, "robot", None) is not None:
         # Preserve one actual path/yaw-boundary frame independently of optional
         # history ranking. Unsupported adapters provide no before-turn capture.
@@ -197,6 +200,9 @@ def init_executor(
         else (bool(trace_path) or env_eqa_collect_trace() or bool(_eqa_cfg(agent).get("collect_agentic_trace", False)))
     )
     self._trace_path = Path(trace_path) if trace_path else None
+    episode_dir = getattr(agent, "_episode_debug_dir", None)
+    if self._collect_trace and self._trace_path is None and isinstance(episode_dir, (str, Path)):
+        self._trace_path = Path(episode_dir) / "agentic_trace.jsonl"
     self._trace_meta = dict(trace_meta or {})
     raw_question_id = self._trace_meta.get("question_id")
     if raw_question_id is None:
