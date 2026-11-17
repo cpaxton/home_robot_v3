@@ -52,12 +52,19 @@
       abstains on a clipped view. Fix live-discovered immutable-frame metadata
       error; 187 focused tests pass, including scope-reset rejection. Report:
       `docs/experiments/decision_view_handoff_20261117.md`.
-- [ ] Qualify general measured task gaze through the existing inspection
-      capability, then unclipped microwave reacquisition and small paired
-      EQA/OVMM regression gates. Keep limits, freshness and geometry admission
-      explicit; do not use floor inspection as an indirect upward-gaze tool.
-      Latest r3 is parent-operated after subagent usage exhaustion, not an
-      independent usability result. No broad sweep.
+- [x] Qualify general measured task gaze without adding a tool: optional
+      pan/tilt on CHAT describe_scene and EQA look_around share floor's measured
+      head primitive. Live out-of-range rejection and unclipped microwave view
+      pass; Qwen recognizes the target, but depth-range admission still rejects.
+      Floor recovery clears checked-pose unknown cells and restores task gaze;
+      replanned approach reports 0.230 m actual travel. Longer route rejects on
+      occupancy. Fix the diagnostic's local/world clearance-coordinate bug
+      separately; 659 focused tests pass. Parent-operated, not independent or
+      autonomous Qwen task success. `docs/experiments/task_gaze_qualification_20261117.md`.
+- [ ] Run small paired EQA/simple OVMM gates on the new task-gaze revision.
+      Audit the occupied cell from the task-gaze pilot and qualify an alternative
+      closer-view route without weakening clearance or admitting far proposals.
+      Microwave still has no admitted XYZ. No broad sweep.
 - [ ] Consolidate CHAT overlaps before further tool expansion: query_memory /
       query_scene_graph first, then head-photo delivery variants. Keep storage,
       wrist authorization and historical-vs-current evidence semantics intact;

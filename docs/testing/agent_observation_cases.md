@@ -74,7 +74,8 @@ wheel-control, rendered-image, mapping-sensor or VLM acceptance.
 | OBS-08 | Camera changes during inference: ground the decision's owned RGB-D/calibration, preserve history and return matching source identity. Missing camera cannot reuse a prior turn. | `test_chat_camera_history.py`, `test_camera_snapshot.py`; two live association checks pass |
 | OBS-09 | Map reset during inference: reject old-scope decision before map insertion/geometry admission and clear prior grounding. | `test_query_grounding.py`; CHAT scope propagation in `test_chat_camera_history.py`; CPU-qualified |
 | OBS-10 | Production voxel frame is immutable: metadata annotation must preserve snapshot association through real admission and cache write. | `test_query_grounding.py::test_coordinator_supplied_snapshot_reaches_admission_without_recapture`; live positive control at `25534704` |
-| OBS-11 | Explicit task gaze honors angles/limits, leaves the head at the measured pose, rejects stale frames and base drift. Floor constraints and default scan/caption remain separate. | `test_task_gaze.py`; real CHAT/HTTP success/rejection in `test_chat_camera_history.py` |
+| OBS-11 | Explicit task gaze honors angles/limits, leaves the head at the measured pose, rejects stale frames and base drift. Floor constraints and default scan/caption remain separate. | `test_task_gaze.py`; real CHAT/HTTP success/rejection in `test_chat_camera_history.py`; [bounded live qualification](../experiments/task_gaze_qualification_20261117.md) |
+| OBS-12 | Clearance diagnostics convert the local robot pose to the planning world before querying the map. Missing conversion cannot fabricate a value. | `test_navigation_diagnostic_frames.py`; CPU-qualified follow-up to the live diagnostic |
 
 The new cross-tool cases use real movement/recovery/grounding functions with
 controlled planner, semantic-response and map inputs. They are not physics,
