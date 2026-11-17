@@ -1127,9 +1127,20 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
     )
 
     # -- describe_scene ------------------------------------------------------
-    def describe_scene() -> str:
+    def describe_scene(pan_rad=None, tilt_rad=None):
         robot = context.get("robot")
         executor = context.get("executor")
+        if pan_rad is not None or tilt_rad is not None:
+            from emet.agent.tool_outcome import ToolOutcome
+            from emet.controller.dynamem.head_observation import capture_head_view
+
+            agent = _agent_from_context(context)
+            if agent is None:
+                return ToolOutcome(False, status="unavailable", note="Robot not connected.")
+            receipt, obs = capture_head_view(agent, pan_rad=pan_rad, tilt_rad=tilt_rad)
+            if receipt["ok"]:
+                stash_discord_image(context, np.asarray(obs.rgb).copy())
+            return ToolOutcome.from_eqa_dict("describe_scene", receipt)
         if robot is None or not hasattr(robot, "get_observation"):
             return "No robot view available."
         obs = robot.get_observation()
@@ -1172,13 +1183,8 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         Tool(
             name="describe_scene",
             description=(
-                "Caption what is in front of the robot *right now* (live head camera) and optionally "
-                "ground with known scene-graph / map labels. Does NOT move or reorient the robot — "
-                "this alone is not a 'closer look'. For 'are you sure' / 'look closer' / confirm, "
-                "first call rotate_base / move_forward / scan_environment (as allowed), then this tool. "
-                "Queues the live head-camera photo for Discord (not an object crop; use send_object_image "
-                'for that). Use an empty JSON "message" on the tool-call turn so chat/Discord only show '
-                "your answer after [Tool results]."
+                "Caption the current head camera, or request measured stationary head inspection "
+                "with optional absolute pan_rad/tilt_rad. Read the receipt and subsequent camera image."
             ),
             parameters=_NO_PARAMS,
             func=describe_scene,

@@ -31,6 +31,79 @@ def setup_chat_loop(monkeypatch):
     return robot
 
 
+@pytest.mark.parametrize("tilt,accepted", [(-0.3, True), (9.0, False)])
+def test_chat_head_gaze_arguments_and_measured_feedback_reach_next_http_request(monkeypatch, tilt, accepted):
+    import base64
+    import copy
+    from io import BytesIO
+
+    import numpy as np
+    from PIL import Image
+
+    from emet.controller.dynamem import look
+    from emet.robots.head_capability import HeadCapability
+
+    robot = setup_chat_loop(monkeypatch)
+    angles = np.array([0.0, -0.6])
+    obs = SimpleNamespace(rgb=np.full((4, 6, 3), 80, dtype=np.uint8), seq_id=1)
+    robot._seq_id = 1
+    robot.get_observation.return_value = obs
+    robot.get_pan_tilt.side_effect = lambda: angles.copy()
+    robot.get_base_pose.return_value = np.zeros(3)
+    robot.get_head_capability.return_value = HeadCapability((-1, 1), (-1.8, 0.5), "fixture")
+
+    def head_to(pan, tilt, **kw):
+        angles[:] = [pan, tilt]
+        obs.rgb[:] = 180
+        return True
+
+    robot.head_to.side_effect = head_to
+    monkeypatch.setattr(look, "wait_post_motion_obs", lambda r, **kw: setattr(r, "_seq_id", r._seq_id + 1))
+    replies = iter(
+        [
+            {"tool_calls": [{"name": "describe_scene", "arguments": {"tilt_rad": tilt}}], "message": ""},
+            {"tool_calls": [], "message": "Reporting the measured inspection outcome."},
+        ]
+    )
+    requests = []
+
+    def create(**kwargs):
+        requests.append(copy.deepcopy(kwargs["messages"]))
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content=json.dumps(next(replies)), tool_calls=None))]
+        )
+
+    client = OpenaiClient("sys", model="emet", base_url="http://127.0.0.1:9/v1")
+    client._openai = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+    monkeypatch.setattr(loop, "get_llm_client", lambda *a, **kw: client)
+    loop.run_agent_with_robot(
+        discord=False,
+        use_llm=True,
+        commands=["Inspect the higher view to find the microwave."],
+        device="cpu",
+        robot_client=robot,
+        max_tool_rounds=3,
+        thinking_status=False,
+        vl_include_camera=True,
+    )
+    assert len(requests) == 2
+    text = requests[-1][-1]["content"][0]["text"]
+    assert ("status=head_view_observed" if accepted else "status=invalid_head_tilt") in text
+    assert '"head_inspection_bounds_rad"' in text
+
+    def pixels(content):
+        url = next(part["image_url"]["url"] for part in content if part["type"] == "image_url")
+        return np.asarray(Image.open(BytesIO(base64.b64decode(url.split(",", 1)[1]))))
+
+    assert np.all(pixels(requests[0][-1]["content"]) == 80)
+    assert np.all(pixels(requests[-1][-1]["content"]) == (180 if accepted else 80))
+    if accepted:
+        robot.head_to.assert_called_once_with(0.0, -0.3, blocking=True)
+        assert '"measured_head_pan_tilt_rad": [0.0, -0.3]' in text
+    else:
+        robot.head_to.assert_not_called()
+
+
 @pytest.mark.parametrize("task_ok", [True, False])
 def test_chat_find_result_reaches_next_model_request(monkeypatch, task_ok):
     """Production FIND registration must reach the next real CHAT/HTTP request."""

@@ -28,7 +28,7 @@ for the current names, measured prompt sizes and live qualification limits.
 
 | Tool | Purpose and requirements | More |
 | --- | --- | --- |
-| `describe_scene` | Caption the live head-camera view; needs camera/caption backend. Does not move closer | [Agent guide](AGENT_RUN.md#skill-checklist-interactive) |
+| `describe_scene` | Caption the live head camera; optional pan/tilt requests measured stationary head inspection | [Task gaze](#measured-task-gaze) |
 | `ground_object` | Request observed 3D geometry for one object in the latest RGB-D view, without navigating; returns geometry or an explicit abstention | [Grounding provenance](#current-view-object-grounding) |
 | `send_image` | Capture and attach the head-camera image; Discord delivery when connected | [Discord](discord_bot.md) |
 | `take_picture` | Capture a head-camera image locally | [CHAT handlers](../src/emet/agent/tools.py) |
@@ -38,6 +38,33 @@ for the current names, measured prompt sizes and live qualification limits.
 | `send_object_image` | Send a stored object crop from the open-vocabulary graph; not a live image | [CHAT handlers](../src/emet/agent/tools.py) |
 | `aim_arm_at` | Localize a named target and aim the arm/wrist camera where supported | [CHAT handlers](../src/emet/agent/tools.py) |
 | `take_ee_picture` | Capture the wrist camera after a successful `aim_arm_at`; needs an available wrist stream | [CHAT handlers](../src/emet/agent/tools.py) |
+
+## Measured task gaze
+
+Use `describe_scene(tilt_rad=-0.3)` in CHAT or `look_around(tilt_rad=-0.3)` in
+EQA to request an absolute head joint angle. The value is an example, not a
+universal robot setting. An omitted joint retains its measured angle. Both
+use the same measured capture routine, with declared robot limits; a request
+outside those limits fails with the active bounds rather than silently clipping.
+Adapters without declared limits return `head_limits_unavailable`.
+
+Explicit gaze leaves the head at the requested view, does not sweep or move the
+base, and reports requested/measured angles, base poses, received-frame sequence
+and available acquisition timing. It requires measured arrival and subsequent
+frame reception. Sensor acquisition timing remains independently unverified;
+RGB can be returned even when depth is missing. This observation does not admit
+object geometry or certify navigation. Inspect the next image, then request
+`ground_object` or EQA verification as needed.
+
+In CHAT, explicit gaze returns the inspection receipt/photo for the coordinator
+to interpret, without an additional caption-model call. In EQA, the captured
+observation enters the existing map/capture/verification flow without a sweep.
+No-argument `describe_scene` retains caption-only behavior; no-argument
+`look_around` retains the configured scan policy. No new tool is added.
+
+`observe_floor` shares the measured motion/capture primitive but keeps its
+downward bounds, calibrated-depth requirement, footprint recheck and task-view
+restoration. It is not the API for aiming at an elevated object.
 
 ## Current-view object grounding
 

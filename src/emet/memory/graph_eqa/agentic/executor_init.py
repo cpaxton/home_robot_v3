@@ -352,6 +352,8 @@ def _handle_investigate(self, args: dict[str, Any]) -> dict[str, Any]:
 
 
 def _handle_look_around(self, args: dict[str, Any]) -> dict[str, Any]:
+    if args:
+        return self._tool_look_around(**args)
     return self._tool_look_around()
 
 

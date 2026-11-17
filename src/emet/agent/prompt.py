@@ -56,12 +56,14 @@ go_home, hand_over, quit). Prefer "message": "" — the turn ends after the acti
 For photos the user should *see*, use send_image or describe_scene (not take_picture alone —
 those only capture locally and produce no Discord reply). Never call take_ee_picture without a
 prior successful aim_arm_at in this session (it will refuse). Prefer moving/reorienting the
-*base* for a new view, then describe_scene (head camera).
+head with explicit describe_scene pan/tilt or the validated base tools for a new view.
 
 Routing hints:
 - "what can you see" / "tell me what you see" / "describe the scene" (no motion asked)
   → describe_scene only: caption the image in front of you; ground with scene graph/map if useful.
   Do NOT scan, explore, or turn unless the user asked to look around / move.
+- To aim the head for an authorized task, use describe_scene with explicit absolute pan_rad/tilt_rad.
+  Inspect measured feedback and the next camera image. No arguments retains caption-only behavior.
 - "look at X" / "face X" / "turn toward X" / "go toward X" / "go look at X"
   → Prefer face_toward with object_label=X, THEN describe_scene (do not blind-rotate ±45°).
     If drive is available and they clearly want distance ("go to", "drive closer"): move_forward

@@ -12,6 +12,21 @@ from typing import Any
 from emet.agent.skills.modes import AgentMode
 
 _NO_PARAMS: dict[str, Any] = {"type": "object", "properties": {}, "required": []}
+_HEAD_VIEW_PARAMS: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "pan_rad": {"type": "number", "description": "Absolute head pan joint angle in radians; omit to retain it."},
+        "tilt_rad": {"type": "number", "description": "Absolute head tilt joint angle in radians; omit to retain it."},
+    },
+    "required": [],
+}
+_HEAD_VIEW_DESCRIPTION = (
+    "Optional pan_rad/tilt_rad requests one stationary head view instead of a scan/caption; "
+    "the unspecified joint retains its measured angle. Uses advertised robot head limits, "
+    "never silently clips. Read returned bounds, requested/measured angles and frame reception. "
+    "The head stays at the requested view. A rejected/unconfirmed request is not a successful look. "
+    "No base movement, route clearance or object geometry is authorized. "
+)
 
 
 @dataclass(frozen=True)
@@ -162,8 +177,9 @@ EQA_SKILL_SPECS: tuple[SkillSpec, ...] = (
             "Refresh camera evidence, map and graph at the current position using the configured scan policy. "
             "When sweeping is disabled this captures the current heading only; it does not turn. "
             "Use rotate_base for an explicit heading change."
+            " " + _HEAD_VIEW_DESCRIPTION
         ),
-        parameters=_NO_PARAMS,
+        parameters=_HEAD_VIEW_PARAMS,
     ),
     SkillSpec(
         name="verify_siglip",
@@ -468,12 +484,14 @@ CHAT_SKILL_SPECS: tuple[SkillSpec, ...] = (
     SkillSpec(
         name="describe_scene",
         modes=frozenset({AgentMode.CHAT}),
-        description="Caption what is in front of the robot *right now* (live head camera) and optionally ground with known scene-graph / map labels. Does NOT move or reorient the robot — this alone is not a 'closer look'. For 'are you sure' / 'look closer' / confirm, first call rotate_base / move_forward / scan_environment (as allowed), then this tool. Queues the live head-camera photo for Discord (not an object crop; use send_object_image for that). Use an empty JSON \"message\" on the tool-call turn so chat/Discord only show your answer after [Tool results].",
-        parameters={
-            "type": "object",
-            "properties": {},
-            "required": [],
-        },
+        description=(
+            "With no arguments, caption the current head camera without motion; optionally ground with known map labels. "
+            + _HEAD_VIEW_DESCRIPTION
+            + "The next coordinator round receives the latest camera image; inspect it before ground_object. "
+            "Queues the head photo for Discord; stored crops use send_object_image. "
+            'Use an empty JSON "message" on the tool-call turn and respond after [Tool results].'
+        ),
+        parameters=_HEAD_VIEW_PARAMS,
         returns_info=True,
     ),
     SkillSpec(
