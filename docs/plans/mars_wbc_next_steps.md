@@ -1,5 +1,12 @@
 # Mars WBC: stabilize the base, define smoothness, then train
 
+Current 2026-11-17 task allocation and measured exposure are maintained in
+[TRAINING_MIXTURE](../rl/TRAINING_MIXTURE.md). Longer training improves genuinely
+fresh cases 12/24 → 16/24 and flagged episodes 4 → 1; goal transitions remain
+0/4. The next planned 30/10/10/50 hand/base/transition/TAMP allocation is not yet
+running. [Hardware readiness](../rl/MARS_HARDWARE_READINESS.md) is independent
+of these policy scores. Older milestones below retain their original scope.
+
 Implementation is consolidated into the canonical thread and #241 development
 branch. Parents #239 and #240 are merged into main and incorporated locally. [Active work](../rl/ACTIVE_WORK.md) owns current
 ownership, receipts and launch status; this page owns the technical sequence.

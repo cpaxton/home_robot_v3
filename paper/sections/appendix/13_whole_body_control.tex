@@ -970,3 +970,22 @@ The candidate is not promoted. Only two complete episodes per hand trajectory
 occur in the short control run, motivating longer lower-rate checkpoint
 fine-tuning without further reward changes. Complete identities, paired plot
 and exact producers are in \texttt{hand\_priority\_pilot\_v1/}.
+
+
+\paragraph{Longer fine-tuning and fresh confirmation.}
+Restoring actor, critics and Adam state, 65,536 additional decisions use actor
+LR $10^{-5}$ to $10^{-6}$ with unchanged reward/exploration and explicit fresh
+physics/RNG reset. All 31 saved optimizer clocks preserve source history.
+The actual physical-tick mixture is 40.02\% hand-active general, 9.93\% base-only
+and 50.04\% unloaded TAMP prefixes. Reused development changes 20/24 to 19/24,
+existing coupled remains 7/10 and TAMP 6/6; stress force/jerk tradeoffs persist.
+A separately frozen 24-case confirmation set gives 12/24 source versus 16/24
+continued successes (teacher 17/24), safety-flagged episodes four versus one,
+and wheel-lift episodes two versus zero. All 72 stops confirm and initial-state,
+configuration and reference hashes match. Single-stage coupled is only 4/8 and
+nominally anchored two-stage goal changes 0/4, versus teacher 6/8 and 2/4.
+Peak linear/yaw jerk increases from 14.88/65.57 to 28.68/78.54 in respective SI
+units. These are scoped generalization gains, not promotion or hardware safety
+qualification. Complete cases and targets are in
+\texttt{fresh\_tracking\_confirmation\_v1/}; current and planned task shares are
+maintained in \texttt{docs/rl/TRAINING\_MIXTURE.md}.

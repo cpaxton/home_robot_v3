@@ -1,14 +1,13 @@
 {
-  "phase": "training",
-  "complete": false,
-  "decisions": 8960,
-  "control_ticks": 10708,
-  "source_checkpoint_state_verified_before_update": true,
-  "environment_state_restored": false,
-  "source_decisions": 16384,
-  "wandb_id": "6vuul7j4",
+  "format": "long-finetune-status-v1",
+  "phase": "complete",
+  "runtime_revision": "9d0620f9c3d3e198494b0a02ca3ce78513b4d04c",
+  "full_regression_tests": 1585,
+  "full_gate_seconds": 1025.7983684539795,
+  "full_xml_sha256": "e0239f772395f88f2f631128908e85ce81baa9b84f3772795d46c7c5d2641bcb",
+  "ppo_started": true,
+  "complete": true,
   "hardware_used": false,
   "safety_promoted": false,
-  "snapshot_only": true,
-  "job_id": "20261117_083406_6c3285"
+  "decision": "no promotion: fresh generalization improves, reused development and force/jerk retain tradeoffs"
 }

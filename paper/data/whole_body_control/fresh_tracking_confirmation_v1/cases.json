@@ -1,0 +1,506 @@
+[
+  {
+    "id": "innate_mars:confirmation-v1:audit:coupled:0",
+    "seed": 410300000,
+    "split": "audit",
+    "mode": "coupled",
+    "travel_m": 0.12411919554323399,
+    "turn_rad": 0.29041928970692205,
+    "arm_delta": [
+      0.030443731727740182,
+      0.032464017395528406,
+      0.01768903886685287,
+      0.0349792921317063,
+      -0.03539467039837868
+    ],
+    "base_mask": [
+      true,
+      true,
+      true
+    ],
+    "purpose": "tracking"
+  },
+  {
+    "id": "innate_mars:confirmation-v1:audit:coupled:1",
+    "seed": 410300001,
+    "split": "audit",
+    "mode": "coupled",
+    "travel_m": -0.16415521361595875,
+    "turn_rad": 0.3602537987247219,
+    "arm_delta": [
+      -0.018521189356757565,
+      0.039293188077967535,
+      0.014228362454849916,
+      -0.01947574233013924,
+      0.024998949923596074
+    ],
+    "base_mask": [
+      true,
+      true,
+      true
+    ],
+    "purpose": "tracking"
+  },
+  {
+    "id": "innate_mars:confirmation-v1:audit:coupled:2",
+    "seed": 410300002,
+    "split": "audit",
+    "mode": "coupled",
+    "travel_m": 0.13138881284376266,
+    "turn_rad": -0.2049634180623168,
+    "arm_delta": [
+      -0.009809520795017797,
+      -0.037369777971096384,
+      -0.0351553730552715,
+      0.022120227625680798,
+      -0.023204294725718652
+    ],
+    "base_mask": [
+      true,
+      true,
+      false
+    ],
+    "purpose": "tracking"
+  },
+  {
+    "id": "innate_mars:confirmation-v1:audit:coupled:3",
+    "seed": 410300003,
+    "split": "audit",
+    "mode": "coupled",
+    "travel_m": -0.16400424186161353,
+    "turn_rad": -0.39095191788708106,
+    "arm_delta": [
+      -0.000377719677400995,
+      -0.03514414945688897,
+      -0.03465718946320088,
+      0.004697678988644191,
+      -0.024741590631235696
+    ],
+    "base_mask": [
+      true,
+      true,
+      false
+    ],
+    "purpose": "tracking"
+  },
+  {
+    "id": "innate_mars:confirmation-v1:audit:coupled:4",
+    "seed": 410300004,
+    "split": "audit",
+    "mode": "coupled",
+    "travel_m": 0.162725776660805,
+    "turn_rad": 0.27975361288953315,
+    "arm_delta": [
+      -0.032774562055288656,
+      0.01558938657053939,
+      -0.001588720238320497,
+      -0.016432006008846072,
+      -0.022572919020847432
+    ],
+    "base_mask": [
+      true,
+      true,
+      true
+    ],
+    "purpose": "tracking"
+  },
+  {
+    "id": "innate_mars:confirmation-v1:audit:coupled:5",
+    "seed": 410300005,
+    "split": "audit",
+    "mode": "coupled",
+    "travel_m": -0.14913013541971087,
+    "turn_rad": 0.2286161603174262,
+    "arm_delta": [
+      0.020526759453089093,
+      0.03817996126880293,
+      0.01566989658253968,
+      0.009239992989036667,
+      -0.008213491144981724
+    ],
+    "base_mask": [
+      true,
+      true,
+      true
+    ],
+    "purpose": "tracking"
+  },
+  {
+    "id": "innate_mars:confirmation-v1:audit:coupled:6",
+    "seed": 410300006,
+    "split": "audit",
+    "mode": "coupled",
+    "travel_m": 0.14814019386558633,
+    "turn_rad": -0.40284406788429816,
+    "arm_delta": [
+      -0.03217395096675598,
+      0.028105838856719252,
+      0.017470862815336406,
+      0.018157243817889544,
+      -0.023529773640195064
+    ],
+    "base_mask": [
+      true,
+      true,
+      false
+    ],
+    "purpose": "tracking"
+  },
+  {
+    "id": "innate_mars:confirmation-v1:audit:coupled:7",
+    "seed": 410300007,
+    "split": "audit",
+    "mode": "coupled",
+    "travel_m": -0.12250802897141744,
+    "turn_rad": -0.4169779794556364,
+    "arm_delta": [
+      0.022838361045858853,
+      -0.010386783615325915,
+      0.01829619740766012,
+      0.011715968148100518,
+      0.03982853447830594
+    ],
+    "base_mask": [
+      true,
+      true,
+      false
+    ],
+    "purpose": "tracking"
+  },
+  {
+    "id": "innate_mars:confirmation-v1:audit:hand_free_base:8",
+    "seed": 410300008,
+    "split": "audit",
+    "mode": "hand_free_base",
+    "travel_m": 0.0,
+    "turn_rad": 0.0,
+    "arm_delta": [
+      -0.03333536412800368,
+      0.03839535075225727,
+      -0.022496078018741185,
+      0.038619091775972315,
+      0.03525064074418815
+    ],
+    "base_mask": [
+      false,
+      false,
+      false
+    ],
+    "purpose": "tracking"
+  },
+  {
+    "id": "innate_mars:confirmation-v1:audit:hand_free_base:9",
+    "seed": 410300009,
+    "split": "audit",
+    "mode": "hand_free_base",
+    "travel_m": 0.0,
+    "turn_rad": 0.0,
+    "arm_delta": [
+      0.029796041696154414,
+      -0.03691990353242587,
+      -0.0001921317703697592,
+      0.0014997773976129988,
+      -0.011250398425461647
+    ],
+    "base_mask": [
+      false,
+      false,
+      false
+    ],
+    "purpose": "tracking"
+  },
+  {
+    "id": "innate_mars:confirmation-v1:audit:hand_free_base:10",
+    "seed": 410300010,
+    "split": "audit",
+    "mode": "hand_free_base",
+    "travel_m": 0.0,
+    "turn_rad": 0.0,
+    "arm_delta": [
+      -0.02060563245661073,
+      -0.026963976380608354,
+      0.03674140004833571,
+      -0.03273073950389693,
+      -0.0003510067886066878
+    ],
+    "base_mask": [
+      false,
+      false,
+      false
+    ],
+    "purpose": "tracking"
+  },
+  {
+    "id": "innate_mars:confirmation-v1:audit:hand_free_base:11",
+    "seed": 410300011,
+    "split": "audit",
+    "mode": "hand_free_base",
+    "travel_m": 0.0,
+    "turn_rad": 0.0,
+    "arm_delta": [
+      -0.038107546752177035,
+      0.02951848831626746,
+      0.03556006397407279,
+      0.010548076302563027,
+      -0.018945474986514776
+    ],
+    "base_mask": [
+      false,
+      false,
+      false
+    ],
+    "purpose": "tracking"
+  },
+  {
+    "id": "innate_mars:confirmation-v1:audit:hand_free_base:12",
+    "seed": 410300012,
+    "split": "audit",
+    "mode": "hand_free_base",
+    "travel_m": 0.0,
+    "turn_rad": 0.0,
+    "arm_delta": [
+      -0.01910296641695628,
+      0.029345568026104947,
+      -0.030293710339096506,
+      0.021973550687416576,
+      0.028616328055634098
+    ],
+    "base_mask": [
+      false,
+      false,
+      false
+    ],
+    "purpose": "tracking"
+  },
+  {
+    "id": "innate_mars:confirmation-v1:audit:hand_free_base:13",
+    "seed": 410300013,
+    "split": "audit",
+    "mode": "hand_free_base",
+    "travel_m": 0.0,
+    "turn_rad": 0.0,
+    "arm_delta": [
+      -0.02462586367185736,
+      0.0061151668085064545,
+      -0.023132016659815992,
+      -0.021116352474978006,
+      0.033578718356002867
+    ],
+    "base_mask": [
+      false,
+      false,
+      false
+    ],
+    "purpose": "tracking"
+  },
+  {
+    "id": "innate_mars:confirmation-v1:audit:hand_free_base:14",
+    "seed": 410300014,
+    "split": "audit",
+    "mode": "hand_free_base",
+    "travel_m": 0.0,
+    "turn_rad": 0.0,
+    "arm_delta": [
+      0.036112549446321675,
+      0.02166495471089637,
+      -0.024992247270880893,
+      -0.023213151097481274,
+      0.01260388362735241
+    ],
+    "base_mask": [
+      false,
+      false,
+      false
+    ],
+    "purpose": "tracking"
+  },
+  {
+    "id": "innate_mars:confirmation-v1:audit:hand_free_base:15",
+    "seed": 410300015,
+    "split": "audit",
+    "mode": "hand_free_base",
+    "travel_m": 0.0,
+    "turn_rad": 0.0,
+    "arm_delta": [
+      0.02701383338021012,
+      -0.033216560277609386,
+      -0.016723083224946773,
+      0.0010199827977892748,
+      -0.008800987408891583
+    ],
+    "base_mask": [
+      false,
+      false,
+      false
+    ],
+    "purpose": "tracking"
+  },
+  {
+    "id": "innate_mars:confirmation-v1:audit:base_only:16",
+    "seed": 410300016,
+    "split": "audit",
+    "mode": "base_only",
+    "travel_m": 0.13528697876524343,
+    "turn_rad": 0.24847114119256497,
+    "arm_delta": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "base_mask": [
+      true,
+      true,
+      true
+    ],
+    "purpose": "tracking"
+  },
+  {
+    "id": "innate_mars:confirmation-v1:audit:base_only:17",
+    "seed": 410300017,
+    "split": "audit",
+    "mode": "base_only",
+    "travel_m": -0.15428374905888573,
+    "turn_rad": 0.23557475016374582,
+    "arm_delta": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "base_mask": [
+      true,
+      true,
+      true
+    ],
+    "purpose": "tracking"
+  },
+  {
+    "id": "innate_mars:confirmation-v1:audit:base_only:18",
+    "seed": 410300018,
+    "split": "audit",
+    "mode": "base_only",
+    "travel_m": 0.15446503942535308,
+    "turn_rad": -0.26200731938079275,
+    "arm_delta": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "base_mask": [
+      true,
+      true,
+      true
+    ],
+    "purpose": "tracking"
+  },
+  {
+    "id": "innate_mars:confirmation-v1:audit:base_only:19",
+    "seed": 410300019,
+    "split": "audit",
+    "mode": "base_only",
+    "travel_m": -0.1401705527245634,
+    "turn_rad": -0.3662417708610004,
+    "arm_delta": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "base_mask": [
+      true,
+      true,
+      true
+    ],
+    "purpose": "tracking"
+  },
+  {
+    "id": "innate_mars:confirmation-v1:audit:coupled:20",
+    "seed": 410300020,
+    "split": "audit",
+    "mode": "coupled",
+    "travel_m": 0.15562416130807324,
+    "turn_rad": 0.40266029508798906,
+    "arm_delta": [
+      -0.003948171664613864,
+      -0.005510739389424424,
+      -0.014384591963229276,
+      0.02768661559240341,
+      -0.006278919112827651
+    ],
+    "base_mask": [
+      true,
+      true,
+      true
+    ],
+    "purpose": "tracking"
+  },
+  {
+    "id": "innate_mars:confirmation-v1:audit:coupled:21",
+    "seed": 410300021,
+    "split": "audit",
+    "mode": "coupled",
+    "travel_m": -0.15306776137613684,
+    "turn_rad": 0.20512097117855055,
+    "arm_delta": [
+      -0.013469028765852702,
+      0.024810696004490436,
+      0.00698304904329957,
+      -0.03597897422478389,
+      0.014677718033457465
+    ],
+    "base_mask": [
+      true,
+      true,
+      true
+    ],
+    "purpose": "tracking"
+  },
+  {
+    "id": "innate_mars:confirmation-v1:audit:coupled:22",
+    "seed": 410300022,
+    "split": "audit",
+    "mode": "coupled",
+    "travel_m": 0.15348370343702117,
+    "turn_rad": -0.3417367925865741,
+    "arm_delta": [
+      -0.01758670045295574,
+      0.0036506660650637984,
+      0.0377588244182522,
+      0.002792855829222479,
+      0.012207789034617458
+    ],
+    "base_mask": [
+      true,
+      true,
+      true
+    ],
+    "purpose": "tracking"
+  },
+  {
+    "id": "innate_mars:confirmation-v1:audit:coupled:23",
+    "seed": 410300023,
+    "split": "audit",
+    "mode": "coupled",
+    "travel_m": -0.12478234623719203,
+    "turn_rad": -0.1944304141594679,
+    "arm_delta": [
+      0.004761508595941703,
+      -0.034332433594676706,
+      -0.0021215528950841583,
+      -0.013618642230435317,
+      -0.02951140265190423
+    ],
+    "base_mask": [
+      true,
+      true,
+      true
+    ],
+    "purpose": "tracking"
+  }
+]

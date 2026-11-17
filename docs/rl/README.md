@@ -42,3 +42,7 @@ turning this index into another experiment log.
 Run status and passing software tests are separate from measured policy
 improvement. The experiment report records which options were implemented,
 which were trained, failed gates and whether a candidate was retained.
+
+Current WBC operational documents: [training mixture](TRAINING_MIXTURE.md) and
+[Mars hardware readiness](MARS_HARDWARE_READINESS.md). These distinguish actual
+exposure, proposed curriculum changes and robot-side validation.

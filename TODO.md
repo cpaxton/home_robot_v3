@@ -20,10 +20,15 @@
 - [x] Isolate hand-pose reward priority (1 → 4) with ordinary exploration and
       a matched completed control; preserve every accuracy/jerk/contact failure.
       Completed 20/24 → 19/24, coupled 7/10 unchanged; no promotion.
-- [ ] Complete 65,536 additional ordinary-reward decisions at lower actor LR,
+- [x] Complete 65,536 additional ordinary-reward decisions at lower actor LR,
       restoring actor/critics/Adam with explicit fresh physical reset. Compare
       final outcomes; then expand reachable posture/reset coverage and fresh
       confirmation cases rather than claiming general mastery from reused audits.
+      Completed fresh 12/24 → 16/24, flagged episodes 4 → 1, but jerk remains.
+- [ ] Add nominally anchored goal transitions at 10% overall training ticks,
+      retaining 30% regular hand-active / 10% base-only / 50% unloaded TAMP.
+      Keep the [mixture ledger](docs/rl/TRAINING_MIXTURE.md) current; validate
+      driver/feedback/stop readiness separately before Mars motion tests.
 - [ ] Isolate fine-pose weighting, progress and pose-gated velocity reward
       changes; measure critic calibration and late-hold exploration before
       extending the reward PPO budget. Keep jerk/force protections active.

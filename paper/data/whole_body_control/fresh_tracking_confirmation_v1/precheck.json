@@ -1,0 +1,97 @@
+{
+  "cases": [
+    {
+      "id": "innate_mars:confirmation-v1:audit:coupled:20",
+      "first_admission": {
+        "accepted": true,
+        "reason": null,
+        "minimum_support_margin_m": 0.017712231009646497,
+        "fixed_hand_witness_position_m": 0.0,
+        "fixed_hand_witness_orientation_rad": 0.0,
+        "dynamic_feasibility_verified": false,
+        "geometry_sample_period_s": 0.025
+      },
+      "second_admission": {
+        "accepted": true,
+        "reason": null,
+        "minimum_support_margin_m": 0.017712231009646504,
+        "fixed_hand_witness_position_m": 0.0,
+        "fixed_hand_witness_orientation_rad": 0.0,
+        "dynamic_feasibility_verified": false,
+        "geometry_sample_period_s": 0.025
+      },
+      "C2_join_verified": true,
+      "live_qpos_unchanged": true
+    },
+    {
+      "id": "innate_mars:confirmation-v1:audit:coupled:21",
+      "first_admission": {
+        "accepted": true,
+        "reason": null,
+        "minimum_support_margin_m": 0.016931621258082882,
+        "fixed_hand_witness_position_m": 0.0,
+        "fixed_hand_witness_orientation_rad": 0.0,
+        "dynamic_feasibility_verified": false,
+        "geometry_sample_period_s": 0.025
+      },
+      "second_admission": {
+        "accepted": true,
+        "reason": null,
+        "minimum_support_margin_m": 0.016931621258082882,
+        "fixed_hand_witness_position_m": 0.0,
+        "fixed_hand_witness_orientation_rad": 0.0,
+        "dynamic_feasibility_verified": false,
+        "geometry_sample_period_s": 0.025
+      },
+      "C2_join_verified": true,
+      "live_qpos_unchanged": true
+    },
+    {
+      "id": "innate_mars:confirmation-v1:audit:coupled:22",
+      "first_admission": {
+        "accepted": true,
+        "reason": null,
+        "minimum_support_margin_m": 0.01771591699987811,
+        "fixed_hand_witness_position_m": 0.0,
+        "fixed_hand_witness_orientation_rad": 0.0,
+        "dynamic_feasibility_verified": false,
+        "geometry_sample_period_s": 0.025
+      },
+      "second_admission": {
+        "accepted": true,
+        "reason": null,
+        "minimum_support_margin_m": 0.01771591699987811,
+        "fixed_hand_witness_position_m": 0.0,
+        "fixed_hand_witness_orientation_rad": 0.0,
+        "dynamic_feasibility_verified": false,
+        "geometry_sample_period_s": 0.025
+      },
+      "C2_join_verified": true,
+      "live_qpos_unchanged": true
+    },
+    {
+      "id": "innate_mars:confirmation-v1:audit:coupled:23",
+      "first_admission": {
+        "accepted": true,
+        "reason": null,
+        "minimum_support_margin_m": 0.01757087272701854,
+        "fixed_hand_witness_position_m": 0.0,
+        "fixed_hand_witness_orientation_rad": 0.0,
+        "dynamic_feasibility_verified": false,
+        "geometry_sample_period_s": 0.025
+      },
+      "second_admission": {
+        "accepted": true,
+        "reason": null,
+        "minimum_support_margin_m": 0.01757087272701854,
+        "fixed_hand_witness_position_m": 0.0,
+        "fixed_hand_witness_orientation_rad": 0.0,
+        "dynamic_feasibility_verified": false,
+        "geometry_sample_period_s": 0.025
+      },
+      "C2_join_verified": true,
+      "live_qpos_unchanged": true
+    }
+  ],
+  "scope": "scratch construction only, all geometry outcomes retained; no controller evaluation"
+}

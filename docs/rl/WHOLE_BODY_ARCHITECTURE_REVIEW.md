@@ -229,11 +229,20 @@ training success (20/24 → 19/24 overall), keeps existing coupled 7/10 and TAMP
 promoted. The exact pre-update initial policy/observation/action comparison
 passes against the reused ordinary control. [Report](../experiments/hand_priority_training_20261117.md).
 
-The small diagnostic runs expose each hand trajectory only twice. Next test
-65,536 additional ordinary-reward decisions with a lower actor LR, restoring
-actor/critic/Adam state and explicitly resetting physical state. Keep ordinary
-exploration and reward/guard terms unchanged. Then broaden reachable reset and
-posture coverage; compare a less cancellation-prone action head if longer
-training does not improve accuracy and stability. Reused audits are development
-evidence; fresh confirmation is required before qualification. No hardware
-motion or promotion follows from these diagnostics.
+Longer lower-rate fine-tuning now completes 65,536 additional decisions with
+actor/critic/Adam state restored. Fresh confirmation improves 12/24 → 16/24,
+safety flags 4 → 1 and wheel lifts 2 → 0, with all initial/config/reference hashes
+matched and all 72 fresh stops confirmed. This shows useful learning beyond the
+reused development set. It does not settle architecture or safety: reused cases
+lose one success, stress force/jerk worsen, single-stage coupled is 4/8 and
+two-stage transitions 0/4. [Complete results](../experiments/long_finetune_20261117.md).
+
+The maintained [training mixture](TRAINING_MIXTURE.md) records actual exposure:
+40% general hand-active, 10% base-only, 50% unloaded TAMP prefixes, with no
+dedicated general goal changes. Next add analogous nominally anchored transitions
+at 10% overall, retaining 30% regular hand-active, 10% base-only and 50% TAMP.
+That allocation is planned, not yet running. Broader posture/reset coverage and
+fresh confirmation remain necessary. Compare a less cancellation-prone actor
+head if distribution/reward fixes still leave quiet misses; do not infer a
+hardware limitation or require a transformer from these results. Hardware
+readiness has separate [driver/feedback/stop requirements](MARS_HARDWARE_READINESS.md).

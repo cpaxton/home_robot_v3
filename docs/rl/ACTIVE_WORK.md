@@ -6,6 +6,11 @@ validation and the next milestone. The
 implementation sequence; experiment reports own measured results. Older
 snapshots and threads are historical evidence, not competing current plans.
 
+The maintained [training mixture](TRAINING_MIXTURE.md) distinguishes the actual
+40/10/50 hand-active/base/TAMP tick split from the planned 30/10/10/50 split
+adding goal transitions. [Hardware readiness](MARS_HARDWARE_READINESS.md) keeps
+robot-side feedback/executor/stop work separate from policy progress.
+
 ## One controller owner and development worktree
 
 Continue controller implementation, training decisions and progress updates in
@@ -76,16 +81,20 @@ The paper builds to 61 pages. [Completed report](../experiments/quiet_reference_
 failure identities, but worse worst hand error, linear jerk and contact load;
 no promotion. [Completed report and paired plot](../experiments/hand_priority_training_20261117.md).
 
-**Longer ordinary-reward fine-tuning is running**, job `20261117_083406_6c3285`,
-65,536 additional decisions from the ordinary 16,384-decision checkpoint. Actor,
-critics and Adam state restore exactly; physics/history/case cursors reset with
-explicit new seed 108. Actor LR decays 1e-5 → 1e-6, ordinary exploration and
-all reward/guard settings stay fixed. The restored archived source matches all
-1,585 receipt-bound tests. One CPU14 native worker, numerical threads one,
-CUDA hidden, W&B offline `6vuul7j4`. No intermediate selection or promotion;
-final matched physical readouts and viewer restoration are automatic. The reused
-audit cases remain development evidence; require fresh confirmation and broader
-posture/reset coverage before hardware. [Protocol](../experiments/long_finetune_20261117.md).
+**Longer fine-tuning and fresh confirmation are complete.** 65,536 additional
+decisions finish (81,920 lineage total). Reused development is 20/24 → 19/24,
+existing coupled stays 7/10 and unloaded TAMP 6/6. The 24 genuinely fresh cases
+improve **12/24 → 16/24**, safety flags **4 → 1**, wheel lifts **2 → 0**;
+teacher is 17/24. All 72 fresh stops confirm and initial/config/reference hashes
+match. Peak jerk and reused stress contact loads still worsen, so no promotion.
+
+Goal transitions are a specific gap: longer-trained 0/4 versus source 1/4 and
+teacher 2/4. Single-stage coupled is also only 4/8. The next planned allocation
+is 30% regular hand-active, 10% base-only, 10% goal changes, 50% unloaded TAMP
+by physical ticks; it is not yet implemented/running. No PPO job remains active.
+The retained viewer is restored on 8766. [Longer run](../experiments/long_finetune_20261117.md),
+[fresh cases](../experiments/fresh_tracking_confirmation_20261117.md),
+[mixture](TRAINING_MIXTURE.md), [hardware readiness](MARS_HARDWARE_READINESS.md).
 
 **Wrapper reward work:** the [reward specification](../experiments/wrapper_reward_20261116.md)
 records the legacy 20 Hz objective and an opt-in, versioned contract-tracking

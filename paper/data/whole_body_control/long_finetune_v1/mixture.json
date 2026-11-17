@@ -1,0 +1,31 @@
+{
+  "decisions_in_run": 65536,
+  "source_decisions": 16384,
+  "control_ticks": 77452,
+  "complete": true,
+  "rows": [
+    {
+      "use_case": "general/hand",
+      "target_fraction": 0.4,
+      "control_ticks": 31000,
+      "actual_fraction": 0.4002478954707432,
+      "episodes_started": 62
+    },
+    {
+      "use_case": "general/base",
+      "target_fraction": 0.1,
+      "control_ticks": 7692,
+      "actual_fraction": 0.09931312296648247,
+      "episodes_started": 17
+    },
+    {
+      "use_case": "tamp",
+      "target_fraction": 0.5,
+      "control_ticks": 38760,
+      "actual_fraction": 0.5004389815627743,
+      "episodes_started": 190
+    }
+  ],
+  "clock": "physical control ticks; episode counters count starts, not completions",
+  "run_sha256": "5f42ac6d220aed050767a85d8a32be08ab654621f2c4235ddea7fbab34dba94a"
+}
