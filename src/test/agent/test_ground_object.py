@@ -30,12 +30,12 @@ def test_ground_object_delivers_geometry_or_abstention_to_coordinator(admitted):
     executor.agent = SimpleNamespace(ground_current_view=ground)
     tools = {t.name: t for t in get_tools({"executor": executor})}
     ok, results, has_info = _dispatch_tool_calls(
-        [{"name": "ground_object", "arguments": {"query": "microwave", "description": "above the stove"}}],
+        [{"name": "ground_object", "arguments": {"query": "silver microwave above the stove"}}],
         tools,
         executor,
     )
     assert ok and has_info and len(results) == 1
-    ground.assert_called_once_with("microwave", target_description="above the stove")
+    ground.assert_called_once_with("silver microwave above the stove")
     executor.assert_not_called()
     assert '"source_obs_id": 5' in results[0]
     if admitted:
@@ -54,6 +54,22 @@ def test_ground_object_reports_unsupported_controller_without_retrieval_fallback
     out = tools["ground_object"].func(query="microwave")
     assert out["ok"] is False and out["status"] == "unavailable"
     executor.assert_not_called()
+
+
+def test_ground_object_does_not_silently_ignore_extra_constraints():
+    ground = Mock()
+    executor = Mock()
+    executor.agent = SimpleNamespace(ground_current_view=ground)
+    tools = {t.name: t for t in get_tools({"executor": executor})}
+    assert set(tools["ground_object"].parameters["properties"]) == {"query"}
+    ok, results, has_info = _dispatch_tool_calls(
+        [{"name": "ground_object", "arguments": {"query": "stool", "description": "nearest stool"}}],
+        tools,
+        executor,
+    )
+    assert ok and has_info
+    assert "unexpected keyword argument" in results[0]
+    ground.assert_not_called()
 
 
 def test_query_find_profile_explicitly_allows_grounded_instance_admission():

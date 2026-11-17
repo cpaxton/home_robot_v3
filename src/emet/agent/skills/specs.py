@@ -230,7 +230,7 @@ CHAT_SKILL_SPECS: tuple[SkillSpec, ...] = (
         description=(
             "Localize one visible object from the latest available RGB-D view, without moving. "
             "Use when you can see the target and need observed 3D geometry; no search candidate is required. "
-            "Pass a short object query and optional description for appearance/spatial constraints. "
+            "Include all identifying appearance/spatial constraints in query, e.g. nearest black stool in the foreground. "
             "Returns admitted world XYZ and object/view references, or an explicit abstention with depth/support reasons. "
             "A view reference or voxel search point is not object geometry. "
             "After success, find_objects with the same query can plan an approach using this grounding. "
@@ -239,8 +239,11 @@ CHAT_SKILL_SPECS: tuple[SkillSpec, ...] = (
         parameters={
             "type": "object",
             "properties": {
-                "query": {"type": "string", "minLength": 1, "description": "Object to localize, e.g. microwave."},
-                "description": {"type": "string", "description": "Optional visual or relational constraints."},
+                "query": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Complete object phrase, including identifying attributes or relations; not an EQA question/options.",
+                },
             },
             "required": ["query"],
             "additionalProperties": False,

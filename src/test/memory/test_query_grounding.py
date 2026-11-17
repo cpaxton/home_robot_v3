@@ -67,7 +67,7 @@ def test_coordinator_capture_uses_real_admission_without_retrieval_or_motion():
     frame.info = {"observation_scope_id": "episode-1", "image_timing": {"clock_domain": "fixture"}}
     agent.update = Mock(side_effect=lambda **kw: agent.voxel_map.observations.append(frame))
     agent.retrieve_query_candidate = Mock(side_effect=AssertionError("retrieval must not gate a visible object"))
-    result = agent.ground_current_view(" MUG ", target_description="mug on the table")
+    result = agent.ground_current_view(" MUG on the table ")
     assert result["ok"] and result["status"] == "grounded"
     assert result["observation"] == {
         "source_obs_id": 3,
@@ -78,10 +78,11 @@ def test_coordinator_capture_uses_real_admission_without_retrieval_or_motion():
     }
     assert result["geometry"]["status"] == "admitted"
     assert result["geometry"]["coordinate_frame"] == "world"
+    assert result["geometry"]["units"] == "meters"
     assert result["geometry"]["xyz"] == [1, 1, 1]
     assert result["geometry"]["point_count"] == 64
     record = next(iter(agent.query_candidates.records.values()))
-    assert record.query == "mug" and record.target_description == "mug. mug on the table"
+    assert record.query == "mug on the table" and record.target_description == "mug on the table"
     assert record.instance_id == result["geometry"]["obs_id"]
     agent.update.assert_called_once_with(full_perception=True)
     agent.retrieve_query_candidate.assert_not_called()
@@ -121,6 +122,19 @@ def test_coordinator_repeated_calls_capture_distinct_views():
     assert first["observation"]["source_obs_id"] == 3
     assert second["observation"]["source_obs_id"] == 4
     assert agent.update.call_count == 2
+
+
+def test_coordinator_object_constraints_reach_real_vlm_prompt():
+    agent = controller()
+    agent.parameters["query_memory"] = {"grounding_backend": "vlm", "region_strategy": "point", "mask_backend": "rgbd"}
+    client = agent.graph_memory.eqa_client = Mock(return_value='{"verified": false, "reason": "not visible"}')
+    frame = agent.voxel_map.observations[-1]
+    agent.update = Mock(side_effect=lambda **kw: agent.voxel_map.observations.append(frame))
+    result = agent.ground_current_view("nearest black stool in the foreground")
+    assert not result["ok"] and not agent.query_candidates.records
+    command = client.call_args[0][0]
+    assert "nearest black stool in the foreground" in command[0]
+    agent.detection_model.predict.assert_not_called()
 
 
 def test_current_view_without_verifier_reports_unavailable_not_absent():

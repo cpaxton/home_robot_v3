@@ -146,7 +146,7 @@ class LazyGraphController(DynagraphController):
             return {"ok": False, "reason": "fresh observation required"}
         return self._ground_query_frame(record.query, record.target_description, record.source_obs_id, handle=handle)
 
-    def ground_current_view(self, query: str, *, target_description: str | None = None):
+    def ground_current_view(self, query: str):
         """Capture one view and use the same object admission as assessed EQA views.
 
         This does not move the robot or retrieve a search anchor. Acquisition
@@ -154,10 +154,8 @@ class LazyGraphController(DynagraphController):
         physical manipulation still requires its existing fresh reacquisition.
         """
         query = " ".join(query.lower().split())
-        constraints = None if target_description is None else target_description.strip()
-        if not query or constraints == "":
+        if not query:
             return {"ok": False, "status": "invalid_query", "reason": "target description required"}
-        description = query if constraints is None else f"{query}. {constraints}"
         self._grounded_query_target = None
         before = len(self.voxel_map.observations)
         self.update(full_perception=True)
@@ -166,7 +164,7 @@ class LazyGraphController(DynagraphController):
             return {"ok": False, "status": "observation_unavailable", "reason": "new captured observation required"}
         frame = self.voxel_map.observations[-1]
         info = getattr(frame, "info", None) or {}
-        result = self.ground_query_view(query, source_obs_id=source, target_description=description)
+        result = self.ground_query_view(query, source_obs_id=source, target_description=query)
         return {
             **result,
             "query": query,
@@ -184,6 +182,7 @@ class LazyGraphController(DynagraphController):
                     {
                         "xyz": result["xyz"],
                         "coordinate_frame": "world",
+                        "units": "meters",
                         "obs_id": result["obs_id"],
                         "source": self._grounded_query_target.geometry_source,
                         "point_count": len(self._grounded_query_target.points),

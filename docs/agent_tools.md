@@ -35,9 +35,11 @@ use those schemas for exact arguments rather than copying prose into calls.
 
 ## Current-view object grounding
 
-Call `ground_object(query="microwave", description="silver appliance above the stove")`
+Call `ground_object(query="silver microwave above the stove")`
 when the object is visible and the coordinator needs its geometry. The query
-stays attached to the description; a relation alone does not replace the target.
+must contain the complete identifying object phrase; do not pass an EQA question
+or answer options. The VLM grounder intentionally treats EQA's separate question
+context as non-binding, so constraints belong in this explicit object query.
 The tool captures a view through the controller and invokes the existing
 `ground_query_view` boundary, also used for confirmed EQA views. It does not
 require a retrieval candidate, navigate, or manipulate anything.

@@ -1042,12 +1042,12 @@ def build_chat_tools(context: dict[str, Any]) -> list[Tool]:
         )
 
     # -- current-view object geometry ----------------------------------------
-    def ground_object(query: str, description: str | None = None) -> dict:
+    def ground_object(query: str) -> dict:
         agent = _agent_from_context(context)
         ground = getattr(agent, "ground_current_view", None)
         if not callable(ground):
             return {"ok": False, "status": "unavailable", "note": "Current-view RGB-D grounding is unavailable."}
-        result = ground(query, target_description=description)
+        result = ground(query)
         return {**result, "note": result.get("reason") or "Object geometry admitted from the captured RGB-D view."}
 
     tools.append(

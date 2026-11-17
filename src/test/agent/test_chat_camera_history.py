@@ -127,7 +127,7 @@ def test_chat_grounding_reaches_model_without_motion_or_answer_override(monkeypa
     assert (
         "[ground_object] ok status=grounded" if admitted else "[ground_object] failed status=not_grounded"
     ) in requests[1]
-    executor.agent.ground_current_view.assert_called_once_with("microwave", target_description=None)
+    executor.agent.ground_current_view.assert_called_once_with("microwave")
     executor.assert_not_called()
 
 
