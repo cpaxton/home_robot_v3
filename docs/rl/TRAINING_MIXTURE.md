@@ -92,19 +92,19 @@ first goal's required quiet hold finishes, with nominally anchored C2 references
 they are not discontinuous, arbitrary unreachable targets. Four cases do not
 establish a general transition success rate.
 
-## Current goal-change experiment — training
+## Completed goal-change experiment
 
 Preserve the outer 50/50 general/TAMP balance. Within general, move 20 percentage
 points from ordinary hand tracking into analogous goal-change cases:
 
-| Use case | Completed ordinary share | Running goal-change target |
+| Use case | Completed ordinary share | Goal-change run target |
 | --- | ---: | ---: |
 | Regular hand-active tracking | 40% | 30% |
 | Base-only tracking | 10% | 10% |
 | General two-stage goal changes | 0% | 10% |
 | TAMP unloaded prefixes | 50% | 50% |
 
-The running curriculum producer is `paper/data/whole_body_control/goal_change_curriculum_v1/run.py`,
+The completed curriculum producer is `paper/data/whole_body_control/goal_change_curriculum_v1/run.py`,
 with adjacent protocol/cases/curriculum manifests. The older ordinary runner above
 is historical. Read its live ledger with `--run logs/manipulation/goal-change-curriculum-v1/curriculum/run.json`.
 
@@ -115,9 +115,11 @@ than copying the 24 confirmation identities into PPO. Keep precise hand/coarse
 base contracts, reward, native limits, history and force/wheel guards fixed.
 Both nominal-stage and live-state/fault invariants have implementation/tests.
 The full frozen-source gate passes 1,604 tests and teacher/source admission is
-complete (13/16 vs 9/16, all 32 stops confirmed). PPO is now running the fixed
-131,072-decision budget. This is an observed training allocation, not a final
-policy-performance result. See the
+complete (13/16 vs 9/16, all 32 stops confirmed). The fixed 131,072-decision run completes. Actual shares are
+29.92/10.22/9.99/49.87% (46,500/15,884/15,530/77,509 ticks). Goal changes
+complete four stochastic episodes per train case: 31 timeouts and one wheel-lift
+stop, zero successes. Final deterministic goals regress 9/16 → 6/16 despite
+regular tracking improving 19/24 → 22/24. No promotion or automatic extension. See the
 [curriculum protocol](../experiments/goal_change_curriculum_20261117.md).
 
 Subsequent additions should be explicit new rows, not silently folded into

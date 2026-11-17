@@ -75,7 +75,11 @@ source baseline is 13/16 versus 9/16 on the goal-change suite; all 32 stops conf
 with one teacher safety-flagged episode. The full frozen-source regression gate
 passes **1,604 tests**. That receipt belongs to source `2a2ce5c1`; later local
 hardware/UI changes do not inherit it. PPO uses the frozen runtime independently
-of ongoing integration edits. No candidate has hardware qualification.
+of ongoing integration edits. The continuation now completes: regular 19/24 → 22/24, existing coupled 7/10 →
+6/10, TAMP 6/6, goal changes 9/16 → 6/16. All 56 candidate stops confirm, but
+it is not promoted. Only four stochastic transition episodes per training
+identity occur; none succeed. Further endpoint/credit diagnostics precede more
+training. No candidate has hardware qualification.
 
 ## Servo transfer is a separate experiment
 

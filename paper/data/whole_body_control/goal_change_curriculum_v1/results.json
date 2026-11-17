@@ -1,0 +1,2491 @@
+{
+  "format": "goal-change-curriculum-results-v1",
+  "complete": true,
+  "source_revision": "2a2ce5c1ec06ff9d03bb7b770dc82188e717e9df",
+  "additional_decisions": 131072,
+  "lineage_decisions": 212992,
+  "control_ticks": 155423,
+  "summary": {
+    "regular/all/source": {
+      "successes": 19,
+      "attempts": 24,
+      "confirmed_stops": 24,
+      "unsafe_episodes": 1,
+      "worst": {
+        "ee_position_error": 0.006235683118383869,
+        "ee_orientation_error": 0.032060908272613924,
+        "peak_base_linear_jerk_m_s3": 4.122165166484826,
+        "peak_base_yaw_jerk_rad_s3": 70.63702132906755,
+        "peak_contact_force": 33.653710840131524
+      }
+    },
+    "regular/all/curriculum": {
+      "successes": 22,
+      "attempts": 24,
+      "confirmed_stops": 24,
+      "unsafe_episodes": 1,
+      "worst": {
+        "ee_position_error": 0.004449259177097535,
+        "ee_orientation_error": 0.02702904744299059,
+        "peak_base_linear_jerk_m_s3": 3.440516898876272,
+        "peak_base_yaw_jerk_rad_s3": 32.07792256963215,
+        "peak_contact_force": 30.22408819980989
+      }
+    },
+    "existing-coupled/all/source": {
+      "successes": 7,
+      "attempts": 10,
+      "confirmed_stops": 10,
+      "unsafe_episodes": 2,
+      "worst": {
+        "ee_position_error": 0.012367240031247938,
+        "ee_orientation_error": 0.04484203794929373,
+        "peak_base_linear_jerk_m_s3": 7.648401863629974,
+        "peak_base_yaw_jerk_rad_s3": 41.084967537418116,
+        "peak_contact_force": 42.561963930394754
+      }
+    },
+    "existing-coupled/all/curriculum": {
+      "successes": 6,
+      "attempts": 10,
+      "confirmed_stops": 10,
+      "unsafe_episodes": 2,
+      "worst": {
+        "ee_position_error": 0.006370408655435195,
+        "ee_orientation_error": 0.035167997560332426,
+        "peak_base_linear_jerk_m_s3": 7.165291394363336,
+        "peak_base_yaw_jerk_rad_s3": 38.80145729121987,
+        "peak_contact_force": 32.38103997428389
+      }
+    },
+    "tamp/all/source": {
+      "successes": 6,
+      "attempts": 6,
+      "confirmed_stops": 6,
+      "unsafe_episodes": 0
+    },
+    "tamp/all/curriculum": {
+      "successes": 6,
+      "attempts": 6,
+      "confirmed_stops": 6,
+      "unsafe_episodes": 0
+    },
+    "goal-changes/all/source": {
+      "successes": 9,
+      "attempts": 16,
+      "confirmed_stops": 16,
+      "unsafe_episodes": 0,
+      "worst": {
+        "ee_position_error": 0.03205320287607779,
+        "ee_orientation_error": 0.06919378131499825,
+        "peak_base_linear_jerk_m_s3": 8.130047167074814,
+        "peak_base_yaw_jerk_rad_s3": 91.03696912589885,
+        "peak_contact_force": 12.942812411705663
+      }
+    },
+    "goal-changes/train/source": {
+      "successes": 4,
+      "attempts": 8,
+      "confirmed_stops": 8,
+      "unsafe_episodes": 0,
+      "worst": {
+        "ee_position_error": 0.03205320287607779,
+        "ee_orientation_error": 0.06919378131499825,
+        "peak_base_linear_jerk_m_s3": 8.130047167074814,
+        "peak_base_yaw_jerk_rad_s3": 91.03696912589885,
+        "peak_contact_force": 12.942812411705663
+      }
+    },
+    "goal-changes/audit/source": {
+      "successes": 5,
+      "attempts": 8,
+      "confirmed_stops": 8,
+      "unsafe_episodes": 0,
+      "worst": {
+        "ee_position_error": 0.0262277302951,
+        "ee_orientation_error": 0.043178602431842565,
+        "peak_base_linear_jerk_m_s3": 6.186975726992732,
+        "peak_base_yaw_jerk_rad_s3": 62.298061061728745,
+        "peak_contact_force": 0.19620000000000115
+      }
+    },
+    "goal-changes/all/curriculum": {
+      "successes": 6,
+      "attempts": 16,
+      "confirmed_stops": 16,
+      "unsafe_episodes": 0,
+      "worst": {
+        "ee_position_error": 0.027771062568933202,
+        "ee_orientation_error": 0.06312622527405355,
+        "peak_base_linear_jerk_m_s3": 6.3471408045494835,
+        "peak_base_yaw_jerk_rad_s3": 58.98011035360385,
+        "peak_contact_force": 0.19620000000000115
+      }
+    },
+    "goal-changes/train/curriculum": {
+      "successes": 3,
+      "attempts": 8,
+      "confirmed_stops": 8,
+      "unsafe_episodes": 0,
+      "worst": {
+        "ee_position_error": 0.027771062568933202,
+        "ee_orientation_error": 0.06312622527405355,
+        "peak_base_linear_jerk_m_s3": 6.3471408045494835,
+        "peak_base_yaw_jerk_rad_s3": 58.98011035360385,
+        "peak_contact_force": 0.19620000000000115
+      }
+    },
+    "goal-changes/audit/curriculum": {
+      "successes": 3,
+      "attempts": 8,
+      "confirmed_stops": 8,
+      "unsafe_episodes": 0,
+      "worst": {
+        "ee_position_error": 0.017721789769673174,
+        "ee_orientation_error": 0.042528313010986016,
+        "peak_base_linear_jerk_m_s3": 5.964978940753607,
+        "peak_base_yaw_jerk_rad_s3": 55.34913662301277,
+        "peak_contact_force": 0.19620000000000115
+      }
+    }
+  },
+  "cases": {
+    "regular": {
+      "source": [
+        {
+          "id": "mars:wrapper-reward-v2:train:hand:0",
+          "seed": 35900000,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.0007157032178760083,
+            "ee_orientation_error": 0.0012815580386330572,
+            "base_goal_error": 0.0010531703413745705,
+            "base_heading_error_rad": 0.0013924582434473864,
+            "settled_seconds": 21.100000000000165
+          }
+        },
+        {
+          "id": "mars:wrapper-reward-v2:train:hand:1",
+          "seed": 35900001,
+          "success": false,
+          "code": "tracking_timeout",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.00463429129136853,
+            "ee_orientation_error": 0.008210529204132804,
+            "base_goal_error": 0.006210685551135872,
+            "base_heading_error_rad": 0.006865188393131827,
+            "settled_seconds": 0
+          }
+        },
+        {
+          "id": "mars:wrapper-reward-v2:train:hand:2",
+          "seed": 35900002,
+          "success": false,
+          "code": "tracking_timeout",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.0035894972029257006,
+            "ee_orientation_error": 0.006185651014912914,
+            "base_goal_error": 0.005254124738550503,
+            "base_heading_error_rad": 0.007373332770850588,
+            "settled_seconds": 0
+          }
+        },
+        {
+          "id": "mars:wrapper-reward-v2:train:hand:3",
+          "seed": 35900003,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.0015699888462702017,
+            "ee_orientation_error": 0.0028330599513788452,
+            "base_goal_error": 0.0024435120724486197,
+            "base_heading_error_rad": 0.0035677026925013122,
+            "settled_seconds": 21.050000000000164
+          }
+        },
+        {
+          "id": "mars:wrapper-reward-v2:train:hand:4",
+          "seed": 35900004,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.0013320068725401148,
+            "ee_orientation_error": 0.002106053387581166,
+            "base_goal_error": 0.00104008718370986,
+            "base_heading_error_rad": 0.0,
+            "settled_seconds": 20.550000000000157
+          }
+        },
+        {
+          "id": "mars:wrapper-reward-v2:train:hand:5",
+          "seed": 35900005,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.00038186211880675156,
+            "ee_orientation_error": 0.000594228067175716,
+            "base_goal_error": 0.0002930538028648562,
+            "base_heading_error_rad": 0.0,
+            "settled_seconds": 20.65000000000016
+          }
+        },
+        {
+          "id": "mars:wrapper-reward-v2:train:hand:6",
+          "seed": 35900006,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 1.2150647394481858e-06,
+            "ee_orientation_error": 3.3222572479601288e-06,
+            "base_goal_error": 0.0,
+            "base_heading_error_rad": 0.0,
+            "settled_seconds": 21.100000000000165
+          }
+        },
+        {
+          "id": "mars:wrapper-reward-v2:train:hand:7",
+          "seed": 35900007,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.000284647363215357,
+            "ee_orientation_error": 0.0004427255292783506,
+            "base_goal_error": 0.00021782809231653635,
+            "base_heading_error_rad": 0.0,
+            "settled_seconds": 21.100000000000165
+          }
+        },
+        {
+          "id": "mars:wrapper-reward-v2:train:base:0",
+          "seed": 35900020,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.0007478537877988532,
+            "ee_orientation_error": 0.0028304240482964513,
+            "base_goal_error": 0.00015053747337493914,
+            "base_heading_error_rad": 1.720009027036479e-05,
+            "settled_seconds": 21.100000000000165
+          }
+        },
+        {
+          "id": "mars:wrapper-reward-v2:train:base:1",
+          "seed": 35900021,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.0008990792897778177,
+            "ee_orientation_error": 0.003668378455940999,
+            "base_goal_error": 0.00020943049160667982,
+            "base_heading_error_rad": 0.0023312942570550836,
+            "settled_seconds": 21.100000000000165
+          }
+        },
+        {
+          "id": "mars:wrapper-reward-v2:train:base:2",
+          "seed": 35900022,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.004473999807393268,
+            "ee_orientation_error": 0.013413360635499067,
+            "base_goal_error": 0.0027559212989335864,
+            "base_heading_error_rad": 0.013126568138084188,
+            "settled_seconds": 21.100000000000165
+          }
+        },
+        {
+          "id": "mars:wrapper-reward-v2:train:base:3",
+          "seed": 35900023,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.004261867723132255,
+            "ee_orientation_error": 0.013213327723210584,
+            "base_goal_error": 0.001350434368215829,
+            "base_heading_error_rad": 0.01291355996847171,
+            "settled_seconds": 21.100000000000165
+          }
+        },
+        {
+          "id": "mars:wrapper-reward-v2:audit:hand:0",
+          "seed": 35901000,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.0009203925028708879,
+            "ee_orientation_error": 0.0016537739673839708,
+            "base_goal_error": 0.0013057926787026668,
+            "base_heading_error_rad": 0.001588951218687046,
+            "settled_seconds": 20.950000000000163
+          }
+        },
+        {
+          "id": "mars:wrapper-reward-v2:audit:hand:1",
+          "seed": 35901001,
+          "success": false,
+          "code": "tracking_timeout",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.006235683118383869,
+            "ee_orientation_error": 0.01073621875456765,
+            "base_goal_error": 0.010078693804038917,
+            "base_heading_error_rad": 0.017084045418391845,
+            "settled_seconds": 0
+          }
+        },
+        {
+          "id": "mars:wrapper-reward-v2:audit:hand:2",
+          "seed": 35901002,
+          "success": false,
+          "code": "tracking_timeout",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.004316586972747163,
+            "ee_orientation_error": 0.007422158144129168,
+            "base_goal_error": 0.006586887434710956,
+            "base_heading_error_rad": 0.010043784699390768,
+            "settled_seconds": 0
+          }
+        },
+        {
+          "id": "mars:wrapper-reward-v2:audit:hand:3",
+          "seed": 35901003,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.0002607376303164506,
+            "ee_orientation_error": 0.0004628678868415214,
+            "base_goal_error": 0.0003849927922258107,
+            "base_heading_error_rad": 0.0005209995286004632,
+            "settled_seconds": 21.000000000000163
+          }
+        },
+        {
+          "id": "mars:wrapper-reward-v2:audit:hand:4",
+          "seed": 35901004,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 5.012157374291388e-06,
+            "ee_orientation_error": 7.820057841391873e-06,
+            "base_goal_error": 3.006809791623845e-06,
+            "base_heading_error_rad": 0.0,
+            "settled_seconds": 20.500000000000156
+          }
+        },
+        {
+          "id": "mars:wrapper-reward-v2:audit:hand:5",
+          "seed": 35901005,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.0004014383302305466,
+            "ee_orientation_error": 0.0006314968170338114,
+            "base_goal_error": 0.00031178905333183567,
+            "base_heading_error_rad": 0.0,
+            "settled_seconds": 20.500000000000156
+          }
+        },
+        {
+          "id": "mars:wrapper-reward-v2:audit:hand:6",
+          "seed": 35901006,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 1.430558202906591e-06,
+            "ee_orientation_error": 4.010710580334927e-06,
+            "base_goal_error": 0.0,
+            "base_heading_error_rad": 0.0,
+            "settled_seconds": 21.100000000000165
+          }
+        },
+        {
+          "id": "mars:wrapper-reward-v2:audit:hand:7",
+          "seed": 35901007,
+          "success": false,
+          "code": "unsafe_contact",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": true,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.005415194295269515,
+            "ee_orientation_error": 0.032060908272613924,
+            "base_goal_error": 0.0,
+            "base_heading_error_rad": 0.0,
+            "settled_seconds": 0
+          }
+        },
+        {
+          "id": "mars:wrapper-reward-v2:audit:base:0",
+          "seed": 35901020,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.0007318669706517709,
+            "ee_orientation_error": 0.002812439367896369,
+            "base_goal_error": 0.0001620911686532556,
+            "base_heading_error_rad": 2.269488528905552e-05,
+            "settled_seconds": 21.100000000000165
+          }
+        },
+        {
+          "id": "mars:wrapper-reward-v2:audit:base:1",
+          "seed": 35901021,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.0019451035762936522,
+            "ee_orientation_error": 0.007644777421314267,
+            "base_goal_error": 0.0005277374751936149,
+            "base_heading_error_rad": 0.007149267111950928,
+            "settled_seconds": 21.100000000000165
+          }
+        },
+        {
+          "id": "mars:wrapper-reward-v2:audit:base:2",
+          "seed": 35901022,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.004690456176935819,
+            "ee_orientation_error": 0.013717127089414529,
+            "base_goal_error": 0.0029565837703408268,
+            "base_heading_error_rad": 0.013427863563643533,
+            "settled_seconds": 21.100000000000165
+          }
+        },
+        {
+          "id": "mars:wrapper-reward-v2:audit:base:3",
+          "seed": 35901023,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.004380365166413506,
+            "ee_orientation_error": 0.013645171131139059,
+            "base_goal_error": 0.0014757745091972458,
+            "base_heading_error_rad": 0.013371517148309532,
+            "settled_seconds": 21.100000000000165
+          }
+        }
+      ],
+      "curriculum": [
+        {
+          "id": "mars:wrapper-reward-v2:train:hand:0",
+          "seed": 35900000,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.000138624642264164,
+            "ee_orientation_error": 0.0003588204009775613,
+            "base_goal_error": 0.0002506547750171996,
+            "base_heading_error_rad": 0.00021925598269145752,
+            "settled_seconds": 21.100000000000165
+          }
+        },
+        {
+          "id": "mars:wrapper-reward-v2:train:hand:1",
+          "seed": 35900001,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.00243144845245645,
+            "ee_orientation_error": 0.006297191425623613,
+            "base_goal_error": 0.003936059040788361,
+            "base_heading_error_rad": 0.0020930929711399653,
+            "settled_seconds": 21.000000000000163
+          }
+        },
+        {
+          "id": "mars:wrapper-reward-v2:train:hand:2",
+          "seed": 35900002,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.0018058429257925997,
+            "ee_orientation_error": 0.004565027819791981,
+            "base_goal_error": 0.003207811140548959,
+            "base_heading_error_rad": 0.002881438549706239,
+            "settled_seconds": 20.500000000000156
+          }
+        },
+        {
+          "id": "mars:wrapper-reward-v2:train:hand:3",
+          "seed": 35900003,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.0006564993506697739,
+            "ee_orientation_error": 0.0017048484183019338,
+            "base_goal_error": 0.001241671843964535,
+            "base_heading_error_rad": 0.001267153815577654,
+            "settled_seconds": 21.100000000000165
+          }
+        },
+        {
+          "id": "mars:wrapper-reward-v2:train:hand:4",
+          "seed": 35900004,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.0017536696801832487,
+            "ee_orientation_error": 0.003873576729510459,
+            "base_goal_error": 0.0020235374153547286,
+            "base_heading_error_rad": 0.0,
+            "settled_seconds": 20.75000000000016
+          }
+        },
+        {
+          "id": "mars:wrapper-reward-v2:train:hand:5",
+          "seed": 35900005,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.0010786919320865049,
+            "ee_orientation_error": 0.0023695593340354,
+            "base_goal_error": 0.0012375323542722723,
+            "base_heading_error_rad": 0.0,
+            "settled_seconds": 20.65000000000016
+          }
+        },
+        {
+          "id": "mars:wrapper-reward-v2:train:hand:6",
+          "seed": 35900006,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 1.0232355840576473e-06,
+            "ee_orientation_error": 2.999393140811873e-06,
+            "base_goal_error": 0.0,
+            "base_heading_error_rad": 0.0,
+            "settled_seconds": 21.100000000000165
+          }
+        },
+        {
+          "id": "mars:wrapper-reward-v2:train:hand:7",
+          "seed": 35900007,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.00022881361702630615,
+            "ee_orientation_error": 0.000497208713975236,
+            "base_goal_error": 0.00025905359643020083,
+            "base_heading_error_rad": 0.0,
+            "settled_seconds": 21.100000000000165
+          }
+        },
+        {
+          "id": "mars:wrapper-reward-v2:train:base:0",
+          "seed": 35900020,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.0007487352646258031,
+            "ee_orientation_error": 0.002830639260390258,
+            "base_goal_error": 0.00015083070683978708,
+            "base_heading_error_rad": 3.8730991514232646e-05,
+            "settled_seconds": 21.100000000000165
+          }
+        },
+        {
+          "id": "mars:wrapper-reward-v2:train:base:1",
+          "seed": 35900021,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.0011312751747527222,
+            "ee_orientation_error": 0.004377931311771907,
+            "base_goal_error": 0.00021804612425865974,
+            "base_heading_error_rad": 0.003338757351937319,
+            "settled_seconds": 21.100000000000165
+          }
+        },
+        {
+          "id": "mars:wrapper-reward-v2:train:base:2",
+          "seed": 35900022,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.004801963140576559,
+            "ee_orientation_error": 0.014673345090829784,
+            "base_goal_error": 0.0027338516883839295,
+            "base_heading_error_rad": 0.014411482390943559,
+            "settled_seconds": 21.100000000000165
+          }
+        },
+        {
+          "id": "mars:wrapper-reward-v2:train:base:3",
+          "seed": 35900023,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.004684456417811324,
+            "ee_orientation_error": 0.014600753195489966,
+            "base_goal_error": 0.0013399884135079606,
+            "base_heading_error_rad": 0.014329752548157436,
+            "settled_seconds": 21.100000000000165
+          }
+        },
+        {
+          "id": "mars:wrapper-reward-v2:audit:hand:0",
+          "seed": 35901000,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.0001964492832673581,
+            "ee_orientation_error": 0.0005088655458168094,
+            "base_goal_error": 0.0003401100178841189,
+            "base_heading_error_rad": 0.0002506234076985192,
+            "settled_seconds": 21.100000000000165
+          }
+        },
+        {
+          "id": "mars:wrapper-reward-v2:audit:hand:1",
+          "seed": 35901001,
+          "success": false,
+          "code": "tracking_timeout",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.0030196598503449508,
+            "ee_orientation_error": 0.007610006539005686,
+            "base_goal_error": 0.005844402621321213,
+            "base_heading_error_rad": 0.006953608044926395,
+            "settled_seconds": 0
+          }
+        },
+        {
+          "id": "mars:wrapper-reward-v2:audit:hand:2",
+          "seed": 35901002,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.0021486721443152294,
+            "ee_orientation_error": 0.00542126645924779,
+            "base_goal_error": 0.003981051063165237,
+            "base_heading_error_rad": 0.0041404457719402266,
+            "settled_seconds": 20.200000000000152
+          }
+        },
+        {
+          "id": "mars:wrapper-reward-v2:audit:hand:3",
+          "seed": 35901003,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.00043565727695858236,
+            "ee_orientation_error": 0.0011201060805721592,
+            "base_goal_error": 0.0007818964872212003,
+            "base_heading_error_rad": 0.0006885545022283224,
+            "settled_seconds": 21.100000000000165
+          }
+        },
+        {
+          "id": "mars:wrapper-reward-v2:audit:hand:4",
+          "seed": 35901004,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.0008847059682974525,
+            "ee_orientation_error": 0.0019464619551073385,
+            "base_goal_error": 0.0010162114304806938,
+            "base_heading_error_rad": 0.0,
+            "settled_seconds": 20.75000000000016
+          }
+        },
+        {
+          "id": "mars:wrapper-reward-v2:audit:hand:5",
+          "seed": 35901005,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.0013818552349959324,
+            "ee_orientation_error": 0.003052640660446191,
+            "base_goal_error": 0.001594887617643065,
+            "base_heading_error_rad": 0.0,
+            "settled_seconds": 20.450000000000156
+          }
+        },
+        {
+          "id": "mars:wrapper-reward-v2:audit:hand:6",
+          "seed": 35901006,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 1.368871237180852e-06,
+            "ee_orientation_error": 4.2671472651292335e-06,
+            "base_goal_error": 0.0,
+            "base_heading_error_rad": 0.0,
+            "settled_seconds": 21.100000000000165
+          }
+        },
+        {
+          "id": "mars:wrapper-reward-v2:audit:hand:7",
+          "seed": 35901007,
+          "success": false,
+          "code": "unsafe_contact",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": true,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.004449259177097535,
+            "ee_orientation_error": 0.02702904744299059,
+            "base_goal_error": 0.0,
+            "base_heading_error_rad": 0.0,
+            "settled_seconds": 0
+          }
+        },
+        {
+          "id": "mars:wrapper-reward-v2:audit:base:0",
+          "seed": 35901020,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.0007329104171663469,
+            "ee_orientation_error": 0.002812757571923491,
+            "base_goal_error": 0.00016244305105659175,
+            "base_heading_error_rad": 4.788044801183283e-05,
+            "settled_seconds": 21.100000000000165
+          }
+        },
+        {
+          "id": "mars:wrapper-reward-v2:audit:base:1",
+          "seed": 35901021,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.0025666400873908283,
+            "ee_orientation_error": 0.009708384164096012,
+            "base_goal_error": 0.0005230683091224691,
+            "base_heading_error_rad": 0.009323027139465966,
+            "settled_seconds": 21.100000000000165
+          }
+        },
+        {
+          "id": "mars:wrapper-reward-v2:audit:base:2",
+          "seed": 35901022,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.004975815340141206,
+            "ee_orientation_error": 0.014812089121836609,
+            "base_goal_error": 0.002937447707280662,
+            "base_heading_error_rad": 0.014544476187177025,
+            "settled_seconds": 21.100000000000165
+          }
+        },
+        {
+          "id": "mars:wrapper-reward-v2:audit:base:3",
+          "seed": 35901023,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.004778482279852105,
+            "ee_orientation_error": 0.014985968179827646,
+            "base_goal_error": 0.0014652110530708271,
+            "base_heading_error_rad": 0.014736983068042386,
+            "settled_seconds": 21.100000000000165
+          }
+        }
+      ]
+    },
+    "existing-coupled": {
+      "source": [
+        {
+          "id": "innate_mars:v2:train:base_only:0",
+          "seed": 35700000,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.0007744638343859211,
+            "ee_orientation_error": 0.002866463485697884,
+            "base_goal_error": 0.0002299055787989304,
+            "base_heading_error_rad": 7.632491977143405e-05,
+            "settled_seconds": 21.100000000000165
+          }
+        },
+        {
+          "id": "innate_mars:v2:train:hand_free_base:1",
+          "seed": 35700001,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 8.592271979157904e-07,
+            "ee_orientation_error": 2.3290662717752295e-06,
+            "base_goal_error": 0.0,
+            "base_heading_error_rad": 0.0,
+            "settled_seconds": 20.75000000000016
+          }
+        },
+        {
+          "id": "innate_mars:v2:train:hand_free_base:2",
+          "seed": 35700002,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 1.622514141384216e-07,
+            "ee_orientation_error": 4.1402709452658604e-07,
+            "base_goal_error": 0.0,
+            "base_heading_error_rad": 0.0,
+            "settled_seconds": 20.70000000000016
+          }
+        },
+        {
+          "id": "innate_mars:v2:train:coupled:3",
+          "seed": 35700003,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.0014875522729116436,
+            "ee_orientation_error": 0.0026867570119118046,
+            "base_goal_error": 0.0021072898204476296,
+            "base_heading_error_rad": 0.0025318782953594465,
+            "settled_seconds": 20.900000000000162
+          }
+        },
+        {
+          "id": "innate_mars:v2:train:coupled:4",
+          "seed": 35700004,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.001173395879245769,
+            "ee_orientation_error": 0.0018453283946195682,
+            "base_goal_error": 0.0009098238972929512,
+            "base_heading_error_rad": 0.0,
+            "settled_seconds": 19.95000000000015
+          }
+        },
+        {
+          "id": "innate_mars:v2:train:fixed_world_hand:5",
+          "seed": 35700005,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 8.460311063170383e-06,
+            "ee_orientation_error": 1.5272345425702743e-05,
+            "base_goal_error": 1.155695047571148e-05,
+            "base_heading_error_rad": 1.2910622243888451e-05,
+            "settled_seconds": 21.100000000000165
+          }
+        },
+        {
+          "id": "innate_mars:v2:audit:hand_free_base:6",
+          "seed": 35700006,
+          "success": false,
+          "code": "unsafe_contact",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": true,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.0070070329458416175,
+            "ee_orientation_error": 0.03670309240242728,
+            "base_goal_error": 0.0,
+            "base_heading_error_rad": 0.0,
+            "settled_seconds": 0
+          }
+        },
+        {
+          "id": "innate_mars:v2:audit:coupled:7",
+          "seed": 35700007,
+          "success": false,
+          "code": "tracking_timeout",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.012367240031247938,
+            "ee_orientation_error": 0.02066951909713982,
+            "base_goal_error": 0.01807883108066239,
+            "base_heading_error_rad": 0.02676854097268433,
+            "settled_seconds": 0
+          }
+        },
+        {
+          "id": "innate_mars:v2:audit:fixed_world_hand:8",
+          "seed": 35700008,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 2.7241102964968852e-05,
+            "ee_orientation_error": 4.8913378825588795e-05,
+            "base_goal_error": 3.591755163405083e-05,
+            "base_heading_error_rad": 3.754987732845381e-05,
+            "settled_seconds": 21.100000000000165
+          }
+        },
+        {
+          "id": "innate_mars:v2:audit:hand_free_base:9",
+          "seed": 35700009,
+          "success": false,
+          "code": "unsafe_contact",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": true,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.00859445596270431,
+            "ee_orientation_error": 0.04484203794929373,
+            "base_goal_error": 0.0,
+            "base_heading_error_rad": 0.0,
+            "settled_seconds": 0
+          }
+        }
+      ],
+      "curriculum": [
+        {
+          "id": "innate_mars:v2:train:base_only:0",
+          "seed": 35700000,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.0007772807969186655,
+            "ee_orientation_error": 0.002868085546810418,
+            "base_goal_error": 0.0002306854007663638,
+            "base_heading_error_rad": 0.0001230484820233002,
+            "settled_seconds": 21.100000000000165
+          }
+        },
+        {
+          "id": "innate_mars:v2:train:hand_free_base:1",
+          "seed": 35700001,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 8.996002744985802e-07,
+            "ee_orientation_error": 2.7873537138891926e-06,
+            "base_goal_error": 0.0,
+            "base_heading_error_rad": 0.0,
+            "settled_seconds": 20.65000000000016
+          }
+        },
+        {
+          "id": "innate_mars:v2:train:hand_free_base:2",
+          "seed": 35700002,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 4.4556249978895744e-07,
+            "ee_orientation_error": 1.2799394888576197e-06,
+            "base_goal_error": 0.0,
+            "base_heading_error_rad": 0.0,
+            "settled_seconds": 20.500000000000156
+          }
+        },
+        {
+          "id": "innate_mars:v2:train:coupled:3",
+          "seed": 35700003,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 6.190148019463803e-05,
+            "ee_orientation_error": 0.0001613634383645725,
+            "base_goal_error": 0.00010839695501145517,
+            "base_heading_error_rad": 8.04405924226259e-05,
+            "settled_seconds": 21.100000000000165
+          }
+        },
+        {
+          "id": "innate_mars:v2:train:coupled:4",
+          "seed": 35700004,
+          "success": false,
+          "code": "tracking_timeout",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.003189185124147166,
+            "ee_orientation_error": 0.007086046057937409,
+            "base_goal_error": 0.0037027972748326456,
+            "base_heading_error_rad": 0.0,
+            "settled_seconds": 0
+          }
+        },
+        {
+          "id": "innate_mars:v2:train:fixed_world_hand:5",
+          "seed": 35700005,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 9.723614661754036e-06,
+            "ee_orientation_error": 2.5406929925932025e-05,
+            "base_goal_error": 1.613432809273786e-05,
+            "base_heading_error_rad": 9.497483858913677e-06,
+            "settled_seconds": 21.100000000000165
+          }
+        },
+        {
+          "id": "innate_mars:v2:audit:hand_free_base:6",
+          "seed": 35700006,
+          "success": false,
+          "code": "unsafe_contact",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": true,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.005751434823223536,
+            "ee_orientation_error": 0.03270063832670606,
+            "base_goal_error": 0.0,
+            "base_heading_error_rad": 0.0,
+            "settled_seconds": 0
+          }
+        },
+        {
+          "id": "innate_mars:v2:audit:coupled:7",
+          "seed": 35700007,
+          "success": false,
+          "code": "tracking_timeout",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.006370408655435195,
+            "ee_orientation_error": 0.015962651149493457,
+            "base_goal_error": 0.011059218575598963,
+            "base_heading_error_rad": 0.009433906820122906,
+            "settled_seconds": 0
+          }
+        },
+        {
+          "id": "innate_mars:v2:audit:fixed_world_hand:8",
+          "seed": 35700008,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 2.230207501047371e-05,
+            "ee_orientation_error": 5.774367430814213e-05,
+            "base_goal_error": 3.534695651272248e-05,
+            "base_heading_error_rad": 1.7066412577710754e-05,
+            "settled_seconds": 21.100000000000165
+          }
+        },
+        {
+          "id": "innate_mars:v2:audit:hand_free_base:9",
+          "seed": 35700009,
+          "success": false,
+          "code": "unsafe_contact",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": true,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.005243971956739309,
+            "ee_orientation_error": 0.035167997560332426,
+            "base_goal_error": 0.0,
+            "base_heading_error_rad": 0.0,
+            "settled_seconds": 0
+          }
+        }
+      ]
+    },
+    "tamp": {
+      "source": [
+        {
+          "id": "development:left:20g:0",
+          "seed": null,
+          "success": true,
+          "code": "grasp_pose_complete",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          }
+        },
+        {
+          "id": "development:right:50g:1",
+          "seed": null,
+          "success": true,
+          "code": "grasp_pose_complete",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          }
+        },
+        {
+          "id": "development:left:50g:2",
+          "seed": null,
+          "success": true,
+          "code": "grasp_pose_complete",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          }
+        },
+        {
+          "id": "development:right:20g:3",
+          "seed": null,
+          "success": true,
+          "code": "grasp_pose_complete",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          }
+        },
+        {
+          "id": "audit:left:20g:0",
+          "seed": null,
+          "success": true,
+          "code": "grasp_pose_complete",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          }
+        },
+        {
+          "id": "audit:right:50g:1",
+          "seed": null,
+          "success": true,
+          "code": "grasp_pose_complete",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          }
+        }
+      ],
+      "curriculum": [
+        {
+          "id": "development:left:20g:0",
+          "seed": null,
+          "success": true,
+          "code": "grasp_pose_complete",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          }
+        },
+        {
+          "id": "development:right:50g:1",
+          "seed": null,
+          "success": true,
+          "code": "grasp_pose_complete",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          }
+        },
+        {
+          "id": "development:left:50g:2",
+          "seed": null,
+          "success": true,
+          "code": "grasp_pose_complete",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          }
+        },
+        {
+          "id": "development:right:20g:3",
+          "seed": null,
+          "success": true,
+          "code": "grasp_pose_complete",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          }
+        },
+        {
+          "id": "audit:left:20g:0",
+          "seed": null,
+          "success": true,
+          "code": "grasp_pose_complete",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          }
+        },
+        {
+          "id": "audit:right:50g:1",
+          "seed": null,
+          "success": true,
+          "code": "grasp_pose_complete",
+          "stop_confirmed": true,
+          "goal_change_delivered": null,
+          "safety_flags": {
+            "wheel_lift": false,
+            "invalid_physics": false,
+            "unsafe_contact": false,
+            "retention_lost": false
+          }
+        }
+      ]
+    },
+    "goal-changes": {
+      "source": [
+        {
+          "id": "innate_mars:goal-change-v1:train:0",
+          "seed": 410400000,
+          "success": false,
+          "code": "tracking_timeout",
+          "stop_confirmed": true,
+          "goal_change_delivered": true,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.015398171422494767,
+            "ee_orientation_error": 0.025906953565696233,
+            "base_goal_error": 0.01949967081480911,
+            "base_heading_error_rad": 0.02118716741379327,
+            "settled_seconds": 0
+          }
+        },
+        {
+          "id": "innate_mars:goal-change-v1:train:1",
+          "seed": 410400001,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": true,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.002183042542830715,
+            "ee_orientation_error": 0.004114373225123586,
+            "base_goal_error": 0.002975213745032754,
+            "base_heading_error_rad": 0.0029689413094605684,
+            "settled_seconds": 16.750000000000103
+          }
+        },
+        {
+          "id": "innate_mars:goal-change-v1:train:2",
+          "seed": 410400002,
+          "success": false,
+          "code": "tracking_timeout",
+          "stop_confirmed": true,
+          "goal_change_delivered": true,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.012781631127690101,
+            "ee_orientation_error": 0.017968217755888263,
+            "base_goal_error": 0.008736771455757226,
+            "base_heading_error_rad": 0.0,
+            "settled_seconds": 0
+          }
+        },
+        {
+          "id": "innate_mars:goal-change-v1:train:3",
+          "seed": 410400003,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": true,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 8.653400780822023e-08,
+            "ee_orientation_error": 2.1283115233608674e-07,
+            "base_goal_error": 0.0,
+            "base_heading_error_rad": 0.0,
+            "settled_seconds": 16.6500000000001
+          }
+        },
+        {
+          "id": "innate_mars:goal-change-v1:train:4",
+          "seed": 410400004,
+          "success": false,
+          "code": "tracking_timeout",
+          "stop_confirmed": true,
+          "goal_change_delivered": true,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.03205320287607779,
+            "ee_orientation_error": 0.06919378131499825,
+            "base_goal_error": 0.06993315947417639,
+            "base_heading_error_rad": 0.1628042598235583,
+            "settled_seconds": 0
+          }
+        },
+        {
+          "id": "innate_mars:goal-change-v1:train:5",
+          "seed": 410400005,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": true,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.0023995520465824372,
+            "ee_orientation_error": 0.004302113760843152,
+            "base_goal_error": 0.003312486178788065,
+            "base_heading_error_rad": 0.0038241364328645924,
+            "settled_seconds": 16.850000000000104
+          }
+        },
+        {
+          "id": "innate_mars:goal-change-v1:train:6",
+          "seed": 410400006,
+          "success": false,
+          "code": "tracking_timeout",
+          "stop_confirmed": true,
+          "goal_change_delivered": true,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.012055573321399239,
+            "ee_orientation_error": 0.01683550940559494,
+            "base_goal_error": 0.008176818756100998,
+            "base_heading_error_rad": 0.0,
+            "settled_seconds": 0
+          }
+        },
+        {
+          "id": "innate_mars:goal-change-v1:train:7",
+          "seed": 410400007,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": true,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 3.1202079037461146e-07,
+            "ee_orientation_error": 8.992699545392466e-07,
+            "base_goal_error": 0.0,
+            "base_heading_error_rad": 0.0,
+            "settled_seconds": 16.750000000000103
+          }
+        },
+        {
+          "id": "innate_mars:goal-change-v1:audit:8",
+          "seed": 410400008,
+          "success": false,
+          "code": "tracking_timeout",
+          "stop_confirmed": true,
+          "goal_change_delivered": true,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.0262277302951,
+            "ee_orientation_error": 0.043178602431842565,
+            "base_goal_error": 0.04151577064018178,
+            "base_heading_error_rad": 0.0736833041356171,
+            "settled_seconds": 0
+          }
+        },
+        {
+          "id": "innate_mars:goal-change-v1:audit:9",
+          "seed": 410400009,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": true,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.001721581112189289,
+            "ee_orientation_error": 0.0030681184310368814,
+            "base_goal_error": 0.00244566106383525,
+            "base_heading_error_rad": 0.0030423645440214864,
+            "settled_seconds": 16.5000000000001
+          }
+        },
+        {
+          "id": "innate_mars:goal-change-v1:audit:10",
+          "seed": 410400010,
+          "success": false,
+          "code": "tracking_timeout",
+          "stop_confirmed": true,
+          "goal_change_delivered": true,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.01731073566122748,
+            "ee_orientation_error": 0.02313982819301489,
+            "base_goal_error": 0.011147239299211293,
+            "base_heading_error_rad": 0.0,
+            "settled_seconds": 0
+          }
+        },
+        {
+          "id": "innate_mars:goal-change-v1:audit:11",
+          "seed": 410400011,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": true,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 7.048750940416333e-08,
+            "ee_orientation_error": 1.8611544365878127e-07,
+            "base_goal_error": 0.0,
+            "base_heading_error_rad": 0.0,
+            "settled_seconds": 16.850000000000104
+          }
+        },
+        {
+          "id": "innate_mars:goal-change-v1:audit:12",
+          "seed": 410400012,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": true,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.00030330058853912905,
+            "ee_orientation_error": 0.0005367719233772361,
+            "base_goal_error": 0.0004593447290425992,
+            "base_heading_error_rad": 0.0006576346202611209,
+            "settled_seconds": 16.950000000000106
+          }
+        },
+        {
+          "id": "innate_mars:goal-change-v1:audit:13",
+          "seed": 410400013,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": true,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.0007662719028262244,
+            "ee_orientation_error": 0.0014278587301503514,
+            "base_goal_error": 0.0010119129417545903,
+            "base_heading_error_rad": 0.0009561443630929905,
+            "settled_seconds": 16.750000000000103
+          }
+        },
+        {
+          "id": "innate_mars:goal-change-v1:audit:14",
+          "seed": 410400014,
+          "success": false,
+          "code": "tracking_timeout",
+          "stop_confirmed": true,
+          "goal_change_delivered": true,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.01662942322312809,
+            "ee_orientation_error": 0.022446768130016292,
+            "base_goal_error": 0.01083406973084872,
+            "base_heading_error_rad": 0.0,
+            "settled_seconds": 0
+          }
+        },
+        {
+          "id": "innate_mars:goal-change-v1:audit:15",
+          "seed": 410400015,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": true,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 5.7598082318249274e-08,
+            "ee_orientation_error": 1.7631291696726156e-07,
+            "base_goal_error": 0.0,
+            "base_heading_error_rad": 0.0,
+            "settled_seconds": 16.850000000000104
+          }
+        }
+      ],
+      "curriculum": [
+        {
+          "id": "innate_mars:goal-change-v1:train:0",
+          "seed": 410400000,
+          "success": false,
+          "code": "tracking_timeout",
+          "stop_confirmed": true,
+          "goal_change_delivered": true,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.006963040538178971,
+            "ee_orientation_error": 0.01785439110956476,
+            "base_goal_error": 0.01060231526938117,
+            "base_heading_error_rad": 0.0038726952743937935,
+            "settled_seconds": 0
+          }
+        },
+        {
+          "id": "innate_mars:goal-change-v1:train:1",
+          "seed": 410400001,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": true,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.0023869492598262397,
+            "ee_orientation_error": 0.006293489534660752,
+            "base_goal_error": 0.0037858278536322017,
+            "base_heading_error_rad": 0.0015569004894063583,
+            "settled_seconds": 16.800000000000104
+          }
+        },
+        {
+          "id": "innate_mars:goal-change-v1:train:2",
+          "seed": 410400002,
+          "success": false,
+          "code": "tracking_timeout",
+          "stop_confirmed": true,
+          "goal_change_delivered": true,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.00865529862744199,
+            "ee_orientation_error": 0.01793097852095291,
+            "base_goal_error": 0.009313603325400523,
+            "base_heading_error_rad": 0.0,
+            "settled_seconds": 0
+          }
+        },
+        {
+          "id": "innate_mars:goal-change-v1:train:3",
+          "seed": 410400003,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": true,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 9.599660845012215e-08,
+            "ee_orientation_error": 2.159383408157448e-07,
+            "base_goal_error": 0.0,
+            "base_heading_error_rad": 0.0,
+            "settled_seconds": 16.6500000000001
+          }
+        },
+        {
+          "id": "innate_mars:goal-change-v1:train:4",
+          "seed": 410400004,
+          "success": false,
+          "code": "tracking_timeout",
+          "stop_confirmed": true,
+          "goal_change_delivered": true,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.027771062568933202,
+            "ee_orientation_error": 0.06312622527405355,
+            "base_goal_error": 0.03795186504593305,
+            "base_heading_error_rad": 0.01535900241207963,
+            "settled_seconds": 0
+          }
+        },
+        {
+          "id": "innate_mars:goal-change-v1:train:5",
+          "seed": 410400005,
+          "success": false,
+          "code": "tracking_timeout",
+          "stop_confirmed": true,
+          "goal_change_delivered": true,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.006265305945648827,
+            "ee_orientation_error": 0.01593683127506416,
+            "base_goal_error": 0.01005869357118818,
+            "base_heading_error_rad": 0.005630420555751042,
+            "settled_seconds": 0
+          }
+        },
+        {
+          "id": "innate_mars:goal-change-v1:train:6",
+          "seed": 410400006,
+          "success": false,
+          "code": "tracking_timeout",
+          "stop_confirmed": true,
+          "goal_change_delivered": true,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.006956712013666176,
+            "ee_orientation_error": 0.01440958574472696,
+            "base_goal_error": 0.007484327290783892,
+            "base_heading_error_rad": 0.0,
+            "settled_seconds": 0
+          }
+        },
+        {
+          "id": "innate_mars:goal-change-v1:train:7",
+          "seed": 410400007,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": true,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 1.9095875002501733e-07,
+            "ee_orientation_error": 5.953009234499476e-07,
+            "base_goal_error": 0.0,
+            "base_heading_error_rad": 0.0,
+            "settled_seconds": 16.750000000000103
+          }
+        },
+        {
+          "id": "innate_mars:goal-change-v1:audit:8",
+          "seed": 410400008,
+          "success": false,
+          "code": "tracking_timeout",
+          "stop_confirmed": true,
+          "goal_change_delivered": true,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.017721789769673174,
+            "ee_orientation_error": 0.042528313010986016,
+            "base_goal_error": 0.029126812394008213,
+            "base_heading_error_rad": 0.023671798444783617,
+            "settled_seconds": 0
+          }
+        },
+        {
+          "id": "innate_mars:goal-change-v1:audit:9",
+          "seed": 410400009,
+          "success": false,
+          "code": "tracking_timeout",
+          "stop_confirmed": true,
+          "goal_change_delivered": true,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.004689113156091391,
+            "ee_orientation_error": 0.01193145191270559,
+            "base_goal_error": 0.007908840910950968,
+            "base_heading_error_rad": 0.005657002210154614,
+            "settled_seconds": 0
+          }
+        },
+        {
+          "id": "innate_mars:goal-change-v1:audit:10",
+          "seed": 410400010,
+          "success": false,
+          "code": "tracking_timeout",
+          "stop_confirmed": true,
+          "goal_change_delivered": true,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.010177443226701534,
+            "ee_orientation_error": 0.02072529653972767,
+            "base_goal_error": 0.010741570957293396,
+            "base_heading_error_rad": 0.0,
+            "settled_seconds": 0
+          }
+        },
+        {
+          "id": "innate_mars:goal-change-v1:audit:11",
+          "seed": 410400011,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": true,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 6.753641136782591e-08,
+            "ee_orientation_error": 1.788139343261721e-07,
+            "base_goal_error": 0.0,
+            "base_heading_error_rad": 0.0,
+            "settled_seconds": 16.850000000000104
+          }
+        },
+        {
+          "id": "innate_mars:goal-change-v1:audit:12",
+          "seed": 410400012,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": true,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 5.3761308212296345e-05,
+            "ee_orientation_error": 0.0001369488251461663,
+            "base_goal_error": 0.00010297312833576819,
+            "base_heading_error_rad": 0.00011599972167003654,
+            "settled_seconds": 17.050000000000107
+          }
+        },
+        {
+          "id": "innate_mars:goal-change-v1:audit:13",
+          "seed": 410400013,
+          "success": false,
+          "code": "tracking_timeout",
+          "stop_confirmed": true,
+          "goal_change_delivered": true,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.007284245243607627,
+            "ee_orientation_error": 0.01880251882209173,
+            "base_goal_error": 0.010830045956051405,
+            "base_heading_error_rad": 0.0028909261628837116,
+            "settled_seconds": 0
+          }
+        },
+        {
+          "id": "innate_mars:goal-change-v1:audit:14",
+          "seed": 410400014,
+          "success": false,
+          "code": "tracking_timeout",
+          "stop_confirmed": true,
+          "goal_change_delivered": true,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 0.011300993378878289,
+            "ee_orientation_error": 0.02290098934556388,
+            "base_goal_error": 0.011861114299934887,
+            "base_heading_error_rad": 0.0,
+            "settled_seconds": 0
+          }
+        },
+        {
+          "id": "innate_mars:goal-change-v1:audit:15",
+          "seed": 410400015,
+          "success": true,
+          "code": "ok",
+          "stop_confirmed": true,
+          "goal_change_delivered": true,
+          "safety_flags": {
+            "wheel_lift": false,
+            "unsafe_contact": false,
+            "retention_lost": false,
+            "invalid_physics": false
+          },
+          "endpoint": {
+            "ee_position_error": 9.291256229730856e-08,
+            "ee_orientation_error": 2.3276357876976346e-07,
+            "base_goal_error": 0.0,
+            "base_heading_error_rad": 0.0,
+            "settled_seconds": 16.850000000000104
+          }
+        }
+      ]
+    }
+  },
+  "mixture": {
+    "general": {
+      "control_ticks": 77914,
+      "episodes": 160,
+      "requested_fraction": 0.5
+    },
+    "tamp": {
+      "control_ticks": 77509,
+      "episodes": 379,
+      "requested_fraction": 0.5
+    }
+  },
+  "general_mixture": {
+    "hand": {
+      "control_ticks": 46500,
+      "episodes": 93,
+      "requested_fraction": 0.6
+    },
+    "base": {
+      "control_ticks": 15884,
+      "episodes": 35,
+      "requested_fraction": 0.2
+    },
+    "goal_changes": {
+      "control_ticks": 15530,
+      "episodes": 32,
+      "requested_fraction": 0.2
+    }
+  },
+  "goal_completed_episodes": 32,
+  "goal_completed_by_case": {
+    "innate_mars:goal-change-v1:train:0": 4,
+    "innate_mars:goal-change-v1:train:1": 4,
+    "innate_mars:goal-change-v1:train:2": 4,
+    "innate_mars:goal-change-v1:train:3": 4,
+    "innate_mars:goal-change-v1:train:4": 4,
+    "innate_mars:goal-change-v1:train:5": 4,
+    "innate_mars:goal-change-v1:train:6": 4,
+    "innate_mars:goal-change-v1:train:7": 4
+  },
+  "actor_weights_sha256": "7971c16dfac4b4ba35eb1da413a2d5d1a30990ebd0e2ff027ed324c443830393",
+  "raw_report_sha256": "279cd927bdf3a3f60df519542e6e170cd7c10cd4a6ca4acb433f735f5a4128d8",
+  "goal_audit_ids_excluded_from_ppo": true,
+  "hardware_used": false,
+  "promoted": false
+}

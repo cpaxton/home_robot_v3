@@ -7,8 +7,8 @@ implementation sequence; experiment reports own measured results. Older
 snapshots and threads are historical evidence, not competing current plans.
 
 The maintained [training mixture](TRAINING_MIXTURE.md) distinguishes the actual
-completed 40/10/50 hand-active/base/TAMP tick split from the running 30/10/10/50
-split adding goal transitions. [Hardware readiness](MARS_HARDWARE_READINESS.md) keeps
+completed 40/10/50 hand-active/base/TAMP tick split from the completed 30/10/10/50
+completed split adding goal transitions. [Hardware readiness](MARS_HARDWARE_READINESS.md) keeps
 robot-side feedback/executor/stop work separate from policy progress.
 
 **Herman passive audit is current:** reachable, Zenoh/domain 0, arm/odom ~200/30 Hz.
@@ -99,10 +99,14 @@ Goal transitions are a specific gap: longer-trained 0/4 versus source 1/4 and
 teacher 2/4. Single-stage coupled is also only 4/8. Frozen source `2a2ce5c1` now
 passes **1,604 full regressions**. New goal cases are all admitted: teacher 13/16,
 source 9/16; all 32 stops confirm, teacher has one safety-flagged episode and
-source none. Managed job `20261117_111259_6729bc` is **training** the fixed
-131,072-decision candidate with 30/10/10/50 regular-hand/base/goals/TAMP physical
-ticks. No final performance or promotion claim yet. The retained simulator viewer
-is paused and restored automatically after the run.
+source none. Managed job `20261117_111259_6729bc` is **complete** at 131,072 new
+decisions / 155,423 physical ticks (212,992 lineage). Regular tracking improves
+19/24 → 22/24 and TAMP stays 6/6, but existing coupled falls 7/10 → 6/10 and
+goal changes 9/16 → 6/16. All 56 candidate stops confirm; no promotion.
+Only four stochastic goal episodes per train case occur, all fail (31 timeouts,
+one wheel-lift stop). Next inspect the three lost goal successes and fine-tracking/
+credit assignment before another budget extension. No PPO remains active; the
+retained simulator viewer is restored on 8766.
 [Curriculum](../experiments/goal_change_curriculum_20261117.md),
 [longer run](../experiments/long_finetune_20261117.md),
 [fresh cases](../experiments/fresh_tracking_confirmation_20261117.md).

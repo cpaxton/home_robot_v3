@@ -70,3 +70,44 @@ safety-flagged episode; source has none. No case was removed. Managed job
 `20261117_111259_6729bc` has entered PPO; W&B offline ID `4przjfk9`. The budget
 and fixed-final readout remain unchanged. Subsequent hardware/UI development runs
 outside this frozen runtime and does not inherit its regression qualification.
+
+## Completed fixed-budget results
+
+The run and paired readout finish: **131,072 additional decisions**, **155,423
+physical ticks**, **212,992 lineage decisions**. Audit IDs never enter PPO.
+
+| Cohort | Source | Curriculum final |
+| --- | ---: | ---: |
+| Regular development | 19/24 | 22/24 |
+| Existing coupled | 7/10 | 6/10 |
+| Unloaded TAMP prefixes | 6/6 | 6/6 |
+| Goal changes, all | 9/16 | 6/16 |
+| Goal changes, training identities | 4/8 | 3/8 |
+| Goal changes, audit identities | 5/8 | 3/8 |
+
+All **56 candidate evaluation stops confirm**. Evaluation safety flags remain
+three episodes across the regular/existing cohorts; goal-change evaluation has
+none under either policy. Worst goal position error improves 32.05 → 27.77 mm,
+yaw jerk 91.04 → 58.98 rad/s³, and contact load 12.94 → 0.196 N, but three
+previously successful goal cases regress. Those new misses end at 6.27, 4.69 and
+7.28 mm; all ten failed handoffs exceed the unchanged 3 mm hand position bound,
+four also exceed 0.02 rad orientation. All ten satisfy the coarse base region;
+all receive their second command. These are tracking timeouts, not geometry
+rejections, missing updates or failed stops. Terminal metrics follow stopping;
+they do not by themselves prove the active policy had reached a false equilibrium.
+
+Actual tick shares are **29.92/10.22/9.99/49.87%**. The goal family completes only
+**32 training episodes: four per training identity**, with **31 timeouts and one
+wheel-lift stop**, zero stochastic successes. Thus total PPO decision count
+substantially overstates transition experience. This is a measured distribution/
+exploration concern, not proof that increasing its weight alone will solve it.
+
+**Do not promote this checkpoint or extend its budget automatically.** Preserve
+the ordinary-tracking/smoothness improvements, but inspect pre-stop traces of
+the three regressed cases: active goals, measured/commanded velocities, actor
+feedback contributions and per-tick tracking/stability rewards. Separate missing
+fine correction from noisy-training terminal-credit failure before another run.
+Herman remains preview/passive only. The retained simulator viewer is restored
+on port 8766; no PPO job remains active. Compact complete case outcomes and
+source-bound raw-report checksum are in
+`paper/data/whole_body_control/goal_change_curriculum_v1/results.json`.

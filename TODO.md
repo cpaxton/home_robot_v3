@@ -31,7 +31,10 @@
       driver/feedback/stop readiness separately before Mars motion tests.
       Implemented at `2a2ce5c1`; full frozen-source gate passes 1,604 tests.
       Teacher/source admission is 13/16 vs 9/16, all 32 stops confirm. Job
-      `20261117_111259_6729bc` is training the fixed 131,072-decision candidate. [Protocol](docs/experiments/goal_change_curriculum_20261117.md).
+      `20261117_111259_6729bc` completes 131,072 decisions: regular 22/24, TAMP
+      6/6, but goal changes regress 9/16 → 6/16. No promotion. Inspect three
+      lost successes and the four stochastic episodes per training case before
+      extending training. [Protocol](docs/experiments/goal_change_curriculum_20261117.md).
 - [x] Repeat passive Herman audit after power-on: Zenoh discovery, ~200/30 Hz
       arm/odom timing, active driver source fingerprint and exact-revision offline
       reader/unit patch checks. No robot commands, service starts or deployment.
