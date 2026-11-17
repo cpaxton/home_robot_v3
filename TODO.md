@@ -37,8 +37,23 @@
       Foreground stool mask is manually verified, 20,454 depth points admitted;
       cropped microwave abstains. No robot actions or GT masks/poses. Report:
       `docs/experiments/coordinator_grounding_20261116.md`.
-- [ ] Retry the bounded operator case with ground_object exposed, then small
-      paired EQA/OVMM gates. No broad sweep yet.
+- [x] Retry the bounded operator case with ground_object exposed. All three
+      groundings abstain; the target is visually identified but no XYZ admitted.
+      A clearer coordinator image is replaced by a cropped grounding capture.
+      Active list stays 32 across all twelve rounds (34 registered; task-plan
+      pair provider-gated), up one from the prior live session. Report:
+      `docs/experiments/agent_tool_surface_20261117.md`.
+- [ ] Preserve the exact decision RGB-D snapshot, calibration and scope for
+      grounding within the existing capability. Return source-image association;
+      keep acquisition timing and manipulation reacquisition boundaries explicit.
+      Test clear decision pixels followed by a clipped newer frame, then repeat
+      bounded live qualification and small paired EQA/OVMM gates. No broad sweep.
+- [ ] Consolidate CHAT overlaps before further tool expansion: query_memory /
+      query_scene_graph first, then head-photo delivery variants. Keep storage,
+      wrist authorization and historical-vs-current evidence semantics intact;
+      use existing registry/capability machinery. No task-specific tool pruning
+      or new routing framework. General task gaze should extend/consolidate the
+      inspection interface rather than add separate directional recovery tools.
 - [ ] Expose floor-support coverage alongside obstacle clearance; targeted floor
       inspection should consider reachable visible unknown cells rather than
       stopping on the first behind-camera candidate. Preserve drop/step safety.

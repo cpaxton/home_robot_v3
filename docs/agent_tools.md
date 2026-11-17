@@ -18,6 +18,12 @@ The source of truth for names, argument JSON schemas, and prompt descriptions is
 [EQA bindings](../src/emet/agent/skills/eqa.py). This index describes capabilities;
 use those schemas for exact arguments rather than copying prose into calls.
 
+The current CHAT registry has 34 tools; a normal session without a qualified
+task provider advertises 32 because the general task-plan pair is gated. The
+model-final EQA pack has 8–11 depending on capabilities. See the
+[exact inventory and consolidation review](experiments/agent_tool_surface_20261117.md)
+for the current names, measured prompt sizes and live qualification limits.
+
 ## CHAT: perception and memory
 
 | Tool | Purpose and requirements | More |
