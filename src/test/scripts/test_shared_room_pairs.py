@@ -141,8 +141,11 @@ def test_model_endpoint_is_explicit_config_and_provenance_not_ambient_environmen
     )
     with pytest.raises(RuntimeError, match="test stops"):
         run(args)
-    eqa = OmegaConf.load(output / "fixture-candidate/config.yaml").mapping.eqa
+    mapping = OmegaConf.load(output / "fixture-candidate/config.yaml").mapping
+    eqa = mapping.eqa
     manifest = json.loads((output / "manifest.json").read_text())
+    assert mapping.graph_object_fusion.enabled and mapping.graph_object_fusion.use_instance_nodes
+    assert manifest["graph_object_fusion"] == {"enabled": True, "use_instance_nodes": True}
     if endpoint:
         assert eqa.vl_endpoint == "openai@" + endpoint
         assert "vl_quantization" not in eqa

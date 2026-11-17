@@ -98,6 +98,7 @@ def run(args):
         "episode_timeout_s": 1500,
         "arms": args.arms,
         "grounding_backend": args.grounding_backend,
+        "graph_object_fusion": {"enabled": True, "use_instance_nodes": True},
         "decision_policy": getattr(args, "decision_policy", "legacy"),
         "candidate_decision_policy": candidate_policy,
         "floor_reference_z": floor_reference,
@@ -132,6 +133,7 @@ def run(args):
             config.write_text(
                 f"extends: {root}/configs/emet/default.yaml\n"
                 + "mapping:\n  query_driven_memory: true\n  debug_perfect_sensor_depth: true\n"
+                "  graph_object_fusion:\n    enabled: true\n    use_instance_nodes: true\n"
                 "  find_phase_nav_step_timeout_s: 30.0\n  motion_planner:\n    obstacle_map_mode: physical\n"
                 f"  query_memory:\n    grounding_backend: {args.grounding_backend}\n"
                 + (
