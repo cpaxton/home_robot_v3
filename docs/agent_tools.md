@@ -23,6 +23,7 @@ use those schemas for exact arguments rather than copying prose into calls.
 | Tool | Purpose and requirements | More |
 | --- | --- | --- |
 | `describe_scene` | Caption the live head-camera view; needs camera/caption backend. Does not move closer | [Agent guide](AGENT_RUN.md#skill-checklist-interactive) |
+| `ground_object` | Request observed 3D geometry for one object in the latest RGB-D view, without navigating; returns geometry or an explicit abstention | [Grounding provenance](#current-view-object-grounding) |
 | `send_image` | Capture and attach the head-camera image; Discord delivery when connected | [Discord](discord_bot.md) |
 | `take_picture` | Capture a head-camera image locally | [CHAT handlers](../src/emet/agent/tools.py) |
 | `query_memory` | Ask about remembered objects/locations; uses graph EQA when enabled, otherwise voxel memory | [Graph memory](graph_memory.md) |
@@ -31,6 +32,47 @@ use those schemas for exact arguments rather than copying prose into calls.
 | `send_object_image` | Send a stored object crop from the open-vocabulary graph; not a live image | [CHAT handlers](../src/emet/agent/tools.py) |
 | `aim_arm_at` | Localize a named target and aim the arm/wrist camera where supported | [CHAT handlers](../src/emet/agent/tools.py) |
 | `take_ee_picture` | Capture the wrist camera after a successful `aim_arm_at`; needs an available wrist stream | [CHAT handlers](../src/emet/agent/tools.py) |
+
+## Current-view object grounding
+
+Call `ground_object(query="microwave", description="silver appliance above the stove")`
+when the object is visible and the coordinator needs its geometry. The query
+stays attached to the description; a relation alone does not replace the target.
+The tool captures a view through the controller and invokes the existing
+`ground_query_view` boundary, also used for confirmed EQA views. It does not
+require a retrieval candidate, navigate, or manipulate anything.
+
+With `query_memory.grounding_backend: vlm`, the configured VLM selects a region
+under the query's visual constraints. Configured RGB-D/SAM2 providers supply
+surface masks; `yoloe_sam2` can use query-conditioned YOLOE masks as proposals.
+The VLM supplies semantic selection, while valid masked depth pixels, camera
+calibration and camera world pose supply the geometry. XYZ is the median of
+the admitted object's world points, not coordinates invented by the VLM or a
+depth median across the whole frame. Sensor or estimated-depth provenance follows
+the configured depth provider. Simulator object poses and ground-truth masks
+are not inputs. The separate `yoloe` grounding backend remains configurable;
+using the tool does not silently select a different perception model.
+
+Results distinguish `grounded`, `not_grounded`, `observation_unavailable`, and
+unsupported configurations. `geometry` contains admitted world XYZ, graph
+observation ID, geometry source and point count only on success; `observation`
+identifies the captured voxel frame and available acquisition timing. Image
+timing does not become a freshness guarantee merely because a frame was added.
+The result belongs to its recorded view, which can differ from the next live
+camera attachment. Failure clears the controller's current grounding reference;
+unverified search points never become a fallback success.
+
+Successful grounding stores the normal query target, so `find_objects` with
+the same query can plan an approach from that reference. Route clearance and
+manipulation reacquisition remain independent checks. No answer is overridden.
+
+Use a controller supporting current-view grounding (currently LazyGraph) and
+enable object admission explicitly. `configs/emet/shared_find_acceptance.yaml`
+opts into `graph_object_fusion.enabled` and `use_instance_nodes`; generic defaults
+remain unchanged. In LazyGraph, ordinary updates still record viewpoints rather
+than stream object instances. Configure `query_memory.grounding_cache_dir` or
+`EMET_EQA_EPISODE_DIR` to retain the exact RGB, depth, masks, selection prompts,
+raw responses, admission settings and calibration for manual inspection.
 
 ## CHAT: navigation and mapping
 

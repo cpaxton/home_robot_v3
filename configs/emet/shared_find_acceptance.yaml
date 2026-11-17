@@ -3,6 +3,11 @@
 extends: configs/emet/default.yaml
 mapping:
   query_driven_memory: true
+  # Allow explicit, verified query masks to become object references. Lazy graph
+  # capture still records viewpoints rather than streaming object instances.
+  graph_object_fusion:
+    enabled: true
+    use_instance_nodes: true
   debug_perfect_sensor_depth: true
   find_phase_nav_step_timeout_s: 30.0
   motion_planner:

@@ -24,11 +24,15 @@
       validated rotation handler; preserve measured success/rejection instead of
       reporting legacy executor liveness as turn success. CPU acceptance passes;
       no live retry of this additional repair yet.
-- [ ] Make current-view object grounding callable by the CHAT coordinator using
+- [x] Make current-view object grounding callable by the CHAT coordinator using
       existing RGB-D admission, without requiring a frontier approach first.
       Keep unverified search references distinct from object geometry; preserve
-      fresh manipulation authorization. Then retry the bounded operator case
-      and small paired EQA/OVMM gates. No broad sweep yet.
+      fresh manipulation authorization. `ground_object` now uses the existing
+      capture/admission path and returns geometry/provenance or explicit failure;
+      opt-in find profile enables verified instance admission. The 119-test
+      focused pack passes, including real CHAT/HTTP continuation checks.
+- [ ] Qualify the new grounding call on recorded RGB-D, then retry the bounded
+      operator case and small paired EQA/OVMM gates. No broad sweep yet.
 - [ ] Expose floor-support coverage alongside obstacle clearance; targeted floor
       inspection should consider reachable visible unknown cells rather than
       stopping on the first behind-camera candidate. Preserve drop/step safety.

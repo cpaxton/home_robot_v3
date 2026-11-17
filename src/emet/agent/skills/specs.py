@@ -225,6 +225,29 @@ EQA_SKILL_SPECS: tuple[SkillSpec, ...] = (
 # Chat skill metadata (funcs bind in emet.agent.tools.build_chat_tools).
 CHAT_SKILL_SPECS: tuple[SkillSpec, ...] = (
     SkillSpec(
+        name="ground_object",
+        modes=frozenset({AgentMode.CHAT}),
+        description=(
+            "Localize one visible object from the latest available RGB-D view, without moving. "
+            "Use when you can see the target and need observed 3D geometry; no search candidate is required. "
+            "Pass a short object query and optional description for appearance/spatial constraints. "
+            "Returns admitted world XYZ and object/view references, or an explicit abstention with depth/support reasons. "
+            "A view reference or voxel search point is not object geometry. "
+            "After success, find_objects with the same query can plan an approach using this grounding. "
+            "Grounding neither proves route clearance nor authorizes manipulation; those checks remain separate."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "minLength": 1, "description": "Object to localize, e.g. microwave."},
+                "description": {"type": "string", "description": "Optional visual or relational constraints."},
+            },
+            "required": ["query"],
+            "additionalProperties": False,
+        },
+        returns_info=True,
+    ),
+    SkillSpec(
         name="plan_task",
         modes=frozenset({AgentMode.CHAT}),
         description="Plan a multi-step task without executing it. Requires a qualified task provider. "

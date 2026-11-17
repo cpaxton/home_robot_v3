@@ -60,6 +60,69 @@ def test_current_view_grounds_without_retrieval_or_camera_anchor():
     assert record.require_grounding(2) == result["obs_id"]
 
 
+def test_coordinator_capture_uses_real_admission_without_retrieval_or_motion():
+    agent = controller()
+    agent.graph_memory.eqa_client = Mock(return_value='{"matching_ids": [0], "constraints_verified": true}')
+    frame = agent.voxel_map.observations[-1]
+    frame.info = {"observation_scope_id": "episode-1", "image_timing": {"clock_domain": "fixture"}}
+    agent.update = Mock(side_effect=lambda **kw: agent.voxel_map.observations.append(frame))
+    agent.retrieve_query_candidate = Mock(side_effect=AssertionError("retrieval must not gate a visible object"))
+    result = agent.ground_current_view(" MUG ", target_description="mug on the table")
+    assert result["ok"] and result["status"] == "grounded"
+    assert result["observation"] == {
+        "source_obs_id": 3,
+        "view_id": "voxel-frame:3",
+        "image_timing": {"clock_domain": "fixture"},
+        "observation_scope_id": "episode-1",
+        "acquisition_freshness": "not_verified_by_this_tool",
+    }
+    assert result["geometry"]["status"] == "admitted"
+    assert result["geometry"]["coordinate_frame"] == "world"
+    assert result["geometry"]["xyz"] == [1, 1, 1]
+    assert result["geometry"]["point_count"] == 64
+    record = next(iter(agent.query_candidates.records.values()))
+    assert record.query == "mug" and record.target_description == "mug. mug on the table"
+    assert record.instance_id == result["geometry"]["obs_id"]
+    agent.update.assert_called_once_with(full_perception=True)
+    agent.retrieve_query_candidate.assert_not_called()
+
+
+def test_coordinator_capture_failure_clears_previous_geometry():
+    agent = controller()
+    agent._grounded_query_target = object()
+    agent.update = Mock()  # No captured frame added.
+    result = agent.ground_current_view("mug")
+    assert not result["ok"] and result["status"] == "observation_unavailable"
+    assert agent._grounded_query_target is None
+    assert not agent.query_candidates.records
+    agent.detection_model.predict.assert_not_called()
+
+
+def test_coordinator_abstention_does_not_return_old_geometry():
+    agent = controller()
+    agent._grounded_query_target = object()
+    frame = agent.voxel_map.observations[-1]
+    agent.update = Mock(side_effect=lambda **kw: agent.voxel_map.observations.append(frame))
+    agent.graph_memory.eqa_client = Mock(return_value='{"matching_ids": [], "constraints_verified": false}')
+    result = agent.ground_current_view("mug")
+    assert not result["ok"] and result["geometry"]["status"] == "not_admitted"
+    assert "xyz" not in result["geometry"] and "xyz" not in result
+    assert agent._grounded_query_target is None
+    assert not agent.query_candidates.records
+
+
+def test_coordinator_repeated_calls_capture_distinct_views():
+    agent = controller()
+    agent.graph_memory.eqa_client = Mock(return_value='{"matching_ids": [0], "constraints_verified": true}')
+    frame = agent.voxel_map.observations[-1]
+    agent.update = Mock(side_effect=lambda **kw: agent.voxel_map.observations.append(frame))
+    first = agent.ground_current_view("mug")
+    second = agent.ground_current_view("mug")
+    assert first["observation"]["source_obs_id"] == 3
+    assert second["observation"]["source_obs_id"] == 4
+    assert agent.update.call_count == 2
+
+
 def test_current_view_without_verifier_reports_unavailable_not_absent():
     agent = controller()
     result = agent.ground_query_view("mug", source_obs_id=2, target_description="mug")

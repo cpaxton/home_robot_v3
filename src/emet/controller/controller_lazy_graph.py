@@ -146,6 +146,54 @@ class LazyGraphController(DynagraphController):
             return {"ok": False, "reason": "fresh observation required"}
         return self._ground_query_frame(record.query, record.target_description, record.source_obs_id, handle=handle)
 
+    def ground_current_view(self, query: str, *, target_description: str | None = None):
+        """Capture one view and use the same object admission as assessed EQA views.
+
+        This does not move the robot or retrieve a search anchor. Acquisition
+        timing is evidence metadata, not a guarantee of a newly acquired frame;
+        physical manipulation still requires its existing fresh reacquisition.
+        """
+        query = " ".join(query.lower().split())
+        constraints = None if target_description is None else target_description.strip()
+        if not query or constraints == "":
+            return {"ok": False, "status": "invalid_query", "reason": "target description required"}
+        description = query if constraints is None else f"{query}. {constraints}"
+        self._grounded_query_target = None
+        before = len(self.voxel_map.observations)
+        self.update(full_perception=True)
+        source = len(self.voxel_map.observations)
+        if source <= before:
+            return {"ok": False, "status": "observation_unavailable", "reason": "new captured observation required"}
+        frame = self.voxel_map.observations[-1]
+        info = getattr(frame, "info", None) or {}
+        result = self.ground_query_view(query, source_obs_id=source, target_description=description)
+        return {
+            **result,
+            "query": query,
+            "status": "grounded" if result["ok"] else "not_grounded",
+            "observation": {
+                "source_obs_id": source,
+                "view_id": f"voxel-frame:{source}",
+                "image_timing": info.get("image_timing"),
+                "observation_scope_id": info.get("observation_scope_id"),
+                "acquisition_freshness": "not_verified_by_this_tool",
+            },
+            "geometry": {
+                "status": "admitted" if result["ok"] else "not_admitted",
+                **(
+                    {
+                        "xyz": result["xyz"],
+                        "coordinate_frame": "world",
+                        "obs_id": result["obs_id"],
+                        "source": self._grounded_query_target.geometry_source,
+                        "point_count": len(self._grounded_query_target.points),
+                    }
+                    if result["ok"]
+                    else {"reason": result.get("reason"), "depth_support": result.get("depth_support")}
+                ),
+            },
+        }
+
     def ground_query_view(self, query: str, *, source_obs_id: int, target_description: str):
         """Localize a target in the current captured view without a retrieval prerequisite.
 
@@ -337,7 +385,13 @@ class LazyGraphController(DynagraphController):
             world[valid],
             geometry_source=verification.get("geometry_source", "detector_mask"),
         )
-        return {"ok": True, "instance_id": obs_id, "obs_id": obs_id, "xyz": self._grounded_query_target.xyz.tolist()}
+        return {
+            "ok": True,
+            "instance_id": obs_id,
+            "obs_id": obs_id,
+            "xyz": self._grounded_query_target.xyz.tolist(),
+            "cache_path": cache_path,
+        }
 
     def ground_vlm_frame(self, frame, query, description, *, min_depth=None, tracking_target=None, purpose="object"):
         """Shared head/wrist perception without admitting a new memory instance."""

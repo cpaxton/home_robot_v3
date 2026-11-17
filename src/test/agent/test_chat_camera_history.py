@@ -83,6 +83,54 @@ def test_chat_find_result_reaches_next_model_request(monkeypatch, task_ok):
         assert "unobserved_footprint" in requests[1]
 
 
+@pytest.mark.parametrize("admitted", [True, False])
+def test_chat_grounding_reaches_model_without_motion_or_answer_override(monkeypatch, admitted):
+    """Exercise production registration, dispatch, dialogue retention and HTTP serialization."""
+    robot = setup_chat_loop(monkeypatch)
+    executor = loop.DynamemTaskExecutor()
+    executor.agent.ground_current_view.return_value = {
+        "ok": admitted,
+        "status": "grounded" if admitted else "not_grounded",
+        "reason": None if admitted else "no supported target surface",
+        "geometry": {"status": "admitted", "xyz": [1, 2, 3]} if admitted else {"status": "not_admitted"},
+        "observation": {"source_obs_id": 42, "view_id": "voxel-frame:42"},
+    }
+    requests = []
+    replies = iter(
+        [
+            {"tool_calls": [{"name": "ground_object", "arguments": {"query": "microwave"}}], "message": ""},
+            {"tool_calls": [], "message": "Reporting the grounding result."},
+        ]
+    )
+
+    def create(**kwargs):
+        requests.append(json.dumps(kwargs["messages"]))
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content=json.dumps(next(replies)), tool_calls=None))]
+        )
+
+    client = OpenaiClient("sys", model="emet", base_url="http://127.0.0.1:9/v1")
+    client._openai = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+    monkeypatch.setattr(loop, "get_llm_client", lambda *a, **kw: client)
+    goal = "Localize the visible microwave; do not move."
+    loop.run_agent_with_robot(
+        discord=False,
+        use_llm=True,
+        commands=[goal],
+        device="cpu",
+        robot_client=robot,
+        max_tool_rounds=3,
+        thinking_status=False,
+    )
+    assert len(requests) == 2 and goal in requests[1]
+    assert "voxel-frame:42" in requests[1]
+    assert (
+        "[ground_object] ok status=grounded" if admitted else "[ground_object] failed status=not_grounded"
+    ) in requests[1]
+    executor.agent.ground_current_view.assert_called_once_with("microwave", target_description=None)
+    executor.assert_not_called()
+
+
 def test_live_chat_session_preserves_earlier_user_turn_and_camera(monkeypatch):
     """Actual two-turn CHAT loop and HTTP client; robot and transport are controlled."""
     import copy
