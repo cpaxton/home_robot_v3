@@ -35,7 +35,10 @@ def capture_arrays(observation):
     ):
         raise ValueError("invalid_observed_camera_geometry")
     camera = Camera.from_K(intrinsic, width=depth.shape[1], height=depth.shape[0])
-    world = camera_xyz_to_global_xyz(camera.depth_to_xyz(depth), pose)
+    # The generic camera helper defaults to float16. At metre-scale ranges that
+    # can add millimetre quantization unrelated to the sensor/calibration budget.
+    # Preserve input precision here; this does not improve physical accuracy.
+    world = camera_xyz_to_global_xyz(camera.depth_to_xyz(depth, data_type=np.float64), pose)
     return rgb, depth, world
 
 

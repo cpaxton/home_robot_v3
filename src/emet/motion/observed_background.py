@@ -48,6 +48,8 @@ class ObservedBackground:
     capture_ids: frozenset[str]
     latest_capture: CaptureInterval
     self_material_profile: tuple[str, ...] | None = None
+    occupied_owners: tuple[tuple[str, tuple[int, ...]], ...] = ()
+    capture_history: tuple[CaptureInterval, ...] = ()
 
     def __post_init__(self):
         stamps = np.asarray(self.observed_monotonic, float)
@@ -60,6 +62,27 @@ class ObservedBackground:
         ):
             raise ValueError("invalid_background_evidence")
         object.__setattr__(self, "observed_monotonic", _frozen(stamps))
+        occupied = self.workspace.cells.ravel() == 2
+        owners = {}
+        for ref, ids in self.occupied_owners:
+            if not isinstance(ref, str) or not ref or any(type(i) is not int or not 0 <= i < occupied.size for i in ids):
+                raise ValueError('invalid_background_owners')
+            owners.setdefault(ref, set()).update(i for i in ids if occupied[i])
+        attributed = set().union(*owners.values()) if owners else set()
+        owners.setdefault('background', set()).update(set(map(int, np.flatnonzero(occupied))) - attributed)
+        object.__setattr__(self, 'occupied_owners', tuple(
+            (ref, tuple(sorted(ids))) for ref, ids in sorted(owners.items()) if ids))
+        history = {}
+        for capture in (*self.capture_history, self.latest_capture):
+            if (not isinstance(capture, CaptureInterval) or capture.observation_id not in self.capture_ids
+                    or capture.calibration_id != self.latest_capture.calibration_id
+                    or capture.latest > self.latest_capture.latest
+                    or (capture.observation_id in history and history[capture.observation_id] != capture)):
+                raise ValueError('invalid_background_capture_history')
+            history[capture.observation_id] = capture
+        if len(history) > 4096:
+            raise ValueError('invalid_background_capture_history')
+        object.__setattr__(self, 'capture_history', tuple(history[key] for key in sorted(history)))
 
     @classmethod
     def from_capture(
@@ -68,6 +91,7 @@ class ObservedBackground:
     ):
         now = time.monotonic() if now is None else now
         capture.require(now=now)
+        excluded_refs = tuple(excluded_refs)
         if robot_material is not None:
             if robot_material.scene_epoch != scene_epoch:
                 raise ObservationUnavailable('background_epoch_or_capture_invalid')
@@ -80,7 +104,7 @@ class ObservedBackground:
         stamps = np.full(workspace.cells.shape, np.nan)
         stamps[workspace.cells != 0] = capture.earliest
         return cls(workspace, stamps, scene_epoch, frozenset((capture.observation_id,)), capture,
-                   partition.self_material_profile)
+                   partition.self_material_profile, partition.owners)
 
     def update(self, partition, *, excluded_refs, scene_epoch, capture: CaptureInterval, now=None,
                robot_material=None, point_error_m=0.):
@@ -135,6 +159,10 @@ class ObservedBackground:
         # robot ownership/contact admission; that remains the separate #245 gate.
         observed = current.cells != 0
         cells[observed], stamps[observed] = current.cells[observed], capture.earliest
+        # Occupied contributors accumulate. A fresh support label cannot erase
+        # an old obstacle in the same voxel or renew that contributor's age.
+        repeated_occupied = (old.cells == 2) & (current.cells == 2)
+        stamps[repeated_occupied] = self.observed_monotonic[repeated_occupied]
         return ObservedBackground(
             ObservedWorkspace(old.origin, old.resolution, cells),
             stamps,
@@ -142,6 +170,10 @@ class ObservedBackground:
             self.capture_ids | {capture.observation_id},
             capture,
             partition.self_material_profile or self.self_material_profile,
+            # Keep excluded contributors when a mixed cell remains occupied.
+            # __post_init__ removes metadata only for cells actually absent.
+            self.occupied_owners + partition.owners,
+            self.capture_history + (capture,),
         )
 
     @property
@@ -151,8 +183,17 @@ class ObservedBackground:
             + self.workspace.origin.tobytes()
             + np.float64(self.workspace.resolution).tobytes()
             + self.workspace.cells.tobytes()
+            + repr(self.occupied_owners).encode()
         )
         return "observed-background:" + digest.hexdigest()
+
+    def exclusively_owned_cells(self, ref):
+        owners = dict(self.occupied_owners)
+        exclusive = set(owners.get(ref, ()))
+        for other, ids in owners.items():
+            if other != ref:
+                exclusive.difference_update(ids)
+        return frozenset(exclusive)
 
     def known_free(self, bounds, *, now, static_assumption=None, max_age_s=2.0):
         if not np.isfinite(max_age_s) or not 0 < max_age_s <= 2:

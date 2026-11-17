@@ -24,6 +24,15 @@ class Observation:
     timestep: int = 1
 
 
+def test_observed_unprojection_keeps_submillimetre_depth_precision():
+    obs = SimpleNamespace(rgb=np.zeros((3, 3, 3), np.uint8), depth=np.full((3, 3), 1.0003),
+        camera_K=np.array([[100., 0., 1.], [0., 100., 1.], [0., 0., 1.]]), camera_pose=np.eye(4))
+    _, depth, world = capture_arrays(obs)
+    np.testing.assert_array_equal(depth, obs.depth)
+    np.testing.assert_allclose(world[..., 2], 1.0003, rtol=0, atol=1e-12)
+    np.testing.assert_allclose(world[0, 0], [-.010003, -.010003, 1.0003], rtol=0, atol=1e-12)
+
+
 def capture(stamp, received):
     rgb = np.zeros((80, 80, 3), dtype=np.uint8)
     depth = np.full((80, 80), np.nan)

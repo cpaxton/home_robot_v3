@@ -150,6 +150,19 @@ class ObservedMaterialAdmission:
             raise ObservationUnavailable('capture_identity_mismatch')
 
     def query(self, solid: WorldSolid, *, now, allow_captured_robot=False):
+        return self._query(solid, now=now, allow_captured_robot=allow_captured_robot)
+
+    def query_payload(self, physical, padded, *, contact, object_ref, phase, now, departure_clearance_m=None):
+        from emet.motion.observed_support_contact import ObservedSupportContact
+
+        if not isinstance(contact, ObservedSupportContact) or not padded.contains_solid(physical):
+            raise ValueError('invalid_observed_support_contact')
+        contact.require(self.background, now=now, static_assumption=self.static_assumption)
+        active = contact if contact.eligible(physical, object_ref=object_ref, phase=phase,
+                                             departure_clearance_m=departure_clearance_m) else None
+        return self._query(padded, now=now, allow_captured_robot=True, support_contact=active)
+
+    def _query(self, solid, *, now, allow_captured_robot, support_contact=None):
         self.robot_material.require(now=now, model_signature=self.robot_material.model_signature,
                                     scene_epoch=self.background.scene_epoch)
         grid = self.background.workspace
@@ -159,8 +172,17 @@ class ObservedMaterialAdmission:
         region = grid.query_region(clipped) if np.all(clipped[0] < clipped[1]) else None
         nodes = 0
         pending = []
+        support_pending = False
+        support_cells = (self.background.exclusively_owned_cells(support_contact.support_ref)
+                         if support_contact is not None else frozenset())
         if region is not None:
             cells = grid.cells[region]
+            stamps = self.background.observed_monotonic[region]
+            assumption = self.static_assumption
+            fresh = ((0 <= now-stamps) & (now-stamps <= 2.) if assumption is None else
+                (assumption.scene_epoch == self.background.scene_epoch
+                 and assumption.started_monotonic <= now <= assumption.expires_monotonic)
+                & (assumption.started_monotonic <= stamps) & (stamps <= now))
             # Preserve obstacle/mixed evidence before any ownership shortcut.
             for local in np.argwhere(cells == 2):
                 nodes += 1
@@ -170,36 +192,41 @@ class ObservedMaterialAdmission:
                 cell = grid.origin + np.stack((np.array(index), np.array(index)+1))*grid.resolution
                 if solid.disjoint_box(cell):
                     continue
+                if np.ravel_multi_index(index, grid.cells.shape) in support_cells and fresh[tuple(local)]:
+                    support_pending = True
+                    continue
                 return AdmissionDecision(False, 'occupied_environment', nodes)
         # Environment evidence wins even when an occupied cell also intersects
         # captured material. Only then can a whole-solid containment proof pass.
         owned = self._owned if allow_captured_robot else ()
-        if any(material.contains_solid(solid) for material in owned):
+        if not support_pending and any(material.contains_solid(solid) for material in owned):
             return AdmissionDecision(True, 'captured_robot_material')
         if np.any(bounds[0] < grid_bounds[0]) or np.any(bounds[1] > grid_bounds[1]):
             return AdmissionDecision(False, 'outside_observed_workspace')
         if region is not None:
-            stamps = self.background.observed_monotonic[region]
-            assumption = self.static_assumption
-            fresh = ((0 <= now-stamps) & (now-stamps <= 2.) if assumption is None else
-                (assumption.scene_epoch == self.background.scene_epoch
-                 and assumption.started_monotonic <= now <= assumption.expires_monotonic)
-                & (assumption.started_monotonic <= stamps) & (stamps <= now))
             for local in np.argwhere(~((cells == 1) & fresh)):
                 index = np.array([v+s.start for v, s in zip(local, region, strict=True)])
                 cell = grid.origin + np.stack((index, index+1))*grid.resolution
-                pending.append(np.stack((np.maximum(cell[0], bounds[0]), np.minimum(cell[1], bounds[1]))))
+                is_support = (cells[tuple(local)] == 2
+                              and np.ravel_multi_index(tuple(index), grid.cells.shape) in support_cells
+                              and fresh[tuple(local)])
+                pending.append((np.stack((np.maximum(cell[0], bounds[0]), np.minimum(cell[1], bounds[1]))), is_support))
         while pending:
-            cell = pending.pop()
+            cell, is_support = pending.pop()
             nodes += 1
             if nodes > self.max_nodes:
                 return AdmissionDecision(False, 'admission_budget_exhausted', nodes)
-            if solid.disjoint_box(cell) or any(material.contains_box(cell) for material in owned):
+            if solid.disjoint_box(cell):
+                continue
+            if is_support:
+                if support_contact.covers_box(cell):
+                    continue
+            elif any(material.contains_box(cell) for material in owned):
                 continue
             axis = int(np.argmax(cell[1]-cell[0]))
             if cell[1, axis]-cell[0, axis] <= self.min_extent:
                 return AdmissionDecision(False, 'unknown_swept_volume', nodes)
             a, b = cell.copy(), cell.copy()
             a[1, axis] = b[0, axis] = float(np.mean(cell[:, axis]))
-            pending.extend((a, b))
+            pending.extend(((a, is_support), (b, is_support)))
         return AdmissionDecision(True, 'observed_free_or_captured_material', nodes)

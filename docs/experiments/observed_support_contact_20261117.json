@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "scope": "observed support-contact mechanics and offline planning audit; not live observed execution",
+  "parent_commit": "953e7ab52bd99a1785d42225f8bb40d28acd1ff8",
+  "dirty_during_tests": true,
+  "observed_task_success_assessed": false,
+  "execution_qualified": false,
+  "source_sha256": {
+    "src/emet/motion/observed_support_contact.py": "4bb0c3ed8ab02c16c3d6923e31cfca0b6927e088e4890217307a85c617ea11e6",
+    "src/emet/motion/observed_background.py": "3c5042baf56952355ba32bb0f899d93f1ad336164f7257fe265abb8f64954dfc",
+    "src/emet/motion/observed_admission.py": "904bcb916d7024bd22dddc70cb2cd8dba99811988d224addd55196609ef0b9b4",
+    "src/emet/controller/manipulation/observed_collision.py": "6f12586c6be8800f3be08dd70fdde34206fe0ace06f1dcf383f27c19d611ac43",
+    "src/emet/controller/task/tamp/observed_adapter.py": "b374f38f4c0e140efccacd25e2c6f07033b78f00286d599dbf42452bc9f77ec2",
+    "src/emet/controller/task/tamp/observed_capture.py": "7fecf944e8d66256d1efd4e0c803b001c6224a2c1c00b778f5494ae304279fa1",
+    "src/test/motion/test_observed_support_contact.py": "dd3b8da34a9ea61a80b13b93515e21daa3b224f2a15e9d4e82c3ba8bf89f4c76",
+    "src/test/controller/task/tamp/test_observed_adapter.py": "69d1eddc57b63a812ade9503fe814c27b0f0d2f1c57b44b2d9694632f127173d",
+    "src/test/agent/test_observed_capture_binding.py": "f0b196940b2f40a1ed742eac554d0fbdf2c6d46b5411d42f30eebf247b048a7f"
+  },
+  "tests": {
+    "corrected.xml": {
+      "tests": 161,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "focus.xml": {
+      "tests": 138,
+      "failures": 3,
+      "errors": 0,
+      "skipped": 0
+    },
+    "path-audit.xml": {
+      "tests": 31,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "regressions.xml": {
+      "tests": 988,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "final-replan.xml": {
+      "tests": 188,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "metrics.xml": {
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  },
+  "evidence_sha256": {
+    "corrected.xml": "0472283adb9fad72d4c94babb7b809f22952e0530337e9f0c8f01e9efb598346",
+    "focus.xml": "875ed6aaf0e74b3a915afd9db14e196bff50ae715860825dc25da2a93b4d7671",
+    "path-audit.xml": "5504a559330d48ebabfc174b70d8d34dbfccd1b88e24de2b2bad8b6db41864b6",
+    "regressions.xml": "faeb76febdd06656126e213069909cb174beb4b4fbacb23863c446c08ec3d1d5",
+    "final-replan.xml": "b9b68e3f7f5f23b6e506d5d51970a162cadfe9bbd9e21d4eed3e1db5ddd9048b",
+    "metrics.xml": "df484e11963aa58048d241af466021bcb1a4230d7643aa205ba5cab9ad4bceeb"
+  },
+  "jobs": {
+    "initial_focus": "20261117_011803_fb2a71",
+    "corrected_focus": "20261117_012744_4d3d2d",
+    "path_audit": "20261117_013116_8003c1",
+    "motion_tamp_regressions": "20261117_013245_2bca30",
+    "independent_metrics": "20261117_014356_c84931",
+    "final_replan_guard": "20261117_014620_938a6c"
+  },
+  "broad_source_sha256": {
+    "src/emet/motion/observed_support_contact.py": "4bb0c3ed8ab02c16c3d6923e31cfca0b6927e088e4890217307a85c617ea11e6",
+    "src/emet/motion/observed_background.py": "3c5042baf56952355ba32bb0f899d93f1ad336164f7257fe265abb8f64954dfc",
+    "src/emet/motion/observed_admission.py": "904bcb916d7024bd22dddc70cb2cd8dba99811988d224addd55196609ef0b9b4",
+    "src/emet/controller/manipulation/observed_collision.py": "ca0685ced7ffe7a9935c41ae92134004e826a8eec3257ccf48cb1f3734055aa8",
+    "src/emet/controller/task/tamp/observed_adapter.py": "b374f38f4c0e140efccacd25e2c6f07033b78f00286d599dbf42452bc9f77ec2",
+    "src/emet/controller/task/tamp/observed_capture.py": "7fecf944e8d66256d1efd4e0c803b001c6224a2c1c00b778f5494ae304279fa1",
+    "src/test/motion/test_observed_support_contact.py": "5db0c7907406896a89944d4b8443778496115d9a8bce799309a3a359ad1f12ff",
+    "src/test/controller/task/tamp/test_observed_adapter.py": "69d1eddc57b63a812ade9503fe814c27b0f0d2f1c57b44b2d9694632f127173d",
+    "src/test/agent/test_observed_capture_binding.py": "f0b196940b2f40a1ed742eac554d0fbdf2c6d46b5411d42f30eebf247b048a7f"
+  },
+  "source_binding": "Broad run uses broad_source_sha256; final-replan uses source_sha256. First failed attempt is older unfrozen development source. Metrics adds test-only measurement recording before final replan guard.",
+  "independent_audit": {
+    "observed_support_lift_audit_samples": 110,
+    "observed_support_lift_contact_samples": 2,
+    "observed_support_lift_peak_penetration_m": 0.0002999999999999982,
+    "observed_support_place_audit_samples": 110,
+    "observed_support_place_contact_samples": 2,
+    "observed_support_place_peak_penetration_m": 0.0002999999999999982
+  }
+}

@@ -15,7 +15,10 @@
       Active fixes: [observed admission repair](docs/plans/2026-11-16_observed_admission.md)
       on `fix/tamp-observed-admission`; captured-material mechanics, fingertip
       contact, finite checked closing and error/receipt repairs are implemented.
-      Local support contact, full live source and observed transfer remain open.
+      Local support-contact mechanics are implemented; full live source and
+      observed-transfer qualification remain open. The
+      [support witness checks](docs/experiments/observed_support_contact_20261117.md)
+      preserve mixed ownership, historical capture ages and the 1 mm bound.
       [Current capture/geometry evidence](docs/experiments/observed_transfer_progress_20261116.md):
       whole-robot outer bounds pass contact sampling; synchronized depth provenance
       reproduces wrist-camera/target RGB ownership disagreement. Normal tracking

@@ -27,8 +27,9 @@ free evidence outside that material. Candidate poses never construct ownership.
 Meshes require explicit solid declarations; hollow CAD/AABB volumes cannot be
 promoted to owned material. Source-backed raycast regressions cover the start,
 unknown shadow, measured prescan, false labels and original evidence ages.
-Phase-specific target/support contact, full Stretch uncertainty and live source
-assembly remain required before claiming a complete observed transfer.
+Phase-specific target/support policies now have opt-in implementations. Full
+Stretch uncertainty qualification and live source assembly remain required
+before claiming a complete observed transfer.
 Its synthetic transfer/swap fixture supplies `known_free=lambda _: True` to test
 tool orchestration. This is not evidence that a real self-occluding map admits
 those paths. This planning blocker is separate from moving-mask visibility loss.
@@ -48,6 +49,7 @@ those paths. This planning blocker is separate from moving-mask visibility loss.
 | `ObservedNativeCollisionChecker` | Robot-only FK, payload geometry and optional captured-material solid queries | Missing workspace, stale geometry, scene revisions, unresolved payload geometry or unqualified candidate bounds |
 | `CapturedRobotMaterial` / `RobotGeometryBound` | Immutable captured inner material and model/calibration/profile-bound candidate envelopes | Future-pose ownership, relocated/undersized links, clock/calibration changes and uncertain clearance shells |
 | `ObservedTargetContact` | Complete capture-bound target envelope, exact fingertip geom IDs and bounded penetration in named motion phases | Whole-body exemptions, deep penetration, vanishing target cores, stale/replaced profiles; never exempts environment or unknown space |
+| `ObservedSupportContact` | Original finite support depth/mask witness, explicit solid-layer/motion-error priors, bounded payload contact and fixed lift-departure floor | Mixed/unattributed cells, unknown space, robot contact, hidden backside without a solid prior, stale or replaced capture/calibration |
 | `VisualEffectFrame` | One tracked pose with capture interval, error bounds, bracketed robot feedback, full calibrated gripper volumes | Receive time alone, matching joint endpoints alone, missing alignment bounds, changing calibration, excessive uncertainty |
 | `ObservedVisualVerifier` | Fresh repeated visual lift and post-retreat placement effects | Height-only lift, static/slipped object, occlusion, replay, unsupported/outside/unsettled placement, gripper volume still near object |
 | `ObservedRegionTransferProvider` | Complete observed role/region predicates and the existing task search/session interface | Missing roles, unsupported/held objects, ambiguous occupancy, unknown destination space |
@@ -158,8 +160,53 @@ joint uncertainty still requires outer geometry bounds; a motor acknowledgement
 does not establish a grasp. The new command uses the same possible-dispatch
 receipt boundary as arm commands. Full-close presets remain on the legacy path.
 This is tested control plumbing, not qualification of a real Stretch closure,
-calibration, contact-force bound or live observed transfer. Local support contact
-and a concrete live source/refiner remain required.
+calibration, contact-force bound or live observed transfer. The local support
+policy below and a concrete live source/refiner still need live qualification.
+
+An optional `support_contact=ObservedSupportContact(...)` on both snapshot and
+checker binds one object/support instance to a finite `ObservedSupportPatch`,
+its exact historical capture, original depth, support mask, intrinsics/extrinsics
+and calibration ID. Source/profile replacement stops before command dispatch.
+Only the named payload during lift, place or release can use this contact policy;
+robot and wrist geometry retain their ordinary environment checks.
+
+`ObservedBackground` now preserves every contributor to retained occupied cells,
+including excluded foreground labels in mixed cells. Occupied updates union owners
+and retain their oldest acquisition age; missing legacy provenance is background.
+The ownership layer participates in the geometry revision. A newer foreground
+observation cannot relabel an old obstacle as support. An immutable bounded capture
+history pins the witness's complete original interval, not merely its ID.
+
+Support-only occupied cells can be refined by bounded subdivision against the
+original ray witness. The whole subquery must project into valid support pixels
+inside the finite measured footprint. Regions before the nearest possible return
+are measured free. Any refinement behind that return additionally requires
+`backing_depth_m` and a nonempty `backing_prior_id`: an explicitly qualified finite
+solid top layer covering the admitted band, including waived planning padding.
+Depth endpoints alone cannot establish that material. Missing backing leaves it
+blocked. Unknown cells and other/mixed occupied owners never consume this exception,
+and no occupancy cell becomes free because contact is allowed.
+
+The worst physical payload corner is checked against the uncertain **unit** plane
+with at most 1 mm penetration. Payload pose error and the mandatory explicit
+`payload_motion_error_m` remain in that physical bound; the latter must cover
+encoder/FK/base/retention displacement over the motion hypothesis. Zero is used
+only by declared ideal fixtures. Ordinary collision padding is separate and remains
+active against unrelated geometry. Lift cannot deepen beyond one measured initial
+clearance; IK/RRT query order cannot renew that floor. Budgets larger than the
+permitted contact depth can correctly prevent admission; these tests do not
+calibrate those budgets or justify relaxing the penetration limit.
+
+After release, both the frozen release hypothesis and current measured object
+geometry must pass. This does not prove settled support: the visual effect checker
+still requires fresh repeated post-retreat evidence. Missing/replaced current
+geometry stops execution, preserving possible-progress feedback after dispatch.
+
+`capture_arrays` now preserves depth precision during observed unprojection,
+avoiding the generic camera helper's float16 rounding at metre-scale distances.
+This removes extra numeric quantization; it does not improve sensor accuracy or
+resolve RGB/depth ownership. Historical tracking results are not rescored.
+See the [support mechanics evidence](../experiments/observed_support_contact_20261117.md).
 
 `ObservedBackground.from_capture/update(..., robot_material=...)` validates every
 self-labelled endpoint against captured inner material before excluding it.

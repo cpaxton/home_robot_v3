@@ -30,6 +30,7 @@ from emet.controller.manipulation.physical_pick_place import PhysicalMotionResul
 from emet.controller.manipulation.shape_pose import ShapePoseEvidence, evidence_rotation_distance, shape_identity
 from emet.motion.observed_admission import ObservedMaterialAdmission
 from emet.motion.observed_contact import ObservedTargetContact
+from emet.motion.observed_support_contact import ObservedSupportContact
 from emet.motion.placement_geometry import PlacementScene, bounds_array, box_corners
 
 from .api import failure_code, response
@@ -51,6 +52,7 @@ class ObservedNativeSnapshot:
     support_bounds: np.ndarray
     admission: ObservedMaterialAdmission | None = None
     target_contact: ObservedTargetContact | None = None
+    support_contact: ObservedSupportContact | None = None
 
     def __post_init__(self):
         bounds = bounds_array(self.support_bounds)
@@ -66,6 +68,13 @@ class ObservedNativeSnapshot:
                     or self.admission.scene_geometry_digest != self.scene.geometry_digest
                     or self.admission.robot_material.capture != self.frame.capture):
                 raise ValueError('invalid_observed_admission')
+        if self.support_contact is not None:
+            contact = self.support_contact
+            if (not isinstance(contact, ObservedSupportContact) or self.admission is None
+                    or contact.object_ref != self.frame.payload.object_ref
+                    or contact.scene_epoch != self.admission.background.scene_epoch
+                    or not np.array_equal(contact.patch.bounds, bounds)):
+                raise ValueError('invalid_observed_support_contact')
         if self.target_contact is not None:
             contact, payload = self.target_contact, self.frame.payload
             if not isinstance(contact, ObservedTargetContact):
@@ -207,6 +216,11 @@ class ObservedNativeAdapter:
             raise ObservationUnavailable('payload_identity_mismatch')
         if self.source.current_revision() != snapshot.scene_revision:
             raise ObservationUnavailable('scene_revision_changed')
+        if snapshot.support_contact is not None:
+            if snapshot.support_contact.support_ref != task.support_ref:
+                raise ObservationUnavailable('support_geometry_unknown')
+            snapshot.support_contact.require(snapshot.admission.background, now=self.clock(),
+                                              static_assumption=snapshot.admission.static_assumption)
         return snapshot
 
     def discover(self, object_filter='', robot=''):
@@ -244,6 +258,13 @@ class ObservedNativeAdapter:
         if new_contact is not None:
             new_contact.require(now=self.clock(), model_signature=model_signature(ex.model),
                                 capture_id=snapshot.frame.capture.observation_id)
+        old_support, new_support = ex.collision.support_contact, snapshot.support_contact
+        if ((old_support is None) != (new_support is None)
+                or (old_support is not None and old_support.profile_identity != new_support.profile_identity)):
+            raise ObservationUnavailable('scene_changed_replan')
+        if new_support is not None:
+            new_support.require(snapshot.admission.background, now=self.clock(),
+                                static_assumption=snapshot.admission.static_assumption)
         if not allow_scene_change and (snapshot.scene_revision != ex.collision.scene_revision
                 or snapshot.scene.geometry_digest != ex.collision.scene.geometry_digest):
             raise ObservationUnavailable('scene_revision_changed')
@@ -256,6 +277,7 @@ class ObservedNativeAdapter:
         ex.collision.received_monotonic = snapshot.frame.capture.received_monotonic
         ex.collision.admission = snapshot.admission
         ex.collision.set_target_contact(new_contact)
+        ex.collision.set_support_contact(new_support)
         return snapshot
 
     def _certify(self, ex, task, region=None):
@@ -427,6 +449,9 @@ class ObservedNativeAdapter:
                 or (initial.target_contact is None) != (current.target_contact is None)
                 or (initial.target_contact is not None and
                     initial.target_contact.profile_identity != current.target_contact.profile_identity)
+                or (initial.support_contact is None) != (current.support_contact is None)
+                or (initial.support_contact is not None and
+                    initial.support_contact.profile_identity != current.support_contact.profile_identity)
                 or initial.scene_revision != current.scene_revision
                 or initial.frame.capture.calibration_id != current.frame.capture.calibration_id
                 or initial.scene.geometry_digest != current.scene.geometry_digest

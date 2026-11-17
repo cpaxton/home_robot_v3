@@ -125,6 +125,18 @@ does not close the source/contact gates below.
    Initial and destination patches can differ: a fresh view cannot fill the
    support hole under the resting object. Preserve original scan ages or declare
    a separately qualified finite planar-continuity prior.
+   November 17: the local policy, historical owner/capture binding, measured
+   departure anchor and snapshot/checker integration are implemented. Corrected
+   focused checks pass 161 tests; support/path audits pass 31. Source-backed
+   MuJoCo ray fixtures admit shallow table contact and reject a visible small
+   peg; lift/place paths pass an independent dense collision replay. These are
+   mechanics checks, not a live Stretch transfer. The source must still qualify
+   masks, backing thickness, registration and motion-error budgets. See
+   [the current support record](../experiments/observed_support_contact_20261117.md).
+   Broader motion/TAMP/capture regressions pass 988 tests. After preserving the
+   same attachment's original floor during measured-pose replanning, 188 final
+   physical/interface checks pass. Independent lift/place replay records 110
+   samples per path and 0.3 mm peak penetration against the unchanged 1 mm bound.
 2. Full calibrated Stretch outer link/gripper geometry over unmeasured joints,
    with inner material justified independently. Do not substitute passive debug
    joints or telescope equal-split estimates for actual sensors.
