@@ -8,11 +8,17 @@
       native/live and frozen-packet qualification are separate gates.
 - [x] Document the full registry and evidence/action contracts in
       `docs/agent_tool_contracts.md`; coverage checks include all registry names.
-- [ ] Qualify the new native head path, frozen Q12 overview/detail packets and
-      an end-to-end Q12 replay; preserve failures and abstentions. Prior paired
+- [x] Qualify the new native head path, frozen Q12 overview/detail packets and
+      an end-to-end Q12 replay; preserve failures and abstentions. Native gaze
+      passes; Q12 remains wrong despite retained movement views and two tables
+      visible in the current image. No accuracy gain established. Report:
+      `docs/experiments/observation_contracts_20261117.md`. Prior paired
       micro-pilot: EQA 0/2 both arms; S0 candidate object+destination 2/2 versus
       pre-gaze 1/2 (212.2 vs 656.7 s episode wall). One seed/two questions do not
       establish general superiority or a current-main merge gate.
+- [ ] Run the next matched-source small EQA/simple-OVMM pair with complete
+      assessment PNG packets saved. The packet audit extension passes 45
+      focused tests; do not treat the candidate-only Q12 replay as a pair.
 - [ ] Evaluate a small subset of [NVIDIA USDCraft-10K](https://huggingface.co/datasets/nvidia/USDCraft-10K)
       assets for new articulated OVMM/TAMP/EQA scenes (doors, drawers, appliances
       and hidden-object tasks). Assess OpenUSD/PhysX to MuJoCo/MJCF import;

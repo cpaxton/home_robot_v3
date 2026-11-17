@@ -155,6 +155,9 @@ no explicit ranking policy was configured. Current assessment and qualified
 pre-turn views remain pinned; the four-image assessment ceiling still applies.
 Images retain roles, view IDs, scope and age. Selection/sampling diagnostics are
 traced. A view must be retained before any ranking strategy can choose it.
+When query-image dumps are enabled, `vlm_packet_pngs` lists the assessment
+packet images in prompt order (an unavailable dump path is null). Historical
+packet dumps do not overwrite the canonical current-view PNG.
 
 Configure `mapping.eqa.navigation_views` in the unified YAML (`eqa.navigation_views`
 in resolved controller parameters):
