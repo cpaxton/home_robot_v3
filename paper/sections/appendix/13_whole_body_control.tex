@@ -955,3 +955,18 @@ rejected and conditioned exploration remains disabled by default. These audits
 have been inspected repeatedly for development; fresh confirmatory cases are
 required before qualification. Complete identities and producers are in
 \texttt{quiet\_reference\_pilot\_v1/}.
+
+
+\paragraph{Isolated hand-pose priority.}
+A single-factor weight increase from one to four uses ordinary exploration and
+unchanged remaining rewards/guards. Exact initial policy/observations/first
+actions match the explicitly reused control. Both final checkpoints have 16,384
+decisions; new-case success changes 20/24 to 19/24, existing coupled remains
+7/10 and unloaded TAMP 6/6. The same three contact failures persist. Active-hand
+median endpoint error changes 0.957 to 1.107 mm, 90th percentile 9.342 to
+7.002 mm, worst 13.10 to 19.83 mm. Worst base linear jerk increases 5.89 to
+7.68 m/s$^3$ and contact load 34.96 to 35.92 N despite lower yaw jerk.
+The candidate is not promoted. Only two complete episodes per hand trajectory
+occur in the short control run, motivating longer lower-rate checkpoint
+fine-tuning without further reward changes. Complete identities, paired plot
+and exact producers are in \texttt{hand\_priority\_pilot\_v1/}.

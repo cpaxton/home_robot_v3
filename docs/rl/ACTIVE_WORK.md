@@ -71,16 +71,21 @@ All 120 evaluation stops confirm; no evaluation wheel lift or invalid physics.
 The ordinary arm exactly reproduces the previous independent-critic weights.
 The paper builds to 61 pages. [Completed report](../experiments/quiet_reference_training_20261117.md).
 
-**Hand-priority experiment is training** (job `20261117_082059_5a7777`). It
-isolates hand-pose reward priority alone (1 → 4), keeping ordinary noise and
-remaining reward/safety settings fixed. Reuse the completed same-source control
-only with exact initial-state/first-action verification before updates. Existing
-audit cases are development evidence after repeated inspection; require fresh
-confirmation before promotion. The temporary runtime was removed after the
-completed run; restore its checksummed archive under ignored workspace storage
-and verify the existing source-bound receipt before follow-up training.
-The restoration and exact initial-policy/first-action pairing pass; PPO is
-running on CPU14. [Exact protocol](../experiments/hand_priority_training_20261117.md).
+**Hand-priority experiment is complete.** Weight 1 → 4 changes new cases
+20/24 → 19/24, existing coupled stays 7/10 and TAMP 6/6. Same three contact
+failure identities, but worse worst hand error, linear jerk and contact load;
+no promotion. [Completed report and paired plot](../experiments/hand_priority_training_20261117.md).
+
+**Longer ordinary-reward fine-tuning is running**, job `20261117_083406_6c3285`,
+65,536 additional decisions from the ordinary 16,384-decision checkpoint. Actor,
+critics and Adam state restore exactly; physics/history/case cursors reset with
+explicit new seed 108. Actor LR decays 1e-5 → 1e-6, ordinary exploration and
+all reward/guard settings stay fixed. The restored archived source matches all
+1,585 receipt-bound tests. One CPU14 native worker, numerical threads one,
+CUDA hidden, W&B offline `6vuul7j4`. No intermediate selection or promotion;
+final matched physical readouts and viewer restoration are automatic. The reused
+audit cases remain development evidence; require fresh confirmation and broader
+posture/reset coverage before hardware. [Protocol](../experiments/long_finetune_20261117.md).
 
 **Wrapper reward work:** the [reward specification](../experiments/wrapper_reward_20261116.md)
 records the legacy 20 Hz objective and an opt-in, versioned contract-tracking

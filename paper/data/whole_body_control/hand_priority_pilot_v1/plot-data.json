@@ -1,0 +1,346 @@
+{
+  "raw_report_sha256": "a26ae7a86e219ad88c8c20707d2da7eb1d588af6f8a87416df9f4384dca1cfd0",
+  "scope": "All general/coupled cases for jerk; endpoint plot requires active hand. No task thresholds changed.",
+  "rows": [
+    {
+      "id": "mars:wrapper-reward-v2:train:hand:0",
+      "hand_active": true,
+      "control_position_mm": 0.39370074296253776,
+      "candidate_position_mm": 0.5937963878351922,
+      "control_linear_jerk": 0.24110958570024293,
+      "candidate_linear_jerk": 0.40193622155274505,
+      "control_unsafe": false,
+      "candidate_unsafe": false
+    },
+    {
+      "id": "mars:wrapper-reward-v2:train:hand:1",
+      "hand_active": true,
+      "control_position_mm": 4.590132600896033,
+      "candidate_position_mm": 6.893355946013363,
+      "control_linear_jerk": 2.250253248560319,
+      "candidate_linear_jerk": 2.1649862973274425,
+      "control_unsafe": false,
+      "candidate_unsafe": false
+    },
+    {
+      "id": "mars:wrapper-reward-v2:train:hand:2",
+      "hand_active": true,
+      "control_position_mm": 2.7873500474150625,
+      "candidate_position_mm": 4.585230338135138,
+      "control_linear_jerk": 1.0025453243617748,
+      "candidate_linear_jerk": 1.3537885681037014,
+      "control_unsafe": false,
+      "candidate_unsafe": false
+    },
+    {
+      "id": "mars:wrapper-reward-v2:train:hand:3",
+      "hand_active": true,
+      "control_position_mm": 0.0034440500592816062,
+      "candidate_position_mm": 0.973041462835266,
+      "control_linear_jerk": 3.5918049960490137,
+      "candidate_linear_jerk": 3.8259985241129777,
+      "control_unsafe": false,
+      "candidate_unsafe": false
+    },
+    {
+      "id": "mars:wrapper-reward-v2:train:hand:4",
+      "hand_active": true,
+      "control_position_mm": 1.5466981487449614,
+      "candidate_position_mm": 1.2358123673928916,
+      "control_linear_jerk": 0.597575713997229,
+      "candidate_linear_jerk": 0.7961361728112848,
+      "control_unsafe": false,
+      "candidate_unsafe": false
+    },
+    {
+      "id": "mars:wrapper-reward-v2:train:hand:5",
+      "hand_active": true,
+      "control_position_mm": 0.5847723282231397,
+      "candidate_position_mm": 2.192654138527767,
+      "control_linear_jerk": 1.5971467936693906,
+      "candidate_linear_jerk": 1.3376394010252228,
+      "control_unsafe": false,
+      "candidate_unsafe": false
+    },
+    {
+      "id": "mars:wrapper-reward-v2:train:hand:6",
+      "hand_active": true,
+      "control_position_mm": 0.0013793645063197469,
+      "candidate_position_mm": 0.0010351581956058167,
+      "control_linear_jerk": 0.3444425424376186,
+      "candidate_linear_jerk": 0.5106322097301128,
+      "control_unsafe": false,
+      "candidate_unsafe": false
+    },
+    {
+      "id": "mars:wrapper-reward-v2:train:hand:7",
+      "hand_active": true,
+      "control_position_mm": 0.9570211129494285,
+      "candidate_position_mm": 0.0884866832267995,
+      "control_linear_jerk": 1.6349268748403116,
+      "candidate_linear_jerk": 2.496379018054037,
+      "control_unsafe": false,
+      "candidate_unsafe": false
+    },
+    {
+      "id": "mars:wrapper-reward-v2:train:base:0",
+      "hand_active": false,
+      "control_position_mm": 0.7480016191162275,
+      "candidate_position_mm": 0.7475489343214232,
+      "control_linear_jerk": 1.1227163930128,
+      "candidate_linear_jerk": 1.1227320518251223,
+      "control_unsafe": false,
+      "candidate_unsafe": false
+    },
+    {
+      "id": "mars:wrapper-reward-v2:train:base:1",
+      "hand_active": false,
+      "control_position_mm": 0.9355266813871935,
+      "candidate_position_mm": 0.8268442288199447,
+      "control_linear_jerk": 1.1279743403019487,
+      "candidate_linear_jerk": 1.1313152372715196,
+      "control_unsafe": false,
+      "candidate_unsafe": false
+    },
+    {
+      "id": "mars:wrapper-reward-v2:train:base:2",
+      "hand_active": false,
+      "control_position_mm": 4.532585987502736,
+      "candidate_position_mm": 4.2459773028817756,
+      "control_linear_jerk": 0.06578331304996579,
+      "candidate_linear_jerk": 0.09969902222251806,
+      "control_unsafe": false,
+      "candidate_unsafe": false
+    },
+    {
+      "id": "mars:wrapper-reward-v2:train:base:3",
+      "hand_active": false,
+      "control_position_mm": 4.331143397539957,
+      "candidate_position_mm": 3.9940416383578277,
+      "control_linear_jerk": 0.05949327390970772,
+      "candidate_linear_jerk": 0.06171481936964202,
+      "control_unsafe": false,
+      "candidate_unsafe": false
+    },
+    {
+      "id": "mars:wrapper-reward-v2:audit:hand:0",
+      "hand_active": true,
+      "control_position_mm": 0.297624608550334,
+      "candidate_position_mm": 0.9886253660570613,
+      "control_linear_jerk": 0.4564339664393708,
+      "candidate_linear_jerk": 0.4910440352231618,
+      "control_unsafe": false,
+      "candidate_unsafe": false
+    },
+    {
+      "id": "mars:wrapper-reward-v2:audit:hand:1",
+      "hand_active": true,
+      "control_position_mm": 5.269535491309026,
+      "candidate_position_mm": 9.00657213983568,
+      "control_linear_jerk": 4.215137734053845,
+      "candidate_linear_jerk": 1.8131389444470736,
+      "control_unsafe": false,
+      "candidate_unsafe": false
+    },
+    {
+      "id": "mars:wrapper-reward-v2:audit:hand:2",
+      "hand_active": true,
+      "control_position_mm": 3.3698355682552044,
+      "candidate_position_mm": 5.835824192822558,
+      "control_linear_jerk": 1.0679653932492483,
+      "candidate_linear_jerk": 1.2774399064312054,
+      "control_unsafe": false,
+      "candidate_unsafe": false
+    },
+    {
+      "id": "mars:wrapper-reward-v2:audit:hand:3",
+      "hand_active": true,
+      "control_position_mm": 0.8203124562713289,
+      "candidate_position_mm": 1.106716326330706,
+      "control_linear_jerk": 4.406413120668226,
+      "candidate_linear_jerk": 4.422512190971625,
+      "control_unsafe": false,
+      "candidate_unsafe": false
+    },
+    {
+      "id": "mars:wrapper-reward-v2:audit:hand:4",
+      "hand_active": true,
+      "control_position_mm": 0.6067582916889431,
+      "candidate_position_mm": 0.10776987410438282,
+      "control_linear_jerk": 0.8307991310362806,
+      "candidate_linear_jerk": 1.1697174117800642,
+      "control_unsafe": false,
+      "candidate_unsafe": false
+    },
+    {
+      "id": "mars:wrapper-reward-v2:audit:hand:5",
+      "hand_active": true,
+      "control_position_mm": 1.2983358278578316,
+      "candidate_position_mm": 0.694853468601519,
+      "control_linear_jerk": 1.7292475350034642,
+      "candidate_linear_jerk": 1.615295581114129,
+      "control_unsafe": false,
+      "candidate_unsafe": false
+    },
+    {
+      "id": "mars:wrapper-reward-v2:audit:hand:6",
+      "hand_active": true,
+      "control_position_mm": 0.0014951856862333,
+      "candidate_position_mm": 0.0014937619382901775,
+      "control_linear_jerk": 0.4271545602158866,
+      "candidate_linear_jerk": 0.4490427217488503,
+      "control_unsafe": false,
+      "candidate_unsafe": false
+    },
+    {
+      "id": "mars:wrapper-reward-v2:audit:hand:7",
+      "hand_active": true,
+      "control_position_mm": 6.4418390445864615,
+      "candidate_position_mm": 4.659022662031286,
+      "control_linear_jerk": 1.7930730091867852,
+      "candidate_linear_jerk": 1.3698535769948352,
+      "control_unsafe": true,
+      "candidate_unsafe": true
+    },
+    {
+      "id": "mars:wrapper-reward-v2:audit:base:0",
+      "hand_active": false,
+      "control_position_mm": 0.7320400548952168,
+      "candidate_position_mm": 0.7315161085066215,
+      "control_linear_jerk": 1.2157299229017366,
+      "candidate_linear_jerk": 1.215740432557904,
+      "control_unsafe": false,
+      "candidate_unsafe": false
+    },
+    {
+      "id": "mars:wrapper-reward-v2:audit:base:1",
+      "hand_active": false,
+      "control_position_mm": 2.0495720080088273,
+      "candidate_position_mm": 1.7277509977939365,
+      "control_linear_jerk": 0.9090624655870866,
+      "candidate_linear_jerk": 0.914802970384794,
+      "control_unsafe": false,
+      "candidate_unsafe": false
+    },
+    {
+      "id": "mars:wrapper-reward-v2:audit:base:2",
+      "hand_active": false,
+      "control_position_mm": 4.743178704717962,
+      "candidate_position_mm": 4.465113937326792,
+      "control_linear_jerk": 0.059426530051137315,
+      "candidate_linear_jerk": 0.09100884311761552,
+      "control_unsafe": false,
+      "candidate_unsafe": false
+    },
+    {
+      "id": "mars:wrapper-reward-v2:audit:base:3",
+      "hand_active": false,
+      "control_position_mm": 4.445072547528177,
+      "candidate_position_mm": 4.116008263351138,
+      "control_linear_jerk": 0.04774125279388749,
+      "candidate_linear_jerk": 0.03843037613740505,
+      "control_unsafe": false,
+      "candidate_unsafe": false
+    },
+    {
+      "id": "innate_mars:v2:train:base_only:0",
+      "hand_active": false,
+      "control_position_mm": 0.774923291894749,
+      "candidate_position_mm": 0.7735566650522773,
+      "control_linear_jerk": 1.671336385043292,
+      "candidate_linear_jerk": 1.6712958266145455,
+      "control_unsafe": false,
+      "candidate_unsafe": false
+    },
+    {
+      "id": "innate_mars:v2:train:hand_free_base:1",
+      "hand_active": true,
+      "control_position_mm": 0.0006826211119934264,
+      "candidate_position_mm": 0.0010215933799675517,
+      "control_linear_jerk": 0.6076524373237466,
+      "candidate_linear_jerk": 0.8169783860512079,
+      "control_unsafe": false,
+      "candidate_unsafe": false
+    },
+    {
+      "id": "innate_mars:v2:train:hand_free_base:2",
+      "hand_active": true,
+      "control_position_mm": 3.7781536734586304e-05,
+      "candidate_position_mm": 0.00043737909992679026,
+      "control_linear_jerk": 0.11809261277178783,
+      "candidate_linear_jerk": 0.12338322603049075,
+      "control_unsafe": false,
+      "candidate_unsafe": false
+    },
+    {
+      "id": "innate_mars:v2:train:coupled:3",
+      "hand_active": true,
+      "control_position_mm": 1.167917095316581,
+      "candidate_position_mm": 1.244469918671408,
+      "control_linear_jerk": 0.464312993118125,
+      "candidate_linear_jerk": 0.9344312025838177,
+      "control_unsafe": false,
+      "candidate_unsafe": false
+    },
+    {
+      "id": "innate_mars:v2:train:coupled:4",
+      "hand_active": true,
+      "control_position_mm": 2.1869832094349917,
+      "candidate_position_mm": 1.5344975953562596,
+      "control_linear_jerk": 1.4973573716427548,
+      "candidate_linear_jerk": 0.936778156380055,
+      "control_unsafe": false,
+      "candidate_unsafe": false
+    },
+    {
+      "id": "innate_mars:v2:train:fixed_world_hand:5",
+      "hand_active": true,
+      "control_position_mm": 0.007017215953451385,
+      "candidate_position_mm": 0.008683535406730704,
+      "control_linear_jerk": 0.02909806915499233,
+      "candidate_linear_jerk": 0.03821185563813107,
+      "control_unsafe": false,
+      "candidate_unsafe": false
+    },
+    {
+      "id": "innate_mars:v2:audit:hand_free_base:6",
+      "hand_active": true,
+      "control_position_mm": 11.275356777834249,
+      "candidate_position_mm": 6.548129769964637,
+      "control_linear_jerk": 2.034762706031213,
+      "candidate_linear_jerk": 7.67639889986449,
+      "control_unsafe": true,
+      "candidate_unsafe": true
+    },
+    {
+      "id": "innate_mars:v2:audit:coupled:7",
+      "hand_active": true,
+      "control_position_mm": 12.341336175060821,
+      "candidate_position_mm": 19.833064778363546,
+      "control_linear_jerk": 3.7239223349873396,
+      "candidate_linear_jerk": 2.6243578255088105,
+      "control_unsafe": false,
+      "candidate_unsafe": false
+    },
+    {
+      "id": "innate_mars:v2:audit:fixed_world_hand:8",
+      "hand_active": true,
+      "control_position_mm": 0.027404580139029498,
+      "candidate_position_mm": 0.025865223295095958,
+      "control_linear_jerk": 0.021820346329090794,
+      "candidate_linear_jerk": 0.027370423136898803,
+      "control_unsafe": false,
+      "candidate_unsafe": false
+    },
+    {
+      "id": "innate_mars:v2:audit:hand_free_base:9",
+      "hand_active": true,
+      "control_position_mm": 13.09842603614094,
+      "candidate_position_mm": 7.074621223917462,
+      "control_linear_jerk": 5.88850956672288,
+      "candidate_linear_jerk": 4.571235781938743,
+      "control_unsafe": true,
+      "candidate_unsafe": true
+    }
+  ]
+}

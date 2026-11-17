@@ -1,0 +1,14 @@
+{
+  "phase": "training",
+  "complete": false,
+  "decisions": 8960,
+  "control_ticks": 10708,
+  "source_checkpoint_state_verified_before_update": true,
+  "environment_state_restored": false,
+  "source_decisions": 16384,
+  "wandb_id": "6vuul7j4",
+  "hardware_used": false,
+  "safety_promoted": false,
+  "snapshot_only": true,
+  "job_id": "20261117_083406_6c3285"
+}

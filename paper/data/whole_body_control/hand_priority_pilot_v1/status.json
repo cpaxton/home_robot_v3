@@ -1,19 +1,13 @@
 {
-  "phase": "training",
-  "complete": false,
-  "decisions": 4352,
-  "control_ticks": 5207,
-  "matched_control_verified_before_update": true,
-  "initial_policy_state_sha256": "2e5ff5b813182c8d060e80ece163132e19c6dcb38d0a832e5d64aaae04d5ef2c",
-  "initial_observation_sha256": "8abcc7b16421008835b989ae8e7f220513f6871d3ab0d082a647c89eaa61926f",
-  "first_rollout": {
-    "observations": "69f02be9bd563dc103eda2c71e6f338556851f7f9b04b146e021ec96f651ab49",
-    "actions": "34aa53e397031dbe2b88636fe761ac51bfbaf6a35667e4e1ba7fe9ccfac863ad",
-    "reward_groups": "b6bdfb8aef577a2a930f5ffbe8d79999fc400ff1509f7340420809ed0fe9484b"
-  },
-  "regression_tests": 1585,
-  "wandb_id": "qte8xtkt",
+  "format": "hand-priority-status-v1",
+  "phase": "complete",
+  "runtime_revision": "9d0620f9c3d3e198494b0a02ca3ce78513b4d04c",
+  "full_regression_tests": 1585,
+  "full_gate_seconds": 1025.7983684539795,
+  "full_xml_sha256": "e0239f772395f88f2f631128908e85ce81baa9b84f3772795d46c7c5d2641bcb",
+  "ppo_started": true,
+  "complete": true,
   "hardware_used": false,
   "safety_promoted": false,
-  "snapshot_only": true
+  "decision": "no promotion: one lost success, worse worst endpoint/contact despite lower yaw jerk"
 }

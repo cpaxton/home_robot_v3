@@ -1,4 +1,4 @@
-# Isolated hand-pose priority training
+# Isolated hand-pose priority training — complete
 
 This experiment follows the [completed exploration comparison](quiet_reference_training_20261117.md).
 The reduced-noise candidate regresses deterministic accuracy/contact despite
@@ -48,3 +48,37 @@ confirmatory cases are required before promotion. No intermediate checkpoint
 selection, automatic extensions, teacher actions in loss, loaded carry or
 hardware use. Preserve all contact failures and report precision, drift, quiet
 settling, measured jerk, contact and stop confirmation separately.
+
+## Completed result
+
+The fixed final checkpoint completes all 16,384 decisions (15,360 actor-update
+decisions). Exact initial policy/first observations/actions match the reused
+ordinary control before learning. W&B remains offline, ID `qte8xtkt`.
+
+| Controller | New train | Reused audit | Existing coupled | Unloaded TAMP |
+| --- | ---: | ---: | ---: | ---: |
+| Ordinary control | 11/12 | 9/12 | 7/10 | 6/6 |
+| Hand-pose priority | 10/12 | 9/12 | 7/10 | 6/6 |
+
+The priority candidate loses training hand case 2 (4.59 mm endpoint error),
+without changing existing-coupled success identities. Both retain the same three
+contact failures across tracking cohorts; there is no evaluation wheel lift,
+invalid physics or retention loss. All 40 candidate stops confirm. The control
+and retained rows are explicitly reused historical executions, not fresh
+independent trials or 120 new rollouts.
+
+Across all active-hand cases, median endpoint error changes **0.957 → 1.107 mm**,
+90th percentile **9.342 → 7.002 mm**, worst **13.10 → 19.83 mm**. Worst base
+linear jerk increases **5.89 → 7.68 m/s³**, yaw jerk falls **53.36 → 47.96 rad/s³**,
+and peak contact load increases **34.96 → 35.92 N**. There is no joint
+accuracy/stability/safety improvement, so the candidate is not promoted.
+The complete [paired plot](../../paper/data/whole_body_control/hand_priority_pilot_v1/paired-outcomes.svg)
+marks every candidate safety failure and retains all case identities in compact
+JSON; raw weights/traces remain ignored.
+
+Next test longer exposure with smaller updates from the ordinary checkpoint:
+65,536 additional decisions, restored actor/critics/Adam state, fresh physical
+reset and explicit new RNG seed, actor LR 1e-5 → 1e-6. Reward, exploration,
+case distribution and guards stay fixed. This is fine-tuning after reset, not
+an exactly resumed simulator state. Broader reachable reset/posture coverage
+and fresh confirmatory cases remain necessary afterward.

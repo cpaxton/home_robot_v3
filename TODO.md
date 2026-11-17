@@ -17,8 +17,13 @@
       final checkpoints on identical cases; 0/8 → 3/8 frozen stochastic probe
       is not evidence of improved deterministic policy.
       Completed: 20/24 → 19/24, 7/10 → 6/10, two extra contacts; rejected.
-- [ ] Isolate hand-pose reward priority (1 → 4) with ordinary exploration and
+- [x] Isolate hand-pose reward priority (1 → 4) with ordinary exploration and
       a matched completed control; preserve every accuracy/jerk/contact failure.
+      Completed 20/24 → 19/24, coupled 7/10 unchanged; no promotion.
+- [ ] Complete 65,536 additional ordinary-reward decisions at lower actor LR,
+      restoring actor/critics/Adam with explicit fresh physical reset. Compare
+      final outcomes; then expand reachable posture/reset coverage and fresh
+      confirmation cases rather than claiming general mastery from reused audits.
 - [ ] Isolate fine-pose weighting, progress and pose-gated velocity reward
       changes; measure critic calibration and late-hold exploration before
       extending the reward PPO budget. Keep jerk/force protections active.

@@ -223,11 +223,17 @@ control. Reduced noise remains disabled by default. The same-source ordinary
 arm reproduces the preceding actor weights exactly; full regressions pass 1,585.
 [Complete results](../experiments/quiet_reference_training_20261117.md).
 
-Next isolate hand-pose priority alone (weight 1 → 4), retaining ordinary noise,
-all other reward terms and physical guards. Reuse the matched completed control
-and verify exact initial policy/first observations/actions before learning.
-Then broaden reachable reset/posture coverage; test a less cancellation-prone
-action head if these interventions do not improve hand accuracy without worsening
-jerk/force. Repeatedly inspected audit cases are now development evidence, not
-independent final qualification. No hardware motion or promotion follows from
-these diagnostics.
+The isolated hand-priority run also completes: weight 1 → 4 loses one new
+training success (20/24 → 19/24 overall), keeps existing coupled 7/10 and TAMP
+6/6, and worsens worst endpoint/contact despite lower yaw jerk. It is not
+promoted. The exact pre-update initial policy/observation/action comparison
+passes against the reused ordinary control. [Report](../experiments/hand_priority_training_20261117.md).
+
+The small diagnostic runs expose each hand trajectory only twice. Next test
+65,536 additional ordinary-reward decisions with a lower actor LR, restoring
+actor/critic/Adam state and explicitly resetting physical state. Keep ordinary
+exploration and reward/guard terms unchanged. Then broaden reachable reset and
+posture coverage; compare a less cancellation-prone action head if longer
+training does not improve accuracy and stability. Reused audits are development
+evidence; fresh confirmation is required before qualification. No hardware
+motion or promotion follows from these diagnostics.
