@@ -103,14 +103,18 @@ under goal jumps and measured toward/away motion, mask activation, force guards
 at zero stability scale, wrapper propagation, serialized training provenance,
 and actual spawned TAMP execution with bundled physical-tick rewards.
 
-This profile has **not been trained or promoted**. Historical 1,538-test source
+The [paired pilot](wrapper_reward_training_20261116.md) subsequently trains
+this profile and a matched legacy control for 16,384 decisions each. New-case
+success is 18/24 and 19/24 versus retained 20/24; neither is promoted.
+The initial implementation validation below predates that completed run. Historical 1,538-test source
 receipts describe the preceding runtime; they do not certify these source edits.
-Next run a bounded paired experiment against the retained actor, initially using
-independent reachable coupled/mask goals and safe allocations resembling the
-observed quiet misses. Keep audit seeds separate, compare identical cases to the
-teacher, then expand to the 50/50 general/TAMP physical-tick mixture. Report hand
-accuracy, quiet drift, transient error, jerk, force, wheel lift and confirmed stop
-separately. Improved reward values alone are not improved policy performance.
+That paired experiment uses independent reachable coupled/mask goals, separate
+audit seeds and the 50/50 general/TAMP physical-tick mixture. Its completed
+readout reports hand accuracy, quiet drift, transient error, jerk, forces, wheel
+lift and confirmed stops separately. The new profile does not improve the
+retained actor; the next comparison should isolate reward components and
+critic/exploration effects. Improved reward values alone are not improved policy
+performance.
 
 The motivating measurements are in
 [the hand accuracy diagnosis](hand_tracking_accuracy_20261116.md).

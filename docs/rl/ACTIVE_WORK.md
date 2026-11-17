@@ -47,23 +47,24 @@ records the legacy 20 Hz objective and an opt-in, versioned contract-tracking
 profile shared by general/coupled/TAMP wrappers. It adds fine hand priority,
 pose-gated velocity credit and measured progress against the same active goal.
 Legacy defaults remain unchanged. The bounded paired reward pilot below is
-now running with independent coupled/mask cases and the existing 50/50
-general/TAMP physical-tick mixture. Older runtime receipts are historical;
-the fresh 1,563-test receipt qualifies the pilot source.
+complete with independent coupled/mask cases and the existing 50/50 general/TAMP
+physical-tick mixture. Older runtime receipts are historical; the fresh
+1,563-test receipt qualifies the pilot source.
 
 
-**Reward PPO pilot is running.** Frozen runtime `5f0eb3c2` passes **1,563 fresh
-complete regressions** (1,110.89 s). Revised teacher admission passes 12/12
-training and 6/6 TAMP; its 11/12 audit result retains one contact stop.
-Retained-actor baselines are 11/12 training, 9/12 fresh audit, 6/10 existing
-coupled and 6/6 TAMP; all 40 stops confirm. Managed training job
-`20261116_224923_96115d` runs 16,384 decisions per reward arm from that actor,
-with fresh critics and the 50/50 general/TAMP physical-tick mixture. The
-new-reward run (`mqbn78v9`, offline W&B) exports a verified finite checkpoint
-at 2,048 decisions, including 1,024 actor-update decisions after critic warmup. The legacy control and final
-matched evaluation follow automatically; this is not yet a measured policy
-improvement. The viewer on 8766 remains stopped to free CPU14. The rejected
-v1 admission is preserved. See the [pilot report](../experiments/wrapper_reward_training_20261116.md).
+**Reward PPO pilot is complete; neither candidate is promoted.** Frozen runtime
+`5f0eb3c2` passes 1,563 fresh complete regressions. Both reward arms train for
+16,384 decisions with fresh critics and matched initial states/first actions.
+Retained/new-reward/legacy results are **20/24 → 18/24 → 19/24** on new cases,
+**6/10 → 6/10 → 7/10** on existing coupled cases, and **6/6** TAMP prefixes for
+all three. All 120 actor stops confirm; three existing contact-failure identities
+remain per controller, and some jerk/contact maxima worsen. Teacher is 12/12
+training and 11/12 audit. Legacy resolves the old reverse 10.09 mm false
+equilibrium to 0.0154 mm but regresses other cases. This is a tradeoff, not a
+general controller improvement. Keep the retained actor. No PPO job remains
+active; the viewer is restored on 8766. Next isolate reward components and
+critic/late-hold exploration effects before a larger budget. See the
+[completed paired report](../experiments/wrapper_reward_training_20261116.md).
 
 **Earlier PPO:** The 32,768-decision joint fine-tuning run completes
 with scores unchanged: v1 9/10, v2 5/10, fresh base audits 0/16 and TAMP 6/6.

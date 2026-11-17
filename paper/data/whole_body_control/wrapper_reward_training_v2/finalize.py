@@ -28,11 +28,11 @@ for name in ('new-cases','frozen-coupled'):
   populations={'all':items}
   if name=='new-cases':populations|={split:[r for r in items if splits[r['id']]==split] for split in ('train','audit')}
   for population,group in populations.items():
-   metrics={key:float(np.max([r['metrics'][key] for r in group])) for key in ('ee_position_error','ee_orientation_error','peak_hand_position_error','peak_base_linear_jerk_m_s3','peak_base_yaw_jerk_rad_s3','peak_contact_force','peak_hold_base_drift_m')}
-   report['summary'][f'{name}/{population}/{controller}']={'successes':sum(r['success'] for r in group),'attempts':len(group),'confirmed_stops':sum(r['stop_confirmed'] for r in group),'unsafe_episodes':sum(any(r['safety_flags'].values()) for r in group),'worst':metrics}
+   metrics={key:(float(np.max(values)) if (values:=[r['metrics'][key] for r in group if not (key.startswith('ee_') or key=='peak_hand_position_error') or r['metrics'].get('hand_target_active')]) else None) for key in ('ee_position_error','ee_orientation_error','peak_hand_position_error','peak_base_linear_jerk_m_s3','peak_base_yaw_jerk_rad_s3','peak_contact_force','peak_hold_base_drift_m')}
+   report['summary'][f'{name}/{population}/{controller}']={'successes':sum(r['success'] for r in group),'attempts':len(group),'confirmed_stops':sum(r['stop_confirmed'] for r in group),'unsafe_episodes':sum(any(r['safety_flags'].values()) for r in group),'active_hand_cases':sum(bool(r['metrics'].get('hand_target_active')) for r in group),'worst':metrics}
 tamp={'initial':read(OUT/'initial-tamp.json')}|{arm:read(OUT/arm/'final-tamp.json') for arm in ('contract','legacy')};report['cases']['tamp']=tamp
 for name,rows in tamp.items():
- report['summary']['tamp/'+name]={'successes':sum(r['success'] for r in rows),'attempts':len(rows),'confirmed_stops':sum(r['stop_confirmed'] for r in rows),'unsafe_episodes':sum(any(r['safety_flags'].values()) for r in rows)}
+ report['summary']['tamp/'+name]={'successes':sum(r['success'] for r in rows),'attempts':len(rows),'confirmed_stops':sum(r.get('stop_confirmed') is True for r in rows),'unsafe_episodes':sum(any(r.get('safety_flags', {'execution_error':True}).values()) for r in rows)}
 report['complete']=True
 (OUT/'physical-comparison.json').write_text(json.dumps(report,indent=2,allow_nan=False)+'\n')
 import wandb

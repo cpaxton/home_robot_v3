@@ -12,3 +12,11 @@ The legacy-reward control and contract-reward arm share initial actor, critics,
 seed, distribution and budget; the runner checks initial state/first actions.
 No raw traces, compressed archives, credentials or weights belong here.
 Preparation and passing teacher cases are not policy-training outcomes.
+
+Both fixed runs and all final readouts are complete. `physical-comparison.json`
+is a compact physical-metric projection of the ignored 2.3 MB native report,
+with its full-report SHA-256. `physical-comparison.svg` excludes inactive hand
+errors and marks safety stops. Run metadata, optimizer diagnostics and all
+producer/evidence hashes are included. No checkpoint is promoted: retained,
+new reward and legacy PPO score 20/24, 18/24 and 19/24 on new cases. All retain
+6/6 unloaded TAMP prefixes; legacy improves existing coupled 6/10 to 7/10.

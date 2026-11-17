@@ -1,10 +1,17 @@
 {
+  "physical-comparison.svg": "97e43e3e02140082caf663b174ab3b6f7cbb2ccff03fbf67bdb1df4cb2556e0c",
+  "optimizer-diagnostics.json": "c7b544069b2367ca6ed5bdc64c277a39678ae1748110ef4d283265d187a75a9b",
   "await_and_train.py": "f58fc1ebad78a7ac22eba592527b852615120cb3aa623e11b8d9d66e7188c376",
+  "wandb-comparison.json": "f09e0fe0000f9b1538e2a64913dd7e4550d0cf7eb9dc5d418a7ce41f33e32c0b",
   "checkpoint-2048-verification.json": "62f2602f178ddf094d2b65209977824c4a7ecb1d589938cc880aec2d6685256d",
   "admission.json": "5a71168c0e1ad04ae94d41c5ee5cad6293e213d004e5d6bca232a09bb22b2279",
   "supervise.py": "48113ee6dee181504e6d64c083bfc9fa7843100f2817bab875e90bfaf80be432",
+  "contract-run.json": "1e13884a6619349f4fd2198775cffab742e3e03c107f149d233cdc614d53821f",
+  "legacy-run.json": "ac87559a6b5772ba9f0386d61b4eb456f49ed166077d387e28fd6d46f8cf3483",
   "run.py": "b13b8d3b3ef1e6e125adfeed8479f08102c3073e6c328bea08cfa2901a6e0cfb",
+  "plot.py": "daeed8588b2ba0892782d8f363bffda2525efa509ccfc687d6c9241ee2766723",
   "protocol.json": "c37d90d050f308ce848aa4ac61c01c55f6cb44329a0c60ec752326601875c091",
   "cases.json": "5702612ff67c1e0a02ed5e352aa31f052ae4bb5cf9683531f8b285643123c10e",
-  "finalize.py": "71a26047b21d3dfd3a6ad3f65ad3d2352e5908cd453c596265e32129ffe5a5e0"
+  "physical-comparison.json": "fc9b4cbf17a9cbf342a2638b22e8e052171cf42537984912989e5bd76f74306e",
+  "finalize.py": "1d369f7b36d90b881349d5fc750e1dd6c77046fbc647bd0a6f86f7050369a69f"
 }

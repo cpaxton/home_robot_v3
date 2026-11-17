@@ -1,0 +1,174 @@
+{
+  "format": "wrapper-reward-training-arm-v1",
+  "protocol": {
+    "format": "wrapper-reward-training-pilot-v2",
+    "runtime_revision": "5f0eb3c28eef6ed07d87087cdfffdf024e103841",
+    "initializer": "logs/eval/scoped-wheel-feedback-v2/candidate/actor",
+    "seed": 107,
+    "decisions_per_arm": 16384,
+    "critic_only_decisions": 1024,
+    "rollout_steps": 256,
+    "actor_learning_rate": [
+      5e-05,
+      1e-05
+    ],
+    "critic_learning_rate": 0.001,
+    "initial_action_std": 0.02,
+    "epochs": 3,
+    "batch_size": 64,
+    "clip": 0.05,
+    "target_kl": 0.01,
+    "entropy_weight": 0.0001,
+    "family_control_tick_weights": [
+      0.5,
+      0.5
+    ],
+    "general_hand_base_tick_weights": [
+      0.8,
+      0.2
+    ],
+    "training_horizon_s": 25,
+    "evaluation_horizon_s": 25,
+    "randomization_scale": 0,
+    "case_manifest": "cases.json",
+    "training_cases": 12,
+    "fresh_audit_cases": 12,
+    "reward_arms": [
+      "contract",
+      "legacy"
+    ],
+    "intermediate_checkpoint_selection": false,
+    "teacher_actions_in_loss": false,
+    "automatic_extensions": 0,
+    "hardware_used": false,
+    "safety_promoted": false,
+    "distribution": "FK-witness nonholonomic coupled trajectories with full/XY-only/free base masks, forward/reverse/base-yaw cases; separate audit motions/seeds; 50% TAMP grasp-pose unloaded prefix by physical ticks",
+    "checkpoint_admission": "raw actor is trained/evaluated on separately fingerprinted general and TAMP plants; export is scoped to its declared general plant, not qualified TAMP checkpoint deployment",
+    "preceding_attempt": {
+      "directory": "logs/manipulation/wrapper-reward-training-v1",
+      "training_started": false,
+      "reason": "one new reverse free-base training case trips teacher unsafe-contact guard",
+      "changes": [
+        {
+          "before": {
+            "id": "mars:wrapper-reward-v1:train:hand:7",
+            "seed": 35900007,
+            "split": "train",
+            "mode": "hand_free_base",
+            "travel_m": -0.06,
+            "turn_rad": 0.1,
+            "arm_delta": [
+              0.0,
+              0.003,
+              -0.003,
+              0.0,
+              0.0
+            ],
+            "base_mask": [
+              false,
+              false,
+              false
+            ]
+          },
+          "after": {
+            "id": "mars:wrapper-reward-v1:train:hand:7",
+            "seed": 35900007,
+            "split": "train",
+            "mode": "coupled",
+            "travel_m": -0.06,
+            "turn_rad": 0.1,
+            "arm_delta": [
+              0.0,
+              0.003,
+              -0.003,
+              0.0,
+              0.0
+            ],
+            "base_mask": [
+              true,
+              true,
+              false
+            ]
+          },
+          "reason": "v1 reverse free-base teacher reaches unsafe self-contact; bounded-base pilot does not alter force thresholds; original free-base failure remains in audit and v1 report"
+        }
+      ]
+    }
+  },
+  "reward_configuration": {
+    "format": "whole_body_reward_v1",
+    "position_scale_m": 0.01,
+    "rotation_scale_rad": 0.1,
+    "fine_pose_weight": 0.0,
+    "hand_pose_weight": 1.0,
+    "hand_velocity_weight": 0.5,
+    "base_pose_weight": 1.0,
+    "base_velocity_weight": 0.5,
+    "hand_linear_velocity_scale_m_s": 0.02,
+    "hand_angular_velocity_scale_rad_s": 0.2,
+    "base_position_scale_m": 0.02,
+    "base_heading_scale_rad": 0.05,
+    "base_linear_velocity_scale_m_s": 0.02,
+    "base_angular_velocity_scale_rad_s": 0.1,
+    "pose_gated_velocity": false,
+    "progress_weight": 0.0,
+    "stability_scale": 1.0,
+    "jerk_weight": 0.01,
+    "effort_weight": 0.001,
+    "command_delta_weight": 0.01,
+    "force_free_N": 3.0,
+    "force_scale_N": 3.0,
+    "force_weight": 0.1,
+    "guard_penalty": 10.0,
+    "success_bonus": 2.0,
+    "failure_penalty": 2.0,
+    "tamp_failure_penalty": 10.0
+  },
+  "source_state_digest": "adbf52c79155ca2a396ee357f480b034e230def13d8766459a4aa3eaeb1e7578",
+  "regression_tests": 1563,
+  "regression_receipt_sha256": "a143a04789aec9a16564ef6ba9266f711fb94b2d5cc588bc77f5b4865a5acfe1",
+  "initializer_weights_sha256": "46291c71ea4dccd93feaf94d4b0e88f3deb1ee5945667964300f3c9f1c165813",
+  "admission_sha256": "5a71168c0e1ad04ae94d41c5ee5cad6293e213d004e5d6bca232a09bb22b2279",
+  "runner_sha256": "b13b8d3b3ef1e6e125adfeed8479f08102c3073e6c328bea08cfa2901a6e0cfb",
+  "initial_policy_state_sha256": "2e5ff5b813182c8d060e80ece163132e19c6dcb38d0a832e5d64aaae04d5ef2c",
+  "complete": true,
+  "phase": "complete",
+  "decisions": 16384,
+  "new_ppo_actor_decisions": 15360,
+  "hardware_used": false,
+  "safety_promoted": false,
+  "wandb_id": "lmorfc5l",
+  "initial_observation_sha256": "8abcc7b16421008835b989ae8e7f220513f6871d3ab0d082a647c89eaa61926f",
+  "control_ticks": 19365,
+  "mixture": {
+    "general": {
+      "control_ticks": 9822,
+      "episodes": 20,
+      "requested_fraction": 0.5
+    },
+    "tamp": {
+      "control_ticks": 9543,
+      "episodes": 52,
+      "requested_fraction": 0.5
+    }
+  },
+  "general_mixture": {
+    "hand": {
+      "control_ticks": 7822,
+      "episodes": 16,
+      "requested_fraction": 0.8
+    },
+    "base": {
+      "control_ticks": 2000,
+      "episodes": 4,
+      "requested_fraction": 0.2
+    }
+  },
+  "new_cases_successes": 19,
+  "new_cases_attempts": 24,
+  "fresh_audit_successes": 9,
+  "fresh_audit_attempts": 12,
+  "frozen_coupled_successes": 7,
+  "tamp_successes": 6,
+  "final_weights_sha256": "72df2c7f027f8d5e3c4a7da93b5c8284f5a1fefe0d4207f8d1f3d65dee08a445"
+}

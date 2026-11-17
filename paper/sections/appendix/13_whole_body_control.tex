@@ -895,7 +895,27 @@ arm-only rank five. Doubling hand-error terms reduces three final errors from
 jerk; removing base terms creates a new contact stop. These are diagnostic
 interventions, not replacement policies. Two free-base cases also self-contact
 under both actor and teacher while admitted nominal witnesses remain separated.
-The actual mixed-training reward uses fixed-scale pose/velocity terms, replacing
-the native scalar objective; contract-scale reward and coupled-distribution
-alignment are explicit next steps. Complete producer-separated evidence is in
+The original mixed-training wrapper replaces the native scalar objective with
+fixed-scale pose/velocity terms, motivating the paired reward study below. Complete producer-separated evidence is in
 \texttt{hand\_tracking\_deep\_dive\_v1/}.
+
+
+\paragraph{Paired wrapper-reward PPO pilot.}
+A versioned, opt-in reward combines coarse/fine hand pose credit, pose-gated
+velocity credit and measured progress against the same active goal. Both this
+profile and a legacy-reward control start from identical retained actor and
+fresh critic states, with matched first observations/actions. Each trains for
+16,384 decisions, including 1,024 critic-only decisions, using a 50/50
+general/TAMP physical-tick mixture; the training seed and final checkpoint
+budget are fixed. Fresh source-bound regressions pass 1,563 tests. On twelve
+training and twelve disjoint audit cases, retained/new/legacy scores are
+20/24, 18/24 and 19/24; existing larger coupled scores are 6/10, 6/10 and 7/10.
+All three retain 6/6 unloaded TAMP prefixes, and all 120 actor evaluation stops
+confirm. The legacy run resolves one old 10.09 mm reverse-motion miss to
+0.0154 mm but loses accuracy elsewhere. Each controller retains the same three
+contact-failure identities; the new reward increases the existing-coupled peak
+contact load from 34.65 to 38.22 N and peak yaw jerk from 19.57 to
+31.60 rad/s$^3$. Neither candidate is promoted. This one-seed comparison supports
+further objective/optimizer ablations, not a policy-performance or hardware
+qualification claim. Compact cases and exact producers are in
+\texttt{wrapper\_reward\_training\_v2/}.

@@ -1,10 +1,16 @@
 # Living TODOs (small / near-term)
 
-- [ ] Run a bounded wrapper-reward comparison for hand precision and quiet false
+- [x] Run a bounded wrapper-reward comparison for hand precision and quiet false
       equilibria, with independent coupled/mask cases and disjoint audit seeds;
       then restore the 50/50 general/TAMP physical-tick mix. Preserve force, jerk,
       wheel-lift and confirmed-stop reporting. Profile and baseline:
       [reward specification](docs/experiments/wrapper_reward_20261116.md).
+      Completed: 20/24 retained → 18/24 new reward and 19/24 legacy PPO;
+      existing coupled 6/10 → 6/10 and 7/10; all preserve 6/6 TAMP prefixes.
+      Neither candidate is promoted. [Paired report](docs/experiments/wrapper_reward_training_20261116.md).
+- [ ] Isolate fine-pose weighting, progress and pose-gated velocity reward
+      changes; measure critic calibration and late-hold exploration before
+      extending the reward PPO budget. Keep jerk/force protections active.
 
 - [ ] Profile failed-search cost without answer overrides or target-specific rules:
       final S0 seed 1 misses the receptacle in both arms but candidate takes
