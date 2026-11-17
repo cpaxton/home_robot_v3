@@ -63,14 +63,24 @@ an optional training distribution, then run a fixed-budget pair with independent
 critics and unchanged rewards/guards. Source changes require fresh regression
 and teacher admission; the completed 2acc receipt cannot qualify them.
 
-**Next training pair is queued at frozen source `9d0620f9`.** The optional
-stationary-reference motion-noise distribution passes 99 focused checks. Full
-gate `20261117_015047_2d92b1` and fresh native admission
-`20261117_015047_4e1b10` precede PPO supervisor `20261117_015136_781d98`.
-Both arms use independent critics, original rewards and fixed 16,384-decision
-budgets; only hold exploration differs. At launch PPO has not started. The
-viewer is paused for the sole native worker and restored automatically after
-completion/failure. [Protocol/live-log locations](../experiments/quiet_reference_training_20261117.md).
+**Hold-exploration pair is complete at frozen source `9d0620f9`.** All 1,585
+fresh regressions pass. Ordinary / quiet are **20/24 / 19/24** new cases,
+**7/10 / 6/10** existing coupled and **6/6** TAMP prefixes each. Quiet introduces
+two new contact failures despite more successful stochastic holds; it is rejected.
+All 120 evaluation stops confirm; no evaluation wheel lift or invalid physics.
+The ordinary arm exactly reproduces the previous independent-critic weights.
+The paper builds to 61 pages. [Completed report](../experiments/quiet_reference_training_20261117.md).
+
+**Hand-priority experiment is training** (job `20261117_082059_5a7777`). It
+isolates hand-pose reward priority alone (1 → 4), keeping ordinary noise and
+remaining reward/safety settings fixed. Reuse the completed same-source control
+only with exact initial-state/first-action verification before updates. Existing
+audit cases are development evidence after repeated inspection; require fresh
+confirmation before promotion. The temporary runtime was removed after the
+completed run; restore its checksummed archive under ignored workspace storage
+and verify the existing source-bound receipt before follow-up training.
+The restoration and exact initial-policy/first-action pairing pass; PPO is
+running on CPU14. [Exact protocol](../experiments/hand_priority_training_20261117.md).
 
 **Wrapper reward work:** the [reward specification](../experiments/wrapper_reward_20261116.md)
 records the legacy 20 Hz objective and an opt-in, versioned contract-tracking

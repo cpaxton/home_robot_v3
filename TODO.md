@@ -12,10 +12,13 @@
       and compare independent critic fitting: 1,574 tests; 20/24 new cases,
       7/10 existing coupled, but yaw jerk worsens. No candidate promotion.
       [Architecture review](docs/rl/WHOLE_BODY_ARCHITECTURE_REVIEW.md).
-- [ ] Train the stationary-reference exploration ablation with unchanged mean
+- [x] Train the stationary-reference exploration ablation with unchanged mean
       controller, gripper authority, rewards and safety limits. Compare fixed
       final checkpoints on identical cases; 0/8 → 3/8 frozen stochastic probe
       is not evidence of improved deterministic policy.
+      Completed: 20/24 → 19/24, 7/10 → 6/10, two extra contacts; rejected.
+- [ ] Isolate hand-pose reward priority (1 → 4) with ordinary exploration and
+      a matched completed control; preserve every accuracy/jerk/contact failure.
 - [ ] Isolate fine-pose weighting, progress and pose-gated velocity reward
       changes; measure critic calibration and late-hold exploration before
       extending the reward PPO budget. Keep jerk/force protections active.

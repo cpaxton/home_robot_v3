@@ -938,3 +938,20 @@ changing mean commands; it motivates a training ablation, not a deterministic
 policy improvement claim. Compact producers and complete case outcomes are in
 \texttt{finite\_critic\_pilot\_v2/} and
 \texttt{critic\_architecture\_audit\_v1/}.
+
+
+\paragraph{Stationary-reference exploration ablation.}
+A matched-source pair isolates a 0.125 motion-noise scale for constant
+current/future references. Both complete 16,384 decisions under unchanged
+reward and guards; fresh source-bound regressions pass 1,585 tests. The ordinary
+arm exactly reproduces the preceding independent-critic weights. Reduced noise
+increases stochastic general-episode completions from 0/20 to 13/20, but mean
+policy scores fall from 20/24 to 19/24 new cases and 7/10 to 6/10 existing
+coupled, while both preserve 6/6 unloaded TAMP prefixes. Contact failures
+increase from three to five across the two tracking cohorts, despite all 120
+actor stops confirming. Worst active-hand endpoint error rises from 13.10 to
+19.59 mm and base linear jerk from 5.89 to 22.26 m/s$^3$. The candidate is
+rejected and conditioned exploration remains disabled by default. These audits
+have been inspected repeatedly for development; fresh confirmatory cases are
+required before qualification. Complete identities and producers are in
+\texttt{quiet\_reference\_pilot\_v1/}.

@@ -215,10 +215,19 @@ exploration stays unchanged. It introduces no output filter or action deadband;
 actor-only exports need no inference change. Overlapping base-noise settings use
 the smaller factor, rather than compounding reductions.
 
-Next run a fixed-budget noise pair with original reward, corrected finite
-semantics, independent critics and the same 50/50 general/TAMP tick mixture.
-Separate deterministic physical readouts from stochastic training success.
-Then isolate reward terms and broaden reachable reset/posture coverage; test a
-less cancellation-prone actor head if those interventions do not improve hand
-accuracy without worsening jerk/force. No hardware motion or promotion follows
-from these diagnostics.
+The fixed-budget noise pair now completes: ordinary / quiet scores are 20/24 /
+19/24 on new cases and 7/10 / 6/10 existing coupled; both preserve 6/6 unloaded
+TAMP prefixes. Quiet introduces two new contact failures. Its noisy training
+holds improve 0/20 → 13/20, but this fails to transfer to better deterministic
+control. Reduced noise remains disabled by default. The same-source ordinary
+arm reproduces the preceding actor weights exactly; full regressions pass 1,585.
+[Complete results](../experiments/quiet_reference_training_20261117.md).
+
+Next isolate hand-pose priority alone (weight 1 → 4), retaining ordinary noise,
+all other reward terms and physical guards. Reuse the matched completed control
+and verify exact initial policy/first observations/actions before learning.
+Then broaden reachable reset/posture coverage; test a less cancellation-prone
+action head if these interventions do not improve hand accuracy without worsening
+jerk/force. Repeatedly inspected audit cases are now development evidence, not
+independent final qualification. No hardware motion or promotion follows from
+these diagnostics.

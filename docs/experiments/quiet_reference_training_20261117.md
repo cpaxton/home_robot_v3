@@ -1,4 +1,4 @@
-# Stationary-reference exploration training
+# Stationary-reference exploration training — complete
 
 This fixed-budget pair follows the [completed critic pilot](finite_critic_pilot_20261117.md)
 and [architecture review](../rl/WHOLE_BODY_ARCHITECTURE_REVIEW.md). The retained
@@ -55,3 +55,51 @@ Fresh native teacher admission passes 12/12 training and 6/6 TAMP prefixes;
 all 24 teacher cases remain recorded (23/24 overall). The retained deterministic
 baseline replay continues while the fresh full regression gate runs. This is
 admission evidence, not new PPO progress or a learned-policy success claim.
+
+## Completed result
+
+Fresh full gate passes **1,585 tests** in 1,025.80 s. Both arms finish 16,384
+decisions (15,360 actor-update decisions): ordinary 19,662 physical ticks;
+quiet 19,713. The paper builds to 61 pages. Offline W&B IDs are `2wswbine`
+and `9hcd3mka`. Initial policy/first observations match; first sampled actions
+intentionally differ because noise changes. The ordinary arm exactly reproduces
+the preceding independent-critic actor weights, providing a deterministic control.
+
+| Controller | New train | Reused audit | Existing coupled | Unloaded TAMP |
+| --- | ---: | ---: | ---: | ---: |
+| Retained | 11/12 | 9/12 | 6/10 | 6/6 |
+| Ordinary exploration | 11/12 | 9/12 | 7/10 | 6/6 |
+| Quiet-reference exploration | 11/12 | 8/12 | 6/10 | 6/6 |
+
+**Reject the reduced-noise candidate.** It adds contact failures on new audit
+hand 2 and existing coupled training case 4. Across new/existing coupled cases,
+unsafe-contact episodes increase 3 → 5. All 120 actor stops confirm; there is no
+evaluation wheel lift, invalid physics or retention loss. Worst active-hand
+endpoint error increases **13.10 → 19.59 mm**, base linear jerk
+**5.89 → 22.26 m/s³**, while yaw jerk falls **53.36 → 38.35 rad/s³**.
+Lower yaw jerk alone is not an overall improvement. All failed cases remain.
+
+The training hypothesis was partly confirmed: ordinary exploration completes
+0/20 general episodes; quiet completes 13/20. Ordinary has one training wheel
+lift, quiet none. Quiet lowers noise on 8,971 decisions, but receives only 472
+actor optimizer steps versus 624 ordinary steps under the same KL limits.
+Actor KL early-stops occur in 32/60 updates versus 15/60 ordinary updates.
+Median tracking-head gradient norm doubles (42.40 versus 21.23). Shrinking
+Gaussian variance also tightens the KL constraint on mean changes; these
+measurements suggest an exploration/trust-region interaction, but do not
+identify a unique cause of poor generalization. A
+successful noisy hold is insufficient evidence for deterministic pose accuracy
+or contact safety. The optional setting stays disabled by default.
+
+The next experiment isolates **hand-pose reward weight alone, 1 → 4**, keeping
+ordinary exploration, original remaining reward terms, independent critics and
+physical guards fixed. The earlier combined reward pilot changed several terms
+and cannot answer this narrower question. Reuse the completed ordinary control
+only after exact initial-state/first-action pairing before learning. These audit
+cases have been inspected repeatedly and now serve development comparison;
+fresh confirmatory cases are required before any promotion claim.
+
+After completion the retained viewer restarts. The temporary runtime subsequently
+disappears; raw evidence and archived source remain intact. Any follow-up restores
+the checksummed source into ignored workspace storage and revalidates the same
+source-bound receipt, rather than treating missing files as qualified inputs.

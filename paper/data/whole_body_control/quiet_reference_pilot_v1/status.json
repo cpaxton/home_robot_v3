@@ -1,67 +1,13 @@
 {
   "format": "quiet-reference-status-v1",
+  "phase": "complete",
   "runtime_revision": "9d0620f9c3d3e198494b0a02ca3ce78513b4d04c",
-  "phase": "fresh_regressions_and_native_admission",
-  "focused_tests": 99,
-  "full_receipt_available": false,
-  "ppo_started": false,
-  "prerequisite_jobs": {
-    "quiet-reference-regressions-v1": {
-      "job_id": "20261117_015047_2d92b1",
-      "pid": 119983,
-      "command": [
-        "taskset",
-        "-c",
-        "15",
-        "timeout",
-        "10800",
-        "/tmp/emet-quiet-reference-9d0620f9/.venv/bin/python",
-        "-u",
-        "-m",
-        "emet.rl.regression_gate",
-        "--output",
-        "/tmp/emet-quiet-reference-9d0620f9/logs/eval/quiet-reference-regressions-v1/full.xml"
-      ]
-    },
-    "quiet-reference-admission-v1": {
-      "job_id": "20261117_015047_4e1b10",
-      "pid": 120002,
-      "command": [
-        "taskset",
-        "-c",
-        "14",
-        "timeout",
-        "10800",
-        "/tmp/emet-quiet-reference-9d0620f9/.venv/bin/python",
-        "-u",
-        "/tmp/emet-quiet-reference-9d0620f9/logs/recovery/quiet-reference-pilot-v1/run.py",
-        "admission"
-      ]
-    }
-  },
-  "ppo_job": {
-    "job_id": "20261117_015136_781d98",
-    "pid": 121654,
-    "command": [
-      "taskset",
-      "-c",
-      "14",
-      "timeout",
-      "14400",
-      "/tmp/emet-quiet-reference-9d0620f9/.venv/bin/python",
-      "-u",
-      "/tmp/emet-quiet-reference-9d0620f9/logs/recovery/quiet-reference-pilot-v1/await_and_train.py"
-    ]
-  },
+  "full_regression_tests": 1585,
+  "full_gate_seconds": 1025.7983684539795,
+  "full_xml_sha256": "e0239f772395f88f2f631128908e85ce81baa9b84f3772795d46c7c5d2641bcb",
+  "ppo_started": true,
+  "complete": true,
   "hardware_used": false,
   "safety_promoted": false,
-  "snapshot_utc": "2026-11-17T06:58:44.021270+00:00",
-  "teacher_admitted": true,
-  "teacher_successes": 23,
-  "teacher_attempts": 24,
-  "training_teacher_successes": 12,
-  "training_teacher_attempts": 12,
-  "teacher_tamp_successes": 6,
-  "teacher_tamp_attempts": 6,
-  "baseline_complete": false
+  "decision": "reject reduced-noise candidate: new contacts and accuracy regression"
 }

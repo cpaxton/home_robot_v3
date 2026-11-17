@@ -1,0 +1,7 @@
+{
+  "revision": "9d0620f9c3d3e198494b0a02ca3ce78513b4d04c",
+  "archive_sha256": "be1430306e0d203bb4bd9249250b7798097d046a248d9f068c0f0c31825db738",
+  "runtime": "/home/cpaxton/src/home_robot_v4/.worktrees/wbc-grasp-primitive/logs/runtimes/hand-priority-9d0620f9",
+  "verified_regression_tests": 1585,
+  "reason": "restore archived source after temporary runtime removed; no source changes"
+}
