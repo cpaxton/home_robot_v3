@@ -154,6 +154,12 @@ class MultiCriticPPO:
             ]
         )
 
+    def _critic_values(self, observation, actions):
+        # evaluate() was the learner's original policy interface. Keep compact
+        # policies compatible; production has a cheaper critic-only values().
+        query = getattr(self.policy, "values", None)
+        return query(observation) if callable(query) else self.policy.evaluate(observation, actions)[2]
+
     def actor_gradient_diagnostics(self, ratio, components):
         """First minibatch: unclipped actor gradients per head, excluding entropy.
 
@@ -253,7 +259,7 @@ class MultiCriticPPO:
                         if len(indices) < 2:
                             continue
                         batch = {k: v[indices] for k, v in obs.items()}
-                        errors = ((self.policy.values(batch) - targets[indices]) ** 2).mean(0)
+                        errors = ((self._critic_values(batch, actions[indices]) - targets[indices]) ** 2).mean(0)
                         loss = 0.5 * errors.sum()
                         if not torch.isfinite(loss):
                             raise RuntimeError("nonfinite independent critic loss")
@@ -264,7 +270,7 @@ class MultiCriticPPO:
                         self.optimizer.step()
                         critic_logs.append(errors.detach().tolist())
         with torch.no_grad():
-            after_fit = value_fit_statistics(targets.numpy(), self.policy.values(obs).numpy())
+            after_fit = value_fit_statistics(targets.numpy(), self._critic_values(obs, actions).numpy())
         avg = np.mean(logs, axis=0)
         if critic_logs:
             avg[1:4] = np.mean(critic_logs, axis=0)

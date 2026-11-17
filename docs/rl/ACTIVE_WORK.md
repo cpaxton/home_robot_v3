@@ -54,6 +54,16 @@ fitting short. Actor inference is unchanged. A frozen region-aware feedback
 probe improves selected successes 2/6 → 4/6 but introduces contact and worsens
 one reverse case, so it is not exported. Targeted tests/new full-source evidence
 are required before corrected PPO; historical receipts do not qualify source edits.
+176 targeted tests pass. The first full gate at source `a179dceb` reports
+1,571 passes and two failures in compact test policies lacking a separate
+`values()` method. The diagnostics now preserve the original `evaluate()`
+interface; all 54 focused compatibility/critic tests pass, including learning
+with both critic schedules. No corrected PPO starts under the failed receipt,
+and the viewer is restored. A fresh corrected-source gate and automatic paired
+pilot follow; the [protocol report](../experiments/finite_critic_pilot_20261117.md)
+keeps the original reward/actor fixed and compares joint versus independent
+critic fitting. The retained policy remains a comparison anchor, not a finished
+controller; the objective is improved physical performance.
 
 
 **Wrapper reward work:** the [reward specification](../experiments/wrapper_reward_20261116.md)

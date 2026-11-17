@@ -157,6 +157,17 @@ architectures cannot share identical actor weights; account for initialization
 or distillation differences rather than calling them an exactly paired update.
 Any new inference law requires a bundle version old runtimes reject.
 
+## Training coverage is still a debugging curriculum
+
+Twelve local FK-witness paths and one fixed training seed do not establish a
+general 6DoF controller. Joint changes in this pilot are small and reset posture
+variation is limited; many physical ticks are repeated late holds. More history
+or a larger network cannot substitute for reachable posture/trajectory coverage.
+After the learning-target correction is validated, expand joint-posture resets,
+mid-motion goal changes and disturbance windows while preserving task-family
+balance and separate audits. The small failed PPO pilots do not establish that
+RL is infeasible or that the robot hardware is inherently incapable.
+
 ## Reward conclusions and next experiment
 
 The previous pilot changed fine pose weighting, hand priority, progress and

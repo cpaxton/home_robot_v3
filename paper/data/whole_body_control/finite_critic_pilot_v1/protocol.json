@@ -1,0 +1,55 @@
+{
+  "format": "finite-critic-pilot-v1",
+  "runtime_revision": "a179dceb7335902befdb5108a62024662396c137",
+  "initializer": "logs/eval/scoped-wheel-feedback-v2/candidate/actor",
+  "seed": 107,
+  "decisions_per_arm": 16384,
+  "critic_only_decisions": 1024,
+  "rollout_steps": 256,
+  "actor_learning_rate": [
+    5e-05,
+    1e-05
+  ],
+  "critic_learning_rate": 0.001,
+  "initial_action_std": 0.02,
+  "epochs": 3,
+  "batch_size": 64,
+  "clip": 0.05,
+  "target_kl": 0.01,
+  "entropy_weight": 0.0001,
+  "family_control_tick_weights": [
+    0.5,
+    0.5
+  ],
+  "general_hand_base_tick_weights": [
+    0.8,
+    0.2
+  ],
+  "training_horizon_s": 25,
+  "evaluation_horizon_s": 25,
+  "randomization_scale": 0,
+  "case_manifest": "cases.json",
+  "training_cases": 12,
+  "fresh_audit_cases": 12,
+  "reward_arms": [
+    "finite_joint",
+    "finite_independent"
+  ],
+  "intermediate_checkpoint_selection": false,
+  "teacher_actions_in_loss": false,
+  "automatic_extensions": 0,
+  "hardware_used": false,
+  "safety_promoted": false,
+  "distribution": "FK-witness nonholonomic coupled trajectories with full/XY-only/free base masks, forward/reverse/base-yaw cases; separate audit motions/seeds; 50% TAMP grasp-pose unloaded prefix by physical ticks",
+  "checkpoint_admission": "raw actor is trained/evaluated on separately fingerprinted general and TAMP plants; export is scoped to its declared general plant, not qualified TAMP checkpoint deployment",
+  "preceding_attempt": {
+    "report": "docs/experiments/wrapper_reward_training_20261116.md",
+    "runtime": "5f0eb3c2",
+    "case_manifest_unchanged": true,
+    "reason": "finite contract deadlines previously bootstrapped physically stopped states; independent critic budget is a separate within-source ablation"
+  },
+  "independent_critic_epochs": 3,
+  "episode_contract": "finite_tracking_deadline_v1",
+  "reward": "unchanged legacy wrapper reward in both arms",
+  "comparison": "correct finite deadlines in both; historical joint critic updates vs independent three-epoch critic budget; no actor architecture or exploration changes"
+}
