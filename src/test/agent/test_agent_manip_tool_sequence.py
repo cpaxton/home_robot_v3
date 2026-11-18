@@ -53,7 +53,7 @@ def test_canned_find_then_pick_place_dispatch_order():
         [("pickup", "bowl"), ("place", "table")],
     ]
     outcome = next(r for r in results if r.startswith("[pick_place] "))
-    assert outcome.startswith("[pick_place] ok status=ok")
+    assert json.loads(outcome.removeprefix("[pick_place] "))["status"] == "ok"
 
 
 def test_pick_place_dispatch_surfaces_last_exec_ok_failure():
@@ -73,7 +73,7 @@ def test_pick_place_dispatch_surfaces_last_exec_ok_failure():
     assert ok  # keep going
     assert exe.calls == [[("pickup", "bowl"), ("place", "table")]]
     outcome = next(r for r in results if r.startswith("[pick_place] "))
-    assert outcome.startswith("[pick_place] failed status=controller_failed")
+    assert json.loads(outcome.removeprefix("[pick_place] "))["code"] == "controller_failed"
 
 
 def _make_kinematic_dynamem_executor():
@@ -167,7 +167,7 @@ def test_canned_tool_sequence_selects_kinematic_mp(monkeypatch):
     assert teleport_calls == []
     assert planners == ["rrt_connect", "rrt_connect"]
     outcome = next(r for r in results if r.startswith("[pick_place] "))
-    assert outcome.startswith("[pick_place] ok status=ok")
+    assert json.loads(outcome.removeprefix("[pick_place] "))["status"] == "ok"
     # find_objects, then a nav attempt each for pickup and place.
     assert exe._find.call_count == 3
 
