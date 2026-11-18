@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "scope": "Assisted MuJoCo development regression; expanded clutter/layout conditions. Provided RGBD map and native state; no observed-only qualification or benchmark denominator. Declared positions are development diagnostics, not held-out benchmark fixtures with independent replay certificates.",
+  "cases": [
+    {"id": "cube_clutter_right", "object": "object1", "config": {"initial_distractor_xy": [0.24, -0.63]}},
+    {"id": "cube_clutter_left", "object": "object1", "config": {"initial_distractor_xy": [0.04, -0.63]}},
+    {"id": "cube_clutter_front", "object": "object1", "config": {"initial_distractor_xy": [0.14, -0.55]}},
+    {"id": "cube_clutter_back", "object": "object1", "config": {"initial_distractor_xy": [0.14, -0.78]}},
+    {"id": "cube_clutter_far", "object": "object1", "config": {"initial_distractor_xy": [0.45, -0.63]}},
+    {"id": "cylinder_clutter_right", "object": "object2", "config": {"initial_distractor_xy": [0.24, -0.63]}},
+    {"id": "cylinder_clutter_left", "object": "object2", "config": {"initial_distractor_xy": [0.04, -0.63]}}
+  ]
+}

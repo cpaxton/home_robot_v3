@@ -54,3 +54,23 @@ def test_declared_cases_parse_and_scaled_fixture_keeps_density(monkeypatch, tmp_
     assert float(geom.get("size").split()[0]) == pytest.approx(0.022)
     assert float(geom.get("mass")) == pytest.approx(0.5 * 1.1**3)
     assert ".02 .04 .04" in (fixture / "scene_environment.xml").read_text()
+
+
+def test_clutter_layout_cases_parse_within_declared_geometry(monkeypatch, tmp_path):
+    root = Path(__file__).resolve().parents[5]
+    monkeypatch.syspath_prepend(str(root / "scripts"))
+    from tamp_mobile_cases import load_case
+
+    suite = json.loads((root / "configs/eval/mobile_clutter_layout_20261118.json").read_text())
+    ids = [row["id"] for row in suite["cases"]]
+    assert suite["schema_version"] == 1 and len(ids) == len(set(ids))
+    for row in suite["cases"]:
+        assert row["object"] in {"object1", "object2"}
+        path = tmp_path / "case.json"
+        path.write_text(json.dumps(row.get("config", {})))
+        assert load_case(path) == row.get("config", {})
+        # Distractors are declared on the 0.6 x 0.5 m table and clear the
+        # unchanged placement region, so a lateral release correction can move
+        # the held object away from any of the four surrounding sides.
+        distractor = row["config"]["initial_distractor_xy"]
+        assert -0.58 <= distractor[0] <= 0.58 and -1.48 <= distractor[1] <= -0.52
