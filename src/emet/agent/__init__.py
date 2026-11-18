@@ -48,3 +48,8 @@ def __getattr__(name: str):
     value = getattr(import_module(f"emet.agent.{module_name}"), name)
     globals()[name] = value
     return value
+
+
+def __dir__() -> list[str]:
+    """Expose lazily-exported names so introspection sees them before first access."""
+    return sorted(set(globals()) | set(_EXPORT_MODULES))

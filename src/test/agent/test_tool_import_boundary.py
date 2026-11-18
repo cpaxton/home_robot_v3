@@ -40,3 +40,5 @@ def test_original_tool_imports_retain_public_identity():
     assert agent.Tool is tools.Tool is tool.Tool
     assert agent.get_tool_descriptions_for_prompt is tools.get_tool_descriptions_for_prompt
     assert tools.get_tool_descriptions_for_prompt is tool.get_tool_descriptions_for_prompt
+    # Lazily-exported names are visible to introspection before first access.
+    assert {"Tool", "get_tools", "run_agent_with_robot"} <= set(dir(agent))
