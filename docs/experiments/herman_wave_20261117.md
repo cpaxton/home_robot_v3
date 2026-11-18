@@ -6,6 +6,11 @@ actor outputs base forward/yaw, five arm channels and a gated gripper channel;
 it has no head output. Neither a head nod nor the analytic teacher is presented
 as evidence that the learned WBC works on hardware.
 
+The original wrist-only scenario below was insufficient as a visible arm wave.
+The [checked elbow-and-wrist v2](herman_elbow_wave_20261117.md) supersedes it on
+port 8771. Its new video and measured elbow/wrist outputs were inspected; the
+historical v1 artifacts and outcomes below remain unchanged.
+
 ## Current robot, checked again
 
 An eight-second subscriber-only capture at about 18:19 EST receives 1,600 arm

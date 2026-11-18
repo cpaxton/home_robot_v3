@@ -22,7 +22,7 @@ details{margin-top:18px}.error{color:#ffaf9e}.actual{color:#ffaf51}.target{color
 <body>
 <h1>Herman · Offline rehearsal</h1>
 <div class="badge">Recorded observations + simulation · No robot control</div>
-<p>Play a recorded controller run below. The wave is deliberately tiny (±3.4°) and starts with a two-second hold.
+<p>Play a recorded controller run below. The elbow-and-wrist wave starts with a two-second hold, raises the forearm, waves, then returns.
 Use <b>Hand close-up</b> to inspect it. <span class="actual">Orange axes: measured hand</span> ·
 <span class="target">Cyan axes: target hand</span>. The captured head photo on the left always stays fixed.</p>
 <div id="status">Loading verified replay…</div>
@@ -37,11 +37,12 @@ Use <b>Hand close-up</b> to inspect it. <span class="actual">Orange axes: measur
 <div class="card"><div class="caption" id="viewLabel">Recorded robot motion · fixed world camera</div><img id="simulation" alt="Simulation rendered from recorded robot state"></div>
 </div>
 <input id="frame" type="range" min="0" max="0" step="1" value="0" aria-label="Recorded frame"><div id="clock">Loading frames…</div>
+<pre id="jointReadout">Joint diagnostics load with the recording.</pre>
 <details><summary>Case result and readiness</summary><pre id="result"></pre></details>
 <details><summary>Captured posture, geometry and depth audit</summary><pre id="audit"></pre></details>
 <script>
 const $ = id => document.getElementById(id);
-let state, times = [0], playing = false, busy = false, ready = false;
+let state, timeline = null, times = [0], playing = false, busy = false, ready = false;
 let azimuth = 225, elevation = -15, dirty = false, drag = null, revision = 0;
 let wallOrigin = 0, recordingOrigin = 0, displayedFrame = 0;
 async function json(url) {
@@ -59,6 +60,9 @@ function frameAtTime(values, time) {
 }
 function clock() {
   const t = times[displayedFrame] ?? 0;
+  if (timeline?.measured_joints_delta_deg) {
+    $('jointReadout').textContent = ['Joint travel from start (degrees):   measured | FK witness | actuator target', ...[[2,'Elbow joint3'],[3,'Wrist pitch joint4'],[4,'Wrist roll joint5']].map(([j,name]) => `${name.padEnd(20)} ${timeline.measured_joints_delta_deg[displayedFrame][j].toFixed(1).padStart(8)} | ${timeline.reference_joints_delta_deg[displayedFrame][j].toFixed(1).padStart(8)} | ${timeline.actuator_targets_delta_deg[displayedFrame][j].toFixed(1).padStart(8)}`)].join('\n');
+  } else $('jointReadout').textContent = 'No joint-command diagnostics in this older recording.';
   $('clock').textContent = `${t.toFixed(2)} / ${times[times.length - 1].toFixed(2)} s · Frame ${displayedFrame + 1}/${times.length} · ${playing ? 'Playing at 1×' : 'Paused'}`;
 }
 function stop() {
@@ -72,7 +76,7 @@ async function choose() {
   $('play').disabled = true;
   const meta = await json('/api/frames?replay=' + index);
   if (selection !== revision) return;
-  times = meta.time_s; displayedFrame = 0;
+  timeline = meta; times = meta.time_s; displayedFrame = 0;
   $('frame').max = meta.frames - 1; $('frame').value = 0;
   $('play').disabled = meta.frames <= 1;
   $('play').textContent = meta.frames <= 1 ? 'Static capture · no playback' : 'Play recording';
@@ -97,7 +101,7 @@ async function render() {
     $('simulation').src = url; $('simulation').dataset.url = url;
     if (old) URL.revokeObjectURL(old);
     displayedFrame = frame; clock();
-    const isWave = state.entries[index].key.includes('wrist_wave');
+    const isWave = state.entries[index].key.includes('wave');
     $('status').textContent = index === 0
       ? 'Static captured posture: physics rollout blocked. Select a controller recording to animate.'
       : `Offline simulated execution from a synthetic staged start.${isWave && times[frame] < 2 ? ' Initial hold: motion begins at 2.0 s.' : ''}${frame === times.length - 1 ? ' Recording ended; Play rewinds automatically.' : ''}${camera === 'head_left' ? ' The fixed head view may hide wrist movement; use the external views.' : ''}`;
@@ -155,7 +159,7 @@ setInterval(() => {
   $('replay').value = Math.max(0, teacher >= 0 ? teacher : motion);
   const media = document.createElement('video');
   const format = !media.canPlayType('video/mp4; codecs="avc1.640028"') && state.video_webm_available ? 'webm' : 'mp4';
-  $('videoLink').href = '/video.' + format;
+  $('videoLink').href = '/video.' + format + '?recording=' + (state.recording_id || 'legacy');
   $('videoLink').textContent = 'Watch / download ' + format.toUpperCase();
   $('videoLink').hidden = !state.video_available && !state.video_webm_available;
   $('audit').textContent = JSON.stringify({audit:state.audit,depth:state.depth,proposed_start:state.proposed_start},null,2);

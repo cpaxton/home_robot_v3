@@ -35,7 +35,7 @@ def test_wave_preserves_history_state_base_and_gripper_and_obeys_derivative_limi
         c = env.control
         qpos, qvel, time = env.data.qpos.copy(), env.data.qvel.copy(), float(env.data.time)
         initial = c.positions().copy()
-        reference = HermanWaveReference(c)
+        reference = HermanWaveReference(c, gesture="wrist_wave")
         assert reference.end < 23  # Leaves at least two seconds to settle in the 25s rehearsal.
         assert reference.initial_hold_s == 2
         assert reference.base_mask.tolist() == [True] * 3 and reference.hand_mask
@@ -74,3 +74,35 @@ def test_endpoint_return_cannot_hide_failure_to_follow_the_wave():
     assert wave_tracking_gate(followed, 17)["passed"]
     assert not wave_tracking_gate(followed[:3], 17)["passed"]
     assert not wave_tracking_gate([], 17)["passed"]
+
+
+@pytest.mark.sim
+def test_elbow_wrist_wave_requires_visible_arm_travel_not_just_a_wrist_twitch():
+    env = HermanRehearsalEnv(
+        ManipulationConfig(robot="innate_mars", scenario="reach", randomization_scale=0),
+        initial_arm=[1.5308, -1.5308, 1.0631264228554684, 1.0906603401866908, -0.019941750242513337],
+        initial_grip=0.08897088569736719,
+        initial_head=0,
+        model_factory=build_manipulation_model,
+    )
+    try:
+        env.reset(seed=430_020_000)
+        reference = HermanWaveReference(env.control)
+        assert wave_case()["gesture"] == "elbow_wrist_wave"
+        spans = np.rad2deg(reference.certificate["joint_span_rad"])
+        assert spans[2] > 35 and spans[3] > 25 and spans[4] > 30
+        hand = np.array([reference.sample(t)[1][:3] for t in np.linspace(0, reference.end, 101)])
+        assert np.linalg.norm(np.ptp(hand, axis=0)) > 0.07
+        assert reference.end + 2 < 35
+        for part in reference.path.segments:
+            for actual, limit in zip(polynomial_peaks(part), [0.25, 0.5, 2], strict=True):
+                assert np.all(actual <= limit * (1 + 1e-8))
+    finally:
+        env.close()
+
+
+def test_frozen_phase_cannot_claim_a_completed_wave():
+    from emet.rl.manipulation.herman_gestures import wave_tracking_gate
+
+    trace = [{"time_s": t, "reference_time_s": 0, "position_error_m": 0, "rotation_error_rad": 0} for t in [0, 5, 25]]
+    assert not wave_tracking_gate(trace, 17)["passed"]

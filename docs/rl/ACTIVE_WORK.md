@@ -36,6 +36,13 @@ synthetic start: teacher 1/1, both actors 0/1 (translation boundary at 4.5 s), a
 8771 wave replay and 8770 passive console are transient user services. No motor
 commands or robot deployment. [Report](../experiments/herman_wave_20261117.md).
 
+**Visible arm-wave correction:** the previous case was only a small wrist roll.
+The checked v2 video now shows forearm raise, elbow/wrist wave and return.
+Measured teacher elbow/pitch/roll travel is **37.2° / 29.6° / 35.0°**; peak hand
+error 1.61 mm. Both learned actors move but fail (base boundary / unsafe contact),
+all stops confirm. Current 8771 service: `emet-herman-arm-wave`.
+[Checked video and joint outputs](../experiments/herman_elbow_wave_20261117.md).
+
 ## One controller owner and development worktree
 
 Continue controller implementation, training decisions and progress updates in

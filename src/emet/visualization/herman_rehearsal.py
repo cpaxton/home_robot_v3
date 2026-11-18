@@ -56,6 +56,7 @@ class Replay:
                     )
         self.loaded = {}
         self.targets = {}
+        self.joint_outputs = {}
         self.anchors = {}
 
     def read(self, name):
@@ -73,6 +74,11 @@ class Replay:
             with np.load(io.BytesIO(self.read(self.entries[index]["replay"])), allow_pickle=False) as archive:
                 qpos, times = archive["qpos"].copy(), archive["time_s"].copy()
                 targets = archive["targets"].copy()
+                joints = {
+                    key: archive[key].copy()
+                    for key in ("reference_joints", "measured_joints", "actuator_targets")
+                    if key in archive
+                }
             if (
                 qpos.ndim != 2
                 or qpos.shape[1] != self.model.nq
@@ -87,7 +93,25 @@ class Replay:
                 raise ValueError("malformed finite replay")
             self.loaded[index] = (qpos, times)
             self.targets[index] = targets
+            if joints:
+                if len(joints) != 3 or any(
+                    a.shape != (len(times), 5) or not np.isfinite(a).all() for a in joints.values()
+                ):
+                    raise ValueError("malformed joint output diagnostics")
+                addresses = [self.model.joint(f"joint{i}").qposadr[0] for i in range(1, 6)]
+                if not np.allclose(joints["measured_joints"], qpos[:, addresses], atol=1e-9, rtol=0):
+                    raise ValueError("joint diagnostics disagree with rendered qpos")
+            self.joint_outputs[index] = joints
         return self.loaded[index]
+
+    def timeline(self, index):
+        qpos, times = self.frames(index)
+        result = {"time_s": times.tolist(), "frames": len(times)}
+        joints = self.joint_outputs[index]
+        if joints:
+            origin = joints["measured_joints"][0]
+            result.update({key + "_delta_deg": np.rad2deg(value - origin).tolist() for key, value in joints.items()})
+        return result
 
     def state(self):
         entries = []
@@ -97,6 +121,7 @@ class Replay:
                 entries.append({**entry, "frames": len(times), "duration_s": float(times[-1])})
         return {
             "entries": entries,
+            "recording_id": self.inventory["report.json"][:16],
             "audit": self.report["audit"],
             "summary": self.report.get("summary", {}),
             "depth": self.report["depth"],
@@ -238,7 +263,7 @@ def make_server(replay, port=8771, video=None):
                     index = int(query.get("replay", ["0"])[0])
                     with replay.lock:
                         _, times = replay.frames(index)
-                        self.reply({"time_s": times.tolist(), "frames": len(times)})
+                        self.reply(replay.timeline(index))
                 elif url.path == "/frame.jpg":
                     self.reply(
                         render_worker.submit(
@@ -270,6 +295,7 @@ def make_server(replay, port=8771, video=None):
                     self.send_response(206 if self.headers.get("Range") else 200)
                     self.send_header("Content-Type", "video/webm" if url.path.endswith(".webm") else "video/mp4")
                     self.send_header("Accept-Ranges", "bytes")
+                    self.send_header("Cache-Control", "no-store")
                     self.send_header("Content-Length", str(end - start + 1))
                     if self.headers.get("Range"):
                         self.send_header("Content-Range", f"bytes {start}-{end}/{size}")

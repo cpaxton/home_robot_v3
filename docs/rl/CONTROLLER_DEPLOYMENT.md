@@ -20,10 +20,17 @@ chat tool session. They are not installed for automatic reboot startup. See that
 report for service status, SSH forwarding and current hardware blockers.
 
 The replay now defaults to a moving teacher recording and external camera, with
-visible hand axes and a close-up view. **Watch / download** opens the 25-second
-comparison (MP4 or WebM). Concurrent HTTP plus one render worker fixes browser
+visible hand axes and a close-up view. **Watch / download** opens the checked 35-second
+elbow-and-wrist comparison (MP4 or WebM). Concurrent HTTP plus one render worker fixes browser
 preconnection stalls; playback follows recorded time over SSH. These remain
 recordings, with no robot motion endpoint.
+
+The [corrected wave](../experiments/herman_elbow_wave_20261117.md) now exercises
+the elbow and wrist rather than only a tiny roll. Live replay readouts and the
+video plot measured joint travel against the FK witness and actual actuator
+targets. Current viewer service: `emet-herman-arm-wave.service`; 8771 and its
+existing SSH forward are unchanged. Measured teacher elbow/pitch/roll travel is
+37.2° / 29.6° / 35.0°. Both learned actors fail; hardware remains disabled.
 
 ## Command and feedback path
 

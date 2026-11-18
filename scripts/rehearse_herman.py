@@ -67,6 +67,10 @@ def cases(kind="tracking"):
         from emet.rl.manipulation.herman_gestures import wave_case
 
         return [wave_case()]
+    if kind == "wrist-only":
+        from emet.rl.manipulation.herman_gestures import wave_case
+
+        return [wave_case("wrist_wave")]
     if kind != "tracking":
         raise ValueError("unknown rehearsal case set")
     rows = []
@@ -117,10 +121,10 @@ def evaluate(env, case, policy, output, name):
     initial_hash = digest(
         {"qpos": env.data.qpos.tolist(), "qvel": env.data.qvel.tolist(), "ctrl": env.data.ctrl.tolist()}
     )
-    if case.get("gesture") == "wrist_wave":
+    if case.get("gesture") in {"wrist_wave", "elbow_wrist_wave"}:
         from emet.rl.manipulation.herman_gestures import HermanWaveReference
 
-        reference = HermanWaveReference(control)
+        reference = HermanWaveReference(control, gesture=case["gesture"])
     else:
         reference = CoupledReference(control, case)
     admission = admit_reference(env, reference)
@@ -156,6 +160,7 @@ def evaluate(env, case, policy, output, name):
     delivered = False
     for _tick in range(int(env.config.horizon / env.profile.dt)):
         # Record active-loop feedback BEFORE any native terminal stop.
+        control.update_task_reference()
         info = env._info()
         obs = actor_observation(control)
         action = task_pose_teacher_action(control) if policy is None else policy(obs)
@@ -165,6 +170,10 @@ def evaluate(env, case, policy, output, name):
                 "position_error_m": info["ee_position_error"],
                 "rotation_error_rad": info["ee_orientation_error"],
                 "action": action.tolist(),
+                "measured_joint_positions_rad": control.positions().tolist(),
+                "reference_joint_witness_rad": reference.coordinates(control.trajectory_elapsed())[1].tolist(),
+                "actuator_position_targets_rad": env.data.ctrl[control.act].copy().tolist(),
+                "reference_time_s": float(control.trajectory_elapsed()),
                 "measured_arm_velocity": control.velocities().tolist(),
                 "commanded_arm_velocity": control.velocity.tolist(),
                 "measured_base_velocity": [info["base_linear_velocity_m_s"], info["base_yaw_velocity_rad_s"]],
@@ -189,7 +198,7 @@ def evaluate(env, case, policy, output, name):
             break
     metrics = env._info()
     wave_tracking = None
-    if case.get("gesture") == "wrist_wave":
+    if case.get("gesture") in {"wrist_wave", "elbow_wrist_wave"}:
         from emet.rl.manipulation.herman_gestures import wave_tracking_gate
 
         wave_tracking = wave_tracking_gate(trace, reference.end)
@@ -202,8 +211,16 @@ def evaluate(env, case, policy, output, name):
     stem = case["id"].rsplit(":", 1)[-1] + "-" + name
     (output / (stem + "-trace.json")).write_text(json.dumps(trace, allow_nan=False) + "\n")
     np.savez_compressed(
-        output / (stem + "-replay.npz"), qpos=np.array(qpos), time_s=np.array(times), targets=np.array(targets)
+        output / (stem + "-replay.npz"),
+        qpos=np.array(qpos),
+        time_s=np.array(times),
+        targets=np.array(targets),
+        reference_joints=np.array([row["reference_joint_witness_rad"] for row in trace]),
+        measured_joints=np.array([row["measured_joint_positions_rad"] for row in trace]),
+        actuator_targets=np.array([row["actuator_position_targets_rad"] for row in trace]),
     )
+    reference_joints = np.array([row["reference_joint_witness_rad"] for row in trace])
+    measured_joints = np.array([row["measured_joint_positions_rad"] for row in trace])
     return {
         "id": case["id"],
         "seed": case["seed"],
@@ -212,6 +229,15 @@ def evaluate(env, case, policy, output, name):
         "second_admission": second_admission,
         "success": bool(terminal.get("is_success")),
         "wave_tracking": wave_tracking,
+        "reference_certificate": getattr(reference, "certificate", None),
+        "joint_motion": {
+            "names": list(control.profile.actuators),
+            "reference_span_deg": np.rad2deg(np.ptp(reference_joints, axis=0)).tolist(),
+            "measured_span_deg": np.rad2deg(np.ptp(measured_joints, axis=0)).tolist(),
+            "peak_measured_speed_rad_s": np.max(
+                np.abs([row["measured_arm_velocity"] for row in trace]), axis=0
+            ).tolist(),
+        },
         "code": terminal.get("code"),
         "second_delivered": delivered,
         "stop_confirmed": bool(not env._physics_invalid and whole_body_stopped(control)),
@@ -258,7 +284,7 @@ def main():
     parser.add_argument("--capture", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--policy", action="append", type=Path, default=[])
-    parser.add_argument("--case-set", choices=("tracking", "wave"), default="tracking")
+    parser.add_argument("--case-set", choices=("tracking", "wave", "wrist-only"), default="tracking")
     parser.add_argument(
         "--include-proposals",
         action="store_true",
@@ -356,6 +382,8 @@ def main():
         terminal_hold_seconds=2,
         horizon=25,
     )
+    if args.case_set == "wave":
+        baseline = dataclasses.replace(baseline, horizon=max(35.0, baseline.horizon))
     factory = scene_factory(capture, scene)
     model, fingerprint = factory(
         "innate_mars",
@@ -405,6 +433,7 @@ def main():
         "results": {},
         "complete": False,
         "hardware_motion_commands_sent": 0,
+        "environment": dataclasses.asdict(baseline),
     }
     save(args.output / "report.json", report)
     if args.include_proposals:

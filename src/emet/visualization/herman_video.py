@@ -41,13 +41,18 @@ def measurements(replay, index):
         actual.append(Rotation.from_matrix(target[0].T @ rotation).as_rotvec() @ axis)
         position_errors.append(float(np.linalg.norm(hand.xpos.copy() - goal[:3])))
         rotation_errors.append(float(Rotation.from_matrix(desired @ rotation.T).magnitude()))
-    return {
+    result = {
         "times": times,
         "target_angle": np.rad2deg(vectors @ axis),
         "actual_angle": np.rad2deg(actual),
         "position_mm": np.array(position_errors) * 1000,
         "rotation_deg": np.rad2deg(rotation_errors),
     }
+    joints = replay.joint_outputs[index]
+    if joints:
+        origin = joints["measured_joints"][0]
+        result.update({key + "_deg": np.rad2deg(value - origin) for key, value in joints.items()})
+    return result
 
 
 def text(image, value, position, scale=0.55, color=TEXT):
@@ -55,6 +60,34 @@ def text(image, value, position, scale=0.55, color=TEXT):
 
 
 def chart(image, stats, index, x, duration):
+    if "reference_joints_deg" in stats:
+        for row, (joint, label) in enumerate([(2, "Elbow"), (3, "Pitch"), (4, "Roll")]):
+            top, bottom = 577 + row * 43, 614 + row * 43
+            left, right = x + 68, x + 492
+            bound = max(
+                5.0,
+                max(
+                    float(np.max(abs(stats[k][:, joint])))
+                    for k in ("reference_joints_deg", "measured_joints_deg", "actuator_targets_deg")
+                )
+                * 1.1,
+            )
+            middle = (top + bottom) / 2
+            cv2.rectangle(image, (left, top), (right, bottom), (44, 61, 78), 1)
+            text(image, label, (x + 3, top + 12), 0.35)
+            text(image, f"+/-{bound:.0f}", (x + 3, bottom - 2), 0.3)
+            for key, color in [
+                ("reference_joints_deg", TARGET),
+                ("actuator_targets_deg", (150, 160, 170)),
+                ("measured_joints_deg", ACTUAL),
+            ]:
+                values = stats[key][: index + 1, joint]
+                xx = left + (right - left) * stats["times"][: index + 1] / duration
+                yy = middle - values / bound * ((bottom - top) / 2 - 2)
+                points = np.column_stack([xx, yy]).astype(np.int32)
+                if len(points) >= 2:
+                    cv2.polylines(image, [points], False, color, 1, cv2.LINE_AA)
+        return
     left, right, top, bottom = x + 42, x + 492, 577, 700
     bound = max(4.5, float(np.max(abs(stats["actual_angle"]))) * 1.1)
     cv2.rectangle(image, (left, top), (right, bottom), (44, 61, 78), 1)
@@ -132,13 +165,15 @@ def render_video(directory, output, *, fps=20):
                 text(canvas, "HERMAN | OFFLINE RECORDED WAVE COMPARISON", (18, 27), 0.75)
                 text(
                     canvas,
-                    "Synthetic staged start. No hardware motion. Target +/-3.4 deg; base and gripper held.",
+                    "Synthetic staged start. No hardware motion. Elbow + wrist wave; base/gripper targets fixed."
+                    if replay.report["proposals"][0].get("gesture") == "elbow_wrist_wave"
+                    else "Synthetic staged start. No hardware motion. Small wrist-only reference; base target fixed.",
                     (18, 51),
                     0.52,
                 )
                 text(
                     canvas,
-                    f"Time {now:05.2f} s | cyan: target hand | orange: measured hand | small inset: hand close-up",
+                    f"Time {now:05.2f} s | cyan: reference | orange: measured | grey: actuator target | inset: hand",
                     (18, 76),
                     0.52,
                 )
@@ -172,7 +207,14 @@ def render_video(directory, output, *, fps=20):
                     )
                     text(canvas, status, (x + 15, 557), 0.4, (255, 120, 100) if ended else TEXT)
                     chart(canvas, values, frame, x, duration)
-                    text(canvas, "Hand rotation about wave axis (degrees)", (x + 42, 740), 0.42)
+                    text(
+                        canvas,
+                        "Joint travel from start (deg); FK witness is not an actor input."
+                        if "reference_joints_deg" in values
+                        else "Hand rotation about wave axis (degrees)",
+                        (x + 12, 740),
+                        0.35,
+                    )
                 text(
                     canvas,
                     "Fault stop was confirmed separately; post-stop motion is not in these recordings.",
