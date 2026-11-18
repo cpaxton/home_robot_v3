@@ -14,9 +14,11 @@ robot-side feedback/executor/stop work separate from policy progress.
 **Latest decision (Nov 18):** corrective goal labels substantially improve arm
 spline tracking, but do not yet yield a general controller. Fresh confirmation
 is **19/32 actor vs 31/32 teacher**, with one actor contact stop; all 110 stops
-across spline and general/TAMP checks confirm. A balanced mixed-family
-supervised diagnostic is running. No new PPO budget or hardware motion is
-enabled. Details and the unchanged physical-tick mixture are below.
+across that spline/general/TAMP check confirm. Balanced fitting improves hand
+and goal-change regressions to 14/16 each, but worsens base/spline behavior and
+leaves two stops unconfirmed. A gain-only follow-up preserves the retained
+actor's declared base feedback. No new PPO budget or hardware motion is enabled.
+Details and the unchanged physical-tick mixture are below.
 
 **Herman passive audit is current:** reachable, Zenoh/domain 0, arm/odom ~200/30 Hz.
 The active robot source retains the known velocity/failed-read bugs; a patch for
@@ -205,15 +207,37 @@ boundaries, not full pick/place or carry. The original base actor's 8/8 is not
 preserved by this zero-initialized motion-head experiment. Output:
 `logs/eval/gain-local-confirmation-v1/report.json`.
 
-**Next diagnostic is running:** `emet-gain-mixed-response` retains corrective
+**Mixed diagnostic completed:** `emet-gain-mixed-response` retains corrective
 labels and the 4,000-update budget, with explicit sampling probabilities: 50%
 spline examples and one sixth each ordinary hand, base and goal-change examples.
 It adds four canonical train/four audit identities per general family; audit
 labels never enter fitting. This tests missing cross-family exposure, without
 adding a residual controller, changing deployment architecture or relaxing
-acceptance bounds. The same confirmation script runs afterward; those seeds
-are now reused regression cases, not another independent holdout. Outputs:
+acceptance bounds. All 72 collection teacher trials pass. Confirmation yields
+hand **14/16**, base **2/8**, goal changes **14/16**, unloaded TAMP **6/6**, but
+only **13/32** spline successes. Three actor wheel-lift episodes occur across
+splines/base; only **76/78 actor stops** confirm (teacher 32/32). This is an
+unqualified tradeoff, not a replacement for either retained actor. The original
+report includes one false `running` outcome caused by the horizon bug below;
+it remains a failed episode. Confirmation seeds are reused regression cases,
+not another independent holdout. Outputs:
 `logs/eval/gain-mixed-response-v1` and `logs/eval/gain-mixed-confirmation-v1`.
+
+**Current follow-up:** `emet-gain-source-feedback` keeps the mixed data/budget
+but restores both declared source base settings: signed reference-tracking
+navigation feedback and `base_rate_feedback=False`. Earlier head comparisons
+deliberately disabled those settings to match a direct head; this gain-only
+follow-up must not be presented as that matched comparison. The actor and
+executor interfaces are unchanged. A frozen fitting/evaluation pipeline is
+running on one CPU. Outputs: `logs/eval/gain-source-feedback-v1` and
+`logs/eval/gain-source-feedback-confirmation-v1`.
+
+**Evaluator correction:** spline rollouts now use ceiling-plus-one tick budgets
+and explicit exhaustion failure. Flooring a decimal horizon could exit one
+tick before the environment's terminal receipt. Two regression cases cover
+decimal timing and nontermination; frozen historical reports are unchanged.
+The current head/confirmation/budget modules cover 14 passing tests, including
+simulation and rejection of mismatched non-tensor base-feedback settings.
 
 Disk headroom recovered by compressing eleven old source archives: **3.39 GiB**
 saved, each verified by bit-exact decompression before removing its raw tar.

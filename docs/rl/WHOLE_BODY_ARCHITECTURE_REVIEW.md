@@ -264,6 +264,17 @@ budget, sampling 50% splines and one sixth each hand/base/handoff examples.
 This is supervised family balancing, separate from the physical-tick PPO mix;
 it does not establish that PPO or the full architecture is solved.
 
+Mixed fitting subsequently reaches hand 14/16 and handoffs 14/16, with unloaded
+TAMP 6/6, but base 2/8 and splines 13/32. Three wheel-lift episodes and two
+unconfirmed actor stops remain. This candidate is not promoted. The matched
+comparison deliberately removed the source's signed base-navigation feedback
+and enabled instantaneous base-rate feedback. A gain-only follow-up preserves
+both source settings (`--source-base-feedback`) with the same data and budget;
+it is a source-feedback test, not a matched direct-head comparison. The format,
+actor/critic split and executor authority remain unchanged. The current runner
+also corrects decimal-horizon floor rounding; the one old `running` episode
+stays recorded as a failure rather than being retroactively relabeled.
+
 Reproduce confirmation with `scripts/eval_wbc_motion_head.py --fit
 logs/eval/gain-local-response-v1 --initializer INITIALIZER --output FRESH_DIR`
 under the exact fit-source overlay. It refuses unfinished or source-mismatched

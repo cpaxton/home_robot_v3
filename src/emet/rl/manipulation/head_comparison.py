@@ -38,24 +38,29 @@ class DirectMotionActor(WholeBodyActor):
         return action * self.action_mask(obs)
 
 
-def matched_heads(source, *, seed=20261118, backbone_frozen=True):
+def matched_heads(source, *, seed=20261118, backbone_frozen=True, source_base_feedback=False):
     """Clone one backbone and zero both motion means with explicit fitting mode.
 
     Disable base-only gain priors in this comparison: a direct head does not
     possess them. The retained, unchanged source remains a separate baseline.
     Head parameter counts differ and are reported rather than called equal.
+    Explicit source-base-feedback mode is a gain-only follow-up, not a matched
+    direct-head comparison. It preserves both source base-feedback settings.
     """
     if type(backbone_frozen) is not bool:
         raise ValueError("explicit boolean backbone fitting mode required")
+    if type(source_base_feedback) is not bool:
+        raise ValueError("explicit boolean source base feedback mode required")
     with torch.random.fork_rng(devices=[]):
         torch.manual_seed(seed)
         gain = copy.deepcopy(source)
-        gain.base_navigation_feedback = None
-        gain.base_rate_feedback = True
+        if not source_base_feedback:
+            gain.base_navigation_feedback = None
+            gain.base_rate_feedback = True
         nn.init.zeros_(gain.gain.weight)
         nn.init.zeros_(gain.gain.bias)
-        direct = DirectMotionActor(gain)
-    for actor in (gain, direct):
+        heads = {"gain": gain} if source_base_feedback else {"gain": gain, "direct": DirectMotionActor(gain)}
+    for actor in heads.values():
         actor.requires_grad_(not backbone_frozen)
         actor.grip.requires_grad_(False)
         (
@@ -63,7 +68,7 @@ def matched_heads(source, *, seed=20261118, backbone_frozen=True):
             if isinstance(actor, WholeBodyActor) and not isinstance(actor, DirectMotionActor)
             else actor.motion_head
         ).requires_grad_(True)
-    return {"gain": gain, "direct": direct}
+    return heads
 
 
 def recovery_reference(env, *, seed, offset_rad=0.08, acquisition_s=1.5):

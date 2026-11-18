@@ -302,10 +302,15 @@ controller qualification. Frozen confirmation reaches 19/32 fresh splines vs
 stops confirmed. Reused hand/base/goal-change/unloaded-TAMP outcomes are
 3/16, 4/8, 7/16 and 6/6; the arm-only fit does not preserve base performance.
 
-The next supervised probe (`--general-exposure 4`) draws 50% of fitting examples
+The mixed supervised probe (`--general-exposure 4`) draws 50% of fitting examples
 from spline data and one sixth each from ordinary hand/base/goal-change data.
 Weights apply to optimizer sampling, including the virtual labels; they are
 **not physical control-tick PPO shares**. Four train/four audit identities per
 general family are added, audit remains excluded from optimization, and the
-fitting budget stays at 4,000 updates. The unchanged PPO mixture above remains
-the only completed PPO exposure. New raw datasets and weights stay ignored.
+fitting budget stays at 4,000 updates. It improves general hand/goal-change
+success to 14/16 each but reaches only 2/8 base and 13/32 splines; wheel lift and
+two unconfirmed stops prevent qualification. The next gain-only probe retains
+this mixture while preserving the initializer's declared base-feedback settings
+(`--source-base-feedback`), which the earlier matched-head comparison removed.
+The unchanged PPO mixture above remains the only completed PPO exposure.
+New raw datasets and weights stay ignored.

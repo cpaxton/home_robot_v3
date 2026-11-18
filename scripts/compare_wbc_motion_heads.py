@@ -34,6 +34,7 @@ def run(
     heads=("gain", "direct"),
     goal_queries=0,
     general_exposure=0,
+    source_base_feedback=False,
 ):
     output = Path(output)
     if output.exists() or type(count) is not int or not 1 <= count <= 16 or type(updates) is not int or updates <= 0:
@@ -44,6 +45,8 @@ def run(
         raise ValueError("bounded virtual goal query count required")
     if type(general_exposure) is not int or not 0 <= general_exposure <= 8:
         raise ValueError("bounded general exposure per family and split required")
+    if type(source_base_feedback) is not bool or (source_base_feedback and heads != ("gain",)):
+        raise ValueError("source base feedback requires an explicit gain-only diagnostic")
     teacher_config = TaskPoseTeacherConfig(coupled_base_tracking=coupled_teacher)
     output.mkdir(parents=True)
     spec = load_manifest("configs/benchmarks/mars_arm_splines_v2.json")
@@ -74,6 +77,7 @@ def run(
             "heads": list(heads),
             "goal_queries_every_five_ticks": goal_queries,
             "general_exposure_per_family_split": general_exposure,
+            "source_base_feedback": source_base_feedback,
             "fitting_family_weights": {"splines": 0.5, "hand": 1 / 6, "base": 1 / 6, "goal_changes": 1 / 6}
             if general_exposure
             else {"splines": 1.0},
@@ -91,6 +95,11 @@ def run(
     try:
         source = WholeBodyBundle(initializer, robot="innate_mars", fingerprint=env.unwrapped.fingerprint)
         report["initializer_weights_sha256"] = source.manifest["weights_sha256"]
+        report["configuration"]["base_rate_feedback"] = (
+            source.actor.base_rate_feedback if source_base_feedback else True
+        )
+        prior = source.actor.base_navigation_feedback if source_base_feedback else None
+        report["configuration"]["base_navigation_feedback"] = None if prior is None else prior.record()
         for case, variant in [
             (case, variant)
             for case in cases
@@ -250,7 +259,9 @@ def run(
             **{f"{split}_{k}": v for split, samples in data.items() for k, v in samples.items()},
         )
         torch.set_num_threads(1)
-        for name, actor in matched_heads(source.actor, backbone_frozen=not backbone_trainable).items():
+        for name, actor in matched_heads(
+            source.actor, backbone_frozen=not backbone_trainable, source_base_feedback=source_base_feedback
+        ).items():
             if name not in heads:
                 continue
             before = {k: v.clone() for k, v in actor.state_dict().items()}
@@ -316,6 +327,11 @@ if __name__ == "__main__":
     p.add_argument("--head", action="append", choices=("gain", "direct"))
     p.add_argument("--goal-queries", type=int, default=0)
     p.add_argument("--general-exposure", type=int, default=0)
+    p.add_argument(
+        "--source-base-feedback",
+        action="store_true",
+        help="gain-only follow-up preserving source base feedback; not a matched direct-head comparison",
+    )
     a = p.parse_args()
     run(
         a.output,
@@ -325,7 +341,8 @@ if __name__ == "__main__":
         backbone_trainable=a.backbone_trainable,
         recovery_offsets=a.recovery_offsets,
         coupled_teacher=a.coupled_teacher,
-        heads=tuple(a.head or ("gain", "direct")),
+        heads=tuple(a.head or (("gain",) if a.source_base_feedback else ("gain", "direct"))),
         goal_queries=a.goal_queries,
         general_exposure=a.general_exposure,
+        source_base_feedback=a.source_base_feedback,
     )

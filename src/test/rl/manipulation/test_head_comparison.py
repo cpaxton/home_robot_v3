@@ -63,6 +63,28 @@ def test_direct_head_remains_bounded_and_cannot_act_with_all_targets_inactive():
     assert torch.count_nonzero(actor(tensor)) == 0
 
 
+def test_source_base_feedback_mode_is_gain_only_and_preserves_declared_feedback():
+    from emet.rl.manipulation.base_navigation_feedback import BaseNavigationFeedback
+
+    source = WholeBodyActor(
+        base_rate_feedback=False,
+        base_navigation_feedback=BaseNavigationFeedback(reference_tracking=True, heading_gain_scale=2.0),
+    )
+    heads = matched_heads(source, source_base_feedback=True)
+    assert set(heads) == {"gain"}
+    gain = heads["gain"]
+    assert gain.base_rate_feedback is False
+    assert gain.base_navigation_feedback == source.base_navigation_feedback
+    assert gain.base_navigation_feedback is not source.base_navigation_feedback
+    assert torch.count_nonzero(gain.gain.weight) == torch.count_nonzero(gain.gain.bias) == 0
+    for k, v in source.state_dict().items():
+        if not k.startswith("gain."):
+            torch.testing.assert_close(v, gain.state_dict()[k], rtol=0, atol=0)
+    comparison = matched_heads(source)
+    assert comparison["gain"].base_rate_feedback is True
+    assert comparison["gain"].base_navigation_feedback is None
+
+
 def test_direct_head_cannot_be_published_as_an_existing_gain_actor_bundle(tmp_path):
     from emet.rl.manipulation.env import ManipulationConfig
     from emet.rl.manipulation.whole_body_bundle import export_actor

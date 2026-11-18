@@ -44,6 +44,17 @@ def infer(actor, obs):
         return actor(tensors)[0].numpy().copy()
 
 
+def check_base_feedback(actor, configuration):
+    prior = actor.base_navigation_feedback
+    actual = {
+        "base_rate_feedback": actor.base_rate_feedback,
+        "base_navigation_feedback": None if prior is None else prior.record(),
+    }
+    if any(key in configuration and configuration[key] != value for key, value in actual.items()):
+        raise ValueError("experimental source base feedback differs from fitting configuration")
+    return actual
+
+
 def run(fit_path, initializer, output, *, head="gain"):
     fit_path, output = Path(fit_path), Path(output)
     fit = json.loads((fit_path / "report.json").read_text())
@@ -78,7 +89,12 @@ def run(fit_path, initializer, output, *, head="gain"):
         source = WholeBodyBundle(initializer, robot="innate_mars", fingerprint=env.unwrapped.fingerprint)
         if source.manifest["weights_sha256"] != fit["initializer_weights_sha256"]:
             raise ValueError("matching experimental backbone initializer required")
-        actor = matched_heads(source.actor, backbone_frozen=fit["configuration"]["backbone_frozen"])[head]
+        actor = matched_heads(
+            source.actor,
+            backbone_frozen=fit["configuration"]["backbone_frozen"],
+            source_base_feedback=fit["configuration"].get("source_base_feedback", False),
+        )[head]
+        report["actor_base_feedback"] = check_base_feedback(actor, fit["configuration"])
         weights = fit_path / (head + ".pt")
         state = torch.load(weights, map_location="cpu", weights_only=True)
         if state.get("format") != "experimental-motion-fitting-v1" or state.get("head") != head:

@@ -37,7 +37,9 @@ def episode(env, case, policy=None):
     observation, initial = env.reset(options={"case_id": case["id"]})
     e = env.unwrapped
     identity = digest({"qpos": e.data.qpos.tolist(), "qvel": e.data.qvel.tolist()})
-    for _ in range(int(e.config.horizon / e.profile.dt)):
+    # Decimal horizons can divide to just below an integer. Do not stop one
+    # physical tick before the environment emits its terminal receipt.
+    for _ in range(int(np.ceil(e.config.horizon / e.profile.dt)) + 1):
         action = (
             task_pose_teacher_action(e.control)
             if policy is None
@@ -46,6 +48,8 @@ def episode(env, case, policy=None):
         observation, _, done, truncated, info = env.step(action)
         if done or truncated:
             break
+    else:
+        info = {**info, "primitive_success": False, "code": "spline_execution_budget_exhausted"}
     metrics = e._info()
     confirmed = stop(env)
     return {
