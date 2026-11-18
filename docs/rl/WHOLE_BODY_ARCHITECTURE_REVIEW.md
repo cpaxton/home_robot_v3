@@ -40,7 +40,8 @@ not merely an array of repeated samples. A transformer is not a prerequisite.
 simulator information in the training critic while deploying a sensor-only actor.
 Keep that separation and explicit actor-only exports. Multiple value heads are
 also legitimate: with the same discount/termination, summed GAE corresponds to
-the summed reward. Shared advantage normalization preserves reward coefficients;
+the summed reward. Shared advantage normalization retains relative head
+coefficients and the combined direction, not absolute reward units;
 per-head whitening would change their relative meaning.
 
 The present implementation is robot-specific: history widths and actuator
@@ -156,6 +157,30 @@ under matched task distributions, budgets and physical readouts. Different
 architectures cannot share identical actor weights; account for initialization
 or distillation differences rather than calling them an exactly paired update.
 Any new inference law requires a bundle version old runtimes reject.
+
+### Required comparison before actor promotion
+
+The gain actor already consumes measured feedback; its observed failure is
+insufficient error correction, not an absent feedback loop. The v2 teacher's
+70/70 result validates the wider distribution and the corrected coupled
+baseline. It is not evidence that PPO has solved these equilibria. Keep the PR
+draft and the actor unqualified.
+
+First finish the fixed-budget gain-actor pilot on the corrected distribution.
+Then compare the gain head with a direct bounded velocity head using the same
+GRU/context, sensor inputs, masks, native limits, rewards, physical-tick mixture,
+critic budget and evaluation identities. Copy a common encoder/context, reset
+both motion heads to identical zero initial means, preserve identical gripper
+handling, and reset head optimizer state. Report parameter counts: heads of
+different shapes cannot inherit identical weights or optimizer history. Use the
+same fixed training budget and paired seeds; retain the current checkpoint as a
+separate warm-start baseline rather than conflating it with this comparison.
+
+Report hand position/orientation and path errors, residual-error episodes with
+near-zero commands, measured versus commanded rates, settling, drift, jerk,
+contact loads, wheel unloading and stop confirmation. Keep train/development
+results separate from a final disjoint audit. Neither lower training loss nor a
+passing teacher replaces those physical readouts or hardware qualification.
 
 ## Training coverage is still a debugging curriculum
 

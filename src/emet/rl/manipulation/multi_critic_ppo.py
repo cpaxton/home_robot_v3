@@ -60,13 +60,15 @@ def grouped_gae(rewards, values, next_values, terminated, episode_end, ticks, *,
 
 
 def combine_advantages(advantages, weights=(1.0, 1.0, 1.0), *, normalization="shared"):
-    """Preserve reward coefficients by whitening the weighted sum once.
+    """Whiten the weighted sum once, retaining relative head coefficients.
 
     GAE is linear across heads with shared clocks and termination. Thus the
     raw weighted sum represents the specified total reward. Whitening each
     head first instead changes that objective and removes positive within-head
     reward scales. Keep that historical mode explicit for paired experiments.
     The second return contains the weighted contribution from each head.
+    Shared normalization preserves the combined direction, not absolute reward
+    units; the standard-deviation floor bounds amplification of near-flat data.
     """
     a = torch.as_tensor(advantages)
     weights = torch.as_tensor(weights, dtype=a.dtype, device=a.device)

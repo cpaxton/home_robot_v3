@@ -16,7 +16,7 @@ class SensorEncoder(nn.Module):
         super().__init__()
         self.profile = PROFILES[robot]
         self.fields, self.width = history_layout(self.profile, retention_context=True)
-        self.preview_fields, _ = preview_layout()
+        self.preview_fields, self.preview_width = preview_layout()
         p = self.profile
         names = (
             "positions",
@@ -36,7 +36,14 @@ class SensorEncoder(nn.Module):
             + [1.0] * p.action_size
             + [1.0] * 9
         )
-        self.token_width = len(scales) + 9  # base velocity6 + projected hand gravity3
+        base_velocity = self.fields["base_velocity"]
+        base_velocity_width = base_velocity.stop - base_velocity.start
+        self.encoded_fields = {
+            "proprioception": slice(0, len(scales)),
+            "base_velocity": slice(len(scales), len(scales) + base_velocity_width),
+            "hand_gravity": slice(len(scales) + base_velocity_width, len(scales) + base_velocity_width + 3),
+        }
+        self.token_width = self.encoded_fields["hand_gravity"].stop
         self.register_buffer("scales", torch.tensor(scales, dtype=torch.float32))
         self.register_buffer(
             "motion_scale",
@@ -93,7 +100,20 @@ class WholeBodyActor(nn.Module):
             raise ValueError("base navigation feedback requires a wheeled profile")
         self.gru = nn.GRU(self.encoder.token_width, hidden, batch_first=True)
         self.context = nn.Sequential(nn.Linear(hidden + 126 + 9, 128), nn.ELU(), nn.Linear(128, 128), nn.ELU())
-        self.feedback_width = 24 + p.arm_size + 6 + 9
+        pf = self.encoder.preview_fields
+        error_width = sum(pf[name].stop - pf[name].start for name in ("base_error", "hand_error"))
+        base_velocity = self.encoder.encoded_fields["base_velocity"]
+        self.feedback_fields, offset = {}, 0
+        for name, width in (
+            ("current_error", error_width),
+            ("future_error", error_width),
+            ("joint_velocity", p.arm_size),
+            ("base_velocity", base_velocity.stop - base_velocity.start),
+            ("reference_motion", len(self.encoder.motion_scale)),
+        ):
+            self.feedback_fields[name] = slice(offset, offset + width)
+            offset += width
+        self.feedback_width = offset
         self.gain = nn.Linear(128, (p.action_size - 1) * self.feedback_width)
         self.grip = nn.Linear(128, 1)
         nn.init.zeros_(self.gain.weight)
@@ -122,7 +142,7 @@ class WholeBodyActor(nn.Module):
             hand[:, 3:] -= hand.new_tensor([1, 0, 0, 1, 0, 0]) * row[:, pf["hand_mask"]]
             errors += [row[:, pf["base_error"]], hand]
         velocities = obs["history"][:, -1, f["proprio/velocities"]] / history.new_tensor(self.encoder.profile.speed)
-        base_velocity = history[:, -1, -9:-3]
+        base_velocity = history[:, -1, self.encoder.encoded_fields["base_velocity"]]
         feedback = torch.cat([*errors, velocities, base_velocity, motion], dim=-1)
         gain = self.gain(context).reshape(-1, self.encoder.profile.action_size - 1, self.feedback_width)
         if self.base_navigation_feedback is not None:
@@ -135,7 +155,10 @@ class WholeBodyActor(nn.Module):
             # rate path; history, announced twist and hand-driven base authority
             # remain. Arm rows retain measured rates for reactive compensation.
             gain = gain.clone()
-            gain[:, :2, 24 : 24 + self.encoder.profile.arm_size + 6] = 0
+            measured_rates = slice(
+                self.feedback_fields["joint_velocity"].start, self.feedback_fields["base_velocity"].stop
+            )
+            gain[:, :2, measured_rates] = 0
         mean = torch.cat(
             [
                 torch.tanh(torch.einsum("bae,be->ba", gain, feedback) / math.sqrt(self.feedback_width)),

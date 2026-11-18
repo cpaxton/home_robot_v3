@@ -96,15 +96,23 @@ changes. The corrected candidate teacher rerun passes **70/70**, all admitted
 with confirmed stops: splines 24/24, ordinary hand 16/16, base 8/8, goal changes
 16/16, unloaded TAMP 6/6. All 170 current focused tests pass, including the local
 HTTP test rerun with loopback permission. These do not replace a fresh full
-training regression receipt. Next run the frozen full suite, then a bounded
-65,536-decision pilot with paired source/final evaluations; no promotion or
-hardware motion is implied.
+training regression receipt. The first frozen `e412cc47` full-suite attempt
+crashed natively while slicing MuJoCo contact objects for critic features; the
+gate stopped before PPO. That failed log is retained. The follow-up snapshots
+active contact arrays instead, documents finite-deadline termination and derives
+actor feedback offsets without changing its action law. A fresh full suite and
+teacher receipt are required before the bounded 65,536-decision pilot. No
+promotion or hardware motion is implied. The [architecture comparison protocol](WHOLE_BODY_ARCHITECTURE_REVIEW.md#required-comparison-before-actor-promotion)
+separates distribution repair from the still-unresolved gain-head question.
 
 Disk headroom recovered by compressing eleven old source archives: **3.39 GiB**
 saved, each verified by bit-exact decompression before removing its raw tar.
 Checkpoints, recordings, failed trials and archived source contents are retained.
 Restore paths and original hashes are in ignored
 `logs/recovery/trajectory-spread-v1/source-archive-compression.json`.
+An additional 28.17 GiB was reclaimed from an unused July InternVL download
+cache; its pinned revision is recorded for re-download. Robot assets and learned
+weights are preserved.
 
 ## One controller owner and development worktree
 

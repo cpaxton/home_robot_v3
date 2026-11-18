@@ -67,12 +67,30 @@ def privileged_state(env, elapsed=0.0, horizon=12.0):
     finger_load, wheel_load, support = np.zeros((2, 3)), np.zeros(4), 0.0
     table = m.body("table").id
     geom_bodies = np.asarray(m.geom_bodyid).copy()
-    for i, contact in enumerate(d.contact[: d.ncon]):
-        geoms = np.asarray(contact.geom).copy()
+    # The binding's contact-object slice/iterator has crashed in long mixed
+    # rollouts. Copy the active scalar arrays once, as ContactMonitor does;
+    # never construct individual C-backed contact objects for critic features.
+    contacts = d.contact
+    count = min(int(d.ncon), len(contacts))
+    geom1, geom2 = contacts.geom1[:count].copy(), contacts.geom2[:count].copy()
+    addresses, dimensions = contacts.efc_address[:count].copy(), contacts.dim[:count].copy()
+    excludes, friction = contacts.exclude[:count].copy(), contacts.friction[:count].copy()
+    forces = np.asarray(d.efc_force).copy()
+    for i in range(count):
+        geoms = np.array([geom1[i], geom2[i]])
         if np.any(geoms < 0) or np.any(geoms >= m.ngeom):
             raise ValueError("invalid active critic contact geometry")
         bodies = set(geom_bodies[geoms])
-        normal, linear_bound = solved_contact_force(m, d, i)
+        normal, linear_bound = solved_contact_force(
+            m,
+            d,
+            i,
+            efc_address=addresses[i],
+            dim=dimensions[i],
+            exclude=excludes[i],
+            efc_force=forces,
+            friction=friction[i],
+        )
         for index, body in enumerate(fingers):
             if body in bodies:
                 # N, N (tangential L1 bound), and contact count; no mixed N/Nm.

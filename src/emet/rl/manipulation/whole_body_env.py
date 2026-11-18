@@ -50,6 +50,11 @@ class GeneralTrackingEnv(gym.Wrapper):
         return self.observation(raw), {**info, "reward_contract": self.meter.record()}
 
     def step(self, action):
+        """Finite task deadlines terminate; native timeout flags remain in info.
+
+        ``truncated=False`` is intentional: this task's stopped deadline is a
+        terminal outcome, not Gym TimeLimit censoring of a continuing task.
+        """
         from emet.rl.manipulation.mastery_objective import mastery_metrics, tracking_contract_passes
 
         e = self.env.unwrapped
