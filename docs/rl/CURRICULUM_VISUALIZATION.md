@@ -12,6 +12,13 @@ with a visible reset instead of leaving their tiles frozen. Replays are not new
 trials or continuous trajectories. Failed trials still freeze at their terminal
 recorded state.
 
+Recordings are sampled at 20 Hz. Baseline videos were encoded at 8 fps; the
+larger-motion candidate now uses 20 fps, without speeding up physical time.
+Tiles report finite-interval measured joint speed (deg/s) and hand speed (cm/s).
+Tiny floating-point timestamp errors are tolerated when choosing a recorded
+frame, without interpolating robot states. The initial sample has no prior
+interval and therefore no speed readout.
+
 Each tile has a distinct case/seed identity, split, actual robot, target/measured
 hand axes, base goal direction and hand tracking error. Failed teacher cases
 and admission failures remain visible. Recordings that end earlier hold their
@@ -97,7 +104,7 @@ export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
 taskset -c 15 .venv/bin/python -m emet.visualization.curriculum_record \
   --output logs/eval/curriculum-videos-v1 --family arm_splines_l0
 taskset -c 15 .venv/bin/python -m emet.visualization.curriculum_video \
-  --output logs/eval/curriculum-videos-v1 --family arm_splines_l0 --fps 8
+  --output logs/eval/curriculum-videos-v1 --family arm_splines_l0 --fps 20
 
 # Export all declared spline targets, then publish completed media.
 taskset -c 15 .venv/bin/python -m emet.visualization.curriculum_coverage \
@@ -126,6 +133,26 @@ moving reference increases from 66.5% to **86.2%**. This is a different
 distribution, not a timing-only comparison or a new actor result. Conservative
 derivative bounds can still make larger paths slow; the speed, acceleration
 and jerk caps have not been raised.
+
+Measured candidate median peak speeds are **0.229 rad/s (13.1 deg/s)** for the
+fastest joint and **3.92 cm/s** for the hand. Level zero deliberately uses 40%
+of the configured 0.6 rad/s arm profile, or 0.24 rad/s. Its reference reaches
+96% of that selected cap; the slowness is substantially real, not only 8 fps
+presentation or an overly conservative jerk estimate. This profile is not a
+new measurement of Herman's hardware capabilities.
+
+Audit physical speed coverage separately from video timing:
+
+```bash
+PYTHONPATH=src .venv/bin/python scripts/audit_wbc_motion_speeds.py \
+  --recordings logs/eval/curriculum-videos-v1 \
+  --output logs/eval/motion-speed-audit-v1
+```
+
+The report includes per-joint pose ranges and speed extrema, plus time-weighted
+speed-bin exposure relative to configured profile caps. Quiet time stays visible;
+base-only passive arm motion is labelled. Neither sparse sample counts nor
+replayed video loops count as extra physical exposure.
 
 [Generated videos, measured coverage and validation results](../experiments/mars_curriculum_visualization_20261117.md).
 

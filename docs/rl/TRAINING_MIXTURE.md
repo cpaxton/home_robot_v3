@@ -1,6 +1,6 @@
 # Whole-body training mixture
 
-Updated 2026-11-17. This is the maintained use-case ledger for current Mars WBC
+Updated 2026-11-18. This is the maintained use-case ledger for current Mars WBC
 training. [ACTIVE_WORK](ACTIVE_WORK.md) owns job/branch status; experiment reports
 own results. Update this page whenever sampling weights, case pools, reset
 conditions or training stages change. Planned allocations are not running ones.
@@ -203,3 +203,30 @@ The new general settling ceiling is six seconds after the reference, including
 the two-second quiet hold, with immediate completion once that hold passes.
 There is no learned v2 result yet. Require a fresh full regression receipt before
 the bounded pilot and compare fixed source/final checkpoints on identical cases.
+
+## Next coverage extension: joint-space whole-body references
+
+The current arm splines already interpolate joint coordinates, then use FK to
+produce the hand-pose trajectory the actor tracks. They keep a stationary base
+target and sample four posture neighborhoods; they do not cover the full legal
+Mars configuration or speed distribution. Sampling joint coordinates improves
+reachability of the geometric targets, but does not certify dynamics, contact,
+support or trackability.
+
+For the next candidate, split the existing 20% spline allocation between
+stationary-base arm paths and coordinated whole-body paths. Preserve the other
+families and 50% TAMP share. Sample smooth arm joint motion together with
+left/right wheel travel or forward/yaw rates, then integrate differential-drive
+kinematics at the wheel axle. Arbitrary independent base X/Y splines would
+introduce lateral motion Mars cannot execute. Convert the resulting full robot
+path to masked base SE(2) and hand SE(3) targets through FK; private joint/wheel
+witnesses remain generator/admission data, not a changed actor interface.
+
+Expand admitted posture neighborhoods and sample speed bands independently of
+pose amplitude, with explicit conservative/medium/fast profile fractions and
+bounded acceleration/jerk. Maintain both joint-position/speed-bin exposure and
+task-space voxel/orientation coverage: uniform joint sampling is not uniform
+hand-workspace coverage. Keep every rejection, train/audit split and safety
+failure. Teacher/dynamic validation precedes adding this candidate to PPO.
+This is the next distribution extension; the running frozen v2 pilot retains
+the previously documented mixture and selected speed limits.

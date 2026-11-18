@@ -14,7 +14,7 @@ from emet.visualization.curriculum_record import record, sha
 from emet.visualization.curriculum_video import render
 
 
-def run(output, families, *, fps=8, resume=False, loop_shorter=False):
+def run(output, families, *, fps=20, resume=False, loop_shorter=False):
     output = Path(output)
     output.mkdir(parents=True, exist_ok=True)
     state = {
@@ -78,7 +78,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--family", action="append", choices=FAMILIES)
-    parser.add_argument("--fps", type=int, default=8)
+    parser.add_argument("--fps", type=int, default=20)
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--loop-shorter", action="store_true")
     args = parser.parse_args()

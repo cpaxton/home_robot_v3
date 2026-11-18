@@ -83,7 +83,9 @@ def axes(scene, position, rotation, color):
 
 
 def frame_index(times, now):
-    return max(0, min(len(times) - 1, int(np.searchsorted(times, now, side="right") - 1)))
+    # Physics timestamps accumulate floating-point roundoff. At native 20 Hz,
+    # an exact display tick must not turn into a repeated/then-skipped state.
+    return max(0, min(len(times) - 1, int(np.searchsorted(times, now + 1e-9, side="right") - 1)))
 
 
 def tracking_readout(values, index, family):
@@ -95,6 +97,18 @@ def tracking_readout(values, index, family):
     position = float(np.linalg.norm(hand[:3] - goal[:3])) * 1000
     angle = float(Rotation.from_matrix(pose_rotation(hand) @ pose_rotation(goal).T).magnitude())
     return "EE", position, float(np.rad2deg(angle))
+
+
+def motion_readout(values, index):
+    """Measured finite-interval speeds, in deg/s and cm/s, without interpolation."""
+    if index == 0:
+        return None
+    dt = float(values["time_s"][index] - values["time_s"][index - 1])
+    if not np.isfinite(dt) or dt <= 0:
+        raise ValueError("positive recorded interval required for measured speed")
+    joints = (values["joints"][index] - values["joints"][index - 1]) / dt
+    hand = (values["hand"][index, :3] - values["hand"][index - 1, :3]) / dt
+    return float(np.rad2deg(np.max(abs(joints)))), float(100 * np.linalg.norm(hand))
 
 
 def render_cell(directory, row, index, path, *, fps, frame_count, loop_shorter=False):
@@ -181,6 +195,10 @@ def render_cell(directory, row, index, path, *, fps, frame_count, loop_shorter=F
                     cached = renderer.render().copy()
                     previous = selected
                 canvas[24:264] = cached
+                speeds = motion_readout(values, selected)
+                if speeds is not None:
+                    cv2.rectangle(canvas, (0, 24), (CELL_W, 43), BG, -1)
+                    label(canvas, f"Measured joint max {speeds[0]:.1f} deg/s | hand {speeds[1]:.1f} cm/s", 8, 38, 0.33)
                 ended = not looping and now > values["time_s"][-1] + 1 / fps
                 kind, position, angle = tracking_readout(values, selected, directory.name)
                 detail = f"{local_time:04.1f}s {kind} {position:.1f}mm / {angle:.1f}deg"
@@ -208,7 +226,10 @@ def render_cell(directory, row, index, path, *, fps, frame_count, loop_shorter=F
             renderer.close()
 
 
-def render(output, family, *, fps=8, loop_shorter=False):
+def render(output, family, *, fps=20, loop_shorter=False):
+    # imwrite may otherwise start a full OpenCV worker pool after rendering,
+    # exhausting a bounded service's task limit before ffmpeg can be spawned.
+    cv2.setNumThreads(1)
     if family not in FAMILIES or type(fps) is not int or not 1 <= fps <= 20:
         raise ValueError("known family and fps in 1..20 required")
     output = Path(output)
@@ -238,7 +259,7 @@ def render(output, family, *, fps=8, loop_shorter=False):
         label(head, "MARS | " + TITLES[family], 15, 26, 0.65)
         label(
             head,
-            "ACTUAL ANALYTIC-TEACHER EXECUTIONS | 1x simulation time | 16 distinct case/seed identities | no hardware motion",
+            f"ACTUAL ANALYTIC-TEACHER EXECUTIONS | {fps} fps | 1x simulation time | 16 distinct case/seed identities | no hardware motion",
             15,
             49,
             0.43,
@@ -372,7 +393,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--family", choices=FAMILIES, required=True)
-    parser.add_argument("--fps", type=int, default=8)
+    parser.add_argument("--fps", type=int, default=20)
     parser.add_argument(
         "--loop-shorter",
         action="store_true",

@@ -31,6 +31,7 @@ def test_grids_have_distinct_case_seed_identities_and_explicit_scope(family):
 def test_frame_selection_never_interpolates_unrecorded_physics():
     times = np.array([0, 0.05, 0.1])
     assert [frame_index(times, t) for t in [-1, 0, 0.049, 0.05, 0.099, 0.1, 2]] == [0, 0, 0, 1, 1, 2, 2]
+    assert frame_index(np.array([0, 0.05 + 1e-14, 0.1 + 1e-14]), 0.05) == 1
 
 
 def test_coverage_reports_occupancy_without_workspace_percentage():
@@ -131,6 +132,23 @@ def test_base_video_reports_base_error_and_wraps_heading():
     pose = np.array([[0.1, 0.2, 0.3, 1, 0, 0, 1, 0, 0]])
     kind, position, angle = tracking_readout({"hand": pose, "hand_target": pose}, 0, "hand")
     assert kind == "EE" and position == 0 and angle == 0
+
+
+def test_measured_speed_readout_uses_recorded_time_not_display_frame_rate():
+    from emet.visualization.curriculum_video import motion_readout
+
+    values = {
+        "time_s": np.array([0.0, 0.05]),
+        "joints": np.array([[0, 0], [0.01, -0.02]]),
+        "hand": np.array([[0, 0, 0], [0.01, 0, 0]]),
+    }
+    assert motion_readout(values, 0) is None
+    joint_speed, hand_speed = motion_readout(values, 1)
+    assert joint_speed == pytest.approx(np.rad2deg(0.4))
+    assert hand_speed == pytest.approx(20.0)
+    values["time_s"][1] = 0
+    with pytest.raises(ValueError, match="positive"):
+        motion_readout(values, 1)
 
 
 def test_base_only_hand_sweeps_do_not_inflate_hand_target_coverage():

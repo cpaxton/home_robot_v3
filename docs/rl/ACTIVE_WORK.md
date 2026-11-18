@@ -115,7 +115,15 @@ snapshot, then a fresh teacher preflight, source evaluation, 65,536-decision PPO
 pilot and paired evaluations. Stage failures prevent PPO. State/logs are under
 `logs/recovery/motion-density-v2/pipeline-current.json`. This snapshot precedes
 the later main tool-binding merge; its eventual receipt must not be described
-as full validation of that newer combined tip. No PPO result is claimed yet.
+as full validation of that newer combined tip. The frozen full gate has now
+passed **1,833 tests**, and its fresh teacher preflight passes **70/70** again.
+The first PPO launch exhausted the service's 64 thread slots in W&B before any
+update. It is preserved. Service `emet-motion-density-training` restarts the
+same fixed budget in `logs/manipulation/motion-density-v2-restart`, with one
+compute core, one Go worker and 128 thread slots. Restart state is
+`logs/recovery/motion-density-v2/restart.json`; no completed PPO result is
+claimed. Broader joint-space whole-body/speed coverage is documented as the
+next candidate, not silently added to this frozen run.
 
 Disk headroom recovered by compressing eleven old source archives: **3.39 GiB**
 saved, each verified by bit-exact decompression before removing its raw tar.
