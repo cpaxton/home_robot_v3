@@ -3,6 +3,7 @@
 import mujoco
 import numpy as np
 
+from emet.rl.manipulation.observation_layout import GRIP_PHASES, PHASE_NAMES
 from emet.rl.manipulation.profiles import require_finite
 
 
@@ -276,7 +277,7 @@ class ManipulationControl:
         reference = require_finite(reference, (self.profile.arm_size,))
         if np.any(reference < self.limits[:, 0]) or np.any(reference > self.limits[:, 1]):
             raise ValueError("trajectory outside joint limits")
-        if phase not in {"reach", "pregrasp", "close", "carry", "place", "release", "disturbance"}:
+        if phase not in PHASE_NAMES:
             raise ValueError("unknown manipulation phase")
         if phase == "release" and not release:
             raise ValueError("release requires executor authorization")
@@ -425,7 +426,7 @@ class ManipulationControl:
         grip_span = float(np.ptp(self.grip_limits))
         correction = action[-1] * p.grip_fraction * grip_span
         # Corrections are only permitted during closed-grip phases.
-        if self.phase not in {"carry", "place", "disturbance"}:
+        if self.phase not in GRIP_PHASES:
             correction = 0
         goal = self.grip_reference + correction
         if self.release_authorized:
@@ -687,7 +688,7 @@ class ManipulationControl:
 
         # No object pose, solver contact, or wheel-force ground truth in actor input.
         phase = np.zeros(7)
-        phase[("reach", "pregrasp", "close", "carry", "place", "release", "disturbance").index(self.phase)] = 1
+        phase[PHASE_NAMES.index(self.phase)] = 1
         target_tokens, target_mask = PoseTargets(
             self.base_goal,
             self.base_mask,

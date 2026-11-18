@@ -6,9 +6,27 @@ import torch
 from torch import nn
 
 from emet.rl.manipulation.base_navigation_feedback import BaseNavigationFeedback, navigation_feedback_gain
-from emet.rl.manipulation.observation_layout import history_layout, preview_layout
+from emet.rl.manipulation.observation_layout import (
+    BASE_ERROR_SCALE,
+    CURRENT_PREVIEW_ROW,
+    FUTURE_PREVIEW_ROW,
+    GRIP_PHASE_INDICES,
+    MOTION_BASE_FORWARD,
+    MOTION_BASE_YAW,
+    MOTION_HAND_ANGULAR,
+    MOTION_HAND_LINEAR,
+    PREVIEW_ROWS,
+    history_layout,
+    preview_layout,
+)
 from emet.rl.manipulation.profiles import PROFILES
 from emet.rl.manipulation.whole_body_observation import PRIVILEGED_WIDTH
+
+# Hand pose/error encode position (3) then two rotation-matrix columns (6), so
+# orientation starts at column 3 and a masked hand compares against the
+# identity rotation's first two columns.
+HAND_ORIENTATION_OFFSET = 3
+IDENTITY_ROTATION_COLUMNS = (1.0, 0.0, 0.0, 1.0, 0.0, 0.0)
 
 
 class SensorEncoder(nn.Module):
@@ -63,21 +81,21 @@ class SensorEncoder(nn.Module):
         velocity = velocity / velocity.new_tensor(
             [max(self.profile.base_speed, 0.1)] * 3 + [max(self.profile.base_yaw_speed, 0.5)] * 3
         )
-        hand_columns = h[..., self.fields["hand_pose"]][..., 3:].reshape(*h.shape[:-1], 3, 2)
+        hand_columns = h[..., self.fields["hand_pose"]][..., HAND_ORIENTATION_OFFSET:].reshape(*h.shape[:-1], 3, 2)
         third = torch.linalg.cross(hand_columns[..., 0], hand_columns[..., 1], dim=-1)
         rotation = torch.cat([hand_columns, third[..., None]], dim=-1)
         gravity = -rotation[..., 2, :]
         history = torch.cat([selected, velocity, gravity], dim=-1).clamp(-20, 20)
         preview = obs["preview"].clone()
-        preview[..., self.preview_fields["base_error"]] /= preview.new_tensor([0.1, 0.1, 0.5])
-        preview[..., self.preview_fields["hand_error"]][..., :3] /= 0.02
+        preview[..., self.preview_fields["base_error"]] /= preview.new_tensor(BASE_ERROR_SCALE)
+        preview[..., self.preview_fields["hand_error"]][..., :HAND_ORIENTATION_OFFSET] /= 0.02
         # All temporal samples are real observations; no hidden state survives a call.
         motion = obs["motion"].clone()
         motion[..., :2] = torch.stack(
             [co[:, -1] * motion[:, 0] + si[:, -1] * motion[:, 1], -si[:, -1] * motion[:, 0] + co[:, -1] * motion[:, 1]],
             dim=-1,
         )
-        for start in (3, 6):
+        for start in (MOTION_HAND_LINEAR, MOTION_HAND_ANGULAR):
             motion[:, start : start + 3] = torch.einsum(
                 "bij,bj->bi", rotation[:, -1].transpose(1, 2), motion[:, start : start + 3].clone()
             )
@@ -99,7 +117,13 @@ class WholeBodyActor(nn.Module):
         if base_navigation_feedback is not None and not p.wheel_bodies:
             raise ValueError("base navigation feedback requires a wheeled profile")
         self.gru = nn.GRU(self.encoder.token_width, hidden, batch_first=True)
-        self.context = nn.Sequential(nn.Linear(hidden + 126 + 9, 128), nn.ELU(), nn.Linear(128, 128), nn.ELU())
+        # The context concatenates the GRU state with the flattened preview and
+        # the reference twist; derive both widths from the encoder's layout.
+        self.preview_flat = PREVIEW_ROWS * self.encoder.preview_width
+        self.motion_width = len(self.encoder.motion_scale)
+        self.context = nn.Sequential(
+            nn.Linear(hidden + self.preview_flat + self.motion_width, 128), nn.ELU(), nn.Linear(128, 128), nn.ELU()
+        )
         pf = self.encoder.preview_fields
         error_width = sum(pf[name].stop - pf[name].start for name in ("base_error", "hand_error"))
         base_velocity = self.encoder.encoded_fields["base_velocity"]
@@ -126,7 +150,7 @@ class WholeBodyActor(nn.Module):
         hand = h[:, f["hand_mask"]] > 0.5
         base = (h[:, f["base_mask"]] > 0.5).any(dim=-1, keepdim=True) | hand
         retain = h[:, f["retain_object_command"]] > 0.5
-        phase = h[:, f["phase"]][:, [3, 4, 6]].any(dim=-1, keepdim=True)
+        phase = h[:, f["phase"]][:, GRIP_PHASE_INDICES].any(dim=-1, keepdim=True)
         blocks = [base.expand(-1, 2)] if self.encoder.profile.wheel_bodies else []
         return torch.cat([*blocks, hand.expand(-1, self.encoder.profile.arm_size), retain & phase], dim=-1).float()
 
@@ -136,10 +160,10 @@ class WholeBodyActor(nn.Module):
         context = self.context(torch.cat([context, preview.flatten(1), motion], dim=-1))
         f, pf = self.encoder.fields, self.encoder.preview_fields
         errors = []
-        for index in (1, 4):
+        for index in (CURRENT_PREVIEW_ROW, FUTURE_PREVIEW_ROW):
             row = preview[:, index]
             hand = row[:, pf["hand_error"]].clone()
-            hand[:, 3:] -= hand.new_tensor([1, 0, 0, 1, 0, 0]) * row[:, pf["hand_mask"]]
+            hand[:, HAND_ORIENTATION_OFFSET:] -= hand.new_tensor(IDENTITY_ROTATION_COLUMNS) * row[:, pf["hand_mask"]]
             errors += [row[:, pf["base_error"]], hand]
         velocities = obs["history"][:, -1, f["proprio/velocities"]] / history.new_tensor(self.encoder.profile.speed)
         base_velocity = history[:, -1, self.encoder.encoded_fields["base_velocity"]]
@@ -171,7 +195,7 @@ class WholeBodyActor(nn.Module):
             # base-only: coupled hand control retains its original learned map.
             # There is no teacher action or temporal output filter here; native
             # wheel speed/slew/stop guards still own actuator commands.
-            base = (mean[:, :2] + motion[:, [0, 2]]).clamp(-1, 1)
+            base = (mean[:, :2] + motion[:, [MOTION_BASE_FORWARD, MOTION_BASE_YAW]]).clamp(-1, 1)
             mean = torch.cat([torch.where(eligible[:, None], base, mean[:, :2]), mean[:, 2:]], dim=-1)
         return mean * self.action_mask(obs)
 
@@ -200,7 +224,12 @@ class MultiCriticPolicy(nn.Module):
         )
         self.critic_encoder = SensorEncoder(robot)
         self.privileged = bool(privileged)
-        width = self.critic_encoder.token_width + 126 + 9 + PRIVILEGED_WIDTH
+        width = (
+            self.critic_encoder.token_width
+            + PREVIEW_ROWS * self.critic_encoder.preview_width
+            + len(self.critic_encoder.motion_scale)
+            + PRIVILEGED_WIDTH
+        )
         self.critics = nn.ModuleList(
             [
                 nn.Sequential(nn.Linear(width, 128), nn.ELU(), nn.Linear(128, 128), nn.ELU(), nn.Linear(128, 1))

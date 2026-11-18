@@ -11,6 +11,15 @@ from numbers import Real
 
 import torch
 
+from emet.rl.manipulation.observation_layout import (
+    BASE_ERROR_SCALE,
+    CURRENT_PREVIEW_ROW,
+    FUTURE_PREVIEW_ROW,
+    MOTION_BASE_FORWARD,
+    MOTION_BASE_YAW,
+    MOTION_HAND_LINEAR,
+)
+
 
 @dataclass(frozen=True)
 class BaseNavigationFeedback:
@@ -94,10 +103,16 @@ def navigation_feedback_gain(gain, preview, motion, eligible, fields, config):
     in the actor; learned gains supply pose correction, not velocity rescaling.
     No output smoothing, task labels, joint witness or teacher is involved.
     """
-    task_width, motion_start = 3 + 9, gain.shape[-1] - 9
     error = fields["base_error"]
-    x = preview[:, 4, error][:, 0]
-    direction = torch.where(motion[:, 0].abs() > 1e-5, motion[:, 0], x).sign()
+    hand_error = fields["hand_error"]
+    # Each feedback row is [base_error, hand_error]; the base feedforward sits
+    # at the start of the trailing reference-motion block.
+    error_width = (error.stop - error.start) + (hand_error.stop - hand_error.start)
+    motion_start = gain.shape[-1] - motion.shape[-1]
+    x = preview[:, FUTURE_PREVIEW_ROW, error][:, 0]
+    direction = torch.where(
+        motion[:, MOTION_BASE_FORWARD].abs() > 1e-5, motion[:, MOTION_BASE_FORWARD], x
+    ).sign()
     direction = torch.where(direction == 0, 1.0, direction)
     proposed = torch.zeros_like(gain[:, :2])
 
@@ -108,13 +123,17 @@ def navigation_feedback_gain(gain, preview, motion, eligible, fields, config):
 
     if not config.reference_tracking:
         proposed[:, 0, motion_start] = magnitude(gain[:, 0, motion_start])
-        proposed[:, 1, motion_start + 2] = magnitude(gain[:, 1, motion_start + 2])
+        proposed[:, 1, motion_start + MOTION_BASE_YAW] = magnitude(gain[:, 1, motion_start + MOTION_BASE_YAW])
     constant = (preview[:, 1:, error] == preview[:, 1:2, error]).all(dim=(1, 2))
-    stationary = (motion[:, :3] == 0).all(-1) & constant
-    for row, offset in ((1, 0), (4, task_width)):
+    stationary = (motion[:, :MOTION_HAND_LINEAR] == 0).all(-1) & constant
+    for row, offset in ((CURRENT_PREVIEW_ROW, 0), (FUTURE_PREVIEW_ROW, error_width)):
         value = preview[:, row, error]
-        xy = (1 - 0.5 * config.xy_region_m / 0.1 / value[:, :2].norm(dim=-1).clamp_min(1e-8)).clamp_min(0)
-        yaw = (1 - 0.5 * config.yaw_region_rad / 0.5 / value[:, 2].abs().clamp_min(1e-8)).clamp_min(0)
+        xy = (
+            1 - 0.5 * config.xy_region_m / BASE_ERROR_SCALE[0] / value[:, :2].norm(dim=-1).clamp_min(1e-8)
+        ).clamp_min(0)
+        yaw = (
+            1 - 0.5 * config.yaw_region_rad / BASE_ERROR_SCALE[2] / value[:, 2].abs().clamp_min(1e-8)
+        ).clamp_min(0)
         xy_factor = xy if config.reference_tracking else torch.where(stationary, xy, 1.0)
         yaw_factor = torch.where(stationary, yaw, 1.0)
         proposed[:, 0, offset] = magnitude(gain[:, 0, offset]) * xy_factor

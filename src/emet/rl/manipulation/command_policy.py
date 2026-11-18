@@ -10,7 +10,7 @@ from stable_baselines3.common.distributions import DiagGaussianDistribution
 
 from emet.rl.manipulation.feedback_policy import FeedbackActorCriticPolicy, GoalFeedbackFeatures
 from emet.rl.manipulation.normalization import CommandVecNormalize
-from emet.rl.manipulation.observation_layout import history_layout
+from emet.rl.manipulation.observation_layout import GRIP_PHASE_INDICES, history_layout
 from emet.rl.manipulation.profiles import PROFILES
 
 
@@ -85,7 +85,7 @@ class ExecutorFeedbackPolicy(FeedbackActorCriticPolicy):
         hand = history[:, fields["hand_mask"]] > 0.5
         base = (history[:, fields["base_mask"]] > 0.5).any(dim=1, keepdim=True) | hand
         phase = history[:, fields["phase"]]
-        closed = (phase[:, [3, 4, 6]] > 0.5).any(dim=1, keepdim=True)
+        closed = (phase[:, GRIP_PHASE_INDICES] > 0.5).any(dim=1, keepdim=True)
         retain = history[:, fields["retain_object_command"]] > 0.5
         profile = PROFILES[self.features_extractor.robot]
         blocks = ([base.expand(-1, 2)] if profile.wheel_bodies else []) + [
