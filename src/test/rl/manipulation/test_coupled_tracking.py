@@ -285,3 +285,41 @@ def test_partial_base_goals_retain_coupled_authority_to_close_hand_error(robot):
         assert result["final_metrics"]["ee_orientation_error"] < 0.02
     finally:
         env.close()
+
+
+@pytest.mark.sim
+def test_measured_state_retarget_rebuilds_reference_from_current_pose():
+    case = {
+        "id": "innate_mars:retarget:test:0",
+        "seed": 35600999,
+        "split": "audit",
+        "mode": "hand_free_base",
+        "travel_m": 0.03,
+        "turn_rad": 0.0,
+        "arm_delta": [0.0, 0.0, 0.0, 0.0, 0.0],
+        "base_mask": [False, False, False],
+        "retarget": {"at_fraction": 0.5, "travel_m": -0.02},
+    }
+    env = CoupledTrackingEnv("innate_mars", [case])
+    try:
+        env.reset()
+        e, c = env.unwrapped, env.unwrapped.control
+        original = c.task_trajectory
+        assert env.retarget_at is not None and not env.retargeted
+        for _ in range(500):
+            pre_base = c.base_pose().copy()
+            _, _, done, truncated, info = env.step(np.zeros(e.profile.action_size))
+            assert not done and not truncated
+            if info["retarget_delivered"]:
+                replacement = c.task_trajectory
+                assert replacement is not original
+                # A measured-state rebuild starts at the pre-step measured pose,
+                # not the original reference's planned endpoint.
+                np.testing.assert_allclose(replacement.start_base, pre_base, rtol=1e-12, atol=1e-12)
+                assert replacement.travel == -0.02
+                assert info["coupled_admission"]["accepted"]
+                break
+        else:
+            pytest.fail("measured-state retarget was not delivered")
+    finally:
+        env.close()
