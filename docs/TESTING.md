@@ -180,6 +180,7 @@ Environment: **`RUN_SIM_TESTS=0`** skips sim integration tests. Heavy VLLM downl
 | **Multi-robot sim plumbing** | [plans/MULTI_ROBOT_TESTING.md](plans/MULTI_ROBOT_TESTING.md) | Registry, MJCF load, GenericZmqClient (partially superseded by unit tests) |
 | **CLI / install smoke** | [cli.md](cli.md#testing), [simulation.md](simulation.md#2-test-the-setup) | `emet test`, serve smoke |
 | **SQA3D + ScanNet EQA** | [sqa3d.md](sqa3d.md) | Situated QA loaders, EM@1 eval, Open3D mesh replay |
+| **Agent architecture / tool contracts** | [agent_architecture.md](agent_architecture.md), [agent_tool_contracts.md](agent_tool_contracts.md) | Source map, all tool effects, capability gates and focused checks |
 | **Agent / LLM** | [AGENT_RUN.md](AGENT_RUN.md#testing), [llm_agent.md](llm_agent.md#testing-the-llm-agent) | Agent loop, component tests |
 | **Refactor logs (not test specs)** | [logs/README.md](logs/README.md) | Historical change notes |
 

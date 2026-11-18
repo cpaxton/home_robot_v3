@@ -1,5 +1,7 @@
 # Running the embodied agent (`emet run agent`)
 
+Source ownership and execution diagrams: [Agent architecture](agent_architecture.md).
+
 Start with the [agent tool index](agent_tools.md) and [tool contracts](agent_tool_contracts.md) for the complete CHAT and EQA
 tool lists, or the [TAMP overview](tamp.md) for multi-step manipulation.
 Structured TAMP tools, placement, assisted articulation, input contracts, and the

@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 from emet.agent.skills.modes import AgentMode
-from emet.agent.tools import Tool
+from emet.agent.tool import Tool
 
 
 def build_skill_pack(
@@ -18,11 +18,16 @@ def build_skill_pack(
     *,
     eqa_submode: str | None = None,
 ) -> list[Tool]:
-    """Build the tool list for *mode*.
+    """Bind the registry for *mode*, before orchestrator-level advertisement gates.
 
     * ``CHAT`` — *backend* is the chat ``context`` dict
       (``executor``, ``robot``, ``discord_bot``, …).
-    * ``EQA_EPISODE`` — *backend* is an :class:`~emet.memory.graph_eqa.agentic_eqa.AgenticEQAExecutor`.
+    * ``EQA_EPISODE`` — *backend* is an :class:`~emet.memory.graph_eqa.AgenticEQAExecutor`.
+      The binder selects answer/explore termination and supported floor/base tools.
+
+    CHAT's session later removes provider-gated tools; EQA's public builder
+    removes compatibility aliases for model-final routing. Use those session
+    paths when inspecting what the model actually receives.
     """
     if mode is AgentMode.CHAT:
         from emet.agent.tools import build_chat_tools

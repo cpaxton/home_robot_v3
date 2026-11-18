@@ -1,5 +1,7 @@
 # Agent tools overview
 
+Source ownership and execution diagrams: [Agent architecture](agent_architecture.md).
+
 This index lists the tools in the shared skill registry. **CHAT** is the
 interactive terminal/Discord agent (`run agent`); **EQA_EPISODE** is the separate
 embodied question-answering/exploration loop. Their tool packs are distinct.

@@ -356,6 +356,7 @@ Use this outline when updating docs or finding the right page. Prefer editing th
 | [attempt_ledger.md](docs/attempt_ledger.md) | Opt-in action-outcome ledger (nav/verify/manip attempts in graph memory) |
 | [eqa.md](docs/eqa.md) | Embodied QA overview (older Stretch path + pointers) |
 | [AGENT_RUN.md](docs/AGENT_RUN.md) | Discord/CHAT vs Habitat `EQA_EPISODE`; skill packs |
+| [Agent architecture](docs/agent_architecture.md) | Source ownership, execution diagrams, mode/capability gates, and extension workflow |
 | [Agent tools](docs/agent_tools.md) | Complete CHAT and EQA tool index, requirements, and reference links |
 | [Tool contracts](docs/agent_tool_contracts.md) | Inputs, effects, evidence guarantees, adapter capabilities, and failure/recovery semantics |
 | [TAMP overview](docs/tamp.md) | Task discovery, motion planning, execution, verification, and current limits |

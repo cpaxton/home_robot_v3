@@ -16,35 +16,94 @@ and chooses its next call. Terminal and Discord share this CHAT loop.
 Habitat episode runner rather than evaluating the CHAT policy. Shared perception,
 memory and skill interfaces do not make these controllers interchangeable.
 
-\begin{table}[ht]
+\paragraph{Source ownership and advertised tools.}
+\texttt{app/run\_agent.py} owns CLI mode selection;
+\texttt{agent/loop.py} owns the CHAT session and ordered dispatch.
+\texttt{agent/tool.py} provides the lightweight tool value object and schema/prompt
+rendering. \texttt{agent/skills/specs.py} owns both modes' canonical metadata;
+CHAT binds it to closures in \texttt{agent/tools.py}, while EQA binds it to its
+executor. Metadata is not repeated in CHAT handler declarations.
+Figure~\ref{fig:agent_tool_architecture} shows these boundaries. The repository
+\path{docs/agent_architecture.md} maps descendants to their owners, and
+\path{docs/agent_tool_contracts.md} records each tool's inputs, effects and limits.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+  box/.style={draw, rounded corners, align=center, font=\scriptsize,
+    text width=3.3cm, minimum height=0.9cm},
+  flow/.style={-{Stealth}, thick},
+  binding/.style={flow, dashed}]
+  \node[box, text width=7cm] (cli) at (0,0)
+    {\texttt{emet run agent}\\CLI modes and launch lifecycle};
+  \node[box] (offline) at (-4,-1.65)
+    {\texttt{--offline}\\Text chat; no robot tools};
+  \node[box] (chat) at (0,-1.65)
+    {CHAT\\Terminal / Discord + ordered dispatch};
+  \node[box] (eqa) at (4,-1.65)
+    {\texttt{--eqa-eval}\\Shared scored Habitat episode};
+  \node[box, text width=5cm] (specs) at (2,-3.25)
+    {Shared specs + mode/capability binding\\Names, schemas, descriptions; session gates};
+  \node[box, text width=7cm] (backend) at (2,-4.85)
+    {Controller / memory / perception / TAMP\\Measured outcomes, capture identity, admitted geometry};
+  \draw[flow] (cli) -- (offline);
+  \draw[flow] (cli) -- (chat);
+  \draw[flow] (cli) -- (eqa);
+  \draw[binding] (specs.north west) -- (chat.south);
+  \draw[binding] (specs.north east) -- node[right,font=\tiny] {agentic path} (eqa.south);
+  \draw[flow] (chat.south west) -- ++(0,-2.65) |- (backend.west);
+  \draw[flow] (eqa.east) -- ++(0.45,0) |- (backend.east);
+\end{tikzpicture}
+\caption{Agent composition. Solid arrows show execution/delegation; dashed arrows
+show schema binding. Scored Habitat can select classic or agentic EQA; only the
+agentic path binds EQA tools. \texttt{--eqa} alone enables CHAT caption/memory
+support and does not switch orchestrators. Backend receipts do not equate
+historical evidence, visual presence, admitted geometry and action permission.}
+\label{fig:agent_tool_architecture}
+\end{figure}
+
+\begin{table}[htbp]
 \centering
 \small
 \begin{tabular}{@{}p{.20\linewidth}p{.75\linewidth}@{}}
 \toprule
-CHAT capability & Representative tools and admission \\
+CHAT capability & Complete registry inventory (34 names) \\
 \midrule
-Observation and memory & \texttt{describe\_scene}, \texttt{send\_image},
-\texttt{query\_memory}, \texttt{query\_scene\_graph},
-\texttt{list\_scene\_relations}; historical retrieval is not fresh execution evidence. \\
-Navigation and views & \texttt{explore}, \texttt{find\_objects},
+Observation / memory (10) & \texttt{describe\_scene}, \texttt{ground\_object},
+\texttt{send\_image}, \texttt{take\_picture}, \texttt{query\_memory},
+\texttt{query\_scene\_graph}, \texttt{list\_scene\_relations},
+\texttt{send\_object\_image}, \texttt{aim\_arm\_at}, \texttt{take\_ee\_picture}. \\
+Navigation / mapping (10) & \texttt{explore}, \texttt{find\_objects},
 \texttt{scan\_environment}, \texttt{go\_home}, \texttt{rotate\_base},
-\texttt{face\_toward}, \texttt{move\_forward}, \texttt{observe\_floor};
-robot capabilities, measured arrival and map coverage constrain actions. \\
-Primitive TAMP & \texttt{scene\_tasks}, \texttt{plan\_pick\_place},
-\texttt{execute\_pick\_place\_plan}, \texttt{pick\_place};
-input provenance and execution mode are checked independently. \\
-Multi-step TAMP & \texttt{plan\_task}, \texttt{execute\_task\_plan};
-exposed only with a bound provider, currently a privileged Stretch table-transfer
-provider with opt-in checked unloaded base approaches for native diagnostics. \\
-Articulation & \texttt{set\_receptacle\_state}; simulator-assisted joint setting,
-rejected by native physical execution. \\
+\texttt{face\_toward}, \texttt{move\_forward}, \texttt{observe\_floor},
+\texttt{navigation\_diagnostics}, \texttt{send\_map\_snapshot}. \\
+Tasks / manipulation (8) & \texttt{scene\_tasks}, \texttt{plan\_pick\_place},
+\texttt{execute\_pick\_place\_plan}, \texttt{pick\_place},
+\texttt{set\_receptacle\_state}, \texttt{plan\_task},
+\texttt{execute\_task\_plan}, \texttt{hand\_over}. \\
+Communication / session (6) & \texttt{say}, \texttt{wave}, \texttt{nod\_head},
+\texttt{shake\_head}, \texttt{avert\_gaze}, \texttt{quit}. \\
 \bottomrule
 \end{tabular}
-\caption{CHAT capability groups. Registration and shared tool names do not
-establish successful composition or availability on every robot. Complete public
-schemas and mode qualifications are maintained in the repository tool index.}
+\caption{CHAT registry. A normal session advertises 32 tools when the general
+task provider is absent, suppressing \texttt{plan\_task} and
+\texttt{execute\_task\_plan}. Other registered tools can refuse unavailable
+capabilities; registration is not execution qualification. EQA's distinct full
+catalog and optional shared tools are in Appendix~\ref{app:agentic_tools}.}
 \label{tab:chat_capabilities}
 \end{table}
+
+\paragraph{Observation and motion contracts.}
+\texttt{describe\_scene} without arguments captions the current head view;
+explicit capability-qualified pan/tilt requests measured stationary gaze without
+an additional caption call. \texttt{ground\_object} uses the owned RGB-D snapshot
+behind the coordinator's decision, retaining capture identity, calibration and
+scope. Its admitted world points or explicit abstention are independent from
+semantic visual presence. A remembered crop is not a current head frame; wrist
+capture requires successful arm aim. Floor inspection rechecks a fixed rejected
+footprint and restores task gaze. Relative base tools retain measured progress
+and rejection reasons. None of these observations certifies route clearance or
+manipulation feasibility. Read-only queries can still save diagnostic artifacts.
 
 \paragraph{Language selects goals; planners refine motion.}
 A task request passes from CHAT to a grounded task session, then to task-skeleton
