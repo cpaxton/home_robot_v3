@@ -476,3 +476,44 @@ not held-out generalization or physical-failure recovery. The corrected live
 agent uses one call per round; repeated bundled proposals are covered separately
 by real-loop mocked tests. Both frozen histories, exact feedback and artifact
 hashes are in \path{docs/experiments/tamp_contextual_recovery_20261116.json}.
+
+\paragraph{Provided-map mobile development controls.}
+Separate CPU-only MuJoCo controls compose unloaded navigation, a local provided
+RGBD collision map, public-tool grasp/lift, checked loaded wheel transport,
+placement/release/retreat, remapping the released object, and departure.
+Native robot/object state and geometry outside the local map remain privileged;
+the external simulated scanner is an explicit prior, not an onboard sensor claim.
+A single-entry local-map owner invalidates old generation leases and plan handles
+on retirement. In one isolated constructor comparison, batched projection keeps
+the exact 2.304-million-cell grid checksum while reducing peak process RSS from
+1.877~GB to 0.136~GB; full-model episodes still use about 2~GB. This is not a
+full-agent memory or speedup estimate.
+
+The initial mobile cylinder fails release after two corrections: the conservative
+lowered probe penetrates the support by 1.0145~mm, beyond the unchanged 1~mm limit.
+Comparing the same finite certified candidates by bottleneck support margin
+instead of first feasibility recovers that control in one correction
+(Figure~\ref{fig:mobile_release_margin}). Raise/drop, retention, contact and
+correction limits are unchanged. The original cube also completes after this
+change. Seven prospectively declared development task cases include six mobile
+and one stationary control: five complete, while two stop when source evidence
+expires during long planning or early execution. The shifted-cube failure also
+completes in a separately retained faster-CPU repeat; it does not replace the
+primary failure. Fault-injection controls remain separate. These sparse,
+within-family provided-map trials do not qualify onboard observed execution,
+household OVMM, real-time control, hardware, or new LLM-agent success rates.
+Source hashes, partial receipts and failed attempts are in
+\path{docs/experiments/mobile_release_20261117.md} and the compact JSON index.
+Post-search reacquisition and fresh selected-path revalidation remain open.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/mobile_release_margin_20261117.pdf}
+\caption{Mobile cylinder development control using native state and a provided
+RGBD map. Left: bottleneck support slack among candidates that pass the same
+sampled checks; ranking selects the middle candidate. Right: final measured and
+conservative lowered payload gaps for rejected and recovered release decisions.
+The support limit is unchanged. Simulator diagnostics do not establish hardware
+uncertainty or continuous-contact guarantees.}
+\label{fig:mobile_release_margin}
+\end{figure}

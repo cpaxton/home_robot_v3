@@ -1,0 +1,358 @@
+{
+  "schema_version": 1,
+  "scope": "Assisted MuJoCo development regression; provided RGBD map and native state; no observed-only qualification or benchmark denominator.",
+  "benchmark_denominator": null,
+  "task_passed": 5,
+  "task_declared": 7,
+  "negative_controls_verified": 2,
+  "negative_controls_declared": 2,
+  "unfinished": 0,
+  "cases": [
+    {
+      "id": "cube_control",
+      "kind": "task",
+      "status": "passed",
+      "exit_code": 0,
+      "runtime_sha256": {
+        "scripts/eval_mobile_mapped_contact.py": "b0e0dd4456bdd8474a0c3a9df0d7e4f19ace7163ecac125f49225db7dfdd5d8b",
+        "src/emet/motion/release.py": "2d9286892deee6a1e1cbcad2fce2cd03b306bef1095d1cda251be138968ecdff"
+      },
+      "code": "ok",
+      "completed_ops": [
+        "grasp",
+        "place"
+      ],
+      "failed_stage": null,
+      "execution_started": true,
+      "recovery": "none",
+      "error": null,
+      "last_phase": {
+        "phase": "navigate_away",
+        "success": true,
+        "reason": "ok",
+        "wall_seconds": 48.50547304000065,
+        "cumulative_peak_rss_bytes": 2034860032
+      },
+      "peak_process_rss_bytes": 2034860032,
+      "map_store": {
+        "loads": 4,
+        "unloads": 4,
+        "stale_rejections": 3,
+        "resident_bytes": 0,
+        "peak_resident_bytes": 24113850,
+        "load_seconds": 97.69297149500198
+      }
+    },
+    {
+      "id": "cylinder_control",
+      "kind": "task",
+      "status": "passed",
+      "exit_code": 0,
+      "runtime_sha256": {
+        "scripts/eval_mobile_mapped_contact.py": "b0e0dd4456bdd8474a0c3a9df0d7e4f19ace7163ecac125f49225db7dfdd5d8b",
+        "src/emet/motion/release.py": "2d9286892deee6a1e1cbcad2fce2cd03b306bef1095d1cda251be138968ecdff"
+      },
+      "code": "ok",
+      "completed_ops": [
+        "grasp",
+        "place"
+      ],
+      "failed_stage": null,
+      "execution_started": true,
+      "recovery": "none",
+      "error": null,
+      "last_phase": {
+        "phase": "navigate_away",
+        "success": true,
+        "reason": "ok",
+        "wall_seconds": 48.795354972004134,
+        "cumulative_peak_rss_bytes": 2017107968
+      },
+      "peak_process_rss_bytes": 2017107968,
+      "map_store": {
+        "loads": 4,
+        "unloads": 4,
+        "stale_rejections": 3,
+        "resident_bytes": 0,
+        "peak_resident_bytes": 24112842,
+        "load_seconds": 97.13964563600166
+      }
+    },
+    {
+      "id": "cylinder_stationary",
+      "kind": "task",
+      "status": "passed",
+      "exit_code": 0,
+      "runtime_sha256": {
+        "scripts/eval_mobile_mapped_contact.py": "b0e0dd4456bdd8474a0c3a9df0d7e4f19ace7163ecac125f49225db7dfdd5d8b",
+        "src/emet/motion/release.py": "2d9286892deee6a1e1cbcad2fce2cd03b306bef1095d1cda251be138968ecdff"
+      },
+      "code": "ok",
+      "completed_ops": [
+        "grasp",
+        "place"
+      ],
+      "failed_stage": null,
+      "execution_started": true,
+      "recovery": "none",
+      "error": null,
+      "last_phase": {
+        "phase": "navigate_away",
+        "success": true,
+        "reason": "stationary_control",
+        "wall_seconds": 0.013231983000878245,
+        "cumulative_peak_rss_bytes": 2031697920
+      },
+      "peak_process_rss_bytes": 2031697920,
+      "map_store": {
+        "loads": 3,
+        "unloads": 3,
+        "stale_rejections": 2,
+        "resident_bytes": 0,
+        "peak_resident_bytes": 24112698,
+        "load_seconds": 77.10654301300383
+      }
+    },
+    {
+      "id": "cube_shifted",
+      "kind": "task",
+      "status": "failed",
+      "exit_code": 1,
+      "runtime_sha256": {
+        "scripts/eval_mobile_mapped_contact.py": "b0e0dd4456bdd8474a0c3a9df0d7e4f19ace7163ecac125f49225db7dfdd5d8b",
+        "src/emet/motion/release.py": "2d9286892deee6a1e1cbcad2fce2cd03b306bef1095d1cda251be138968ecdff"
+      },
+      "code": "support_geometry_unknown",
+      "completed_ops": [],
+      "failed_stage": null,
+      "execution_started": false,
+      "recovery": "inspect",
+      "error": "RuntimeError:support_geometry_unknown",
+      "last_phase": {
+        "phase": "plan_transfer",
+        "wall_seconds": 219.57626689600147,
+        "cumulative_peak_rss_bytes": 1995485184
+      },
+      "peak_process_rss_bytes": 1995485184,
+      "map_store": {
+        "loads": 1,
+        "unloads": 1,
+        "stale_rejections": 0,
+        "resident_bytes": 0,
+        "peak_resident_bytes": 24100806,
+        "load_seconds": 79.4770615630041
+      }
+    },
+    {
+      "id": "cylinder_shifted",
+      "kind": "task",
+      "status": "passed",
+      "exit_code": 0,
+      "runtime_sha256": {
+        "scripts/eval_mobile_mapped_contact.py": "b0e0dd4456bdd8474a0c3a9df0d7e4f19ace7163ecac125f49225db7dfdd5d8b",
+        "src/emet/motion/release.py": "2d9286892deee6a1e1cbcad2fce2cd03b306bef1095d1cda251be138968ecdff"
+      },
+      "code": "ok",
+      "completed_ops": [
+        "grasp",
+        "place"
+      ],
+      "failed_stage": null,
+      "execution_started": true,
+      "recovery": "none",
+      "error": null,
+      "last_phase": {
+        "phase": "navigate_away",
+        "success": true,
+        "reason": "ok",
+        "wall_seconds": 48.01388134300214,
+        "cumulative_peak_rss_bytes": 2029416448
+      },
+      "peak_process_rss_bytes": 2029416448,
+      "map_store": {
+        "loads": 4,
+        "unloads": 4,
+        "stale_rejections": 3,
+        "resident_bytes": 0,
+        "peak_resident_bytes": 24112806,
+        "load_seconds": 96.86819370500598
+      }
+    },
+    {
+      "id": "cylinder_larger",
+      "kind": "task",
+      "status": "passed",
+      "exit_code": 0,
+      "runtime_sha256": {
+        "scripts/eval_mobile_mapped_contact.py": "b0e0dd4456bdd8474a0c3a9df0d7e4f19ace7163ecac125f49225db7dfdd5d8b",
+        "src/emet/motion/release.py": "2d9286892deee6a1e1cbcad2fce2cd03b306bef1095d1cda251be138968ecdff"
+      },
+      "code": "ok",
+      "completed_ops": [
+        "grasp",
+        "place"
+      ],
+      "failed_stage": null,
+      "execution_started": true,
+      "recovery": "none",
+      "error": null,
+      "last_phase": {
+        "phase": "navigate_away",
+        "success": true,
+        "reason": "ok",
+        "wall_seconds": 47.455343925001216,
+        "cumulative_peak_rss_bytes": 2026188800
+      },
+      "peak_process_rss_bytes": 2026188800,
+      "map_store": {
+        "loads": 4,
+        "unloads": 4,
+        "stale_rejections": 3,
+        "resident_bytes": 0,
+        "peak_resident_bytes": 24112914,
+        "load_seconds": 95.92736832899391
+      }
+    },
+    {
+      "id": "cube_clutter",
+      "kind": "task",
+      "status": "failed",
+      "exit_code": 1,
+      "runtime_sha256": {
+        "scripts/eval_mobile_mapped_contact.py": "b0e0dd4456bdd8474a0c3a9df0d7e4f19ace7163ecac125f49225db7dfdd5d8b",
+        "src/emet/motion/release.py": "2d9286892deee6a1e1cbcad2fce2cd03b306bef1095d1cda251be138968ecdff"
+      },
+      "code": "support_geometry_unknown",
+      "completed_ops": [],
+      "failed_stage": "pregrasp",
+      "execution_started": true,
+      "recovery": "inspect",
+      "error": "RuntimeError:support_geometry_unknown",
+      "last_phase": {
+        "phase": "pick_carry_place",
+        "wall_seconds": 9.538590296004259,
+        "cumulative_peak_rss_bytes": 1985306624
+      },
+      "peak_process_rss_bytes": 1985306624,
+      "map_store": {
+        "loads": 1,
+        "unloads": 1,
+        "stale_rejections": 0,
+        "resident_bytes": 0,
+        "peak_resident_bytes": 24100770,
+        "load_seconds": 24.30362187600258
+      }
+    },
+    {
+      "id": "occupied_before_plan",
+      "kind": "negative_control",
+      "status": "passed",
+      "exit_code": 0,
+      "runtime_sha256": {
+        "scripts/eval_mobile_mapped_contact.py": "b0e0dd4456bdd8474a0c3a9df0d7e4f19ace7163ecac125f49225db7dfdd5d8b",
+        "src/emet/motion/release.py": "2d9286892deee6a1e1cbcad2fce2cd03b306bef1095d1cda251be138968ecdff"
+      },
+      "code": "no_plan_within_budget",
+      "completed_ops": [],
+      "failed_stage": null,
+      "execution_started": false,
+      "recovery": "inspect",
+      "error": null,
+      "last_phase": null,
+      "peak_process_rss_bytes": null,
+      "map_store": null
+    },
+    {
+      "id": "evidence_loss_after_grasp",
+      "kind": "negative_control",
+      "status": "passed",
+      "exit_code": 0,
+      "runtime_sha256": {
+        "scripts/eval_mobile_mapped_contact.py": "b0e0dd4456bdd8474a0c3a9df0d7e4f19ace7163ecac125f49225db7dfdd5d8b",
+        "src/emet/motion/release.py": "2d9286892deee6a1e1cbcad2fce2cd03b306bef1095d1cda251be138968ecdff"
+      },
+      "code": "collision",
+      "completed_ops": [
+        "grasp"
+      ],
+      "failed_stage": "preplace",
+      "execution_started": true,
+      "recovery": "inspect",
+      "error": null,
+      "last_phase": null,
+      "peak_process_rss_bytes": null,
+      "map_store": null
+    }
+  ],
+  "runtime_commit": "d330c53f",
+  "managed_jobs": [
+    "20261117_201133_9157d1",
+    "20261117_201134_a12e68",
+    "20261117_201134_eaff9c",
+    "20261117_201134_b657ef"
+  ],
+  "raw_root": ".tamp-runs/release-matrix-20261117",
+  "supplementary_repeat": {
+    "case": "cube_shifted",
+    "job": "20261117_201829_899f05",
+    "passed": true,
+    "cpu_affinity": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ],
+    "runtime_hashes_match_primary": true,
+    "replaces_primary_failure": false,
+    "peak_process_rss_bytes": 2024529920,
+    "result_sha256": "003fc4caaaaf9ce000108b939c260275b2b984c8c485f5c674bb3e913bc47a36"
+  },
+  "baseline_jobs": [
+    "20261117_195949_d760e1",
+    "20261117_195950_f1d700"
+  ],
+  "release_fix": {
+    "previous_support_slack_m": 0.0003638052218610825,
+    "selected_support_slack_m": 0.00829553740040723,
+    "old_final_lowered_gap_m": -0.00101449342154377,
+    "new_final_lowered_gap_m": -0.0008046347742393074,
+    "support_penetration_limit_m": 0.001,
+    "max_raise_m": 0.04,
+    "max_drop_m": 0.04,
+    "max_adjustments": 2,
+    "successful_mobile_cylinder_adjustments": 1,
+    "bounds_relaxed": false,
+    "candidate_support_slack_m": [
+      0.0003638052218610825,
+      0.00829553740040723,
+      0.001429890306432445
+    ],
+    "clearance_m": 0.003
+  },
+  "verification": {
+    "expanded_tests": {
+      "job": "20261117_201135_5312ac",
+      "passed": 261,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "report_tests": {
+      "job": "20261117_201830_cdaa8e",
+      "passed": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "paper_build": {
+      "job": "20261117_203134_2edde4",
+      "passed": true,
+      "final_job": "20261117_204027_34ecd9"
+    }
+  },
+  "next_gate": "Post-search reacquisition and selected-proposal path revalidation before publishing a fresh plan handle; no coarse-grid-only certificate reuse."
+}

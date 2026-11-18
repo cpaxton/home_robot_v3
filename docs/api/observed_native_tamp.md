@@ -725,3 +725,10 @@ FIXTURE --states DIR... --output RESULT.json` audits those snapshots offline.
 These private MuJoCo contacts/forces never become robot sensor inputs or tool
 acceptance evidence. See the
 [release investigation](../experiments/mobile_release_20261117.md).
+
+`report_mobile_map_regression.py --runs OUT --output SUMMARY.json` summarizes all
+nine declared cases, including cases not yet launched. It counts the seven task
+cases separately from two negative controls, preserves crashes/timeouts/failures,
+and rejects duplicate or inconsistent case receipts. These development counts
+are not a qualified benchmark denominator. The fixed suite is the default;
+`--suite PATH` explicitly selects another declaration.

@@ -48,9 +48,13 @@
       batch construction preserves the cell checksum at ~13.8× lower isolated
       peak RSS. Generation leases invalidate retired maps/plans. One assisted
       cube episode completes navigation, pick/carry/place, remapping and departure;
-      the cylinder release rejection (persistent tracking reserve despite existing
-      settling) remains open. Full observed execution and broader OVMM remain
-      unqualified.
+      [release investigation](docs/experiments/mobile_release_20261117.md) now
+      reproduces and repairs first-feasible release selection: both original
+      mobile objects complete under bounded candidate-margin ranking. Expanded
+      cases still expose source-evidence expiry during long planning. Next gate:
+      consume the old plan handle, reacquire, and revalidate the chosen proposal
+      under a fresh lease before issuing a new handle; coarse grid equality is
+      insufficient. Full observed execution and broader OVMM remain unqualified.
 
 - [ ] Profile failed-search cost without answer overrides or target-specific rules:
       final S0 seed 1 misses the receptacle in both arms but candidate takes
