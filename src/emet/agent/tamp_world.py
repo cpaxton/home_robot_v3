@@ -10,13 +10,15 @@ WORLD_CHANGING_TOOLS = frozenset({
 
 
 @contextmanager
-def task_world_change(name, context):
+def task_world_change(name, context, *, arguments=None):
     """Discard old and in-flight evidence even when motion raises or aborts.
 
     This is CHAT dispatch admission, not a lock against unrelated controllers.
     TAMP execution owns its own measured per-step state updates.
     """
-    if name not in WORLD_CHANGING_TOOLS or context is None:
+    head_gaze = (name == 'describe_scene' and isinstance(arguments, dict)
+                 and any(arguments.get(key) is not None for key in ('pan_rad', 'tilt_rad')))
+    if (name not in WORLD_CHANGING_TOOLS and not head_gaze) or context is None:
         yield
         return
     participants = [provider for key in ('observed_tamp_provider', 'tamp_task_session', 'observed_native_adapter')

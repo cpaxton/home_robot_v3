@@ -296,7 +296,7 @@ def _dispatch_tool_calls(
                 return finish(False)
             if verbose_tools:
                 print(colored("[executor]", "yellow"), json.dumps(cmds, default=str), flush=True)
-            with task_world_change(name, tamp_context):
+            with task_world_change(name, tamp_context, arguments=args):
                 keep_going = executor(cmds)
             if not keep_going:
                 # Quit (or stop) — abort the agent turn.
@@ -336,7 +336,7 @@ def _dispatch_tool_calls(
             continue
 
         try:
-            with task_world_change(name, tamp_context):
+            with task_world_change(name, tamp_context, arguments=args):
                 result = tool.func(**args) if args else tool.func()
             outcome = ToolOutcome.coerce(name, result)
             structured_result = isinstance(result, dict) and ("ok" in result or "schema_version" in result)

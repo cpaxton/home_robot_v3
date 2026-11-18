@@ -2,6 +2,7 @@
 # Licensed under the Apache License, Version 2.0 (see LICENSE).
 """Task gaze uses measured motion and evidence, without floor or scan policy."""
 
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -173,9 +174,11 @@ def test_synchronous_native_capture_does_not_require_a_zmq_sequence(monkeypatch)
     assert not out["ok"] and out["status"] == "stale_observation" and actual is None
 
 
-def test_habitat_capture_uses_acquisition_time_and_applied_sensor_pose():
+def test_habitat_capture_uses_acquisition_time_and_applied_sensor_pose(monkeypatch):
     import time
 
+    # Exercise the local optional client without requiring its separate sim env.
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3] / "packages" / "emet_habitat"))
     from emet_habitat.robot_client import HabitatRobotClient
 
     robot = object.__new__(HabitatRobotClient)

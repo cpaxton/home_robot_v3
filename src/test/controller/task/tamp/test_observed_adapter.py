@@ -400,12 +400,13 @@ def test_empty_grasp_never_reaches_placement(system, shape):
     assert result['data']['completed_ops'] == []
 
 
-def test_motion_invalidates_observed_adapter_and_stored_handles(system):
+@pytest.mark.parametrize('tool_name, arguments', [('rotate_base', None), ('describe_scene', {'pan_rad': 0.})])
+def test_motion_invalidates_observed_adapter_and_stored_handles(system, tool_name, arguments):
     from emet.agent.tamp_world import task_world_change
 
     planned = plan(system)
     assert planned['status'] == 'ok', planned
-    with task_world_change('rotate_base', system.context):
+    with task_world_change(tool_name, system.context, arguments=arguments):
         pass
     assert system.adapter.plans == {} and system.state.invalid
     assert system.adapter.execute(planned['data']['plan_ref'])['code'] == 'unknown_plan'
