@@ -78,12 +78,14 @@ hand and goal-change arm offsets rather than letting base travel supply all hand
 motion. Full-family candidate preflight precedes further training.
 [Metrics](CURRICULUM_VISUALIZATION.md#per-trajectory-spread-and-dead-time-audit).
 
-**Main integration:** current main `d86017ca` is integrated with semantic
+**Main integration:** main `8f7c9ec8` is integrated with semantic
 preservation of unloaded TAMP scopes through grasp alignment/fallback search,
 checked base approaches, observed verification and measured stopping. Runtime
 `command_client` copies are synchronized. Integration/recheck runs cover 765
 distinct passing cases; this is not a new full frozen training receipt. The
 session-start abort now preserves `SystemExit` before guard creation.
+The newer centralized agent tool bindings retain the unloaded scope; 78 agent
+import/dispatch/session/discovery tests pass after that merge.
 
 **Expanded-curriculum debugging:** general reset now synchronizes the servo's
 base tolerance with the task after leaving the fixed-base fixture (previously
@@ -104,6 +106,16 @@ actor feedback offsets without changing its action law. A fresh full suite and
 teacher receipt are required before the bounded 65,536-decision pilot. No
 promotion or hardware motion is implied. The [architecture comparison protocol](WHOLE_BODY_ARCHITECTURE_REVIEW.md#required-comparison-before-actor-promotion)
 separates distribution repair from the still-unresolved gain-head question.
+
+**Current frozen run:** `b958fc62` passes 104 contact/actor/coupled regressions;
+the layout refactor gives bit-identical actions for 128 observations across
+eight Mars/Stretch feedback configurations. Managed service
+`emet-motion-density-reviewed` is running a fresh full suite on this immutable
+snapshot, then a fresh teacher preflight, source evaluation, 65,536-decision PPO
+pilot and paired evaluations. Stage failures prevent PPO. State/logs are under
+`logs/recovery/motion-density-v2/pipeline-current.json`. This snapshot precedes
+the later main tool-binding merge; its eventual receipt must not be described
+as full validation of that newer combined tip. No PPO result is claimed yet.
 
 Disk headroom recovered by compressing eleven old source archives: **3.39 GiB**
 saved, each verified by bit-exact decompression before removing its raw tar.
