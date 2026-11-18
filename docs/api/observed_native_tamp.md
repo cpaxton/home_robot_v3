@@ -689,3 +689,39 @@ does not enable default OVMM loaded transport, qualify onboard-only mapping,
 run Habitat/RoboCasa, or establish a real-robot sensor/controller contract.
 The [mobile-map record](../experiments/local_map_mobile_20261117.md) separates
 those limits from the measured memory and task evidence.
+
+The native bounded release search now keeps an already certified measured pose
+without moving. If adjustment is required, it compares all existing finite
+candidates and maximizes the smaller support margin across the certified
+commanded/lowered delivery interval and the maximum drop bound. It retains the
+same raise/drop limits, sampled opening/retreat checks and two-adjustment budget.
+This reduces dependence on a first feasible pose with almost zero support margin;
+it does not certify future controller error from the measured tracking reserve.
+Internal `release_candidate` events distinguish IK/path, opening, support bounds,
+retreat and acceptance. Public tool codes and partial-execution receipts retain
+their existing schema; private geometry stays in evaluator logs.
+
+`scripts/eval_mobile_mapped_contact.py --case-config CASE.json` accepts declared
+initial conditions: `initial_base_x`, `initial_object_xy`,
+`initial_distractor_xy`, `placement_region`, `mobile`, `approach_m`, and
+`departure_m`. Values are validated before model creation. The initial overrides
+run before discovery/commands. With `mobile=false`, default approach/departure
+are zero and transport is stationary; the record explicitly labels that control.
+The default configuration preserves the previous mobile episode.
+
+The fixed development matrix is
+`configs/eval/mobile_map_regression_20261117.json`. Run
+`scripts/run_mobile_map_regression.py --fixture FIXTURE --output OUT` through
+`emet jobs run --no-gpu-exclusive`. `--lane N --lanes K` partitions cases across
+separate managed jobs on disjoint safe CPU allocations; defaults are lane 0 of 1,
+with a 900 s per-case timeout. `--case ID` selects exact case IDs and is repeatable.
+Scaled geometry and constant-density mass are compiled from copied fixture XML
+before physics; source fixtures are unchanged. Task failures, negative controls,
+crashes and timeouts remain separate in each JSON lane manifest.
+
+`scripts/tamp_release_diagnostics.py` saves evaluator-only measured-state/actuator
+snapshots at release decisions. `scripts/inspect_tamp_release_states.py --fixture
+FIXTURE --states DIR... --output RESULT.json` audits those snapshots offline.
+These private MuJoCo contacts/forces never become robot sensor inputs or tool
+acceptance evidence. See the
+[release investigation](../experiments/mobile_release_20261117.md).

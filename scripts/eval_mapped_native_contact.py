@@ -15,6 +15,7 @@ import faulthandler
 import hashlib
 import json
 import os
+import resource
 import subprocess
 import time
 import xml.etree.ElementTree as ET
@@ -26,6 +27,7 @@ import mujoco
 import numpy as np
 from eval_native_table_contact import ContactRobot
 from scipy.ndimage import binary_erosion
+from tamp_release_diagnostics import install_release_diagnostics
 
 from emet.agent.tools import get_tools
 from emet.controller.manipulation import physical_pick_place
@@ -310,6 +312,7 @@ def run(args):
 
     def executor(obj):
         ex = raw_executor(obj)
+        install_release_diagnostics(ex, robot, out / "release-states")
         if args.collision_mode == "native":
             return ex
         guard = MappedGuard(ex.collision, model, grid, admission, support, ticket)
@@ -434,6 +437,7 @@ def run(args):
 
 def main():
     faulthandler.enable()
+    resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--fixture", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)

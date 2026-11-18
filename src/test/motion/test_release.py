@@ -90,7 +90,7 @@ def test_opening_collision_finds_bounded_alternative_without_mutating_state():
     before = [a.copy() for a in (ex.data.qpos, ex.data.qvel, ex.data.qacc, ex.data.contact.dist)]
     plan, error = search(ex)
     assert error is None and plan is not None
-    assert 0.025 < plan.target_z <= 0.035 and 0 < plan.gap_m <= 0.04
+    assert 0.025 < plan.target_z <= 0.045 and 0 < plan.gap_m <= 0.04
     assert len(plan.prefix) == 2
     for old, new in zip(before, (ex.data.qpos, ex.data.qvel, ex.data.qacc, ex.data.contact.dist), strict=True):
         np.testing.assert_array_equal(old, new)
@@ -251,7 +251,7 @@ def test_resting_support_keeps_the_unchanged_one_mm_penetration_gate(depth, reje
         assert checker.last_contacts[0]['reason'] == 'support_penetration'
 
 
-def test_measured_tracking_reserve_selects_more_clearance_without_relaxing_limits():
+def test_measured_tracking_reserve_preserves_both_delivery_limits():
     ex = rig()
     ordinary, error = search(ex)
     assert ordinary is not None and error is None
@@ -264,7 +264,9 @@ def test_measured_tracking_reserve_selects_more_clearance_without_relaxing_limit
         tracking_reserve_m=0.008,
     )
     assert reserved is not None and error is None
-    assert reserved.target_z > ordinary.target_z
+    # Candidate ranking need not be monotone on the shifted discrete grid.
+    # The complete delivered interval must still obey both support limits.
+    assert reserved.gap_m - (.008 + .003) >= -.001
     assert reserved.gap_m <= 0.04
     ex.command_joints.assert_not_called()
 
@@ -493,4 +495,43 @@ def test_open_support_wait_keeps_motion_limits_until_late_settling(monkeypatch, 
     assert result.success is success
     if success:
         assert ex.data.time >= 5.9
+    ex.command_joints.assert_not_called()
+
+
+def test_release_candidate_diagnostics_identify_opening_and_acceptance_without_dispatch():
+    ex = rig()
+    ex.event = Mock()
+    plan, error = search(ex)
+    assert plan is not None and error is None
+    rows = [call.kwargs for call in ex.event.call_args_list if call.kwargs.get('phase') == 'release_candidate']
+    assert any(row['stage'] == 'opening' and row['reason'].startswith('gripper_open_path_failed') for row in rows)
+    assert rows[-1]['stage'] == 'accepted'
+    ex.command_joints.assert_not_called()
+
+
+def test_release_bounds_rejection_records_geometry_without_dispatch():
+    ex = rig()
+    ex.event = Mock()
+    plan, error = plan_release(ex, support='table', region=np.array([[.1,.1],[.2,.2]]),
+        limits=ReleaseLimits(.04,.04,height_joint='height'),initial_z=.025)
+    assert plan is None
+    rows = [call.kwargs for call in ex.event.call_args_list if call.kwargs.get('stage') == 'support_bounds']
+    assert rows and np.asarray(rows[0]['bounds']).shape == (2,3)
+    assert rows[0]['region'] == [[.1,.1],[.2,.2]]
+    ex.command_joints.assert_not_called()
+
+
+def test_adjustment_prefers_support_slack_over_first_barely_feasible_pose():
+    ex = rig()
+    ex.event = Mock()
+    plan, error = search(ex)
+    assert plan is not None and error is None
+    rows = [call.kwargs for call in ex.event.call_args_list]
+    feasible = [row for row in rows if row.get('stage') == 'feasible']
+    selected = [row for row in rows if row.get('stage') == 'accepted'][-1]
+    assert len(feasible) >= 2
+    assert selected['support_slack_m'] == max(row['support_slack_m'] for row in feasible)
+    assert selected['support_slack_m'] > feasible[0]['support_slack_m']
+    assert plan.target_z > feasible[0]['target_z']
+    assert plan.target_z <= .025 + .04 and plan.gap_m <= .04
     ex.command_joints.assert_not_called()

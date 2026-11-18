@@ -286,12 +286,19 @@ def plan_release(executor, *, support, region, limits, initial_z, attempted=(), 
         targets += [(current_point + [0, 0, tracking_reserve_m+delta], current_rotation)
                     for delta in limits.offsets_m]
     last = "no_plan_within_budget"
+    best, best_score, best_index = None, -float("inf"), None
+
+    def decision(index, stage, **detail):
+        ex.event(phase="release_candidate", candidate=index, stage=stage,
+                 initial_z=float(initial_z), tracking_reserve_m=float(tracking_reserve_m), **detail)
+
     for index, (point, rotation) in enumerate(targets):
         target_z = float(point[2])
         if target_z > initial_z + limits.max_raise_m or (
             index and (target_z < current_point[2]
                        or any(abs(target_z - old) < limits.target_epsilon_m for old in attempted))
         ):
+            decision(index, "target_limit_or_repeat", requested_z=target_z)
             continue
         probe.data.qpos[:] = original
         probe.collision = held_checker(ex.collision, measured)
@@ -300,6 +307,7 @@ def plan_release(executor, *, support, region, limits, initial_z, attempted=(), 
             path, error = probe.plan_pose(np.asarray(point), np.asarray(rotation))
             if error:
                 last = error
+                decision(index, "adjustment_ik", reason=error)
                 continue
             goal = probe.data.qpos[ex.qadr].copy()
             probe.data.qpos[:] = original
@@ -315,6 +323,7 @@ def plan_release(executor, *, support, region, limits, initial_z, attempted=(), 
             )
             if not direct.success:
                 last = f"release_adjustment_failed:{direct.reason}:{direct.detail}"
+                decision(index, "adjustment_path", reason=last)
                 continue
             path = [start.copy(), goal.copy()]
             probe.data.qpos[ex.qadr] = goal
@@ -331,6 +340,7 @@ def plan_release(executor, *, support, region, limits, initial_z, attempted=(), 
                     break
             if not heights_valid:
                 last = 'release_raise_limit'
+                decision(index, 'adjustment_height', reason=last)
                 continue
             probe.data.qpos[ex.qadr] = goal
             mujoco.mj_kinematics(model, probe.data)
@@ -341,6 +351,9 @@ def plan_release(executor, *, support, region, limits, initial_z, attempted=(), 
         bounds = body_bounds(model, probe.data, body_subtree(model, ex.payload_body))
         patches = [np.asarray(p) for p in surfaces if bounds_fit(bounds, np.asarray(p), region, limits.max_drop_m)]
         if not patches:
+            decision(index, "support_bounds", bounds=bounds.tolist(),
+                     surfaces=[np.asarray(p).tolist() for p in surfaces],
+                     region=None if region is None else region.tolist(), max_drop_m=limits.max_drop_m)
             continue
         patch = max(patches, key=lambda p: p[1, 2])
         closed = probe.data.qpos.copy()
@@ -358,12 +371,16 @@ def plan_release(executor, *, support, region, limits, initial_z, attempted=(), 
                 body_bounds(model, probe.data, body_subtree(model, ex.payload_body)), patch, region, limits.max_drop_m
             ):
                 error = "no_plan_within_budget"
+                decision(index, "lowered_support_bounds", lower_by_m=float(lower_by),
+                         bounds=body_bounds(model, probe.data, payload_ids).tolist(), patch=patch.tolist())
                 break
             probe.collision = held_checker(ex.collision, measured)
             probe.collision.set_payload(model, probe.data, None)
             probe.collision.robot_ids |= body_subtree(model, ex.payload_body)
             _, error = probe.plan_gripper_open()
             if error:
+                decision(index, "opening", lower_by_m=float(lower_by), reason=error,
+                         contacts=list(probe.collision.last_contacts))
                 break
         if error:
             last = error
@@ -377,10 +394,24 @@ def plan_release(executor, *, support, region, limits, initial_z, attempted=(), 
         _, error = probe.plan_pose(*ex.place_targets[2])
         if error:
             last = error
+            decision(index, "retreat", reason=error, contacts=list(probe.collision.last_contacts))
             continue
-        return ReleasePlan(
-            path, held_checker(ex.collision, measured), dropped, target_z, float(bounds[0, 2] - patch[1, 2])
-        ), None
+        gap = float(bounds[0, 2] - patch[1, 2])
+        candidate = ReleasePlan(path, held_checker(ex.collision, measured), dropped, target_z, gap)
+        if index == 0:
+            # A certified measured pose needs no adjustment at all.
+            decision(index, "accepted", target_z=target_z, gap_m=gap)
+            return candidate, None
+        # Compare the already certified delivery interval, rather than taking
+        # the first pose with nearly zero lower-support margin. Both endpoint
+        # constraints and the existing raise/drop limits remain unchanged.
+        score = min(gap - reserve + 0.001, limits.max_drop_m - gap)
+        decision(index, "feasible", target_z=target_z, gap_m=gap, support_slack_m=score)
+        if score > best_score:
+            best, best_score, best_index = candidate, score, index
+    if best is not None:
+        decision(best_index, "accepted", target_z=best.target_z, gap_m=best.gap_m, support_slack_m=best_score)
+        return best, None
     return None, last
 
 
@@ -419,6 +450,8 @@ def refine_release(executor, *, support, region, limits):
             target_z=None if plan is None else plan.target_z,
             max_drop_m=limits.max_drop_m,
             tracking_reserve_m=tracking_reserve,
+            measured_ee=ex.data.body(ex.ee_body).xpos.tolist(),
+            adjustment_count=len(attempted),
         )
         if plan is None:
             return PhysicalMotionResult(False, error, "release")

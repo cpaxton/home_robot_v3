@@ -22,6 +22,8 @@ from types import SimpleNamespace
 import mujoco
 import numpy as np
 from eval_mapped_native_contact import MappedContactRobot, MappedGuard, provided_scan
+from tamp_mobile_cases import load_case
+from tamp_release_diagnostics import install_release_diagnostics
 
 from emet.agent.tools import get_tools
 from emet.controller.manipulation import physical_pick_place
@@ -178,6 +180,9 @@ def run(args):
     if not cpus:
         raise RuntimeError("no_safe_allocated_cpu")
     apply_affinity(cpus)
+    case = load_case(args.case_config)
+    mobile = case.get("mobile", True)
+    region = np.asarray(case.get("placement_region", [[0.06, -0.73], [0.22, -0.57]]), float)
     result = {
         "scope": __doc__,
         "passed": False,
@@ -187,6 +192,7 @@ def run(args):
         "assistance": ["native_state", "provided_external_rgbd_scanner", "native_navigation_geometry"],
         "object": args.object,
         "cpu_affinity": cpus,
+        "case_config": case,
     }
 
     def save():
@@ -209,12 +215,29 @@ def run(args):
 
     model = mujoco.MjModel.from_xml_path(str(args.fixture.resolve() / "scene.xml"))
     robot = MobileRobot(model, args.object)
+    # Declared initial conditions only, before discovery or any command.
+    if "initial_base_x" in case:
+        j = int(model.body("base_link").jntadr[0])
+        robot.data.qpos[int(model.jnt_qposadr[j])] = float(case["initial_base_x"])
+    if "initial_object_xy" in case:
+        xy = np.asarray(case["initial_object_xy"], float)
+        if xy.shape != (2,) or not np.isfinite(xy).all():
+            raise ValueError("invalid_mobile_case_config")
+        addr = int(model.jnt_qposadr[model.body(args.object).jntadr[0]])
+        robot.data.qpos[addr : addr + 2] = xy
+    if "initial_distractor_xy" in case:
+        other = "object1" if args.object == "object2" else "object2"
+        a = int(model.jnt_qposadr[model.body(other).jntadr[0]])
+        robot.data.qpos[a : a + 2] = case["initial_distractor_xy"]
+    if {"initial_base_x", "initial_object_xy", "initial_distractor_xy"} & set(case):
+        robot.step(1.0)
+    robot.refresh()
     adapter = native_adapter.NativeTableAdapter(robot, model=model, policy="bounded_release")
     raw_data = adapter._data
     adapter._data = lambda **kw: {
         **raw_data(**kw),
         "geometry_source": "rgbd_map_plus_native_scene",
-        "base_motion": "checked_unloaded_and_loaded_straight",
+        "base_motion": "checked_unloaded_and_loaded_straight" if mobile else "stationary_control",
         "collision_scope": "local_contained_solids_and_native_full_robot_payload_sweeps",
         "assistance": result["assistance"],
     }
@@ -299,6 +322,7 @@ def run(args):
         ex.collision.additional_scene_checks = (current_guard.configuration_collides,)
         robot.gate = current_guard.lease.require_current
         ex.event = event
+        install_release_diagnostics(ex, robot, out / "release-states")
         return ex
 
     adapter._executor = executor
@@ -306,6 +330,8 @@ def run(args):
     def prepare_transport(ex, obj, goal):
         start = base_pose(model, adapter.data)
         end = start.copy()
+        if not mobile:
+            return end.tolist(), None
         end[0] += float(goal[0] - adapter.data.body(obj).xpos[0])
         if not native_approach.sweep_clear(model, adapter.data, start, end, loaded_checker=ex.collision, event=event):
             return None, "transport_collision"
@@ -318,6 +344,11 @@ def run(args):
 
     def transport(plan):
         nonlocal current_guard
+        if not mobile:
+            current_guard = acquire("destination")
+            plan.executor.collision.additional_scene_checks = (current_guard.configuration_collides,)
+            robot.gate = current_guard.lease.require_current
+            return PhysicalMotionResult(True, "stationary_control", "transport")
         # A stopped, loaded handoff is a new acquisition boundary. Long grasp
         # search must not consume the carry scan's original evidence lifetime.
         current_guard = acquire("carry")
@@ -364,18 +395,18 @@ def run(args):
         with phase("navigate_to_source") as row:
             sync(adapter.data)
             start = base_pose(model, adapter.data)
-            end = start + [0.10, 0, 0]
-            outcome = native_approach.execute_approach(
-                robot, nav, native_approach.BaseApproach(tuple(start), tuple(end))
+            end = start + [float(case.get("approach_m", 0.10 if mobile else 0.0)), 0, 0]
+            outcome = (
+                native_approach.execute_approach(robot, nav, native_approach.BaseApproach(tuple(start), tuple(end)))
+                if np.linalg.norm(end - start)
+                else native_approach.ApproachResult(True, "stationary_control")
             )
             row.update(success=outcome.success, reason=outcome.reason)
             if not outcome.success:
                 raise RuntimeError(outcome.reason)
         current_guard = acquire("source")
         with phase("plan_transfer"):
-            planned = call(
-                "plan_pick_place", task_ref=task["task_ref"], placement_region=[[0.06, -0.73], [0.22, -0.57]]
-            )
+            planned = call("plan_pick_place", task_ref=task["task_ref"], placement_region=region.tolist())
             if planned["status"] != "ok":
                 raise RuntimeError(planned["code"])
         with phase("pick_carry_place"):
@@ -397,9 +428,13 @@ def run(args):
         with phase("navigate_away") as row:
             sync(adapter.data)
             start = base_pose(model, adapter.data)
-            end = start + [0.10, 0, 0]
-            outcome = native_approach.execute_approach(
-                robot, nav, native_approach.BaseApproach(tuple(start), tuple(end)), scene_checker=checker
+            end = start + [float(case.get("departure_m", 0.10 if mobile else 0.0)), 0, 0]
+            outcome = (
+                native_approach.execute_approach(
+                    robot, nav, native_approach.BaseApproach(tuple(start), tuple(end)), scene_checker=checker
+                )
+                if np.linalg.norm(end - start)
+                else native_approach.ApproachResult(True, "stationary_control")
             )
             row.update(success=outcome.success, reason=outcome.reason)
             if not outcome.success:
@@ -433,9 +468,13 @@ def run(args):
 
 def main():
     faulthandler.enable()
+    resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--fixture", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument(
+        "--case-config", type=Path, help="JSON fixture/goal/transport overrides; initial conditions only."
+    )
     parser.add_argument("--object", choices=["object1", "object2"], default="object2")
     parser.add_argument("--resolution", type=float, choices=[0.02, 0.005], default=0.005)
     return run(parser.parse_args())
