@@ -61,6 +61,11 @@
 - [ ] Reconcile Herman's reported stow pose with joint1/joint2 declared limits and
       link3/chassis proxy geometry; validate an actual staging path. Preserve
       blocked exact capture separately from any synthetic start.
+- [x] Implement admitted random smooth arm-spline postures, reversals and holds,
+      with 32 train / 16 audit identities per level and a 20% overall tick share.
+      [Distribution and validation protocol](docs/experiments/mars_arm_splines_20261117.md).
+- [ ] Finish full teacher preflight, bounded spline PPO and paired regression
+      comparisons, including the frozen elbow/wrist wave.
 - [ ] Add admitted Herman-like posture/hold/handoff cases to a bounded training
       distribution with separate held-out poses. Current staged teacher is 6/6,
       both actors 0/6; improve quiet holds and prevent base wandering before

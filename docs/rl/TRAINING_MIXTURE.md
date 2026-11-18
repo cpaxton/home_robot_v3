@@ -128,6 +128,22 @@ bounded disturbances, and then grasp/lift/loaded carry/place once their simulato
 initialization/execution is reliable. Keep a core of ordinary tracking. Any new
 weights and randomization curriculum must be recorded before training starts.
 
+## Random arm-spline family (implemented; validation before training)
+
+The next Mars mixture is **10/10/10/20/50** regular-hand/base/goal-change/
+random-arm-spline/unloaded-TAMP control ticks. It keeps the outer 50/50 balance.
+It is not the completed goal-change run above. The new family samples four
+nearby legal reset postures, cubic joint geometry mapped through private FK,
+reversals/returns, speed/acceleration/jerk-bounded timing and quiet holds. The
+base target stays stationary without welding the base or masking wheel actions.
+
+The manifest declares 32 train / 16 audit identities at each of three amplitude
+and speed levels. Start at the smallest (0.12 rad knots, 25% speed, 0.04 rad reset
+jitter), with zero added randomization. Keep reward coefficients unchanged.
+Admission retains rejected samples; a fresh full teacher report and source-bound
+regressions precede the bounded PPO pilot. No audit case enters training or
+selects a curriculum level. [Protocol and target-gallery commands](../experiments/mars_arm_splines_20261117.md).
+
 ## Maintenance checklist
 
 For every run record planned/actual tick fractions, exact case manifests and

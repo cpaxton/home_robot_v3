@@ -1,0 +1,1083 @@
+{
+  "format": "mars-arm-splines-v1",
+  "robot": "innate_mars",
+  "training_mix": {
+    "hand": 0.1,
+    "base": 0.1,
+    "goal_changes": 0.1,
+    "arm_splines": 0.2,
+    "tamp": 0.5
+  },
+  "reset_anchors_rad": {
+    "ready": [
+      0,
+      -0.4,
+      0.2,
+      0.2,
+      0
+    ],
+    "raised": [
+      0,
+      -0.6,
+      -0.2,
+      0.8,
+      0
+    ],
+    "left_reach": [
+      -1.2,
+      -0.6,
+      0.2,
+      0.4,
+      0
+    ],
+    "folded_right": [
+      1.35,
+      -1.3,
+      0.6,
+      1.05,
+      0
+    ]
+  },
+  "levels": [
+    {
+      "amplitude_rad": 0.12,
+      "speed_fraction": 0.25,
+      "posture_jitter_rad": 0.04,
+      "knot_count": 4,
+      "initial_hold_s": 1.0,
+      "maximum_duration_s": 28.0
+    },
+    {
+      "amplitude_rad": 0.3,
+      "speed_fraction": 0.4,
+      "posture_jitter_rad": 0.08,
+      "knot_count": 4,
+      "initial_hold_s": 1.0,
+      "maximum_duration_s": 28.0
+    },
+    {
+      "amplitude_rad": 0.55,
+      "speed_fraction": 0.6,
+      "posture_jitter_rad": 0.12,
+      "knot_count": 4,
+      "initial_hold_s": 1.0,
+      "maximum_duration_s": 28.0
+    }
+  ],
+  "curriculum": {
+    "initial_level": 0,
+    "advance_minimum_success": 0.85,
+    "advance_maximum_safety_failures": 0,
+    "advance_scope": "development probes only; audit never selects a level"
+  },
+  "cases": [
+    {
+      "id": "mars:arm-splines-v1:train:l0:0",
+      "seed": 460000000,
+      "split": "train",
+      "level": 0,
+      "posture": "ready"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l0:1",
+      "seed": 460000001,
+      "split": "train",
+      "level": 0,
+      "posture": "raised"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l0:2",
+      "seed": 460000002,
+      "split": "train",
+      "level": 0,
+      "posture": "left_reach"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l0:3",
+      "seed": 460000003,
+      "split": "train",
+      "level": 0,
+      "posture": "folded_right"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l0:4",
+      "seed": 460000004,
+      "split": "train",
+      "level": 0,
+      "posture": "ready"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l0:5",
+      "seed": 460000005,
+      "split": "train",
+      "level": 0,
+      "posture": "raised"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l0:6",
+      "seed": 460000006,
+      "split": "train",
+      "level": 0,
+      "posture": "left_reach"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l0:7",
+      "seed": 460000007,
+      "split": "train",
+      "level": 0,
+      "posture": "folded_right"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l0:8",
+      "seed": 460000008,
+      "split": "train",
+      "level": 0,
+      "posture": "ready"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l0:9",
+      "seed": 460000009,
+      "split": "train",
+      "level": 0,
+      "posture": "raised"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l0:10",
+      "seed": 460000010,
+      "split": "train",
+      "level": 0,
+      "posture": "left_reach"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l0:11",
+      "seed": 460000011,
+      "split": "train",
+      "level": 0,
+      "posture": "folded_right"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l0:12",
+      "seed": 460000012,
+      "split": "train",
+      "level": 0,
+      "posture": "ready"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l0:13",
+      "seed": 460000013,
+      "split": "train",
+      "level": 0,
+      "posture": "raised"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l0:14",
+      "seed": 460000014,
+      "split": "train",
+      "level": 0,
+      "posture": "left_reach"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l0:15",
+      "seed": 460000015,
+      "split": "train",
+      "level": 0,
+      "posture": "folded_right"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l0:16",
+      "seed": 460000016,
+      "split": "train",
+      "level": 0,
+      "posture": "ready"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l0:17",
+      "seed": 460000017,
+      "split": "train",
+      "level": 0,
+      "posture": "raised"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l0:18",
+      "seed": 460000018,
+      "split": "train",
+      "level": 0,
+      "posture": "left_reach"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l0:19",
+      "seed": 460000019,
+      "split": "train",
+      "level": 0,
+      "posture": "folded_right"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l0:20",
+      "seed": 460000020,
+      "split": "train",
+      "level": 0,
+      "posture": "ready"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l0:21",
+      "seed": 460000021,
+      "split": "train",
+      "level": 0,
+      "posture": "raised"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l0:22",
+      "seed": 460000022,
+      "split": "train",
+      "level": 0,
+      "posture": "left_reach"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l0:23",
+      "seed": 460000023,
+      "split": "train",
+      "level": 0,
+      "posture": "folded_right"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l0:24",
+      "seed": 460000024,
+      "split": "train",
+      "level": 0,
+      "posture": "ready"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l0:25",
+      "seed": 460000025,
+      "split": "train",
+      "level": 0,
+      "posture": "raised"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l0:26",
+      "seed": 460000026,
+      "split": "train",
+      "level": 0,
+      "posture": "left_reach"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l0:27",
+      "seed": 460000027,
+      "split": "train",
+      "level": 0,
+      "posture": "folded_right"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l0:28",
+      "seed": 460000028,
+      "split": "train",
+      "level": 0,
+      "posture": "ready"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l0:29",
+      "seed": 460000029,
+      "split": "train",
+      "level": 0,
+      "posture": "raised"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l0:30",
+      "seed": 460000030,
+      "split": "train",
+      "level": 0,
+      "posture": "left_reach"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l0:31",
+      "seed": 460000031,
+      "split": "train",
+      "level": 0,
+      "posture": "folded_right"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l1:0",
+      "seed": 460010000,
+      "split": "train",
+      "level": 1,
+      "posture": "ready"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l1:1",
+      "seed": 460010001,
+      "split": "train",
+      "level": 1,
+      "posture": "raised"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l1:2",
+      "seed": 460010002,
+      "split": "train",
+      "level": 1,
+      "posture": "left_reach"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l1:3",
+      "seed": 460010003,
+      "split": "train",
+      "level": 1,
+      "posture": "folded_right"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l1:4",
+      "seed": 460010004,
+      "split": "train",
+      "level": 1,
+      "posture": "ready"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l1:5",
+      "seed": 460010005,
+      "split": "train",
+      "level": 1,
+      "posture": "raised"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l1:6",
+      "seed": 460010006,
+      "split": "train",
+      "level": 1,
+      "posture": "left_reach"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l1:7",
+      "seed": 460010007,
+      "split": "train",
+      "level": 1,
+      "posture": "folded_right"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l1:8",
+      "seed": 460010008,
+      "split": "train",
+      "level": 1,
+      "posture": "ready"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l1:9",
+      "seed": 460010009,
+      "split": "train",
+      "level": 1,
+      "posture": "raised"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l1:10",
+      "seed": 460010010,
+      "split": "train",
+      "level": 1,
+      "posture": "left_reach"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l1:11",
+      "seed": 460010011,
+      "split": "train",
+      "level": 1,
+      "posture": "folded_right"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l1:12",
+      "seed": 460010012,
+      "split": "train",
+      "level": 1,
+      "posture": "ready"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l1:13",
+      "seed": 460010013,
+      "split": "train",
+      "level": 1,
+      "posture": "raised"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l1:14",
+      "seed": 460010014,
+      "split": "train",
+      "level": 1,
+      "posture": "left_reach"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l1:15",
+      "seed": 460010015,
+      "split": "train",
+      "level": 1,
+      "posture": "folded_right"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l1:16",
+      "seed": 460010016,
+      "split": "train",
+      "level": 1,
+      "posture": "ready"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l1:17",
+      "seed": 460010017,
+      "split": "train",
+      "level": 1,
+      "posture": "raised"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l1:18",
+      "seed": 460010018,
+      "split": "train",
+      "level": 1,
+      "posture": "left_reach"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l1:19",
+      "seed": 460010019,
+      "split": "train",
+      "level": 1,
+      "posture": "folded_right"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l1:20",
+      "seed": 460010020,
+      "split": "train",
+      "level": 1,
+      "posture": "ready"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l1:21",
+      "seed": 460010021,
+      "split": "train",
+      "level": 1,
+      "posture": "raised"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l1:22",
+      "seed": 460010022,
+      "split": "train",
+      "level": 1,
+      "posture": "left_reach"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l1:23",
+      "seed": 460010023,
+      "split": "train",
+      "level": 1,
+      "posture": "folded_right"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l1:24",
+      "seed": 460010024,
+      "split": "train",
+      "level": 1,
+      "posture": "ready"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l1:25",
+      "seed": 460010025,
+      "split": "train",
+      "level": 1,
+      "posture": "raised"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l1:26",
+      "seed": 460010026,
+      "split": "train",
+      "level": 1,
+      "posture": "left_reach"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l1:27",
+      "seed": 460010027,
+      "split": "train",
+      "level": 1,
+      "posture": "folded_right"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l1:28",
+      "seed": 460010028,
+      "split": "train",
+      "level": 1,
+      "posture": "ready"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l1:29",
+      "seed": 460010029,
+      "split": "train",
+      "level": 1,
+      "posture": "raised"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l1:30",
+      "seed": 460010030,
+      "split": "train",
+      "level": 1,
+      "posture": "left_reach"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l1:31",
+      "seed": 460010031,
+      "split": "train",
+      "level": 1,
+      "posture": "folded_right"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l2:0",
+      "seed": 460020000,
+      "split": "train",
+      "level": 2,
+      "posture": "ready"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l2:1",
+      "seed": 460020001,
+      "split": "train",
+      "level": 2,
+      "posture": "raised"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l2:2",
+      "seed": 460020002,
+      "split": "train",
+      "level": 2,
+      "posture": "left_reach"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l2:3",
+      "seed": 460020003,
+      "split": "train",
+      "level": 2,
+      "posture": "folded_right"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l2:4",
+      "seed": 460020004,
+      "split": "train",
+      "level": 2,
+      "posture": "ready"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l2:5",
+      "seed": 460020005,
+      "split": "train",
+      "level": 2,
+      "posture": "raised"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l2:6",
+      "seed": 460020006,
+      "split": "train",
+      "level": 2,
+      "posture": "left_reach"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l2:7",
+      "seed": 460020007,
+      "split": "train",
+      "level": 2,
+      "posture": "folded_right"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l2:8",
+      "seed": 460020008,
+      "split": "train",
+      "level": 2,
+      "posture": "ready"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l2:9",
+      "seed": 460020009,
+      "split": "train",
+      "level": 2,
+      "posture": "raised"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l2:10",
+      "seed": 460020010,
+      "split": "train",
+      "level": 2,
+      "posture": "left_reach"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l2:11",
+      "seed": 460020011,
+      "split": "train",
+      "level": 2,
+      "posture": "folded_right"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l2:12",
+      "seed": 460020012,
+      "split": "train",
+      "level": 2,
+      "posture": "ready"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l2:13",
+      "seed": 460020013,
+      "split": "train",
+      "level": 2,
+      "posture": "raised"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l2:14",
+      "seed": 460020014,
+      "split": "train",
+      "level": 2,
+      "posture": "left_reach"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l2:15",
+      "seed": 460020015,
+      "split": "train",
+      "level": 2,
+      "posture": "folded_right"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l2:16",
+      "seed": 460020016,
+      "split": "train",
+      "level": 2,
+      "posture": "ready"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l2:17",
+      "seed": 460020017,
+      "split": "train",
+      "level": 2,
+      "posture": "raised"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l2:18",
+      "seed": 460020018,
+      "split": "train",
+      "level": 2,
+      "posture": "left_reach"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l2:19",
+      "seed": 460020019,
+      "split": "train",
+      "level": 2,
+      "posture": "folded_right"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l2:20",
+      "seed": 460020020,
+      "split": "train",
+      "level": 2,
+      "posture": "ready"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l2:21",
+      "seed": 460020021,
+      "split": "train",
+      "level": 2,
+      "posture": "raised"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l2:22",
+      "seed": 460020022,
+      "split": "train",
+      "level": 2,
+      "posture": "left_reach"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l2:23",
+      "seed": 460020023,
+      "split": "train",
+      "level": 2,
+      "posture": "folded_right"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l2:24",
+      "seed": 460020024,
+      "split": "train",
+      "level": 2,
+      "posture": "ready"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l2:25",
+      "seed": 460020025,
+      "split": "train",
+      "level": 2,
+      "posture": "raised"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l2:26",
+      "seed": 460020026,
+      "split": "train",
+      "level": 2,
+      "posture": "left_reach"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l2:27",
+      "seed": 460020027,
+      "split": "train",
+      "level": 2,
+      "posture": "folded_right"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l2:28",
+      "seed": 460020028,
+      "split": "train",
+      "level": 2,
+      "posture": "ready"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l2:29",
+      "seed": 460020029,
+      "split": "train",
+      "level": 2,
+      "posture": "raised"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l2:30",
+      "seed": 460020030,
+      "split": "train",
+      "level": 2,
+      "posture": "left_reach"
+    },
+    {
+      "id": "mars:arm-splines-v1:train:l2:31",
+      "seed": 460020031,
+      "split": "train",
+      "level": 2,
+      "posture": "folded_right"
+    },
+    {
+      "id": "mars:arm-splines-v1:audit:l0:0",
+      "seed": 470000000,
+      "split": "audit",
+      "level": 0,
+      "posture": "ready"
+    },
+    {
+      "id": "mars:arm-splines-v1:audit:l0:1",
+      "seed": 470000001,
+      "split": "audit",
+      "level": 0,
+      "posture": "raised"
+    },
+    {
+      "id": "mars:arm-splines-v1:audit:l0:2",
+      "seed": 470000002,
+      "split": "audit",
+      "level": 0,
+      "posture": "left_reach"
+    },
+    {
+      "id": "mars:arm-splines-v1:audit:l0:3",
+      "seed": 470000003,
+      "split": "audit",
+      "level": 0,
+      "posture": "folded_right"
+    },
+    {
+      "id": "mars:arm-splines-v1:audit:l0:4",
+      "seed": 470000004,
+      "split": "audit",
+      "level": 0,
+      "posture": "ready"
+    },
+    {
+      "id": "mars:arm-splines-v1:audit:l0:5",
+      "seed": 470000005,
+      "split": "audit",
+      "level": 0,
+      "posture": "raised"
+    },
+    {
+      "id": "mars:arm-splines-v1:audit:l0:6",
+      "seed": 470000006,
+      "split": "audit",
+      "level": 0,
+      "posture": "left_reach"
+    },
+    {
+      "id": "mars:arm-splines-v1:audit:l0:7",
+      "seed": 470000007,
+      "split": "audit",
+      "level": 0,
+      "posture": "folded_right"
+    },
+    {
+      "id": "mars:arm-splines-v1:audit:l0:8",
+      "seed": 470000008,
+      "split": "audit",
+      "level": 0,
+      "posture": "ready"
+    },
+    {
+      "id": "mars:arm-splines-v1:audit:l0:9",
+      "seed": 470000009,
+      "split": "audit",
+      "level": 0,
+      "posture": "raised"
+    },
+    {
+      "id": "mars:arm-splines-v1:audit:l0:10",
+      "seed": 470000010,
+      "split": "audit",
+      "level": 0,
+      "posture": "left_reach"
+    },
+    {
+      "id": "mars:arm-splines-v1:audit:l0:11",
+      "seed": 470000011,
+      "split": "audit",
+      "level": 0,
+      "posture": "folded_right"
+    },
+    {
+      "id": "mars:arm-splines-v1:audit:l0:12",
+      "seed": 470000012,
+      "split": "audit",
+      "level": 0,
+      "posture": "ready"
+    },
+    {
+      "id": "mars:arm-splines-v1:audit:l0:13",
+      "seed": 470000013,
+      "split": "audit",
+      "level": 0,
+      "posture": "raised"
+    },
+    {
+      "id": "mars:arm-splines-v1:audit:l0:14",
+      "seed": 470000014,
+      "split": "audit",
+      "level": 0,
+      "posture": "left_reach"
+    },
+    {
+      "id": "mars:arm-splines-v1:audit:l0:15",
+      "seed": 470000015,
+      "split": "audit",
+      "level": 0,
+      "posture": "folded_right"
+    },
+    {
+      "id": "mars:arm-splines-v1:audit:l1:0",
+      "seed": 470010000,
+      "split": "audit",
+      "level": 1,
+      "posture": "ready"
+    },
+    {
+      "id": "mars:arm-splines-v1:audit:l1:1",
+      "seed": 470010001,
+      "split": "audit",
+      "level": 1,
+      "posture": "raised"
+    },
+    {
+      "id": "mars:arm-splines-v1:audit:l1:2",
+      "seed": 470010002,
+      "split": "audit",
+      "level": 1,
+      "posture": "left_reach"
+    },
+    {
+      "id": "mars:arm-splines-v1:audit:l1:3",
+      "seed": 470010003,
+      "split": "audit",
+      "level": 1,
+      "posture": "folded_right"
+    },
+    {
+      "id": "mars:arm-splines-v1:audit:l1:4",
+      "seed": 470010004,
+      "split": "audit",
+      "level": 1,
+      "posture": "ready"
+    },
+    {
+      "id": "mars:arm-splines-v1:audit:l1:5",
+      "seed": 470010005,
+      "split": "audit",
+      "level": 1,
+      "posture": "raised"
+    },
+    {
+      "id": "mars:arm-splines-v1:audit:l1:6",
+      "seed": 470010006,
+      "split": "audit",
+      "level": 1,
+      "posture": "left_reach"
+    },
+    {
+      "id": "mars:arm-splines-v1:audit:l1:7",
+      "seed": 470010007,
+      "split": "audit",
+      "level": 1,
+      "posture": "folded_right"
+    },
+    {
+      "id": "mars:arm-splines-v1:audit:l1:8",
+      "seed": 470010008,
+      "split": "audit",
+      "level": 1,
+      "posture": "ready"
+    },
+    {
+      "id": "mars:arm-splines-v1:audit:l1:9",
+      "seed": 470010009,
+      "split": "audit",
+      "level": 1,
+      "posture": "raised"
+    },
+    {
+      "id": "mars:arm-splines-v1:audit:l1:10",
+      "seed": 470010010,
+      "split": "audit",
+      "level": 1,
+      "posture": "left_reach"
+    },
+    {
+      "id": "mars:arm-splines-v1:audit:l1:11",
+      "seed": 470010011,
+      "split": "audit",
+      "level": 1,
+      "posture": "folded_right"
+    },
+    {
+      "id": "mars:arm-splines-v1:audit:l1:12",
+      "seed": 470010012,
+      "split": "audit",
+      "level": 1,
+      "posture": "ready"
+    },
+    {
+      "id": "mars:arm-splines-v1:audit:l1:13",
+      "seed": 470010013,
+      "split": "audit",
+      "level": 1,
+      "posture": "raised"
+    },
+    {
+      "id": "mars:arm-splines-v1:audit:l1:14",
+      "seed": 470010014,
+      "split": "audit",
+      "level": 1,
+      "posture": "left_reach"
+    },
+    {
+      "id": "mars:arm-splines-v1:audit:l1:15",
+      "seed": 470010015,
+      "split": "audit",
+      "level": 1,
+      "posture": "folded_right"
+    },
+    {
+      "id": "mars:arm-splines-v1:audit:l2:0",
+      "seed": 470020000,
+      "split": "audit",
+      "level": 2,
+      "posture": "ready"
+    },
+    {
+      "id": "mars:arm-splines-v1:audit:l2:1",
+      "seed": 470020001,
+      "split": "audit",
+      "level": 2,
+      "posture": "raised"
+    },
+    {
+      "id": "mars:arm-splines-v1:audit:l2:2",
+      "seed": 470020002,
+      "split": "audit",
+      "level": 2,
+      "posture": "left_reach"
+    },
+    {
+      "id": "mars:arm-splines-v1:audit:l2:3",
+      "seed": 470020003,
+      "split": "audit",
+      "level": 2,
+      "posture": "folded_right"
+    },
+    {
+      "id": "mars:arm-splines-v1:audit:l2:4",
+      "seed": 470020004,
+      "split": "audit",
+      "level": 2,
+      "posture": "ready"
+    },
+    {
+      "id": "mars:arm-splines-v1:audit:l2:5",
+      "seed": 470020005,
+      "split": "audit",
+      "level": 2,
+      "posture": "raised"
+    },
+    {
+      "id": "mars:arm-splines-v1:audit:l2:6",
+      "seed": 470020006,
+      "split": "audit",
+      "level": 2,
+      "posture": "left_reach"
+    },
+    {
+      "id": "mars:arm-splines-v1:audit:l2:7",
+      "seed": 470020007,
+      "split": "audit",
+      "level": 2,
+      "posture": "folded_right"
+    },
+    {
+      "id": "mars:arm-splines-v1:audit:l2:8",
+      "seed": 470020008,
+      "split": "audit",
+      "level": 2,
+      "posture": "ready"
+    },
+    {
+      "id": "mars:arm-splines-v1:audit:l2:9",
+      "seed": 470020009,
+      "split": "audit",
+      "level": 2,
+      "posture": "raised"
+    },
+    {
+      "id": "mars:arm-splines-v1:audit:l2:10",
+      "seed": 470020010,
+      "split": "audit",
+      "level": 2,
+      "posture": "left_reach"
+    },
+    {
+      "id": "mars:arm-splines-v1:audit:l2:11",
+      "seed": 470020011,
+      "split": "audit",
+      "level": 2,
+      "posture": "folded_right"
+    },
+    {
+      "id": "mars:arm-splines-v1:audit:l2:12",
+      "seed": 470020012,
+      "split": "audit",
+      "level": 2,
+      "posture": "ready"
+    },
+    {
+      "id": "mars:arm-splines-v1:audit:l2:13",
+      "seed": 470020013,
+      "split": "audit",
+      "level": 2,
+      "posture": "raised"
+    },
+    {
+      "id": "mars:arm-splines-v1:audit:l2:14",
+      "seed": 470020014,
+      "split": "audit",
+      "level": 2,
+      "posture": "left_reach"
+    },
+    {
+      "id": "mars:arm-splines-v1:audit:l2:15",
+      "seed": 470020015,
+      "split": "audit",
+      "level": 2,
+      "posture": "folded_right"
+    }
+  ]
+}

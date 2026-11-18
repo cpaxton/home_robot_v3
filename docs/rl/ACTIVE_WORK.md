@@ -43,6 +43,14 @@ error 1.61 mm. Both learned actors move but fail (base boundary / unsafe contact
 all stops confirm. Current 8771 service: `emet-herman-arm-wave`.
 [Checked video and joint outputs](../experiments/herman_elbow_wave_20261117.md).
 
+**Random smooth arm distribution is implemented:** 20% of all training ticks,
+with 10/10/10% existing hand/base/goal changes and 50% TAMP. Seeded FK-witness
+splines cover legal folded and reaching postures, continuous motion through
+interior knots, bounded derivatives and quiet holds. Four exploratory teacher
+cases pass below 2 mm; the complete level-zero teacher and source-bound tests
+must pass before the fixed PPO pilot starts. No training or hardware improvement
+is claimed from those four cases. [Protocol](../experiments/mars_arm_splines_20261117.md).
+
 ## One controller owner and development worktree
 
 Continue controller implementation, training decisions and progress updates in
