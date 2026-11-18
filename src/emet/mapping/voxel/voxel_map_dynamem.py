@@ -124,6 +124,17 @@ class SparseVoxelMapNavigationSpace(SparseVoxelMapNavigationSpaceBase):
         if terrain_hazards:
             self.last_validity["terrain_hazard"] = terrain_hazards[0]  # Compatibility summary.
             self.last_validity["terrain_hazards"] = terrain_hazards
+        ambiguous = getattr(floor_layers, "ambiguous", None)
+        if ambiguous is not None:
+            ambiguous = np.asarray(ambiguous)
+            if ambiguous.shape != obstacles.shape:
+                self.last_validity = {"reason": "terrain_map_shape_mismatch"}
+                return False
+            conflicts = ambiguous[cells[:, 0], cells[:, 1]].astype(bool) & ~observed
+            self.last_validity["floor_evidence"] = {
+                "height_conflict_cells": cells[conflicts].tolist(),
+                "missing_return_cells": cells[~observed & ~conflicts & ~occupied].tolist(),
+            }
         return bool(not occupied.any() and observed.all())
 
     def get_oriented_mask(self, theta):

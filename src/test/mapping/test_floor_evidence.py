@@ -42,6 +42,19 @@ def test_ambiguous_height_and_missing_returns_remain_unknown():
     assert not any(getattr(empty, key).any() for key in ("observed", "inferred", "drops", "raised"))
 
 
+def test_conflicting_floor_returns_are_reported_separately_from_missing_depth_and_hazards():
+    # The recorded q2 failure has substantial floor support but two returns just
+    # outside the band. It is not missing depth, nor a measured 8 cm drop.
+    layers = evidence([[0, 0, 0]] * 24 + [[0, 0, -0.0315], [0, 0, -0.0305]])
+    assert layers.ambiguous[4, 4] and not layers.observed[4, 4]
+    assert not layers.drops[4, 4] and not layers.raised[4, 4]
+    assert not evidence().ambiguous[4, 4]
+    hazard = evidence([[0, 0, 0], [0, 0, -0.2]])
+    assert hazard.drops[4, 4] and not hazard.ambiguous[4, 4]
+    with pytest.raises(ValueError, match="read-only"):
+        layers.ambiguous[4, 4] = False
+
+
 def test_no_frontier_growth_or_iterative_fill():
     layers = evidence()
     assert not layers.inferred[4, 6]

@@ -1,0 +1,230 @@
+# GraphEQA active connection qualification
+
+This follows the [model API smoke](grapheqa_model_api_connection_20261030.md).
+The external controller now has an active sensor/graph/executor connection.
+This is an explicitly adapted GraphEQA baseline, not an unchanged upstream
+reproduction or a completed paired active comparison with emet.
+
+## Input and execution contract
+
+- Scene/spawn selection stays in the renderer. The policy, mapper and planner
+  receive no simulator global pose, semantic sensor, object annotations,
+  enrichment labels, full-scene bounds, global maps or navmesh routes.
+- The renderer retains Habitat's internal navmesh **motor collision filter**.
+  It refuses base motion if that filter is unavailable. No pathfinder route,
+  snapped target or simulator pose is returned to the planning adapter.
+- RGB-D odometry starts at a local origin with calibrated camera height/tilt.
+  Bounded commands initialize registration; the accepted pose comes from RGB-D.
+  Failed depth/registration stops motion, without command-odometry fallback.
+  This is local odometry without loop closure or relocalization.
+- Fresh YOLOE masks use the pinned upstream global vocabulary. Background stays
+  unknown. Learned labels are described as unverified in model context.
+- Geometry uses the shared voxel floor map, grid search, footprint sweep and
+  measured route executor. Only the occupied circular Habitat footprint gives
+  proprioceptive floor support; a surrounding free disk is not invented.
+- A persistent native Hydra process sees only learned sensor packets, static
+  vocabulary and reference code. It has no GPU, network or simulator assets.
+  Native agent nodes update less frequently than captures; context explicitly
+  includes the latest estimated camera pose and timestamp.
+- One reference controller persists across decisions. Its history includes
+  intended target geometry and actual motion receipts. A fresh capture follows
+  each attempt, including a rejected motion. The final model answer is retained.
+  Scoring happens after all episodes, and failed rows remain in the denominator.
+
+The odometry backend is the existing Open3D RGB-D registration API with sampled
+depth/appearance agreement checks. The camera-to-world pose composes with the
+inverse source-to-target transform. See the
+[official Open3D description](https://open3d.org/docs/latest/tutorial/pipelines/rgbd_odometry.html).
+Registration success and self-estimated arrival are not ground-truth accuracy.
+
+## Completed motion gate
+
+Job `20261030_180943_037ded`, source `eaeb5276`, passed in development scene q2:
+
+| Case | Receipt |
+| --- | --- |
+| Observed 0.3 m translation | Success; estimated endpoint residual 2.1 mm, yaw residual 1.61 degrees |
+| Subsequent 90-degree turn | Success; estimated XY residual 2.5 mm, yaw residual 0.12 degrees |
+| Unknown/out-of-grid goal | Rejected before issuing motion |
+
+Artifacts: `/home/cpaxton/runs/emet/grapheqa-navigation-20261030-r3/`.
+They contain registered RGB-D, poses, images, timestamps and shared executor
+receipts. There were 38 executor primitives, no VLM calls and no detector calls.
+This is one short control check, not navigation robustness across environments.
+
+Two earlier failures are preserved:
+
+1. `20261030_180403_b4e6d2`, source `40e1140a`: 4 cm geometry aggregation left
+   isolated unknown floor cells; full-footprint admission disconnected the
+   robot's reachable region. The default 1 cm geometry voxels restored floor
+   connectivity without filling unknown cells or weakening hazard rejection.
+2. `20261030_180646_6a6bab`, source `4b51a9be`: the new primitive adapter switched
+   an in-place turn to steering toward a tiny XY correction as odometry drift
+   crossed a separate 2 cm threshold. It oscillated in heading and failed. The
+   repair preserves turn intent, uses the shared 2.5 cm position tolerance and
+   rejects excessive drift. A regression test covers this failure.
+
+A replay of the earlier ten learned RGB-D packets through the persistent native
+worker also passed: graph updates at frames 5/10 and a complete context with an
+observed frontier at frame 10. This is cached-stream integration validation,
+not a new online-segmentation episode. Replay output:
+`/tmp/grapheqa-native-stream-yfto0tvp/`.
+
+Validation: 63 targeted emet tests and 21 fork API/controller/protocol tests pass.
+The upstream native simulation tests require its isolated Hydra runtime and are
+not included in the host-only count.
+
+## First model-driven diagnostic
+
+At emet `983e409c` / fork `c94c480`, jobs `20261030_181600_a659c7` and
+`20261030_181913_6d9bd7` completed q2/q6/q12 without infrastructure errors. All
+three answers were wrong. q2/q6 returned no action and low confidence; q12
+stopped confidently. No model-selected motion was executed. This does not pass
+active-agent acceptance despite successful HTTP/graph plumbing.
+
+The saved context exposes distinct causes:
+
+- q2 has eight reachable frontiers, but Qwen chooses no action while admitting
+  that the rug is not visible. This is a planning failure, not a missing tool.
+- q6 has no reachable frontier because the fixed zero-height assumption labels
+  measured floor near -0.125 m as a drop. Replaying **identical RGB-D** with a
+  floor reference measured under the stationary occupied footprint restores
+  1,894 reachable cells and eight frontiers. Calibration is startup-only; mixed
+  height/insufficient returns are rejected, and subsequent drops remain hazards.
+  It does not query scene geometry or move the prescribed spawn. Real robots
+  require independent support/mount calibration; this convention repair is
+  confined to the external Habitat adapter.
+- q12 treats the lack of a bedside-table label as proof of absence. The current
+  view shows a sofa/doorway, not a complete bedroom survey. The model's confident
+  answer is retained as wrong; no harness rule replaces it.
+
+The first adapter also left the head down after floor inspection. The repaired
+acquisition now restores the task-facing tilt before assessment, retaining
+floor measurements in the map. The next matched development check repeats all
+three IDs with startup floor calibration and this view restoration. It is not
+a larger benchmark sweep or a claim of improved accuracy.
+
+The repaired q6 movement gate passed in job `20261030_182901_8536b6`, source
+`a2d60b98`: about 2.0 mm estimated translation endpoint residual; subsequent
+90-degree turn yaw residual 0.02 degrees and XY residual 10.5 mm. Unknown goals
+remain rejected. Its measured floor reference was -0.12413 m from 288 underfoot
+returns with a 0.54 mm 5th-to-95th percentile height spread.
+
+Repeating q2/q6/q12 at `a2d60b98` / fork `d710567` in job
+`20261030_183114_980e2f` did **not** establish an active baseline:
+
+| Case | Outcome |
+| --- | --- |
+| q2 | Planner reply repeats an invented frontier list and reaches the 2,048-token cap; retained formatting failure |
+| q6 | Eight reachable frontiers now available; Qwen still emits an uncertain empty plan and wrong C |
+| q12 | Confident wrong C, interpreting missing bedside-table labels as absence |
+
+All three remain in the planned denominator: zero correct, two completed wrong
+answers and one formatting failure. No model-selected motion occurred. The
+mechanical repairs stand, but there is no accuracy-improvement claim. Local
+text-mode JSON validation fails closed; partial answers are not extracted.
+
+A static audit also found that the new frontier adapter would use atan2(0, 0)
+at a coincident frontier endpoint, turning every completed route toward local
++X. It now preserves incoming travel yaw, with a unit regression. None of these
+model runs exercised that latent path, so it does not explain their failures.
+
+The next frozen-input diagnostic uses the same four uniformly spaced RGB
+captures in both image-only and reference-graph conditions. Captures are limited
+to the assessment timestamp, include the current frame, and carry sequence and
+estimated local pose labels. q2's failed response is not excluded: its captured
+input remains valid. This tests context/controller inputs on a reference
+collector's trajectory; it is not a matched active-agent comparison.
+
+## Matched captured-history diagnostic
+
+The contact-sheet experiment (`20261030_183846_6bb2b3`) completed six valid
+replies but exposed an input-quality problem. Qwen resizes **each API image**
+to a maximum side of 512 pixels. A 2-by-2 sheet therefore gives each view only
+about 256 pixels in width and shrinks its drawn labels. Both conditions scored
+0/3; this is not a four-independent-image budget. Keep sheets for human audits.
+
+Fork `8eefc4e` now supports independently attached, text-labeled PNGs in both
+conditions and hashes every image. emet `82044b11` advertises the actual image
+resize caps. The repeated job `20261030_184519_a76b60` used the exact same four
+selected frames, question, model and 2,048-output-token cap:
+
+| Condition | Valid replies | Correct if stopped | Mean request wall time |
+| --- | ---: | ---: | ---: |
+| Four RGB images, no graph/tools | 3/3 | 0/3 | 2.57 s |
+| Same four RGB images + reference graph/controller | 3/3 | 0/3 | 10.85 s |
+
+Exact data-URL comparisons confirm four identical, ordered image attachments
+per pair. Prompt token counts are about 1,235 without the graph versus
+11,500–12,700 with it; the old sheet-only request was about 480. The server
+reports 512-pixel per-image preprocessing and int4 Qwen3-VL-8B. All six replies
+finish normally. No reference call proposes an action. This fixes a real
+evidence-delivery issue, but establishes neither answer improvement nor active
+planning acceptance. Timings exclude collecting the observations/building
+memory; they are not complete-agent runtime comparisons.
+
+Artifacts:
+
+- `/home/cpaxton/runs/emet/grapheqa-four-images-context-pair-20261030/`
+- `/home/cpaxton/runs/emet/grapheqa-uniform4-images-fixture-20261030/`
+- Human question/view panels:
+  `/home/cpaxton/runs/emet/grapheqa-uniform4-fixture-20261030/`
+- Floor-map PNG/PDF, arrays and replay script:
+  `/home/cpaxton/runs/emet/grapheqa-active-calibrated-pilot-20261030/floor-calibration-audit.*`.
+  This figure replays all seventeen startup captures: 0 reachable cells before
+  calibration versus 1,859 after. The earlier 1,894 count used fourteen captures;
+  do not mix the populations. Both comparisons hold their RGB-D inputs fixed.
+
+The source image selection is uniform, with the current capture pinned and no
+future observations. All three cases are retained, including q2's earlier
+format failure. The collector made no task-driven translation, so these are
+weak initial-scan trajectories. A task-independent observed-space collector
+and meaningful model-selected movement are prerequisites for broader claims.
+The graph condition also changes the reference prompt/response structure, so
+this is a complete context/controller comparison, not a causal graph ablation.
+
+Final regression verification: 129 emet mapping/navigation/model-server/history
+tests, one real Habitat sensor-config binding check, and 23 fork API/controller/
+multi-image protocol tests pass. No GPU job or owned model server remains.
+
+## Next live gate and expansion
+
+From clean committed emet and fork checkouts, run the existing managed API check
+with `--active-question-ids 2 --max-decisions 4`, using the root `.venv` Python.
+It owns the local Qwen8B int4 server and starts the Habitat child in
+`.venv-habitat`, preserving the GPU lock. Keep CPU affinity 12, all BLAS/OpenMP
+thread counts at one, caches offline and the 20 GiB free-space reserve.
+
+The initial acquisition sequence is fixed: current frame, nine five-degree
+left turns, three five-degree downward head steps, stationary measured floor
+calibration, and three upward steps restoring the task-facing tilt. Every RGB-D
+frame is segmented online and integrated. Model decisions then select observed objects
+or reachable frontiers. Motion and registration failures are returned as
+feedback, not interpreted as visual absence or used to replace an answer.
+
+The already selected q2/q6/q12 development population now exposes the remaining
+planner/input-coverage failures. Do not call an uncertain no-action response a navigation pass. Match
+pose/perception/motion budgets when connecting the emet side. A matched active
+emet comparison and matched-history image-only controls remain acceptance work;
+do not compare this new sensor-only row directly with historical supplied-pose,
+navmesh-assisted scores. Expand to the fixed twelve-question pilot only after
+both sides meet those contracts. No full sweep is needed at this stage.
+
+Priorities before expansion are: make the reference planning contract clear
+enough to exercise an actual chosen action (without forced answers or a private
+fallback policy); collect useful, task-independent trajectory coverage for the
+image-only controls; then connect the emet policy to the same estimated-pose,
+footprint and movement budgets. Include an explicit basis conversion from the
+historical Habitat X/Z client to the local right-handed Z-up sensor frame.
+The current external avatar has radius 0.1 m and height 1.5 m; sharing executor
+code alone does not establish matched physical settings with the emet client.
+
+## Review and subsequent checks (2026-10-31)
+
+The [review follow-up and planner-contract report](grapheqa_review_and_contract_probe_20261031.md)
+records resolved API review points, 42 passing fork tests and the reviewed native
+stream replay. A frozen field-order probe elicited two uncertain action proposals,
+but fresh q6 one/four-image checks both stopped confidently wrong without motion.
+The default ordering change was reverted. Optional current-first uniform image
+history is now available for controlled qualification; it does not change the
+single-image default or establish active acceptance.

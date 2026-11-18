@@ -2,16 +2,39 @@
 #
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
 
-"""Skill membership and EQA tool schemas (names/schemas must stay stable for traces)."""
+"""Canonical CHAT and EQA tool metadata, independent of handlers and live IO.
+
+Edit names, prompt descriptions, argument JSON schemas and ``returns_info`` here.
+CHAT bindings attach handlers in ``agent.tools``; EQA bindings dispatch through
+``agentic.tools``. Session capability/policy gates can remove tools or specialize
+schemas, so these declarations are the registry, not the advertised tool list.
+Stable names remain part of recorded traces. The human inventory and evidence
+contracts live in ``docs/agent_tool_contracts.md``.
+"""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from emet.agent.skills.modes import AgentMode
 
 _NO_PARAMS: dict[str, Any] = {"type": "object", "properties": {}, "required": []}
+_HEAD_VIEW_PARAMS: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "pan_rad": {"type": "number", "description": "Absolute head pan joint angle in radians; omit to retain it."},
+        "tilt_rad": {"type": "number", "description": "Absolute head tilt joint angle in radians; omit to retain it."},
+    },
+    "required": [],
+}
+_HEAD_VIEW_DESCRIPTION = (
+    "Optional pan_rad/tilt_rad requests one stationary head view instead of a scan/caption; "
+    "the unspecified joint retains its measured angle. Uses advertised robot head limits, "
+    "never silently clips. Read returned bounds, requested/measured angles and frame reception. "
+    "The head stays at the requested view. A rejected/unconfirmed request is not a successful look. "
+    "No base movement, route clearance or object geometry is authorized. "
+)
 
 
 @dataclass(frozen=True)
@@ -26,6 +49,24 @@ class SkillSpec:
     # EQA_EPISODE only: answer mode vs explore mode terminal tool.
     eqa_answer_only: bool = False
     eqa_explore_only: bool = False
+
+
+def head_view_skill(spec: SkillSpec, capability) -> SkillSpec:
+    """Bind optional gaze arguments to the actual session, keeping tool names."""
+    if spec.name not in {"describe_scene", "look_around"}:
+        return spec
+    if capability is None:
+        return replace(
+            spec,
+            parameters=_NO_PARAMS,
+            description=spec.description.replace(_HEAD_VIEW_DESCRIPTION, "")
+            + " Explicit head aiming is unavailable in this session.",
+        )
+    properties = {}
+    for name, (lo, hi) in zip(("pan_rad", "tilt_rad"), (capability.pan, capability.tilt), strict=True):
+        if hi > lo:
+            properties[name] = {**_HEAD_VIEW_PARAMS["properties"][name], "minimum": lo, "maximum": hi}
+    return replace(spec, parameters={"type": "object", "properties": properties, "required": []})
 
 
 # Conceptual aliases (different tool *names* per mode; do not rename EQA tools — traces depend on them).
@@ -43,6 +84,42 @@ SHARED_SKILL_ALIASES: dict[str, dict[AgentMode, str]] = {
 
 EQA_SKILL_SPECS: tuple[SkillSpec, ...] = (
     SkillSpec(
+        name="read_history",
+        modes=frozenset({AgentMode.EQA_EPISODE}),
+        description=(
+            "Read exact retained text from an archived state message. Copy message_id from an archive "
+            "annotation. Optional offset/max_characters paginate it. This returns historical text and "
+            "image IDs; recall_image attaches the pixels. No new observation, movement or geometry permission."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "message_id": {"type": "string", "description": "Exact archived message_id."},
+                "offset": {"type": "integer", "minimum": 0},
+                "max_characters": {"type": "integer", "minimum": 1, "maximum": 8000},
+            },
+            "required": ["message_id"],
+        },
+        returns_info=True,
+    ),
+    SkillSpec(
+        name="recall_image",
+        modes=frozenset({AgentMode.EQA_EPISODE}),
+        description=(
+            "Attach a retained historical image again on the next model turn. Copy the exact image_id "
+            "from an image annotation, not a capture view_id or graph obs_id. This does not move the robot, capture a new "
+            "image, confirm current presence, or admit object geometry."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "image_id": {"type": "string", "description": "Exact image_id from a pixel attachment annotation."}
+            },
+            "required": ["image_id"],
+        },
+        returns_info=True,
+    ),
+    SkillSpec(
         name="inspect_graph",
         modes=frozenset({AgentMode.EQA_EPISODE}),
         description=(
@@ -58,11 +135,9 @@ EQA_SKILL_SPECS: tuple[SkillSpec, ...] = (
         name="explore_frontier",
         modes=frozenset({AgentMode.EQA_EPISODE}),
         description=(
-            "EXPLORE: grow map coverage / change rooms. Locate and close-look questions "
-            "must investigate unused voxel detections (source=voxel) first. Location "
-            "multiple-choice may explore even if a keyword detection is listed. "
-            "Optional 'toward' is weak coverage bias only — not a substitute for "
-            "investigate(obs_id) on a listed detection."
+            "EXPLORE: navigate toward an active frontier to observe new areas and grow map coverage. "
+            "Optional 'toward' is a weak semantic coverage bias, not an object position or a "
+            "specific place-card destination. Movement validation and target verification are separate."
         ),
         parameters={
             "type": "object",
@@ -128,16 +203,18 @@ EQA_SKILL_SPECS: tuple[SkillSpec, ...] = (
             "Refresh camera evidence, map and graph at the current position using the configured scan policy. "
             "When sweeping is disabled this captures the current heading only; it does not turn. "
             "Use rotate_base for an explicit heading change."
+            " " + _HEAD_VIEW_DESCRIPTION
         ),
-        parameters=_NO_PARAMS,
+        parameters=_HEAD_VIEW_PARAMS,
     ),
     SkillSpec(
         name="verify_siglip",
         modes=frozenset({AgentMode.EQA_EPISODE}),
         description=(
-            "Cheap visual check + multimodal VLM assess: does 'phrase' match the current "
-            "camera view / stored view obs_id? Returns PRESENT / CANDIDATE / ABSENT as a "
-            "proposal; only VLM answerable unlocks submit_answer."
+            "Assess 'phrase' in the current camera view or stored view obs_id. Reports retrieval "
+            "proposal scores separately from explicit VLM visual presence and current-view "
+            "object geometry admission when available. A missing proposal is not absence; "
+            "positive visual presence alone is not admitted object geometry."
         ),
         parameters={
             "type": "object",
@@ -159,8 +236,9 @@ EQA_SKILL_SPECS: tuple[SkillSpec, ...] = (
         modes=frozenset({AgentMode.EQA_EPISODE}),
         description=(
             "Submit the final semantic answer text. For MCQ questions, use the selected "
-            "option text without its letter label. Rejected until VLM "
-            "assess marks the view answerable (or the round budget is exhausted)."
+            "option text without its letter label. In model-final mode a supplied answer is committed; "
+            "omit it to request a final model read of the evidence. Completion follows the active episode policy. "
+            "For localization tasks, a semantic answer cannot replace admitted object geometry."
         ),
         parameters={
             "type": "object",
@@ -173,8 +251,8 @@ EQA_SKILL_SPECS: tuple[SkillSpec, ...] = (
         name="finish",
         modes=frozenset({AgentMode.EQA_EPISODE}),
         description=(
-            "End exploration with a short summary of what was mapped. Only allowed once "
-            "frontiers are exhausted or the exploration budget is used."
+            "End exploration with a short summary of what was mapped and what remains unresolved. "
+            "Completion follows the active episode policy."
         ),
         parameters={
             "type": "object",
@@ -188,6 +266,34 @@ EQA_SKILL_SPECS: tuple[SkillSpec, ...] = (
 
 # Chat skill metadata (funcs bind in emet.agent.tools.build_chat_tools).
 CHAT_SKILL_SPECS: tuple[SkillSpec, ...] = (
+    SkillSpec(
+        name="ground_object",
+        modes=frozenset({AgentMode.CHAT}),
+        description=(
+            "Localize one visible object from the camera view attached for this decision, without moving. "
+            "Uses that snapshot's pixels/depth/calibration even if the camera changes while you decide; "
+            "with no camera attachment, captures a view. Returns its decision_view_id when available. "
+            "Use when you can see the target and need observed 3D geometry; no search candidate is required. "
+            "Include all identifying appearance/spatial constraints in query, e.g. nearest black stool in the foreground. "
+            "Returns admitted world XYZ and object/view references, or an explicit abstention with depth/support reasons. "
+            "A view reference or voxel search point is not object geometry. "
+            "After success, find_objects with the same query can plan an approach using this grounding. "
+            "Grounding neither proves route clearance nor authorizes manipulation; those checks remain separate."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Complete object phrase, including identifying attributes or relations; not an EQA question/options.",
+                },
+            },
+            "required": ["query"],
+            "additionalProperties": False,
+        },
+        returns_info=True,
+    ),
     SkillSpec(
         name="plan_task",
         modes=frozenset({AgentMode.CHAT}),
@@ -404,12 +510,14 @@ CHAT_SKILL_SPECS: tuple[SkillSpec, ...] = (
     SkillSpec(
         name="describe_scene",
         modes=frozenset({AgentMode.CHAT}),
-        description="Caption what is in front of the robot *right now* (live head camera) and optionally ground with known scene-graph / map labels. Does NOT move or reorient the robot — this alone is not a 'closer look'. For 'are you sure' / 'look closer' / confirm, first call rotate_base / move_forward / scan_environment (as allowed), then this tool. Queues the live head-camera photo for Discord (not an object crop; use send_object_image for that). Use an empty JSON \"message\" on the tool-call turn so chat/Discord only show your answer after [Tool results].",
-        parameters={
-            "type": "object",
-            "properties": {},
-            "required": [],
-        },
+        description=(
+            "With no arguments, caption the current head camera without motion; optionally ground with known map labels. "
+            + _HEAD_VIEW_DESCRIPTION
+            + "The next coordinator round receives the latest camera image; inspect it before ground_object. "
+            "Queues the head photo for Discord; stored crops use send_object_image. "
+            'Use an empty JSON "message" on the tool-call turn and respond after [Tool results].'
+        ),
+        parameters=_HEAD_VIEW_PARAMS,
         returns_info=True,
     ),
     SkillSpec(
@@ -585,7 +693,7 @@ CHAT_SKILL_SPECS: tuple[SkillSpec, ...] = (
     SkillSpec(
         name="take_picture",
         modes=frozenset({AgentMode.CHAT}),
-        description="Capture the head camera locally. Prefer send_image or describe_scene when the user should see or hear a description — those attach a photo / caption to Discord.",
+        description="Run the configured local head-camera capture command and queue an available head photo for the reply. Missing camera data is an explicit failure; command completion alone does not verify local storage. Prefer send_image for photo-only requests or describe_scene for a caption.",
         parameters={
             "type": "object",
             "properties": {},
@@ -750,18 +858,7 @@ CHAT_SKILL_SPECS: tuple[SkillSpec, ...] = (
 CHAT_EXCLUSIVE_TOOL_NAMES: frozenset[str] = frozenset(s.name for s in CHAT_SKILL_SPECS)
 
 # EQA-only skills (must not appear in the CHAT pack by default).
-EQA_EXCLUSIVE_TOOL_NAMES: frozenset[str] = frozenset(
-    {
-        "inspect_graph",
-        "explore_frontier",
-        "investigate",
-        "navigate_to_obs",
-        "look_around",
-        "verify_siglip",
-        "submit_answer",
-        "finish",
-    }
-)
+EQA_EXCLUSIVE_TOOL_NAMES: frozenset[str] = frozenset(spec.name for spec in EQA_SKILL_SPECS)
 
 
 def eqa_specs_for_submode(submode: str) -> tuple[SkillSpec, ...]:

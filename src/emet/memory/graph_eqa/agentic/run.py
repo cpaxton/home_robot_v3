@@ -19,6 +19,18 @@ from emet.utils.logger import Logger
 _logger = Logger(__name__)
 
 
+def _budget_status(executor, rounds_used):
+    """Resource exhaustion is separate from whether it forced finalization."""
+    used = executor._n_nav + executor._n_explore
+    return {
+        "round_limit": executor.max_rounds,
+        "rounds_used": rounds_used,
+        "navigation_limit": executor.max_nav_steps,
+        "navigation_used": used,
+        "navigation_exhausted": used >= executor.max_nav_steps,
+    }
+
+
 def redirect_rejected_candidates(agent, calls):
     """Rejected query handles cannot consume another router round as a no-op.
 
@@ -164,7 +176,12 @@ def run(self) -> AgenticEQAResult:
     for r in range(self.max_rounds):
         self._round = r
         # Only VLM-assessed ANSWER may auto-submit.
-        if self.mode == "answer" and self._evidence_policy.state == AgenticState.ANSWER and r > 0:
+        if (
+            self.decision_policy != "model_final"
+            and self.mode == "answer"
+            and self._evidence_policy.state == AgenticState.ANSWER
+            and r > 0
+        ):
             # Corroborated (verified) ANSWER may submit early. An unverified
             # ANSWER with budget remaining must keep gathering evidence — early
             # unverified submits were the 2026-08 forced-letter wrongs; the
@@ -199,7 +216,7 @@ def run(self) -> AgenticEQAResult:
             self._unused_detection_hypothesis() is not None
         )
         if (
-            self.decision_policy != "grounded_v2"
+            self.decision_policy == "legacy"
             and self._prefer_explore
             and not skip_prefer_explore
             and self.mode == "answer"
@@ -227,7 +244,7 @@ def run(self) -> AgenticEQAResult:
         # Close-map stay: keep approaching this XY until aimed-close or escape.
         stay_hyp = self._close_map_stay_hypothesis()
         if (
-            self.decision_policy != "grounded_v2"
+            self.decision_policy == "legacy"
             and stay_hyp is not None
             and self.mode == "answer"
             and calls
@@ -251,7 +268,7 @@ def run(self) -> AgenticEQAResult:
         # Mapping-pose graph views are not objects: rewrite to an unused proposal.
         unused_det = self._unused_detection_hypothesis()
         if (
-            self.decision_policy != "grounded_v2"
+            self.decision_policy == "legacy"
             and unused_det is not None
             and self.mode == "answer"
             and calls
@@ -280,7 +297,7 @@ def run(self) -> AgenticEQAResult:
                 }
         # Leave/ABSENT explore-only loops: after a streak of frontiers, force a close look.
         if (
-            self.decision_policy != "grounded_v2"
+            self.decision_policy == "legacy"
             and self.mode == "answer"
             and calls
             and calls[0][0] == "explore_frontier"
@@ -323,7 +340,11 @@ def run(self) -> AgenticEQAResult:
                     "selected": selected_calls,
                     "executed": calls,
                 }
-        eligible_calls = redirect_rejected_candidates(self.agent, calls)
+        # Invalid references are reported by dispatch. Model-final policy
+        # must not silently replace the requested tool or its target.
+        eligible_calls = (
+            redirect_rejected_candidates(self.agent, calls) if self.decision_policy != "model_final" else calls
+        )
         if eligible_calls != calls:
             calls = eligible_calls
             picked_by = f"{picked_by}+rejected_candidate"
@@ -386,7 +407,11 @@ def run(self) -> AgenticEQAResult:
             # double-verify here — that burned rounds on SKIPPED_SAME_VIEW.
         if final is not None:
             break
-        if self.mode == "answer" and self._evidence_policy.state == AgenticState.ANSWER:
+        if (
+            self.decision_policy != "model_final"
+            and self.mode == "answer"
+            and self._evidence_policy.state == AgenticState.ANSWER
+        ):
             if self._auto_submit_allowed(round_idx=self._round):
                 out = self._do_submit_answer()
                 if self._maybe_follow_eqa_explore_action(out):
@@ -441,6 +466,7 @@ def run(self) -> AgenticEQAResult:
     salvage_cf = str(result.salvage_counterfactual_letter or "")
     prev_summary = getattr(self.agent, "_agentic_eqa_summary", None)
     summary = dict(prev_summary) if isinstance(prev_summary, dict) else {}
+    budget_status = _budget_status(self, result.n_rounds)
     summary.update(
         {
             "answer": result.answer,
@@ -452,6 +478,7 @@ def run(self) -> AgenticEQAResult:
             "answer_confidence": result.answer_confidence,
             "decision_rounds": result.decision_rounds,
             "budget_hit": result.budget_hit,
+            "budget_status": budget_status,
             "decision_policy": self.decision_policy,
             "effective_state_contract": self._effective_state_contract_knobs(),
             "router_action_allowlists": {
@@ -481,6 +508,7 @@ def run(self) -> AgenticEQAResult:
             "n_explore": result.n_explore,
             "wall_s": result.wall_s,
             "budget_hit": result.budget_hit,
+            "budget_status": budget_status,
             "tools": result.tool_log,
             "salvage_counterfactual_letter": salvage_cf,
             "answer_provenance": result.answer_provenance,
@@ -583,6 +611,7 @@ def _flush_trace_to_agent(self, result: AgenticEQAResult) -> None:
         "n_nav": result.n_nav,
         "n_explore": result.n_explore,
         "budget_hit": result.budget_hit,
+        "budget_status": _budget_status(self, result.n_rounds),
         "tools": list(result.tool_log),
         "salvage_counterfactual_letter": salvage_cf,
         "scored_policy": "model_final" if self.decision_policy == "model_final" else "no_salvage",

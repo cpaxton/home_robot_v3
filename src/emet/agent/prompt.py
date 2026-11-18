@@ -19,7 +19,7 @@ import json
 import re
 from typing import Any
 
-from emet.agent.tools import Tool, get_tool_descriptions_for_prompt, get_tools
+from emet.agent.tool import Tool, get_tool_descriptions_for_prompt
 from emet.utils.logger import Logger
 
 _logger = Logger(__name__)
@@ -45,20 +45,26 @@ Use "tool_calls": [] when no action is needed.
 Info tools return text (and sometimes photos) for a follow-up reply. When calling any of
 query_*, describe_scene, explore, scan_environment, rotate_base, face_toward, move_forward,
 navigation_diagnostics, send_map_snapshot, list_scene_relations, send_image, send_object_image,
-set "message" to "" on that first turn. After [Tool results], reply with tool_calls [] and a
-message based only on those results (do not invent objects from this prompt).
+set "message" to "" on that tool turn. After [Tool results], continue unfinished work
+using the feedback; call further tools when needed and authorized within the round budget.
+Use tool_calls [] for your final reply when finished, unable to proceed, or required to stop.
+Do not promise a retry without issuing it, or invent observations/actions from this prompt.
+Choose one next action at a time when later actions depend on its outcome.
 
 Action-only tools do not feed a tool-results summary (wave, nod_head, shake_head, avert_gaze,
 go_home, hand_over, quit). Prefer "message": "" — the turn ends after the action.
-For photos the user should *see*, use send_image or describe_scene (not take_picture alone —
-those only capture locally and produce no Discord reply). Never call take_ee_picture without a
+For photos the user should *see*, prefer send_image or describe_scene. take_picture also
+runs the local capture command and queues an available photo; missing camera data remains
+failure. Never call take_ee_picture without a
 prior successful aim_arm_at in this session (it will refuse). Prefer moving/reorienting the
-*base* for a new view, then describe_scene (head camera).
+head with explicit describe_scene pan/tilt or the validated base tools for a new view.
 
 Routing hints:
 - "what can you see" / "tell me what you see" / "describe the scene" (no motion asked)
   → describe_scene only: caption the image in front of you; ground with scene graph/map if useful.
   Do NOT scan, explore, or turn unless the user asked to look around / move.
+- To aim the head for an authorized task, use describe_scene with explicit absolute pan_rad/tilt_rad.
+  Inspect measured feedback and the next camera image. No arguments retains caption-only behavior.
 - "look at X" / "face X" / "turn toward X" / "go toward X" / "go look at X"
   → Prefer face_toward with object_label=X, THEN describe_scene (do not blind-rotate ±45°).
     If drive is available and they clearly want distance ("go to", "drive closer"): move_forward
@@ -147,16 +153,20 @@ def build_agent_system_prompt(
     from emet.agent.env_flags import env_base_rotate_only
 
     if tools is None:
+        from emet.agent.tools import get_tools
+
         tools = get_tools(context or {})
     identity = _IDENTITY_TEMPLATE.format(name=name)
     tools_block = get_tool_descriptions_for_prompt(tools)
     prompt = f"{identity}\n\n{tools_block}\n\n{_FORMAT_BLOCK}"
     if env_base_rotate_only():
+        from emet.agent.tool_policy import ROTATE_ONLY_BLOCKED_TOOLS
+
+        blocked_names = ", ".join(ROTATE_ONLY_BLOCKED_TOOLS)
         prompt += (
             "\n\n# Base motion safety (EMET_BASE_ROTATE_ONLY)\n"
             "XY drive is DISABLED (robot tethered / plugged in). "
-            "Do NOT call explore, move_forward, find_objects, go_home, pick_place, "
-            "execute_pick_place_plan, or hand_over. "
+            f"Do NOT call {blocked_names}. "
             "If the user asks to drive or move forward, reply with tool_calls [] and explain you can "
             "only rotate in place, scan, or describe until drive is re-enabled. "
             "Allowed motion: rotate_base, face_toward, scan_environment.\n"

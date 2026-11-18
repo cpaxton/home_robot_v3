@@ -9,6 +9,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import numpy as np
+import pytest
 
 
 def _make_executor(*, manip_mode: str = "teleport", session_caps: dict | None = None):
@@ -41,6 +42,15 @@ def _make_executor(*, manip_mode: str = "teleport", session_caps: dict | None = 
     exe.emote_task = MagicMock()
     exe.grasp_object = None
     return exe
+
+
+@pytest.mark.parametrize("point", [None, np.array([1.0, 2.0, 0.5])])
+def test_find_task_failure_does_not_mean_executor_quit(point):
+    exe = _make_executor()
+    exe._find = MagicMock(return_value=point)
+    assert exe([("find", "microwave")]) is True
+    assert exe._last_exec_ok is (point is not None)
+    exe._find.assert_called_once_with("microwave")
 
 
 def test_pickup_runs_on_nav_miss_when_sim_teleport_available(monkeypatch):

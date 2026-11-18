@@ -8,8 +8,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from emet.agent.skills.specs import CHAT_SKILL_SPECS, SkillSpec, eqa_specs_for_submode
-from emet.agent.tools import Tool
+from emet.agent.skills.specs import CHAT_SKILL_SPECS, SkillSpec, eqa_specs_for_submode, head_view_skill
+from emet.agent.tool import Tool
 
 if TYPE_CHECKING:
     from emet.memory.graph_eqa import AgenticEQAExecutor
@@ -34,9 +34,19 @@ def bind_eqa_skill(executor: AgenticEQAExecutor, spec: SkillSpec) -> Tool:
 
 
 def bind_eqa_episode_tools(executor: AgenticEQAExecutor, *, eqa_submode: str | None = None) -> list[Tool]:
-    """Assemble the EQA_EPISODE tool pack (stable names/schemas for traces + prefix KV)."""
+    """Bind submode specs and controller-qualified floor/base tools.
+
+    Gaze arguments are specialized from declared head limits. This binder does
+    not apply decision-policy advertisement changes; the EQA public builder in
+    ``memory.graph_eqa.agentic.tools`` removes model-final's navigation alias.
+    """
     submode = eqa_submode if eqa_submode is not None else getattr(executor, "mode", "answer")
-    tools = [bind_eqa_skill(executor, spec) for spec in eqa_specs_for_submode(str(submode))]
+    from emet.controller.dynamem.head_observation import task_head_capability
+
+    capability = task_head_capability(getattr(getattr(executor, "agent", None), "robot", None))
+    tools = [
+        bind_eqa_skill(executor, head_view_skill(spec, capability)) for spec in eqa_specs_for_submode(str(submode))
+    ]
     from emet.controller.dynamem.look import supports_floor_observation
 
     if supports_floor_observation(getattr(executor, "agent", None)):

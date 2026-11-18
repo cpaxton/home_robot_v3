@@ -86,6 +86,26 @@ def resolve_vl_generate_timeout_s() -> float | None:
     return val
 
 
+def generation_metadata(
+    *,
+    prompt_tokens: int,
+    new_token_ids: torch.Tensor | list[int],
+    max_new_tokens: int,
+    eos_token_id: int | list[int] | tuple[int, ...] | None,
+) -> dict[str, Any]:
+    """Describe the completed decode without inferring success from its text."""
+    eos_ids = eos_token_id if isinstance(eos_token_id, (list, tuple)) else [eos_token_id]
+    count = len(new_token_ids)
+    ended_on_eos = bool(count and int(new_token_ids[-1]) in eos_ids)
+    limited = count >= max_new_tokens and not ended_on_eos
+    return {
+        "usage": {"prompt_tokens": prompt_tokens, "completion_tokens": count, "total_tokens": prompt_tokens + count},
+        "finish_reason": "length" if limited else "stop",
+        "finish_reason_verified": bool(ended_on_eos or limited),
+        "stop_reason": "eos" if ended_on_eos else ("max_new_tokens" if limited else "backend_stop"),
+    }
+
+
 def _generate_with_heartbeat(
     generate_fn: Callable[[], Any],
     *,
@@ -621,6 +641,8 @@ class Qwen3VLClient(AbstractVLLMClient):
         progress_callback: Callable[[str], None] | None = None,
         assistant_prefill: str | None = None,
     ) -> str:
+        self.last_generation_metadata = None
+
         def _progress(msg: str) -> None:
             if progress_callback is not None:
                 try:
@@ -760,6 +782,12 @@ class Qwen3VLClient(AbstractVLLMClient):
 
         _progress("decode")
         generated_ids_trimmed = [out_ids[trim_from_len:] for out_ids in generated_ids]
+        self.last_generation_metadata = generation_metadata(
+            prompt_tokens=input_len,
+            new_token_ids=generated_ids_trimmed[0],
+            max_new_tokens=ntok,
+            eos_token_id=self.model.generation_config.eos_token_id,
+        )
         output_text = self._postprocess_output(
             self.processor.batch_decode(
                 generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False

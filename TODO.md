@@ -1,5 +1,363 @@
 # Living TODOs (small / near-term)
 
+- [x] Reconcile #247 with main #246 and address the posted review. Preserve
+      public TAMP receipts and measured settling; throttle capability retries,
+      reject missing snapshot RGB and protect recorded credential fields.
+      Frozen integration: 1,776 passed, one optional Habitat skip with a separate
+      passing configuration probe; paper builds to 73 pages. Re-review record:
+      `docs/experiments/pr247_review_20261117.md`. No new model-quality claim.
+- [x] Bind optional gaze arguments to adapter capabilities; native Habitat uses
+      acquisition-time confirmation rather than requiring a streaming sequence.
+      Preserve bounded movement RGB/pose/timing independently of voxel updates
+      and feed it to existing view selection. Keep query images and request
+      traces through debug finalization. The focused pack passes 789 tests;
+      native/live and frozen-packet qualification are separate gates.
+- [x] Document the full registry and evidence/action contracts in
+      `docs/agent_tool_contracts.md`; coverage checks include all registry names.
+- [x] Qualify the new native head path, frozen Q12 overview/detail packets and
+      an end-to-end Q12 replay; preserve failures and abstentions. Native gaze
+      passes; Q12 remains wrong despite retained movement views and two tables
+      visible in the current image. No accuracy gain established. Report:
+      `docs/experiments/observation_contracts_20261117.md`. Prior paired
+      micro-pilot: EQA 0/2 both arms; S0 candidate object+destination 2/2 versus
+      pre-gaze 1/2 (212.2 vs 656.7 s episode wall). One seed/two questions do not
+      establish general superiority or a current-main merge gate.
+- [ ] At the next benchmark refresh, run a matched-source small EQA/simple-OVMM pair with complete
+      assessment PNG packets saved. The packet audit extension passes 45
+      focused tests; do not treat the candidate-only Q12 replay as a pair.
+- [ ] Evaluate a small subset of [NVIDIA USDCraft-10K](https://huggingface.co/datasets/nvidia/USDCraft-10K)
+      assets for new articulated OVMM/TAMP/EQA scenes (doors, drawers, appliances
+      and hidden-object tasks). Assess OpenUSD/PhysX to MuJoCo/MJCF import;
+      preserve joint limits, collision shapes, scale and physical properties.
+      Validate opening/closing and retain asset IDs, revisions and attribution.
+
+- [x] Have a fresh-context subagent actually operate production CHAT tools in
+      live simulation. Independent six-round trial and informed eight-round
+      follow-up both fail localization; preserve failures and separate loop
+      completion from task success. Report and evidence paths:
+      `docs/experiments/independent_operator_trial_20261116.md`.
+- [x] Repair the observed CHAT FIND handoff: failed `_find` must set task failure,
+      executor-mapped information tools must deliver detailed receipts and permit
+      model follow-up. Do not execute tools twice or equate executor liveness
+      with localization. Successful/failed FIND now reach the next production
+      CHAT/HTTP request with detailed navigation feedback and execute once;
+      mapped information tools honor returns_info. The 95-test focused pack,
+      including existing scan checks, passes. Live task success remains unproven.
+- [x] Qualify rby1/Galaxea-proxy measured gaze in the real simulation bridge:
+      the earlier physics worker had died on the physical guard's rejected legacy
+      pose hold while publication remained alive. Physical mode now skips that
+      hold; fatal physics stops publication. All four live head configurations
+      pass unchanged tolerance, with advancing simulation time and an upright
+      base; 76 focused CPU tests pass. Mark earlier r2/r3 trials infrastructure-
+      invalid. Informed r4 retry sees the microwave and recovers floor coverage,
+      but obtains no admitted object position. See the operator report.
+- [x] Route CHAT face_toward through the existing world-frame conversion and
+      validated rotation handler; preserve measured success/rejection instead of
+      reporting legacy executor liveness as turn success. CPU acceptance passes;
+      no live retry of this additional repair yet.
+- [x] Make current-view object grounding callable by the CHAT coordinator using
+      existing RGB-D admission, without requiring a frontier approach first.
+      Keep unverified search references distinct from object geometry; preserve
+      fresh manipulation authorization. `ground_object` now uses the existing
+      capture/admission path and returns geometry/provenance or explicit failure;
+      opt-in find profile enables verified instance admission. The 140-test
+      focused pack passes, including real CHAT/HTTP continuation checks.
+- [x] Qualify the new grounding call on recorded RGB-D. Initial optional
+      description was ignored by the VLM's intentional question-context rule;
+      a single complete object phrase now reaches both inference prompts.
+      Foreground stool mask is manually verified, 20,454 depth points admitted;
+      cropped microwave abstains. No robot actions or GT masks/poses. Report:
+      `docs/experiments/coordinator_grounding_20261116.md`.
+- [x] Retry the bounded operator case with ground_object exposed. All three
+      groundings abstain; the target is visually identified but no XYZ admitted.
+      A clearer coordinator image is replaced by a cropped grounding capture.
+      Active list stays 32 across all twelve rounds (34 registered; task-plan
+      pair provider-gated), up one from the prior live session. Report:
+      `docs/experiments/agent_tool_surface_20261117.md`.
+- [x] Preserve the exact decision RGB-D snapshot, calibration and scope for
+      grounding within the existing capability. Return source-image association;
+      keep acquisition timing and manipulation reacquisition boundaries explicit.
+      Clear decision pixels survive a newer clipped capture in CHAT/HTTP tests;
+      live RGB/display/depth association passes 2/2. Foreground-stool positive
+      control admits 18,082 points with a manually checked mask; microwave still
+      abstains on a clipped view. Fix live-discovered immutable-frame metadata
+      error; 187 focused tests pass, including scope-reset rejection. Report:
+      `docs/experiments/decision_view_handoff_20261117.md`.
+- [x] Qualify general measured task gaze without adding a tool: optional
+      pan/tilt on CHAT describe_scene and EQA look_around share floor's measured
+      head primitive. Live out-of-range rejection and unclipped microwave view
+      pass; Qwen recognizes the target, but depth-range admission still rejects.
+      Floor recovery clears checked-pose unknown cells and restores task gaze;
+      replanned approach reports 0.230 m actual travel. Longer route rejects on
+      occupancy. Fix the diagnostic's local/world clearance-coordinate bug
+      separately; 659 focused tests pass. Parent-operated, not independent or
+      autonomous Qwen task success. `docs/experiments/task_gaze_qualification_20261117.md`.
+- [ ] Run small paired EQA/simple OVMM gates on the new task-gaze revision.
+      Audit the occupied cell from the task-gaze pilot and qualify an alternative
+      closer-view route without weakening clearance or admitting far proposals.
+      Microwave still has no admitted XYZ. No broad sweep.
+- [ ] Consolidate CHAT overlaps before further tool expansion: query_memory /
+      query_scene_graph first, then head-photo delivery variants. Keep storage,
+      wrist authorization and historical-vs-current evidence semantics intact;
+      use existing registry/capability machinery. No task-specific tool pruning
+      or new routing framework. General task gaze should extend/consolidate the
+      inspection interface rather than add separate directional recovery tools.
+- [ ] Expose floor-support coverage alongside obstacle clearance; targeted floor
+      inspection should consider reachable visible unknown cells rather than
+      stopping on the first behind-camera candidate. Preserve drop/step safety.
+
+- [x] Audit the frozen history failure through real preprocessing and controlled
+      presentation tests. Both frames reach local preprocessing (575 tokens),
+      but both backends abstain on earlier-turn pixels and read them in one
+      current message. Recall restores historical color; local int4 then
+      confuses past/current presence while Caliban does not. Neutral
+      acknowledgement does not fix history. Twenty-two completed diagnostic
+      calls; remote precision remains unverified; no runtime policy flip:
+      `docs/experiments/history_context_audit_20261116.md`.
+- [ ] Compare a bounded current-decision evidence bundle with images attached
+      only in earlier turns, preserving original dialogue and truthful capture
+      order/roles. Qualify historical positives AND current-view negatives
+      before paired EQA/OVMM checks. Use existing view-selection machinery;
+      do not force model answers or add another recovery policy.
+
+- [ ] Simplify the active agent before adding recovery policies: separate
+      last-observed find geometry from current physical-action authorization,
+      remove duplicate advertised tools and task-irrelevant state instructions,
+      then compare fixed contexts with local int4/Caliban using matched decoding.
+      Caliban HTTP is healthy; live dtype/revision remain unverified and the
+      current paired driver deliberately strips endpoint overrides.
+      Audit: `docs/experiments/agent_complexity_review_20261116.md`.
+      First slice now separates find coordinates from present-view verification,
+      preserves invalidation and fresh manipulation checks, removes the advertised
+      navigate alias in model-final, and trims find-only memory instructions.
+      The serial room driver now supports explicit remote model endpoints with
+      unverified precision/decoding labeled honestly. CPU gate: 386 pass, two
+      simulator opt-ins skip; live qualification and fixed-packet model calls
+      remain separate. Staged test plan and budgets:
+      `docs/plans/2026-11-16_harness_simplification_and_model_eval.md`.
+      First live simplified check completes without OOM: 1/2 phases; bowl ends
+      in four rounds, microwave still lacks geometry after eleven. All 15
+      executions match model choices and 30 assistant/tool messages stay exact.
+      No stable performance gain is established. Report:
+      `docs/experiments/agent_simplification_20261116.md`.
+
+- [x] Connect the sensor-only active GraphEQA baseline. Supplied-model inference,
+      learned native graph and observed-space navigation run together; a real
+      model-selected q6 frontier reaches a fresh assessment. Bounded retries,
+      interrupted-decision traces, answer history and callable frontier projection
+      are repaired; 46 fork tests, 25 emet tests and a native 15-packet replay pass.
+      Task failures remain baseline outcomes, not blockers for this connection.
+      The final two-case check has no successful answers; preserve all truncations,
+      wrong answers and failed rows without overrides or further model tuning.
+      Report: `docs/experiments/grapheqa_decoding_control_20261101.md`.
+- [x] Run the first frozen paired answer-path pilot: images-only, external
+      GraphEQA and production model-final answering on an empty graph receive
+      identical PNG packets and matched total output allowances, including the
+      keyword call. All 36 planned trials complete inference; one GraphEQA reply
+      fails formatting. Correct counts are 0/12, 1/12 and 1/12 on four correlated
+      development snapshots. Mean answer-path times are 2.44 / 11.97 / 3.61 s;
+      these exclude collection/navigation and are not full-agent results. Packet
+      audit, question/view/path panels, source pins and limits:
+      `docs/experiments/frozen_eqa_comparison_20261103.md`.
+- [x] Complete the first bounded sensor-only active EQA pair: q2/q6/q12 at
+      `9ff8521f`, all six episodes finish, both agents 0/3. Shared estimated-pose
+      body, navigation geometry and motion budgets are wired; sampling is isolated
+      from geometry updates. No task-quality improvement is established. Manual
+      image audit shows inadequate target context; emet translates 2.46–3.27 m
+      while native GraphEQA requests no forward motion. Preserve the 118 versus
+      nine model-call imbalance: this is a whole-system diagnostic, not an
+      isolated graph ablation. Report/figures:
+      `docs/experiments/active_sensor_agent_pilot_20261106.md`.
+- [ ] Finish small S0/Molmo find qualification after the common Stretch clock repair.
+      Old main timed out at ~0.03x under the loaded one-core protocol. Cache the
+      native compiled-model hash per model; 34 targeted tests pass and the idle
+      full bridge improves 0.166x -> 0.605x on four safe physical cores. Use
+      main+shared repair versus candidate with identical allocation, preserve
+      failed rows, and measure loaded RTF before interpreting object search.
+      Repaired S0 completes both arms: cylinder found, destination missing
+      (1/2 phases each; 573/412 s; no superiority established). Molmo initially
+      fails wrapper discovery; retry through the installed Python 3.11 override
+      after cached scene merge preflight. Molmo retry completes both arms, bowl
+      found and microwave missing (1/2 phases each; 173/143 s). Both arms are
+      0/2 complete find tasks across S0/Molmo; task acceptance remains red.
+      Neither EQA nor find-only results qualify pick/place.
+- [ ] Diagnose S0 candidate waypoint timeout (sequence 27) at healthy ~0.58x
+      simulator rate; preserve measured terminal pose in failed receipts before
+      attributing the failure to control versus contact. Separately test the
+      exploration arrival head policy: hardcoded level pitch produces empty
+      sky/floor in the table scene, losing a previously visible target. Retain
+      image/command context and avoid task-specific pitch rules.
+- [ ] Follow the diagnostic EQA cohort with broader target-covering trajectories,
+      matched-history image-only controls and predeclared task budgets. Retain
+      model-final answers, raw context and failed actions; do not tune the
+      reference baseline until it succeeds. Stronger-model comparisons remain
+      optional ablations, not prerequisites for accepting the connection.
+- [ ] Recover the visible Molmo microwave with a safe closer view. Cached masks
+      cover the coffee maker; Qwen-box/SAM2 finds the microwave but its median
+      depth is 3.34 m, beyond the unchanged 2.5 m support limit. Range failures
+      now remain distinct from object absence. The alternative provider loses
+      the bowl control 0/3 versus 3/3 cached; retain multiple opt-in providers,
+      preserve semantic rejections and avoid a global provider/depth default flip.
+      Offline diagnostic: 24/24 attempts complete; no task-quality gain claimed.
+      Coordinator-visible recovery now preserves task gaze, source-bound image
+      proposal bearings, nested geometry feedback and camera observations across
+      CHAT tool rounds; 268 contract/CPU geometry checks pass. The central model
+      chooses sensing, movement and stopping in model-final mode: legacy
+      automatic stops, navigation redirects and inference-failure action
+      substitutions are disabled. Explicit approach indices and dialogue survive.
+      Failed investigation now returns fresh current-view evidence alongside the
+      unchanged navigation failure. Strict live check restores bowl admission
+      (1/2 phases); all 10 executions match model selections. The microwave is
+      visible at 3.304 m after all three nav steps are spent, so the model's
+      correct semantic location still lacks admitted geometry. An earlier 2/2
+      pass used legacy post-error navigation and is retained separately.
+      Freeze the strict candidate for a broader matched EQA/find pilot; any
+      larger horizon must apply to both arms. No system superiority is claimed.
+      Plan: `docs/experiments/closer_view_feedback_20261113.md`.
+- [x] Run the frozen recovery-budget check: new candidate at 6/3, then baseline
+      and candidate at 12/8 rounds/navigation calls per find phase. Driver and
+      opt-in acceptance profile now expose/use 12/8; independent navigation
+      exhaustion is recorded, and relative motion uses the shared counter.
+      Explicit answer commits, bounded HTTP CHAT history and cached-camera
+      labeling are repaired/covered. Preserve a new low-budget control because
+      answer semantics changed too. All three episodes complete: candidate 1/2
+      at 6/3, baseline and candidate both 2/2 at 12/8. Candidate query time
+      165 s versus 332 s baseline in this one stochastic episode, not a stable
+      speedup claim. Candidate 13/13 actions match model choices; baseline uses
+      two legacy redirects. Microwave geometry is admitted at 1.646 m median
+      proposal depth versus a 3.476 m rejection in the low control. The bowl
+      phase changes the next phase's start pose; deliberate recovery from the
+      range receipt and causal budget benefit are not established. Approved
+      ten-file deduplication freed 5.24 GiB; the run declared a monitored 16 GiB
+      floor. Nov 15 cleanup reclaimed 10.40 GiB of disposable download/lint
+      caches, restoring roughly 20 GiB free; recheck before further live tests.
+      User-approved raw-array archival subsequently reclaimed 23.76 GiB, leaving
+      about 40 GiB free; all 214 batches verified and visual/metric files retained.
+      Restore/index: `docs/experiments/debug_array_archival_20261115.md`.
+      Review/protocol: `docs/experiments/recovery_budget_review_20261114.md`.
+- [ ] Repeat matched 12/8 find checks and small EQA/another-room acceptance;
+      preserve failures and compare then-current main before scaling. Add a
+      shared-start out-of-range diagnostic to distinguish model-selected closer
+      views from incidental gains caused by a preceding task's trajectory.
+      Do not add answer overrides or automatic high-level action substitutions.
+- [ ] Fix multimodal packet growth before another long-horizon repeat: seed-1
+      baseline passes 2/2; candidate bowl terminal localization fails after an
+      earlier admission, then destination inference raises CUDA OOM. Last input
+      contains 28 historical images (15 unique pixel hashes) plus two current
+      images, despite staying within 50 messages. Preserve dialogue/action text;
+      deduplicate/budget image evidence with auditable identities. Keep retained
+      admitted object evidence distinct from latest-view grounding failure.
+      Incomplete pair: `~/runs/emet/recovery-budget-high-20261115-r2/`.
+      Episode image packets now preserve dialogue, bound attachments to eight,
+      expose stable pixel IDs and support explicit historical recall. Offline replay
+      reduces the failing 30 attachments to eight. Live seed-1 retest completes
+      without OOM, 1/2 phases; all 15 requests stay within eight images. The
+      coordinator uses recall_view but still submits a semantic microwave answer
+      without geometry. Find now gets an explicit localization task header;
+      semantic EQA keeps its question header. Header-only live check remains
+      1/2 without OOM. Removed a contradictory legacy routing-priority sentence
+      from the actual tool description; 436 CPU checks pass. Task improvement,
+      broader task acceptance and retained-object selection remain pending.
+      The third image-only check still raises OOM with eight images: long state
+      text also matters. Added a 64k working-character cap that archives only old
+      state text by explicit reference; current state and all assistant/tool text
+      remain exact. read_history retrieves original text and recall_image its
+      pixels. The resource probe completes at 22,773 tokens with a synthetic
+      6 GiB competing GPU allocation; live also completes without OOM (1/2).
+      Fifteen requests respect both bounds, with assistant/tool text unchanged.
+      Fixed a discovered pixel/frame ID naming collision: current tools are
+      recall_image(image_id) and read_history(message_id). 442 CPU checks pass;
+      current-API live check completes without OOM, 0/2 terminal phases. All 16
+      requests respect bounds and preserve 32 assistant/tool messages. Pixel recall
+      uses the correct ID. Bowl geometry remains admitted at submit, but the
+      terminal adapter rejects it without current visual verification; context
+      now states both existing requirements. Investigate last-observed find
+      geometry versus current manipulation authorization as separate contracts.
+      Broader acceptance remains pending.
+      Examples: `docs/experiments/multimodal_context_20261115.md`.
+- [ ] Emit actual per-episode simulation duration, model inference cost and
+      invocation overhead in paper-run manifests. Clock probes and reported
+      episode wall metrics alone do not measure complete task simulation time.
+- [ ] Record effective generation config, RNG/seed policy and environment versions
+      in paper-run manifests. Qwen's checkpoint defaults enable sampling at 0.7;
+      an unseeded one-call contrast does not establish a stable prompt effect.
+      The supplied HTTP server correctly rejects unsupported request seed settings;
+      diagnostic per-call RNG control is not an API capability or cross-GPU guarantee.
+
+- [x] Fork GraphEQA for supplied model endpoints and paired frozen-context
+      evaluation: https://github.com/cpaxton/graph_eqa/pull/1. Planner/room API
+      routing, instance IDs, scorer isolation and complete request traces are
+      tested; the real Qwen8B int4 current-image/graph pair returns valid replies.
+      The active connection is complete; matched evaluations remain separate work.
+- [ ] Extract the model-server contract repairs into a focused PR against current
+      main: loaded-model identity, complete dialogue, unsupported-setting errors,
+      decode receipts and declared native/text tool capabilities. They are tested
+      on `feat/harness-evidence-study`; do not treat main's older server as qualified.
+
+- [ ] Qualify a genuine model-only baseline: identical frozen RGB trajectories,
+      current/uniform/retrieved/selected context, no graph or interactive tools,
+      matched image/token budgets and one frozen backbone. Then run a minimal
+      active-tool agent and semantic-voxel/graph/tool ablations on the EQA/OVMM
+      pilot. Preserve the common physical executor and collision checks. Plan:
+      `docs/experiments/shared_agent_literature_review_20261029.md`.
+      A live current-image vs reference-graph API pair now completes on Qwen8B
+      int4 (`cede090f`, fork `21b6876`); both answers are uncertain. This is one
+      frozen-context wiring check, not matched-history or active acceptance.
+- [ ] Audit runnable 3D-Mem and zero-shot ToolEQA baselines; separately qualify
+      a GraphEQA controller adaptation and an upstream reproduction. Review
+      NavMCP's trajectory-evidence/interface comparison and release dependencies.
+      Do not relabel internal `static_graph` or a reduced tool list as a faithful
+      upstream system; keep models, segmentation inputs and task populations clear.
+      GraphEQA's cached Habitat container passes native learned RGB-D graph
+      construction on 2026-10-30 (five fresh views, 16 object-layer nodes).
+      Repeated updates and the reference agent-state handoff also pass at
+      `476e6c81` (ten fresh views, 20 object nodes and two agent nodes; no model
+      requests). The model API fork and paired context runner are available at
+      https://github.com/cpaxton/graph_eqa/pull/1; live model/context routing passes.
+      The sensor-only pose and measured execution gates now pass in two short
+      scene checks; match the same frame basis/body/budgets on the emet side and
+      resolve model planning before one complete paired active episode. Report:
+      `docs/experiments/grapheqa_model_api_connection_20261030.md`.
+      Native warnings remain; the April-2025 image is a dependency base, not
+      current-source parity.
+- [ ] Qualify GraphEQA with **no privileged scene inputs**: freshly inferred
+      segmentation, explicit episode IDs, no annotation enrichment, semantic
+      masks/IDs, global scene bounds or navmesh route oracle. First run the
+      isolated learned RGB-D -> native Hydra probe (passed at `55ab995e`); then match observed-map
+      navigation and pose estimation across the active agents. Historical
+      semantics-off rows still have navmesh assistance. Protocol and command:
+      `docs/experiments/grapheqa_sensor_only_qualification_20261030.md`.
+
+- [ ] Resolve refresh execution failures before another broad window: rerun the
+      five DynaMem missing-viewpoint exceptions on `6ae052fc`; qualify Molmo's
+      declared assisted/physical mode and fail fast on dead physics; isolate S0
+      tracking and native TAMP release clock/geometry conditions. Preserve the
+      original scores and manifests. Diagnosis:
+      `docs/experiments/benchmark_failure_audit_20261029.md`.
+      Repaired live native two-object TAMP now passes (both goals, zero forbidden
+      commands). All five EQA retries now complete without crashes (2/5 correct),
+      after offline package-cache pruning restored the disk reserve. This closes
+      the identified crash recovery; Molmo and integrated S0 remain open.
+- [ ] Qualify all 12 controlled development interventions through the shared
+      agent. Full Stretch fixtures and production CHAT bindings now exist; live
+      action/evidence audit, learned localization and manipulation are not yet
+      accepted. The remote CHAT image keyword and per-user reset bugs have focused
+      regression fixes; retain the old and corrected live diagnostic artifacts.
+      Qualify official frame packs
+      and evaluators for EXPRESS/AbstainEQA. Protocol/results:
+      `docs/experiments/harness_capability_benchmark.md`.
+- [ ] Resolve cold-map turn feasibility in the new live case: both corrected
+      seen/unseen protocols finish and preserve camera/history, but target-directed
+      floor inspection returns `floor_target_unobservable` and yaw does not change.
+      Compare scripted broad downward inspection with targeted inspection before
+      changing planner clearance. Color correctness is not recall/navigation
+      acceptance. Audit: `paper/data/harness_live_diagnostic_20261029/`.
+- [ ] Complete the frozen-main existing-benchmark refresh across its declared
+      237 tasks; preserve errors/pending cases and resume across idle windows.
+      Gather source-linked figure inputs, audit selected success/failure traces,
+      and assess task quality/cost separately from tooling correctness.
+      `docs/experiments/benchmark_refresh_20261029.md`; no RL work is preempted.
+
 - [x] Land the consolidated [merged TAMP review corrections](docs/plans/2026-11-16_tamp_stack_review.md)
       on `fix/tamp-stack-review`, then integrate them into the observed-admission
       follow-up. Original #226/#231/#234/#242/#243/#244 are merged; the new

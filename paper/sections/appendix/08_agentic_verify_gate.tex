@@ -7,7 +7,13 @@ On larger slices the same gate matters: image-space SigLIP cosine on Habitat RGB
 We therefore treat SigLIP as a \textbf{high-recall / high-false-positive proposal} for ``check here,'' not as a high-precision confirmer (Appendix~\ref{app:agentic_tools}; \texttt{docs/experiments/agentic\_scale.md}).
 Image-space scores use three bands: \texttt{ABSENT}~$< 0.10$ (true-negative \emph{for this view}), \texttt{CANDIDATE}~$[0.10, 0.12)$, \texttt{PRESENT}~$\geq 0.12$.
 
-\paragraph{Intended loop.}
+The following gate sequence and forced recovery diagnostics describe historical
+policies and archived runs. Current \texttt{model\_final} selects actions without
+this forced sequence and preserves explicit semantic submissions
+(Appendix~\ref{app:agentic_tools}); these source changes do not revise the
+reported historical measurements.
+
+\paragraph{Historical intended loop.}
 (1)~Explore / inspect for candidates;
 (2)~move in and score the \emph{new} view once;
 (3)~assess---escalate or answer---never re-verify the same observation.

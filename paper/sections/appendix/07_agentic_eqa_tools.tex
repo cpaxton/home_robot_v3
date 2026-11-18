@@ -1,7 +1,11 @@
 \section{Agentic EQA tools}
 \label{app:agentic_tools}
 
-This appendix documents the scored HM-EQA / Dynagraph \emph{agentic} tool set (\texttt{emet.memory.graph\_eqa.agentic\_tools}), distinct from the interactive Discord/chat agent tools.
+This appendix documents the scored HM-EQA / Dynagraph \emph{agentic} tool set,
+distinct from interactive CHAT. Canonical names, descriptions and argument schemas
+live in \texttt{emet.agent.skills.specs}; EQA bindings live in
+\texttt{emet.memory.graph\_eqa.agentic.tools}. The older
+\texttt{agentic\_tools} import remains a compatibility shim.
 When \texttt{eqa.agentic\_verify} (or \texttt{EMET\_EQA\_AGENTIC\_VERIFY=1}) is set, \texttt{GraphEQAController.run\_eqa} runs \texttt{AgenticEQAExecutor} instead of the classic planning/\texttt{query\_answer} loop (Section~\ref{sec:eqa_loops}).
 
 The historical scored rows pin their own source/configuration; current state,
@@ -17,7 +21,14 @@ The model must reply with only:
 \begin{verbatim}
 {"tool_calls": [{"name": "<tool>", "arguments": {...}}, ...], "message": ""}
 \end{verbatim}
-Rules encoded in the prompt: explore / navigate for candidate views; trust VLM assess over detector proposals; use the listed stable action cards and semantic outcome history rather than repeating unchanged work; one or two tool calls per turn.
+The actual prompt also requests \texttt{current\_room} and
+\texttt{in\_target\_area} context. In \texttt{model\_final}, the model selects
+the next observation/action from images, history and measured outcomes, without
+a required investigate/explore sequence. Explicit submitted semantic answers are
+preserved; omitting the answer requests a final model evidence read. Historical
+\texttt{legacy} and \texttt{grounded\_v2} policies retain their own answer gates,
+progress rules and action substitutions. None of these semantic decisions alone
+admits object geometry or authorizes motion/manipulation.
 SigLIP/OWL are intentionally high-recall (high false positive) support for choosing where to look---not a precision oracle (Appendix~\ref{app:agentic_verify_gate}).
 
 \paragraph{State message (Investigate / Explore cards).}
@@ -31,15 +42,15 @@ After motion tools succeed, the executor captures a fresh observation and update
 \paragraph{Investigate vs.\ explore.}
 The router chooses explicitly: \texttt{investigate(obs\_id)} for a closer look at a listed place card (graph / confirmed / SigLIP), or \texttt{explore\_frontier} to grow coverage when place approaches are exhausted or no place is worth pursuing.
 State splits \textbf{Investigate} and \textbf{Explore} cards; Investigate lines show per-query \texttt{investigated=$N$}, \texttt{approaches=$k$/$N$}, \texttt{coverage=open|closed} (object footprint $\cap$ unexplored frontier), closest approach, and recent station verify/assess outcomes.
-\texttt{navigate\_to\_obs} remains an alias of \texttt{investigate}.
+\texttt{navigate\_to\_obs} remains a callable alias of \texttt{investigate}, but is omitted from \texttt{model\_final} advertisement.
 Optional \texttt{toward} on explore is coverage bias only---not a substitute for investigating a place card.
 
 \paragraph{Station observations are not place cards.}
 Automatic capture stations (\texttt{\_station\_obs\_ids}) appear in memory but are \emph{excluded} from Investigate cards and blocked as \texttt{investigate} targets (\texttt{STATION\_OBS\_NOT\_PLACE}).
 Chasing station obs along a patio (e.g.\ q105) burned the nav budget with zero \texttt{explore\_frontier} calls; the paper-router stack filters them so the router must pick real graph / SigLIP place cards or explore.
 
-\paragraph{Prefer explore after close ABSENT.}
-After a close approach that returns detector/VLM \texttt{ABSENT}, the executor sets \texttt{\_prefer\_explore} and forces one \texttt{explore\_frontier} (state nudge + fallback + run-loop redirect) instead of immediately re-investigating another nearby card.
+\paragraph{Historical explore-after-ABSENT policy.}
+Outside \texttt{model\_final}, after a close approach that returns detector/VLM \texttt{ABSENT}, the executor sets \texttt{\_prefer\_explore} and forces one \texttt{explore\_frontier} (state nudge + fallback + run-loop redirect) instead of immediately re-investigating another nearby card.
 When action history is agent-visible, state also surfaces a short \textbf{Recent actions} history so the router sees prior ABSENT / explore outcomes within the episode.
 
 \paragraph{Configurable action-history visibility.}
@@ -113,22 +124,35 @@ diagnostics only. Frozen details:
 \subsection{Answer-mode tools}
 
 \begin{description}
+  \item[\texttt{read\_history}] Read exact retained text by archived
+    \texttt{message\_id}, with optional \texttt{offset}/\texttt{max\_characters}
+    pagination. This does not acquire new evidence.
+  \item[\texttt{recall\_image}] Reattach retained historical pixels by
+    \texttt{image\_id}; recall is not fresh visibility or current geometry.
   \item[\texttt{inspect\_graph}] Refresh question keywords and retrieve up to $K$ place evidence cards from the scene graph, SigLIP hits, and frontier waypoints (diversified source packing).
     Use when the evidence list looks stale or empty.
     Parameters: none.
-  \item[\texttt{explore\_frontier}] Grow map coverage when no Investigate place is worth a closer look (or after close ABSENT).
+  \item[\texttt{explore\_frontier}] Navigate for new coverage; legacy policies can prefer this after exhausted Investigate cards or close ABSENT.
     Optional \texttt{toward} is weak coverage bias only---not investigate.
     Agentic prefers a VLM pick among reachable frontier RGBs when available.
     Successful visits retire nearby frontier graph nodes.
   \item[\texttt{investigate}] Closer look at a listed Investigate \texttt{obs\_id}: sample a navigable floor pose in an annulus around the object (prefer frontier-adjacent), look around, verify/assess; card shows \texttt{coverage=open|closed} from footprint$\cap$frontier and \texttt{approaches=$k$/$N$}.
-  \item[\texttt{navigate\_to\_obs}] Alias for \texttt{investigate}.
-  \item[\texttt{look\_around}] In-place head sweep / rotate to refresh map and graph without translating.
-    Parameters: none.
+  \item[\texttt{navigate\_to\_obs}] Compatibility alias for \texttt{investigate}, hidden in \texttt{model\_final}.
+  \item[\texttt{look\_around}] Refresh evidence with the configured scan policy;
+    when sweeping is disabled it captures the current heading only. Optional
+    \texttt{pan\_rad}/\texttt{tilt\_rad}, advertised only with declared head
+    limits, request a measured stationary head view instead of a sweep. Omitted
+    joints retain their measured angle; out-of-range requests are rejected.
   \item[\texttt{verify\_siglip}] Cheap visual check: does string \texttt{phrase} match the current camera view or stored view \texttt{obs\_id} (default $-1$ = latest fresh view)?
-    Returns \texttt{PRESENT} / \texttt{CANDIDATE} / \texttt{ABSENT} with a similarity score as a \emph{proposal} for state.
-  \item[\texttt{submit\_answer}] Submit the final answer (MCQ letter or short phrase).
-    Unlocked when VLM assess marks the view answerable (detector PRESENT alone does not open the gate).
-    Optional string \texttt{answer}.
+    Reports retrieval proposals separately from VLM visual presence, answerability
+    and object-geometry admission. Positive presence is not a geometric position;
+    voxel detection handles are not camera-view IDs.
+  \item[\texttt{submit\_answer}] Submit optional semantic \texttt{answer} text
+    (for MCQ, option text without its letter). \texttt{model\_final} preserves an
+    explicit submission; omission requests a final model read. Historical policies
+    can require positive answer evidence or apply their configured unverified
+    fallback. Detector PRESENT alone is not semantic proof. OVMM localization
+    independently requires admitted object geometry.
 \end{description}
 
 \subsection{Explore-mode tools}
@@ -137,8 +161,20 @@ When no question is provided (map-building explore), \texttt{submit\_answer} is 
 
 \begin{description}
   \item[\texttt{finish}] End exploration with an optional one-sentence \texttt{summary}.
-    Allowed once frontiers are exhausted or the exploration budget is used.
+    Completion follows the selected episode policy; this tool is mutually exclusive with \texttt{submit\_answer}.
 \end{description}
+
+\subsection{Capability-qualified shared tools}
+
+EQA can additionally bind CHAT's \texttt{observe\_floor},
+\texttt{rotate\_base} and \texttt{move\_forward} when the controller declares
+support. Floor inspection requires measured head motion and calibrated depth,
+rechecks the rejected footprint and restores task gaze; it does not authorize a
+route. Relative motion reports actual progress and refusal reasons rather than
+assuming requested travel. The registry contains ten EQA names across both
+terminal submodes. The advertised \texttt{model\_final} pack contains eight base
+tools, plus up to three shared tools; other policies retain the navigation alias.
+The session schema is authoritative for optional arguments and bounds.
 
 \subsection{Budgets and configuration}
 

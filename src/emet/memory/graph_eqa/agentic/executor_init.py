@@ -138,6 +138,9 @@ def init_executor(
     cfg_decision = _eqa_cfg(agent).get("agentic_decision_policy", "legacy")
     self.decision_policy = resolve_agentic_decision_policy(env_decision if env_decision is not None else cfg_decision)
     eqa_cfg = _eqa_cfg(agent)
+    from emet.memory.navigation_views import bind_navigation_views
+
+    bind_navigation_views(agent)
     if getattr(agent, "robot", None) is not None:
         # Preserve one actual path/yaw-boundary frame independently of optional
         # history ranking. Unsupported adapters provide no before-turn capture.
@@ -197,6 +200,9 @@ def init_executor(
         else (bool(trace_path) or env_eqa_collect_trace() or bool(_eqa_cfg(agent).get("collect_agentic_trace", False)))
     )
     self._trace_path = Path(trace_path) if trace_path else None
+    episode_dir = getattr(agent, "_episode_debug_dir", None)
+    if self._collect_trace and self._trace_path is None and isinstance(episode_dir, (str, Path)):
+        self._trace_path = Path(episode_dir) / "agentic_trace.jsonl"
     self._trace_meta = dict(trace_meta or {})
     raw_question_id = self._trace_meta.get("question_id")
     if raw_question_id is None:
@@ -218,7 +224,10 @@ def init_executor(
     scope = (self._session_id, epoch if isinstance(epoch, str) else None)
     conversation = getattr(agent, "_vlm_episode_conversation", None)
     if not isinstance(conversation, VLMConversation) or getattr(agent, "_vlm_conversation_scope", None) != scope:
-        conversation = VLMConversation()
+        conversation = VLMConversation(
+            max_images=eqa_cfg.get("agentic_context_max_images", 8),
+            max_characters=eqa_cfg.get("agentic_context_max_characters", 64000),
+        )
         agent._vlm_episode_conversation = conversation
         agent._vlm_conversation_scope = scope
     self._conversation = conversation
@@ -311,6 +320,16 @@ def _handle_inspect_graph(self, args: dict[str, Any]) -> dict[str, Any]:
     return self._tool_inspect_graph()
 
 
+def _handle_recall_image(self, args: dict[str, Any]) -> dict[str, Any]:
+    return self._conversation.recall_image(str(args.get("image_id", "")))
+
+
+def _handle_read_history(self, args: dict[str, Any]) -> dict[str, Any]:
+    return self._conversation.read_history(
+        str(args.get("message_id", "")), offset=args.get("offset", 0), max_characters=args.get("max_characters", 4000)
+    )
+
+
 def _handle_explore_frontier(self, args: dict[str, Any]) -> dict[str, Any]:
     return self._tool_explore_frontier(
         str(args.get("toward") or ""),
@@ -339,6 +358,8 @@ def _handle_investigate(self, args: dict[str, Any]) -> dict[str, Any]:
 
 
 def _handle_look_around(self, args: dict[str, Any]) -> dict[str, Any]:
+    if args:
+        return self._tool_look_around(**args)
     return self._tool_look_around()
 
 
@@ -389,7 +410,7 @@ def _handle_relative_motion(self, args: dict[str, Any]) -> dict[str, Any]:
     from emet.controller.task.tamp.api import response
 
     name = args["_tool_name"]
-    if self._n_nav >= self.max_nav_steps:
+    if self._n_nav + self._n_explore >= self.max_nav_steps:
         out = response(name, code="navigation_budget_exhausted")
     else:
         key = "meters" if name == "move_forward" else "degrees"
@@ -417,6 +438,8 @@ def _handle_relative_motion(self, args: dict[str, Any]) -> dict[str, Any]:
 
 
 TOOL_HANDLERS: dict[str, Any] = {
+    "read_history": _handle_read_history,
+    "recall_image": _handle_recall_image,
     "inspect_graph": _handle_inspect_graph,
     "explore_frontier": _handle_explore_frontier,
     "investigate": _handle_investigate,

@@ -71,10 +71,12 @@ def test_find_objects_surfaces_abort_outcome():
 
     by_name = {t.name: t for t in get_tools({"executor": FakeExec(), "robot": None})}
     out = by_name["find_objects"].func(text="aerosol")
-    assert "aborted" in out.lower()
-    assert "Last plan:" in out
-    assert "localize=voxel" in out
-    assert "do not immediately re-call" in out.lower()
+    assert out["ok"] is False
+    assert out["status"] == "aborted_waypoint_timeout"
+    assert "aborted" in out["note"].lower()
+    assert "Last plan:" in out["note"]
+    assert "localize=voxel" in out["note"]
+    assert "do not immediately re-call" in out["note"].lower()
     assert by_name["find_objects"].returns_info is True
 
 
@@ -108,8 +110,9 @@ def test_explore_surfaces_rejected_clearance():
 
     by_name = {t.name: t for t in get_tools({"executor": FakeExec(), "robot": None})}
     out = by_name["explore"].func()
-    assert "rejected_low_clearance" in out
-    assert "Last plan:" in out
+    assert out.ok is False
+    assert out.status == "rejected_low_clearance"
+    assert "Last plan:" in out.note
 
 
 def test_list_scene_relations_falls_back_to_graph_eqa():

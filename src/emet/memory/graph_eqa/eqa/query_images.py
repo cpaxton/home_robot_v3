@@ -105,8 +105,9 @@ def dump_query_rgb(
     rgb: Any | None = None,
     *,
     kind: str = "vlm_assess",
+    write_canonical: bool = True,
 ) -> dict[str, str]:
-    """Save canonical + per-query PNGs. Returns path fields for the trace row."""
+    """Save query PNGs; context images must not replace the canonical current view."""
     out_dir = query_images_dir(executor)
     if out_dir is None:
         return {}
@@ -127,13 +128,13 @@ def dump_query_rgb(
     canonical = out_dir / f"rgb_{oid:04d}.png"
     query = out_dir / f"{kind_token}_r{round_i:02d}_obs{oid:04d}.png"
     try:
-        saved_canonical = save_rgb_png(canonical, arr)
+        saved_canonical = save_rgb_png(canonical, arr) if write_canonical else None
         saved_query = save_rgb_png(query, arr)
     except OSError:
         return {}
-    if saved_canonical is None or saved_query is None:
+    if saved_query is None or (write_canonical and saved_canonical is None):
         return {}
     return {
-        "rgb_png": str(saved_canonical),
+        **({"rgb_png": str(saved_canonical)} if saved_canonical is not None else {}),
         "query_png": str(saved_query),
     }

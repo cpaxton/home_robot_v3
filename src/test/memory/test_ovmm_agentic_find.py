@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from unittest.mock import MagicMock, patch
 
 import numpy as np
+import pytest
 
 from emet.eval.ovmm_agentic_find import (
     OvmmAgenticLocalizeResult,
@@ -383,6 +384,11 @@ def test_explored_table_uses_grounded_object_not_verified_camera(mock_run):
     )
     agent = MagicMock()
     agent.query_driven_memory = True
+    from emet.memory.query_candidates import QueryCandidates
+
+    agent.query_candidates = QueryCandidates()
+    candidate = agent.query_candidates.propose("table", 1, 1, [1, 2, 3])
+    agent.query_candidates.ground(candidate.handle, instance_id=7, observation_revision=1)
     agent.graph_memory.get_nodes.return_value = [_Node(7, np.array([1.0, 2.0, 3.0]), ["table"])]
     out = run_ovmm_agentic_localize(agent, "Where is the table?")
     assert out.extra["xyz_source"] == "grounded_object"
@@ -390,6 +396,68 @@ def test_explored_table_uses_grounded_object_not_verified_camera(mock_run):
     # A dresser cannot become a table through its shared view ID.
     agent.graph_memory.get_nodes.return_value = [_Node(7, np.array([1.0, 2.0, 3.0]), ["dresser"])]
     assert run_ovmm_agentic_localize(agent, "Where is the table?").xyz is None
+
+
+@pytest.mark.parametrize("verified", [False, True])
+@pytest.mark.parametrize("invalidation", [None, "removed", "rejected", "missing_reference", "restored_checkpoint"])
+@patch("emet.memory.graph_eqa.agentic_eqa.run_agentic_eqa_result")
+def test_find_retains_last_observed_location_without_authorizing_stale_manipulation(mock_run, verified, invalidation):
+    from emet.memory.query_candidates import QueryCandidates
+
+    candidates = QueryCandidates()
+    record = candidates.propose("bowl", 1, 1, [1, 2, 3])
+    candidates.ground(record.handle, instance_id=7, observation_revision=1)
+    if invalidation == "removed":
+        candidates.invalidate_instance(7, "object removed")
+    elif invalidation == "rejected":
+        candidates.reject(record.handle, observation_revision=2, reason="wrong referent")
+    elif invalidation == "missing_reference":
+        candidates.release(record.handle)
+    elif invalidation == "restored_checkpoint":
+        candidates = QueryCandidates.from_dict(candidates.to_dict())
+    mock_run.return_value = AgenticEQAResult(
+        discord_text="on the counter",
+        answer="on the counter",
+        confidence=verified,
+        verified=verified,
+        verified_obs_id=123 if verified else None,
+        grounded_obs_id=7,
+    )
+    agent = MagicMock()
+    agent.query_driven_memory = True
+    agent.query_candidates = candidates
+    agent.graph_memory.get_nodes.return_value = [_Node(7, np.array([1.0, 2.0, 3.0]), ["bowl"])]
+    out = run_ovmm_agentic_localize(agent, "Where is the bowl?")
+    assert out.answer == "on the counter"
+    assert out.verified is verified
+    if invalidation:
+        assert out.xyz is None
+    else:
+        assert np.array_equal(out.xyz, [1, 2, 3])
+        assert out.extra["location_semantics"] == "last_observed"
+        meta = {}
+        xyz, ok, _, _ = record_ovmm_agentic_result(out, meta=meta, prefix="obj", default_query="bowl")
+        assert ok and np.array_equal(xyz, [1, 2, 3])
+        assert meta["obj_current_view_verified"] is verified
+        assert meta["obj_grounded_obs_id"] == 7
+        assert meta["obj_location_semantics"] == "last_observed"
+        # Remembered find location never refreshes physical-action grounding.
+        with pytest.raises(ValueError, match="fresh object-specific grounding"):
+            record.require_grounding(2)
+        assert run_ovmm_agentic_localize(agent, "Where is the microwave?").xyz is None
+        # A later task with no selected grounding cannot recover another task's
+        # coordinates just because the old object remains in graph memory.
+        mock_run.return_value.grounded_obs_id = None
+        assert run_ovmm_agentic_localize(agent, "Where is the bowl?").xyz is None
+    agent.prepare_query_target.assert_not_called()
+    agent.ground_query_view.assert_not_called()
+
+
+@pytest.mark.parametrize("xyz", [[float("nan"), 0, 0], [0, float("inf"), 0], [1, 2]])
+def test_find_rejects_invalid_object_coordinates(xyz):
+    agent = MagicMock()
+    agent.graph_memory.get_nodes.return_value = [_Node(7, np.asarray(xyz), ["bowl"])]
+    assert xyz_from_verified_obs(agent, 7, phrases=["bowl"]) is None
 
 
 @patch("emet.memory.graph_eqa.agentic_eqa.run_agentic_eqa_result")

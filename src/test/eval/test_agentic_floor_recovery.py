@@ -77,7 +77,9 @@ def test_resolved_rejection_is_historical_and_cannot_clear_new_attempt(monkeypat
         "observation": {"footprint_after": {"pose_valid": True}},
     }
     text = tools.build_state_message(ex)
-    assert "Retry investigate or explore" in text
+    assert "Previous navigation attempt" in text
+    assert "checked footprint valid" in text
+    assert "Replan with an available navigation/movement tool" in text
     assert "route is NOT certified" in text
     assert "Stationary recovery tool" not in text
     ex.agent._last_nav_plan = {"attempt": 2}

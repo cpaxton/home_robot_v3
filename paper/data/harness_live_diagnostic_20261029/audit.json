@@ -1,0 +1,16 @@
+{
+  "scope": "Two authored development cases, live Stretch production CHAT; not OVMM/manipulation or qualified recall",
+  "source_sha": "f268d59442ae5b4f48b82d9f4215e04da4d24867",
+  "model": "Qwen/Qwen3-VL-8B-Instruct",
+  "quantization": "not established by endpoint metadata",
+  "protocol_complete": 2,
+  "n": 2,
+  "manual_audit": {
+    "seen_color_correct": true,
+    "unseen_abstention": true,
+    "turn_goal_reached": 0,
+    "observe_turn_recall_accepted": 0
+  },
+  "failure": "Targeted floor inspection could not obtain a safe viewing pose for the rejected footprint; both bases stayed still. The seen target remained in the final view, so this does not demonstrate recall after turning.",
+  "safety": "No unsafe motion admitted; full feedback and exact image/history packets retained; no final-answer override"
+}
