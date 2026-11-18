@@ -54,3 +54,16 @@ and half-open. The event range indexes JSONL rows and the command range indexes
 the `commands` array in the final result. These bundles describe returned tool
 failures. An interrupted process may leave only the before checkpoint and
 events recorded up to the interruption.
+
+## Failure bundle smoke
+
+Job `20261118_174912_bc4427` replayed cube front and produced
+`failure-bundle-smoke/tool-calls/01-plan_pick_place/failure.json` under
+`.tamp-runs/` (SHA256
+`2f9247a4aedc189b7742996ad2b9733ee38d3e1c8bb3a5ba813b6900887c8444`).
+Both checkpoint files and the referenced source scan were present. Event
+rows `[2, 4)` contain the gripper-opening rejection, the map witness records
+`unknown_swept_volume`, and the command range `[2, 2)` confirms the failed
+tool issued no commands. The public receipt still reports
+`no_plan_within_budget`. This validates the diagnostic bundle for a returned
+preflight failure.
