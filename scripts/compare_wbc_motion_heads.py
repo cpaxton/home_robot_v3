@@ -11,7 +11,7 @@ from emet.rl.manipulation.arm_spline_benchmark import episode, save, stop
 from emet.rl.manipulation.arm_splines import ArmSplineTrackingEnv, SplineLevel, load_manifest
 from emet.rl.manipulation.carry_benchmark import digest, source_hashes
 from emet.rl.manipulation.command_runtime import TaskPoseTeacherConfig, task_pose_teacher_action
-from emet.rl.manipulation.head_comparison import fit_head, matched_heads, recovery_reference
+from emet.rl.manipulation.head_comparison import fit_head, label_nearby_goals, matched_heads, recovery_reference
 from emet.rl.manipulation.whole_body_bundle import WholeBodyBundle
 from emet.rl.regression_gate import file_digest
 
@@ -32,12 +32,15 @@ def run(
     recovery_offsets=False,
     coupled_teacher=False,
     heads=("gain", "direct"),
+    goal_queries=0,
 ):
     output = Path(output)
     if output.exists() or type(count) is not int or not 1 <= count <= 16 or type(updates) is not int or updates <= 0:
         raise ValueError("fresh output and one to sixteen cases per split required")
     if not heads or len(set(heads)) != len(heads) or not set(heads) <= {"gain", "direct"}:
         raise ValueError("explicit unique diagnostic heads required")
+    if type(goal_queries) is not int or not 0 <= goal_queries <= 4:
+        raise ValueError("bounded virtual goal query count required")
     teacher_config = TaskPoseTeacherConfig(coupled_base_tracking=coupled_teacher)
     output.mkdir(parents=True)
     spec = load_manifest("configs/benchmarks/mars_arm_splines_v2.json")
@@ -66,6 +69,7 @@ def run(
             "recovery_offsets": recovery_offsets,
             "teacher_configuration": asdict(teacher_config),
             "heads": list(heads),
+            "goal_queries_every_five_ticks": goal_queries,
         },
         "scope": "teacher-action fit with explicit backbone mode, followed by unchanged closed-loop development cases; not PPO",
         "hardware_used": False,
@@ -73,6 +77,7 @@ def run(
         "complete": False,
         "teacher_cases": [],
         "heads": {},
+        "virtual_goal_labels": {"train": 0, "audit": 0, "static_rejections": []},
     }
     data = {split: {k: [] for k in ("history", "preview", "motion", "actions")} for split in ("train", "audit")}
     try:
@@ -103,6 +108,20 @@ def run(
             samples = data[case["split"]]
             e = env.unwrapped
             for _ in range(int(np.ceil(e.config.horizon / e.profile.dt)) + 1):
+                if goal_queries and e.steps % 5 == 0:
+                    labels, rejections = label_nearby_goals(
+                        env,
+                        seed=case["seed"] + e.steps * 1000003,
+                        count=goal_queries,
+                    )
+                    report["virtual_goal_labels"][case["split"]] += len(labels)
+                    report["virtual_goal_labels"]["static_rejections"].extend(
+                        {"case": case["id"], "tick": e.steps, **r} for r in rejections
+                    )
+                    for label in labels:
+                        for name in ("history", "preview", "motion"):
+                            samples[name].append(label["observation"][name])
+                        samples["actions"].append(label["action"])
                 action = task_pose_teacher_action(e.control, config=teacher_config)
                 for name in ("history", "preview", "motion"):
                     samples[name].append(observation[name].copy())
@@ -217,6 +236,7 @@ if __name__ == "__main__":
     p.add_argument("--recovery-offsets", action="store_true")
     p.add_argument("--coupled-teacher", action="store_true")
     p.add_argument("--head", action="append", choices=("gain", "direct"))
+    p.add_argument("--goal-queries", type=int, default=0)
     a = p.parse_args()
     run(
         a.output,
@@ -227,4 +247,5 @@ if __name__ == "__main__":
         recovery_offsets=a.recovery_offsets,
         coupled_teacher=a.coupled_teacher,
         heads=tuple(a.head or ("gain", "direct")),
+        goal_queries=a.goal_queries,
     )

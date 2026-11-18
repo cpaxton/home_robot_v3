@@ -284,3 +284,18 @@ successful spline tracking: source/final both 0/24. Contact failures worsen;
 the checkpoint is not promoted. Broader sampling alone is insufficient evidence
 for another budget extension. Current work isolates the action head, recovery
 state distribution and fine tracking; see the [active index](ACTIVE_WORK.md).
+
+## Corrective-data probe (separate from the PPO mixture)
+
+The supervised motion-head diagnostic uses the sixteen level-zero spline train
+identities, nominal plus admitted nearby acquisition goals. It adds **two virtual
+goal labels per five teacher ticks**: 4,164 train labels, alongside the executed
+teacher samples. The 2,012 audit labels never enter fitting. Virtual labels use
+scratch FK and copied measured history; they do not execute the goal or simulate
+a successful recovery. Rejected static proposals are counted and retained.
+
+With the same 4,000-update fitting budget, this reaches 16/16 train and 7/8 audit
+cases versus 1/16 and 0/8 without those labels. All stops confirm, and no unsafe
+contact/wheel lift occurs. This is not additional PPO exposure or a general
+controller qualification. A frozen actor is being checked on 32 fresh spline
+seeds and reused general/TAMP regression pools before changing the main mixture.

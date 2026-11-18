@@ -131,6 +131,68 @@ def recovery_reference(env, *, seed, offset_rad=0.08, acquisition_s=1.5):
     }
 
 
+def label_nearby_goals(env, *, seed, count=2, offset_rad=0.08):
+    """Label virtual goal changes at a measured state, without executing them.
+
+    This augments corrective directions missing from near-perfect teacher
+    rollouts. Static FK/path checks do not qualify the resulting controller.
+    """
+    import numpy as np
+
+    from emet.eval.physical_tamp import make_scene_checker
+    from emet.rl.manipulation.command_runtime import TaskPoseTeacherConfig, task_pose_teacher_action
+    from emet.rl.manipulation.coupled_tracking import reference_support_margin
+    from emet.rl.manipulation.tracking import TaskFrameFK
+    from emet.rl.manipulation.whole_body_observation import actor_observation
+
+    if type(count) is not int or not 0 <= count <= 4 or not 0 < offset_rad <= 0.1:
+        raise ValueError("bounded counterfactual goal population required")
+    e, c = env.unwrapped, env.unwrapped.control
+    if c.stopped or not c.hand_mask:
+        raise ValueError("counterfactual labels require active hand tracking")
+    rng = np.random.default_rng(seed)
+    initial = c.positions()
+    low = np.maximum(initial - offset_rad, c.limits[:, 0] + 0.01)
+    high = np.minimum(initial + offset_rad, c.limits[:, 1] - 0.01)
+    if np.any(low > high):
+        return [], [{"reason": "measured_pose_outside_sampling_margin"}]
+    fk = TaskFrameFK(e.model, e.data, c)
+    checker = make_scene_checker(e.model, {"object_body": e.payload_name, "gripper_bodies": e.profile.finger_bodies})
+    labels, rejections = [], []
+    for _ in range(count):
+        for _ in range(8):
+            target = rng.uniform(low, high)
+            accepted = True
+            for fraction in np.linspace(0, 1, 9):
+                fk(c.base_pose(), initial + fraction * (target - initial))
+                if (
+                    checker.configuration_collides(e.model, fk.data)
+                    or reference_support_margin(e.model, fk.data, e.profile) < 0.005
+                ):
+                    accepted = False
+                    break
+            if not accepted:
+                rejections.append({"joint_target": target.tolist(), "reason": "static_collision_or_support"})
+                continue
+            hand = fk(c.base_pose(), target)
+            shadow = copy.copy(c)
+            shadow.task_trajectory = None
+            shadow.preview_sampler = None
+            shadow.history = None if c.history is None else c.history.copy()
+            shadow.set_pose_targets(c.base_goal.copy(), c.base_mask.copy(), hand, True)
+            observation = actor_observation(shadow)
+            action = task_pose_teacher_action(shadow, config=TaskPoseTeacherConfig(coupled_base_tracking=True))
+            labels.append(
+                {
+                    "observation": observation,
+                    "action": action,
+                    "hand_error_m": float(np.linalg.norm(hand[:3] - c.ee_pose()[:3])),
+                }
+            )
+            break
+    return labels, rejections
+
+
 def fit_head(actor, observations, targets, *, updates=1000, batch_size=128, seed=20261118, learning_rate=3e-3):
     """Teacher-action fitting isolates the head; this is not a PPO result."""
     if type(updates) is not int or updates <= 0 or type(batch_size) is not int or batch_size <= 0:

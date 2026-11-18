@@ -230,6 +230,35 @@ architecture comparison and independent confirmation remain outstanding; these
 results favor investigating recovery-state coverage and objective/credit
 assignment before claiming that a direct head solves the observed equilibria.
 
+Expanding to all sixteen existing train/eight audit identities, a coupled
+teacher and 4,000 updates gives 48/48 expert successes, but only 1/16 train and
+0/8 audit for the fitted gain controller. This changes both population and expert
+configuration, so it is not a pure paired data-size comparison. All 24 actor
+stops confirm. Teacher action-MSE remains a poor proxy for execution success.
+
+The controlled data probe keeps that actor and budget, and adds virtual
+nearby goal changes at measured states (`--goal-queries 2`). Joint FK supplies
+nearby hand targets with sampled collision/support checks. A copied controller
+and copied history produce labels; neither physics nor the real command/history
+is modified. These are synthetic goal labels, not executed safe trajectories.
+Dataset and reports count them separately. The same untouched trajectories are
+used for closed-loop evaluation. It reaches **16/16 train, 7/8 audit** with all
+24 stops confirmed and no unsafe-contact/wheel-lift/invalid-physics flags.
+The one failure settles accurately but exceeds path bounds: 5.26 mm / 0.0445 rad
+peak. Training action MSE increases (9.78e-6 to 8.38e-5) while execution improves;
+fitting nearly perfect expert actions was an inadequate performance proxy.
+This supports investigating corrective goal/error coverage, not declaring the
+gain architecture solved. It is a one-seed supervised probe. A frozen
+confirmation uses 32 fresh spline seeds plus reused general/TAMP regression
+pools before deciding whether to use these examples for future PPO warm starts.
+No controller is promoted and the acceptance bounds are unchanged.
+
+Reproduce confirmation with `scripts/eval_wbc_motion_head.py --fit
+logs/eval/gain-local-response-v1 --initializer INITIALIZER --output FRESH_DIR`
+under the exact fit-source overlay. It refuses unfinished or source-mismatched
+fits, uses strict experimental state loading and never exports a deployment
+bundle. Raw datasets, models and trial tables remain ignored under `logs/`.
+
 ## Training coverage is still a debugging curriculum
 
 Twelve local FK-witness paths and one fixed training seed do not establish a

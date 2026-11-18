@@ -1,6 +1,6 @@
 # Active Mars controller work
 
-Updated 2026-11-17. This is the operational index for ownership, branches,
+Updated 2026-11-18. This is the operational index for ownership, branches,
 validation and the next milestone. The
 [technical next-steps plan](../plans/mars_wbc_next_steps.md) owns the detailed
 implementation sequence; experiment reports own measured results. Older
@@ -78,7 +78,7 @@ hand and goal-change arm offsets rather than letting base travel supply all hand
 motion. Full-family candidate preflight precedes further training.
 [Metrics](CURRICULUM_VISUALIZATION.md#per-trajectory-spread-and-dead-time-audit).
 
-**Main integration:** main `8f7c9ec8` is integrated with semantic
+**Main integration:** main `f1b7bb5b` is integrated with semantic
 preservation of unloaded TAMP scopes through grasp alignment/fallback search,
 checked base approaches, observed verification and measured stopping. Runtime
 `command_client` copies are synchronized. Integration/recheck runs cover 765
@@ -86,6 +86,8 @@ distinct passing cases; this is not a new full frozen training receipt. The
 session-start abort now preserves `SystemExit` before guard creation.
 The newer centralized agent tool bindings retain the unloaded scope; 78 agent
 import/dispatch/session/discovery tests pass after that merge.
+The subsequent CHAT-handler extraction preserves that scope in `chat_tamp.py`;
+124 agent runtime, capture, dispatch and task-session tests pass after this merge.
 
 **Expanded-curriculum debugging:** general reset now synchronizes the servo's
 base tolerance with the task after leaving the fixed-base fixture (previously
@@ -147,15 +149,40 @@ hits an unsafe-contact guard; it is retained, never used for fitting, and not
 called qualified. The direct head cannot be exported through existing bundle
 formats. [Interpretation and reproduction](WHOLE_BODY_ARCHITECTURE_REVIEW.md#small-motion-head-diagnostics).
 
-**Next bounded diagnostic is running:** `emet-gain-recovery-population` uses
+**Broader fitting diagnostic completed:** `emet-gain-recovery-population` used
 16 existing train identities and eight audit identities, nominal plus admitted
 capture-error references, the coupled teacher, and 4,000 fitting updates on the
 gain controller. Training teacher failures prevent fitting; audit failures stay
-reported and never enter the optimizer. This is supervised error-coverage
-diagnosis, not another PPO budget extension or a deployed actor. Its immutable
+reported and never enter the optimizer. All 48 coupled-teacher trials passed,
+but the fitted controller reaches only **1/16 train, 0/8 audit**, with 24/24
+confirmed stops. This is supervised error-coverage diagnosis, not another PPO
+budget extension or a deployed actor. Its immutable
 overlay uses the validated `b958fc62` baseline; the pre-existing working-tree
 reward edit is excluded and preserved. Output:
 `logs/eval/gain-recovery-population-v1/report.json`.
+
+**Corrective-data diagnostic completed:** `emet-gain-local-response` adds two nearby virtual-goal
+labels every five physical ticks at measured teacher states. Scratch FK checks
+joint-path collision/support; copied control/history views supply sensor-only
+inputs and expert responses. No virtual goal is executed, and the measured
+plant, real command and history stay unchanged. The actor, 4,000-update budget
+and original evaluation cases match the previous diagnostic. This tests whether
+local corrective directions absent from nearly perfect rollouts improve closed
+loop behavior. It reaches **16/16 train and 7/8 audit**, with **24/24 confirmed
+stops**, no unsafe-contact, wheel-lift or invalid-physics flags. Median terminal
+hand error is 0.094 mm and 0.000535 rad. The remaining folded-right audit case
+settles but exceeds path bounds (5.26 mm / 0.0445 rad peak); its good endpoint
+does not erase that failure. This is supervised fitting, not PPO improvement
+or qualification. Output:
+`logs/eval/gain-local-response-v1/report.json`.
+
+**Independent-seed check is running:** `emet-gain-local-confirmation` freezes
+that actor and evaluates 32 fresh spline identities (16 at level zero, eight
+each at levels one/two), paired with the same coupled teacher. It then reruns
+the existing hand/base/goal-change/unloaded-TAMP pools, explicitly labeled as
+reused regression cases. Nothing is fitted or pruned. The experimental weights
+remain outside deployment bundles. Output:
+`logs/eval/gain-local-confirmation-v1/report.json`.
 
 Disk headroom recovered by compressing eleven old source archives: **3.39 GiB**
 saved, each verified by bit-exact decompression before removing its raw tar.

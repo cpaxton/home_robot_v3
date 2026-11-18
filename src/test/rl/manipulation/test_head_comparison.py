@@ -113,3 +113,32 @@ def test_acquisition_targets_do_not_teleport_or_edit_live_actuator_state():
         assert not e.control.stopped
     finally:
         env.close()
+
+
+@pytest.mark.sim
+def test_virtual_goal_labels_preserve_live_physics_history_and_command():
+    from emet.rl.manipulation.arm_splines import ArmSplineTrackingEnv, motion_manifest
+    from emet.rl.manipulation.head_comparison import label_nearby_goals
+
+    env = ArmSplineTrackingEnv([motion_manifest()["cases"][0]], timing="bounded_v2", finish_after_hold=True)
+    try:
+        env.reset()
+        e, c = env.unwrapped, env.unwrapped.control
+        before = {k: getattr(e.data, k).copy() for k in ("qpos", "qvel", "ctrl")}
+        history, goal = c.history.copy(), c.hand_goal.copy()
+        trajectory, sampler, time = c.task_trajectory, c.preview_sampler, float(e.data.time)
+        labels, _ = label_nearby_goals(env, seed=31, count=2)
+        assert len(labels) == 2
+        for label in labels:
+            assert set(label["observation"]) == {"history", "preview", "motion"}
+            np.testing.assert_array_equal(label["observation"]["motion"], 0)
+            assert label["hand_error_m"] > 0.001
+            assert np.isfinite(label["action"]).all() and np.max(abs(label["action"])) <= 1
+        for key, value in before.items():
+            np.testing.assert_array_equal(getattr(e.data, key), value)
+        np.testing.assert_array_equal(c.history, history)
+        np.testing.assert_array_equal(c.hand_goal, goal)
+        assert c.task_trajectory is trajectory and c.preview_sampler is sampler
+        assert float(e.data.time) == time
+    finally:
+        env.close()
