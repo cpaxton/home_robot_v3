@@ -11,10 +11,24 @@ write structured attempts into the graph-memory action-outcome ledger.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+from copy import deepcopy
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from emet.controller.task.tamp.api import SCHEMA_VERSION, TAMP_TOOLS
+
+
+def _valid_versioned_result(tool: str, value: Any) -> bool:
+    """Validate the shared TAMP/relative-motion envelope without serialization."""
+    return (
+        isinstance(value, dict)
+        and value.get("schema_version") == SCHEMA_VERSION
+        and value.get("tool") == tool
+        and isinstance(value.get("status"), str)
+        and value["status"] in {"ok", "error", "partial"}
+        and isinstance(value.get("code"), str)
+        and isinstance(value.get("data"), dict)
+    )
 
 
 @dataclass
@@ -101,49 +115,108 @@ class ToolOutcome:
         return cls(ok=ok, status=status, note=note, tool=tool, payload=d)
 
     @classmethod
+    def from_versioned_result(cls, tool: str, value: Any, *, wrapper: ToolOutcome | None = None) -> ToolOutcome:
+        """Own and validate a TAMP/motion receipt without a JSON round trip.
+
+        Wrapper success must agree with the embedded receipt. In particular, a
+        partial receipt cannot be promoted, or a failed wrapper silently erased.
+        Copy nested data so a provider's later updates cannot rewrite history.
+        """
+        envelope = deepcopy(value) if isinstance(value, dict) else value
+        if not _valid_versioned_result(tool, envelope):
+            return cls(
+                False,
+                status="invalid_tool_result",
+                tool=tool,
+                note=wrapper.note if wrapper is not None else "",
+                payload={"recovery": "inspect"},
+            )
+        success = envelope["status"] == "ok" and envelope["code"] == "ok"
+        if wrapper is not None and (wrapper.tool != tool or wrapper.ok is not success):
+            return cls(False, status="invalid_tool_result", tool=tool, payload={"recovery": "inspect"})
+        return cls(
+            ok=success,
+            status=envelope["code"],
+            note=(wrapper.note if wrapper is not None else "") or str(envelope.get("message", "")),
+            tool=tool,
+            payload=envelope,
+        )
+
+    @classmethod
     def coerce(cls, tool: str, result: Any) -> ToolOutcome:
         """Normalize versioned TAMP JSON, EQA dictionaries, and legacy prose."""
         if isinstance(result, ToolOutcome):
             if not result.tool:
-                result.tool = tool
-            return result
+                result = replace(result, tool=tool)
+            if result.tool != tool:
+                return cls(False, status="invalid_tool_result", tool=tool, payload={"recovery": "inspect"})
+            if tool not in TAMP_TOOLS and tool not in {"rotate_base", "move_forward"}:
+                return result
+            return cls.from_versioned_result(tool, result.payload, wrapper=result)
         if tool in TAMP_TOOLS or tool in {"rotate_base", "move_forward"}:
             try:
                 envelope = json.loads(result) if isinstance(result, str) else result
             except (ValueError, TypeError):
                 envelope = None
-            if (
-                not isinstance(envelope, dict)
-                or envelope.get("schema_version") != SCHEMA_VERSION
-                or envelope.get("tool") != tool
-                or not isinstance(envelope.get("status"), str)
-                or envelope.get("status") not in {"ok", "error", "partial"}
-                or not isinstance(envelope.get("code"), str)
-                or not isinstance(envelope.get("data"), dict)
-            ):
-                return cls(ok=False, status="invalid_tool_result", tool=tool, payload={"recovery": "inspect"})
-            # Outcome.status stores the machine-readable reason code for the ledger.
-            return cls(
-                ok=envelope["status"] == "ok" and envelope["code"] == "ok",
-                status=envelope["code"],
-                note=str(envelope.get("message", "")),
-                tool=tool,
-                payload=dict(envelope),
-            )
+            return cls.from_versioned_result(tool, envelope)
         if isinstance(result, dict) and "ok" in result:
             return cls.from_eqa_dict(tool, result)
         text = "" if result is None else str(result)
-        lowered = text.lower()
-        failed = (lowered.startswith("tool ") and " failed" in lowered) or (
-            "was interrupted or failed" in lowered or "not available" in lowered
-        )
+        # Legacy prose is information, not an action-success receipt. New CHAT
+        # handlers return explicit outcomes; do not infer success from wording.
         return cls(
-            ok=not failed,
-            status="" if not failed else "failed",
+            ok=False,
+            status="unverified_result",
             note=text[:240],
             tool=tool,
             payload={"message": text} if text else {},
         )
+
+
+def retained_outcomes(results: list[ToolOutcome] | list[str]) -> list[ToolOutcome]:
+    """Accept typed receipts, or decode historical rendered inputs at the boundary.
+
+    The production loop passes typed receipts. String support keeps existing
+    callers of the historical dialogue/continuation helpers working.
+    """
+    outcomes = []
+    for result in results:
+        if isinstance(result, ToolOutcome):
+            if result.tool in TAMP_TOOLS:
+                outcomes.append(ToolOutcome.from_versioned_result(result.tool, result.payload, wrapper=result))
+            else:
+                outcomes.append(result)
+            continue
+        prefix, separator, body = result.partition("] ")
+        if separator and prefix.startswith("["):
+            outcomes.append(ToolOutcome.coerce(prefix[1:], body))
+        else:
+            outcomes.append(ToolOutcome(False, status="invalid_tool_result"))
+    return outcomes
+
+
+@dataclass
+class DispatchResult:
+    """Typed receipts plus their model/log rendering for one ordered dispatch.
+
+    Runtime continuation/history consume ``outcomes`` directly. Tuple unpacking
+    preserves the old private dispatcher interface for integrations and tests.
+    Rendering is captured once; it is never reparsed by the CHAT runtime.
+    """
+
+    continue_running: bool = True
+    has_info: bool = False
+    outcomes: list[ToolOutcome] = field(default_factory=list)
+    messages: list[str] = field(default_factory=list)
+
+    def append(self, outcome: ToolOutcome, text: str | None = None) -> None:
+        self.outcomes.append(outcome)
+        self.messages.append(outcome.render() if text is None else text)
+
+    def __iter__(self):
+        yield self.continue_running
+        yield self.messages
+        yield self.has_info
 
 
 def maybe_record_tool_attempt(
@@ -188,7 +261,9 @@ def maybe_record_tool_attempt(
     view_id = str(payload.get("view_id") or "")
     room = str(payload.get("room") or "")
     status = str(outcome.status or payload.get("nav_note") or payload.get("error") or "")
-    if kind == "verify":
+    if status == "unverified_result":
+        outcome_str = "unknown"
+    elif kind == "verify":
         st = status.upper()
         if st in {"VISUAL_ABSENT", "ABSENT"}:
             outcome_str = "absent"

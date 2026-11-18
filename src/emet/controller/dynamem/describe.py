@@ -50,6 +50,7 @@ def dump_memory_to_text(
 def describe_head_camera_scene_text(
     self,
     *,
+    observation: Any | None = None,
     graph_memory: Any | None = None,
     memory_backend: Any | None = None,
     graph_memory_backend: Any | None = None,
@@ -60,6 +61,9 @@ def describe_head_camera_scene_text(
     1. Caption the **current** head RGB (VLM when loaded).
     2. Ground / enrich with graph/map labels already known.
     3. Optional curated detector fallback if configured.
+    When supplied, ``observation`` is the owned CHAT capture also sent to the
+    user. Do not recapture during captioning; array conversion/downsampling
+    below must not mutate the caller's snapshot.
     Does **not** look around or explore — use ``scan_environment`` / ``explore`` for that.
     """
     mem_kw = {
@@ -67,7 +71,7 @@ def describe_head_camera_scene_text(
         "memory_backend": memory_backend,
         "graph_memory_backend": graph_memory_backend,
     }
-    rgb, depth = self._describe_scene_capture_rgb()
+    rgb, depth = self._describe_scene_capture_rgb(observation=observation)
     if isinstance(rgb, str):
         return rgb  # error string from capture
 
@@ -91,11 +95,15 @@ def describe_head_camera_scene_text(
     )
 
 
-def _describe_scene_capture_rgb(self) -> tuple[np.ndarray, np.ndarray | None] | tuple[str, None]:
+def _describe_scene_capture_rgb(
+    self, *, observation: Any | None = None
+) -> tuple[np.ndarray, np.ndarray | None] | tuple[str, None]:
     """Return (rgb, depth) or (error_message, None)."""
-    if self.robot is None or not hasattr(self.robot, "get_observation"):
-        return "No robot view available.", None
-    obs = self.robot.get_observation()
+    obs = observation
+    if obs is None:
+        if self.robot is None or not hasattr(self.robot, "get_observation"):
+            return "No robot view available.", None
+        obs = self.robot.get_observation()
     if obs is None or getattr(obs, "rgb", None) is None:
         return "No current image.", None
     rgb = np.asarray(obs.rgb)

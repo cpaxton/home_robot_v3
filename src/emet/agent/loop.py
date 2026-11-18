@@ -60,7 +60,7 @@ from emet.agent.thinking_status import (
     format_tool_running_status,
     short_llm_label,
 )
-from emet.agent.tool_outcome import ToolOutcome, maybe_record_tool_attempt
+from emet.agent.tool_outcome import DispatchResult, ToolOutcome, maybe_record_tool_attempt
 from emet.agent.tools import Tool, get_tools
 from emet.config.embodied_agent_config import (
     EmbodiedAgentConfig,
@@ -213,21 +213,44 @@ def _dispatch_tool_calls(
     verbose_tools: bool = False,
     on_tool_start: Callable[[str], None] | None = None,
     tamp_context: dict | None = None,
-) -> tuple[bool, list[str], bool]:
+) -> DispatchResult:
     """Execute a list of parsed tool_calls in model-specified order.
 
     Executor-mapped tools run immediately (not batched past a following direct
     tool) so sequences like ``[scan_environment, describe_scene]`` capture the
     post-scan frame.
 
-    Returns (continue_running, list_of_result_strings, has_info_results).
-    continue_running is False if quit was requested.
-    has_info_results is True if any tool with returns_info=True produced output
-    (including failure messages that should be relayed to the user).
+    Returns typed outcomes and their prompt/log messages. ``continue_running``
+    concerns session liveness, not task success. ``has_info`` requests a model
+    follow-up, including failures. Legacy three-value unpacking remains supported.
     """
-    results: list[str] = []
+    dispatched = DispatchResult()
+    results = dispatched.messages
     has_info = False
     ok = True
+
+    def finish(continue_running: bool) -> DispatchResult:
+        dispatched.continue_running = continue_running
+        dispatched.has_info = has_info
+        if chat_log:
+            for result in results:
+                chat_log.log("tool", result)
+        return dispatched
+
+    def stop_batch(
+        remaining: list[str], *, failed_tool: str, discovery_only: bool = False, recovery: str = "inspect"
+    ) -> None:
+        if remaining:
+            data: dict[str, Any] = {"unattempted_tools": remaining}
+            data.update(
+                {"stopped_tool": failed_tool, "stop_reason": "discovery_only"}
+                if discovery_only
+                else {"failed_tool": failed_tool}
+            )
+            stopped = tamp_response("dispatch", code="batch_stopped", data=data, recovery=recovery)
+            dispatched.append(
+                ToolOutcome.from_eqa_dict("dispatch", {"ok": False, **stopped}), "[dispatch] " + json.dumps(stopped)
+            )
 
     if verbose_tools and tool_calls:
         print(colored("[tool_calls raw]", "yellow"), flush=True)
@@ -245,16 +268,9 @@ def _dispatch_tool_calls(
         tool = tools_by_name.get(name)
         if tool is None:
             from emet.agent.env_flags import env_base_rotate_only
+            from emet.agent.tool_policy import ROTATE_ONLY_BLOCKED_TOOLS
 
-            drive_like = name in {
-                "explore",
-                "find_objects",
-                "move_forward",
-                "go_home",
-                "pick_place",
-                "execute_pick_place_plan",
-                "hand_over",
-            }
+            drive_like = name in ROTATE_ONLY_BLOCKED_TOOLS
             if env_base_rotate_only() and drive_like:
                 msg = (
                     f"[{name}] I can't drive right now (rotate-only / tethered). "
@@ -266,32 +282,18 @@ def _dispatch_tool_calls(
                     "Try rephrasing, or ask what I can do."
                 )
             logger.warning(f"Unknown or unavailable tool: {name}")
-            results.append(msg)
+            dispatched.append(ToolOutcome(False, status="unavailable", tool=name, note=msg), msg)
             has_info = True
             remaining = [c.get("name", "") for c in tool_calls[call_index + 1 :]]
             if name in TAMP_TOOLS or any(n in TAMP_TOOLS for n in remaining):
-                if remaining:
-                    results.append(
-                        "[dispatch] "
-                        + json.dumps(
-                            tamp_response(
-                                "dispatch",
-                                code="batch_stopped",
-                                data={"failed_tool": name, "unattempted_tools": remaining},
-                                recovery="inspect",
-                            )
-                        )
-                    )
+                stop_batch(remaining, failed_tool=name)
                 break
             continue
 
         cmds = tool.to_executor(args)
         if cmds:
             if any(c[0] == "quit" for c in cmds):
-                if chat_log:
-                    for r in results:
-                        chat_log.log("tool", r)
-                return False, results, has_info
+                return finish(False)
             if verbose_tools:
                 print(colored("[executor]", "yellow"), json.dumps(cmds, default=str), flush=True)
             with task_world_change(name, tamp_context):
@@ -301,19 +303,18 @@ def _dispatch_tool_calls(
                 ok = False
                 cmd_names = [c[0] for c in cmds]
                 summary = f"Executor ran: {', '.join(cmd_names)} -> quit/stop"
-                results.append(summary)
+                dispatched.append(ToolOutcome(False, status="stopped", tool=name, note=summary), summary)
                 if verbose_tools:
                     print(colored("[executor summary]", "magenta"), summary, flush=True)
-                if chat_log:
-                    for r in results:
-                        chat_log.log("tool", r)
-                return False, results, has_info
+                return finish(False)
             # Keep going; surface pickup/place failures via _last_exec_ok without quitting.
             task_ok = bool(getattr(executor, "_last_exec_ok", True))
             cmd_names = [c[0] for c in cmds]
             summary = f"Executor ran: {', '.join(cmd_names)} -> {'ok' if task_ok else 'failed'}"
-            results.append(summary)
-            has_info = has_info or tool.returns_info
+            dispatched.append(
+                ToolOutcome(task_ok, status="ok" if task_ok else "failed", tool=name, note=summary), summary
+            )
+            has_info = has_info or tool.returns_info or not task_ok
             if verbose_tools:
                 print(colored("[executor summary]", "magenta"), summary, flush=True)
             # Record pick/place outcomes into the attempt ledger when available.
@@ -345,9 +346,9 @@ def _dispatch_tool_calls(
             if isinstance(result, ToolOutcome) or structured_result or parsed_envelope:
                 result_str = outcome.render()
             else:
-                result_str = f"[{name}] {result}" if result is not None else f"[{name}] ok"
-            results.append(result_str)
-            if tool.returns_info and result is not None and result != "":
+                result_str = f"[{name}] {result}" if result is not None else f"[{name}] no result returned"
+            dispatched.append(outcome, result_str)
+            if not outcome.ok or (tool.returns_info and result is not None and result != ""):
                 has_info = True
             if result is not None and result != "":
                 if verbose_tools:
@@ -365,9 +366,8 @@ def _dispatch_tool_calls(
                 import traceback
 
                 traceback.print_exc()
-            results.append(err)
-            if tool.returns_info:
-                has_info = True
+            dispatched.append(outcome, err)
+            has_info = True
             gm = getattr(getattr(executor, "agent", None), "graph_memory", None)
             maybe_record_tool_attempt(gm, outcome, source="chat")
 
@@ -380,29 +380,16 @@ def _dispatch_tool_calls(
             # Later calls were chosen before the model saw this boundary. A
             # discovery-only result also forbids continuing the precomputed batch.
             remaining = [c.get("name", "") for c in tool_calls[call_index + 1 :]]
-            if remaining:
-                stopped = tamp_response(
-                    "dispatch",
-                    code="batch_stopped",
-                    data={
-                        **(
-                            {"stopped_tool": name, "stop_reason": "discovery_only"}
-                            if discovery_only
-                            else {"failed_tool": name}
-                        ),
-                        "unattempted_tools": remaining,
-                    },
-                    recovery="none" if discovery_only else outcome.payload.get("recovery") or "inspect",
-                )
-                results.append("[dispatch] " + json.dumps(stopped))
+            stop_batch(
+                remaining,
+                failed_tool=name,
+                discovery_only=discovery_only,
+                recovery="none" if discovery_only else outcome.payload.get("recovery") or "inspect",
+            )
             has_info = True
             break
 
-    if chat_log:
-        for r in results:
-            chat_log.log("tool", r)
-
-    return ok, results, has_info
+    return finish(ok)
 
 
 # ---------------------------------------------------------------------------
@@ -465,46 +452,9 @@ def _call_llm_body(
             except Exception:
                 pass
 
-    def _with(verbose: bool, **call_kw: Any) -> str:
-        return llm_client(text, verbose=verbose, **call_kw)
+    from emet.agent.llm_call import call_adapter
 
-    def _try_chain() -> str:
-        if isinstance(llm_client, AbstractVLLMClient):
-            kw: dict[str, Any] = {
-                "system_prompt": getattr(llm_client, "system_prompt", None) or None,
-                "max_new_tokens": getattr(llm_client, "max_tokens", None),
-                "reset_context": reset_context,
-                "verbose": debug,
-                "image": image,
-            }
-            if progress_callback is not None:
-                try:
-                    return llm_client.generate_multimodal(text, progress_callback=_on_progress, **kw)
-                except TypeError as e:
-                    logger.warning(f"LLM generate_multimodal rejected progress_callback ({e}); retrying without it")
-            return llm_client.generate_multimodal(text, **kw)
-        if openai_tools_param is not None and image is not None:
-            try:
-                return _with(debug, tools=openai_tools_param, image=image, reset_context=reset_context)
-            except TypeError as e:
-                logger.warning(f"LLM call rejected tools+image+reset_context ({e}); falling back")
-        if openai_tools_param is not None:
-            try:
-                return _with(debug, tools=openai_tools_param, reset_context=reset_context)
-            except TypeError as e:
-                logger.warning(f"LLM call rejected tools+reset_context ({e}); falling back")
-        if image is not None:
-            try:
-                return _with(debug, image=image, reset_context=reset_context)
-            except TypeError as e:
-                logger.warning(f"LLM call rejected image+reset_context ({e}); falling back")
-        try:
-            return _with(debug, reset_context=reset_context)
-        except TypeError as e:
-            logger.warning(
-                f"LLM call rejected reset_context ({e}); falling back to bare text call (tools/image may be dropped)"
-            )
-            return llm_client(text)
+    adapter = call_adapter(llm_client)
 
     stop_beat = threading.Event()
 
@@ -523,7 +473,14 @@ def _call_llm_body(
         beat_thread = threading.Thread(target=_heartbeat, name="emet-llm-heartbeat", daemon=True)
         beat_thread.start()
     try:
-        raw = _try_chain()
+        raw = adapter(
+            text,
+            tools=openai_tools_param,
+            image=image,
+            reset_context=reset_context,
+            verbose=debug,
+            progress_callback=_on_progress if progress_callback is not None else None,
+        )
     finally:
         stop_beat.set()
         if beat_thread is not None:
@@ -1464,7 +1421,7 @@ def run_agent_with_robot(
                 # Tool perception may reset the shared VLM's dialogue. Share
                 # weights, not the captioner's conversation with the agent.
                 with llm_client.preserve_conversation() if isinstance(llm_client, AbstractLLMClient) else nullcontext():
-                    ok, results, has_info = _dispatch_tool_calls(
+                    dispatched = _dispatch_tool_calls(
                         tool_calls,
                         tools_by_name,
                         executor,
@@ -1474,8 +1431,9 @@ def run_agent_with_robot(
                         on_tool_start=_on_tool_start if show_thinking_status else None,
                         tamp_context=context,
                     )
+                ok, results, has_info = dispatched
                 tools_elapsed = timeit.default_timer() - tools_t0
-                turn_results.extend(results)
+                turn_results.extend(dispatched.outcomes)
                 print_terminal(
                     f"tools done in {tools_elapsed:.1f}s ({', '.join(tool_names)})",
                     color="cyan",
@@ -1499,7 +1457,7 @@ def run_agent_with_robot(
                 if has_info:
                     # Last round: do not continue into exhaustion with a silent turn —
                     # force a no-tool summarize or relay tool text.
-                    continuation = tamp_followup(turn_request, results)
+                    continuation = tamp_followup(turn_request, dispatched.outcomes)
                     tamp_stopped = any(c.get("name") in TAMP_TOOLS for c in tool_calls) and continuation is None
                     last_round = _round >= max_tool_rounds - 1 or tamp_stopped
                     followup = (

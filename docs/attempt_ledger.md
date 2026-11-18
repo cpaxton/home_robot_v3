@@ -293,7 +293,7 @@ flowchart LR
 | OVMM full manip | `emet.eval.ovmm_full` | After GT-scored pick/place (`sim` / `attempt`) |
 | Stretch manip truth | `DynamemTaskExecutor._pickup` / `_place` | Propagates `agent.manipulate` / `agent.place` / `GraspObjectOperation.was_successful` (no more unconditional `True`) |
 
-Shared tool result shape: [`emet.agent.tool_outcome.ToolOutcome`](../src/emet/agent/tool_outcome.py) (`ok`, `status`, `note`, `payload`).
+Shared tool result shape: [`emet.agent.tool_outcome.ToolOutcome`](../src/emet/agent/tool_outcome.py) (`ok`, `status`, `note`, `payload`). CHAT retains typed outcomes through continuation/history. Unstructured legacy prose is `unverified_result`, recorded as `outcome=unknown`; wording alone cannot establish success or a measured action failure.
 
 ---
 
