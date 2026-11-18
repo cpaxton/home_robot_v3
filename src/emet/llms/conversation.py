@@ -9,6 +9,13 @@ from emet.llms.image_context import ImageContext
 
 
 class VLMConversation:
+    """Keep required context exact; fail before inference if it exceeds the budget.
+
+    Older state text can be archived by reference. Current instructions,
+    assistant actions and tool receipts are never silently shortened. Overflow
+    is an explicit caller-visible error, with original dialogue preserved.
+    """
+
     def __init__(self, *, max_images=8, max_characters=64000):
         if max_characters is not None and (type(max_characters) is not int or max_characters < 1):
             raise ValueError("max_characters must be a positive integer or None")

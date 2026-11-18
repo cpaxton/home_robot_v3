@@ -12,6 +12,7 @@ from uuid import uuid4
 import numpy as np
 
 from emet.controller.dynamem.constants import (
+    DYNAMEM_HEAD_ARRIVAL_TOL_RAD,
     DYNAMEM_HEAD_SETTLE_S,
     DYNAMEM_HEAD_SWEEP_FRAME_SETTLE_S,
     DYNAMEM_HEAD_SWEEP_MAX_WAIT_S,
@@ -198,7 +199,7 @@ def inspect_floor(agent, **options):
         base_before = np.asarray(get_base(), dtype=float).copy()
         out = observe_floor(agent, **options)
         current = np.asarray(getter(), dtype=float)
-        if np.allclose(current, previous, atol=0.12):
+        if np.allclose(current, previous, atol=DYNAMEM_HEAD_ARRIVAL_TOL_RAD):
             return out
         moved = robot.head_to(*previous, blocking=True)
         if moved is False:
@@ -206,7 +207,11 @@ def inspect_floor(agent, **options):
         deadline = time.monotonic() + 5.0
         while True:
             measured = np.asarray(getter(), dtype=float)
-            if measured.shape == (2,) and np.isfinite(measured).all() and np.max(abs(measured - previous)) <= 0.12:
+            if (
+                measured.shape == (2,)
+                and np.isfinite(measured).all()
+                and np.max(abs(measured - previous)) <= DYNAMEM_HEAD_ARRIVAL_TOL_RAD
+            ):
                 break
             if time.monotonic() >= deadline:
                 raise RuntimeError("head restoration unconfirmed")

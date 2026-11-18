@@ -4,6 +4,7 @@
 
 import numpy as np
 
+from emet.controller.dynamem.constants import DYNAMEM_HEAD_ARRIVAL_TOL_RAD
 from emet.robots.head_capability import HeadCapability
 
 
@@ -94,7 +95,7 @@ def _capture_head_view(agent, *, pan_rad, tilt_rad, bounds, require_depth):
         detail["measured_head_pan_tilt_rad"] = measured.tolist()
         if measured.shape != (2,) or not np.isfinite(measured).all():
             return failure("head_pose_unconfirmed")
-        if np.max(np.abs(measured - target)) <= 0.12:
+        if np.max(np.abs(measured - target)) <= DYNAMEM_HEAD_ARRIVAL_TOL_RAD:
             break
         if time.monotonic() >= deadline:
             return failure("head_pose_unconfirmed")

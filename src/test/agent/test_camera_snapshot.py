@@ -55,6 +55,13 @@ def test_snapshot_owns_pixels_depth_pose_and_timing_without_task_labels():
     assert identity["frame_sequence"] == 17
 
 
+def test_snapshot_rejects_missing_head_rgb():
+    source = observation()
+    source.rgb = None
+    with pytest.raises(ValueError, match="requires head RGB"):
+        camera_snapshot(source)
+
+
 @pytest.mark.parametrize("supplied", [True, False])
 def test_perception_depth_provider_receives_supplied_snapshot_or_live_capture(supplied):
     earlier, _ = camera_snapshot(observation())

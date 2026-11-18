@@ -147,11 +147,13 @@ def test_history_is_bounded_before_http_and_after_reply_even_when_prefix_fills_l
         assert sent[-1] == {"role": "user", "content": f"turn {index}"}
 
 
-def test_transient_capability_failure_is_retried_instead_of_cached_as_support(monkeypatch):
+def test_transient_capability_failure_is_throttled_then_recovers_explicit_support(monkeypatch):
     import httpx
     from openai import OpenAI
 
     requests = []
+    clock = [0.0]
+    monkeypatch.setattr("emet.llms.openai_client.time.monotonic", lambda: clock[0])
 
     def handle(request):
         requests.append(request.method)
@@ -183,7 +185,12 @@ def test_transient_capability_failure_is_retried_instead_of_cached_as_support(mo
     client = OpenaiClient("sys", model="fixture", base_url="http://fixture/v1")
     assert client.supports_native_tools  # Compatibility default, no discovered claim.
     assert client._native_tools_supported is None
+    clock[0] = 59.0
+    assert client.supports_native_tools and client.supports_native_tools
+    assert requests == ["GET"]
+    clock[0] = 60.0
     assert not client.supports_native_tools
+    clock[0] = 120.0
     assert not client.supports_native_tools
     assert requests == ["GET", "GET"]
 

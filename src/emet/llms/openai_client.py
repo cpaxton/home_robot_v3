@@ -9,6 +9,7 @@
 
 import base64
 import os
+import time
 from io import BytesIO
 from typing import Any
 
@@ -21,6 +22,7 @@ from emet.llms.base import AbstractLLMClient, AbstractPromptBuilder
 # Virgil ChatWrapper-style bounds: keep system prefix, trim oldest middle turns.
 DEFAULT_MAX_HISTORY_LENGTH = 50
 DEFAULT_HISTORY_PRESERVE = 1  # keep leading system message
+_NATIVE_TOOLS_DISCOVERY_RETRY_S = 60.0
 
 
 def resolve_openai_base_url(base_url: str | None = None) -> str | None:
@@ -89,11 +91,16 @@ class OpenaiClient(AbstractLLMClient):
             client_kwargs["base_url"] = self.base_url
         self._openai = OpenAI(**client_kwargs)
         self._native_tools_supported: bool | None = None
+        self._native_tools_retry_at = 0.0
 
     @property
     def supports_native_tools(self) -> bool:
-        """Honor explicit provider capabilities; undeclared APIs keep normal OpenAI tools."""
-        if self._native_tools_supported is None:
+        """Discover once; retry failed discovery after 60s, optimistically allowing tools.
+
+        The first access (and a failed-discovery retry) can perform network I/O
+        with a five-second timeout. Explicit capabilities are cached per client.
+        """
+        if self._native_tools_supported is None and time.monotonic() >= self._native_tools_retry_at:
             self._native_tools_supported = True
             if self.base_url:
                 try:
@@ -111,6 +118,7 @@ class OpenaiClient(AbstractLLMClient):
                     # Discovery is optional for third-party APIs. Do not infer
                     # missing capabilities or change the requested model.
                     self._native_tools_supported = None
+                    self._native_tools_retry_at = time.monotonic() + _NATIVE_TOOLS_DISCOVERY_RETRY_S
         return True if self._native_tools_supported is None else self._native_tools_supported
 
     def _trim_history(self) -> None:

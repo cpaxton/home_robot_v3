@@ -18,7 +18,10 @@ def camera_snapshot(observation: Observations) -> tuple[Observations, dict[str, 
     Stereo head inputs are retained for configured depth providers. Only the
     current decision is held by CHAT; voxel memory owns frames admitted later.
     A copied receive timestamp is not a new sensor acquisition timestamp.
+    Missing head RGB is rejected explicitly; it cannot identify a decision view.
     """
+    if observation.rgb is None:
+        raise ValueError("camera_snapshot requires head RGB")
     names = (
         "gps",
         "compass",
