@@ -182,6 +182,54 @@ contact loads, wheel unloading and stop confirmation. Keep train/development
 results separate from a final disjoint audit. Neither lower training loss nor a
 passing teacher replaces those physical readouts or hardware qualification.
 
+### Small motion-head diagnostics
+
+The corrected-distribution PPO pilot still scores 0/24 on splines. A separate
+teacher-action fitting diagnostic now compares gain and direct bounded heads.
+Both clone one retained GRU/context, reset motion outputs to identical zero
+means, retain frozen gripper weights, and use the same sensor inputs, masks,
+fitting budget and evaluation cases. Base-only gain priors are disabled in both
+branches; the unchanged retained actor remains a separate baseline. Head sizes
+are reported (39,732 gain vs 34,823 direct parameters), not called identical.
+
+| Diagnostic, 1,000 updates per head | Gain success | Direct success |
+| --- | ---: | ---: |
+| Frozen shared backbone; nominal teacher data | 0/8 | 0/8 |
+| Trainable shared-context initialization; nominal data | 2/8 | 0/8 |
+| Trainable context; nominal plus acquisition data | 3/8 | 1/8 |
+
+These are **supervised fitting diagnostics, not PPO improvements**. The eight
+development cases comprise four train/four held out; every success is on train,
+and all actor stops confirm. The direct head is therefore not a supported
+replacement. With a frozen backbone, the gain head's action MSE is already low
+(4.15e-5 train / 1.37e-4 audit), yet its closed-loop controller fails. Action
+fit on successful teacher trajectories is insufficient to establish reactive
+error correction or stability.
+
+Acquisition data adds admitted joint-witness offsets with initial hand errors
+of 9–34 mm, and an explicit 1.5 s capture hold before motion. Scratch FK changes
+the announced goal; it never teleports the measured plant. The motion budget is
+unchanged apart from that extra hold. Original evaluation goals and thresholds
+remain fixed. Eight training teacher trials all pass; one recovery audit expert
+hits unsafe contact. That failure remains reported, never enters optimizer
+minibatches, and makes audit action-MSE an unqualified diagnostic. Audit expert
+outcomes do not choose the training population or fitting budget.
+
+```bash
+PYTHONPATH=src OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 \
+  taskset -c 15 .venv/bin/python scripts/compare_wbc_motion_heads.py \
+  --initializer logs/manipulation/long-finetune-v1/continued/checkpoint-65536/actor \
+  --output logs/eval/head-comparison-example --updates 1000 --count 4 \
+  --backbone-trainable --recovery-offsets
+```
+
+Omit the last two flags for the frozen/nominal diagnostic. Raw samples, weights,
+failed attempts and reports stay ignored under `logs/`; no deployment bundle is
+produced. Existing actor bundle formats reject the direct head. A genuine PPO
+architecture comparison and independent confirmation remain outstanding; these
+results favor investigating recovery-state coverage and objective/credit
+assignment before claiming that a direct head solves the observed equilibria.
+
 ## Training coverage is still a debugging curriculum
 
 Twelve local FK-witness paths and one fixed training seed do not establish a

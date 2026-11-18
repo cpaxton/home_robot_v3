@@ -230,3 +230,57 @@ hand-workspace coverage. Keep every rejection, train/audit split and safety
 failure. Teacher/dynamic validation precedes adding this candidate to PPO.
 This is the next distribution extension; the running frozen v2 pilot retains
 the previously documented mixture and selected speed limits.
+
+## Joint/wheel sampler implementation and first validation
+
+`whole_body_splines.py` now implements this experimental family. Natural cubic
+arm-joint and cumulative left/right wheel-travel paths share a bounded smooth
+phase. Wheel travel determines forward/yaw motion; numerical axle integration
+then determines world XY. FK supplies hand poses. Neither wheel nor joint
+witnesses are additional actor inputs. Certificates distinguish kinematic
+derivative bounds from force/support or dynamic feasibility.
+
+Three bands select **25%, 55%, 85%** of the configured profile speed caps, with
+unchanged acceleration/jerk bounds. Four nearby anchor neighborhoods are mixed
+with proposals throughout the joint-limit box; physical reset and complete-path
+admission reject collisions, support-margin and joint-limit failures. Rejections
+are retained. This is sampled feasible coverage, not uniform workspace coverage
+or a claim to cover every reachable state. The next step is to measure bins and
+retime/recover difficult cases, not put all fast cases directly into PPO.
+
+Thirty teacher cases (five train/five audit per band) admit all references and
+confirm all stops. Success is **9/10 slow, 4/10 medium, 0/10 fast**, with no
+unsafe-force, wheel-lift or invalid-physics flags. Faster references miss the
+unchanged 3 mm / 0.02 rad path gate. The slow failure also misses quiet settling.
+All cases remain in the report and generated gallery.
+
+```bash
+PYTHONPATH=src MUJOCO_GL=disable OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 \
+  taskset -c 15 .venv/bin/python scripts/eval_wbc_whole_body_splines.py \
+  --level 0 --count 5 --teacher --output logs/eval/whole-body-joint-splines-v1/slow
+```
+
+Use a fresh output; levels 1/2 select medium/fast. The script exports full
+base/hand/joint paths and an interactive target gallery. The existing shared
+gallery now displays base paths/headings and joint coordinates when provided.
+Validation used a frozen `b958fc62` baseline plus sampler overlays, preserving
+the separate working-tree reward edit. This family has **0% training share**
+in the completed v2 pilot; future mixture changes need a new versioned run.
+
+## Completed v2 pilot exposure
+
+The completed 65,536-decision run collected **78,440 physical ticks**:
+
+| Family | Physical ticks | Episodes started |
+| --- | ---: | ---: |
+| Hand | 7,816 | 55 |
+| Base | 7,943 | 54 |
+| Goal changes | 7,839 | 77 |
+| Arm splines | 15,692 | 85 |
+| Unloaded TAMP | 39,150 | 198 |
+
+The requested 10/10/10/20/50 mixture is realized, but this did not produce
+successful spline tracking: source/final both 0/24. Contact failures worsen;
+the checkpoint is not promoted. Broader sampling alone is insufficient evidence
+for another budget extension. Current work isolates the action head, recovery
+state distribution and fine tracking; see the [active index](ACTIVE_WORK.md).

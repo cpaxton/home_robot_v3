@@ -121,9 +121,41 @@ The first PPO launch exhausted the service's 64 thread slots in W&B before any
 update. It is preserved. Service `emet-motion-density-training` restarts the
 same fixed budget in `logs/manipulation/motion-density-v2-restart`, with one
 compute core, one Go worker and 128 thread slots. Restart state is
-`logs/recovery/motion-density-v2/restart.json`; no completed PPO result is
-claimed. Broader joint-space whole-body/speed coverage is documented as the
-next candidate, not silently added to this frozen run.
+`logs/recovery/motion-density-v2/restart.json`. That pipeline is now complete:
+65,536 decisions / 78,440 physical ticks. Matched splines remain **0/24 → 0/24**,
+with 24/24 stops each; median final hand position error improves 24.0 → 21.1 mm,
+but contact stops increase 15 → 17 and wheel-lift stops stay at two. Hand cases
+stay 1/16, base 8/8, handoffs 0/16. Final unloaded TAMP is 6/6; source has 5/6
+plus one execution error with no terminal stop evidence, so that difference
+cannot be attributed to learned tracking. No promotion or further budget
+extension. Detailed raw outputs remain under ignored `logs/eval/motion-density-v2-*`.
+
+**Broader references implemented separately:** experimental joint/wheel cubic
+paths integrate nonholonomic axle motion and use FK for the same pose interface.
+Three bands use 25/55/85% of configured speed caps, four anchor neighborhoods
+plus full-joint-space reset proposals, bounded sampling and retained rejections.
+First teacher checks: **9/10 slow, 4/10 medium, 0/10 fast**, all 30 admitted and
+stopped, no unsafe-force/wheel-lift/invalid-physics flags. The faster cases fail
+the unchanged path-precision gate. This family is not in PPO. [Protocol](TRAINING_MIXTURE.md#jointwheel-sampler-implementation-and-first-validation).
+
+**Controlled head diagnostics completed:** common backbone and zero initial
+motion means; matched teacher-action fitting, not PPO. Frozen backbone: both
+heads 0/8. Trainable context: gain 2/8, direct 0/8. Adding admitted reset-time
+capture errors gives gain 3/8 and direct 1/8, all successes on train cases;
+held-out cases remain 0/4. All actor stops confirm. One recovery audit expert
+hits an unsafe-contact guard; it is retained, never used for fitting, and not
+called qualified. The direct head cannot be exported through existing bundle
+formats. [Interpretation and reproduction](WHOLE_BODY_ARCHITECTURE_REVIEW.md#small-motion-head-diagnostics).
+
+**Next bounded diagnostic is running:** `emet-gain-recovery-population` uses
+16 existing train identities and eight audit identities, nominal plus admitted
+capture-error references, the coupled teacher, and 4,000 fitting updates on the
+gain controller. Training teacher failures prevent fitting; audit failures stay
+reported and never enter the optimizer. This is supervised error-coverage
+diagnosis, not another PPO budget extension or a deployed actor. Its immutable
+overlay uses the validated `b958fc62` baseline; the pre-existing working-tree
+reward edit is excluded and preserved. Output:
+`logs/eval/gain-recovery-population-v1/report.json`.
 
 Disk headroom recovered by compressing eleven old source archives: **3.39 GiB**
 saved, each verified by bit-exact decompression before removing its raw tar.

@@ -364,7 +364,7 @@ class ArmSplineTrackingEnv(gym.Wrapper):
         if not self.levels or any(not isinstance(level, SplineLevel) for level in self.levels):
             raise ValueError("declared spline levels required")
         for case in self.cases:
-            validate_case(case, self.levels)
+            self.validate_case(case)
         if len({c["id"] for c in self.cases}) != len(self.cases) or len({c["seed"] for c in self.cases}) != len(
             self.cases
         ):
@@ -383,6 +383,29 @@ class ArmSplineTrackingEnv(gym.Wrapper):
         )
         self.reward_config = reward_config
         self.ready = False
+
+    def validate_case(self, case):
+        validate_case(case, self.levels)
+
+    def sample_posture(self, rng, case, level):
+        e = self.unwrapped
+        anchor = np.array(ANCHORS[case["posture"]], float)
+        low = np.maximum(anchor - level.posture_jitter_rad, e.control.limits[:, 0] + 0.03)
+        high = np.minimum(anchor + level.posture_jitter_rad, e.control.limits[:, 1] - 0.03)
+        return rng.uniform(low, high)
+
+    def sample_reference(self, rng, case, level):
+        e = self.unwrapped
+        initial = e.control.positions().copy()
+        low = np.maximum(initial - level.amplitude_rad, e.control.limits[:, 0] + 0.03)
+        high = np.minimum(initial + level.amplitude_rad, e.control.limits[:, 1] - 0.03)
+        points = np.vstack([initial, rng.uniform(low, high, size=(level.knot_count - 1, e.profile.arm_size))])
+        if rng.random() < 0.5:
+            points[-1] = initial
+        return ArmSplineReference(e.control, points, level, timing=self.timing)
+
+    def settling_budget(self):
+        return 3.0
 
     def observe(self, raw):
         e = self.unwrapped
@@ -407,25 +430,16 @@ class ArmSplineTrackingEnv(gym.Wrapper):
         e = self.unwrapped
         level = self.levels[case["level"]]
         rng = np.random.default_rng(case["seed"])
-        anchor = np.array(ANCHORS[case["posture"]], float)
         for attempt in range(self.maximum_attempts):
             # Sampling bounds choose a synthetic reset. No measured robot state
             # is clamped and no runtime reference can write generalized state.
-            low = np.maximum(anchor - level.posture_jitter_rad, e.control.limits[:, 0] + 0.03)
-            high = np.minimum(anchor + level.posture_jitter_rad, e.control.limits[:, 1] - 0.03)
-            e.reset_posture = rng.uniform(low, high)
+            e.reset_posture = self.sample_posture(rng, case, level)
             raw, info = e.reset(seed=case["seed"])
             if info.get("initialization_failed"):
                 self.rejections.append({"attempt": attempt, "reason": "initialization_failed"})
                 continue
-            initial = e.control.positions().copy()
-            low = np.maximum(initial - level.amplitude_rad, e.control.limits[:, 0] + 0.03)
-            high = np.minimum(initial + level.amplitude_rad, e.control.limits[:, 1] - 0.03)
-            points = np.vstack([initial, rng.uniform(low, high, size=(level.knot_count - 1, e.profile.arm_size))])
-            if rng.random() < 0.5:
-                points[-1] = initial
             try:
-                reference = ArmSplineReference(e.control, points, level, timing=self.timing)
+                reference = self.sample_reference(rng, case, level)
                 if self.spread_requirements is not None and not self.spread_requirements.accepts(reference.spread):
                     raise ValueError(
                         "insufficient_pose_excursion:" + json.dumps(reference.spread["base_relative_hand"])
@@ -439,9 +453,8 @@ class ArmSplineTrackingEnv(gym.Wrapper):
             e.reach_hold_trial = False
             e.fixed_base_trial = False
             e.control.pose_only_targets = True
-            # Two seconds of required quiet hold plus one second of settling
-            # allowance, rather than mostly collecting a 35-second static hold.
-            e.config = replace(e.config, horizon=float(np.ceil((reference.end + 3.0) / e.profile.dt) * e.profile.dt))
+            horizon = float(np.ceil((reference.end + self.settling_budget()) / e.profile.dt) * e.profile.dt)
+            e.config = replace(e.config, horizon=horizon)
             e.set_task_trajectory(reference)
             e.control.history = None
             self.reference = reference
