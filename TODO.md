@@ -44,6 +44,13 @@
       uncertainty accounting and partial/no-command controls are covered.
       This is a separate control; full observed source/refiner and relative
       contact/geometry qualification remain open.
+      [Bounded local maps and mobile gate](docs/experiments/local_map_mobile_20261117.md):
+      batch construction preserves the cell checksum at ~13.8× lower isolated
+      peak RSS. Generation leases invalidate retired maps/plans. One assisted
+      cube episode completes navigation, pick/carry/place, remapping and departure;
+      the cylinder release rejection (persistent tracking reserve despite existing
+      settling) remains open. Full observed execution and broader OVMM remain
+      unqualified.
 
 - [ ] Profile failed-search cost without answer overrides or target-specific rules:
       final S0 seed 1 misses the receptacle in both arms but candidate takes

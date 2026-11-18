@@ -190,3 +190,20 @@ retains source profiles, negative cases, cancelled infeasible goals and a native
 crash separately. This establishes collision-map integration, **not completion
 of gates 2–5 above**. The observed source/refiner and relative contact geometry
 remain the next qualification work; no fictitious passive sensor was added.
+
+### November 17: local map resources and mobile control
+
+The next OVMM-shaped control adds batched workspace construction and an opt-in
+single-owner local scene store with generation leases. Old maps/plans invalidate
+before reacquisition; capture ages and unknown occupancy remain unchanged.
+An isolated 2.304-million-cell comparison preserves the exact grid checksum and
+reduces peak RSS from 1,877,245,952 to 136,491,008 bytes. The initial mobile
+control reaches grasp/lift but outlasts source evidence during loaded preflight;
+reacquisition now occurs at the stopped loaded handoff. See the
+[mobile experiment record](../experiments/local_map_mobile_20261117.md).
+This is provided-map/native-state assistance, not default OVMM or full observed
+source qualification. One cube control now completes navigation/carry/place/departure;
+the cylinder completes carry but rejects release with persistent measured
+tracking shortfall. Both already use the native endpoint-settling gate; a
+redundant proposed setting and its duplicate runs were discarded. Release and
+collision bounds remain unchanged.

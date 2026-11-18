@@ -45,13 +45,13 @@ from emet.simulation.synchronized_capture import camera_opencv_pose
 from emet.utils.cpu_affinity import apply_affinity, safe_cpu_ids
 
 
-def provided_scan(fixture, robot, target, out, *, resolution=0.005):
+def provided_scan(fixture, robot, target, out, *, resolution=0.005, include_target=False, build_stats=None):
     """Actual pinhole depth returns from an explicitly assisted static prescan."""
     xml = ET.parse(fixture / "scene_environment.xml")
     world = xml.getroot().find("worldbody")
     for name in ("object1", "object2"):
         body = world.find(f"body[@name='{name}']")
-        if name == target:
+        if name == target and not include_target:
             world.remove(body)
         else:
             body.set("pos", " ".join(map(str, robot.data.body(name).xpos)))
@@ -72,7 +72,7 @@ def provided_scan(fixture, robot, target, out, *, resolution=0.005):
     k = rendered_camera_intrinsics(65, 512, 512)
     pose = camera_opencv_pose(model, data, camera, upright=False)
     now = time.monotonic()
-    ticket = CaptureInterval("provided-static-scan", started, now, now, "provided-simulation-scanner")
+    ticket = CaptureInterval(f"provided-static-scan:{time.monotonic_ns()}", started, now, now, "provided-simulation-scanner")
     observation = SimpleNamespace(rgb=rgb, depth=depth, camera_K=k, camera_pose=pose, received_monotonic=now)
     # Operator selects wood by appearance; the support plane is fitted from depth.
     c = rgb.astype(float)
@@ -94,7 +94,8 @@ def provided_scan(fixture, robot, target, out, *, resolution=0.005):
     )
     workspace = [[-0.4, -0.9, 0.44], [0.4, -0.3, 1.04]]
     grid = ObservedWorkspace.from_depth(
-        depth, k, pose, workspace=workspace, resolution=resolution, depth_margin_m=0.0001, max_cells=3_000_000
+        depth, k, pose, workspace=workspace, resolution=resolution, depth_margin_m=0.0001, max_cells=3_000_000,
+        build_stats=build_stats
     )
     labels = np.where(mask, "table", "background")
     background = ObservedBackground.from_capture(

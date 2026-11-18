@@ -34,6 +34,45 @@ def test_clear_endpoints_do_not_authorize_colliding_base_interior():
         np.testing.assert_array_equal(getattr(d, name), value)
 
 
+def test_loaded_sweep_checks_payload_only_obstacle_and_preserves_attachment():
+    from emet.eval.physical_tamp import make_scene_checker
+    m, d = scene(obstacle='''<body name="payload" pos="0 .12 .2"><freejoint/>
+      <geom type="box" size=".004 .004 .004"/></body>
+      <geom type="box" pos=".02 .12 .2" size=".002 .005 .005"/>''')
+    checker = make_scene_checker(m, {'object_body': 'payload', 'gripper_bodies': ()})
+    checker.set_payload(m, d, 'payload', 'base_link')
+    original = d.qpos.copy()
+    attachment = checker.payload_transform.copy()
+    assert module.sweep_clear(m, d, [0, 0, 0], [.04, 0, 0], envelope=False)
+    assert not module.sweep_clear(m, d, [0, 0, 0], [.04, 0, 0], envelope=False, loaded_checker=checker)
+    np.testing.assert_array_equal(d.qpos, original)
+    np.testing.assert_array_equal(checker.payload_transform, attachment)
+
+
+@pytest.mark.parametrize('when', ['before_command', 'during_motion'])
+def test_loaded_motion_checks_retention_after_preflight_and_stops_on_loss(monkeypatch, when):
+    monkeypatch.setenv('EMET_SIM_NAV_TELEPORT', '0')
+    m, d = scene()
+    clock = [0.]
+    monkeypatch.setattr(module, 'time', SimpleNamespace(monotonic=lambda: clock[0],
+        sleep=lambda dt: clock.__setitem__(0, clock[0]+dt)))
+    monkeypatch.setattr(module, 'sweep_clear', lambda *args, **kwargs: True)
+    robot = SimpleNamespace(get_emet_session=lambda: {'is_simulation': True},
+        move_base_to=Mock(return_value=True), cancel_navigation=Mock(return_value=True))
+    def sync(data):
+        data.time = clock[0]
+        mujoco.mj_kinematics(m, data)
+    retained = Mock(side_effect=[True, False] if when=='before_command' else [True, True, False])
+    ex = SimpleNamespace(model=m, data=d, synchronize=sync, payload_body='arm', _loaded_binding_done=True,
+        collision=SimpleNamespace(payload_body='arm'), payload_retained=retained, qadr=np.array([7]),
+        joint_tolerance=.03, event=Mock())
+    result = module.execute_approach(robot, ex, module.BaseApproach((0.,0.,0.),(.04,0.,0.)), loaded=True)
+    assert result.reason == 'payload_not_retained'
+    assert result.execution_started is (when=='during_motion')
+    assert robot.move_base_to.called is (when=='during_motion')
+    assert robot.cancel_navigation.called is (when=='during_motion')
+
+
 def test_sweep_includes_arm_and_controller_tracking_envelope():
     m, d = scene(arm=True, obstacle='<geom type="box" pos=".02 .15 .2" size=".002 .01 .01"/>')
     assert not module.sweep_clear(m, d, [0, 0, 0], [.04, 0, 0], envelope=False)

@@ -1,6 +1,6 @@
 # Copyright (c) Chris Paxton 2026
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
-"""Unloaded, short straight base approaches on private native scene geometry.
+"""Short straight base motion on private native scene geometry.
 
 Sweeps are sampled static checks, including an XY/yaw tracking envelope. They
 are not continuous collision or dynamics certificates. No live qpos is written.
@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import itertools
 import time
+from copy import copy
 from dataclasses import dataclass
 
 import mujoco
@@ -17,6 +18,7 @@ import numpy as np
 from emet.controller.manipulation.native_scene import qpos_difference
 from emet.eval.physical_tamp import base_pose, make_scene_checker, write_offline_base_pose
 from emet.motion.mujoco_collision import body_subtree
+from emet.motion.release import held_checker, relative_pose
 
 LINEAR_STEP_M = .005
 ANGULAR_STEP_RAD = .025
@@ -57,8 +59,12 @@ def base_alternatives(model, data):
         yield BaseApproach(tuple(start), tuple(start + offset * forward))
 
 
-def sweep_clear(model, measured, start, goal, *, deadline=None, envelope=True, event=lambda **row: None):
-    """Check full robot geometry, forbidding even finger/target contact in transit.
+def sweep_clear(model, measured, start, goal, *, deadline=None, envelope=True, event=lambda **row: None,
+                loaded_checker=None, scene_checker=None):
+    """Check full robot geometry and, when supplied, the measured held payload.
+
+    Unloaded motion forbids finger/target contact. Loaded motion preserves only
+    the held checker's explicit grasp contact allowances and scene map hooks.
 
     Private data and a private checker protect live contacts and payload state.
     The measured arm is held through the base sweep. A colliding held-arm posture
@@ -69,7 +75,9 @@ def sweep_clear(model, measured, start, goal, *, deadline=None, envelope=True, e
         return False
     scratch = mujoco.MjData(model)
     mujoco.mj_copyData(scratch, model, measured)
-    checker = make_scene_checker(model, {'object_body': 'base_link', 'gripper_bodies': ()})
+    checker = (held_checker(loaded_checker, relative_pose(scratch, loaded_checker.payload_body, loaded_checker.payload_parent))
+               if loaded_checker is not None else copy(scene_checker) if scene_checker is not None
+               else make_scene_checker(model, {'object_body': 'base_link', 'gripper_bodies': ()}))
     if checker.unsupported_links(model, ['base_link']):
         return False
     xy = np.arange(-XY_ENVELOPE_M, XY_ENVELOPE_M + 1e-9, LINEAR_STEP_M) if envelope else [0.]
@@ -116,24 +124,37 @@ def planning_starts(model, data, *, deadline, event=lambda **row: None):
         mujoco.mj_kinematics(model, data)
 
 
-def execute_approach(robot, executor, approach):
+def execute_approach(robot, executor, approach, *, loaded=False, scene_checker=None):
     """ACK is dispatch only; require fresh measured arrival, cancellation and quiet."""
     model, data = executor.model, executor.data
     if not approach_available(robot):
         return ApproachResult(False, 'base_approach_unavailable')
+    if loaded and (not getattr(executor, '_loaded_binding_done', False)
+                   or not executor.payload_body or executor.collision.payload_body != executor.payload_body):
+        return ApproachResult(False, 'payload_not_retained')
+    def check(measured, a, b, **kwargs):
+        return sweep_clear(model, measured, a, b,
+            **({'loaded_checker': executor.collision} if loaded else
+               {'scene_checker': scene_checker} if scene_checker is not None else {}), **kwargs)
     executor.synchronize(data)
+    if loaded and not executor.payload_retained():
+        return ApproachResult(False, 'payload_not_retained')
     start, goal = np.array(approach.start), np.array(approach.goal)
     current = base_pose(model, data)
     if np.linalg.norm(current[:2]-start[:2]) > .01 or abs(_angle(current[2]-start[2])) > .015:
         return ApproachResult(False, 'base_approach_invalidated')
     before_check = data.qpos.copy()
-    if not sweep_clear(model, data, current, goal, event=executor.event):
+    if not check(data, current, goal, event=executor.event):
         return ApproachResult(False, 'base_approach_invalidated')
     robot_ids = body_subtree(model, 'base_link')
+    if loaded:
+        robot_ids |= body_subtree(model, executor.payload_body)
     scene_addresses = [address for j in range(model.njnt) if model.jnt_bodyid[j] not in robot_ids
                        for address in range(int(model.jnt_qposadr[j]),
                                             int(model.jnt_qposadr[j+1]) if j+1 < model.njnt else model.nq)]
     executor.synchronize(data)
+    if loaded and not executor.payload_retained():
+        return ApproachResult(False, 'payload_not_retained')
     current = base_pose(model, data)
     if (np.linalg.norm(current[:2]-start[:2]) > .01 or abs(_angle(current[2]-start[2])) > .015
             or np.max(np.abs(data.qpos[executor.qadr]-before_check[executor.qadr])) > .002
@@ -167,6 +188,8 @@ def execute_approach(robot, executor, approach):
         while data.time-started_sim < 12. and time.monotonic()-started_wall < 45.:
             time.sleep(.05)
             executor.synchronize(data)
+            if loaded and not executor.payload_retained():
+                return ApproachResult(False, 'payload_not_retained', True)
             current = base_pose(model, data)
             displacement = current[:2]-start[:2]
             along = float(displacement @ direction)
@@ -178,12 +201,12 @@ def execute_approach(robot, executor, approach):
             if (along < -XY_ENVELOPE_M or along > length+XY_ENVELOPE_M
                     or cross > XY_ENVELOPE_M or abs(_angle(current[2]-start[2])) > YAW_ENVELOPE_RAD
                     or arm_error > executor.joint_tolerance
-                    or not sweep_clear(model, data, current, current, envelope=False)):
+                    or not check(data, current, current, envelope=False)):
                 executor.event(phase='base_approach_rejected', reason='tracking_or_collision',
                                measured_world=current.tolist(), arm_residual=arm_error)
                 return result
             if scene_addresses and np.max(np.abs(qpos_difference(model, data.qpos, scene_reference)[scene_addresses])) > .0001:
-                if not sweep_clear(model, data, current, goal, event=executor.event):
+                if not check(data, current, goal, event=executor.event):
                     executor.event(phase='base_approach_rejected', reason='scene_changed_collision')
                     return result
                 scene_reference = data.qpos.copy()

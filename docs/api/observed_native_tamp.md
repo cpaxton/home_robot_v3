@@ -634,3 +634,58 @@ qualify the assumptions. The source must do that independently. Model bounds and
 Individual telescope-link uncertainty is still required for complete arm planning.
 
 See [rendered motion, contact audit, retained failures and videos](../experiments/observed_moving_geometry_20261029.md).
+
+## Bounded local collision-map lifecycle
+
+`ObservedWorkspace.from_depth` builds its projection geometry in batches
+(`chunk_cells=4096`) rather than allocating corners for the entire workspace.
+`max_cells` retains its existing 250,000 default. The additional defaults are
+`max_output_bytes=64*1024**2` and `max_working_bytes=64*1024**2`.
+Scalar budgets and estimated float conversion/sanitation costs are checked
+before full-frame conversion and grid allocation. Optional `build_stats` reports
+the cell/output count, conservative array-work estimate and maximum batch size.
+These are map-construction budgets, not a process-RSS limit: input owners,
+MuJoCo models, renderers and other application memory remain separate. Array-like
+inputs may already require storage when first inspected; callers should provide
+bounded sensor arrays. Chunking preserves the free/occupied/unknown proof,
+including missing returns and all pixels in each projected cell rectangle.
+
+`LocalSceneStore` is an opt-in owner of local collision evidence, separate from
+navigation mapping. Its defaults admit one scene with at most 64 MiB of counted
+retained storage. `load(key, builder, reserve_bytes=...)` retires older entries
+before building and checks the scene's deduplicated Python/NumPy storage before
+publication. The builder must bound its own scratch. Builders and consumers
+must not retain scenes outside their lease borrow; arbitrary external references
+and callback-owned allocations are not controlled by this store.
+
+Plans and collision hooks retain `LocalSceneLease`, an opaque weak reference and
+unique generation. Replacing even the same key invalidates old leases. Expired
+captures retire their scene; failed reacquisition leaves the old scene invalid.
+A borrow serializes a geometry query against eviction. Check the same expected
+lease again at command dispatch, and during ongoing control. Cancellation must
+remain available after retirement. This is evidence-lifetime enforcement, not a
+claim that the scene stayed unchanged: owners must explicitly invalidate on a
+scene change and clear their pending plan handles. Acquisition time is never
+renewed by a lease check.
+
+The development runner `scripts/eval_mobile_mapped_contact.py` exercises this
+lifecycle in simulated Stretch. It navigates unloaded, builds a source map,
+uses the public primitive tools, reacquires at a stopped loaded handoff, checks
+and executes loaded wheel transport, reacquires at the destination, places and
+retreats, then remaps the released object before navigating away. Only private
+planning data receives hypothetical poses; live base motion uses ordinary wheel
+velocity actuators. It retains the native adapter's existing 0.3 s endpoint
+stillness check; controller and release thresholds remain unchanged.
+Loaded sweeps preserve measured attachment, explicit grasp
+contact allowances and map hooks, and execution checks measured retention and
+arrival. The unchanged 5 mm/0.025 rad sweep spacing and 10 mm/0.05 rad tracking
+envelope are sampled checks, not continuous collision certificates.
+
+This runner explicitly uses native robot/object state, native full-scene geometry
+and a provided external RGBD scanner. Completely contained solids also face the
+local map's strict unknown-space checks; solids outside or straddling its bounds
+retain the declared native guard. This is an assisted integration control. It
+does not enable default OVMM loaded transport, qualify onboard-only mapping,
+run Habitat/RoboCasa, or establish a real-robot sensor/controller contract.
+The [mobile-map record](../experiments/local_map_mobile_20261117.md) separates
+those limits from the measured memory and task evidence.

@@ -34,7 +34,9 @@ class ObservedWorkspace:
 
     @classmethod
     def from_depth(cls, depth, intrinsic, world_from_camera, *, workspace, resolution,
-                   depth_margin_m=.02, min_depth_m=.1, max_depth_m=5., max_cells=250_000):
+                   depth_margin_m=.02, min_depth_m=.1, max_depth_m=5., max_cells=250_000,
+                   chunk_cells=4096, max_output_bytes=64*1024**2, max_working_bytes=64*1024**2,
+                   build_stats=None):
         """Carve a cell only when its *entire* projection is in front of valid depth.
 
         Every pixel in the projected corner bounding rectangle must return a
@@ -43,7 +45,12 @@ class ObservedWorkspace:
         Workspace bounds must lie on this grid; no partial edge cells are added.
         Inputs use the same optical XYZ convention as ``Camera.depth_to_xyz``.
         """
-        depth, intrinsic, pose = np.asarray(depth, float), np.asarray(intrinsic, float), np.asarray(world_from_camera, float)
+        if any(type(v) is not int or v < 1 for v in
+               (chunk_cells, max_output_bytes, max_working_bytes)):
+            raise ValueError('invalid_observed_workspace_budget')
+        # Inspect existing arrays without converting the whole frame to float64.
+        depth = np.asarray(depth)
+        intrinsic, pose = np.asarray(intrinsic, float), np.asarray(world_from_camera, float)
         bounds = bounds_array(workspace)
         if (depth.ndim != 2 or not depth.size or intrinsic.shape != (3, 3) or pose.shape != (4, 4)
                 or not np.isfinite(intrinsic).all() or intrinsic[0, 0] <= 0 or intrinsic[1, 1] <= 0
@@ -55,43 +62,58 @@ class ObservedWorkspace:
                 or not np.isfinite(depth_margin_m) or depth_margin_m < 0
                 or not np.isfinite([min_depth_m, max_depth_m]).all() or not 0 < min_depth_m < max_depth_m):
             raise ValueError('invalid_observed_depth_geometry')
-        # Out-of-range values are unknown, including a finite overflow/sentinel.
-        depth = np.where(np.isfinite(depth) & (depth >= min_depth_m) & (depth <= max_depth_m), depth, 0.)
         count = (bounds[1] - bounds[0]) / resolution
         if np.any(count < 1) or not np.allclose(count, np.round(count), atol=1e-7, rtol=0):
             raise ValueError('workspace_must_align_to_grid')
         if np.prod(count) > max_cells:
             raise ValueError('observed_workspace_budget_exceeded')
         shape = np.round(count).astype(int)
-        ids = np.indices(shape).reshape(3, -1).T
-        centers = bounds[0] + (ids + .5) * resolution
-        corners = centers[:, None, :] + CORNERS[None] * resolution / 2
-        camera = (corners - pose[:3, 3]) @ pose[:3, :3]
-        in_front = np.all(camera[..., 2] > 0, axis=1)
-        projected = camera @ intrinsic.T
-        with np.errstate(divide='ignore', invalid='ignore'):
-            uv = projected[..., :2] / projected[..., 2:]
+        total = int(np.prod(shape))
+        # Includes immutable output conversion/validation, owned sensor buffers,
+        # and a conservative reserve for all geometry arrays in one batch.
+        working = 16*total + 3*depth.size*np.dtype(float).itemsize + 2048*min(chunk_cells, max(total, depth.size))
+        if total > max_output_bytes or working > max_working_bytes:
+            raise ValueError('observed_workspace_budget_exceeded')
+        # Budget rejection precedes conversion and full-frame sanitation too.
+        depth = np.asarray(depth, float)
+        # Out-of-range values are unknown, including finite overflow/sentinels.
+        depth = np.where(np.isfinite(depth) & (depth >= min_depth_m) & (depth <= max_depth_m), depth, 0.)
         cells = np.zeros(tuple(shape), dtype=np.uint8)
         height, width = depth.shape
-        for index in np.flatnonzero(in_front):
-            lo, hi = uv[index].min(0), uv[index].max(0)
-            if np.any(lo < -.5) or hi[0] >= width - .5 or hi[1] >= height - .5:
-                continue
-            low, high = np.floor(lo + .5).astype(int), np.floor(hi + .5).astype(int)
-            patch = depth[low[1]:high[1] + 1, low[0]:high[0] + 1]
-            if np.isfinite(patch).all() and np.all(patch > camera[index, :, 2].max() + depth_margin_m):
-                cells[tuple(ids[index])] = 1
+        for start in range(0, total, chunk_cells):
+            ids = np.column_stack(np.unravel_index(np.arange(start, min(total, start+chunk_cells)), tuple(shape)))
+            centers = bounds[0] + (ids + .5) * resolution
+            corners = centers[:, None, :] + CORNERS[None] * resolution / 2
+            camera = (corners - pose[:3, 3]) @ pose[:3, :3]
+            in_front = np.all(camera[..., 2] > 0, axis=1)
+            projected = camera @ intrinsic.T
+            with np.errstate(divide='ignore', invalid='ignore'):
+                uv = projected[..., :2] / projected[..., 2:]
+            for index in np.flatnonzero(in_front):
+                lo, hi = uv[index].min(0), uv[index].max(0)
+                if np.any(lo < -.5) or hi[0] >= width - .5 or hi[1] >= height - .5:
+                    continue
+                low, high = np.floor(lo + .5).astype(int), np.floor(hi + .5).astype(int)
+                patch = depth[low[1]:high[1] + 1, low[0]:high[0] + 1]
+                if np.isfinite(patch).all() and np.all(patch > camera[index, :, 2].max() + depth_margin_m):
+                    cells[tuple(ids[index])] = 1
         # Endpoint cells are occupied; a margin-neighbourhood remains unknown
         # because free carving already stops before each return by that margin.
-        y, x = np.indices(depth.shape)
-        valid = np.isfinite(depth) & (depth > 0)
-        z = depth[valid]
-        camera_points = np.column_stack(((x[valid] - intrinsic[0, 2]) * z / intrinsic[0, 0],
-                                         (y[valid] - intrinsic[1, 2]) * z / intrinsic[1, 1], z))
-        world = camera_points @ pose[:3, :3].T + pose[:3, 3]
-        inside = np.all((world >= bounds[0]) & (world < bounds[1]), axis=1)
-        endpoints = np.floor((world[inside] - bounds[0]) / resolution).astype(int)
-        cells[tuple(endpoints.T)] = 2
+        for start in range(0, depth.size, chunk_cells):
+            pixels = np.arange(start, min(depth.size, start+chunk_cells))
+            z = depth.ravel()[pixels]
+            valid = z > 0
+            y, x = np.divmod(pixels[valid], width)
+            z = z[valid]
+            camera_points = np.column_stack(((x - intrinsic[0, 2]) * z / intrinsic[0, 0],
+                                             (y - intrinsic[1, 2]) * z / intrinsic[1, 1], z))
+            world = camera_points @ pose[:3, :3].T + pose[:3, 3]
+            inside = np.all((world >= bounds[0]) & (world < bounds[1]), axis=1)
+            endpoints = np.floor((world[inside] - bounds[0]) / resolution).astype(int)
+            cells[tuple(endpoints.T)] = 2
+        if build_stats is not None:
+            build_stats.update(grid_cells=total, output_bytes=total, estimated_working_bytes=working,
+                               chunk_cells=chunk_cells, max_cells_per_batch=min(chunk_cells, total))
         return cls(bounds[0], resolution, cells)
 
     @classmethod
