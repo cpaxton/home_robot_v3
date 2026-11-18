@@ -119,3 +119,26 @@ def test_curriculum_routes_stream_only_catalogued_media(tmp_path):
         server.shutdown()
         server.server_close()
         thread.join(timeout=2)
+
+
+def test_base_video_reports_base_error_and_wraps_heading():
+    from emet.visualization.curriculum_video import tracking_readout
+
+    values = {"base_target": np.array([[0.03, 0.04, -np.pi + 0.01]]), "base": np.array([[0, 0, np.pi - 0.01]])}
+    kind, position, angle = tracking_readout(values, 0, "base")
+    assert kind == "BASE" and position == pytest.approx(50)
+    assert angle == pytest.approx(np.rad2deg(0.02))
+    pose = np.array([[0.1, 0.2, 0.3, 1, 0, 0, 1, 0, 0]])
+    kind, position, angle = tracking_readout({"hand": pose, "hand_target": pose}, 0, "hand")
+    assert kind == "EE" and position == 0 and angle == 0
+
+
+def test_base_only_hand_sweeps_do_not_inflate_hand_target_coverage():
+    case = {"id": "active", "seed": 1, "split": "train"}
+    pose = [0.1, 0.2, 0.3, 1, 0, 0, 1, 0, 0]
+    active = {"case": case, "hand": [pose, pose], "hand_active": True}
+    passive = {"case": case, "hand": [[100, 100, 100, *pose[3:]]], "hand_active": False}
+    result = coverage_statistics([active, passive])
+    assert result["admitted_paths"] == 2 and result["active_hand_paths"] == 1 and result["passive_hand_sweeps"] == 1
+    np.testing.assert_allclose(result["position_span_m"], [0, 0, 0])
+    assert result["occupied_2cm_voxels"] == 1

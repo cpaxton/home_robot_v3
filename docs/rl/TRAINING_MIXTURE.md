@@ -128,9 +128,9 @@ bounded disturbances, and then grasp/lift/loaded carry/place once their simulato
 initialization/execution is reliable. Keep a core of ordinary tracking. Any new
 weights and randomization curriculum must be recorded before training starts.
 
-## Random arm-spline family (implemented; validation before training)
+## Random arm-spline family (preflight passed; bounded PPO pilot)
 
-The next Mars mixture is **10/10/10/20/50** regular-hand/base/goal-change/
+The bounded Mars pilot requests **10/10/10/20/50** regular-hand/base/goal-change/
 random-arm-spline/unloaded-TAMP control ticks. It keeps the outer 50/50 balance.
 It is not the completed goal-change run above. The new family samples four
 nearby legal reset postures, cubic joint geometry mapped through private FK,
@@ -161,3 +161,5 @@ Hardware status is maintained separately in
 [Mars hardware readiness](MARS_HARDWARE_READINESS.md).
 
 Inspect the actual curriculum in the [4×4 video and 3D coverage gallery](CURRICULUM_VISUALIZATION.md). It distinguishes teacher execution, train/audit cases and extra visualization-only examples.
+
+The frozen level-zero preflight is 48/48 teacher successes after 1,679 source-bound regressions. Active pilot output is `logs/manipulation/arm-splines-v1-restart`; the original run is preserved after a visualization-induced TAMP IPC timeout during critic warmup. Rendering is finished; do not freeze live IPC workers.

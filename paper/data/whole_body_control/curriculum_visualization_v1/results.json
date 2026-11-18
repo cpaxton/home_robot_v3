@@ -1,0 +1,474 @@
+{
+  "format": "curriculum-visualization-evidence-v1",
+  "hardware_used": false,
+  "learned_policy_improvement_claimed": false,
+  "recording_implementation_revision": "28844d03",
+  "recordings_root": "logs/eval/curriculum-videos-v1",
+  "videos": {
+    "arm_splines_l0": {
+      "title": "Random arm splines | small",
+      "controller": "analytic_teacher",
+      "fps": 8,
+      "frames": 132,
+      "duration_s": 16.5,
+      "resolution": [
+        1536,
+        1232
+      ],
+      "time_scale": 1,
+      "summary": {
+        "attempts": 16,
+        "admitted": 16,
+        "successes": 16
+      },
+      "assets": {
+        "arm_splines_l0.mp4": "88ea2168dc0998e8c9879a78c43d2c0ea1b92882b81aa6b74220a0b4977922ef",
+        "arm_splines_l0.webm": "46b6f03f6880637f2b15164a44581cd52a9fa86e26b6b863d403242df553a305",
+        "arm_splines_l0.jpg": "6dd7503bae74243f498eae8883f384e9b7c6418995c81bbc48c502bb12220a94"
+      },
+      "producer_sha256": "d82f818cfacc04e9fef1db09d88d826b1b24efa6fbc5f6e4c297ffde77849edb",
+      "source_report_sha256": "488424b5998f3ab116a92b23ea32bc7afa1b36ecc901d3fca6907a43236b0ba6",
+      "stop_confirmed": 16,
+      "failure_codes": {}
+    },
+    "arm_splines_l1": {
+      "title": "Random arm splines | medium",
+      "controller": "analytic_teacher",
+      "fps": 8,
+      "frames": 185,
+      "duration_s": 23.125,
+      "resolution": [
+        1536,
+        1232
+      ],
+      "time_scale": 1,
+      "summary": {
+        "attempts": 16,
+        "admitted": 16,
+        "successes": 14
+      },
+      "assets": {
+        "arm_splines_l1.mp4": "8084645cf850c11931dc8f07de4ddbde6db89e2984f3404d50e3b02f24f96234",
+        "arm_splines_l1.webm": "8d4a6abdc627b76473fa8c74853d6b6ad59f2f864811ac68902208e4386de657",
+        "arm_splines_l1.jpg": "1ac60da2b910b97ca4596b8c14a1643c77fd6c3d4c47501a622ae666302d662b"
+      },
+      "producer_sha256": "d82f818cfacc04e9fef1db09d88d826b1b24efa6fbc5f6e4c297ffde77849edb",
+      "source_report_sha256": "4b17f14d3ad5bb3b3e81bd1c0f07054d1d1904caac9c61ae831be2ba9f8879e7",
+      "stop_confirmed": 16,
+      "failure_codes": {
+        "unsafe_contact": 1,
+        "spline_path_tracking_failed": 1
+      }
+    },
+    "arm_splines_l2": {
+      "title": "Random arm splines | full",
+      "controller": "analytic_teacher",
+      "fps": 8,
+      "frames": 167,
+      "duration_s": 20.875,
+      "resolution": [
+        1536,
+        1232
+      ],
+      "time_scale": 1,
+      "summary": {
+        "attempts": 16,
+        "admitted": 16,
+        "successes": 12
+      },
+      "assets": {
+        "arm_splines_l2.mp4": "fde4a2afa4d9a7b6ad21d84ac5c4fdf29fa7c53b50e7fe61b17ee83b2b38217c",
+        "arm_splines_l2.webm": "f710c6484f7cef1d238221a5c625f9fdccaf43bf2607f0c0dd552affaa6f0f0e",
+        "arm_splines_l2.jpg": "6351e1e28e6d183a9928f8e5c50d0eb3a3eb178a78ae57aeb249bd0ed3b8d043"
+      },
+      "producer_sha256": "d82f818cfacc04e9fef1db09d88d826b1b24efa6fbc5f6e4c297ffde77849edb",
+      "source_report_sha256": "9a257b98dc8fa332d409607294e4acc6d1597d9b1e3e972ad0306c8805eb28f9",
+      "stop_confirmed": 16,
+      "failure_codes": {
+        "spline_path_tracking_failed": 3,
+        "unsafe_contact": 1
+      }
+    },
+    "base": {
+      "title": "Base position + heading",
+      "controller": "analytic_teacher",
+      "fps": 8,
+      "frames": 201,
+      "duration_s": 25.125,
+      "resolution": [
+        1536,
+        1232
+      ],
+      "time_scale": 1,
+      "summary": {
+        "attempts": 16,
+        "admitted": 16,
+        "successes": 13
+      },
+      "assets": {
+        "base.mp4": "e6c2d94dfdc417ff7811a9683c42c1a25d8b8916c00dfbaf163998f61fd03900",
+        "base.webm": "80da99db517839c0b2d6bc180ba7cc58c9fdb64b1ca90008264b7c49db245f5b",
+        "base.jpg": "b647dfe1920ea11bf10a2b6b9e24e80352bab32920436859c9bc0ce46e1f001b"
+      },
+      "producer_sha256": "d82f818cfacc04e9fef1db09d88d826b1b24efa6fbc5f6e4c297ffde77849edb",
+      "source_report_sha256": "f6dd8034dd06dbffd4ac6384854b7b5352846483dbb1a2874171a416fad83005",
+      "stop_confirmed": 16,
+      "failure_codes": {
+        "tracking_timeout": 3
+      }
+    },
+    "goal_changes": {
+      "title": "Mid-motion goal changes",
+      "controller": "analytic_teacher",
+      "fps": 8,
+      "frames": 201,
+      "duration_s": 25.125,
+      "resolution": [
+        1536,
+        1232
+      ],
+      "time_scale": 1,
+      "summary": {
+        "attempts": 16,
+        "admitted": 16,
+        "successes": 13
+      },
+      "assets": {
+        "goal_changes.mp4": "06f2e40da7b97287ddfb241f1bb95eb2817fa7c6f405587b0e51ada3260d5821",
+        "goal_changes.webm": "e7d3db20c320d6b16aaf5e670beeb02f6dde32a8f9846f0ecb4d058366043522",
+        "goal_changes.jpg": "c147a865c9a11f9373f00909de1001349ac155cec60758fb2807815f654ce6b8"
+      },
+      "producer_sha256": "d82f818cfacc04e9fef1db09d88d826b1b24efa6fbc5f6e4c297ffde77849edb",
+      "source_report_sha256": "bd18df1ef6654c1c96eda271297713692323e4084c4861b8e4a1da3c5879e99e",
+      "stop_confirmed": 16,
+      "failure_codes": {
+        "tracking_timeout": 3
+      }
+    },
+    "hand": {
+      "title": "General hand + base tracking",
+      "controller": "analytic_teacher",
+      "fps": 8,
+      "frames": 201,
+      "duration_s": 25.125,
+      "resolution": [
+        1536,
+        1232
+      ],
+      "time_scale": 1,
+      "summary": {
+        "attempts": 16,
+        "admitted": 16,
+        "successes": 15
+      },
+      "assets": {
+        "hand.mp4": "7256b5fb15d985df570eae00c9dc51ba5958d54f7ac9ce8a57f7d85dd9b8f589",
+        "hand.webm": "24c494725eb54eacbd317bac90c9ad42da6ddf273a53bb3861fd93401dc7255b",
+        "hand.jpg": "46052491225e19652b5d2cc9ed4a7b79dcbebdf35b132f4e1cce82947e6c1c49"
+      },
+      "producer_sha256": "d82f818cfacc04e9fef1db09d88d826b1b24efa6fbc5f6e4c297ffde77849edb",
+      "source_report_sha256": "9a9015ca1283642e12bcfad19fb42fc8ca6985ec011768ad48ceda8d22d7e669",
+      "stop_confirmed": 16,
+      "failure_codes": {
+        "unsafe_contact": 1
+      }
+    },
+    "tamp": {
+      "title": "TAMP unloaded approach / grasp pose",
+      "controller": "analytic_teacher",
+      "fps": 8,
+      "frames": 96,
+      "duration_s": 12.0,
+      "resolution": [
+        1536,
+        1232
+      ],
+      "time_scale": 1,
+      "summary": {
+        "attempts": 16,
+        "admitted": 16,
+        "successes": 16
+      },
+      "assets": {
+        "tamp.mp4": "52d32accbaaa6b9fd8f637435c6d55ec740a8f4d81754c6a378fa7f5a1b2ab39",
+        "tamp.webm": "fcc3124f353fae60b8e8e2677bb2c68e405f10acc2c64034cf363d358ec812c4",
+        "tamp.jpg": "4a0c3bece7745e20761c22df4449eefaacf37b09d9af5022035821f2be279fb5"
+      },
+      "producer_sha256": "d82f818cfacc04e9fef1db09d88d826b1b24efa6fbc5f6e4c297ffde77849edb",
+      "source_report_sha256": "368aa27ea20869c8113922dd94848fc627b6bfb1197a2e547e71ea6c14af482c",
+      "stop_confirmed": 16,
+      "failure_codes": {}
+    }
+  },
+  "coverage": {
+    "requested_paths": 208,
+    "admitted_paths": 208,
+    "rejected_paths": 0,
+    "active_hand_paths": 192,
+    "passive_hand_sweeps": 16,
+    "postures": {
+      "other": 64,
+      "ready": 36,
+      "raised": 36,
+      "left_reach": 36,
+      "folded_right": 36
+    },
+    "splits": {
+      "train": 120,
+      "audit": 70,
+      "visualization": 18
+    },
+    "position_min_m": [
+      0.08817402992694232,
+      -0.28259283790603634,
+      0.03682445262350596
+    ],
+    "position_max_m": [
+      0.46853301952827187,
+      0.09887488617168935,
+      0.4049269929621235
+    ],
+    "position_span_m": [
+      0.3803589896013295,
+      0.38146772407772567,
+      0.3681025403386175
+    ],
+    "occupied_2cm_voxels": 1053,
+    "orientation_from_first_max_deg": 106.92492660084612,
+    "interpretation": "Sample occupancy only; no reachable-workspace percentage or uniform coverage claim."
+  },
+  "coverage_by_family": {
+    "hand": {
+      "requested_paths": 16,
+      "admitted_paths": 16,
+      "rejected_paths": 0,
+      "active_hand_paths": 16,
+      "passive_hand_sweeps": 0,
+      "postures": {
+        "other": 16
+      },
+      "splits": {
+        "train": 8,
+        "audit": 8
+      },
+      "position_min_m": [
+        0.18710242503672211,
+        -0.11240177476457242,
+        0.21628462574944451
+      ],
+      "position_max_m": [
+        0.4389039902769849,
+        0.020827621296772476,
+        0.24890899076431028
+      ],
+      "position_span_m": [
+        0.25180156524026276,
+        0.1332293960613449,
+        0.032624365014865764
+      ],
+      "occupied_2cm_voxels": 69,
+      "orientation_from_first_max_deg": 13.945747923021457,
+      "interpretation": "Sample occupancy only; no reachable-workspace percentage or uniform coverage claim."
+    },
+    "base": {
+      "requested_paths": 16,
+      "admitted_paths": 16,
+      "rejected_paths": 0,
+      "active_hand_paths": 0,
+      "passive_hand_sweeps": 16,
+      "postures": {
+        "other": 16
+      },
+      "splits": {
+        "train": 4,
+        "audit": 4,
+        "visualization": 8
+      },
+      "interpretation": "Sample occupancy only; no reachable-workspace percentage or uniform coverage claim."
+    },
+    "goal_changes": {
+      "requested_paths": 16,
+      "admitted_paths": 16,
+      "rejected_paths": 0,
+      "active_hand_paths": 16,
+      "passive_hand_sweeps": 0,
+      "postures": {
+        "other": 16
+      },
+      "splits": {
+        "train": 8,
+        "audit": 8
+      },
+      "position_min_m": [
+        0.15790486264205666,
+        -0.15122653564581162,
+        0.19727450684682515
+      ],
+      "position_max_m": [
+        0.46853301952827187,
+        0.06513812946275913,
+        0.2514194394389692
+      ],
+      "position_span_m": [
+        0.3106281568862152,
+        0.21636466510857075,
+        0.05414493259214406
+      ],
+      "occupied_2cm_voxels": 94,
+      "orientation_from_first_max_deg": 18.957629847089752,
+      "interpretation": "Sample occupancy only; no reachable-workspace percentage or uniform coverage claim."
+    },
+    "arm_splines_l0": {
+      "requested_paths": 48,
+      "admitted_paths": 48,
+      "rejected_paths": 0,
+      "active_hand_paths": 48,
+      "passive_hand_sweeps": 0,
+      "postures": {
+        "ready": 12,
+        "raised": 12,
+        "left_reach": 12,
+        "folded_right": 12
+      },
+      "splits": {
+        "train": 32,
+        "audit": 16
+      },
+      "position_min_m": [
+        0.09308540867802796,
+        -0.2523884308196913,
+        0.16453803731684927
+      ],
+      "position_max_m": [
+        0.3241571972527527,
+        0.05980919747588019,
+        0.31855217327719815
+      ],
+      "position_span_m": [
+        0.23107178857472477,
+        0.3121976282955715,
+        0.15401413596034888
+      ],
+      "occupied_2cm_voxels": 92,
+      "orientation_from_first_max_deg": 88.9757826762219,
+      "interpretation": "Sample occupancy only; no reachable-workspace percentage or uniform coverage claim."
+    },
+    "arm_splines_l1": {
+      "requested_paths": 48,
+      "admitted_paths": 48,
+      "rejected_paths": 0,
+      "active_hand_paths": 48,
+      "passive_hand_sweeps": 0,
+      "postures": {
+        "ready": 12,
+        "raised": 12,
+        "left_reach": 12,
+        "folded_right": 12
+      },
+      "splits": {
+        "train": 32,
+        "audit": 16
+      },
+      "position_min_m": [
+        0.09141147655199713,
+        -0.2754721223538689,
+        0.07339959493740764
+      ],
+      "position_max_m": [
+        0.33295645037318994,
+        0.06931609720146888,
+        0.37308242738582614
+      ],
+      "position_span_m": [
+        0.2415449738211928,
+        0.3447882195553378,
+        0.29968283244841853
+      ],
+      "occupied_2cm_voxels": 376,
+      "orientation_from_first_max_deg": 96.92251421638109,
+      "interpretation": "Sample occupancy only; no reachable-workspace percentage or uniform coverage claim."
+    },
+    "arm_splines_l2": {
+      "requested_paths": 48,
+      "admitted_paths": 48,
+      "rejected_paths": 0,
+      "active_hand_paths": 48,
+      "passive_hand_sweeps": 0,
+      "postures": {
+        "ready": 12,
+        "raised": 12,
+        "left_reach": 12,
+        "folded_right": 12
+      },
+      "splits": {
+        "train": 32,
+        "audit": 16
+      },
+      "position_min_m": [
+        0.08817402992694232,
+        -0.28259283790603634,
+        0.03682445262350596
+      ],
+      "position_max_m": [
+        0.37678269763877265,
+        0.09887488617168935,
+        0.4049269929621235
+      ],
+      "position_span_m": [
+        0.28860866771183036,
+        0.38146772407772567,
+        0.3681025403386175
+      ],
+      "occupied_2cm_voxels": 846,
+      "orientation_from_first_max_deg": 109.42894403839247,
+      "interpretation": "Sample occupancy only; no reachable-workspace percentage or uniform coverage claim."
+    },
+    "tamp": {
+      "requested_paths": 16,
+      "admitted_paths": 16,
+      "rejected_paths": 0,
+      "active_hand_paths": 16,
+      "passive_hand_sweeps": 0,
+      "postures": {
+        "other": 16
+      },
+      "splits": {
+        "train": 4,
+        "audit": 2,
+        "visualization": 10
+      },
+      "position_min_m": [
+        0.30042489462172384,
+        -0.053653665745018876,
+        0.2303661573973383
+      ],
+      "position_max_m": [
+        0.31700379882805024,
+        -0.05267662627175709,
+        0.27129299628794534
+      ],
+      "position_span_m": [
+        0.016578904206326406,
+        0.000977039473261783,
+        0.040926838890607053
+      ],
+      "occupied_2cm_voxels": 3,
+      "orientation_from_first_max_deg": 0.26345888149194324,
+      "interpretation": "Sample occupancy only; no reachable-workspace percentage or uniform coverage claim."
+    }
+  },
+  "matching_recording_and_coverage_spline_references": 48,
+  "integration_tests": {
+    "tests": 49,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "xml_sha256": "14f43a283b382b2e80dd832fa95c66e63bb9bbc2d760d9532622bc0993262a3e"
+  },
+  "coverage_artifacts_sha256": {
+    "coverage.html": "71bf9964eda0d08f8c9569c699fc77545c70bdafc63e14abf29be327f0a4d760",
+    "coverage.svg": "e79fa9cd2228789fc95558554b35425208af4ab343de0d41a70c15cb13bd0c9c",
+    "coverage.json": "8341382055728a76763af03c826c76f3d544c597002f5e27cfdca4bc157391be",
+    "coverage.png": "d256964da292ed4d281b6a92d36639b2f41b4053b2af3fd36febdc0bee075af3"
+  }
+}

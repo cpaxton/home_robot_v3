@@ -64,6 +64,9 @@
 - [x] Implement admitted random smooth arm-spline postures, reversals and holds,
       with 32 train / 16 audit identities per level and a 20% overall tick share.
       [Distribution and validation protocol](docs/experiments/mars_arm_splines_20261117.md).
+- [x] Render seven checked 4×4 teacher curriculum videos and full 208-path
+      coverage (all 144 spline identities), with interactive 3D filters/orbit.
+      [Viewer, results and scope](docs/experiments/mars_curriculum_visualization_20261117.md).
 - [ ] Finish full teacher preflight, bounded spline PPO and paired regression
       comparisons, including the frozen elbow/wrist wave.
 - [ ] Add admitted Herman-like posture/hold/handoff cases to a bounded training

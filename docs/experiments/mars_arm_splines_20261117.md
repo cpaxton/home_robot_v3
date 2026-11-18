@@ -125,3 +125,17 @@ The pipeline stops on any failed prerequisite and does not silently increase
 the training budget. Ordinary/coupled/goal-change/TAMP and frozen-wave evaluation
 remain required after the spline comparison. No success, qualification or
 hardware-readiness claim is made for the queued checkpoint.
+
+## Follow-up after visualization
+
+Frozen `614dfcd6` completed 1,679 regressions and all 48 level-zero teacher cases,
+with 48 confirmed stops. The full [curriculum visualization report](mars_curriculum_visualization_20261117.md)
+adds seven videos and all 144 spline targets. Its later-stage failures remain
+explicit. Freezing the original job for video work caused a live TAMP IPC
+wall-clock timeout after 2,048 critic-only decisions; its data remain preserved.
+The same frozen source/receipts and retained initializer restarted in
+`logs/manipulation/arm-splines-v1-restart`, managed service
+`emet-arm-spline-training-restart`, status
+`logs/recovery/arm-spline-development-v1/restart.json`. Fixed 65,536-decision
+budget unchanged. No actor improvement is claimed before paired evaluation.
+Avoid freezing live IPC; use an explicit checkpoint boundary for future work.

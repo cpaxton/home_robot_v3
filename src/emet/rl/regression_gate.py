@@ -26,6 +26,7 @@ REGRESSION_TARGETS = (
     "src/test/scripts/test_control_artifacts.py",
     "src/test/scripts/test_pack_mars_training_snapshot.py",
     "src/test/visualization/test_herman_rehearsal.py",
+    "src/test/visualization/test_curriculum.py",
 )
 
 
@@ -82,6 +83,10 @@ def source_state(root):
             root / "src/test/rl/manipulation/fixtures/herman_capture_v1.json",
             root / "src/emet/visualization/herman_rehearsal.py",
             root / "src/emet/visualization/herman_rehearsal.html",
+            *sorted((root / "src/emet/visualization").glob("curriculum*.py")),
+            root / "src/emet/visualization/curriculum_gallery.html",
+            root / "src/emet/visualization/curriculum_coverage.html",
+            root / "scripts/render_wbc_curriculum.py",
             root / "src/emet/rl/test_drive.html",
             root / "scripts/prove_mars_c1_recovery.py",
             root / "scripts/validate_mars_unloaded_primitives.py",

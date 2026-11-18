@@ -2,7 +2,8 @@
 
 The Mars curriculum now has seven **4×4 videos**, one for each motion family:
 ordinary hand/base tracking, base-only tracking, goal changes, three random
-arm-spline levels, and unloaded TAMP approach/grasp-pose execution. The videos
+arm-spline levels, and unloaded TAMP approach/grasp-pose execution. Level zero is the initial spline training level; medium/full are later stages
+shown for inspection, not a claim that the current run samples them. The videos
 show actual analytic-teacher simulation, not joint-witness animation, target
 markers alone, or a learned-policy performance claim. Playback is real time.
 
@@ -55,7 +56,8 @@ unloaded-prefix goals only. Neither failed nor unexecuted plans are silently
 converted into successful robot motion.
 
 The 3D view and standalone PNG/SVG show hand position paths, sparse orientation
-axes, and base paths. Numeric summaries report axis spans, occupied 2 cm voxels,
+axes, and base paths. Base-only hand masks are false; their passive hand sweeps do not count toward
+active hand coverage. Numeric summaries report active-hand axis spans, occupied 2 cm voxels,
 posture/split counts and rotation range. These describe sample coverage; there
 is no known reachable-workspace denominator and no percentage coverage claim.
 The videos also make sparse or nearly stationary parts of the current mixture
@@ -69,10 +71,13 @@ spline targets. `--resume` reuses only completed, source-bound records/media
 with unchanged hashes; incomplete families require a fresh output.
 
 Run one numerical worker, numerical threads one, CUDA hidden, EGL rendering.
-On the unstable workstation, pause the owned simulator-training service while
-recording/rendering and always resume it afterward. The managed video job has
-an independent stop hook that resumes that service even if video generation
-fails. Rendering reads recorded states, calls `mj_forward`, and never steps
+On the unstable workstation, schedule recording/rendering before PPO, or stop
+at an explicit learner/checkpoint boundary and restart afterward. **Do not
+freeze a live TAMP IPC worker:** its wall-clock polling deadline ages while
+frozen. A stop hook that thaws a service does not prevent that timeout. This
+first visualization run exposed that issue; the original interrupted run is
+preserved and the unchanged frozen training configuration was restarted in a
+fresh directory. See the linked experiment report below. Rendering reads recorded states, calls `mj_forward`, and never steps
 physics. Video intermediates are deleted after each grid; models are compressed
 and content-deduplicated within each family.
 
@@ -99,3 +104,5 @@ report hashes and measured motion spans. Check decoded frames and the browser
 player, not only an encoder return code. Keep all videos, binary models,
 recordings and compressed traces under ignored `logs/`; commit scripts, docs
 and compact numeric evidence only.
+
+[Generated videos, measured coverage and validation results](../experiments/mars_curriculum_visualization_20261117.md).

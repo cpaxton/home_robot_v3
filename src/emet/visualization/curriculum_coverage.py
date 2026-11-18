@@ -17,16 +17,19 @@ from emet.visualization.curriculum_video import pose_rotation
 
 def coverage_statistics(rows):
     admitted = [r for r in rows if r.get("hand")]
+    active = [r for r in admitted if r.get("hand_active", True)]
     result = {
         "requested_paths": len(rows),
         "admitted_paths": len(admitted),
         "rejected_paths": len(rows) - len(admitted),
+        "active_hand_paths": len(active),
+        "passive_hand_sweeps": len(admitted) - len(active),
         "postures": dict(Counter(r["case"].get("posture", "other") for r in admitted)),
         "splits": dict(Counter(r["case"]["split"] for r in admitted)),
     }
-    if admitted:
-        points = np.concatenate([np.asarray(r["hand"])[:, :3] for r in admitted])
-        rotations = np.concatenate([np.asarray([pose_rotation(p) for p in r["hand"]]) for r in admitted])
+    if active:
+        points = np.concatenate([np.asarray(r["hand"])[:, :3] for r in active])
+        rotations = np.concatenate([np.asarray([pose_rotation(p) for p in r["hand"]]) for r in active])
         relative = Rotation.from_matrix(rotations @ rotations[0].T).magnitude()
         result.update(
             position_min_m=points.min(0).tolist(),
@@ -59,6 +62,7 @@ def export(output, *, full_splines=True):
                 indices = np.unique(np.r_[np.arange(0, len(hand), max(1, len(hand) // 180)), len(hand) - 1])
                 item = {
                     "family": family,
+                    "hand_active": family != "base",
                     "case": row["case"],
                     "hand": hand[indices].tolist(),
                     "base": base[indices].tolist(),
@@ -74,6 +78,7 @@ def export(output, *, full_splines=True):
             for case in spec["cases"]:
                 item = {
                     "family": f"arm_splines_l{case['level']}",
+                    "hand_active": True,
                     "case": case,
                     "scope": "full admitted reference; no rollout implied",
                 }
@@ -136,13 +141,15 @@ def plot(report, output):
         hand = np.asarray(row["hand"])
         base = np.asarray(row["base"])
         color = palette(FAMILIES.index(row["family"]))
+        xy.plot(*base[:, :2].T, color=color, alpha=0.2, ls=":")
+        if not row.get("hand_active", True):
+            continue
         xyz.plot(*hand[:, :3].T, color=color, alpha=0.35, lw=0.7)
         xy.plot(*hand[:, :2].T, color=color, alpha=0.25, lw=0.6)
         xz.plot(hand[:, 0], hand[:, 2], color=color, alpha=0.25, lw=0.6)
         for i in np.linspace(0, len(hand) - 1, 3, dtype=int):
             rot = pose_rotation(hand[i])
             xyz.quiver(*hand[i, :3], *(rot[:, 0] * 0.015), color=color, alpha=0.4, linewidth=0.6)
-        xy.plot(*base[:, :2].T, color=color, alpha=0.2, ls=":")
     xyz.set(
         xlabel="World x (m)",
         ylabel="World y (m)",

@@ -86,6 +86,17 @@ def frame_index(times, now):
     return max(0, min(len(times) - 1, int(np.searchsorted(times, now, side="right") - 1)))
 
 
+def tracking_readout(values, index, family):
+    if family == "base":
+        delta = values["base_target"][index] - values["base"][index]
+        angle = float(abs(np.arctan2(np.sin(delta[2]), np.cos(delta[2]))))
+        return "BASE", float(np.linalg.norm(delta[:2])) * 1000, float(np.rad2deg(angle))
+    hand, goal = values["hand"][index], values["hand_target"][index]
+    position = float(np.linalg.norm(hand[:3] - goal[:3])) * 1000
+    angle = float(Rotation.from_matrix(pose_rotation(hand) @ pose_rotation(goal).T).magnitude())
+    return "EE", position, float(np.rad2deg(angle))
+
+
 def render_cell(directory, row, index, path, *, fps, frame_count):
     process = encoder(path, CELL_W, CELL_H, fps)
     renderer = None
@@ -114,7 +125,7 @@ def render_cell(directory, row, index, path, *, fps, frame_count):
             camera = mujoco.MjvCamera()
             mujoco.mjv_defaultCamera(camera)
             camera.lookat[:] = [0.07, 0, 0.16]
-            camera.distance = 0.70 if "tamp" not in str(directory.name) else 0.80
+            camera.distance = 0.70 if directory.name.startswith("arm_splines") else 0.90
             camera.azimuth, camera.elevation = 225, -25
             option = mujoco.MjvOption()
             option.geomgroup[3] = 0
@@ -149,10 +160,15 @@ def render_cell(directory, row, index, path, *, fps, frame_count):
                     axes(renderer.scene, goal[:3], pose_rotation(goal), [0.2, 0.9, 1, 0.85])
                     base = values["base_target"][selected]
                     point = np.r_[base[:2], 0.025]
+                    # The ground goal can sit underneath the chassis. A pole
+                    # and elevated heading arrow preserve its XY/yaw identity
+                    # while keeping it visible in the fixed world camera.
+                    above = point + [0, 0, 0.33]
+                    segment(renderer.scene, point, above, [0.3, 0.55, 1, 0.8])
                     segment(
                         renderer.scene,
-                        point,
-                        point + np.r_[0.08 * np.cos(base[2]), 0.08 * np.sin(base[2]), 0],
+                        above,
+                        above + np.r_[0.10 * np.cos(base[2]), 0.10 * np.sin(base[2]), 0],
                         [0.3, 0.55, 1, 1],
                         arrow=True,
                     )
@@ -160,16 +176,13 @@ def render_cell(directory, row, index, path, *, fps, frame_count):
                     previous = selected
                 canvas[24:264] = cached
                 ended = now > values["time_s"][-1] + 1 / fps
-                hand = values["hand"][selected]
-                goal = values["hand_target"][selected]
-                position = float(np.linalg.norm(hand[:3] - goal[:3])) * 1000
-                angle = float(Rotation.from_matrix(pose_rotation(hand) @ pose_rotation(goal).T).magnitude())
-                detail = f"{now:04.1f}s | {position:.1f}mm / {np.rad2deg(angle):.1f}deg"
+                kind, position, angle = tracking_readout(values, selected, directory.name)
+                detail = f"{now:04.1f}s {kind} {position:.1f}mm / {angle:.1f}deg"
                 label(canvas, detail, 8, 281, 0.34)
                 status = (
                     ("END " + str(row.get("code", "")))
                     if ended
-                    else ("PASS" if row["success"] else "FAIL (see report)")
+                    else ("PASS" if row["success"] else "FAIL " + str(row.get("code", "see report")))
                 )
                 label(canvas, status[:30], 220, 281, 0.27, (100, 235, 150) if row["success"] else (255, 120, 100))
             process.stdin.write(canvas.tobytes())
