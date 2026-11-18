@@ -153,11 +153,10 @@ class HabitatEQASimulator:
 
     @property
     def intrinsics(self) -> np.ndarray:
-        fx = 0.5 * self._width / np.tan(self._hfov / 2.0)
-        fy = fx
-        cx = self._width / 2.0
-        cy = self._height / 2.0
-        return np.array([[fx, 0, cx], [0, fy, cy], [0, 0, 1]], dtype=np.float64)
+        from emet.utils.pinhole_intrinsics import pinhole_K_from_opengl_projection
+
+        sensor = self._agent.scene_node.subtree_sensors["depth_sensor"]
+        return pinhole_K_from_opengl_projection(sensor.render_camera.projection_matrix, self._width, self._height)
 
     def set_init_pose(self, pose: SceneInitPose) -> None:
         """Place agent at Explore-EQA ``(init_x, init_y, init_z)`` with ``init_angle`` yaw."""
@@ -225,6 +224,8 @@ class HabitatEQASimulator:
         """
         pan = float(pan_rad)
         tilt = float(tilt_rad)
+        if not self.get_head_capability().contains([pan, tilt]):
+            raise ValueError("Camera look exceeds the declared non-inverted virtual-camera range")
         orient = self._mn.Vector3(tilt, pan, 0.0)
         for spec in self._agent.agent_config.sensor_specifications:
             spec.orientation = orient
@@ -233,6 +234,12 @@ class HabitatEQASimulator:
         self._head_pan_rad = pan
         self._head_tilt_rad = tilt
         self._camera_tilt_deg = float(np.rad2deg(tilt))
+
+    def get_head_capability(self):
+        """Virtual sensor orientation range, not mechanical actuator limits."""
+        from emet.robots.head_capability import HeadCapability
+
+        return HeadCapability((-np.pi, np.pi), (-np.pi / 2, np.pi / 2), "habitat_virtual_camera")
 
     @property
     def floor_y(self) -> float:

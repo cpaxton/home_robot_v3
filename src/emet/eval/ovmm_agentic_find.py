@@ -155,8 +155,8 @@ def xyz_from_verified_obs(
                     if xyz is None:
                         continue
                     arr = np.asarray(xyz, dtype=np.float64).reshape(-1)
-                    if arr.size >= 3:
-                        return arr[:3]
+                    if arr.size >= 3 and np.isfinite(arr[:3]).all():
+                        return arr[:3].copy()
     return None
 
 
@@ -207,6 +207,9 @@ def record_ovmm_agentic_result(
     if extra:
         meta[f"{prefix}_xyz_source"] = extra.get("xyz_source")
         meta[f"{prefix}_from_pin"] = extra.get("from_pin")
+        for key in ("grounded_obs_id", "location_semantics", "current_view_verified"):
+            if key in extra:
+                meta[f"{prefix}_{key}"] = extra[key]
         if extra.get("voxel_query_used"):
             q_used = str(extra["voxel_query_used"])
     return xyz, ok, q_used, source
@@ -298,7 +301,20 @@ def run_ovmm_agentic_localize(
     extra_q = None
     extra_stats: dict[str, Any] = {}
     grounded_oid = getattr(result, "grounded_obs_id", None)
-    if result.verified and grounded_oid is not None:
+    # This task's selected grounding is a last-observed object location. Turning
+    # the camera away does not erase it or authorize a physical action. The
+    # manipulation controller independently reacquires geometry before acting.
+    grounded_valid = grounded_oid is not None
+    if grounded_valid and getattr(agent, "query_driven_memory", False) is True:
+        records = getattr(getattr(agent, "query_candidates", None), "records", {})
+        grounded_valid = isinstance(records, dict) and any(
+            r.instance_id == grounded_oid
+            and r.grounded_revision is not None
+            and r.rejected_revision is None
+            and not r.invalidation_reason
+            for r in records.values()
+        )
+    if grounded_valid:
         xyz = xyz_from_verified_obs(agent, grounded_oid, phrases=localize_phrases)
         if xyz is not None:
             xyz_source = "grounded_object"
@@ -331,6 +347,8 @@ def run_ovmm_agentic_localize(
         "answer_provenance": str(result.answer_provenance or ""),
         "xyz_source": xyz_source,
         "grounded_obs_id": grounded_oid,
+        "location_semantics": "last_observed" if xyz_source == "grounded_object" else None,
+        "current_view_verified": bool(result.verified),
     }
     if extra_q:
         extra["voxel_query_used"] = extra_q

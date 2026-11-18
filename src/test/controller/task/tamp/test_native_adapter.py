@@ -40,6 +40,7 @@ def native(table_model):
             'source': 'simulator_ground_truth', 'model_signature': model_signature(model),
             'qpos': data.qpos.tolist(), 'qvel': data.qvel.tolist(), 'sim_time': float(data.time),
             'captured_at': time.time()}}, arm_to=Mock(), open_gripper=Mock(), close_gripper=Mock(),
+        gripper_to=Mock(return_value=None), get_gripper_position=Mock(return_value=0.),
         get_emet_session=lambda: {'is_simulation': True, 'sim_object_placements': {
             'object1': {'cat': 'blue cube'}, 'object2': {'cat': 'red cylinder'}, 'table': {'cat': 'table'}}})
     context = {'robot': robot, 'manip_mode': 'physical', 'tamp_inputs': 'privileged',
@@ -102,8 +103,14 @@ def test_observed_mode_never_reads_privileged_metadata(native):
     robot.get_emet_session.assert_not_called()
 
 
-def test_native_model_mismatch_rejects_before_actuation(native):
-    robot, _, _, call = native
+def test_native_model_mismatch_rejects_before_actuation(native, monkeypatch):
+    robot, _, context, call = native
+    model = context['_native_tamp_adapter'].model
+    # This test isolates model binding. Reuse the loaded fixture model when the
+    # mismatch invalidates the cache; cold mesh loading can outlast the two-second
+    # snapshot lifetime and mask the intended rejection as stale_observation.
+    monkeypatch.setattr('emet.controller.task.tamp.native_adapter.NativeTableAdapter',
+                        lambda client, **kwargs: NativeTableAdapter(client, model=model, **kwargs))
     robot._state['native_tamp_snapshot']['model_signature'] = 'different-physics-model'
     assert call('scene_tasks')['code'] == 'native_model_mismatch'
     robot.arm_to.assert_not_called()
@@ -405,3 +412,380 @@ def test_native_transfer_rejects_unsettled_snapshot(native):
     robot._state['native_tamp_snapshot']['qvel'][adapter.model.jnt_dofadr[joint]] = .2
     with pytest.raises(ValueError, match='not_settled'):
         domain.snapshot()
+
+
+def test_shared_bounded_policy_is_explicit_and_legacy_default_is_preserved(native):
+    robot, _, context, _ = native
+    from emet.controller.task.tamp.native_policy import FINE_GRASP_YAWS
+    adapter = NativeTableAdapter(robot, model=context['_native_tamp_adapter'].model, policy='bounded_release')
+    assert adapter.policy == 'bounded_release'
+    assert adapter.grasp_yaw_offsets == FINE_GRASP_YAWS
+    assert adapter.payload_binding == 'verified_lift'
+    assert adapter.release_limits.max_drop_m == .04
+    assert adapter.arm_extension_margin_m == .0005
+    assert adapter.prefer_face_aligned_grasps is True
+    assert context['_native_tamp_adapter'].policy == 'legacy'
+    assert context['_native_tamp_adapter'].release_limits is None
+    assert context['_native_tamp_adapter'].prefer_face_aligned_grasps is False
+    assert context['_native_tamp_adapter']._executor('object1').joint_limit_margins == {}
+    with pytest.raises(ValueError, match='invalid_native_tamp_policy'):
+        NativeTableAdapter(None, policy='typo')
+    robot.arm_to.assert_not_called()
+
+
+def test_bounded_plan_reserves_arm_extension_without_changing_measured_state_or_limits(native):
+    """The home-start fixture stays interior; this is not a general path bound."""
+    robot, _, context, _ = native
+    model = context['_native_tamp_adapter'].model
+    adapter = NativeTableAdapter(robot, model=model, policy='bounded_release')
+    before_q, before_limits = adapter.data.qpos.copy(), model.jnt_range.copy()
+    result = adapter.plan(object_name='blue cube', receptacle_name='table')
+    assert result['status'] == 'ok', result
+    executor = adapter.plans[result['data']['plan_ref']].executor
+    for path in executor.grasp_paths + executor.place_paths:
+        for i in range(4):
+            name = f'joint_arm_l{i}'
+            lo, hi = model.jnt_range[model.joint(name).id]
+            column = executor.joint_names.index(name)
+            values = np.asarray(path)[:, column]
+            assert np.all(values >= lo + .0005 - 1e-9)
+            assert np.all(values <= hi - .0005 + 1e-9)
+    np.testing.assert_array_equal(adapter.data.qpos, before_q)
+    np.testing.assert_array_equal(model.jnt_range, before_limits)
+    robot.arm_to.assert_not_called()
+    robot.open_gripper.assert_not_called()
+
+
+def test_bounded_margin_does_not_clamp_or_admit_out_of_range_measured_start(native):
+    robot, _, context, _ = native
+    adapter = NativeTableAdapter(robot, model=context['_native_tamp_adapter'].model, policy='bounded_release')
+    executor = adapter._executor('object1')
+    joint = adapter.model.joint('joint_arm_l0')
+    adapter.data.qpos[joint.qposadr[0]] = float(joint.range[1]) + 8e-6
+    before = adapter.data.qpos.copy()
+    goal = before[executor.qadr].copy()
+    goal[executor.joint_names.index('joint_arm_l0')] = float(joint.range[1]) - .0005
+    path, error = executor.plan_joint_target(goal)
+    assert path is None and 'invalid_start:joint_bounds:joint_arm_l0' in error
+    np.testing.assert_array_equal(adapter.data.qpos, before)
+    robot.arm_to.assert_not_called()
+
+
+def test_bounded_target_reserve_keeps_valid_margin_band_start_in_path(native):
+    robot, _, context, _ = native
+    adapter = NativeTableAdapter(robot, model=context['_native_tamp_adapter'].model, policy='bounded_release')
+    executor = adapter._executor('object1')
+    adapter.data.qpos[adapter.model.joint('joint_lift').qposadr[0]] = .85
+    adapter.data.qpos[adapter.model.joint('joint_wrist_pitch').qposadr[0]] = 0.
+    for i in range(4):
+        joint = adapter.model.joint(f'joint_arm_l{i}')
+        adapter.data.qpos[joint.qposadr[0]] = float(joint.range[1]) - .00025
+    before = adapter.data.qpos.copy()
+    start = before[executor.qadr].copy()
+    goal = start.copy()
+    for i in range(4):
+        name = f'joint_arm_l{i}'
+        goal[executor.joint_names.index(name)] = float(adapter.model.joint(name).range[1]) - .001
+    path, error = executor.plan_joint_target(goal)
+    assert error is None, error
+    np.testing.assert_array_equal(path[0], start)
+    np.testing.assert_allclose(path[-1], goal)
+    for i in range(4):
+        name = f'joint_arm_l{i}'
+        column = executor.joint_names.index(name)
+        upper = float(adapter.model.joint(name).range[1])
+        assert upper - .0005 < path[0][column] < upper
+    # Pure planning may leave private data at its goal, but never clamps the
+    # start waypoint or writes a measured configuration back to the robot.
+    robot.arm_to.assert_not_called()
+    robot.open_gripper.assert_not_called()
+    robot.close_gripper.assert_not_called()
+
+
+def test_checked_approach_plan_uses_real_shifted_base_without_commands(native, monkeypatch):
+    monkeypatch.setenv('EMET_SIM_NAV_TELEPORT', '0')
+    robot, data, context, _ = native
+    robot.move_base_to = Mock(return_value=True)
+    robot.cancel_navigation = Mock(return_value=True)
+    model = context['_native_tamp_adapter'].model
+    joint = model.body('object1').jntadr[0]
+    robot._state['native_tamp_snapshot']['qpos'][model.jnt_qposadr[joint]] = .025
+    adapter = NativeTableAdapter(robot, model=model, policy='bounded_approach')
+    before, ctrl = adapter.data.qpos.copy(), data.ctrl.copy()
+    result = adapter.plan(object_name='blue cube', receptacle_name='table')
+    assert result['status'] == 'ok', result
+    assert result['data']['base_motion'] == 'checked_unloaded_approach'
+    plan = adapter.plans[result['data']['plan_ref']]
+    assert plan.base_approach is not None
+    assert 0 < np.linalg.norm(np.subtract(plan.base_approach.goal[:2], plan.base_approach.start[:2])) <= .08+1e-9
+    assert adapter.planning_ik_calls <= 256
+    np.testing.assert_array_equal(adapter.data.qpos, before)
+    np.testing.assert_array_equal(data.ctrl, ctrl)
+    for command in (robot.move_base_to, robot.cancel_navigation, robot.arm_to, robot.open_gripper, robot.close_gripper):
+        command.assert_not_called()
+
+
+def test_place_target_rotates_measured_payload_center_offset():
+    model = mujoco.MjModel.from_xml_string("""<mujoco><compiler angle="radian"/><worldbody>
+      <body name="ee" pos=".2 .1 .3" euler=".2 -.4 .7"><geom size=".01"/></body>
+      <body name="desired" euler=".4 .2 -.6"/>
+      <body name="payload" pos=".4 -.1 .6" euler=".1 .3 -.2"><freejoint/>
+        <geom type="box" pos=".02 -.01 .03" size=".01 .02 .03"/>
+      </body></worldbody></mujoco>""")
+    data = mujoco.MjData(model)
+    mujoco.mj_forward(model, data)
+    adapter = NativeTableAdapter.__new__(NativeTableAdapter)
+    adapter.model, adapter.data = model, data
+    ee = data.body('ee')
+    gid = int(model.body('payload').geomadr[0])
+    corners = np.array([[x, y, z] for x in (-1, 1) for y in (-1, 1) for z in (-1, 1)])
+    world_vertices = (corners*model.geom_size[gid]) @ data.geom_xmat[gid].reshape(3, 3).T + data.geom_xpos[gid]
+    attached_vertices = (world_vertices-ee.xpos) @ ee.xmat.reshape(3, 3)
+    rotation = data.body('desired').xmat.reshape(3, 3).copy()
+    goal, before = np.array([.02, -.65, .54]), data.qpos.copy()
+    targets = adapter._place_targets(SimpleNamespace(ee_body='ee'), 'payload', goal, rotation)
+    delivered = attached_vertices @ rotation.T + targets[1][0]
+    np.testing.assert_allclose((delivered.min(0)+delivered.max(0))/2, goal, atol=1e-12)
+    old_offset = (world_vertices.min(0)+world_vertices.max(0))/2-ee.xpos
+    old_delivered = attached_vertices @ rotation.T + (goal-old_offset)
+    assert np.linalg.norm((old_delivered.min(0)+old_delivered.max(0))/2-goal) > .01
+    np.testing.assert_array_equal(data.qpos, before)
+
+
+@pytest.mark.parametrize('exhausted', [False, True])
+def test_loaded_placement_refresh_preserves_reference_and_shared_budget(native, monkeypatch, exhausted):
+    from emet.controller.task.tamp import native_placement
+    robot, _, context, call = native
+    adapter = context['_native_tamp_adapter']
+    plan = adapter.plans[make_plan(call)]
+    plan.placement_region = np.array([[-.3, -.95], [.3, -.4]])
+    ex = plan.executor
+    ex.payload_body = plan.object_body
+    ex.collision.set_payload(adapter.model, adapter.data, plan.object_body, ex.ee_body)
+    before, reference = adapter.data.qpos.copy(), ex.collision.payload_transform.copy()
+    attempts = []
+    def paths(owner, executor, targets):
+        assert owner.planning_ik_calls == plan.planning_ik_calls+3*len(attempts)
+        assert executor.collision.payload_body == plan.object_body
+        attempts.append(targets)
+        owner.planning_ik_calls += 3
+        owner.data.qpos[ex.qadr[0]] += .001
+        ex.collision.set_payload(owner.model, owner.data, None)
+        if exhausted:
+            raise ValueError('no_plan_within_budget')
+        return (None, 'pose_ik_failed') if len(attempts) == 1 else ([[], [], []], None)
+    monkeypatch.setattr(native_placement, 'placement_paths', paths)
+    result = native_placement.refine_loaded_placement(adapter, plan)
+    assert result.success is (not exhausted)
+    assert len(attempts) == (1 if exhausted else 2)
+    assert adapter.planning_ik_calls == plan.planning_ik_calls+3*len(attempts)
+    np.testing.assert_array_equal(adapter.data.qpos, before)
+    np.testing.assert_array_equal(ex.collision.payload_transform, reference)
+    assert ex.collision.payload_body == plan.object_body
+    if not exhausted:
+        assert np.all(plan.goal[:2] >= plan.placement_region[0])
+        assert np.all(plan.goal[:2] <= plan.placement_region[1])
+    for command in (robot.arm_to, robot.open_gripper, robot.close_gripper):
+        command.assert_not_called()
+
+
+def test_loaded_refinement_retains_valid_original_goal_when_sampler_has_no_proposals(native, monkeypatch):
+    from emet.controller.task.tamp import native_placement
+    _, _, context, call = native
+    adapter = context['_native_tamp_adapter']
+    plan = adapter.plans[make_plan(call)]
+    ex = plan.executor
+    ex.payload_body = plan.object_body
+    ex.collision.set_payload(adapter.model, adapter.data, plan.object_body, ex.ee_body)
+    goal = plan.goal.copy()
+    monkeypatch.setattr(native_placement, 'free_surface_centers', lambda *a, **k: SimpleNamespace(centers=[]))
+    planner = Mock(return_value=([[], [], []], None))
+    monkeypatch.setattr(native_placement, 'placement_paths', planner)
+    assert native_placement.refine_loaded_placement(adapter, plan).success
+    planner.assert_called_once()
+    np.testing.assert_array_equal(plan.goal, goal)
+
+
+@pytest.mark.parametrize('started', [False, True])
+def test_failed_base_approach_cannot_dispatch_grasp(native, monkeypatch, started):
+    from emet.controller.task.tamp.native_approach import ApproachResult, BaseApproach
+    robot, _, context, call = native
+    adapter = context['_native_tamp_adapter']
+    ref = make_plan(call)
+    plan = adapter.plans[ref]
+    plan.base_approach = BaseApproach((0., 0., 0.), (.04, 0., 0.))
+    plan.executor.grasp_only = Mock(side_effect=AssertionError('grasp after failed approach'))
+    monkeypatch.setattr('emet.controller.task.tamp.native_adapter.execute_approach',
+                        lambda *args: ApproachResult(False, 'base_approach_failed', started))
+    result = call('execute_pick_place_plan', plan_ref=ref)
+    assert result['code'] == 'base_approach_failed'
+    assert result['status'] == ('partial' if started else 'error')
+    assert result['data']['execution_started'] is started
+    assert result['data']['failed_stage'] == 'base_approach'
+    assert call('execute_pick_place_plan', plan_ref=ref)['code'] == 'unknown_plan'
+    plan.executor.grasp_only.assert_not_called()
+    robot.arm_to.assert_not_called()
+
+
+def test_policy_change_invalidates_cached_native_handles(native, monkeypatch):
+    from emet.controller.task.tamp.native_adapter import adapter_for
+    robot, _, context, _ = native
+    old = context['_native_tamp_adapter']
+    # Exercise cache/policy identity without aging the measured fixture during
+    # an unrelated cold mesh reload. Production freshness checks stay active.
+    def construct(client, *, model=None, **kwargs):
+        assert model is old.model
+        return NativeTableAdapter(client, model=model, **kwargs)
+    monkeypatch.setattr('emet.controller.task.tamp.native_adapter.NativeTableAdapter', construct)
+    robot._state['native_tamp_snapshot']['captured_at'] = time.time()
+    robot._state_received_monotonic = time.monotonic()
+    old.plans['old'] = object()
+    context['native_tamp_policy'] = 'bounded_release'
+    current = adapter_for(context, robot)
+    assert current is not old and current.policy == 'bounded_release'
+    assert current.execute('old')['code'] == 'unknown_plan'
+    robot.arm_to.assert_not_called()
+
+
+@pytest.mark.parametrize('measured', [.12, -.05, -.375])
+def test_bounded_contact_hold_uses_measured_motor_position_and_normal_commands(native, measured):
+    robot, _, context, _ = native
+    robot.get_gripper_position.return_value = measured
+    adapter = NativeTableAdapter(robot, model=context['_native_tamp_adapter'].model, policy='bounded_release')
+    executor = adapter._executor('object1')
+    before = adapter.data.qpos.copy()
+    assert executor.gripper_close_command is None
+    assert executor.gripper_hold_command() is True
+    target = robot.gripper_to.call_args.args[0]
+    assert target == pytest.approx(max(-.3, .5 * (measured - .3)))
+    assert robot.gripper_to.call_args.kwargs == {'blocking': False}
+    np.testing.assert_array_equal(adapter.data.qpos, before)
+    robot.arm_to.assert_not_called()
+    robot.close_gripper.assert_not_called()
+    assert context['_native_tamp_adapter']._executor('object1').gripper_close_command is None
+    assert context['_native_tamp_adapter']._executor('object1').gripper_hold_command is None
+
+
+@pytest.mark.parametrize('feedback', [None, float('nan'), 'bad-feedback', -1., 1.])
+def test_contact_hold_rejects_invalid_encoder_without_a_command(native, feedback):
+    robot, _, context, _ = native
+    adapter = NativeTableAdapter(robot, model=context['_native_tamp_adapter'].model, policy='bounded_release')
+    robot.get_gripper_position.return_value = feedback
+    assert adapter._executor('object1').gripper_hold_command() is False
+    robot.gripper_to.assert_not_called()
+
+
+@pytest.mark.parametrize('missing', ['gripper_to', 'get_gripper_position'])
+def test_contact_hold_capability_is_required_before_planning_or_motion(native, missing):
+    robot, _, context, _ = native
+    adapter = NativeTableAdapter(robot, model=context['_native_tamp_adapter'].model, policy='bounded_release')
+    setattr(robot, missing, None)
+    assert adapter.plan(object_name='blue cube', receptacle_name='table')['code'] == 'native_execution_unavailable'
+    robot.arm_to.assert_not_called()
+    robot.open_gripper.assert_not_called()
+    robot.close_gripper.assert_not_called()
+
+
+def test_diagnostic_gripper_ablation_changes_only_closure_not_shared_limits(native):
+    from emet.eval.contact_stability import TracedNativeAdapter
+    robot, _, context, _ = native
+    model = context['_native_tamp_adapter'].model
+    adapter = TracedNativeAdapter(robot, model=model, trace=Mock(), native_policy='bounded_release', gripper_close_loose=False)
+    assert adapter._executor('object1').gripper_close_command is None
+    assert adapter._executor('object1').gripper_hold_command is None
+    assert adapter.gripper_contact_hold_fraction == 0.
+    assert adapter.arm_extension_margin_m == .0005 and adapter.payload_binding == 'verified_lift'
+    assert adapter.release_limits.open_settle_timeout_s == 12.
+
+
+@pytest.mark.parametrize('substage', ['post_lift_hold', 'loaded_payload_handoff', 'post_release_support'])
+def test_native_verification_substage_is_public_and_does_not_leak_to_next_handle(native, monkeypatch, substage):
+    from emet.controller.task.tamp.api import VerificationFailure
+    _, _, context, call = native
+    adapter = context['_native_tamp_adapter']
+    ref = make_plan(call)
+    ex = adapter.plans[ref].executor
+    ex.grasp_only = Mock(return_value=SimpleNamespace(success=True))
+    ex.place_only = Mock(return_value=SimpleNamespace(success=True))
+    def reject():
+        adapter.last_verification = VerificationFailure(substage, 'payload_not_retained')
+        return False
+    monkeypatch.setattr(adapter, '_verify', lambda *a, released, **k:
+                        reject() if (released == (substage == 'post_release_support') and
+                                     substage != 'loaded_payload_handoff') else True)
+    if substage == 'loaded_payload_handoff':
+        adapter.payload_binding = 'verified_lift'
+        monkeypatch.setattr(adapter, '_bind_loaded_payload', lambda *a, **k: reject())
+    result = call('execute_pick_place_plan', plan_ref=ref)
+    assert result['status'] == 'partial' and result['code'] == 'verification_failed'
+    assert result['data']['verification'] == {'substage': substage, 'reason': 'payload_not_retained'}
+    assert 'object1' not in json.dumps(result)
+    assert 'verification' not in call('execute_pick_place_plan', plan_ref=ref)['data']
+
+
+@pytest.mark.parametrize('phase', ['preplace', 'place'])
+def test_loaded_motion_retention_failure_has_its_own_witness(native, monkeypatch, phase):
+    from emet.controller.manipulation.physical_pick_place import PhysicalMotionResult
+    _, _, context, call = native
+    adapter = context['_native_tamp_adapter']
+    ref = make_plan(call)
+    ex = adapter.plans[ref].executor
+    ex.grasp_only = Mock(return_value=PhysicalMotionResult(True, 'ok', 'lift'))
+    ex.place_only = Mock(return_value=PhysicalMotionResult(False, 'payload_not_retained', phase))
+    monkeypatch.setattr(adapter, '_verify', lambda *a, **k: True)
+    result = call('execute_pick_place_plan', plan_ref=ref)
+    assert result['status'] == 'partial' and result['code'] == 'payload_not_retained'
+    assert result['data']['verification'] == {'substage': 'loaded_motion', 'reason': 'payload_not_retained'}
+    assert result['data']['completed_ops'] == ['grasp']
+    assert 'verification' not in call('execute_pick_place_plan', plan_ref=ref)['data']
+
+
+def test_bounded_grasp_fallback_preserves_old_order_and_budget():
+    adapter = object.__new__(NativeTableAdapter)
+    adapter.policy, adapter.planning_ik_calls, adapter.max_planning_ik_calls = 'bounded_release', 0, 2
+    adapter.pregrasp_fallback_offset_m = (0., 0., .08)
+    seen = []
+    def candidates(*args, approach_offset=(0., .08, .04)):
+        adapter._plan_candidate_pose(SimpleNamespace(plan_pose=lambda *a, **k: ([], None)), None, None)
+        seen.append(approach_offset)
+        yield approach_offset, []
+    adapter._grasp_candidates = candidates
+    assert len(list(adapter._grasp_options(None, None, None, None, None, None))) == 2
+    assert seen == [(0., .08, .04), (0., 0., .08)]
+    assert adapter.planning_ik_calls == adapter.max_planning_ik_calls == 2
+    with pytest.raises(ValueError, match='no_plan_within_budget'):
+        list(adapter._grasp_options(None, None, None, None, None, None))
+
+
+def test_legacy_grasp_search_has_no_extra_approach():
+    adapter = object.__new__(NativeTableAdapter)
+    adapter._grasp_candidates = Mock(return_value=iter([(object(), [])]))
+    assert len(list(adapter._grasp_options(None, None, None, None, None, None))) == 1
+    assert adapter._grasp_candidates.call_count == 1
+    assert not adapter._grasp_candidates.call_args.kwargs
+
+
+def test_primary_placement_cannot_spend_the_vertical_fallback_reserve(native, monkeypatch):
+    _, _, context, call = native
+    adapter = context['_native_tamp_adapter']
+    adapter.pregrasp_fallback_offset_m = (0., 0., .08)
+    adapter.max_planning_ik_calls = 8
+    seen = []
+    dummy = SimpleNamespace(plan_pose=lambda *a, **k: ([], None))
+    def grasps(*args, approach_offset=None, **kwargs):
+        seen.append(approach_offset)
+        adapter._plan_candidate_pose(dummy, None, None)
+        yield np.eye(3), [[], [], []]
+    def placement(*args):
+        if seen[-1] is None:
+            while True:
+                adapter._plan_candidate_pose(dummy, None, None)
+        adapter._plan_candidate_pose(dummy, None, None)
+        return [[], [], []], None
+    monkeypatch.setattr(adapter, '_grasp_candidates', grasps)
+    monkeypatch.setattr('emet.controller.task.tamp.native_adapter.placement_paths', placement)
+    monkeypatch.setattr(surfaces_module, 'free_surface_centers',
+        lambda *a, **k: SimpleNamespace(centers=[np.array([.15, -.6, .54])]))
+    result = call('plan_pick_place', object_name='blue cube', receptacle_name='table')
+    assert result['status'] == 'ok', result
+    assert seen == [None, (0., 0., .08)] and adapter.planning_ik_calls == 8

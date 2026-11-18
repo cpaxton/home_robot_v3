@@ -17,6 +17,8 @@ import mujoco
 import numpy as np
 
 from emet.controller.manipulation.native_inputs import ObservationUnavailable, read_object_pose
+from emet.controller.manipulation.observed_collision import ObservedNativeCollisionChecker
+from emet.core.zmq_protocol import motion_wait_timeout_scale, read_sim_to_real_ratio
 from emet.motion.arm_rrt import plan_arm_joint_path
 from emet.motion.mujoco_arm_ik import joint_qpos_addrs, solve_pose_ik
 
@@ -34,6 +36,11 @@ class PhysicalPickPlaceExecutor:
     ENDPOINT_STILLNESS_TOLERANCE = 0.002
 
     execution_mode = "physical"
+    release_refiner: Callable[[], PhysicalMotionResult] | None = None
+    release_verifier: Callable[[], PhysicalMotionResult] | None = None
+    released_collision = None
+    gripper_close_command: Callable[[], bool] | None = None
+    gripper_hold_command: Callable[[], bool] | None = None
 
     def __init__(
         self,
@@ -58,8 +65,10 @@ class PhysicalPickPlaceExecutor:
         base_body: str | None = None,
         joint_limit_margins=None,
         gripper_open_configuration=(),
+        gripper_close_command=None,
         input_mode: str = "observed",
         object_pose_provider=None,
+        visual_verifier=None,
     ):
         if input_mode not in {"observed", "privileged"}:
             raise ValueError("invalid_tamp_inputs")
@@ -68,9 +77,12 @@ class PhysicalPickPlaceExecutor:
                 raise ValueError("observed_object_provider_required")
             if getattr(collision, "geometry_source", None) != "observed_voxels":
                 raise ValueError("observed_collision_provider_required")
+            if isinstance(collision, ObservedNativeCollisionChecker) and object_pose_provider is not collision:
+                raise ValueError("observed_object_provider_mismatch")
         elif object_pose_provider is not None and object_pose_provider.input_mode != "privileged":
             raise ValueError("input_provider_mismatch")
         self.input_mode, self.object_pose_provider = input_mode, object_pose_provider
+        self.visual_verifier = visual_verifier
         self.robot, self.model, self.data = robot, model, data
         self.ee_body, self.joint_names = ee_body, tuple(joint_names)
         self.collision = collision
@@ -92,6 +104,7 @@ class PhysicalPickPlaceExecutor:
         self.base_body = base_body
         self.joint_limit_margins = dict(joint_limit_margins or {})
         self.gripper_open_configuration = dict(gripper_open_configuration)
+        self.gripper_close_command = gripper_close_command
         self.grasp_paths: list = []
         self.place_paths: list = []
         self.grasp_targets: list = []
@@ -104,12 +117,20 @@ class PhysicalPickPlaceExecutor:
         return float(self.data.time) if self.use_sim_time else time.monotonic()
 
     def _settling_window(self, duration):
-        """Physics duration in simulation, with an independent stalled-clock bound."""
+        """Physics duration with a capped, simulation-rate-scaled wall bound."""
         started, wall = self._motion_time(), time.monotonic()
+        wall_budget = self.settling_wall_timeout_s
+        if self.use_sim_time:
+            wall_budget *= motion_wait_timeout_scale(read_sim_to_real_ratio(getattr(self.robot, "_state", None)))
+
         def active():
             elapsed = self._motion_time() - started
-            return (np.isfinite(elapsed) and 0 <= elapsed < duration
-                    and (not self.use_sim_time or time.monotonic() - wall < self.settling_wall_timeout_s))
+            return (
+                np.isfinite(elapsed)
+                and 0 <= elapsed < duration
+                and (not self.use_sim_time or time.monotonic() - wall < wall_budget)
+            )
+
         return active
 
     def plan_pose(self, position, rotation, *, ordered_groups=False):
@@ -155,7 +176,11 @@ class PhysicalPickPlaceExecutor:
         # Coupled actuators cannot use independent-joint RRT samples. When a
         # simultaneous move cuts through furniture, try two bounded group orders
         # using the same segment checker (e.g. raise/orient, then extend).
-        if self.coupled_groups and (ordered_groups or not path.success) and path.reason not in ("invalid_start", "invalid_goal"):
+        if (
+            self.coupled_groups
+            and (ordered_groups or not path.success)
+            and path.reason not in ("invalid_start", "invalid_goal")
+        ):
             coupled = {name for group in self.coupled_groups for name in group}
             groups = [[name] for name in self.joint_names if name not in coupled] + list(self.coupled_groups)
             # Pregrasp uses the chain's lift/orient/extend ordering even when
@@ -163,7 +188,7 @@ class PhysicalPickPlaceExecutor:
             # lag can sweep low fingertips into the support during that motion.
             if ordered_groups:
                 path = replace(path, success=False, reason="ordered_path_failed")
-            for order in ((groups,) if ordered_groups else (groups, list(reversed(groups)))):
+            for order in (groups,) if ordered_groups else (groups, list(reversed(groups))):
                 self.data.qpos[:] = start
                 current = q0.copy()
                 waypoints = [current.copy()]
@@ -201,7 +226,9 @@ class PhysicalPickPlaceExecutor:
             if self.collision.payload_body is not None and self.collision.configuration_collides(self.model, self.data):
                 return None, "arm_goal_revalidation_failed"
             return path.waypoints, None
-        return None, (f"arm_path_failed:{path.reason}:{path.detail}" if path.detail else f"arm_path_failed:{path.reason}")
+        return None, (
+            f"arm_path_failed:{path.reason}:{path.detail}" if path.detail else f"arm_path_failed:{path.reason}"
+        )
 
     def prepare_for_navigation(self, path):
         return self._execute_path("navigation_posture", path)
@@ -216,19 +243,31 @@ class PhysicalPickPlaceExecutor:
         goal = np.array(list(self.gripper_open_configuration.values()))
         try:
             result = plan_arm_joint_path(
-                self.model, self.data, joint_names=names, q_start=before[addresses], q_goal=goal,
-                collision=self.collision, planner="linear", step_size=0.025, goal_tolerance=0.001,
+                self.model,
+                self.data,
+                joint_names=names,
+                q_start=before[addresses],
+                q_goal=goal,
+                collision=self.collision,
+                planner="linear",
+                step_size=0.025,
+                goal_tolerance=0.001,
             )
         finally:
             self.data.qpos[:] = before
             mujoco.mj_kinematics(self.model, self.data)
         if not result.success:
-            return None, f"gripper_open_path_failed:{result.reason}"
+            detail = f":{result.detail}" if result.detail else ""
+            return None, f"gripper_open_path_failed:{result.reason}{detail}"
         self.data.qpos[addresses] = goal
         mujoco.mj_kinematics(self.model, self.data)
         return result.waypoints, None
 
     def _object_pose(self, object_ref):
+        # Native height checks need the geometry origin, not material yaw. The
+        # typed checker validates the complete prior and retains shape symmetry.
+        if self.input_mode == "observed" and isinstance(self.collision, ObservedNativeCollisionChecker):
+            return self.collision.observed_geometry_pose(object_ref)
         if self.object_pose_provider is not None:
             return read_object_pose(self.object_pose_provider, object_ref, inputs=self.input_mode)
         # Explicit oracle evaluation/debug path only. Observed construction
@@ -249,22 +288,31 @@ class PhysicalPickPlaceExecutor:
             self.event(phase="payload_retention", accepted=False, reason="missing_payload_reference")
             return False
         try:
-            object_pose = self._object_pose(self.payload_body)
+            if self.input_mode == "observed" and isinstance(self.collision, ObservedNativeCollisionChecker):
+                displacement, angle = self.collision.payload_retention_residual(
+                    self.model, self.data, self.payload_body
+                )
+            else:
+                object_pose = self._object_pose(self.payload_body)
+                ee = self.data.body(self.ee_body)
+                rotation = ee.xmat.reshape(3, 3).T
+                position = rotation @ (object_pose[:3, 3] - ee.xpos)
+                relative_rotation = rotation @ object_pose[:3, :3]
+                angle = np.arccos(np.clip((np.sum(relative_rotation * expected[:3, :3]) - 1) / 2, -1, 1))
+                displacement = float(np.linalg.norm(position - expected[:3, 3]))
         except ObservationUnavailable as exc:
             self.event(phase="payload_retention", accepted=False, reason=str(exc))
             return False
-        ee = self.data.body(self.ee_body)
-        rotation = ee.xmat.reshape(3, 3).T
-        position = rotation @ (object_pose[:3, 3] - ee.xpos)
-        relative_rotation = rotation @ object_pose[:3, :3]
-        angle = np.arccos(np.clip((np.sum(relative_rotation * expected[:3, :3]) - 1) / 2, -1, 1))
-        displacement = float(np.linalg.norm(position - expected[:3, 3]))
         retained = bool(displacement <= 0.02 and angle <= 0.1)
         if not retained:
             self.event(
-                phase="payload_retention", accepted=False, reason="payload_not_retained",
-                translation_residual_m=displacement, rotation_residual_rad=float(angle),
-                translation_tolerance_m=0.02, rotation_tolerance_rad=0.1,
+                phase="payload_retention",
+                accepted=False,
+                reason="payload_not_retained",
+                translation_residual_m=displacement,
+                rotation_residual_rad=float(angle),
+                translation_tolerance_m=0.02,
+                rotation_tolerance_rad=0.1,
             )
         return retained
 
@@ -277,26 +325,56 @@ class PhysicalPickPlaceExecutor:
         position = getattr(self.robot, "get_gripper_position", None)
         if not callable(position):
             return PhysicalMotionResult(False, "unsupported_gripper_feedback", "grasp")
-        response = self.robot.close_gripper(blocking=False)
+        response = (
+            self.gripper_close_command()
+            if self.gripper_close_command is not None
+            else self.robot.close_gripper(blocking=False)
+        )
         if not isinstance(response, (bool, np.bool_)) or not response:
             return PhysicalMotionResult(False, "gripper_close_command_failed", "grasp")
         self.synchronize(self.data)
+        started = self._motion_time()
+        result = self._wait_gripper_still(
+            position,
+            timeout_s,
+            event_phase="gripper_motor_settled" if self.gripper_hold_command is not None else "gripper_settled",
+        )
+        if not result.success or self.gripper_hold_command is None:
+            return result
+        response = self.gripper_hold_command()
+        if not isinstance(response, (bool, np.bool_)) or not response:
+            return PhysicalMotionResult(False, "gripper_hold_command_failed", "grasp")
+        self.synchronize(self.data)
+        remaining = timeout_s - (self._motion_time() - started)
+        if remaining <= 0:
+            return PhysicalMotionResult(False, "gripper_settling_timeout", "grasp")
+        return self._wait_gripper_still(position, remaining)
+
+    def _wait_gripper_still(self, position, timeout_s, *, event_phase="gripper_settled"):
         start_sim_time = float(self.data.time)
-        previous = float(position())
+        try:
+            previous = float(position())
+        except (TypeError, ValueError):
+            return PhysicalMotionResult(False, "invalid_gripper_feedback", "grasp")
         active = self._settling_window(timeout_s)
         stable_since = self._motion_time()
         while active():
             time.sleep(0.05)
             self.synchronize(self.data)
-            current = float(position())
+            try:
+                current = float(position())
+            except (TypeError, ValueError):
+                return PhysicalMotionResult(False, "invalid_gripper_feedback", "grasp")
             if not np.isfinite([current, previous]).all():
                 return PhysicalMotionResult(False, "invalid_gripper_feedback", "grasp")
             # Accumulate small drift relative to the stable-interval anchor.
             if abs(current - previous) > 0.01:
                 stable_since = self._motion_time()
                 previous = current
-            if self._motion_time() - stable_since >= 0.3 and self.data.time - start_sim_time >= 0.25:
-                self.event(phase="gripper_settled", measured=current, controller_success=True)
+            if self._motion_time() - stable_since >= 0.3 and (
+                not self.use_sim_time or self.data.time - start_sim_time >= 0.25
+            ):
+                self.event(phase=event_phase, measured=current, controller_success=True)
                 return PhysicalMotionResult(True, "gripper_settled", "grasp")
         return PhysicalMotionResult(False, "gripper_settling_timeout", "grasp")
 
@@ -304,12 +382,9 @@ class PhysicalPickPlaceExecutor:
         """Arrival tolerance is not an IK certificate: rebuild world-pose paths."""
         self.synchronize(self.data)
         before = self.data.qpos.copy()
-        previous_payload = (
-            self.collision.payload_body,
-            self.collision.payload_parent,
-            None if self.collision.payload_transform is None else self.collision.payload_transform.copy(),
-        )
+        previous_payload = self.collision.capture_payload()
         paths = []
+        phase = phases[0] if phases else "planning"
         try:
             if grasp and open_gripper_geometry and self.gripper_open_configuration:
                 addresses = joint_qpos_addrs(self.model, tuple(self.gripper_open_configuration))
@@ -329,11 +404,11 @@ class PhysicalPickPlaceExecutor:
                     return None, PhysicalMotionResult(False, f"measured_pose_replan_failed:{error}", phase)
                 paths.append(path)
             return paths, None
+        except ObservationUnavailable as exc:
+            return None, PhysicalMotionResult(False, str(exc), phase)
         finally:
             self.data.qpos[:] = before
-            self.collision.payload_body, self.collision.payload_parent, self.collision.payload_transform = (
-                previous_payload
-            )
+            self.collision.restore_payload(previous_payload)
             mujoco.mj_kinematics(self.model, self.data)
 
     def _execute_path(self, phase, path):
@@ -390,8 +465,11 @@ class PhysicalPickPlaceExecutor:
             )
             if not check.success:
                 self.event(
-                    phase=phase, reason=check.reason, detail=check.detail,
-                    measured=current.tolist(), command=np.asarray(target).tolist(),
+                    phase=phase,
+                    reason=check.reason,
+                    detail=check.detail,
+                    measured=current.tolist(),
+                    command=np.asarray(target).tolist(),
                     contacts=list(self.collision.last_contacts) if check.detail == "collision" else [],
                 )
                 reason = f"revalidation_failed:{check.reason}"
@@ -436,7 +514,7 @@ class PhysicalPickPlaceExecutor:
             stable_since = self._motion_time()
             anchor = self.data.qpos[self.qadr].copy()
             while active():
-                time.sleep(.05)
+                time.sleep(0.05)
                 self.synchronize(self.data)
                 if base_drifted():
                     return PhysicalMotionResult(False, "base_drift_during_arm", phase)
@@ -455,12 +533,20 @@ class PhysicalPickPlaceExecutor:
         self.event(phase=f"{phase}_complete", controller_success=True, residual=residual)
         return PhysicalMotionResult(True, "ok", phase, residual)
 
-    def grasp_only(self, object_query, *, object_gt_body=None, grasp_T_world=None, stop_after=None):
-        """Execute exactly the admitted scope; unloaded prefixes never close or lift.
+    def _visual_check(self, method):
+        try:
+            effect = getattr(self.visual_verifier, method)(after=time.monotonic())
+        except ObservationUnavailable as exc:
+            self.event(phase=method, accepted=False, reason=str(exc), evidence_state="unknown")
+            return PhysicalMotionResult(False, "visual_effect_unknown", method)
+        self.event(phase=method, accepted=effect.satisfied, effect=effect.as_dict())
+        if not effect.satisfied:
+            reason = "visual_effect_unknown" if effect.state == "unknown" else effect.reason
+            return PhysicalMotionResult(False, reason, method)
+        return None
 
-        A prefix is not a successful grasp. The caller owns final measured hold
-        and stop confirmation. Full-task callers retain three-stage replanning.
-        """
+    def grasp_only(self, object_query, *, object_gt_body=None, grasp_T_world=None, stop_after=None):
+        """Execute only the admitted prefix; prefixes never close or lift."""
         if stop_after not in (None, "pregrasp", "grasp_pose"):
             return PhysicalMotionResult(False, "invalid_execution_scope", "grasp")
         phases = ("pregrasp", "grasp", "lift") if stop_after is None else (
@@ -468,6 +554,8 @@ class PhysicalPickPlaceExecutor:
         )
         if len(self.grasp_paths) != len(phases) or len(self.grasp_targets) != len(phases) or object_gt_body is None:
             return PhysicalMotionResult(False, "missing_validated_grasp", "grasp")
+        if self.input_mode == "observed" and self.visual_verifier is None:
+            return PhysicalMotionResult(False, "visual_verification_unavailable", "preflight")
         if self.gripper_open_configuration:
             self.synchronize(self.data)
             before = self.data.qpos.copy()
@@ -483,12 +571,19 @@ class PhysicalPickPlaceExecutor:
             for option, targets in enumerate(self.grasp_target_options or [self.grasp_targets]):
                 targets = targets[:len(phases)]
                 paths, error = self._replan_at_measured_pose(
-                    phases, targets, object_body=object_gt_body, grasp=True,
+                    phases,
+                    targets,
+                    object_body=object_gt_body,
+                    grasp=True,
                     open_gripper_geometry=open_geometry,
                 )
-                self.event(phase=phase, option=option, accepted=error is None,
-                           reason=None if error is None else error.message,
-                           targets=[[np.asarray(p).tolist(), np.asarray(r).tolist()] for p, r in targets])
+                self.event(
+                    phase=phase,
+                    option=option,
+                    accepted=error is None,
+                    reason=None if error is None else error.message,
+                    targets=[[np.asarray(p).tolist(), np.asarray(r).tolist()] for p, r in targets],
+                )
                 if error is None:
                     self.grasp_targets = targets
                     break
@@ -511,15 +606,19 @@ class PhysicalPickPlaceExecutor:
                 return result
         if stop_after is not None:
             return PhysicalMotionResult(True, stop_after + "_complete", phases[-1])
+        if self.input_mode == "observed":
+            error = self._visual_check("begin_grasp")
+            if error is not None:
+                return error
         closing = self._close_gripper_until_still()
         if not closing.success:
             return closing
         self.synchronize(self.data)
         try:
             initial_object_height = float(self._object_pose(object_gt_body)[2, 3])
+            self.collision.set_payload(self.model, self.data, object_gt_body, self.ee_body)
         except ObservationUnavailable as exc:
             return PhysicalMotionResult(False, str(exc), "grasp")
-        self.collision.set_payload(self.model, self.data, object_gt_body, self.ee_body)
         self.payload_body = object_gt_body
         result = self._execute_path("lift", self.grasp_paths[2])
         if result.success:
@@ -529,9 +628,17 @@ class PhysicalPickPlaceExecutor:
                 return PhysicalMotionResult(False, str(exc), "lift")
             if height - initial_object_height < 0.05:
                 return PhysicalMotionResult(False, "object_not_lifted", "lift")
+            if self.input_mode == "observed":
+                error = self._visual_check("verify_lift")
+                if error is not None:
+                    return error
         return result
 
     def place_only(self, receptacle_query, *, object_gt_body=None, receptacle_gt_body=None):
+        if self.input_mode == "observed" and self.visual_verifier is None:
+            return PhysicalMotionResult(False, "visual_verification_unavailable", "preflight")
+        if self.input_mode == "observed" and self.visual_verifier.lift_reference is None:
+            return PhysicalMotionResult(False, "visual_effect_unknown", "preflight")
         if (
             self.payload_body != object_gt_body
             or len(self.place_paths) != 3
@@ -556,10 +663,17 @@ class PhysicalPickPlaceExecutor:
             result = self._execute_path(phase, path)
             if not result.success:
                 return result
+        if self.release_refiner is not None:
+            result = self.release_refiner()
+            if not result.success:
+                return result
         # Certify release and open-finger retreat from the actual placement pose.
         # Planning preserves measured state and the retention reference on failure.
         paths, error = self._replan_at_measured_pose(
-            ("retreat",), self.place_targets[2:], object_body=object_gt_body, grasp=False,
+            ("retreat",),
+            self.place_targets[2:],
+            object_body=object_gt_body,
+            grasp=False,
         )
         if error is not None:
             return error
@@ -568,10 +682,24 @@ class PhysicalPickPlaceExecutor:
         self.event(phase="release", controller_success=True)
         self.collision.set_payload(self.model, self.data, None)
         self.payload_body = None
+        if self.release_verifier is not None:
+            result = self.release_verifier()
+            if not result.success:
+                return result
+        if self.released_collision is not None:
+            self.collision = self.released_collision
         paths, error = self._replan_at_measured_pose(
-            ("retreat",), self.place_targets[2:], object_body=object_gt_body, grasp=False,
+            ("retreat",),
+            self.place_targets[2:],
+            object_body=object_gt_body,
+            grasp=False,
         )
         if error is not None:
             return error
         self.place_paths[2] = paths[0]
-        return self._execute_path("retreat", paths[0])
+        result = self._execute_path("retreat", paths[0])
+        if result.success and self.input_mode == "observed":
+            error = self._visual_check("verify_place")
+            if error is not None:
+                return error
+        return result

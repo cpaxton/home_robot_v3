@@ -46,12 +46,21 @@ def _pin_eqa_look_obs(self, obs_id: int | None) -> None:
     gm.last_eqa_look_obs_id = oid
 
 
-def _tool_look_around(self, *, verify: bool = True) -> dict[str, Any]:
+def _tool_look_around(self, *, verify: bool = True, pan_rad=None, tilt_rad=None) -> dict[str, Any]:
     from emet.memory.graph_eqa.agentic.views import captured_view, retain_latest_view
 
     agent = self.agent
     frames = getattr(getattr(agent, "voxel_map", None), "observations", ())
     before = retain_latest_view(self, after=-1) if isinstance(frames, (list, tuple)) and len(frames) else None
+    head_receipt = None
+    observation = None
+    if pan_rad is not None or tilt_rad is not None:
+        from emet.controller.dynamem.head_observation import capture_head_view
+
+        head_receipt, observation = capture_head_view(agent, pan_rad=pan_rad, tilt_rad=tilt_rad)
+        if not head_receipt["ok"]:
+            self._append_trace({"tool": "look_around", **head_receipt})
+            return head_receipt
     hypothesis_id = None
     if verify:
         hypothesis_id = self._begin_policy_approach(
@@ -60,7 +69,9 @@ def _tool_look_around(self, *, verify: bool = True) -> dict[str, Any]:
             self.query_text,
         )
     ok = False
-    if hasattr(agent, "look_around"):
+    if head_receipt is not None:
+        ok = True
+    elif hasattr(agent, "look_around"):
         try:
             agent.look_around()
             ok = True
@@ -68,7 +79,11 @@ def _tool_look_around(self, *, verify: bool = True) -> dict[str, Any]:
             _logger.warning(f"look_around failed: {e}")
     if ok:
         self._refresh_room_after_motion()
-    cap = self._tool_capture_and_update()
+    cap = (
+        self._tool_capture_and_update(observation=observation)
+        if observation is not None
+        else self._tool_capture_and_update()
+    )
     verify_out = None
     if hypothesis_id is not None and cap.get("ok") and cap.get("obs_id") is not None:
         self._policy_approached(hypothesis_id, int(cap["obs_id"]))
@@ -87,13 +102,19 @@ def _tool_look_around(self, *, verify: bool = True) -> dict[str, Any]:
                 "rotation_deg": float(np.degrees(np.arccos(np.clip((np.trace(rotation) - 1) / 2, -1, 1)))),
             }
     out = {
-        "ok": ok,
+        "ok": ok and (head_receipt is None or bool(cap.get("ok"))),
         "capture": cap,
         "verify": verify_out,
         "camera_motion": motion,
         "note": "Fresh capture does not imply a changed viewpoint. Camera motion compares the views before and after this call, not earlier navigation. Use rotate_base for an explicit heading change.",
     }
-    self._append_trace({"tool": "look_around", "ok": ok, "capture": cap, "camera_motion": motion})
+    if head_receipt is not None:
+        out["observation"] = head_receipt["observation"]
+        out["note"] = head_receipt["note"]
+    self._append_trace(
+        {"tool": "look_around", "ok": out["ok"], "capture": cap, "camera_motion": motion}
+        | ({"observation": head_receipt["observation"]} if head_receipt is not None else {})
+    )
     return out
 
 
@@ -193,7 +214,7 @@ def _obs_revisions_advanced(self, gm: Any, before_revs: dict[int, int]) -> list[
     return advanced
 
 
-def _tool_capture_and_update(self) -> dict[str, Any]:
+def _tool_capture_and_update(self, *, observation=None) -> dict[str, Any]:
     from emet.memory.graph_eqa.agentic.views import retain_latest_view
 
     frame_count = len(getattr(getattr(self.agent, "voxel_map", None), "observations", ()))
@@ -203,7 +224,10 @@ def _tool_capture_and_update(self) -> dict[str, Any]:
     agent = self.agent
     if hasattr(agent, "update"):
         try:
-            agent.update()
+            if observation is None:
+                agent.update()
+            else:
+                agent.update(full_perception=True, observation=observation)
         except Exception as e:
             _logger.warning(f"capture_and_update agent.update failed: {e}")
     # Always refresh graph-side confirmed memory after a voxel update when enabled.

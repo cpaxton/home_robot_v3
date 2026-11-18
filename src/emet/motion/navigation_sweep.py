@@ -97,6 +97,59 @@ def validate_navigation_sweep(space, start, waypoints, *, linear_step_m=0.025, a
     return True, None
 
 
+def shortcut_navigation_route(space, start, waypoints, *, max_translation_m=0.2):
+    """Remove grid stair steps only when the complete drive/turn sweep is valid.
+
+    Preserve the exact terminal XYT and bounded drive segments. Each shortcut
+    uses the same continuous footprint/unknown-space checker as execution;
+    obstacle corners, unknown floor and turns are never skipped unchecked.
+    """
+    if not waypoints:
+        return []
+    accepted, _ = validate_navigation_sweep(space, start, waypoints)
+    if not accepted:
+        return []
+    result, current, index = [], np.asarray(start, dtype=float), 0
+    while index < len(waypoints):
+        for end in range(len(waypoints) - 1, index - 1, -1):
+            target = np.asarray(waypoints[end], dtype=float).copy()
+            if end < len(waypoints) - 1:
+                delta = target[:2] - current[:2]
+                target[2] = np.arctan2(delta[1], delta[0]) if np.linalg.norm(delta) > 1e-8 else current[2]
+            candidate = differential_drive_waypoints(current, target, max_translation_m=max_translation_m)
+            accepted, _ = validate_navigation_sweep(space, current, candidate)
+            if accepted:
+                result.extend(candidate)
+                current = np.asarray(candidate[-1])
+                index = end + 1
+                break
+        else:
+            return []
+    return result
+
+
+def drive_route_effort(start, waypoints, *, translation_step_m, rotation_step_rad):
+    """Nominal primitive-equivalent work for an admitted turn/drive route.
+
+    This is a geometry/control cost, not wall time or a semantic score. Required
+    scales come from the executor's calibrated primitives. Inserting collinear
+    waypoints does not change the score.
+    """
+    if (
+        not np.isfinite([translation_step_m, rotation_step_rad]).all()
+        or min(translation_step_m, rotation_step_rad) <= 0
+    ):
+        raise ValueError("Positive finite primitive scales required")
+    poses = np.asarray([start, *waypoints], dtype=float)
+    if poses.ndim != 2 or poses.shape[1] != 3 or not np.isfinite(poses).all():
+        raise ValueError("Finite XYT route required")
+    delta = np.diff(poses, axis=0)
+    return float(
+        np.linalg.norm(delta[:, :2], axis=1).sum() / translation_step_m
+        + np.abs(np.arctan2(np.sin(delta[:, 2]), np.cos(delta[:, 2]))).sum() / rotation_step_rad
+    )
+
+
 @dataclass
 class RouteExecutionResult:
     success: bool

@@ -1,0 +1,983 @@
+{
+  "schema_version": 1,
+  "scope": "Privileged simulated Stretch development replay with checked unloaded base approaches; actual run-agent CLI uses remote Caliban; independent resets, no exact matched-state or held-out reliability claim",
+  "native_source_sha": "158fd4272a50734a07238f2338efd05e19ce540f",
+  "agent_source_sha": "2e4dd8fce373aa4fd19a6d0206b11b440f01faa1",
+  "final_code_sha": "2f993af95210b497666c324b84ffd2ffd7c2a909",
+  "shutdown_followup": {
+    "schema_version": 1,
+    "source_commit": "2f993af95210b497666c324b84ffd2ffd7c2a909",
+    "scope": "Actual run agent CLI; privileged simulated Stretch with checked unloaded base approach; focused completed-swap and client-shutdown regression; no cameras, exploration, hardware or held-out claim",
+    "native_policy": "bounded_approach",
+    "model": "remote Caliban Qwen/Qwen3-VL-8B-Instruct",
+    "sampling": "server defaults; not independently pinned",
+    "initial_state_certificate": false,
+    "previous_agent_baseline": "docs/experiments/tamp_stretch_realism_20261101.json",
+    "aggregate": {
+      "tasks_passed": 1,
+      "tasks": 1,
+      "completed_transfers": 3,
+      "declared_transfers": 3,
+      "final_object_goals_satisfied": 2,
+      "final_object_goals": 2,
+      "audit_commands": 766,
+      "forbidden_commands": 0,
+      "cli_infrastructure_errors": 0,
+      "llm_calls": 3,
+      "multi_tool_model_responses": 1,
+      "llm_wall_time_s": 22.730778489029035,
+      "valid_contract_trials": 1,
+      "stop_boundary_cases": 0,
+      "stop_boundary_violations": 0,
+      "requested_invalid_handle_checks": 0,
+      "requested_invalid_handle_checks_passed": 0
+    },
+    "cases": [
+      {
+        "id": "swap-shift",
+        "job_id": "20261116_014530_ad7fc8",
+        "family": "wide-destination-swap",
+        "initial_x_shift_m": 0.015,
+        "passed": true,
+        "task_passed": true,
+        "physical_goals_satisfied": true,
+        "execution_completion_verified": true,
+        "cli_exit_code": 0,
+        "completed_transfers": 3,
+        "declared_transfers": 3,
+        "execution_code": "ok",
+        "final_goals_satisfied": {
+          "object2": true,
+          "object1": true
+        },
+        "audit_commands": 766,
+        "forbidden_commands": 0,
+        "llm_calls": 3,
+        "multi_tool_model_responses": 1,
+        "llm_wall_time_s": 22.730778489029035,
+        "agent_integration": {
+          "tamp_calls": 3,
+          "outcome_counts": {
+            "ok": 3,
+            "error": 0,
+            "partial": 0,
+            "invalid": 0
+          },
+          "code_counts": {
+            "ok": 3
+          },
+          "result_contracts_valid": true,
+          "failure_stop_compliant": null,
+          "failure_cases": 0,
+          "discovery_only_cases": 0,
+          "stop_boundary_cases": 0,
+          "failure_boundaries": [],
+          "unassessed": [
+            "task_interpretation",
+            "goal_coverage",
+            "physical_recovery",
+            "observed_grounding",
+            "navigation",
+            "exploration"
+          ]
+        },
+        "requested_rejection_observed": null,
+        "summary": {
+          "path": ".tamp-runs/agent-base-stop-20261116/episodes/swap-shift/summary.json",
+          "sha256": "99ab476558b2a6bbd1f012def557935d2a001a30df713e8768bddaa2c5bd5b51"
+        }
+      }
+    ]
+  },
+  "shutdown_warning": {
+    "original_cohort_count": 1,
+    "reason": "Confirmed navigation receipt evicted by subsequent arm commands; client retried cancellation at shutdown",
+    "fix": "One boot/session/sequence-bound positive stop witness; new goals and server restarts cannot reuse it",
+    "focused_recheck_warning_count": 0,
+    "earlier_task_outcomes_not_rescored": true
+  },
+  "historical_results_unchanged": {
+    "native_tasks": "4/8",
+    "actual_agent_tasks": "3/4"
+  },
+  "native_pilot": {
+    "schema_version": 1,
+    "scope": "Same-source privileged native development checked unloaded base-approach pilot; stricter sampled original-reference hold coverage; no hardware, force sensing, training, held-out or general qualification claim",
+    "source_commit": "158fd4272a50734a07238f2338efd05e19ce540f",
+    "protocol": "configs/eval/tamp_native_base_approach_corrected_20261116.json",
+    "exact_paired_initial_state_certificate": false,
+    "old_native_aggregate_unchanged": "4/8",
+    "old_caliban_aggregate_unchanged": "3/4",
+    "candidate_aggregate": {
+      "tasks_passed": 3,
+      "tasks": 3,
+      "completed_transfers": 7,
+      "declared_transfers": 7,
+      "boundary_checks_passed": 2,
+      "boundary_checks_observed": 2,
+      "audit_commands": 1858,
+      "forbidden_commands": 0,
+      "infrastructure_errors": 0
+    },
+    "private_probe": {
+      "artifact": {
+        "path": ".tamp-runs/base-approach-20261116/place_probe.json",
+        "sha256": "404bdfdc5620d68a293568232f84335020ef53b67bd9051f3a51d0c558dda4ee"
+      },
+      "scope": "Pure failed-snapshot placement IK/collision; no executed task claim"
+    },
+    "live_base_component": {
+      "artifact": {
+        "path": ".tamp-runs/base-approach-20261116/base-smoke/summary.json",
+        "sha256": "b305ac9b93311f70bb78202437d7aeade307d20f7d831f18810aa13407078991"
+      },
+      "scope": "Measured wheel move and stop only; no manipulation/task claim"
+    },
+    "cases": [
+      {
+        "id": "approach-swap",
+        "case_id": "swap-right25",
+        "role": "production_candidate",
+        "job_id": "20261116_010302_748f7e",
+        "gripper_close_preset_override": null,
+        "effective_gripper_close_loose": false,
+        "effective_gripper_contact_hold_fraction": 0.5,
+        "base_approaches": [
+          {
+            "phase": "base_approach_complete",
+            "measured_world": [
+              0.02297881789222406,
+              0.0038076679416227787,
+              0.0013761257723890888
+            ],
+            "goal_world": [
+              0.027224864424031107,
+              0.0040607720638910026,
+              -0.0047172012902384096
+            ],
+            "stop_confirmed": true
+          }
+        ],
+        "passed": true,
+        "run_status": "complete",
+        "code": "ok",
+        "status": "ok",
+        "verification": null,
+        "completed_transfers": 3,
+        "declared_transfers": 3,
+        "cube_max_original_rotation_before_handoff_rad": 0.007541462606991825,
+        "final_goals_satisfied": {
+          "object2": true,
+          "object1": true
+        },
+        "boundary_checks": [],
+        "audit_commands": 845,
+        "forbidden_commands": 0,
+        "malformed_audit_rows": 0,
+        "wall_time_s": 297.0583143818658,
+        "summary": {
+          "path": ".tamp-runs/base-approach-corrected-20261116/approach-swap/summary.json",
+          "sha256": "1810139cbd2987c15723ab5f8e2a6bf3c6d044a06025b8ea647f09e825822c5c"
+        }
+      },
+      {
+        "id": "approach-control",
+        "case_id": "control",
+        "role": "production_candidate",
+        "job_id": "20261116_010302_09fd57",
+        "gripper_close_preset_override": null,
+        "effective_gripper_close_loose": false,
+        "effective_gripper_contact_hold_fraction": 0.5,
+        "base_approaches": [],
+        "passed": true,
+        "run_status": "complete",
+        "code": "ok",
+        "status": "ok",
+        "verification": null,
+        "completed_transfers": 2,
+        "declared_transfers": 2,
+        "cube_max_original_rotation_before_handoff_rad": 0.029608953217453795,
+        "final_goals_satisfied": {
+          "object2": true,
+          "object1": true
+        },
+        "boundary_checks": [
+          {
+            "tool": "execute_task_plan",
+            "code": "unknown_plan",
+            "status": "error",
+            "expected_codes": [
+              "unknown_plan"
+            ],
+            "no_commands": true,
+            "passed": true
+          }
+        ],
+        "audit_commands": 504,
+        "forbidden_commands": 0,
+        "malformed_audit_rows": 0,
+        "wall_time_s": 155.31435874616727,
+        "summary": {
+          "path": ".tamp-runs/base-approach-corrected-20261116/approach-control/summary.json",
+          "sha256": "62f70d3658027081901f31f5454a8470b51b8fe4430a56ccf9fdb2b69268d24c"
+        }
+      },
+      {
+        "id": "approach-shift",
+        "case_id": "shift15",
+        "role": "production_candidate",
+        "job_id": "20261116_010303_0ec611",
+        "gripper_close_preset_override": null,
+        "effective_gripper_close_loose": false,
+        "effective_gripper_contact_hold_fraction": 0.5,
+        "base_approaches": [
+          {
+            "phase": "base_approach_complete",
+            "measured_world": [
+              0.02574243316543369,
+              0.0011387163390973007,
+              -0.00022926227170874913
+            ],
+            "goal_world": [
+              0.029916346336477287,
+              0.001370506385432318,
+              -0.007326240874107055
+            ],
+            "stop_confirmed": true
+          }
+        ],
+        "passed": true,
+        "run_status": "complete",
+        "code": "ok",
+        "status": "ok",
+        "verification": null,
+        "completed_transfers": 2,
+        "declared_transfers": 2,
+        "cube_max_original_rotation_before_handoff_rad": 0.028540543161584015,
+        "final_goals_satisfied": {
+          "object2": true,
+          "object1": true
+        },
+        "boundary_checks": [
+          {
+            "tool": "execute_task_plan",
+            "code": "unknown_plan",
+            "status": "error",
+            "expected_codes": [
+              "unknown_plan"
+            ],
+            "no_commands": true,
+            "passed": true
+          }
+        ],
+        "audit_commands": 509,
+        "forbidden_commands": 0,
+        "malformed_audit_rows": 0,
+        "wall_time_s": 164.92532859696075,
+        "summary": {
+          "path": ".tamp-runs/base-approach-corrected-20261116/approach-shift/summary.json",
+          "sha256": "4235ea754912cb081e37e48d9dd7f884b76cdcd289b3c8b4bf1b0fea5251bf09"
+        }
+      },
+      {
+        "id": "stationary-swap-ablation",
+        "case_id": "swap-right25",
+        "role": "same_source_ablation",
+        "job_id": "20261116_010303_e83871",
+        "gripper_close_preset_override": null,
+        "effective_gripper_close_loose": false,
+        "effective_gripper_contact_hold_fraction": 0.5,
+        "base_approaches": [],
+        "passed": false,
+        "run_status": "complete",
+        "code": "verification_failed",
+        "status": "partial",
+        "verification": {
+          "substage": "post_lift_hold",
+          "reason": "payload_not_retained"
+        },
+        "completed_transfers": 1,
+        "declared_transfers": 3,
+        "cube_max_original_rotation_before_handoff_rad": 0.10020729751962343,
+        "final_goals_satisfied": {
+          "object2": false,
+          "object1": false
+        },
+        "boundary_checks": [],
+        "audit_commands": 439,
+        "forbidden_commands": 0,
+        "malformed_audit_rows": 0,
+        "wall_time_s": 201.76264200010337,
+        "summary": {
+          "path": ".tamp-runs/base-approach-corrected-20261116/stationary-swap-ablation/summary.json",
+          "sha256": "f56919530ca666c8b4bf8451f1feefaef4f64fa94a3be0804a295642e4e62bb4"
+        }
+      }
+    ]
+  },
+  "native_full_population": {
+    "schema_version": 1,
+    "source_commit": "158fd4272a50734a07238f2338efd05e19ce540f",
+    "protocol": "configs/eval/tamp_native_qualification_20261113.json",
+    "scope": "Development replay after qualification failures; identical eight positive tasks and four boundary checks; no held-out or agent claim",
+    "hardware_trials": false,
+    "llm_calls": 0,
+    "prior_qualification": "docs/experiments/tamp_native_qualification_20261113.json",
+    "aggregate": {
+      "positive_tasks_passed": 8,
+      "positive_task_candidates": 8,
+      "completed_transfers": 18,
+      "declared_transfers": 18,
+      "boundary_checks_passed": 4,
+      "declared_boundary_checks": 4,
+      "boundary_checks_observed": 4,
+      "audit_commands": 4605,
+      "forbidden_commands": 0,
+      "infrastructure_errors": 0
+    },
+    "cases": [
+      {
+        "id": "control",
+        "population": "regression",
+        "scenario": "invalid_then_task",
+        "job_id": "20261116_011900_543a5b",
+        "run_status": "complete",
+        "task_passed": true,
+        "code": "ok",
+        "status": "ok",
+        "completed_transfers": 2,
+        "declared_transfers": 2,
+        "boundary_checks": [
+          {
+            "tool": "execute_task_plan",
+            "code": "unknown_plan",
+            "status": "error",
+            "expected_codes": [
+              "unknown_plan"
+            ],
+            "no_commands": true,
+            "passed": true
+          }
+        ],
+        "audit_commands": 504,
+        "forbidden_commands": 0,
+        "wall_time_s": 153.393616277026,
+        "final_goals_satisfied": {
+          "object2": true,
+          "object1": true
+        },
+        "last_motion_phase": null,
+        "summary": {
+          "path": ".tamp-runs/native-base-broad-20261116/episodes/control/summary.json",
+          "sha256": "6608263d9eb48bc8791b3ce43b6f46b21e1e391b5629e7add7b1af25da1eba77"
+        }
+      },
+      {
+        "id": "shift15",
+        "population": "regression",
+        "scenario": "reuse_plan",
+        "job_id": "20261116_011900_85b6ab",
+        "run_status": "complete",
+        "task_passed": true,
+        "code": "ok",
+        "status": "ok",
+        "completed_transfers": 2,
+        "declared_transfers": 2,
+        "boundary_checks": [
+          {
+            "tool": "execute_task_plan",
+            "code": "unknown_plan",
+            "status": "error",
+            "expected_codes": [
+              "unknown_plan"
+            ],
+            "no_commands": true,
+            "passed": true
+          }
+        ],
+        "audit_commands": 509,
+        "forbidden_commands": 0,
+        "wall_time_s": 166.69495075708255,
+        "final_goals_satisfied": {
+          "object2": true,
+          "object1": true
+        },
+        "last_motion_phase": null,
+        "summary": {
+          "path": ".tamp-runs/native-base-broad-20261116/episodes/shift15/summary.json",
+          "sha256": "0a11498e2e8684259775b1f9031547885a14a1068c0243108cb071b7ff7f48c7"
+        }
+      },
+      {
+        "id": "left30",
+        "population": "candidate",
+        "scenario": "task",
+        "job_id": "20261116_011900_28267f",
+        "run_status": "complete",
+        "task_passed": true,
+        "code": "ok",
+        "status": "ok",
+        "completed_transfers": 2,
+        "declared_transfers": 2,
+        "boundary_checks": [],
+        "audit_commands": 564,
+        "forbidden_commands": 0,
+        "wall_time_s": 167.0791094461456,
+        "final_goals_satisfied": {
+          "object2": true,
+          "object1": true
+        },
+        "last_motion_phase": null,
+        "summary": {
+          "path": ".tamp-runs/native-base-broad-20261116/episodes/left30/summary.json",
+          "sha256": "9a1ddd7d38c8a2a2657d300192431fae2f83da952f6b137a0c1d405f32dade69"
+        }
+      },
+      {
+        "id": "right30",
+        "population": "candidate",
+        "scenario": "task",
+        "job_id": "20261116_011901_c96911",
+        "run_status": "complete",
+        "task_passed": true,
+        "code": "ok",
+        "status": "ok",
+        "completed_transfers": 2,
+        "declared_transfers": 2,
+        "boundary_checks": [],
+        "audit_commands": 537,
+        "forbidden_commands": 0,
+        "wall_time_s": 200.49274441297166,
+        "final_goals_satisfied": {
+          "object2": true,
+          "object1": true
+        },
+        "last_motion_phase": null,
+        "summary": {
+          "path": ".tamp-runs/native-base-broad-20261116/episodes/right30/summary.json",
+          "sha256": "05feeea7951346846e89a790b231f7533f411c3ca4a5ed825e0a8d0849181bd7"
+        }
+      },
+      {
+        "id": "back12-yaw",
+        "population": "candidate",
+        "scenario": "task",
+        "job_id": "20261116_011901_c091c6",
+        "run_status": "complete",
+        "task_passed": true,
+        "code": "ok",
+        "status": "ok",
+        "completed_transfers": 2,
+        "declared_transfers": 2,
+        "boundary_checks": [],
+        "audit_commands": 532,
+        "forbidden_commands": 0,
+        "wall_time_s": 146.13507176097482,
+        "final_goals_satisfied": {
+          "object2": true,
+          "object1": true
+        },
+        "last_motion_phase": null,
+        "summary": {
+          "path": ".tamp-runs/native-base-broad-20261116/episodes/back12-yaw/summary.json",
+          "sha256": "4f5e0982fb92b0c31623400d923ddcb8fab603d66daff0e08963179e1ed2ded0"
+        }
+      },
+      {
+        "id": "front12-yaw",
+        "population": "candidate",
+        "scenario": "task",
+        "job_id": "20261116_011901_bb3f00",
+        "run_status": "complete",
+        "task_passed": true,
+        "code": "ok",
+        "status": "ok",
+        "completed_transfers": 2,
+        "declared_transfers": 2,
+        "boundary_checks": [],
+        "audit_commands": 506,
+        "forbidden_commands": 0,
+        "wall_time_s": 144.07162544410676,
+        "final_goals_satisfied": {
+          "object2": true,
+          "object1": true
+        },
+        "last_motion_phase": null,
+        "summary": {
+          "path": ".tamp-runs/native-base-broad-20261116/episodes/front12-yaw/summary.json",
+          "sha256": "7144bdf2822a8a8bd0f11e6a227fd40060f299805116e6c69ce3b16389939389"
+        }
+      },
+      {
+        "id": "swap-left10",
+        "population": "candidate",
+        "scenario": "task",
+        "job_id": "20261116_011901_e3021d",
+        "run_status": "complete",
+        "task_passed": true,
+        "code": "ok",
+        "status": "ok",
+        "completed_transfers": 3,
+        "declared_transfers": 3,
+        "boundary_checks": [],
+        "audit_commands": 684,
+        "forbidden_commands": 0,
+        "wall_time_s": 236.1817723568529,
+        "final_goals_satisfied": {
+          "object2": true,
+          "object1": true
+        },
+        "last_motion_phase": null,
+        "summary": {
+          "path": ".tamp-runs/native-base-broad-20261116/episodes/swap-left10/summary.json",
+          "sha256": "1d2d6932ffdceae1af7965b7cfeff854240ab5302c5ae78930ac6c1314fa37a3"
+        }
+      },
+      {
+        "id": "swap-right25",
+        "population": "candidate",
+        "scenario": "task",
+        "job_id": "20261116_011901_0b98ab",
+        "run_status": "complete",
+        "task_passed": true,
+        "code": "ok",
+        "status": "ok",
+        "completed_transfers": 3,
+        "declared_transfers": 3,
+        "boundary_checks": [],
+        "audit_commands": 764,
+        "forbidden_commands": 0,
+        "wall_time_s": 238.5374142890796,
+        "final_goals_satisfied": {
+          "object2": true,
+          "object1": true
+        },
+        "last_motion_phase": null,
+        "summary": {
+          "path": ".tamp-runs/native-base-broad-20261116/episodes/swap-right25/summary.json",
+          "sha256": "45e4d05757d8221ea806daf4056e4229a52bd6606e8b030c91e1facfa0825b36"
+        }
+      },
+      {
+        "id": "stale-head-plan",
+        "population": "expected_rejection",
+        "scenario": "stale_plan",
+        "job_id": "20261116_011902_3e4153",
+        "run_status": "complete",
+        "task_passed": false,
+        "code": "stale_task_plan",
+        "status": "error",
+        "completed_transfers": 0,
+        "declared_transfers": 0,
+        "boundary_checks": [
+          {
+            "tool": "execute_task_plan",
+            "code": "stale_task_plan",
+            "status": "error",
+            "expected_codes": [
+              "stale_task_plan"
+            ],
+            "no_commands": true,
+            "passed": true
+          }
+        ],
+        "audit_commands": 3,
+        "forbidden_commands": 0,
+        "wall_time_s": 63.40114845801145,
+        "final_goals_satisfied": {
+          "object2": false,
+          "object1": false
+        },
+        "last_motion_phase": null,
+        "summary": {
+          "path": ".tamp-runs/native-base-broad-20261116/episodes/stale-head-plan/summary.json",
+          "sha256": "c1a156fdf9d373f4f5364941ac10f57a1eadd4ef78f84e67124d4478c03c74b4"
+        }
+      },
+      {
+        "id": "occupied-placement",
+        "population": "expected_rejection",
+        "scenario": "blocked_placement",
+        "job_id": "20261116_011902_b2bb2a",
+        "run_status": "complete",
+        "task_passed": false,
+        "code": "no_plan_within_budget",
+        "status": "error",
+        "completed_transfers": 0,
+        "declared_transfers": 0,
+        "boundary_checks": [
+          {
+            "tool": "plan_pick_place",
+            "code": "no_plan_within_budget",
+            "status": "error",
+            "expected_codes": [
+              "no_collision_free_placement",
+              "no_plan_within_budget"
+            ],
+            "no_commands": true,
+            "passed": true
+          }
+        ],
+        "audit_commands": 2,
+        "forbidden_commands": 0,
+        "wall_time_s": 49.86194814997725,
+        "final_goals_satisfied": {
+          "object2": false,
+          "object1": false
+        },
+        "last_motion_phase": null,
+        "summary": {
+          "path": ".tamp-runs/native-base-broad-20261116/episodes/occupied-placement/summary.json",
+          "sha256": "b566767a12c956f0c5046fa1d42ee5c53207134082c37cd39aecc6618fef00b6"
+        }
+      }
+    ]
+  },
+  "actual_agent": {
+    "schema_version": 1,
+    "source_commit": "2e4dd8fce373aa4fd19a6d0206b11b440f01faa1",
+    "scope": "Actual run agent CLI; privileged simulated Stretch with checked unloaded base approach; original four development pilot cases; no cameras, exploration, hardware or held-out claim",
+    "native_policy": "bounded_approach",
+    "model": "remote Caliban Qwen/Qwen3-VL-8B-Instruct",
+    "sampling": "server defaults; not independently pinned",
+    "initial_state_certificate": false,
+    "previous_agent_baseline": "docs/experiments/tamp_stretch_realism_20261101.json",
+    "aggregate": {
+      "tasks_passed": 4,
+      "tasks": 4,
+      "completed_transfers": 10,
+      "declared_transfers": 10,
+      "final_object_goals_satisfied": 8,
+      "final_object_goals": 8,
+      "audit_commands": 2526,
+      "forbidden_commands": 0,
+      "cli_infrastructure_errors": 0,
+      "llm_calls": 16,
+      "multi_tool_model_responses": 2,
+      "llm_wall_time_s": 116.10883013159037,
+      "valid_contract_trials": 4,
+      "stop_boundary_cases": 1,
+      "stop_boundary_violations": 0,
+      "requested_invalid_handle_checks": 1,
+      "requested_invalid_handle_checks_passed": 1
+    },
+    "cases": [
+      {
+        "id": "two-goal-control",
+        "job_id": "20261116_012233_626fca",
+        "family": "two-goal",
+        "initial_x_shift_m": 0.0,
+        "passed": true,
+        "task_passed": true,
+        "physical_goals_satisfied": true,
+        "execution_completion_verified": true,
+        "cli_exit_code": 0,
+        "completed_transfers": 2,
+        "declared_transfers": 2,
+        "execution_code": "ok",
+        "final_goals_satisfied": {
+          "object2": true,
+          "object1": true
+        },
+        "audit_commands": 509,
+        "forbidden_commands": 0,
+        "llm_calls": 6,
+        "multi_tool_model_responses": 0,
+        "llm_wall_time_s": 41.06236000196077,
+        "agent_integration": {
+          "tamp_calls": 4,
+          "outcome_counts": {
+            "ok": 3,
+            "error": 1,
+            "partial": 0,
+            "invalid": 0
+          },
+          "code_counts": {
+            "unknown_plan": 1,
+            "ok": 3
+          },
+          "result_contracts_valid": true,
+          "failure_stop_compliant": true,
+          "failure_cases": 1,
+          "discovery_only_cases": 0,
+          "stop_boundary_cases": 1,
+          "failure_boundaries": [
+            {
+              "tool": "execute_pick_place_plan",
+              "code": "unknown_plan",
+              "unexpected_tools": [],
+              "boundary_kind": "failure"
+            }
+          ],
+          "unassessed": [
+            "task_interpretation",
+            "goal_coverage",
+            "physical_recovery",
+            "observed_grounding",
+            "navigation",
+            "exploration"
+          ]
+        },
+        "requested_rejection_observed": true,
+        "summary": {
+          "path": ".tamp-runs/agent-base-approach-20261116/episodes/two-goal-control/summary.json",
+          "sha256": "223f1c837f6fcb941cfc45b54cccbaed14ca7bfe0e53e2c49c1ad33be0fcf964"
+        }
+      },
+      {
+        "id": "swap-control",
+        "job_id": "20261116_012234_5bbd62",
+        "family": "wide-destination-swap",
+        "initial_x_shift_m": 0.0,
+        "passed": true,
+        "task_passed": true,
+        "physical_goals_satisfied": true,
+        "execution_completion_verified": true,
+        "cli_exit_code": 0,
+        "completed_transfers": 3,
+        "declared_transfers": 3,
+        "execution_code": "ok",
+        "final_goals_satisfied": {
+          "object2": true,
+          "object1": true
+        },
+        "audit_commands": 737,
+        "forbidden_commands": 0,
+        "llm_calls": 3,
+        "multi_tool_model_responses": 1,
+        "llm_wall_time_s": 22.875351084163412,
+        "agent_integration": {
+          "tamp_calls": 3,
+          "outcome_counts": {
+            "ok": 3,
+            "error": 0,
+            "partial": 0,
+            "invalid": 0
+          },
+          "code_counts": {
+            "ok": 3
+          },
+          "result_contracts_valid": true,
+          "failure_stop_compliant": null,
+          "failure_cases": 0,
+          "discovery_only_cases": 0,
+          "stop_boundary_cases": 0,
+          "failure_boundaries": [],
+          "unassessed": [
+            "task_interpretation",
+            "goal_coverage",
+            "physical_recovery",
+            "observed_grounding",
+            "navigation",
+            "exploration"
+          ]
+        },
+        "requested_rejection_observed": null,
+        "summary": {
+          "path": ".tamp-runs/agent-base-approach-20261116/episodes/swap-control/summary.json",
+          "sha256": "206237f9c377ad530c7414f33987c80f2ea77904646c4a4cb0b1364f542a0286"
+        }
+      },
+      {
+        "id": "two-goal-shift",
+        "job_id": "20261116_012234_799c66",
+        "family": "two-goal",
+        "initial_x_shift_m": 0.015,
+        "passed": true,
+        "task_passed": true,
+        "physical_goals_satisfied": true,
+        "execution_completion_verified": true,
+        "cli_exit_code": 0,
+        "completed_transfers": 2,
+        "declared_transfers": 2,
+        "execution_code": "ok",
+        "final_goals_satisfied": {
+          "object2": true,
+          "object1": true
+        },
+        "audit_commands": 514,
+        "forbidden_commands": 0,
+        "llm_calls": 4,
+        "multi_tool_model_responses": 0,
+        "llm_wall_time_s": 29.537645160220563,
+        "agent_integration": {
+          "tamp_calls": 3,
+          "outcome_counts": {
+            "ok": 3,
+            "error": 0,
+            "partial": 0,
+            "invalid": 0
+          },
+          "code_counts": {
+            "ok": 3
+          },
+          "result_contracts_valid": true,
+          "failure_stop_compliant": null,
+          "failure_cases": 0,
+          "discovery_only_cases": 0,
+          "stop_boundary_cases": 0,
+          "failure_boundaries": [],
+          "unassessed": [
+            "task_interpretation",
+            "goal_coverage",
+            "physical_recovery",
+            "observed_grounding",
+            "navigation",
+            "exploration"
+          ]
+        },
+        "requested_rejection_observed": null,
+        "summary": {
+          "path": ".tamp-runs/agent-base-approach-20261116/episodes/two-goal-shift/summary.json",
+          "sha256": "eac1c9fb8d50e0c489510275e671eda98ed71ff0f0318fe41aed0a2512b48e70"
+        }
+      },
+      {
+        "id": "swap-shift",
+        "job_id": "20261116_012234_21a728",
+        "family": "wide-destination-swap",
+        "initial_x_shift_m": 0.015,
+        "passed": true,
+        "task_passed": true,
+        "physical_goals_satisfied": true,
+        "execution_completion_verified": true,
+        "cli_exit_code": 0,
+        "completed_transfers": 3,
+        "declared_transfers": 3,
+        "execution_code": "ok",
+        "final_goals_satisfied": {
+          "object2": true,
+          "object1": true
+        },
+        "audit_commands": 766,
+        "forbidden_commands": 0,
+        "llm_calls": 3,
+        "multi_tool_model_responses": 1,
+        "llm_wall_time_s": 22.63347388524562,
+        "agent_integration": {
+          "tamp_calls": 3,
+          "outcome_counts": {
+            "ok": 3,
+            "error": 0,
+            "partial": 0,
+            "invalid": 0
+          },
+          "code_counts": {
+            "ok": 3
+          },
+          "result_contracts_valid": true,
+          "failure_stop_compliant": null,
+          "failure_cases": 0,
+          "discovery_only_cases": 0,
+          "stop_boundary_cases": 0,
+          "failure_boundaries": [],
+          "unassessed": [
+            "task_interpretation",
+            "goal_coverage",
+            "physical_recovery",
+            "observed_grounding",
+            "navigation",
+            "exploration"
+          ]
+        },
+        "requested_rejection_observed": null,
+        "summary": {
+          "path": ".tamp-runs/agent-base-approach-20261116/episodes/swap-shift/summary.json",
+          "sha256": "5c3dbfbb370a47c184a9c43bd6212691541d865e8d7a88b95f91b2a7414f14f8"
+        }
+      }
+    ]
+  },
+  "regression": {
+    "tests": 407,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "sha256": "4c740e2d4adf55ee9cb062189bc9f02dc35e4b2d9dba4b78ce5d05433123121c",
+    "job_id": "20261116_014531_54b1f9"
+  },
+  "initial_agent_startup_failures": {
+    "source_sha": "158fd4272a50734a07238f2338efd05e19ce540f",
+    "count": 4,
+    "before_dispatch": true,
+    "reason": "stale agent native-policy allowlist; evaluator additionally raised for absent audit",
+    "jobs": [
+      {
+        "case_id": "two-goal-control",
+        "job_id": "20261116_011324_f74f5b",
+        "pid": 990831,
+        "wait_pids": []
+      },
+      {
+        "case_id": "swap-control",
+        "job_id": "20261116_011324_ab550b",
+        "pid": 990837,
+        "wait_pids": [
+          990831
+        ]
+      },
+      {
+        "case_id": "two-goal-shift",
+        "job_id": "20261116_011324_c95eec",
+        "pid": 990861,
+        "wait_pids": [
+          990837
+        ]
+      },
+      {
+        "case_id": "swap-shift",
+        "job_id": "20261116_011325_bfcae5",
+        "pid": 990899,
+        "wait_pids": [
+          990861
+        ]
+      }
+    ],
+    "raw_root": ".tamp-runs/agent-base-approach-20261116",
+    "checkout": "tamp-benchmark-runtime",
+    "not_physical_task_success": true
+  },
+  "failed_intermediate_sources": "docs/experiments/tamp_native_base_approach_initial_20261116.json",
+  "raw_checkout_roots": {
+    "native": "tamp-benchmark-runtime",
+    "agent": "tamp-base-agent-validation"
+  },
+  "raw_artifacts_publicly_archived": false,
+  "limitations": [
+    "All task layouts informed development; single trial per condition.",
+    "Base clearance is sampled static robot geometry and a sampled tracking envelope, not a dynamics certificate.",
+    "Loaded base transport is not implemented; no automatic held-object recovery.",
+    "Observed grounding, navigation/exploration, household adapters and hardware remain unqualified.",
+    "Simulator privileged geometry/state are not claims of hardware sensing.",
+    "Remote inference uses server-default sampling; initialization states are not exact paired resets."
+  ],
+  "raw_reports": [
+    {
+      "path": ".tamp-runs/base-approach-corrected-20261116/report.json",
+      "checkout": "native",
+      "sha256": "a65ecd0df641ce5958402acfacf33c34eded7a05edab01165ba4029aa43c50af"
+    },
+    {
+      "path": ".tamp-runs/native-base-broad-20261116/report.json",
+      "checkout": "native",
+      "sha256": "bee34031f39c73f940fc4fcd0594da9f3975b2686156ef77b5aa8d551db199cd"
+    },
+    {
+      "path": ".tamp-runs/agent-base-approach-20261116/report.json",
+      "checkout": "agent",
+      "sha256": "243474dfa05a067b7b0027231bcec7061f2df15cbc4f76b9eb69298fa93c0f5f"
+    },
+    {
+      "path": ".tamp-runs/agent-base-stop-20261116/report.json",
+      "checkout": "agent",
+      "sha256": "6b1b11f76f11cd296a6e1097de42b76462c1a76dd875087cd2246f9c868e0288"
+    }
+  ],
+  "motion_code_hashes": {
+    "src/emet/controller/task/tamp/native_adapter.py": "c6131b9e9417655e230b6a0c6b6136b2728cf1e9c4389160bae85381222e280c",
+    "src/emet/controller/task/tamp/native_approach.py": "7a098b6dd94a425d889bc7dd2545de69b3a93f7380858cd7f6df897842360a97",
+    "src/emet/controller/task/tamp/native_placement.py": "f6274e791d67da8660b02d25c661075557e067ed041f1ccc70a41cc73002e5b7",
+    "src/emet/controller/task/tamp/native_policy.py": "e552f6b96719d3a40b9aebe3c74327e5687a897a4b0c7925c41a2fd251640957",
+    "src/emet/motion/release.py": "085e49b267ed637d7d728501d0cb4bd7e9ac240b734a427dba83779c4fc1aec5"
+  }
+}

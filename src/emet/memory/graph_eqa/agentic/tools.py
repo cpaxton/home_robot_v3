@@ -157,6 +157,35 @@ Rules:
 - Choose one valid action. The executor applies valid choices unchanged.
 - Do not output reasoning."""
 
+_EQA_FORMAT_BLOCK_MODEL_FINAL = """\
+# Response format
+Respond with ONLY a JSON object:
+{"current_room": "<room or unknown>", "in_target_area": true|false, "tool_calls": [{"name": "<tool>", "arguments": {...}}], "message": ""}
+
+Rules:
+- Choose the next observation or action from the images, dialogue and measured
+  tool outcomes. Tool descriptions define the available capabilities; there is
+  no required INVESTIGATE/EXPLORE sequence.
+- Current-room labels describe where the robot is now, not where it wants to go.
+  Use unknown when the current room cannot be established from evidence.
+- Graph labels, detector proposals and retrieval scores are search hints.
+  A missing graph label is not proof that an object is absent.
+- Visual presence and admitted object geometry are separate. A rejected mask
+  or depth limit does not erase positive visual evidence. Unverified image
+  proposals and their bearings are observation cues, never object positions,
+  free-space evidence or permission for manipulation.
+- If another view is needed, choose an available sensing or bounded movement
+  tool. Read its actual measured progress, rejection, capture and verification
+  before deciding the next dependent action. Do not keep retrying an unchanged
+  failed move. Historical image bearings belong to their source capture.
+- Choose one next action when later actions depend on its result. The executor
+  must validate motion and geometry independently of model confidence.
+- You decide the final answer from the available evidence. For multiple-choice
+  questions use the exact option text. For object-localization tasks, visible
+  presence alone does not establish the required metric geometry.
+- Do not invent observations, measured effects, or successful execution.
+"""
+
 # Back-compat alias (canonical).
 _EQA_FORMAT_BLOCK = _EQA_FORMAT_BLOCK_CANONICAL
 
@@ -306,6 +335,9 @@ def build_agentic_eqa_tools(executor: AgenticEQAExecutor) -> list[Tool]:
     """EQA_EPISODE tool pack. Schemas/names come from :mod:`emet.agent.skills`; funcs dispatch via ``handle_tool``."""
     submode = getattr(executor, "mode", "answer")
     tools = build_skill_pack(AgentMode.EQA_EPISODE, executor, eqa_submode=submode)
+    if getattr(executor, "decision_policy", "legacy") == "model_final":
+        # Keep the compatibility handler, but advertise one navigation operation.
+        tools = [tool for tool in tools if tool.name != "navigate_to_obs"]
     if str(getattr(executor, "decision_policy", "legacy") or "legacy") == "grounded_v2":
         for tool in tools:
             if tool.name == "explore_frontier":
@@ -337,7 +369,10 @@ def build_graph_eqa_system_prompt(
     """Fixed routing system prompt (identity + tools + format). Keep byte-stable per mode."""
     tools_block = get_tool_descriptions_for_prompt(tools)
     policy = str(room_policy or "canonical").strip().lower()
-    if str(decision_policy or "legacy").strip().lower() == "grounded_v2":
+    policy_name = str(decision_policy or "legacy").strip().lower()
+    if policy_name == "model_final":
+        fmt = _EQA_FORMAT_BLOCK_MODEL_FINAL
+    elif policy_name == "grounded_v2":
         fmt = _EQA_FORMAT_BLOCK_GROUNDED
     else:
         fmt = _EQA_FORMAT_BLOCK_LLM if policy == "llm" else _EQA_FORMAT_BLOCK_CANONICAL
@@ -349,7 +384,13 @@ def build_graph_eqa_system_prompt(
             "These use validated navigation and do not grant object localization. "
             "Read measured movement, rejection reasons and the new capture before retrying.\n"
         )
-    return f"{_EQA_IDENTITY}\n\n{tools_block}\n\n{fmt}{movement}"
+    identity = (
+        "You are a robot answering questions or finding objects in a home. "
+        "Use the available images, dialogue, memory and tool feedback to decide what to do next."
+        if policy_name == "model_final"
+        else _EQA_IDENTITY
+    )
+    return f"{identity}\n\n{tools_block}\n\n{fmt}{movement}"
 
 
 def _graph_stats_line(gm: Any) -> str:
@@ -377,9 +418,22 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
         if failure.get("reason") == "HEAD_LIMIT":
             text += "\nDo not repeat this look from the same pose; choose another collision-checked viewing location."
     if getattr(executor, "_require_grounded_object", False):
+        grounded_obs_id = getattr(executor, "_grounded_obs_id", None)
+        geometry = (
+            {"status": "admitted", "object_obs_id": grounded_obs_id}
+            if grounded_obs_id is not None
+            else {"status": "no_selected_object"}
+        )
+        text += "\nSelected object geometry for this query: " + json.dumps(geometry)
+        text += " Retained geometry is not a claim of current visibility, reachability or manipulation readiness."
+        text += "\nCurrent visual verification: " + (
+            "confirmed" if getattr(executor, "_verified", False) else "unconfirmed"
+        )
         text += (
             "\nCompletion requirement: localize the requested object. Visual presence alone is not success; "
-            "an admitted object position is required. If grounding fails, inspect another view or explore. "
+            "an independently admitted, non-invalidated object location is required. "
+            "A retained last-observed location does not require the object to remain in the current camera view. "
+            "Physical action still requires fresh grounding and motion validation. "
             "A camera/viewpoint position is not an object position."
         )
     agent = getattr(executor, "agent", None)
@@ -401,7 +455,7 @@ def build_state_message(executor: AgenticEQAExecutor) -> str:
     if (observation or {}).get("ok") and current.get("footprint_after", {}).get("pose_valid"):
         text += (
             "\nPrevious navigation attempt was rejected for unknown floor. Fresh sensing has now made "
-            "that checked footprint valid. Retry investigate or explore through the normal planner; "
+            "that checked footprint valid. Replan with an available navigation/movement tool; "
             "do not repeat floor captures to resolve this old rejection. The route is NOT certified."
         )
         return text + "\nCurrent recovery observation: " + json.dumps(observation)
@@ -449,10 +503,15 @@ def _build_state_message(executor: AgenticEQAExecutor) -> str:
     from emet.memory.graph_eqa.spatial.room_clusters import room_leave_needed
 
     policy = str(getattr(executor, "room_policy", "canonical") or "canonical").strip().lower()
+    legacy_guidance = getattr(executor, "decision_policy", "legacy") != "model_final"
     gm = executor.graph_memory
     lines: list[str] = []
     if getattr(executor, "mode", "answer") == "explore":
         lines.append(f"Goal: {executor.goal or 'explore and map the environment'}")
+    elif getattr(executor, "_require_grounded_object", False):
+        lines.append("Task: find and localize the requested object for downstream robot action.")
+        lines.append(f"Object request: {executor.question}")
+        lines.append("The requested result is an admitted object location, not just a semantic location description.")
     else:
         lines.append(f"Question: {executor.question}")
     lines.append(_graph_stats_line(gm))
@@ -532,7 +591,7 @@ def _build_state_message(executor: AgenticEQAExecutor) -> str:
             mem_fn = getattr(gm, "_relevant_memory_summary", None)
             if callable(mem_fn) and bool(getattr(gm, "memory_summary_enabled", False)):
                 try:
-                    mem = mem_fn()
+                    mem = mem_fn(for_localization=getattr(executor, "_require_grounded_object", False))
                 except Exception:
                     mem = None
                 if mem:
@@ -558,7 +617,7 @@ def _build_state_message(executor: AgenticEQAExecutor) -> str:
         f"vlm_answerable={executor._verified}"
     )
     pending = getattr(executor, "_pending_answerable", None) or None
-    if pending and not getattr(executor, "_verified", False):
+    if legacy_guidance and pending and not getattr(executor, "_verified", False):
         answer_text = str(pending.get("answer_text") or "").strip()
         if len(answer_text) == 1 and answer_text.upper() in "ABCDE":
             answer_text = ""
@@ -571,7 +630,7 @@ def _build_state_message(executor: AgenticEQAExecutor) -> str:
             f"pending_answer={answer_text} (need confirm — re-investigate another view or "
             "wait for phrase corroboration; do not submit yet)"
         )
-    if getattr(executor, "_close_look_required", False):
+    if legacy_guidance and getattr(executor, "_close_look_required", False):
         source = str(getattr(executor, "_close_look_source", "") or "")
         lines.append(
             "Question needs a CLOSE LOOK (reading a clock/display/label, counting, "
@@ -579,7 +638,7 @@ def _build_state_message(executor: AgenticEQAExecutor) -> str:
             "explore_frontier" + (f" [{source}]" if source else "")
         )
     stay_fn = getattr(executor, "_close_map_stay_hypothesis", None)
-    if callable(stay_fn):
+    if legacy_guidance and callable(stay_fn):
         stay_hyp = stay_fn()
         if stay_hyp is not None:
             lines.append(
@@ -587,7 +646,8 @@ def _build_state_message(executor: AgenticEQAExecutor) -> str:
                 "until aimed close or the cell is unreachable — do not explore away yet."
             )
     if (
-        not getattr(executor, "_verified", False)
+        legacy_guidance
+        and not getattr(executor, "_verified", False)
         and bool(getattr(executor, "_no_early_unverified", True))
         and int(getattr(executor, "_round", 0) or 0) < int(getattr(executor, "max_rounds", 8) or 8) - 1
     ):
@@ -598,7 +658,7 @@ def _build_state_message(executor: AgenticEQAExecutor) -> str:
     recent_actions = list(getattr(executor, "_recent_actions", None) or [])
     if recent_actions:
         lines.append("Recent actions: " + " | ".join(recent_actions))
-    if getattr(executor, "_prefer_explore", False):
+    if legacy_guidance and getattr(executor, "_prefer_explore", False):
         unused_fn = getattr(executor, "_unused_detection_hypothesis", None)
         unused = unused_fn() if callable(unused_fn) else None
         hold_fn = getattr(executor, "_hold_detections_before_explore", None)
@@ -627,7 +687,7 @@ def _build_state_message(executor: AgenticEQAExecutor) -> str:
         question=str(getattr(executor, "question", "") or ""),
         in_target_area=ita if isinstance(ita, bool) else None,
     )
-    if leave:
+    if legacy_guidance and leave:
         here = last_room or graph_room or "unknown"
         lines.append(
             f"Not in a useful place yet (here: {here}) — explore_frontier to leave, "
@@ -641,13 +701,15 @@ def _build_state_message(executor: AgenticEQAExecutor) -> str:
         last = loop_flags[-1]
         lines.append(
             f"NAV_LOOP: obs_id={last.get('obs_id')} visits={last.get('visits')} "
-            f"status={last.get('status')} — pick another investigate card or explore_frontier"
+            f"status={last.get('status')}"
+            + (" — pick another investigate card or explore_frontier" if legacy_guidance else "")
         )
-    lines.append(
-        "Choose: inspect_graph to query detections, investigate(obs_id) for a closer look "
-        "at a listed detection/place (prefer room-relevant cards), OR explore_frontier to "
-        "grow coverage / change rooms (location MCQ may explore even if a keyword proposal is listed)."
-    )
+    if legacy_guidance:
+        lines.append(
+            "Choose: inspect_graph to query detections, investigate(obs_id) for a closer look "
+            "at a listed detection/place (prefer room-relevant cards), OR explore_frontier to "
+            "grow coverage / change rooms (location MCQ may explore even if a keyword proposal is listed)."
+        )
     from emet.memory.graph_eqa.agentic.place import _investigate_hypotheses
 
     # Render the same eligible set used by action selection, not stale recall.
@@ -723,7 +785,7 @@ def _build_state_message(executor: AgenticEQAExecutor) -> str:
                 f"{room_bit}{label_bit}{sim_bit}{conf_bit}{yoloe_bit}{cm_bit} {bits}"
             )
     else:
-        lines.append("Investigate: (none — explore or look_around first)")
+        lines.append("Investigate: (none — explore or look_around first)" if legacy_guidance else "Investigate: (none)")
     if exp:
         lines.append("Explore (frontiers — coverage only; not investigate targets):")
         for h in exp:

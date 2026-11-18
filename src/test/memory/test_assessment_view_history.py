@@ -57,6 +57,32 @@ def test_history_uses_acquisition_metadata_and_labels_old_views_without_preturn_
     assert ex._append_trace.call_args.args[0]["event"] == "view_selection"
 
 
+def test_unmapped_navigation_overview_enters_the_existing_bounded_selection():
+    from emet.memory.navigation_views import NavigationViewBuffer
+
+    ex = executor()
+    ex.agent.parameters = {"eqa": {}}
+    ex.agent.voxel_map.observation_scope_id = "episode"
+    for frame in ex.agent.voxel_map.observations:
+        frame.info["observation_scope_id"] = "episode"
+    buffer = ex.agent.robot.navigation_view_buffer = NavigationViewBuffer("episode")
+    pose = np.eye(4)
+    pose[0, 3] = 2.0
+    pixels = np.full((4, 4, 3), 77, dtype=np.uint8)
+    buffer.consider(
+        rgb=pixels,
+        camera_pose=pose,
+        image_timing={"head_cam_left": {"timestamp_ns": 3 * 10**9, "clock_domain": "sim"}},
+    )
+    result = select_assessment_history(ex, ex.agent.voxel_map.observations[-1].rgb)
+    assert result.views[0].role == "current" and len(result.views) <= 4
+    overview = next(view for view in result.views if view.frame.view_id.startswith("navigation:"))
+    assert np.array_equal(overview.frame.rgb, pixels) and overview.role == "context"
+    assert ex._append_trace.call_args.args[0]["navigation_views"]["retained"] == 1
+    ex.agent.voxel_map.observation_scope_id = "different-episode"
+    assert select_assessment_history(ex, ex.agent.voxel_map.observations[-1].rgb) is None
+
+
 @pytest.mark.parametrize("stamp", [True, False])
 def test_history_rejects_boolean_acquisition_timestamp(stamp):
     ex = executor()

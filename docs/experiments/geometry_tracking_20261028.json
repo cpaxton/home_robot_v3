@@ -1,0 +1,1356 @@
+{
+  "scope": "Geometry tracking diagnostics; not observed manipulation or agent task acceptance",
+  "source_base": "1844e4be",
+  "main_base": "cd169673",
+  "task_success_assessed": false,
+  "attempts": [
+    {
+      "job_id": "20261028_182510_a31d20",
+      "raw_directory": ".tamp-runs/geometry-tracking-20261028/live",
+      "script_sha256": "e1f02944479bf3608837ae3045d1d824c11c4dd8a0b9c47e5c7164c2ec39a2be",
+      "diagnostic_passed": false,
+      "geometry_diagnostic_passed": true,
+      "reacquisition_passed": false,
+      "support_diagnostic_passed": true,
+      "geometry_input_tier": "known_model_prior",
+      "geometry_model_sha256": "9b0460b8c13793f4b96588ec94d10569ec70b736c06a6bb7590e75703d9726d4",
+      "vlm_calls": 3,
+      "vlm_total_s": 28.41417252997053,
+      "queries": [
+        {
+          "index": 0,
+          "seconds": 0.4632277269847691,
+          "code": "ok",
+          "reacquisition_error": null
+        },
+        {
+          "index": 1,
+          "seconds": 0.41194526199251413,
+          "code": "observed_scene_unavailable",
+          "reacquisition_error": "surface_reacquisition_stale"
+        },
+        {
+          "index": 2,
+          "seconds": 0.42583139101043344,
+          "code": "observed_scene_unavailable",
+          "reacquisition_error": "surface_reacquisition_stale"
+        },
+        {
+          "index": 3,
+          "seconds": 0.4221533600066323,
+          "code": "observed_scene_unavailable",
+          "reacquisition_error": "surface_reacquisition_stale"
+        },
+        {
+          "index": 4,
+          "seconds": 0.42621451400918886,
+          "code": "observed_scene_unavailable",
+          "reacquisition_error": "surface_reacquisition_stale"
+        }
+      ],
+      "geometry_tracking": [
+        {
+          "index": 0,
+          "seconds": 1.4137075200269464,
+          "state": "candidate",
+          "construction": "known_model_prior",
+          "model_id": "214f0d45bfdcb9413ba53e6e1a577e3a4c0a3d624f360819b695d3d8f30a69cb",
+          "symmetry": "axial_unoriented",
+          "hypotheses": 1,
+          "translation_observable": true,
+          "orientation_observable": false,
+          "rms_m": [
+            0.0003462788899468532
+          ],
+          "centers": [
+            [
+              -0.021587269469078275,
+              -0.6991413365221046,
+              0.5204215140985982
+            ]
+          ],
+          "poses": [
+            [
+              [
+                0.9830442014140319,
+                -0.183272715407757,
+                0.005933789119569396,
+                -0.021587269469078275
+              ],
+              [
+                -0.18320193266494708,
+                -0.9830155275621824,
+                -0.010840868944536482,
+                -0.6991413365221046
+              ],
+              [
+                0.007819842330661074,
+                0.009569971719484696,
+                -0.9999236299374126,
+                0.5204215140985982
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ]
+            ]
+          ],
+          "nullspaces": [
+            [
+              [
+                2.729098470096837e-16,
+                6.406612269767413e-16,
+                1.1040458147808529e-15,
+                -1.0055494872604117e-15,
+                2.3253804465482443e-16,
+                -1.0
+              ]
+            ]
+          ],
+          "center_spread_m": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "candidate_bounds": [
+            [
+              -0.04182426893222851,
+              -0.7195737960009594,
+              0.4801773974684575
+            ],
+            [
+              -0.0013502700059280434,
+              -0.6787088770432499,
+              0.5606656307287388
+            ]
+          ],
+          "search_boundary_hit": false,
+          "evaluations": 6609,
+          "execution_qualified": false,
+          "observability_scope": "numerical_local_diagnostic_not_calibrated_confidence"
+        },
+        {
+          "index": 1,
+          "seconds": 1.375955433002673,
+          "state": "candidate",
+          "construction": "known_model_prior",
+          "model_id": "214f0d45bfdcb9413ba53e6e1a577e3a4c0a3d624f360819b695d3d8f30a69cb",
+          "symmetry": "axial_unoriented",
+          "hypotheses": 1,
+          "translation_observable": true,
+          "orientation_observable": false,
+          "rms_m": [
+            0.0003462788517005441
+          ],
+          "centers": [
+            [
+              -0.021587283918014736,
+              -0.6991413357737979,
+              0.5204216073274556
+            ]
+          ],
+          "poses": [
+            [
+              [
+                0.9825836543738822,
+                -0.18572601303734676,
+                0.0059338215779200145,
+                -0.021587283918014736
+              ],
+              [
+                -0.185655146893335,
+                -0.9825551432626773,
+                -0.010842365059057524,
+                -0.6991413357737979
+              ],
+              [
+                0.007844016144902556,
+                0.009551886165096854,
+                -0.999923613523257,
+                0.5204216073274556
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ]
+            ]
+          ],
+          "nullspaces": [
+            [
+              [
+                1.3386968817462343e-15,
+                5.682820522001483e-16,
+                2.4511009291855892e-15,
+                1.085629571404818e-15,
+                -2.4278191079738694e-16,
+                1.0
+              ]
+            ]
+          ],
+          "center_spread_m": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "candidate_bounds": [
+            [
+              -0.04182428467564689,
+              -0.7195738547728083,
+              0.4801774647941449
+            ],
+            [
+              -0.0013502831603825795,
+              -0.6787088167747874,
+              0.5606657498607662
+            ]
+          ],
+          "search_boundary_hit": false,
+          "evaluations": 6698,
+          "execution_qualified": false,
+          "observability_scope": "numerical_local_diagnostic_not_calibrated_confidence"
+        },
+        {
+          "index": 2,
+          "seconds": 1.2105646110139787,
+          "state": "candidate",
+          "construction": "known_model_prior",
+          "model_id": "214f0d45bfdcb9413ba53e6e1a577e3a4c0a3d624f360819b695d3d8f30a69cb",
+          "symmetry": "axial_unoriented",
+          "hypotheses": 1,
+          "translation_observable": true,
+          "orientation_observable": false,
+          "rms_m": [
+            0.00034627883952198995
+          ],
+          "centers": [
+            [
+              -0.02158729892461311,
+              -0.6991413351320874,
+              0.520421698250044
+            ]
+          ],
+          "poses": [
+            [
+              [
+                0.9824883733503259,
+                -0.18622938534728636,
+                0.005933992298792739,
+                -0.02158729892461311
+              ],
+              [
+                -0.18615850304039586,
+                -0.9824598999676527,
+                -0.010842356815204568,
+                -0.6991413351320874
+              ],
+              [
+                0.007849074925692246,
+                0.009547826387257666,
+                -0.9999236125995271,
+                0.520421698250044
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ]
+            ]
+          ],
+          "nullspaces": [
+            [
+              [
+                -3.031936537334344e-16,
+                1.3733696493517667e-17,
+                -1.597475495253628e-15,
+                -3.810493330181531e-16,
+                -2.4790122088944292e-15,
+                -1.0
+              ]
+            ]
+          ],
+          "center_spread_m": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "candidate_bounds": [
+            [
+              -0.04182430649081899,
+              -0.7195738538031315,
+              0.4801775542590806
+            ],
+            [
+              -0.0013502913584072344,
+              -0.6787088164610433,
+              0.5606658422410075
+            ]
+          ],
+          "search_boundary_hit": false,
+          "evaluations": 6332,
+          "execution_qualified": false,
+          "observability_scope": "numerical_local_diagnostic_not_calibrated_confidence"
+        },
+        {
+          "index": 3,
+          "seconds": 1.5879470100044273,
+          "state": "candidate",
+          "construction": "known_model_prior",
+          "model_id": "214f0d45bfdcb9413ba53e6e1a577e3a4c0a3d624f360819b695d3d8f30a69cb",
+          "symmetry": "axial_unoriented",
+          "hypotheses": 1,
+          "translation_observable": true,
+          "orientation_observable": false,
+          "rms_m": [
+            0.00034627884662272824
+          ],
+          "centers": [
+            [
+              -0.021587311236766184,
+              -0.6991413353630497,
+              0.5204216432331313
+            ]
+          ],
+          "poses": [
+            [
+              [
+                0.9823952882791317,
+                -0.18671980742788824,
+                0.00593389257181504,
+                -0.021587311236766184
+              ],
+              [
+                -0.18664891189408156,
+                -0.9823668495318426,
+                -0.010842353510070814,
+                -0.6991413353630497
+              ],
+              [
+                0.007853741510699855,
+                0.009543922410324625,
+                -0.9999236132271848,
+                0.5204216432331313
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ]
+            ]
+          ],
+          "nullspaces": [
+            [
+              [
+                -6.063451784894169e-16,
+                7.344081796077708e-16,
+                2.7287882309751057e-15,
+                1.0760412589330264e-15,
+                6.602494790922307e-16,
+                -1.0
+              ]
+            ]
+          ],
+          "center_spread_m": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "candidate_bounds": [
+            [
+              -0.04182431482572864,
+              -0.7195738539026052,
+              0.4801775002326156
+            ],
+            [
+              -0.0013503076478037258,
+              -0.6787088168234942,
+              0.560665786233647
+            ]
+          ],
+          "search_boundary_hit": false,
+          "evaluations": 6879,
+          "execution_qualified": false,
+          "observability_scope": "numerical_local_diagnostic_not_calibrated_confidence"
+        },
+        {
+          "index": 4,
+          "seconds": 1.201091753988294,
+          "state": "candidate",
+          "construction": "known_model_prior",
+          "model_id": "214f0d45bfdcb9413ba53e6e1a577e3a4c0a3d624f360819b695d3d8f30a69cb",
+          "symmetry": "axial_unoriented",
+          "hypotheses": 1,
+          "translation_observable": true,
+          "orientation_observable": false,
+          "rms_m": [
+            0.00034627884243156244
+          ],
+          "centers": [
+            [
+              -0.02158732689964681,
+              -0.6991413350064081,
+              0.5204216762895664
+            ]
+          ],
+          "poses": [
+            [
+              [
+                0.9822994987616402,
+                -0.18722308336052784,
+                0.0059339522754705285,
+                -0.02158732689964681
+              ],
+              [
+                -0.1871521726960379,
+                -0.9822710968076398,
+                -0.010842353594554531,
+                -0.6991413350064081
+              ],
+              [
+                0.007858688680888225,
+                0.009539886440298474,
+                -0.9999236128719651,
+                0.5204216762895664
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ]
+            ]
+          ],
+          "nullspaces": [
+            [
+              [
+                3.172353847839172e-16,
+                -4.497696473386857e-16,
+                1.2673692492305607e-15,
+                -1.6245198325990465e-15,
+                -1.8399940923645524e-15,
+                1.0
+              ]
+            ]
+          ],
+          "center_spread_m": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "candidate_bounds": [
+            [
+              -0.04182433286966983,
+              -0.7195738535493246,
+              0.4801775327285112
+            ],
+            [
+              -0.0013503209296237932,
+              -0.6787088164634916,
+              0.5606658198506215
+            ]
+          ],
+          "search_boundary_hit": false,
+          "evaluations": 6816,
+          "execution_qualified": false,
+          "observability_scope": "numerical_local_diagnostic_not_calibrated_confidence"
+        }
+      ],
+      "readiness": {
+        "scope": "live assembly prerequisite audit, not a manipulation or agent benchmark",
+        "qualification": "not_qualified",
+        "task_success_assessed": false,
+        "execution_source_installed": false,
+        "gates": {
+          "live_rgbd": {
+            "state": "passed",
+            "receive_age_s": 0.02376858697971329,
+            "valid_depth_fraction": 0.8548693003144654,
+            "capture": {
+              "received_monotonic": 172409.192731379,
+              "image_timing": {
+                "head_cam_left": {
+                  "timestamp_ns": 172408709369367,
+                  "clock_domain": "mujoco_render_monotonic",
+                  "clock_id": "9ed7ad0ab6b46f8515c340b2a9aea25444d800b3082017888a7fc4fcd4df3105",
+                  "source": "renderer_scene_capture",
+                  "available": true,
+                  "capture_interval_ns": [
+                    172408709369367,
+                    172408796969887
+                  ],
+                  "depth_capture_interval_ns": [
+                    172408825924631,
+                    172408845211963
+                  ]
+                }
+              }
+            }
+          },
+          "surface_refresh": {
+            "state": "failed",
+            "passed": 1,
+            "attempted": 5
+          },
+          "reference_features": {
+            "state": "unknown",
+            "reason": "rigid_tracking_insufficient"
+          },
+          "depth_workspace": {
+            "state": "passed",
+            "cells": {
+              "unknown": 7190,
+              "free": 6608,
+              "occupied": 26
+            },
+            "scope": "depth carving only; not target/robot-separated execution geometry"
+          },
+          "capture_clock_mapping": {
+            "state": "passed",
+            "scope": "local simulator RGB+depth interval union only",
+            "acquisition_span_s": 0.13584259600611404
+          },
+          "capture_encoder_alignment": {
+            "state": "not_configured",
+            "reason": "stream timestamps do not supply qualified CaptureInterval or alignment bounds"
+          },
+          "complete_payload_geometry": {
+            "state": "unknown",
+            "reason": "object_geometry_unbounded",
+            "construction": "observed_free_space_enclosure"
+          },
+          "robot_target_occupancy_provenance": {
+            "state": "partial",
+            "occupied_before": 26,
+            "occupied_after_target_exclusion": 19,
+            "target_cells_retained_unknown": 7,
+            "free_cells_added": 0,
+            "scope": "measured target/background endpoint attribution only; robot solid-volume and contact policies remain absent"
+          },
+          "support_grounding": {
+            "state": "candidate",
+            "bounds": [
+              [
+                -0.46,
+                -1.11,
+                0.4734888127530061
+              ],
+              [
+                0.37000000000000005,
+                -1.02,
+                0.4872787755178071
+              ]
+            ],
+            "residual_m": 0.0006349984799854935,
+            "received_monotonic": 172409.192731379,
+            "scope": "fresh measured footprint; sensor/calibration margin not hardware-qualified"
+          },
+          "visual_manipulation_effects": {
+            "state": "not_assessed",
+            "reason": "no manipulation attempted"
+          },
+          "default_execution_boundary": {
+            "state": "passed",
+            "planning_code": "observed_scene_unavailable",
+            "execution_code": "observed_scene_unavailable"
+          }
+        },
+        "audit_unchanged_during_admission_checks": true
+      },
+      "geometry_capture_metadata": [
+        {
+          "index": 0,
+          "received_monotonic": 172399.147091678,
+          "image_timing": {
+            "head_cam_left": {
+              "timestamp_ns": 172398777110197,
+              "clock_domain": "mujoco_render_monotonic",
+              "clock_id": "9ed7ad0ab6b46f8515c340b2a9aea25444d800b3082017888a7fc4fcd4df3105",
+              "source": "renderer_scene_capture",
+              "available": true,
+              "capture_interval_ns": [
+                172398777110197,
+                172398864677217
+              ],
+              "depth_capture_interval_ns": [
+                172398906177548,
+                172398917827443
+              ]
+            }
+          }
+        },
+        {
+          "index": 1,
+          "received_monotonic": 172401.289075174,
+          "image_timing": {
+            "head_cam_left": {
+              "timestamp_ns": 172400765128921,
+              "clock_domain": "mujoco_render_monotonic",
+              "clock_id": "9ed7ad0ab6b46f8515c340b2a9aea25444d800b3082017888a7fc4fcd4df3105",
+              "source": "renderer_scene_capture",
+              "available": true,
+              "capture_interval_ns": [
+                172400765128921,
+                172400881590834
+              ],
+              "depth_capture_interval_ns": [
+                172400936345839,
+                172400955331618
+              ]
+            }
+          }
+        },
+        {
+          "index": 2,
+          "received_monotonic": 172403.414979578,
+          "image_timing": {
+            "head_cam_left": {
+              "timestamp_ns": 172403025589308,
+              "clock_domain": "mujoco_render_monotonic",
+              "clock_id": "9ed7ad0ab6b46f8515c340b2a9aea25444d800b3082017888a7fc4fcd4df3105",
+              "source": "renderer_scene_capture",
+              "available": true,
+              "capture_interval_ns": [
+                172403025589308,
+                172403147033336
+              ],
+              "depth_capture_interval_ns": [
+                172403189395277,
+                172403201441599
+              ]
+            }
+          }
+        },
+        {
+          "index": 3,
+          "received_monotonic": 172405.352586467,
+          "image_timing": {
+            "head_cam_left": {
+              "timestamp_ns": 172404767647941,
+              "clock_domain": "mujoco_render_monotonic",
+              "clock_id": "9ed7ad0ab6b46f8515c340b2a9aea25444d800b3082017888a7fc4fcd4df3105",
+              "source": "renderer_scene_capture",
+              "available": true,
+              "capture_interval_ns": [
+                172404767647941,
+                172404865203734
+              ],
+              "depth_capture_interval_ns": [
+                172404906590679,
+                172404926454514
+              ]
+            }
+          }
+        },
+        {
+          "index": 4,
+          "received_monotonic": 172407.663609439,
+          "image_timing": {
+            "head_cam_left": {
+              "timestamp_ns": 172407025155876,
+              "clock_domain": "mujoco_render_monotonic",
+              "clock_id": "9ed7ad0ab6b46f8515c340b2a9aea25444d800b3082017888a7fc4fcd4df3105",
+              "source": "renderer_scene_capture",
+              "available": true,
+              "capture_interval_ns": [
+                172407025155876,
+                172407121425603
+              ],
+              "depth_capture_interval_ns": [
+                172407165465566,
+                172407184708483
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "job_id": "20261028_182754_73e62d",
+      "raw_directory": ".tamp-runs/geometry-tracking-20261028/repeat-live",
+      "script_sha256": "54cb35ec01500393d8bbbf2801fb216c4143a49452aadff20f8b88b8b58d3e18",
+      "diagnostic_passed": true,
+      "geometry_diagnostic_passed": true,
+      "reacquisition_passed": true,
+      "support_diagnostic_passed": true,
+      "geometry_input_tier": "known_model_prior",
+      "geometry_model_sha256": "9b0460b8c13793f4b96588ec94d10569ec70b736c06a6bb7590e75703d9726d4",
+      "vlm_calls": 3,
+      "vlm_total_s": 25.412397079984657,
+      "queries": [
+        {
+          "index": 0,
+          "seconds": 0.6141251430090051,
+          "code": "ok",
+          "reacquisition_error": null
+        },
+        {
+          "index": 1,
+          "seconds": 0.46020311399479397,
+          "code": "ok",
+          "reacquisition_error": null
+        },
+        {
+          "index": 2,
+          "seconds": 0.6013773740269244,
+          "code": "ok",
+          "reacquisition_error": null
+        },
+        {
+          "index": 3,
+          "seconds": 0.5796946120099165,
+          "code": "ok",
+          "reacquisition_error": null
+        },
+        {
+          "index": 4,
+          "seconds": 0.5039182859763969,
+          "code": "ok",
+          "reacquisition_error": null
+        }
+      ],
+      "geometry_tracking": [
+        {
+          "index": 0,
+          "seconds": 1.278544262982905,
+          "state": "candidate",
+          "construction": "known_model_prior",
+          "model_id": "214f0d45bfdcb9413ba53e6e1a577e3a4c0a3d624f360819b695d3d8f30a69cb",
+          "symmetry": "axial_unoriented",
+          "hypotheses": 1,
+          "translation_observable": true,
+          "orientation_observable": false,
+          "rms_m": [
+            0.00029590763753368777
+          ],
+          "centers": [
+            [
+              -0.02159586961059369,
+              -0.6991098648838411,
+              0.5205437247200475
+            ]
+          ],
+          "poses": [
+            [
+              [
+                0.984308978338417,
+                0.17640379670508224,
+                0.004187561392257028,
+                -0.02159586961059369
+              ],
+              [
+                0.17644023915861887,
+                -0.9842487113598427,
+                -0.011104782399409594,
+                -0.6991098648838411
+              ],
+              [
+                0.0021626761272295833,
+                0.011669391351774522,
+                -0.9999295715886435,
+                0.5205437247200475
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ]
+            ]
+          ],
+          "nullspaces": [
+            [
+              [
+                2.7463452285266477e-16,
+                -8.352285607204953e-16,
+                -1.165967195194268e-15,
+                6.785667151531396e-16,
+                1.5749977545250897e-15,
+                1.0
+              ]
+            ]
+          ],
+          "center_spread_m": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "candidate_bounds": [
+            [
+              -0.041763196708811075,
+              -0.7195528229798765,
+              0.4803091798017821
+            ],
+            [
+              -0.001428542512376306,
+              -0.6786669067878056,
+              0.5607782696383129
+            ]
+          ],
+          "search_boundary_hit": false,
+          "evaluations": 4905,
+          "execution_qualified": false,
+          "observability_scope": "numerical_local_diagnostic_not_calibrated_confidence"
+        },
+        {
+          "index": 1,
+          "seconds": 1.1020846070023254,
+          "state": "candidate",
+          "construction": "known_model_prior",
+          "model_id": "214f0d45bfdcb9413ba53e6e1a577e3a4c0a3d624f360819b695d3d8f30a69cb",
+          "symmetry": "axial_unoriented",
+          "hypotheses": 1,
+          "translation_observable": true,
+          "orientation_observable": false,
+          "rms_m": [
+            0.00029590763764970505
+          ],
+          "centers": [
+            [
+              -0.021595897363863265,
+              -0.6991098625508183,
+              0.5205437178372692
+            ]
+          ],
+          "poses": [
+            [
+              [
+                0.9843953391476533,
+                0.1759212340985471,
+                0.00418755986479784,
+                -0.021595897363863265
+              ],
+              [
+                0.1759577060824295,
+                -0.9843350899971864,
+                -0.011104785925029883,
+                -0.6991098625508183
+              ],
+              [
+                0.0021683944720529533,
+                0.011668332934724553,
+                -0.9999295715558864,
+                0.5205437178372692
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ]
+            ]
+          ],
+          "nullspaces": [
+            [
+              [
+                3.8858905827755455e-16,
+                -9.4090164491343e-16,
+                -2.364453782066878e-16,
+                1.2472460003871122e-15,
+                -1.3803428004750975e-15,
+                -1.0
+              ]
+            ]
+          ],
+          "center_spread_m": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "candidate_bounds": [
+            [
+              -0.041763224401110216,
+              -0.7195528207870955,
+              0.48030917286511593
+            ],
+            [
+              -0.0014285703266163179,
+              -0.6786669043145411,
+              0.5607782628094224
+            ]
+          ],
+          "search_boundary_hit": false,
+          "evaluations": 5530,
+          "execution_qualified": false,
+          "observability_scope": "numerical_local_diagnostic_not_calibrated_confidence"
+        },
+        {
+          "index": 2,
+          "seconds": 1.2449854369915556,
+          "state": "candidate",
+          "construction": "known_model_prior",
+          "model_id": "214f0d45bfdcb9413ba53e6e1a577e3a4c0a3d624f360819b695d3d8f30a69cb",
+          "symmetry": "axial_unoriented",
+          "hypotheses": 1,
+          "translation_observable": true,
+          "orientation_observable": false,
+          "rms_m": [
+            0.00029592677440593165
+          ],
+          "centers": [
+            [
+              -0.021594788385001503,
+              -0.6991095631134376,
+              0.5205438918520762
+            ]
+          ],
+          "poses": [
+            [
+              [
+                0.9838737898858638,
+                0.17881602821170625,
+                0.0041465202540583775,
+                -0.021594788385001503
+              ],
+              [
+                0.17885186518483684,
+                -0.9838132279268101,
+                -0.011114984306565831,
+                -0.6991095631134376
+              ],
+              [
+                0.002091864128473521,
+                0.011677354615687868,
+                -0.999929629270804,
+                0.5205438918520762
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ]
+            ]
+          ],
+          "nullspaces": [
+            [
+              [
+                -3.1294625813336564e-16,
+                6.604446424510091e-17,
+                6.2402676335131995e-16,
+                -3.5445461173661775e-16,
+                -1.7703866890043883e-15,
+                1.0
+              ]
+            ]
+          ],
+          "center_spread_m": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "candidate_bounds": [
+            [
+              -0.04176047725812261,
+              -0.7195529270187795,
+              0.48030944184495133
+            ],
+            [
+              -0.0014290995118803988,
+              -0.6786661992080958,
+              0.5607783418592011
+            ]
+          ],
+          "search_boundary_hit": false,
+          "evaluations": 5065,
+          "execution_qualified": false,
+          "observability_scope": "numerical_local_diagnostic_not_calibrated_confidence"
+        },
+        {
+          "index": 3,
+          "seconds": 1.1622593220090494,
+          "state": "candidate",
+          "construction": "known_model_prior",
+          "model_id": "214f0d45bfdcb9413ba53e6e1a577e3a4c0a3d624f360819b695d3d8f30a69cb",
+          "symmetry": "axial_unoriented",
+          "hypotheses": 1,
+          "translation_observable": true,
+          "orientation_observable": false,
+          "rms_m": [
+            0.0002959267813540433
+          ],
+          "centers": [
+            [
+              -0.021594803671735146,
+              -0.6991095629468048,
+              0.5205438486608229
+            ]
+          ],
+          "poses": [
+            [
+              [
+                0.9837860098933793,
+                0.17929833547483398,
+                0.004146520712309195,
+                -0.021594803671735146
+              ],
+              [
+                0.17933414337007342,
+                -0.983725426955671,
+                -0.01111527699180219,
+                -0.6991095629468048
+              ],
+              [
+                0.002086087195125044,
+                0.011678666740532997,
+                -0.99992962601544,
+                0.5205438486608229
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ]
+            ]
+          ],
+          "nullspaces": [
+            [
+              [
+                -1.154696081141822e-15,
+                -1.6250237849620722e-16,
+                -3.906659202217737e-16,
+                -5.643942591701756e-17,
+                -2.3051626419864576e-15,
+                -1.0
+              ]
+            ]
+          ],
+          "center_spread_m": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "candidate_bounds": [
+            [
+              -0.041760492563148274,
+              -0.7195529384944874,
+              0.48030939329620986
+            ],
+            [
+              -0.001429114780322014,
+              -0.6786661873991222,
+              0.5607783040254359
+            ]
+          ],
+          "search_boundary_hit": false,
+          "evaluations": 5070,
+          "execution_qualified": false,
+          "observability_scope": "numerical_local_diagnostic_not_calibrated_confidence"
+        },
+        {
+          "index": 4,
+          "seconds": 0.9710192149796057,
+          "state": "candidate",
+          "construction": "known_model_prior",
+          "model_id": "214f0d45bfdcb9413ba53e6e1a577e3a4c0a3d624f360819b695d3d8f30a69cb",
+          "symmetry": "axial_unoriented",
+          "hypotheses": 1,
+          "translation_observable": true,
+          "orientation_observable": false,
+          "rms_m": [
+            0.0002965116838062055
+          ],
+          "centers": [
+            [
+              -0.021597165980876885,
+              -0.6991107227053778,
+              0.5205441796223418
+            ]
+          ],
+          "poses": [
+            [
+              [
+                0.9807417159335298,
+                0.1952651705307175,
+                0.0041472648053072336,
+                -0.021597165980876885
+              ],
+              [
+                0.19530003164238685,
+                -0.9806803504025315,
+                -0.01113319248241268,
+                -0.6991107227053778
+              ],
+              [
+                0.0018932163738511706,
+                0.011728747246725544,
+                -0.9999294236193793,
+                0.5205441796223418
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ]
+            ]
+          ],
+          "nullspaces": [
+            [
+              [
+                -1.5868029938585533e-15,
+                6.432788029947123e-16,
+                9.467366759987629e-16,
+                -1.0396882539636762e-15,
+                -5.132655554897806e-16,
+                1.0
+              ]
+            ]
+          ],
+          "center_spread_m": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "candidate_bounds": [
+            [
+              -0.04176288457429593,
+              -0.7195548108865156,
+              0.48030939141502554
+            ],
+            [
+              -0.001431447387457839,
+              -0.6786666345242399,
+              0.560778967829658
+            ]
+          ],
+          "search_boundary_hit": false,
+          "evaluations": 5266,
+          "execution_qualified": false,
+          "observability_scope": "numerical_local_diagnostic_not_calibrated_confidence"
+        }
+      ],
+      "readiness": {
+        "scope": "live assembly prerequisite audit, not a manipulation or agent benchmark",
+        "qualification": "not_qualified",
+        "task_success_assessed": false,
+        "execution_source_installed": false,
+        "gates": {
+          "live_rgbd": {
+            "state": "passed",
+            "receive_age_s": 0.03731744998367503,
+            "valid_depth_fraction": 0.854874213836478,
+            "capture": {
+              "received_monotonic": 172567.868114137,
+              "image_timing": {
+                "head_cam_left": {
+                  "timestamp_ns": 172567473827615,
+                  "clock_domain": "mujoco_render_monotonic",
+                  "clock_id": "9ed7ad0ab6b46f8515c340b2a9aea25444d800b3082017888a7fc4fcd4df3105",
+                  "source": "renderer_scene_capture",
+                  "available": true,
+                  "capture_interval_ns": [
+                    172567473827615,
+                    172567565089281
+                  ],
+                  "depth_capture_interval_ns": [
+                    172567604148897,
+                    172567616666031
+                  ]
+                }
+              }
+            }
+          },
+          "surface_refresh": {
+            "state": "passed",
+            "passed": 5,
+            "attempted": 5
+          },
+          "reference_features": {
+            "state": "unknown",
+            "reason": "rigid_tracking_insufficient"
+          },
+          "depth_workspace": {
+            "state": "passed",
+            "cells": {
+              "unknown": 7166,
+              "free": 6622,
+              "occupied": 36
+            },
+            "scope": "depth carving only; not target/robot-separated execution geometry"
+          },
+          "capture_clock_mapping": {
+            "state": "passed",
+            "scope": "local simulator RGB+depth interval union only",
+            "acquisition_span_s": 0.14283841600990854
+          },
+          "capture_encoder_alignment": {
+            "state": "not_configured",
+            "reason": "stream timestamps do not supply qualified CaptureInterval or alignment bounds"
+          },
+          "complete_payload_geometry": {
+            "state": "unknown",
+            "reason": "object_geometry_unbounded",
+            "construction": "observed_free_space_enclosure"
+          },
+          "robot_target_occupancy_provenance": {
+            "state": "partial",
+            "occupied_before": 36,
+            "occupied_after_target_exclusion": 26,
+            "target_cells_retained_unknown": 10,
+            "free_cells_added": 0,
+            "scope": "measured target/background endpoint attribution only; robot solid-volume and contact policies remain absent"
+          },
+          "support_grounding": {
+            "state": "candidate",
+            "bounds": [
+              [
+                -0.47000000000000003,
+                -1.11,
+                0.47343364370425783
+              ],
+              [
+                0.46,
+                -1.01,
+                0.48788421041809926
+              ]
+            ],
+            "residual_m": 0.0006436171586340911,
+            "received_monotonic": 172567.868114137,
+            "scope": "fresh measured footprint; sensor/calibration margin not hardware-qualified"
+          },
+          "visual_manipulation_effects": {
+            "state": "not_assessed",
+            "reason": "no manipulation attempted"
+          },
+          "default_execution_boundary": {
+            "state": "passed",
+            "planning_code": "observed_scene_unavailable",
+            "execution_code": "observed_scene_unavailable"
+          }
+        },
+        "audit_unchanged_during_admission_checks": true
+      },
+      "geometry_capture_metadata": [
+        {
+          "index": 0,
+          "received_monotonic": 172549.107836944,
+          "image_timing": {
+            "head_cam_left": {
+              "timestamp_ns": 172548416957235,
+              "clock_domain": "mujoco_render_monotonic",
+              "clock_id": "9ed7ad0ab6b46f8515c340b2a9aea25444d800b3082017888a7fc4fcd4df3105",
+              "source": "renderer_scene_capture",
+              "available": true,
+              "capture_interval_ns": [
+                172548416957235,
+                172548520742168
+              ],
+              "depth_capture_interval_ns": [
+                172548567178475,
+                172548581041339
+              ]
+            }
+          }
+        },
+        {
+          "index": 1,
+          "received_monotonic": 172551.163611034,
+          "image_timing": {
+            "head_cam_left": {
+              "timestamp_ns": 172550553599522,
+              "clock_domain": "mujoco_render_monotonic",
+              "clock_id": "9ed7ad0ab6b46f8515c340b2a9aea25444d800b3082017888a7fc4fcd4df3105",
+              "source": "renderer_scene_capture",
+              "available": true,
+              "capture_interval_ns": [
+                172550553599522,
+                172550668518969
+              ],
+              "depth_capture_interval_ns": [
+                172550701189277,
+                172550711958200
+              ]
+            }
+          }
+        },
+        {
+          "index": 2,
+          "received_monotonic": 172553.202096639,
+          "image_timing": {
+            "head_cam_left": {
+              "timestamp_ns": 172552574301345,
+              "clock_domain": "mujoco_render_monotonic",
+              "clock_id": "9ed7ad0ab6b46f8515c340b2a9aea25444d800b3082017888a7fc4fcd4df3105",
+              "source": "renderer_scene_capture",
+              "available": true,
+              "capture_interval_ns": [
+                172552574301345,
+                172552677827641
+              ],
+              "depth_capture_interval_ns": [
+                172552727976319,
+                172552741123084
+              ]
+            }
+          }
+        },
+        {
+          "index": 3,
+          "received_monotonic": 172555.333021371,
+          "image_timing": {
+            "head_cam_left": {
+              "timestamp_ns": 172555079644112,
+              "clock_domain": "mujoco_render_monotonic",
+              "clock_id": "9ed7ad0ab6b46f8515c340b2a9aea25444d800b3082017888a7fc4fcd4df3105",
+              "source": "renderer_scene_capture",
+              "available": true,
+              "capture_interval_ns": [
+                172555079644112,
+                172555167773633
+              ],
+              "depth_capture_interval_ns": [
+                172555212721289,
+                172555231072272
+              ]
+            }
+          }
+        },
+        {
+          "index": 4,
+          "received_monotonic": 172557.319365784,
+          "image_timing": {
+            "head_cam_left": {
+              "timestamp_ns": 172556825067947,
+              "clock_domain": "mujoco_render_monotonic",
+              "clock_id": "9ed7ad0ab6b46f8515c340b2a9aea25444d800b3082017888a7fc4fcd4df3105",
+              "source": "renderer_scene_capture",
+              "available": true,
+              "capture_interval_ns": [
+                172556825067947,
+                172556954725661
+              ],
+              "depth_capture_interval_ns": [
+                172557003968620,
+                172557023666884
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "regression": {
+    "job_id": "20261028_182521_e0619a",
+    "tests": "748",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0",
+    "time": "142.002"
+  },
+  "focused": {
+    "job_id": null,
+    "tests": "9",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0",
+    "time": "4.222"
+  },
+  "validation_note": "Broad regression collected 7 geometry tests; final focused run adds 2 measured-model/motion tests and capture-replay checks. Counts are not summed.",
+  "figure": "figures/geometry_tracking_20261028.png"
+}

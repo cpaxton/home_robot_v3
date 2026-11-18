@@ -16,6 +16,7 @@ from emet.controller.task.tamp.native_adapter import NativeTableAdapter
 )
 def test_measured_replanning_covers_exact_requested_scope(scope, phases):
     ex = object.__new__(PhysicalPickPlaceExecutor)
+    ex.input_mode = "privileged"
     ex.grasp_paths = [[np.zeros(1)]] * len(phases)
     ex.grasp_targets = [(np.zeros(3), np.eye(3))] * len(phases)
     ex.grasp_target_options = []
@@ -127,3 +128,28 @@ def test_prefix_plan_preserves_live_physics_and_has_no_downstream_witness(monkey
         )
     finally:
         env.close()
+
+
+def test_prefix_scope_survives_primary_and_fallback_grasp_search():
+    adapter = object.__new__(NativeTableAdapter)
+    adapter.pregrasp_fallback_offset_m = np.array([0, 0.02, 0.03])
+    adapter.max_planning_ik_calls = 100
+    adapter.planning_ik_calls = 0
+    adapter.fallback_ik_reserve_fraction = 0.25
+    adapter._strategy_ik_limit = None
+    calls = []
+
+    def candidates(*args, **kwargs):
+        calls.append(kwargs)
+        if "approach_offset" in kwargs:
+            yield "fallback", "paths"
+
+    adapter._grasp_candidates = candidates
+    result = list(
+        adapter._grasp_options(None, None, None, None, None, None, execution_scope="grasp_pose", aligned_only=True)
+    )
+    assert result == [("fallback", "paths")]
+    assert len(calls) == 2
+    assert all(c["execution_scope"] == "grasp_pose" and c["aligned_only"] for c in calls)
+    assert "approach_offset" not in calls[0] and "approach_offset" in calls[1]
+    assert adapter._strategy_ik_limit is None

@@ -33,24 +33,52 @@ def grounding_assets(roots, arms, backend):
         return {}
     assets = {}
     for arm in arms:
-        checkpoint = roots[arm] / "sam2.1_hiera_small.pt"
-        if not checkpoint.is_file():
-            raise RuntimeError(
-                f"Missing SAM2 checkpoint: {checkpoint}. Link verified local weights "
-                "before running VLM/SAM2 acceptance; no in-episode downloads."
-            )
-        with checkpoint.open("rb") as stream:
-            digest = hashlib.sha256()
-            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-                digest.update(chunk)
-        assets[arm] = {"path": str(checkpoint.resolve()), "sha256": digest.hexdigest()}
+        assets[arm] = {}
+        # YOLOE supplies proposals even when final grounding uses VLM/SAM2.
+        for name in ("sam2.1_hiera_small.pt", "yoloe-v8l-seg.pt", "mobileclip_blt.ts"):
+            checkpoint = roots[arm] / name
+            if not checkpoint.is_file():
+                raise RuntimeError(
+                    f"Missing grounding weight: {checkpoint}. Link verified local weights "
+                    "before running VLM/SAM2 acceptance; no in-episode downloads."
+                )
+            with checkpoint.open("rb") as stream:
+                digest = hashlib.sha256()
+                for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                    digest.update(chunk)
+            assets[arm][name] = {"path": str(checkpoint.resolve()), "sha256": digest.hexdigest()}
     return assets
 
 
 def run(args):
+    endpoint = getattr(args, "vl_endpoint", None)
+    remote_model = None
+    if endpoint:
+        from urllib.parse import urlsplit
+
+        from emet.llms.openai_vllm_client import parse_openai_endpoint_spec
+
+        base_url, remote_model = parse_openai_endpoint_spec(endpoint)
+        parsed = urlsplit(base_url)
+        if (
+            parsed.scheme not in {"http", "https"}
+            or not parsed.hostname
+            or not remote_model
+            or parsed.username
+            or parsed.password
+            or parsed.query
+        ):
+            raise ValueError(
+                "Use an HTTP(S) endpoint with #MODEL and no URL credentials/query; API keys belong in the environment"
+            )
+        endpoint = f"openai@{base_url}#{remote_model}"
     candidate_policy = getattr(args, "candidate_decision_policy", None)
     shared_episodes = getattr(args, "episodes_file", None)
     floor_reference = getattr(args, "floor_reference_z", None)
+    max_rounds = getattr(args, "max_rounds", 12)
+    max_nav_steps = getattr(args, "max_nav_steps", 8)
+    if max_rounds < 1 or max_nav_steps < 0:
+        raise ValueError("max_rounds must be positive and max_nav_steps must be nonnegative")
     roots = {"main": args.main.resolve(), "candidate": args.candidate.resolve()}
     assets = grounding_assets(roots, args.arms, args.grounding_backend)
     revisions = {name: git(root, "rev-parse", "HEAD") for name, root in roots.items()}
@@ -65,8 +93,12 @@ def run(args):
         "shared_episodes_sha256": hashlib.sha256(shared_episodes.read_bytes()).hexdigest() if shared_episodes else None,
         "seed": args.seed,
         "scan_steps": args.scan_steps,
+        "max_rounds_per_phase": max_rounds,
+        "max_nav_steps_per_phase": max_nav_steps,
+        "episode_timeout_s": 1500,
         "arms": args.arms,
         "grounding_backend": args.grounding_backend,
+        "graph_object_fusion": {"enabled": True, "use_instance_nodes": True},
         "decision_policy": getattr(args, "decision_policy", "legacy"),
         "candidate_decision_policy": candidate_policy,
         "floor_reference_z": floor_reference,
@@ -75,7 +107,14 @@ def run(args):
         "validator_sha256": hashlib.sha256(
             Path(__file__).with_name("check_acceptance_metrics.py").read_bytes()
         ).hexdigest(),
-        "scope": "find only, physical navigation, local Qwen3-VL int4; not manipulation acceptance",
+        "scope": "find only, physical navigation; not manipulation acceptance",
+        "vl_endpoint": endpoint,
+        "model": {
+            "id": remote_model or "Qwen/Qwen3-VL-8B-Instruct",
+            "transport": "remote" if endpoint else "local",
+            "quantization": "unverified" if endpoint else "int4",
+            "server_decoding": "unverified" if endpoint else "checkpoint defaults",
+        },
     }
     (args.output / "manifest.json").write_text(json.dumps(manifest, indent=2))
     all_complete, all_success = True, True
@@ -94,6 +133,7 @@ def run(args):
             config.write_text(
                 f"extends: {root}/configs/emet/default.yaml\n"
                 + "mapping:\n  query_driven_memory: true\n  debug_perfect_sensor_depth: true\n"
+                "  graph_object_fusion:\n    enabled: true\n    use_instance_nodes: true\n"
                 "  find_phase_nav_step_timeout_s: 30.0\n  motion_planner:\n    obstacle_map_mode: physical\n"
                 f"  query_memory:\n    grounding_backend: {args.grounding_backend}\n"
                 + (
@@ -104,7 +144,11 @@ def run(args):
                 )
                 + "  eqa:\n    agentic_verify: true\n    collect_agentic_trace: true\n"
                 + f"    agentic_decision_policy: {candidate_policy if arm == 'candidate' and candidate_policy else getattr(args, 'decision_policy', 'legacy')}\n"
-                + "    vl_family: qwen3_vl\n    vl_hf_model_id: Qwen/Qwen3-VL-8B-Instruct\n    vl_quantization: int4\n"
+                + (
+                    f"    vl_endpoint: {json.dumps(endpoint)}\n"
+                    if endpoint
+                    else "    vl_family: qwen3_vl\n    vl_hf_model_id: Qwen/Qwen3-VL-8B-Instruct\n    vl_quantization: int4\n"
+                )
                 + (
                     f"  floor_evidence:\n    enabled: true\n    reference_z_m: {floor_reference}\n"
                     if floor_reference is not None
@@ -157,9 +201,9 @@ def run(args):
                 "--mapping-rotate-steps",
                 str(args.scan_steps),
                 "--agentic-max-rounds",
-                "6",
+                str(max_rounds),
                 "--agentic-max-nav-steps",
-                "3",
+                str(max_nav_steps),
                 "--no-scene-cache",
                 "--port-offset",
                 str(700 + index * 10 + (arm == "candidate") * 2),
@@ -225,8 +269,18 @@ if __name__ == "__main__":
     parser.add_argument("--candidate", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument(
+        "--vl-endpoint",
+        help="Explicit OpenAI-compatible URL#MODEL for both arms; precision and decoding must be verified separately.",
+    )
     parser.add_argument("--episodes-file", type=Path, help="Same frozen task registry for both arms.")
     parser.add_argument("--scan-steps", type=int, choices=(4, 8), default=4)
+    parser.add_argument(
+        "--max-rounds", type=int, default=12, help="Decision rounds per find phase, including finalization."
+    )
+    parser.add_argument(
+        "--max-nav-steps", type=int, default=8, help="Navigation/movement calls per find phase, shared by both arms."
+    )
     parser.add_argument("--arms", nargs="+", choices=("main", "candidate"), default=["main", "candidate"])
     parser.add_argument("--grounding-backend", choices=("yoloe", "vlm"), default="yoloe")
     parser.add_argument("--decision-policy", choices=("legacy", "model_final"), default="legacy")

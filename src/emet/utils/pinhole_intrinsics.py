@@ -14,7 +14,36 @@ __all__ = [
     "apply_pinhole_pixel_ops",
     "chain_pinhole_K_pixel_ops",
     "scale_pinhole_K",
+    "pinhole_K_from_opengl_projection",
 ]
+
+
+def pinhole_K_from_opengl_projection(projection, width: int, height: int) -> np.ndarray:
+    """OpenGL perspective projection -> OpenCV integer-pixel-center intrinsics.
+
+    A raster sample lies at framebuffer (u + .5, v + .5). In an even-sized
+    image the optical center is therefore (width/2 - .5, height/2 - .5), not
+    (width/2, height/2). Read calibration only; no world pose or scene geometry.
+    """
+    p = np.asarray(projection, dtype=np.float64)
+    if (
+        p.shape != (4, 4)
+        or not np.isfinite(p).all()
+        or width <= 0
+        or height <= 0
+        or not np.allclose(p[3], [0, 0, -1, 0])
+        or p[0, 0] <= 0
+        or p[1, 1] <= 0
+        or not np.allclose([p[0, 1], p[1, 0], p[0, 3], p[1, 3]], 0)
+    ):
+        raise ValueError("Finite unskewed OpenGL perspective projection and positive image dimensions required")
+    return np.array(
+        [
+            [p[0, 0] * width / 2, 0, (1 - p[0, 2]) * width / 2 - 0.5],
+            [0, p[1, 1] * height / 2, (1 + p[1, 2]) * height / 2 - 0.5],
+            [0, 0, 1],
+        ]
+    )
 
 
 def apply_pinhole_pixel_ops(image: np.ndarray, ops: tuple[str, ...] | list[str]) -> np.ndarray:

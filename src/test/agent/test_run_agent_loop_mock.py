@@ -19,6 +19,8 @@
 
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from emet.agent.loop import run_agent_with_robot
 
 
@@ -108,3 +110,25 @@ def test_merge_chat_agent_manip_parameters_falls_back_to_config():
     )
     agent = params.get("agent") or {}
     assert agent.get("manip_mode") == "teleport"
+
+
+@pytest.mark.parametrize("policy", ["bounded_release", "bounded_approach"])
+def test_native_policy_configuration_rejects_before_client_start(policy):
+    from emet.config.loader import AgentSectionConfig
+    from emet.core.parameters import Parameters
+    with patch('emet.agent.loop.StretchZmqClient') as client:
+        with pytest.raises(ValueError, match='native_tamp_policy requires physical mode'):
+            run_agent_with_robot(parameters=Parameters(), agent_section=AgentSectionConfig(
+                manip_mode='physical', tamp_inputs='observed', native_tamp_policy=policy))
+        client.assert_not_called()
+
+
+@pytest.mark.parametrize("policy", ["legacy", "bounded_release", "bounded_approach"])
+def test_chat_accepts_native_policy_before_loading_runtime(policy):
+    from emet.config.loader import AgentSectionConfig
+    from emet.core.parameters import Parameters
+
+    with patch('emet.agent.loop.load_embodied_agent_overlay', side_effect=RuntimeError('policy_validated')):
+        with pytest.raises(RuntimeError, match='policy_validated'):
+            run_agent_with_robot(parameters=Parameters(), agent_section=AgentSectionConfig(
+                manip_mode='physical', tamp_inputs='privileged', native_tamp_policy=policy))

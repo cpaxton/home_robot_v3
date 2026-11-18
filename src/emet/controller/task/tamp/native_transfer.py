@@ -1,6 +1,6 @@
 # Copyright (c) Chris Paxton 2026
 # Licensed under the Apache License, Version 2.0 (see LICENSE in the repository root).
-"""Privileged stationary Stretch grounding and bounded native motion refinement."""
+"""Privileged Stretch grounding and bounded native motion refinement."""
 from __future__ import annotations
 
 import json
@@ -48,17 +48,18 @@ def validate_native_task_config(config):
 
 
 class NativeTableTransferProvider(RegionTransferProvider):
-    def __init__(self, robot, config, *, adapter=None, planning_ik_budget=2048, diagnostic_state=False):
+    robot_name = 'stretch'
+    def __init__(self, robot, config, *, adapter=None, planning_ik_budget=2048, diagnostic_state=False, native_policy='legacy'):
         validate_native_task_config(config)
         if type(planning_ik_budget) is not int or planning_ik_budget <= 0:
             raise ValueError('invalid_planning_ik_budget')
-        self.adapter = adapter if adapter is not None else NativeTableAdapter(robot)
+        self.adapter = adapter if adapter is not None else NativeTableAdapter(robot, policy=native_policy)
         if self.adapter.input_mode != 'privileged':
             raise ValueError('native_transfer_requires_privileged_inputs')
         self.roles, self.support, self.reset_id = dict(config['objects']), config['support_body'], config['reset_id']
         self._revision, self._reference = 0, None
         self.diagnostic_state = bool(diagnostic_state)
-        self._profile = fingerprint({'robot': 'stretch', 'interface': 'native_arm_to', 'config': config})
+        self._profile = fingerprint({'robot': 'stretch', 'interface': 'native_arm_to', 'config': config, 'native_policy': getattr(self.adapter, 'policy', 'legacy')})
         self._ik_remaining, self.motion_evidence, self._motion_cache = planning_ik_budget, [], {}
         model = self.adapter.model
         self._robot_ids = body_subtree(model, 'base_link')
@@ -76,6 +77,11 @@ class NativeTableTransferProvider(RegionTransferProvider):
             self._object_ids[role] = bid
         regions = tuple(TransferRegion(row['name'], tuple(tuple(v) for v in row['bounds'])) for row in config['regions'])
         super().__init__(regions, observe=self._observe_native, transfer=self._transfer_native, input_mode='privileged')
+
+    def describe(self):
+        return {**super().describe(), 'robot': self.robot_name,
+                'native_motion_policy': getattr(self.adapter, 'policy', 'legacy'),
+                'base_motion': 'checked_unloaded_approach' if getattr(self.adapter, 'checked_base_approach', False) else 'stationary'}
 
     def _observe_native(self):
         with self.adapter.lock:
@@ -204,9 +210,15 @@ class NativeTableTransferProvider(RegionTransferProvider):
             if plan_ref is None:
                 code = 'task_motion_budget_exhausted' if self._ik_remaining <= 0 else 'task_motion_planning_failed'
                 return TaskExecutionResult(False, False, code)
-            result = self.adapter.execute(plan_ref)
+            before_calls = int(getattr(self.adapter, 'planning_ik_calls', 0))
+            try:
+                result = self.adapter.execute(plan_ref)
+            finally:
+                extra = max(0, int(getattr(self.adapter, 'planning_ik_calls', 0))-before_calls)
+                self._ik_remaining = max(0, self._ik_remaining-extra)
             started = result.get('data', {}).get('execution_started')
-            from .api import failure_code
+            from .api import VerificationFailure, failure_code
             code = failure_code(result.get('code', ''))
             return TaskExecutionResult(result['status'] == 'ok', started if type(started) is bool else True,
-                                       code if code not in {'ok', 'operation_failed'} else 'task_execution_failed')
+                                       code if code not in {'ok', 'operation_failed'} else 'task_execution_failed',
+                                       VerificationFailure.from_data(result.get('data', {}).get('verification')))

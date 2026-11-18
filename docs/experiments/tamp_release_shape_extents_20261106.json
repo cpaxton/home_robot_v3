@@ -1,0 +1,762 @@
+{
+  "schema_version": 1,
+  "source_commit": "6a1d063c",
+  "scope": "Native asynchronous Stretch tools; exact primitive extents and measured support settling before retreat; not an agent score",
+  "agent_score": false,
+  "llm_calls": 0,
+  "hardware_trials": false,
+  "production_policy_changed": false,
+  "initial_state_certificate": false,
+  "original_agent_baseline_unchanged": "2/4",
+  "protocol": "configs/eval/tamp_release_shape_extents.json",
+  "cases": [
+    {
+      "id": "shift-shape-aware",
+      "case_id": "two-goal-shift",
+      "job_id": "20261106_073756_498513",
+      "passed": true,
+      "run_status": "complete",
+      "code": "ok",
+      "completed_transfers": 2,
+      "declared_transfers": 2,
+      "native_failure_stages": [],
+      "final_predicates": {
+        "object2": {
+          "in_region": true,
+          "supported": true,
+          "settled": true,
+          "satisfied": true,
+          "bounds_xy": [
+            [
+              -0.03979676924467518,
+              -0.8210950130873312
+            ],
+            [
+              0.0016992583769952774,
+              -0.779599696862186
+            ]
+          ]
+        },
+        "object1": {
+          "in_region": true,
+          "supported": true,
+          "settled": true,
+          "satisfied": true,
+          "bounds_xy": [
+            [
+              -0.04020596434866403,
+              -0.7186801612736752
+            ],
+            [
+              0.0016488784781887936,
+              -0.6377690588884853
+            ]
+          ]
+        }
+      },
+      "audit_commands": 508,
+      "forbidden_commands": 0,
+      "malformed_audit_rows": 0,
+      "wall_time_s": 315.8811706729466,
+      "release_events": [
+        {
+          "object_body": "object2",
+          "sim_time": 27.18799999999581,
+          "event": {
+            "phase": "release_plan",
+            "accepted": true,
+            "reason": null,
+            "target_z": 0.5470509740991626,
+            "max_drop_m": 0.04,
+            "tracking_reserve_m": 0.018767430363182624
+          }
+        },
+        {
+          "object_body": "object2",
+          "sim_time": 27.237999999995782,
+          "event": {
+            "phase": "release_adjustment",
+            "command": [
+              0.6151203733880869,
+              0.12760506789743617,
+              0.12760477601904746,
+              0.1276042708790889,
+              0.12760387525480393,
+              -0.07976609536790932,
+              -0.7844140361053533,
+              -0.05661277788330494
+            ],
+            "measured": [
+              0.5931089097904074,
+              0.12759380334808826,
+              0.12759410615302788,
+              0.12759358744120017,
+              0.12759297968051345,
+              -0.0784227248543188,
+              -0.8035198457121452,
+              -0.0566148553885267
+            ],
+            "residual": 0.02201146359767947,
+            "controller_success": true
+          }
+        },
+        {
+          "object_body": "object2",
+          "sim_time": 27.543999999995613,
+          "event": {
+            "phase": "release_adjustment_complete",
+            "controller_success": true,
+            "residual": 0.021947137061612332
+          }
+        },
+        {
+          "object_body": "object2",
+          "sim_time": 27.543999999995613,
+          "event": {
+            "phase": "release_plan",
+            "accepted": true,
+            "reason": null,
+            "target_z": 0.5570509740991626,
+            "max_drop_m": 0.04,
+            "tracking_reserve_m": 0.025327614119816433
+          }
+        },
+        {
+          "object_body": "object2",
+          "sim_time": 27.69399999999553,
+          "event": {
+            "phase": "release_adjustment",
+            "command": [
+              0.6244924375892922,
+              0.127605063316668,
+              0.1276049556440992,
+              0.12760478437047762,
+              0.12760456032449055,
+              -0.07995773753837926,
+              -0.7844372653641464,
+              -0.056745462007653166
+            ],
+            "measured": [
+              0.5945692193401273,
+              0.12759891176571114,
+              0.12759940619703286,
+              0.1275994014820877,
+              0.12759955163732026,
+              -0.07876280003824787,
+              -0.8043251692350464,
+              -0.05674915155521725
+            ],
+            "residual": 0.029923218249164885,
+            "controller_success": true
+          }
+        },
+        {
+          "object_body": "object2",
+          "sim_time": 28.2859999999952,
+          "event": {
+            "phase": "release_adjustment_complete",
+            "controller_success": true,
+            "residual": 0.02416909056257055
+          }
+        },
+        {
+          "object_body": "object2",
+          "sim_time": 28.2879999999952,
+          "event": {
+            "phase": "release_plan",
+            "accepted": true,
+            "reason": null,
+            "target_z": 0.5271224274001292,
+            "max_drop_m": 0.04,
+            "tracking_reserve_m": 0.027617707039758632
+          }
+        },
+        {
+          "object_body": "object2",
+          "sim_time": 28.295999999995196,
+          "event": {
+            "phase": "release",
+            "controller_success": true
+          }
+        },
+        {
+          "object_body": "object2",
+          "sim_time": 28.857999999994885,
+          "event": {
+            "phase": "release_open_verified",
+            "controller_success": true,
+            "source": "simulator_ground_truth_debug",
+            "supported": true,
+            "settled": true,
+            "stable_interval_s": 0.1
+          }
+        },
+        {
+          "object_body": "object1",
+          "sim_time": 51.452000000016916,
+          "event": {
+            "phase": "release_plan",
+            "accepted": true,
+            "reason": null,
+            "target_z": 0.547536846830662,
+            "max_drop_m": 0.04,
+            "tracking_reserve_m": 0.01877006912431778
+          }
+        },
+        {
+          "object_body": "object1",
+          "sim_time": 51.50600000001698,
+          "event": {
+            "phase": "release_adjustment",
+            "command": [
+              0.6158192572851285,
+              0.09732582895475694,
+              0.09732585770268407,
+              0.09732526567838552,
+              0.0973245421114372,
+              -0.05527093289882371,
+              -0.785568252959469,
+              -0.03922968820721719
+            ],
+            "measured": [
+              0.5937697085892653,
+              0.09731426882069505,
+              0.09731429342136713,
+              0.09731377051907784,
+              0.09731314015054024,
+              -0.053918178468638375,
+              -0.8044822899731431,
+              -0.0390908650507903
+            ],
+            "residual": 0.022049548695863286,
+            "controller_success": true
+          }
+        },
+        {
+          "object_body": "object1",
+          "sim_time": 51.81400000001736,
+          "event": {
+            "phase": "release_adjustment_complete",
+            "controller_success": true,
+            "residual": 0.02198259839499872
+          }
+        },
+        {
+          "object_body": "object1",
+          "sim_time": 51.81400000001736,
+          "event": {
+            "phase": "release_plan",
+            "accepted": true,
+            "reason": null,
+            "target_z": 0.557536846830662,
+            "max_drop_m": 0.04,
+            "tracking_reserve_m": 0.0253249284257282
+          }
+        },
+        {
+          "object_body": "object1",
+          "sim_time": 51.966000000017544,
+          "event": {
+            "phase": "release_adjustment",
+            "command": [
+              0.6251921953478813,
+              0.09732591506166137,
+              0.09732598079136026,
+              0.0973256812971781,
+              0.09732523694997193,
+              -0.055463533781759874,
+              -0.785594628096829,
+              -0.039361499372355224
+            ],
+            "measured": [
+              0.5952779218040584,
+              0.09732013915016312,
+              0.09732062708933968,
+              0.0973205350579227,
+              0.09732048576756136,
+              -0.054264062128850335,
+              -0.8052824906719206,
+              -0.03921609205779396
+            ],
+            "residual": 0.029914273543822922,
+            "controller_success": true
+          }
+        },
+        {
+          "object_body": "object1",
+          "sim_time": 52.556000000018265,
+          "event": {
+            "phase": "release_adjustment_complete",
+            "controller_success": true,
+            "residual": 0.0241736748461594
+          }
+        },
+        {
+          "object_body": "object1",
+          "sim_time": 52.556000000018265,
+          "event": {
+            "phase": "release_plan",
+            "accepted": true,
+            "reason": null,
+            "target_z": 0.5276378006368965,
+            "max_drop_m": 0.04,
+            "tracking_reserve_m": 0.027588512440670288
+          }
+        },
+        {
+          "object_body": "object1",
+          "sim_time": 52.57000000001828,
+          "event": {
+            "phase": "release",
+            "controller_success": true
+          }
+        },
+        {
+          "object_body": "object1",
+          "sim_time": 52.858000000018635,
+          "event": {
+            "phase": "release_open_verified",
+            "controller_success": true,
+            "source": "simulator_ground_truth_debug",
+            "supported": true,
+            "settled": true,
+            "stable_interval_s": 0.1
+          }
+        }
+      ],
+      "artifacts": [
+        {
+          "path": ".tamp-runs/release-shape-extents-20261106/episodes/shift-shape-aware/protocol.json",
+          "sha256": "7a9bb0299fb9e1e46b2618c50f99a517950efc88d4b76860e43d5a2280f42122"
+        },
+        {
+          "path": ".tamp-runs/release-shape-extents-20261106/episodes/shift-shape-aware/summary.json",
+          "sha256": "1d1a0a9f302a46a5645a6b4489bd84fe683b7bc5886193d3aac3f0dbc98fbacf"
+        },
+        {
+          "path": ".tamp-runs/release-shape-extents-20261106/episodes/shift-shape-aware/initial.json",
+          "sha256": "3fe5caf789daa32e20f98e36e344358daa2eb9ea9a9fac2559a7f487d015b4b0"
+        },
+        {
+          "path": ".tamp-runs/release-shape-extents-20261106/episodes/shift-shape-aware/contact.jsonl",
+          "sha256": "da57a7b0353a261a6a146a3ed1675bd2be04e31fa73d4ff357bfbef36279955f"
+        },
+        {
+          "path": ".tamp-runs/release-shape-extents-20261106/episodes/shift-shape-aware/actuation.jsonl",
+          "sha256": "ba7c7e149bb18981168a5e35b2759b328572937e5320c21d4087b6bab678f7e0"
+        }
+      ]
+    },
+    {
+      "id": "control-shape-aware",
+      "case_id": "two-goal-control",
+      "job_id": "20261106_073756_86c40f",
+      "passed": true,
+      "run_status": "complete",
+      "code": "ok",
+      "completed_transfers": 2,
+      "declared_transfers": 2,
+      "native_failure_stages": [],
+      "final_predicates": {
+        "object2": {
+          "in_region": true,
+          "supported": true,
+          "settled": true,
+          "satisfied": true,
+          "bounds_xy": [
+            [
+              -0.04035882906248406,
+              -0.820284730537995
+            ],
+            [
+              -5.88046666192138e-05,
+              -0.7799853419873153
+            ]
+          ]
+        },
+        "object1": {
+          "in_region": true,
+          "supported": true,
+          "settled": true,
+          "satisfied": true,
+          "bounds_xy": [
+            [
+              -0.03989438592822307,
+              -0.7192355896015719
+            ],
+            [
+              0.0009870399998750182,
+              -0.6387985387247739
+            ]
+          ]
+        }
+      },
+      "audit_commands": 480,
+      "forbidden_commands": 0,
+      "malformed_audit_rows": 0,
+      "wall_time_s": 303.2389645150397,
+      "release_events": [
+        {
+          "object_body": "object2",
+          "sim_time": 26.895999999995972,
+          "event": {
+            "phase": "release_plan",
+            "accepted": true,
+            "reason": null,
+            "target_z": 0.5486297686517777,
+            "max_drop_m": 0.04,
+            "tracking_reserve_m": 0.018778948981612142
+          }
+        },
+        {
+          "object_body": "object2",
+          "sim_time": 26.947999999995943,
+          "event": {
+            "phase": "release_adjustment",
+            "command": [
+              0.6168852964895055,
+              0.12665904411775986,
+              0.1266590956638436,
+              0.12665860512858013,
+              0.12665799010094675,
+              0.06990038302995596,
+              -0.7849863493095137,
+              0.0496640572578799
+            ],
+            "measured": [
+              0.5948517930041519,
+              0.1266486676244364,
+              0.12664870914977058,
+              0.12664827717141358,
+              0.12664774529185785,
+              0.06868117046449318,
+              -0.8040515137424551,
+              0.049772264016537004
+            ],
+            "residual": 0.0220335034853536,
+            "controller_success": true
+          }
+        },
+        {
+          "object_body": "object2",
+          "sim_time": 27.25799999999577,
+          "event": {
+            "phase": "release_adjustment_complete",
+            "controller_success": true,
+            "residual": 0.021966971338353458
+          }
+        },
+        {
+          "object_body": "object2",
+          "sim_time": 27.25799999999577,
+          "event": {
+            "phase": "release_plan",
+            "accepted": true,
+            "reason": null,
+            "target_z": 0.5586297686517777,
+            "max_drop_m": 0.04,
+            "tracking_reserve_m": 0.025336621731719244
+          }
+        },
+        {
+          "object_body": "object2",
+          "sim_time": 27.411999999995686,
+          "event": {
+            "phase": "release_adjustment",
+            "command": [
+              0.6262606177261485,
+              0.12665887506039972,
+              0.1266588914309691,
+              0.12665866653507782,
+              0.1266583675686571,
+              0.06974476458497941,
+              -0.7850274623256942,
+              0.04954663512360011
+            ],
+            "measured": [
+              0.59639579324368,
+              0.1266529650937802,
+              0.12665341429979635,
+              0.12665340594938307,
+              0.1266535593337981,
+              0.06906717712181208,
+              -0.8048741372587196,
+              0.04984818186287047
+            ],
+            "residual": 0.02986482448246852,
+            "controller_success": true
+          }
+        },
+        {
+          "object_body": "object2",
+          "sim_time": 28.01799999999535,
+          "event": {
+            "phase": "release_adjustment_complete",
+            "controller_success": true,
+            "residual": 0.02411895769348804
+          }
+        },
+        {
+          "object_body": "object2",
+          "sim_time": 28.01999999999535,
+          "event": {
+            "phase": "release_plan",
+            "accepted": true,
+            "reason": null,
+            "target_z": 0.5287610068502251,
+            "max_drop_m": 0.04,
+            "tracking_reserve_m": 0.027558584867515168
+          }
+        },
+        {
+          "object_body": "object2",
+          "sim_time": 28.029999999995344,
+          "event": {
+            "phase": "release",
+            "controller_success": true
+          }
+        },
+        {
+          "object_body": "object2",
+          "sim_time": 28.48599999999509,
+          "event": {
+            "phase": "release_open_verified",
+            "controller_success": true,
+            "source": "simulator_ground_truth_debug",
+            "supported": true,
+            "settled": true,
+            "stable_interval_s": 0.1
+          }
+        },
+        {
+          "object_body": "object1",
+          "sim_time": 48.914000000013814,
+          "event": {
+            "phase": "release_plan",
+            "accepted": true,
+            "reason": null,
+            "target_z": 0.5482059939969895,
+            "max_drop_m": 0.04,
+            "tracking_reserve_m": 0.018429728919375665
+          }
+        },
+        {
+          "object_body": "object1",
+          "sim_time": 48.9860000000139,
+          "event": {
+            "phase": "release_adjustment",
+            "command": [
+              0.6164610892780279,
+              0.09635670963726667,
+              0.09635682553761864,
+              0.09635596419072906,
+              0.09635484493976239,
+              0.07238380877182347,
+              -0.7848598167947576,
+              0.051429957860686625
+            ],
+            "measured": [
+              0.5946365740528655,
+              0.0963440697753304,
+              0.09634415847159802,
+              0.09634343176379717,
+              0.09634251109017931,
+              0.07114576150231613,
+              -0.803798323409992,
+              0.05155923073717411
+            ],
+            "residual": 0.021824515225162378,
+            "controller_success": true
+          }
+        },
+        {
+          "object_body": "object1",
+          "sim_time": 49.28800000001427,
+          "event": {
+            "phase": "release_adjustment_complete",
+            "controller_success": true,
+            "residual": 0.021768357773297886
+          }
+        },
+        {
+          "object_body": "object1",
+          "sim_time": 49.28800000001427,
+          "event": {
+            "phase": "release_plan",
+            "accepted": true,
+            "reason": null,
+            "target_z": 0.5582059939969896,
+            "max_drop_m": 0.04,
+            "tracking_reserve_m": 0.025112857360813035
+          }
+        },
+        {
+          "object_body": "object1",
+          "sim_time": 49.42800000001444,
+          "event": {
+            "phase": "release_adjustment",
+            "command": [
+              0.6258296481725107,
+              0.09635653990792112,
+              0.09635660721503764,
+              0.09635621940082116,
+              0.09635566668856098,
+              0.07222952846336402,
+              -0.7848993405935583,
+              0.05131337660663041
+            ],
+            "measured": [
+              0.5958317163030852,
+              0.09635071511715688,
+              0.09635124108646552,
+              0.09635105504832228,
+              0.09635088361992622,
+              0.07152193585857221,
+              -0.8045745880550559,
+              0.051646621494359835
+            ],
+            "residual": 0.029997931869425565,
+            "controller_success": true
+          }
+        },
+        {
+          "object_body": "object1",
+          "sim_time": 50.02200000001517,
+          "event": {
+            "phase": "release_adjustment_complete",
+            "controller_success": true,
+            "residual": 0.024180261742312803
+          }
+        },
+        {
+          "object_body": "object1",
+          "sim_time": 50.02200000001517,
+          "event": {
+            "phase": "release_plan",
+            "accepted": true,
+            "reason": null,
+            "target_z": 0.528314167078234,
+            "max_drop_m": 0.04,
+            "tracking_reserve_m": 0.02759697228770308
+          }
+        },
+        {
+          "object_body": "object1",
+          "sim_time": 50.03000000001518,
+          "event": {
+            "phase": "release",
+            "controller_success": true
+          }
+        },
+        {
+          "object_body": "object1",
+          "sim_time": 50.32800000001554,
+          "event": {
+            "phase": "release_open_verified",
+            "controller_success": true,
+            "source": "simulator_ground_truth_debug",
+            "supported": true,
+            "settled": true,
+            "stable_interval_s": 0.1
+          }
+        }
+      ],
+      "artifacts": [
+        {
+          "path": ".tamp-runs/release-shape-extents-20261106/episodes/control-shape-aware/protocol.json",
+          "sha256": "022a6467189c048f0814561c941fdb5423f40067fe25f73cd9039ec02157d000"
+        },
+        {
+          "path": ".tamp-runs/release-shape-extents-20261106/episodes/control-shape-aware/summary.json",
+          "sha256": "c255456da0b204a2c31652ce436a5ee2ae2eceaeb08e8441e5e93ff80171f520"
+        },
+        {
+          "path": ".tamp-runs/release-shape-extents-20261106/episodes/control-shape-aware/initial.json",
+          "sha256": "2812feffdceeaaffd73c29ec79ce6749155b8499fee6a7bc1317b4d2ab92f340"
+        },
+        {
+          "path": ".tamp-runs/release-shape-extents-20261106/episodes/control-shape-aware/contact.jsonl",
+          "sha256": "fc26fe2d89d5abf5042990d42e742ad4c77d9c6b34f469bb6847a812810db319"
+        },
+        {
+          "path": ".tamp-runs/release-shape-extents-20261106/episodes/control-shape-aware/actuation.jsonl",
+          "sha256": "ef4456f8172735bc62a63873f12a00178c3d51b0f1d22f9bc1bb5e48e585bbcb"
+        }
+      ]
+    }
+  ],
+  "aggregate": {
+    "passed": 2,
+    "completed_transfers": 4,
+    "declared_transfers": 4,
+    "audit_commands": 988,
+    "forbidden_commands": 0,
+    "malformed_audit_rows": 0,
+    "population": 2,
+    "infrastructure_errors": 0
+  },
+  "replay": {
+    "artifact": {
+      "path": ".tamp-runs/release-tracking-reserve-20261106/settled_extent_replay.json",
+      "sha256": "16e4d8434c3c0f427b057f83a60654f3ecf56162e953cdcbbe614d847424ffb1"
+    },
+    "results": {
+      "old_rotated_box_bottom_z": 0.47894588725760656,
+      "exact_shape_bottom_z": 0.47911336632058027,
+      "support_top_z": 0.48,
+      "new_geometry_collides": false,
+      "new_contacts": [],
+      "penetration_tolerance_m": 0.001,
+      "unchanged": true,
+      "controller_commands": 0,
+      "captured_task_rescored": false,
+      "source_file_sha256": "20dea6c14e24d532c635eb0cfa6a1a9d6e39ce7108b4ac8be2f84b53c8453ac4"
+    }
+  },
+  "validation": {
+    "tests": 97,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "artifact": {
+      "path": ".tamp-runs/release-search-20261106/exact-bounds-final.xml",
+      "sha256": "612aa95b74de301213807f3bfc3a27e514863086cdad7ee817d9234dabe461f9"
+    }
+  },
+  "paper_validation": {
+    "pages": 56,
+    "final_pass_undefined_references_or_citations": false,
+    "build_output_contains_initial_pass_reference_warnings": true,
+    "existing_font_warnings": true,
+    "final_log": {
+      "path": ".tamp-runs/release-shape-extents-20261106/paper-final.log",
+      "sha256": "e992a9cf3e0a6523346e0581a8c4e2c145a3030f0b332154814a70428cc7ed40"
+    },
+    "build_log": {
+      "path": ".tamp-runs/release-shape-extents-20261106/paper-build.log",
+      "sha256": "46090278a7e5601067a8a4ca3361047121d8c7457ff0c137979d73ec52a77b4d"
+    }
+  },
+  "figure": {
+    "kind": "first_cylinder_measured_and_command_fk_height",
+    "source": {
+      "path": "scripts/plot_tamp_release_search.py",
+      "sha256": "54a5bfb68dc9f60d067dd53ffca1c5103876cef670cf68cae75ec3e6712accdd"
+    },
+    "pdf": {
+      "path": "paper/figures/tamp_release_pose_search_20261106.pdf",
+      "sha256": "129729d152709551a9d0d6fd2422f799498c31cce9095e3c77165ba766a9b508"
+    },
+    "png": {
+      "path": "docs/experiments/media/tamp_release_pose_search_20261106.png",
+      "sha256": "e5ee1a1c308a0b176980297a163e0efc791bb9e6a4c3173d21925682b276984e"
+    },
+    "csv": {
+      "path": ".tamp-runs/release-shape-extents-20261106/figures/tamp_release_pose_search_20261106.csv",
+      "sha256": "ad5693037a3621d826ca6eaef3e66e5ccaeaa880e85bc4a5bbede04412f31794"
+    },
+    "before_episode": ".tamp-runs/release-search-20261106/episodes/shift-bounded",
+    "after_episode": ".tamp-runs/release-shape-extents-20261106/episodes/shift-shape-aware",
+    "same_state_paired": false
+  }
+}

@@ -49,10 +49,18 @@ def _clear_managed_diagnostic_outputs(root: Path) -> None:
     """Prevent artifacts from an older run surviving in a reused episode path."""
     for name in _MANAGED_DIAGNOSTIC_FILES:
         (root / name).unlink(missing_ok=True)
-    for name in ("frames", "images", "maps", "graph_checkpoint"):
+    # Query images are owned by the agentic trace and may have been written
+    # during this very episode. Finalizing recorder output must preserve them.
+    for name in ("frames", "maps", "graph_checkpoint"):
         path = root / name
         if path.is_dir():
             shutil.rmtree(path)
+    legacy_images = root / "images"
+    if legacy_images.is_dir():
+        for frame in legacy_images.glob("frame_*.png"):
+            frame.unlink()
+        if not any(legacy_images.iterdir()):
+            legacy_images.rmdir()
     crop = root / "dynagraph" / "crops_mosaic.png"
     crop.unlink(missing_ok=True)
 

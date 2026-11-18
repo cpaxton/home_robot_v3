@@ -56,14 +56,26 @@ below. No new actor improvement is claimed. [Protocol](../experiments/mars_arm_s
 a 208-path 3D coverage gallery. Small splines 16/16, medium 14/16, full 12/16;
 these are teacher outcomes, not new actor scores. [Viewer and measured results](../experiments/mars_curriculum_visualization_20261117.md).
 
-**Frozen spline preflight passes:** 1,679 full regressions and 48/48 level-zero
-teacher cases with confirmed stops. Visualization's cgroup freeze caused a TAMP
-IPC timeout in the first run after 2,048 critic-only decisions; it remains
-preserved. The unchanged frozen source/receipts restart from the retained
-initializer in `logs/manipulation/arm-splines-v1-restart`, transient service
-`emet-arm-spline-training-restart`; status is
-`logs/recovery/arm-spline-development-v1/restart.json`. Do not freeze live IPC.
-The 65,536-decision budget and no-promotion stance remain.
+**Completed spline baseline:** frozen `614dfcd6` passed 1,679 regressions and
+48/48 teacher preflight cases. The 65,536-decision restart completed; its paired
+actor outcome is summarized below. Launch/interruption records remain under
+`logs/recovery/arm-spline-development-v1`. Do not freeze live TAMP IPC.
+
+**Current decision: fix motion distribution before more PPO.** The spline
+pilot and paired evaluation are complete: both actors 0/48, with 47/48 and
+46/48 confirmed stops. Neither is promoted. Raw outputs remain ignored under
+`logs/eval/arm-spline-paired-v1-restart`. Within-episode auditing found only
+0.4 mm median local hand excursion in the ordinary hand pool and 3.9/25 s
+of target motion for ordinary episodes. Opt-in bounded v2 timing, quiet-hold
+completion and minimum-spread sampling are implemented; new candidate validation
+precedes further training. [Metrics](CURRICULUM_VISUALIZATION.md#per-trajectory-spread-and-dead-time-audit).
+
+**Main integration:** current main `d86017ca` is integrated with semantic
+preservation of unloaded TAMP scopes through grasp alignment/fallback search,
+checked base approaches, observed verification and measured stopping. Runtime
+`command_client` copies are synchronized. Integration/recheck runs cover 765
+distinct passing cases; this is not a new full frozen training receipt. The
+session-start abort now preserves `SystemExit` before guard creation.
 
 ## One controller owner and development worktree
 

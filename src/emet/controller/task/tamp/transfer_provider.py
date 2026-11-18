@@ -142,6 +142,15 @@ class RegionTransferProvider:
             raise ValueError('invalid_transfer_operator')
         return targets[0][1], self.regions[targets[0][2]]
 
+    def describe_operator(self, operator):
+        """Public roles only: never serialize private operator refs/body IDs."""
+        obj, target = self._selection(operator)
+        sources = [p[2] for p in operator.requires if p[:2] == ('at', obj)]
+        if len(sources) != 1 or sources[0] not in {*self.regions, 'outside'}:
+            raise ValueError('invalid_transfer_operator')
+        return {'action': 'transfer', 'object_name': obj,
+                'from_region': sources[0], 'to_region': target.name}
+
     def feasible(self, state, operator):
         obj, target = self._selection(operator)
         return (operator.requires <= state.predicates and ('free', target.name) in state.predicates

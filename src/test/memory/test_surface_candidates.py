@@ -285,3 +285,67 @@ def test_absent_target_does_not_trigger_proposal_selection():
         rgb, depth, "mug", "mug", client=client, min_depth=0.25, max_depth=4, strategy="depth_candidates"
     )[2]["valid"]
     client.assert_called_once()
+
+
+def test_world_normals_split_touching_similar_appearance_surfaces():
+    from emet.memory.surface_candidates import candidate_mask, surface_candidates
+
+    y, x = np.mgrid[:60, :60]
+    # A horizontal patch joins an upright patch at a measured crease. Same RGB
+    # and continuous depth defeat local color/depth adjacency alone.
+    world = np.stack([np.minimum(x, 30) * 0.005, y * 0.005, np.maximum(x - 30, 0) * 0.005], axis=-1)
+    depth = 1.0 + np.maximum(x - 30, 0) * 0.005
+    rgb = np.full((60, 60, 3), 100, dtype=np.uint8)
+    kwargs = {"min_depth": 0.1, "max_depth": 3.0, "rgb": rgb}
+    assert len(surface_candidates(depth, [0, 0, 1000, 1000], **kwargs)) == 1
+    regions = surface_candidates(depth, [0, 0, 1000, 1000], world_xyz=world, **kwargs)
+    assert len(regions) >= 2
+    for region in regions:
+        mask = candidate_mask(region, depth.shape)
+        assert not (mask[:, :20].any() and mask[:, 40:].any())
+    # Geometry splitting is also effective without appearance features.
+    assert len(surface_candidates(depth, [0, 0, 1000, 1000], min_depth=0.1, max_depth=3.0, world_xyz=world)) >= 2
+
+
+def test_invalid_world_alignment_rejected_and_degenerate_normals_not_invented():
+    from emet.memory.surface_candidates import surface_candidates
+
+    depth = np.ones((40, 40))
+    with pytest.raises(ValueError, match="aligned world XYZ"):
+        surface_candidates(depth, [0, 0, 1000, 1000], min_depth=0.1, max_depth=3.0, world_xyz=np.ones((20, 20, 3)))
+    assert (
+        surface_candidates(depth, [0, 0, 1000, 1000], min_depth=0.1, max_depth=3.0, world_xyz=np.zeros((40, 40, 3)))
+        == []
+    )
+
+
+def test_gradual_normal_chain_does_not_merge_horizontal_and_upright_bands():
+    from emet.memory.surface_candidates import candidate_mask, surface_candidates
+
+    theta = np.linspace(0.0, np.pi / 2.0, 60)
+    yy = np.arange(40)[:, None] * 0.005
+    world = np.empty((40, 60, 3))
+    world[..., 0] = np.sin(theta) * 0.2
+    world[..., 1] = yy
+    world[..., 2] = np.cos(theta) * 0.2
+    regions = surface_candidates(np.ones((40, 60)), [0, 0, 1000, 1000], min_depth=0.1, max_depth=3.0, world_xyz=world)
+    assert len(regions) >= 2
+    for region in regions:
+        mask = candidate_mask(region, (40, 60))
+        assert not (mask[:, :5].any() and mask[:, -5:].any())
+
+
+def test_local_normals_tolerate_millimetre_depth_quantization_without_changing_depth():
+    from emet.memory.surface_candidates import _local_surface_normals
+
+    yy, xx = np.indices((120, 160))
+    x, y = (xx-80)/650., (yy-60)/650.
+    depth = np.round((1./(1.+.3*x+.4*y))*1000)/1000
+    world = np.stack((x*depth, y*depth, depth), axis=-1)
+    original = world.copy()
+    normals = _local_surface_normals(world)[4:-4, 4:-4]
+    expected = np.array([.3, .4, 1.])
+    expected /= np.linalg.norm(expected)
+    angular_error = np.arccos(np.clip(np.sum(normals*expected, axis=-1), -1, 1))
+    assert np.quantile(angular_error, .95) < .12
+    np.testing.assert_array_equal(world, original)

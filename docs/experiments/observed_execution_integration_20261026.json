@@ -1,0 +1,39 @@
+{
+  "implementation_commit": "c532a758",
+  "validation_tier": "synthetic_sensor_controller_and_software_integration",
+  "regression": {
+    "job_id": "20261026_205621_349c68",
+    "tests": 610,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "seconds": 126.16
+  },
+  "new_live_sensor_task_episodes": 0,
+  "new_vlm_calls": 0,
+  "contact_dynamics_qualification": false,
+  "default_observed_execution_enabled": false,
+  "paper_build": {
+    "passed": true,
+    "pages": 52
+  },
+  "scenario_coverage": [
+    "registered primitive tool transfer with visual effects",
+    "three-transfer buffered swap through task tools",
+    "typed no-actuation and partial failures",
+    "unknown-space rejection",
+    "camera/model/scene invalidation",
+    "missing and unaligned visual evidence"
+  ],
+  "source_sha256": {
+    "src/emet/controller/manipulation/observed_collision.py": "255ffacdfd8a1866ae6e06fe071672bf6be2775278baca1b5165163154a27fbb",
+    "src/emet/controller/manipulation/observed_effects.py": "d3d35d154cd47b0fc96aa31658e51b54ee6d5776dee6a1ce847f138ac13d21a6",
+    "src/emet/controller/manipulation/rigid_rgbd_tracking.py": "b976f5ecdb6f0dd31c29fe66af6011a271cd2ce5894d1f52b3ade94311d697a9",
+    "src/emet/controller/manipulation/physical_pick_place.py": "ac301260fe57196d7f1bf95818f0db346e7a5f1ee7f16acb9bf64130f022871f",
+    "src/emet/controller/task/tamp/observed_adapter.py": "5c9d9a13bf47b6068ff308a556cbb1c969ce0cf8e8726e745d8f1863131883a9",
+    "src/emet/controller/task/tamp/observed_transfer.py": "98a80f2572bc2dea2cb723803c204e265e70eaa7c4b1280d0ac55fd3638e82ba",
+    "src/emet/agent/loop.py": "ad711fd9b1916e4794d3ef05bfbc113965f0787bd146c9157090d84192f55799",
+    "src/emet/agent/tools.py": "62628b67f5e251e471bc87a508fe8b7316a8513de586bbb027ae3da45ff7ef61",
+    "src/emet/agent/tamp_world.py": "0a613e4863e39d294c68b74baf958423160969ea7fb7dbb1290f8aff9db84c00"
+  }
+}

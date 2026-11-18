@@ -7,11 +7,90 @@
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 from pathlib import Path
 from uuid import uuid4
 
 import numpy as np
 from PIL import Image, ImageDraw
+
+
+def proposal_view_context(support, frame, *, source_obs_id):
+    """Attach view-bound image bearings, never an object XYZ or a safe route.
+
+    Even a rejected proposal may help a coordinator choose another observation.
+    Bearings describe its image support, not its semantic identity or visibility
+    from a different pose. The caller owns the capture index and frame basis.
+    """
+    if not isinstance(support, dict):
+        return support
+    out = deepcopy(support)
+    height, width = frame.depth.shape
+    info = getattr(frame, "info", None)
+    info = info if isinstance(info, dict) else {}
+    out["view"] = {
+        "source_obs_id": source_obs_id,
+        "image_shape_hw": [height, width],
+        "observation_scope_id": info.get("observation_scope_id"),
+        "image_timing": deepcopy(info.get("image_timing")),
+        "bearing_semantics": "image proposals only; positive base yaw is left/CCW; not object geometry or route permission",
+    }
+
+    def array(value):
+        try:
+            return np.asarray(value.tolist() if hasattr(value, "tolist") else value, dtype=float)
+        except (TypeError, ValueError):
+            return np.asarray(None, dtype=float)
+
+    intrinsic = array(getattr(frame, "camera_K", None))
+    pose = array(getattr(frame, "camera_pose", None))
+    base = array(getattr(frame, "base_pose", None))
+    calibrated = (
+        intrinsic.shape == (3, 3)
+        and np.isfinite(intrinsic).all()
+        and intrinsic[0, 0] > 0
+        and intrinsic[1, 1] > 0
+        and np.allclose(intrinsic[2], [0, 0, 1])
+        and abs(np.linalg.det(intrinsic)) > 1e-12
+    )
+    world_basis = (
+        pose.shape == (4, 4)
+        and np.isfinite(pose).all()
+        and np.allclose(pose[3], [0, 0, 0, 1])
+        and np.allclose(pose[:3, :3].T @ pose[:3, :3], np.eye(3), atol=1e-5)
+        and np.isclose(np.linalg.det(pose[:3, :3]), 1, atol=1e-5)
+        and base.shape == (3,)
+        and np.isfinite(base).all()
+    )
+    for proposal in out.get("proposals", []):
+        proposal["base_yaw_delta_deg"] = None
+        box = array(proposal.get("bbox_xyxy"))
+        if (
+            box.shape != (4,)
+            or not np.isfinite(box).all()
+            or not (0 <= box[0] < box[2] <= width and 0 <= box[1] < box[3] <= height)
+        ):
+            proposal["image_geometry_status"] = "invalid_box"
+            continue
+        center = (box[:2] + box[2:]) / 2
+        proposal["image_center_normalized_xy"] = (1000 * center / [width, height]).tolist()
+        proposal["touches_image_edge"] = bool(box[0] == 0 or box[1] == 0 or box[2] == width or box[3] == height)
+        if not calibrated:
+            proposal["image_geometry_status"] = "calibration_unavailable"
+            continue
+        ray = np.linalg.solve(intrinsic, [*center, 1.0])
+        proposal["optical_offset_deg"] = {
+            "right": float(np.degrees(np.arctan2(ray[0], ray[2]))),
+            "up": float(np.degrees(np.arctan2(-ray[1], np.hypot(ray[0], ray[2])))),
+        }
+        proposal["image_geometry_status"] = "optical_only"
+        if world_basis:
+            direction = pose[:3, :3] @ ray
+            if np.linalg.norm(direction[:2]) > 1e-9:
+                yaw = np.arctan2(direction[1], direction[0]) - base[2]
+                proposal["base_yaw_delta_deg"] = float(np.degrees(np.arctan2(np.sin(yaw), np.cos(yaw))))
+                proposal["image_geometry_status"] = "base_bearing_available"
+    return out
 
 
 def numbered_detection_image(rgb, detections):

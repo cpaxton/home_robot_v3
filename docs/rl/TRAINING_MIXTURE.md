@@ -163,3 +163,26 @@ Hardware status is maintained separately in
 Inspect the actual curriculum in the [4×4 video and 3D coverage gallery](CURRICULUM_VISUALIZATION.md). It distinguishes teacher execution, train/audit cases and extra visualization-only examples.
 
 The frozen level-zero preflight is 48/48 teacher successes after 1,679 source-bound regressions. Active pilot output is `logs/manipulation/arm-splines-v1-restart`; the original run is preserved after a visualization-induced TAMP IPC timeout during critic warmup. Rendering is finished; do not freeze live IPC workers.
+
+## Motion-density audit and current decision
+
+The completed spline pilot adds 65,536 decisions, but source and final actor
+both score **0/48** on the new spline cases. Stops confirm 47/48 and 46/48;
+contact/wheel failures remain, so neither is promoted. Full outputs stay in
+`logs/eval/arm-spline-paired-v1-restart/`, without a new committed evidence bundle.
+
+The video audit exposes a distribution problem: ordinary hand targets have
+median **0.4 mm base-relative hand excursion**, and ordinary hand/base references
+move for only about **3.9/25 seconds**. Most world-space hand travel there is
+base travel. Goal changes have median 7.6 mm local hand excursion. See
+[per-trajectory metrics and commands](CURRICULUM_VISUALIZATION.md#per-trajectory-spread-and-dead-time-audit).
+
+New runs log physical moving/quiet/unknown reference ticks by family, plus
+per-reference local/world hand excursion, path length and orientation travel.
+The opt-in v2 timing removes the artificial 3.9-second phase floor, and episodes
+can finish after their unchanged two-second measured quiet hold. The v2 arm
+candidate starts at larger amplitude with a minimum spread requirement and fresh
+seeds. It still needs teacher/source validation, and the ordinary hand/goal pools
+need broader arm motion before extending PPO. This is not solved by increasing
+the global coverage-box size or speeding up video playback. Preserve explicit
+fine-manipulation and hold cases instead of counting them as generic reaching.

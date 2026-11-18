@@ -40,7 +40,7 @@ Benchmark support and remaining qualification gates:
 
 ## Privileged native Stretch integration
 
-`run agent --native-task-config FILE` opts into stationary region-transfer
+`run agent --native-task-config FILE` opts into region-transfer
 planning. It requires online LLM CHAT, `--state-only-sim`, physical manipulation
 mode and privileged inputs. [Example configuration](../../configs/eval/native_stretch_transfer_debug.json)
 declares public roles, private body bindings, one support and disjoint XY regions.
@@ -78,6 +78,31 @@ followed by step-2 preflight rejection is partial progress, not a failed first
 transfer. Debug mode can include private simulator state in JSON logs for offline
 replay; public tool responses and public motion evidence never include it.
 See [measured integration cases and captured-state controls](../experiments/tamp_native_task_provider_20261022.md).
+
+Planning also returns ordered `step_details` with 1-based indices local to each
+plan; a new one-action recovery plan starts at step 1. Region-transfer
+providers describe public object roles and source/target region names; private
+operator refs and body IDs are never serialized. Providers without a qualified
+description hook return indices only.
+
+Execution feedback includes `completed_actions`, `failed_action`,
+`unverified_actions`, `plan_consumed` and explicit `goal_verified=false` on a
+failed known plan. Completed actions are the prefix whose measured effects were
+verified at completion; later disturbance can still require rediscovery.
+Unverified actions include the failed and unattempted steps and are not claims
+about current state or permission to retry. `failed_step_execution_started`
+distinguishes that step's possible dispatch from earlier overall progress:
+after one completed transfer and a second-step admission refusal, overall
+`execution_started=true` but `failed_step_execution_started=false`. An unknown
+execution exception preserves possible dispatch. Any partial result still stops
+the agent until a separately authorized request and fresh measured admission.
+
+For bound native Stretch tasks, `scene_tasks(robot="stretch")` is equivalent to
+omitting the robot selector. A different robot or nonempty object filter still
+rejects: task discovery must retain the complete bound occupancy context. Use
+`scene_tasks` for task-state inspection on a newly authorized recovery request.
+An unavailable tool in a TAMP-containing batch prevents dispatch of its remaining
+calls; it cannot silently fall through into planning or execution.
 
 ## Provider failures and budgets
 
@@ -124,3 +149,166 @@ no-actuation receipts. Typed failed receipts with `execution_started: false`
 report `failed_phase: preflight`, even when an earlier step made physical
 progress. Exceptions from the actual adapter executor remain possible physical
 execution and are never reclassified by the planning-only catch.
+
+## Native motion policy
+
+`agent.native_tamp_policy` selects the shared native adapter implementation for
+both primitive tools and a bound multi-step native task provider. Default
+`legacy` preserves the existing motion policy. The opt-in bounded release profile
+is Stretch-specific. Selecting it on the Mars native adapter returns
+`native_policy_unsupported` before commands and invalidates the cached adapter;
+switching back cannot resurrect its old plan handles. Mars keeps its own grasp,
+approach and transport hooks under the legacy native profile.
+
+Explicit
+`--set agent.native_tamp_policy=bounded_release` enables the finer grasp yaw set,
+a checked loaded-payload handoff, and bounded measured-state release search.
+Use it with `agent.manip_mode=physical` and `agent.tamp_inputs=privileged` in
+simulation. It does not enable observed execution or imply hardware sensors.
+
+The handoff checks the original retention bound through an additional stable
+bilateral-contact interval before binding the measured transform once. Release
+checks arm/payload motion, nominal and lower opening sweeps, support/drop limits,
+and measured supported stillness before retreat. Numerical collision/retention
+limits and independent final-goal checks are unchanged. The 40 mm maximum
+raise/drop policy is explicit and remains opt-in while broader qualification is
+in progress. A failed or partial result still stops dispatch; do not replay it.
+
+Native discovery reports `native_motion_policy`. A primitive adapter cache is
+invalidated when the configured policy changes, and multi-step scene bindings
+include the policy identity. Task JSON remains the same versioned goal/scene
+contract; motion-policy options are not new LLM tools or object-specific features.
+See [qualification protocol](../plans/2026-11-13_native_tamp_qualification.md).
+
+The November 13 follow-up keeps existing grasp candidates first and adds a
+collision-checked vertical pregrasp only after they fail, sharing the original
+IK cap. The native policy permits up to 12 simulated seconds for measured
+supported settling before retreat, matching the existing native verifier budget;
+this changes the wait budget, not the speed, collision or retention criteria.
+Invalid policy/mode/input combinations are rejected before starting the client.
+
+The bounded policy reserves 0.5 mm inside each telescoping arm segment's
+joint limits when solving IK targets. The coupled extension therefore reserves
+2 mm overall. This leaves room for the small measured limit overrun seen after
+opening; it is not a certified tracking-error bound. Model limits, measured-start
+validation, collision checks and acceptance thresholds remain unchanged. An
+already out-of-range measured start still rejects; no live state is clamped.
+This reserve applies to IK targets, not every path waypoint: the path planner
+uses the original model limits, so a valid measured start within the reserve
+band and the initial path segment can remain outside the target reserve.
+
+Failure receipts can include a finite-vocabulary `data.verification` witness:
+
+```json
+{"substage":"post_lift_hold","reason":"payload_not_retained"}
+```
+
+Native substages distinguish `lift_motion`, `post_lift_hold`,
+`loaded_payload_handoff`, `loaded_motion` and `post_release_support`. The primitive tool and
+multi-step receipt preserve the same witness without private object IDs or
+provider exception text. Unknown/malformed witness fields are discarded at the
+native-provider boundary. Missing evidence remains absent; it is not inferred
+from the generic failure code or reused from an earlier step/handle.
+
+Original payload retention is checked at every sampled post-lift hold update,
+as well as during motion and the loaded handoff. A sampled violation rejects
+immediately and cannot be renewed by a later good sample. This strengthens
+coverage of the existing bound; it does not relax its 20 mm / 0.1 rad limits or
+establish detection between samples.
+
+The bounded development policy tests a contact-relative **position target**.
+After the normal full-close command settles, it targets the midpoint between
+the measured motor position and the original close preset, then requires a
+second settling interval within the same total closing budget. This retains
+half the position error without using pad pose or force feedback. Lift,
+retention and bilateral hold must still pass; motor settling alone is not
+pickup success. The ordinary legacy command and observed/hardware defaults
+are unchanged. No contact physics or sensor availability is changed.
+
+The prior fixed loose-close pilot passed the swap but failed the familiar
+control; it is not a general solution. Its results remain in
+[the pilot report](../experiments/tamp_native_closure_pilot_20261114.md).
+The [live contact-relative pilot](../experiments/tamp_native_contact_relative_pilot_20261114.md)
+passes the two-goal controls but still fails swap retention. The diagnostic
+`--gripper-close-preset default|loose` override disables the contact-relative
+adjustment and archives the effective policy.
+
+For an object described by one collision box, the bounded development policy
+also ranks the existing grasp candidates by jaw alignment with the box's
+measured world-space face normals. This lets a higher aligned grasp precede a
+lower edge pinch. Compound and other shapes keep their prior order. No candidate
+is removed or added, and the shared IK cap stays unchanged. This is a geometric
+preference, not a contact/force certificate; execution still has to pass the
+same physical checks.
+The [geometric-order pilot](../experiments/tamp_native_face_alignment_pilot_20261114.md)
+also retains the failed swap. At that revision, an executed base approach was
+unqualified; the private base-offset IK probe is not task success. The separate
+approach follow-up below records subsequent live development results.
+
+### Experimental checked base approach
+
+`agent.native_tamp_policy=bounded_approach` extends the opt-in bounded policy
+with unloaded pre-grasp base positioning in the native simulated Stretch path.
+The default remains `legacy`; base motion and loaded candidate refresh require
+this explicit opt-in. A shared placement-frame correction described below also
+applies to the other profiles. The same option is accepted by the native
+evaluators and actual `run agent` configuration through shared policy validation.
+
+The planner first tries aligned grasps at the current base, then checked short
+forward/reverse alternatives at 40/80 mm along the measured drive axis, then
+general stationary fallback grasps. It selects a feasible plan in that order;
+it does not globally score the best alignment across bases. All alternatives
+share 256 IK calls and a 120-second planning deadline. The complete grasp,
+placement and retreat must plan before an approach handle is stored.
+
+Bounded grasp search reserves 25% of remaining IK calls for its vertical
+pregrasp strategy, including downstream placement costs in the primary
+allocation. The global cap and deadline never reset. This changes bounded
+search scheduling; historical cohorts retain their original source versions.
+
+Base sweeps include the whole robot at its measured arm posture and forbid
+finger/object contact during transit. Samples are spaced at most 5 mm and
+0.025 rad, including a sampled ±10 mm XY / ±0.05 rad tracking envelope. This
+is a static sampled geometry check, not a continuous or dynamics certificate.
+A colliding held-arm posture rejects; no unchecked tuck is inserted.
+
+Execution rechecks current geometry, uses the ordinary world-frame base
+controller, and requires measured arrival within 10 mm / 0.015 rad, 0.3 seconds
+of quiet pose before confirmed navigation cancellation, then another 0.3 seconds
+of quiet pose. Measured arm drift, corridor departure, stale state, changed
+obstacle geometry or uncertain stops prevent grasp dispatch. Scene joint motion
+triggers a new remaining sweep. Grasp planning restarts from actual arrival.
+No loaded base transport or live root-pose writes are permitted by this path.
+
+Results publish `base_motion=checked_unloaded_approach` and
+`collision_scope=sampled_base_sweep_arm_and_payload`. Pre-command rejection has
+`execution_started=false`; possible dispatch remains partial and consumes the
+handle. Physical task success still requires the existing retention, release
+and final-goal gates. The [November 16 development replay](../experiments/tamp_native_base_approach_20261116.md)
+passes eight native tasks and four actual-agent tasks. These tuned layouts are
+not held-out reliability, observed navigation/exploration or hardware support.
+
+After verified pickup, this profile refreshes held-object bounds and free support
+centers inside the original destination region. Initial and loaded placement use
+one shared path-planning function and the same local support patches. The original
+release proposal is retained when its measured whole footprint still fits the
+original support/region, and its complete updated paths must certify it again.
+Loaded refinement can try up to 16 centers
+using the initial primitive's unused IK/time budget; its extra calls also debit
+the task provider's episode budget. Controller execution time is excluded from
+planning time. The original grasp reference is preserved and no command is sent
+during this refinement. Exhaustion remains a partial held-object failure with
+`verification.substage=loaded_placement_planning`. The execution receipt reports
+the resulting world-space placement goal.
+
+Payload-center offsets are expressed in the measured EE frame and transformed
+through the desired placement rotation, rather than reusing a world-frame
+offset when the target EE orientation differs. This coordinate-frame correction
+is shared by all native profiles. All placement/release/effect
+checks still apply. See the [initial base-approach pilot](../experiments/tamp_native_base_approach_initial_20261116.md)
+for the retained third-transfer failure motivating this refinement.
+
+The command client retains one exact boot/session/sequence stop witness after
+a navigation cancellation is confirmed. Later arm commands may evict the server's
+terminal receipt without losing that witness at client shutdown. A different
+goal, server restart or unconfirmed stop cannot use it to release ownership.

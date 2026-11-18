@@ -47,8 +47,9 @@ def test_render_timestamp_precedes_scene_capture():
         "emet.simulation.stretch_mujoco.mujoco_server_camera_manager.time.monotonic_ns",
         side_effect=lambda: (events.append("timestamp"), 123456)[1],
     ):
-        captured_camera, captured_pixels, stamp = manager._render_camera(renderer, camera)
-    assert events == ["timestamp", "scene", "pixels"]
+        captured_camera, captured_pixels, stamp, end = manager._render_camera(renderer, camera)
+    assert events == ["timestamp", "scene", "pixels", "timestamp"]
+    assert end == stamp
     assert captured_camera is camera
     assert captured_pixels is pixels
     assert stamp == 123456
@@ -63,7 +64,7 @@ def test_camera_batch_retains_per_camera_timing(threaded):
     manager.camera_fps_counter = SimpleNamespace(fps=20)
     head, wrist = StretchCameras.cam_d435i_rgb, StretchCameras.cam_d405_rgb
     manager.camera_renderers = {head: 100, wrist: 200}
-    manager._render_camera = lambda stamp, camera: (camera, np.zeros((2, 2, 3)), stamp)
+    manager._render_camera = lambda stamp, camera: (camera, np.zeros((2, 2, 3)), stamp, stamp+10)
     manager.get_camera_params = lambda camera: np.eye(3)
     with ThreadPoolExecutor(max_workers=1) as pool:
         manager.cameras_rendering_thread_pool = pool
@@ -104,3 +105,19 @@ def test_stretch_full_client_preserves_capture_metadata(timed):
     with patch("emet.controller.zmq_client.time.sleep"):
         observation = client.get_observation()
     assert observation.image_timing == ({"head_cam_left": timing} if timed else {})
+
+
+def test_capture_intervals_follow_pixels_and_keep_rgb_depth_separate():
+    frame = StatusStretchCameras.default()
+    rgb, depth = StretchCameras.cam_d435i_rgb, StretchCameras.cam_d435i_depth
+    pixels = np.zeros((2, 2, 3), dtype=np.uint8)
+    frame.set_camera_data(rgb, pixels, timestamp_ns=100, capture_end_ns=110)
+    frame.set_camera_data(depth, pixels, timestamp_ns=120, capture_end_ns=130)
+    restored = StatusStretchCameras.from_dict(frame.to_dict())
+    timing = restored.image_timing_for(rgb)
+    assert timing['capture_interval_ns'] == [100, 110]
+    assert timing['depth_capture_interval_ns'] == [120, 130]
+    restored.set_camera_data(rgb, pixels, timestamp_ns=140)
+    assert 'capture_interval_ns' not in restored.image_timing_for(rgb)
+    with pytest.raises(ValueError, match='invalid_camera_capture_interval'):
+        restored.set_camera_data(rgb, pixels, timestamp_ns=200, capture_end_ns=199)

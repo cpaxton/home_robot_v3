@@ -97,10 +97,11 @@ def test_eqa_and_chat_share_motion_schemas_only_when_capable():
     assert not names.intersection({"move_forward", "rotate_base", "plan_task"})
 
 
-def test_eqa_motion_budget_prevents_execution():
+@pytest.mark.parametrize("nav,explore", [(2, 0), (1, 1), (0, 2)])
+def test_eqa_motion_budget_prevents_execution(nav, explore):
     from emet.memory.graph_eqa.agentic.executor_init import _handle_relative_motion
 
-    executor = SimpleNamespace(_n_nav=2, max_nav_steps=2, _append_trace=MagicMock())
+    executor = SimpleNamespace(_n_nav=nav, _n_explore=explore, max_nav_steps=2, _append_trace=MagicMock())
     out = _handle_relative_motion(executor, {"_tool_name": "move_forward", "meters": 0.2})
     assert out["code"] == "navigation_budget_exhausted"
     assert out["ok"] is False
@@ -112,6 +113,7 @@ def test_eqa_failed_motion_still_captures_actual_view():
     executor = SimpleNamespace(
         agent=agent_fixture(arrived=False),
         _n_nav=0,
+        _n_explore=0,
         max_nav_steps=2,
         query_text="microwave",
         mode="answer",
@@ -134,6 +136,7 @@ def test_rejected_motion_preserves_navigation_budget():
     executor = SimpleNamespace(
         agent=agent_fixture(rejection="unknown_floor"),
         _n_nav=0,
+        _n_explore=0,
         max_nav_steps=2,
         _append_trace=MagicMock(),
     )
@@ -146,7 +149,7 @@ def test_noop_motion_neither_executes_nor_charges_budget(tool, value):
     from emet.memory.graph_eqa.agentic.executor_init import _handle_relative_motion
 
     agent = agent_fixture()
-    executor = SimpleNamespace(agent=agent, _n_nav=0, max_nav_steps=2, _append_trace=MagicMock())
+    executor = SimpleNamespace(agent=agent, _n_nav=0, _n_explore=0, max_nav_steps=2, _append_trace=MagicMock())
     key = "meters" if tool == "move_forward" else "degrees"
     out = _handle_relative_motion(executor, {"_tool_name": tool, key: value})
     assert out["ok"] and out["data"]["no_op"]

@@ -97,7 +97,7 @@ class DynamemTaskExecutor:
         self.cpu_only = cpu_only
         self._last_memory_save_path = None  # set when memory is saved (e.g. after rotate_in_place)
         self._last_sim_picked_body: str | None = None  # GT body after sim-teleport pickup
-        self._last_exec_ok = True  # False if last __call__ had pickup/place failure
+        self._last_exec_ok = True  # False if last __call__ had find/pickup/place failure
         self._manip_mode = "teleport"
         self._manip_collision = "none"
         self._manip_planner = "rrt_connect"
@@ -587,7 +587,7 @@ class DynamemTaskExecutor:
         Returns:
             True if we should keep going, False if we should stop (quit).
 
-        Task success for the last batch is in ``_last_exec_ok`` (False if pickup/place
+        Task success for the last batch is in ``_last_exec_ok`` (False if find/pickup/place
         failed). Agent loop uses that for tool summaries without treating failure as quit.
         """
         i = 0
@@ -778,6 +778,8 @@ class DynamemTaskExecutor:
             elif command == "find":
                 logger.info(f"[Pickup task] Finding {args}.")
                 point = self._find(args)
+                if point is None:
+                    self._last_exec_ok = False
             elif command == "nod_head":
                 logger.info("[Pickup task] Nodding head.")
                 self.emote_task.get_task("nod_head").run()

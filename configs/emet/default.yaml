@@ -14,11 +14,15 @@ connection: null
 sim: null
 sim_config: null
 
-# Grounded Graph Agent rollout axes. These are inert legacy-compatible defaults;
-# HM-EQA launches freeze their effective values in OUT/run_manifest.json.
+# Grounded Graph Agent rollout axes. Decision policies remain legacy by default;
+# image attachments are bounded independently of retained dialogue.
 mapping:
   eqa:
     agentic_decision_policy: "legacy"
+    # Current/requested images + recent distinct history. null = full-context ablation.
+    agentic_context_max_images: 8
+    # Bound working text by archiving older state snapshots; keep action/tool text exact.
+    agentic_context_max_characters: 64000
     graph_evidence_mode: "off"
     room_history_mode: "off"
     room_policy: "canonical"
